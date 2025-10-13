@@ -191,7 +191,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             min_token_threshold: {
               type: 'number',
-              description: 'Minimum token count for a file operation to be considered for compression. Defaults to 100.',
+              description: 'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
             },
           },
         },
@@ -605,7 +605,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'optimize_session': {
-        const { sessionId, min_token_threshold = 100 } = args as {
+        const { sessionId, min_token_threshold = 30 } = args as {
           sessionId?: string;
           min_token_threshold?: number;
         };
