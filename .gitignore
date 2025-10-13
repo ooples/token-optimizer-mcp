@@ -32,3 +32,6 @@ coverage/
 *.db
 *.sqlite
 *.sqlite3
+
+# Claude configuration (contains secrets)
+.claude/
