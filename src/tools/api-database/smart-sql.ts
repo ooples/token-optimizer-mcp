@@ -10,10 +10,10 @@
  * - Token-optimized output with intelligent caching
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { createHash } from 'crypto';
+import { CacheEngine } from "../../core/cache-engine";
+import { TokenCounter } from "../../core/token-counter";
+import { MetricsCollector } from "../../core/metrics";
+import { createHash } from "crypto";
 
 export interface SmartSqlOptions {
   /**
@@ -24,12 +24,12 @@ export interface SmartSqlOptions {
   /**
    * Action to perform
    */
-  action?: 'analyze' | 'explain' | 'validate' | 'optimize' | 'history';
+  action?: "analyze" | "explain" | "validate" | "optimize" | "history";
 
   /**
    * Database type (for syntax-specific validation)
    */
-  database?: 'postgresql' | 'mysql' | 'sqlite' | 'sqlserver';
+  database?: "postgresql" | "mysql" | "sqlite" | "sqlserver";
 
   /**
    * Schema name (optional)
@@ -53,10 +53,18 @@ export interface SmartSqlOptions {
 }
 
 export interface QueryAnalysis {
-  queryType: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'CREATE' | 'ALTER' | 'DROP' | 'UNKNOWN';
+  queryType:
+    | "SELECT"
+    | "INSERT"
+    | "UPDATE"
+    | "DELETE"
+    | "CREATE"
+    | "ALTER"
+    | "DROP"
+    | "UNKNOWN";
   tables: string[];
   columns: string[];
-  complexity: 'low' | 'medium' | 'high';
+  complexity: "low" | "medium" | "high";
   estimatedCost: number;
 }
 
@@ -73,8 +81,8 @@ export interface ExecutionPlan {
 }
 
 export interface OptimizationSuggestion {
-  type: 'index' | 'rewrite' | 'schema' | 'performance';
-  severity: 'info' | 'warning' | 'critical';
+  type: "index" | "rewrite" | "schema" | "performance";
+  severity: "info" | "warning" | "critical";
   message: string;
   optimizedQuery?: string;
 }
@@ -121,7 +129,7 @@ export class SmartSql {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector
+    private metrics: MetricsCollector,
   ) {}
 
   async run(options: SmartSqlOptions): Promise<SmartSqlOutput> {
@@ -134,11 +142,11 @@ export class SmartSql {
       if (cached) {
         const duration = Date.now() - startTime;
         this.metrics.record({
-          operation: 'smart_sql',
+          operation: "smart_sql",
           duration,
           cacheHit: true,
           success: true,
-          savedTokens: this.tokenCounter.count(JSON.stringify(cached))
+          savedTokens: this.tokenCounter.count(JSON.stringify(cached)),
         });
         return this.transformOutput(cached, true);
       }
@@ -152,11 +160,11 @@ export class SmartSql {
 
     const duration = Date.now() - startTime;
     this.metrics.record({
-      operation: 'smart_sql',
+      operation: "smart_sql",
       duration,
       cacheHit: false,
       success: true,
-      savedTokens: 0
+      savedTokens: 0,
     });
 
     return this.transformOutput(result, false);
@@ -169,41 +177,41 @@ export class SmartSql {
     validation?: Validation;
     history?: HistoryEntry[];
   }> {
-    const action = options.action || 'analyze';
-    const query = options.query || '';
+    const action = options.action || "analyze";
+    const query = options.query || "";
 
     switch (action) {
-      case 'analyze':
+      case "analyze":
         return {
           analysis: this.performAnalysis(query, options.database),
-          optimization: this.generateOptimizations(query, options.database)
+          optimization: this.generateOptimizations(query, options.database),
         };
 
-      case 'explain':
+      case "explain":
         return {
           analysis: this.performAnalysis(query, options.database),
-          executionPlan: this.generateExecutionPlan(query, options.database)
+          executionPlan: this.generateExecutionPlan(query, options.database),
         };
 
-      case 'validate':
+      case "validate":
         return {
-          validation: this.validateQuery(query, options.database)
+          validation: this.validateQuery(query, options.database),
         };
 
-      case 'optimize':
+      case "optimize":
         return {
           analysis: this.performAnalysis(query, options.database),
-          optimization: this.generateOptimizations(query, options.database)
+          optimization: this.generateOptimizations(query, options.database),
         };
 
-      case 'history':
+      case "history":
         return {
-          history: this.getQueryHistory(query)
+          history: this.getQueryHistory(query),
         };
 
       default:
         return {
-          analysis: this.performAnalysis(query, options.database)
+          analysis: this.performAnalysis(query, options.database),
         };
     }
   }
@@ -220,22 +228,22 @@ export class SmartSql {
       tables,
       columns,
       complexity,
-      estimatedCost
+      estimatedCost,
     };
   }
 
-  private detectQueryType(query: string): QueryAnalysis['queryType'] {
+  private detectQueryType(query: string): QueryAnalysis["queryType"] {
     const trimmed = query.trim().toUpperCase();
 
-    if (trimmed.startsWith('SELECT')) return 'SELECT';
-    if (trimmed.startsWith('INSERT')) return 'INSERT';
-    if (trimmed.startsWith('UPDATE')) return 'UPDATE';
-    if (trimmed.startsWith('DELETE')) return 'DELETE';
-    if (trimmed.startsWith('CREATE')) return 'CREATE';
-    if (trimmed.startsWith('ALTER')) return 'ALTER';
-    if (trimmed.startsWith('DROP')) return 'DROP';
+    if (trimmed.startsWith("SELECT")) return "SELECT";
+    if (trimmed.startsWith("INSERT")) return "INSERT";
+    if (trimmed.startsWith("UPDATE")) return "UPDATE";
+    if (trimmed.startsWith("DELETE")) return "DELETE";
+    if (trimmed.startsWith("CREATE")) return "CREATE";
+    if (trimmed.startsWith("ALTER")) return "ALTER";
+    if (trimmed.startsWith("DROP")) return "DROP";
 
-    return 'UNKNOWN';
+    return "UNKNOWN";
   }
 
   private extractTables(query: string): string[] {
@@ -269,11 +277,11 @@ export class SmartSql {
     const selectMatch = query.match(/SELECT\s+(.*?)\s+FROM/is);
     if (selectMatch) {
       const columnList = selectMatch[1];
-      if (!columnList.includes('*')) {
-        const cols = columnList.split(',').map(c => c.trim().split(/\s+/)[0]);
-        cols.forEach(c => {
+      if (!columnList.includes("*")) {
+        const cols = columnList.split(",").map((c) => c.trim().split(/\s+/)[0]);
+        cols.forEach((c) => {
           if (c && !c.match(/^(COUNT|SUM|AVG|MIN|MAX|DISTINCT)\(/i)) {
-            columns.add(c.replace(/^.*\./, ''));
+            columns.add(c.replace(/^.*\./, ""));
           }
         });
       }
@@ -292,7 +300,11 @@ export class SmartSql {
     return Array.from(columns).slice(0, 20); // Limit to 20 columns
   }
 
-  private calculateComplexity(query: string, tables: string[], columns: string[]): 'low' | 'medium' | 'high' {
+  private calculateComplexity(
+    query: string,
+    tables: string[],
+    columns: string[],
+  ): "low" | "medium" | "high" {
     let score = 0;
 
     // Table count
@@ -314,16 +326,19 @@ export class SmartSql {
     if (/HAVING/i.test(query)) score += 10;
     if (/ORDER\s+BY/i.test(query)) score += 5;
 
-    if (score < 30) return 'low';
-    if (score < 80) return 'medium';
-    return 'high';
+    if (score < 30) return "low";
+    if (score < 80) return "medium";
+    return "high";
   }
 
-  private estimateCost(query: string, complexity: 'low' | 'medium' | 'high'): number {
+  private estimateCost(
+    query: string,
+    complexity: "low" | "medium" | "high",
+  ): number {
     const baselineMultiplier = {
-      'low': 1.0,
-      'medium': 2.5,
-      'high': 5.0
+      low: 1.0,
+      medium: 2.5,
+      high: 5.0,
     };
 
     let cost = 100 * baselineMultiplier[complexity];
@@ -336,7 +351,10 @@ export class SmartSql {
     return Math.round(cost);
   }
 
-  private generateExecutionPlan(query: string, _database?: string): ExecutionPlan {
+  private generateExecutionPlan(
+    query: string,
+    _database?: string,
+  ): ExecutionPlan {
     const tables = this.extractTables(query);
     const steps: ExecutionPlanStep[] = [];
 
@@ -344,13 +362,16 @@ export class SmartSql {
     // In real implementation, this would use EXPLAIN
     let stepCost = 0;
 
-    for (const table of tables.slice(0, 10)) { // Limit to 10 steps
+    for (const table of tables.slice(0, 10)) {
+      // Limit to 10 steps
       stepCost += 50;
       steps.push({
-        operation: query.match(/JOIN/i) ? 'Nested Loop Join' : 'Sequential Scan',
+        operation: query.match(/JOIN/i)
+          ? "Nested Loop Join"
+          : "Sequential Scan",
         table,
         cost: stepCost,
-        rows: Math.floor(Math.random() * 10000) + 100
+        rows: Math.floor(Math.random() * 10000) + 100,
       });
     }
 
@@ -358,55 +379,63 @@ export class SmartSql {
 
     return {
       steps,
-      totalCost
+      totalCost,
     };
   }
 
-  private generateOptimizations(query: string, _database?: string): Optimization {
+  private generateOptimizations(
+    query: string,
+    _database?: string,
+  ): Optimization {
     const suggestions: OptimizationSuggestion[] = [];
 
     // Check for SELECT *
     if (/SELECT\s+\*/i.test(query)) {
       suggestions.push({
-        type: 'performance',
-        severity: 'warning',
-        message: 'Avoid SELECT * - specify only needed columns for better performance'
+        type: "performance",
+        severity: "warning",
+        message:
+          "Avoid SELECT * - specify only needed columns for better performance",
       });
     }
 
     // Check for missing WHERE in UPDATE/DELETE
     if (/^(UPDATE|DELETE)/i.test(query.trim()) && !/WHERE/i.test(query)) {
       suggestions.push({
-        type: 'performance',
-        severity: 'critical',
-        message: 'Missing WHERE clause - this will affect all rows in the table'
+        type: "performance",
+        severity: "critical",
+        message:
+          "Missing WHERE clause - this will affect all rows in the table",
       });
     }
 
     // Check for DISTINCT usage
     if (/SELECT\s+DISTINCT/i.test(query)) {
       suggestions.push({
-        type: 'performance',
-        severity: 'info',
-        message: 'DISTINCT can be expensive - consider if GROUP BY might be more appropriate'
+        type: "performance",
+        severity: "info",
+        message:
+          "DISTINCT can be expensive - consider if GROUP BY might be more appropriate",
       });
     }
 
     // Check for OR in WHERE clause
     if (/WHERE.*\sOR\s/i.test(query)) {
       suggestions.push({
-        type: 'index',
-        severity: 'warning',
-        message: 'OR conditions can prevent index usage - consider UNION or restructuring'
+        type: "index",
+        severity: "warning",
+        message:
+          "OR conditions can prevent index usage - consider UNION or restructuring",
       });
     }
 
     // Check for function calls on indexed columns
     if (/WHERE\s+[A-Z]+\([a-zA-Z0-9_]+\)/i.test(query)) {
       suggestions.push({
-        type: 'index',
-        severity: 'warning',
-        message: 'Functions on columns prevent index usage - consider computed columns'
+        type: "index",
+        severity: "warning",
+        message:
+          "Functions on columns prevent index usage - consider computed columns",
       });
     }
 
@@ -414,13 +443,14 @@ export class SmartSql {
     const topSuggestions = suggestions.slice(0, 5);
 
     // Calculate potential speedup
-    const speedup = topSuggestions.length > 0
-      ? `${topSuggestions.length * 15}-${topSuggestions.length * 30}%`
-      : '0%';
+    const speedup =
+      topSuggestions.length > 0
+        ? `${topSuggestions.length * 15}-${topSuggestions.length * 30}%`
+        : "0%";
 
     return {
       suggestions: topSuggestions,
-      potentialSpeedup: speedup
+      potentialSpeedup: speedup,
     };
   }
 
@@ -430,7 +460,7 @@ export class SmartSql {
 
     // Basic syntax validation
     if (!query.trim()) {
-      errors.push('Query is empty');
+      errors.push("Query is empty");
       return { isValid: false, errors, warnings };
     }
 
@@ -438,24 +468,24 @@ export class SmartSql {
     const openCount = (query.match(/\(/g) || []).length;
     const closeCount = (query.match(/\)/g) || []).length;
     if (openCount !== closeCount) {
-      errors.push('Unbalanced parentheses in query');
+      errors.push("Unbalanced parentheses in query");
     }
 
     // Check for SQL injection patterns
     if (/;\s*(DROP|DELETE|UPDATE)\s/i.test(query)) {
-      warnings.push('Potential SQL injection pattern detected');
+      warnings.push("Potential SQL injection pattern detected");
     }
 
     // Check for missing semicolon (if multiple statements)
-    const statementCount = query.split(';').filter(s => s.trim()).length;
-    if (statementCount > 1 && !query.trim().endsWith(';')) {
-      warnings.push('Multiple statements should end with semicolon');
+    const statementCount = query.split(";").filter((s) => s.trim()).length;
+    if (statementCount > 1 && !query.trim().endsWith(";")) {
+      warnings.push("Multiple statements should end with semicolon");
     }
 
     return {
       isValid: errors.length === 0,
       errors,
-      warnings
+      warnings,
     };
   }
 
@@ -464,25 +494,29 @@ export class SmartSql {
     // In real implementation, this would fetch from database
     const history: HistoryEntry[] = [];
 
-    for (let i = 0; i < 20; i++) { // Last 20 queries
+    for (let i = 0; i < 20; i++) {
+      // Last 20 queries
       history.push({
         query: query || `SELECT * FROM table${i}`,
         timestamp: new Date(Date.now() - i * 3600000).toISOString(),
         executionTime: Math.floor(Math.random() * 1000) + 10,
-        rowsAffected: Math.floor(Math.random() * 10000)
+        rowsAffected: Math.floor(Math.random() * 10000),
       });
     }
 
     return history;
   }
 
-  private transformOutput(result: {
-    analysis?: QueryAnalysis;
-    executionPlan?: ExecutionPlan;
-    optimization?: Optimization;
-    validation?: Validation;
-    history?: HistoryEntry[];
-  }, fromCache: boolean): SmartSqlOutput {
+  private transformOutput(
+    result: {
+      analysis?: QueryAnalysis;
+      executionPlan?: ExecutionPlan;
+      optimization?: Optimization;
+      validation?: Validation;
+      history?: HistoryEntry[];
+    },
+    fromCache: boolean,
+  ): SmartSqlOutput {
     const fullOutput = JSON.stringify(result);
     const originalTokens = this.tokenCounter.count(fullOutput);
     let compactedTokens: number;
@@ -491,49 +525,66 @@ export class SmartSql {
     if (fromCache) {
       // Cached: Minimal output (95% reduction)
       const compact = {
-        analysis: result.analysis ? {
-          queryType: result.analysis.queryType,
-          complexity: result.analysis.complexity
-        } : undefined
+        analysis: result.analysis
+          ? {
+              queryType: result.analysis.queryType,
+              complexity: result.analysis.complexity,
+            }
+          : undefined,
       };
       reductionPercentage = 95;
-      compactedTokens = Math.max(1, Math.floor(originalTokens * (1 - reductionPercentage / 100)));
+      compactedTokens = Math.max(
+        1,
+        Math.floor(originalTokens * (1 - reductionPercentage / 100)),
+      );
     } else if (result.executionPlan) {
       // Execution plan: Top 10 steps (80% reduction)
       const compact = {
         analysis: result.analysis,
         executionPlan: {
           steps: result.executionPlan.steps.slice(0, 10),
-          totalCost: result.executionPlan.totalCost
-        }
+          totalCost: result.executionPlan.totalCost,
+        },
       };
       reductionPercentage = 80;
-      compactedTokens = Math.max(1, Math.floor(originalTokens * (1 - reductionPercentage / 100)));
+      compactedTokens = Math.max(
+        1,
+        Math.floor(originalTokens * (1 - reductionPercentage / 100)),
+      );
     } else if (result.optimization) {
       // Optimization: Top 5 suggestions (86% reduction - increased from 85%)
       const compact = {
         analysis: result.analysis,
         optimization: {
           suggestions: result.optimization.suggestions.slice(0, 5),
-          potentialSpeedup: result.optimization.potentialSpeedup
-        }
+          potentialSpeedup: result.optimization.potentialSpeedup,
+        },
       };
       reductionPercentage = 86;
-      compactedTokens = Math.max(1, Math.floor(originalTokens * (1 - reductionPercentage / 100)));
+      compactedTokens = Math.max(
+        1,
+        Math.floor(originalTokens * (1 - reductionPercentage / 100)),
+      );
     } else if (result.history) {
       // History: Last 20 queries (80% reduction)
       const compact = {
-        history: result.history.slice(0, 20)
+        history: result.history.slice(0, 20),
       };
       reductionPercentage = 80;
-      compactedTokens = Math.max(1, Math.floor(originalTokens * (1 - reductionPercentage / 100)));
+      compactedTokens = Math.max(
+        1,
+        Math.floor(originalTokens * (1 - reductionPercentage / 100)),
+      );
     } else {
       // Analysis only (86% reduction - increased from 85%)
       const compact = {
-        analysis: result.analysis
+        analysis: result.analysis,
       };
       reductionPercentage = 86;
-      compactedTokens = Math.max(1, Math.floor(originalTokens * (1 - reductionPercentage / 100)));
+      compactedTokens = Math.max(
+        1,
+        Math.floor(originalTokens * (1 - reductionPercentage / 100)),
+      );
     }
 
     return {
@@ -542,8 +593,8 @@ export class SmartSql {
         originalTokens,
         compactedTokens,
         reductionPercentage,
-        cacheHit: fromCache
-      }
+        cacheHit: fromCache,
+      },
     };
   }
 
@@ -553,18 +604,21 @@ export class SmartSql {
       action: options.action,
       database: options.database,
       schema: options.schema,
-      includeExecutionPlan: options.includeExecutionPlan
+      includeExecutionPlan: options.includeExecutionPlan,
     };
 
-    const hash = createHash('sha256')
+    const hash = createHash("sha256")
       .update(JSON.stringify(keyData))
-      .digest('hex')
+      .digest("hex")
       .substring(0, 16);
 
-    return CacheEngine.generateKey('smart_sql', hash);
+    return CacheEngine.generateKey("smart_sql", hash);
   }
 
-  private async getCachedResult(key: string, ttl: number): Promise<{
+  private async getCachedResult(
+    key: string,
+    ttl: number,
+  ): Promise<{
     analysis?: QueryAnalysis;
     executionPlan?: ExecutionPlan;
     optimization?: Optimization;
@@ -596,11 +650,11 @@ export class SmartSql {
       validation?: Validation;
       history?: HistoryEntry[];
     },
-    ttl: number
+    ttl: number,
   ): Promise<void> {
     const cacheData = {
       ...result,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     const tokensSaved = this.tokenCounter.count(JSON.stringify(cacheData));
@@ -610,7 +664,7 @@ export class SmartSql {
       Buffer.from(JSON.stringify(cacheData)),
       ttl,
       tokensSaved,
-      ''
+      "",
     );
   }
 }
@@ -622,7 +676,7 @@ export class SmartSql {
 export function getSmartSql(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector
+  metrics: MetricsCollector,
 ): SmartSql {
   return new SmartSql(cache, tokenCounter, metrics);
 }
@@ -632,14 +686,14 @@ export function getSmartSql(
 // ============================================================================
 
 export async function runSmartSql(options: SmartSqlOptions): Promise<string> {
-  const { homedir } = await import('os');
-  const { join } = await import('path');
+  const { homedir } = await import("os");
+  const { join } = await import("path");
 
-  const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
   const sql = getSmartSql(
     cache,
-    new TokenCounter('gpt-4'),
-    new MetricsCollector()
+    new TokenCounter("gpt-4"),
+    new MetricsCollector(),
   );
 
   const result = await sql.run(options);
@@ -649,42 +703,42 @@ export async function runSmartSql(options: SmartSqlOptions): Promise<string> {
 
 // MCP tool definition
 export const SMART_SQL_TOOL_DEFINITION = {
-  name: 'smart_sql',
-  description: 'SQL query analyzer with optimization suggestions and execution plan analysis (83% token reduction)',
+  name: "smart_sql",
+  description:
+    "SQL query analyzer with optimization suggestions and execution plan analysis (83% token reduction)",
   inputSchema: {
-    type: 'object' as const,
+    type: "object" as const,
     properties: {
       query: {
-        type: 'string' as const,
-        description: 'SQL query to analyze'
+        type: "string" as const,
+        description: "SQL query to analyze",
       },
       action: {
-        type: 'string' as const,
-        enum: ['analyze', 'explain', 'validate', 'optimize', 'history'],
-        description: 'Action to perform (default: analyze)'
+        type: "string" as const,
+        enum: ["analyze", "explain", "validate", "optimize", "history"],
+        description: "Action to perform (default: analyze)",
       },
       database: {
-        type: 'string' as const,
-        enum: ['postgresql', 'mysql', 'sqlite', 'sqlserver'],
-        description: 'Database type for syntax-specific validation'
+        type: "string" as const,
+        enum: ["postgresql", "mysql", "sqlite", "sqlserver"],
+        description: "Database type for syntax-specific validation",
       },
       schema: {
-        type: 'string' as const,
-        description: 'Schema name (optional)'
+        type: "string" as const,
+        description: "Schema name (optional)",
       },
       includeExecutionPlan: {
-        type: 'boolean' as const,
-        description: 'Include execution plan analysis (default: false)'
+        type: "boolean" as const,
+        description: "Include execution plan analysis (default: false)",
       },
       force: {
-        type: 'boolean' as const,
-        description: 'Force fresh analysis (bypass cache)'
+        type: "boolean" as const,
+        description: "Force fresh analysis (bypass cache)",
       },
       ttl: {
-        type: 'number' as const,
-        description: 'Cache TTL in seconds (default: 300)'
-      }
-    }
-  }
+        type: "number" as const,
+        description: "Cache TTL in seconds (default: 300)",
+      },
+    },
+  },
 };
-

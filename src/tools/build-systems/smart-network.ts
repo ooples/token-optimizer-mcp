@@ -9,14 +9,14 @@
  * - Token-optimized output
  */
 
-import { spawn } from 'childprocess';
-import { CacheEngine } from '../../core/cache-engine';
-import { createHash } from 'crypto';
-import { homedir } from 'os';
-import { join } from 'path';
-import * as dns from 'dns';
-import * as net from 'net';
-import { promisify } from 'util';
+import { spawn } from "childprocess";
+import { CacheEngine } from "../../core/cache-engine";
+import { createHash } from "crypto";
+import { homedir } from "os";
+import { join } from "path";
+import * as dns from "dns";
+import * as net from "net";
+import { promisify } from "util";
 
 const _dnsResolve = promisify(dns.resolve);
 const dnsLookup = promisify(dns.lookup);
@@ -59,7 +59,7 @@ interface SmartNetworkOptions {
   /**
    * Network operation to perform
    */
-  operation: 'ping' | 'port-scan' | 'dns' | 'traceroute' | 'all';
+  operation: "ping" | "port-scan" | "dns" | "traceroute" | "all";
 
   /**
    * Hosts to test (for ping/port-scan operations)
@@ -117,7 +117,7 @@ interface SmartNetworkOutput {
     host: string;
     reachable: boolean;
     latency?: number;
-    status: 'online' | 'offline' | 'timeout';
+    status: "online" | "offline" | "timeout";
   }>;
 
   /**
@@ -153,18 +153,18 @@ interface SmartNetworkOutput {
    * Network diagnostics
    */
   diagnostics: Array<{
-    type: 'connectivity' | 'dns' | 'performance';
+    type: "connectivity" | "dns" | "performance";
     message: string;
-    severity: 'critical' | 'warning' | 'info';
+    severity: "critical" | "warning" | "info";
   }>;
 
   /**
    * Recommendations
    */
   recommendations: Array<{
-    type: 'connectivity' | 'performance' | 'configuration';
+    type: "connectivity" | "performance" | "configuration";
     message: string;
-    impact: 'high' | 'medium' | 'low';
+    impact: "high" | "medium" | "low";
   }>;
 
   /**
@@ -179,13 +179,10 @@ interface SmartNetworkOutput {
 
 export class SmartNetwork {
   private cache: CacheEngine;
-  private cacheNamespace = 'smart_network';
+  private cacheNamespace = "smart_network";
   private projectRoot: string;
 
-  constructor(
-    cache: CacheEngine,
-    projectRoot?: string
-  ) {
+  constructor(cache: CacheEngine, projectRoot?: string) {
     this.cache = cache;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -196,12 +193,12 @@ export class SmartNetwork {
   async run(options: SmartNetworkOptions): Promise<SmartNetworkOutput> {
     const {
       operation,
-      hosts = ['8.8.8.8', 'google.com'],
+      hosts = ["8.8.8.8", "google.com"],
       ports = [80, 443],
-      hostnames = ['google.com', 'github.com'],
+      hostnames = ["google.com", "github.com"],
       pingCount = 4,
       timeout = 5000,
-      maxCacheAge = 300
+      maxCacheAge = 300,
     } = options;
 
     const startTime = Date.now();
@@ -222,7 +219,7 @@ export class SmartNetwork {
       ports,
       hostnames,
       pingCount,
-      timeout
+      timeout,
     });
 
     const duration = Date.now() - startTime;
@@ -256,27 +253,27 @@ export class SmartNetwork {
       success: true,
       connectivity: [],
       duration: 0,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     // Connectivity checks
-    if (operation === 'ping' || operation === 'all') {
+    if (operation === "ping" || operation === "all") {
       result.connectivity = await this.pingHosts(hosts, pingCount, timeout);
       result.latencyStats = this.calculateLatencyStats(result.connectivity);
     }
 
     // Port scanning
-    if (operation === 'port-scan' || operation === 'all') {
+    if (operation === "port-scan" || operation === "all") {
       result.ports = await this.scanPorts(hosts, ports, timeout);
     }
 
     // DNS resolution
-    if (operation === 'dns' || operation === 'all') {
+    if (operation === "dns" || operation === "all") {
       result.dns = await this.resolveDns(hostnames);
     }
 
     // Traceroute
-    if (operation === 'traceroute') {
+    if (operation === "traceroute") {
       // Traceroute is complex and platform-specific, simplified for now
       result.connectivity = await this.pingHosts(hosts, 1, timeout);
     }
@@ -287,7 +284,11 @@ export class SmartNetwork {
   /**
    * Ping hosts
    */
-  private async pingHosts(hosts: string[], count: number, timeout: number): Promise<ConnectivityResult[]> {
+  private async pingHosts(
+    hosts: string[],
+    count: number,
+    timeout: number,
+  ): Promise<ConnectivityResult[]> {
     const results: ConnectivityResult[] = [];
 
     for (const host of hosts) {
@@ -301,45 +302,49 @@ export class SmartNetwork {
   /**
    * Ping a single host
    */
-  private async pingHost(host: string, count: number, timeout: number): Promise<ConnectivityResult> {
+  private async pingHost(
+    host: string,
+    count: number,
+    timeout: number,
+  ): Promise<ConnectivityResult> {
     return new Promise((resolve) => {
-      let output = '';
+      let output = "";
 
       // Platform-specific ping command
-      const isWindows = process.platform === 'win32';
-      const command = isWindows ? 'ping' : 'ping';
+      const isWindows = process.platform === "win32";
+      const command = isWindows ? "ping" : "ping";
       const args = isWindows
-        ? ['-n', count.toString(), '-w', timeout.toString(), host]
-        : ['-c', count.toString(), '-W', (timeout / 1000).toString(), host];
+        ? ["-n", count.toString(), "-w", timeout.toString(), host]
+        : ["-c", count.toString(), "-W", (timeout / 1000).toString(), host];
 
       const child = spawn(command, args, { shell: true });
 
-      child.stdout.on('data', (data) => {
+      child.stdout.on("data", (data) => {
         output += data.toString();
       });
 
-      child.on('close', (code) => {
+      child.on("close", (code) => {
         if (code === 0) {
           const latency = this.parsePingLatency(output);
           resolve({
             host,
             reachable: true,
-            latency
+            latency,
           });
         } else {
           resolve({
             host,
             reachable: false,
-            error: 'Host unreachable'
+            error: "Host unreachable",
           });
         }
       });
 
-      child.on('error', (err) => {
+      child.on("error", (err) => {
         resolve({
           host,
           reachable: false,
-          error: err.message
+          error: err.message,
         });
       });
     });
@@ -356,7 +361,9 @@ export class SmartNetwork {
     }
 
     // Unix: rtt min/avg/max/mdev = X.X/Y.Y/Z.Z/W.W ms
-    const unixMatch = output.match(/rtt[^=]*=\s*[\d.]+\/([\d.]+)\/([\d.]+)\/([\d.]+)/);
+    const unixMatch = output.match(
+      /rtt[^=]*=\s*[\d.]+\/([\d.]+)\/([\d.]+)\/([\d.]+)/,
+    );
     if (unixMatch) {
       return parseFloat(unixMatch[2]); // avg
     }
@@ -367,7 +374,11 @@ export class SmartNetwork {
   /**
    * Scan ports on hosts
    */
-  private async scanPorts(hosts: string[], ports: number[], timeout: number): Promise<PortCheckResult[]> {
+  private async scanPorts(
+    hosts: string[],
+    ports: number[],
+    timeout: number,
+  ): Promise<PortCheckResult[]> {
     const results: PortCheckResult[] = [];
 
     for (const host of hosts) {
@@ -383,7 +394,11 @@ export class SmartNetwork {
   /**
    * Check if a port is open
    */
-  private async checkPort(host: string, port: number, timeout: number): Promise<PortCheckResult> {
+  private async checkPort(
+    host: string,
+    port: number,
+    timeout: number,
+  ): Promise<PortCheckResult> {
     return new Promise((resolve) => {
       const socket = new net.Socket();
 
@@ -392,7 +407,7 @@ export class SmartNetwork {
         resolve({
           host,
           port,
-          open: false
+          open: false,
         });
       }, timeout);
 
@@ -403,16 +418,16 @@ export class SmartNetwork {
           host,
           port,
           open: true,
-          service: this.getServiceName(port)
+          service: this.getServiceName(port),
         });
       });
 
-      socket.on('error', () => {
+      socket.on("error", () => {
         clearTimeout(timer);
         resolve({
           host,
           port,
-          open: false
+          open: false,
         });
       });
     });
@@ -423,26 +438,26 @@ export class SmartNetwork {
    */
   private getServiceName(port: number): string {
     const services: Record<number, string> = {
-      20: 'FTP Data',
-      21: 'FTP Control',
-      22: 'SSH',
-      23: 'Telnet',
-      25: 'SMTP',
-      53: 'DNS',
-      80: 'HTTP',
-      110: 'POP3',
-      143: 'IMAP',
-      443: 'HTTPS',
-      465: 'SMTPS',
-      587: 'SMTP Submission',
-      993: 'IMAPS',
-      995: 'POP3S',
-      3306: 'MySQL',
-      5432: 'PostgreSQL',
-      6379: 'Redis',
-      8080: 'HTTP Alt',
-      8443: 'HTTPS Alt',
-      27017: 'MongoDB'
+      20: "FTP Data",
+      21: "FTP Control",
+      22: "SSH",
+      23: "Telnet",
+      25: "SMTP",
+      53: "DNS",
+      80: "HTTP",
+      110: "POP3",
+      143: "IMAP",
+      443: "HTTPS",
+      465: "SMTPS",
+      587: "SMTP Submission",
+      993: "IMAPS",
+      995: "POP3S",
+      3306: "MySQL",
+      5432: "PostgreSQL",
+      6379: "Redis",
+      8080: "HTTP Alt",
+      8443: "HTTPS Alt",
+      27017: "MongoDB",
     };
 
     return services[port] || `Port ${port}`;
@@ -459,13 +474,13 @@ export class SmartNetwork {
         const lookup = await dnsLookup(hostname);
         results.push({
           hostname,
-          addresses: [lookup.address]
+          addresses: [lookup.address],
         });
       } catch (err) {
         results.push({
           hostname,
           addresses: [],
-          error: (err as Error).message
+          error: (err as Error).message,
         });
       }
     }
@@ -476,14 +491,16 @@ export class SmartNetwork {
   /**
    * Calculate latency statistics
    */
-  private calculateLatencyStats(connectivity: ConnectivityResult[]): {
-    min: number;
-    max: number;
-    avg: number;
-  } | undefined {
+  private calculateLatencyStats(connectivity: ConnectivityResult[]):
+    | {
+        min: number;
+        max: number;
+        avg: number;
+      }
+    | undefined {
     const latencies = connectivity
-      .filter(c => c.latency !== undefined)
-      .map(c => c.latency!);
+      .filter((c) => c.latency !== undefined)
+      .map((c) => c.latency!);
 
     if (latencies.length === 0) {
       return undefined;
@@ -496,7 +513,7 @@ export class SmartNetwork {
     return {
       min: Math.round(min * 100) / 100,
       max: Math.round(max * 100) / 100,
-      avg: Math.round(avg * 100) / 100
+      avg: Math.round(avg * 100) / 100,
     };
   }
 
@@ -504,23 +521,26 @@ export class SmartNetwork {
    * Generate diagnostics
    */
   private generateDiagnostics(result: NetworkResult): Array<{
-    type: 'connectivity' | 'dns' | 'performance';
+    type: "connectivity" | "dns" | "performance";
     message: string;
-    severity: 'critical' | 'warning' | 'info';
+    severity: "critical" | "warning" | "info";
   }> {
     const diagnostics: Array<{
-      type: 'connectivity' | 'dns' | 'performance';
+      type: "connectivity" | "dns" | "performance";
       message: string;
-      severity: 'critical' | 'warning' | 'info';
+      severity: "critical" | "warning" | "info";
     }> = [];
 
     // Connectivity diagnostics
-    const unreachableHosts = result.connectivity.filter(c => !c.reachable);
+    const unreachableHosts = result.connectivity.filter((c) => !c.reachable);
     if (unreachableHosts.length > 0) {
       diagnostics.push({
-        type: 'connectivity',
-        severity: unreachableHosts.length === result.connectivity.length ? 'critical' : 'warning',
-        message: `${unreachableHosts.length} host(s) unreachable: ${unreachableHosts.map(h => h.host).join(', ')}`
+        type: "connectivity",
+        severity:
+          unreachableHosts.length === result.connectivity.length
+            ? "critical"
+            : "warning",
+        message: `${unreachableHosts.length} host(s) unreachable: ${unreachableHosts.map((h) => h.host).join(", ")}`,
       });
     }
 
@@ -528,21 +548,21 @@ export class SmartNetwork {
     if (result.latencyStats) {
       if (result.latencyStats.avg > 200) {
         diagnostics.push({
-          type: 'performance',
-          severity: result.latencyStats.avg > 500 ? 'warning' : 'info',
-          message: `High average latency: ${result.latencyStats.avg}ms`
+          type: "performance",
+          severity: result.latencyStats.avg > 500 ? "warning" : "info",
+          message: `High average latency: ${result.latencyStats.avg}ms`,
         });
       }
     }
 
     // DNS diagnostics
     if (result.dns) {
-      const failedDns = result.dns.filter(d => d.error);
+      const failedDns = result.dns.filter((d) => d.error);
       if (failedDns.length > 0) {
         diagnostics.push({
-          type: 'dns',
-          severity: 'warning',
-          message: `DNS resolution failed for: ${failedDns.map(d => d.hostname).join(', ')}`
+          type: "dns",
+          severity: "warning",
+          message: `DNS resolution failed for: ${failedDns.map((d) => d.hostname).join(", ")}`,
         });
       }
     }
@@ -554,44 +574,48 @@ export class SmartNetwork {
    * Generate recommendations
    */
   private generateRecommendations(result: NetworkResult): Array<{
-    type: 'connectivity' | 'performance' | 'configuration';
+    type: "connectivity" | "performance" | "configuration";
     message: string;
-    impact: 'high' | 'medium' | 'low';
+    impact: "high" | "medium" | "low";
   }> {
     const recommendations: Array<{
-      type: 'connectivity' | 'performance' | 'configuration';
+      type: "connectivity" | "performance" | "configuration";
       message: string;
-      impact: 'high' | 'medium' | 'low';
+      impact: "high" | "medium" | "low";
     }> = [];
 
     // Check if all hosts are unreachable
-    const allUnreachable = result.connectivity.every(c => !c.reachable);
+    const allUnreachable = result.connectivity.every((c) => !c.reachable);
     if (allUnreachable && result.connectivity.length > 0) {
       recommendations.push({
-        type: 'connectivity',
-        message: 'All hosts unreachable. Check firewall, VPN, or internet connection.',
-        impact: 'high'
+        type: "connectivity",
+        message:
+          "All hosts unreachable. Check firewall, VPN, or internet connection.",
+        impact: "high",
       });
     }
 
     // High latency recommendations
     if (result.latencyStats && result.latencyStats.avg > 200) {
       recommendations.push({
-        type: 'performance',
-        message: 'High network latency detected. Consider using a CDN or checking network quality.',
-        impact: 'medium'
+        type: "performance",
+        message:
+          "High network latency detected. Consider using a CDN or checking network quality.",
+        impact: "medium",
       });
     }
 
     // Port security recommendations
     if (result.ports) {
-      const openPorts = result.ports.filter(p => p.open);
-      const sensitivePorts = openPorts.filter(p => [23, 21, 3306, 5432, 27017].includes(p.port));
+      const openPorts = result.ports.filter((p) => p.open);
+      const sensitivePorts = openPorts.filter((p) =>
+        [23, 21, 3306, 5432, 27017].includes(p.port),
+      );
       if (sensitivePorts.length > 0) {
         recommendations.push({
-          type: 'configuration',
-          message: `Sensitive ports open: ${sensitivePorts.map(p => p.service).join(', ')}. Ensure proper security measures.`,
-          impact: 'high'
+          type: "configuration",
+          message: `Sensitive ports open: ${sensitivePorts.map((p) => p.service).join(", ")}. Ensure proper security measures.`,
+          impact: "high",
         });
       }
     }
@@ -606,26 +630,28 @@ export class SmartNetwork {
     operation: string,
     hosts: string[],
     ports: number[],
-    hostnames: string[]
+    hostnames: string[],
   ): string {
     const keyParts = [
       operation,
-      hosts.join(','),
-      ports.join(','),
-      hostnames.join(',')
+      hosts.join(","),
+      ports.join(","),
+      hostnames.join(","),
     ];
-    return createHash('md5').update(keyParts.join(':')).digest('hex');
+    return createHash("md5").update(keyParts.join(":")).digest("hex");
   }
 
   /**
    * Get cached result
    */
   private getCachedResult(key: string, maxAge: number): NetworkResult | null {
-    const cached = this.cache.get(this.cacheNamespace + ':' + key);
+    const cached = this.cache.get(this.cacheNamespace + ":" + key);
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached.toString('utf-8')) as NetworkResult & { cachedAt: number };
+      const result = JSON.parse(cached.toString("utf-8")) as NetworkResult & {
+        cachedAt: number;
+      };
       const age = (Date.now() - result.cachedAt) / 1000;
 
       if (age <= maxAge) {
@@ -643,7 +669,12 @@ export class SmartNetwork {
    */
   private cacheResult(key: string, result: NetworkResult): void {
     const cacheData = { ...result, cachedAt: Date.now() };
-    this.cache.set(this.cacheNamespace + ':' + key, Buffer.from(JSON.stringify(cacheData)), 3600, 0);
+    this.cache.set(
+      this.cacheNamespace + ":" + key,
+      Buffer.from(JSON.stringify(cacheData)),
+      3600,
+      0,
+    );
   }
 
   /**
@@ -651,49 +682,62 @@ export class SmartNetwork {
    */
   private transformOutput(
     result: NetworkResult,
-    diagnostics: Array<{ type: 'connectivity' | 'dns' | 'performance'; message: string; severity: 'critical' | 'warning' | 'info' }>,
-    recommendations: Array<{ type: 'connectivity' | 'performance' | 'configuration'; message: string; impact: 'high' | 'medium' | 'low' }>,
-    fromCache = false
+    diagnostics: Array<{
+      type: "connectivity" | "dns" | "performance";
+      message: string;
+      severity: "critical" | "warning" | "info";
+    }>,
+    recommendations: Array<{
+      type: "connectivity" | "performance" | "configuration";
+      message: string;
+      impact: "high" | "medium" | "low";
+    }>,
+    fromCache = false,
   ): SmartNetworkOutput {
-    const connectivity = result.connectivity.map(c => ({
+    const connectivity = result.connectivity.map((c) => ({
       host: c.host,
       reachable: c.reachable,
       latency: c.latency,
-      status: c.reachable ? 'online' as const :
-              c.error?.includes('timeout') ? 'timeout' as const : 'offline' as const
+      status: c.reachable
+        ? ("online" as const)
+        : c.error?.includes("timeout")
+          ? ("timeout" as const)
+          : ("offline" as const),
     }));
 
-    const ports = result.ports?.map(p => ({
+    const ports = result.ports?.map((p) => ({
       host: p.host,
       port: p.port,
       open: p.open,
-      service: p.service
+      service: p.service,
     }));
 
-    const dns = result.dns?.map(d => ({
+    const dns = result.dns?.map((d) => ({
       hostname: d.hostname,
       addresses: d.addresses,
-      resolved: !d.error
+      resolved: !d.error,
     }));
 
-    let latencyStats = result.latencyStats ? {
-      ...result.latencyStats,
-      distribution: this.getLatencyDistribution(result.latencyStats)
-    } : undefined;
+    let latencyStats = result.latencyStats
+      ? {
+          ...result.latencyStats,
+          distribution: this.getLatencyDistribution(result.latencyStats),
+        }
+      : undefined;
 
     const originalSize = this.estimateOriginalOutputSize(result);
     const compactSize = this.estimateCompactSize({ connectivity, ports, dns });
 
-    const reachableCount = connectivity.filter(c => c.reachable).length;
+    const reachableCount = connectivity.filter((c) => c.reachable).length;
 
     return {
       summary: {
         success: result.success,
-        operation: 'network diagnostics',
+        operation: "network diagnostics",
         hostsChecked: connectivity.length,
         reachableHosts: reachableCount,
         duration: result.duration,
-        fromCache
+        fromCache,
       },
       connectivity,
       ports,
@@ -704,20 +748,26 @@ export class SmartNetwork {
       metrics: {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
-        reductionPercentage: Math.round(((originalSize - compactSize) / originalSize) * 100)
-      }
+        reductionPercentage: Math.round(
+          ((originalSize - compactSize) / originalSize) * 100,
+        ),
+      },
     };
   }
 
   /**
    * Get latency distribution description
    */
-  private getLatencyDistribution(stats: { min: number; max: number; avg: number }): string {
-    if (stats.avg < 50) return 'Excellent';
-    if (stats.avg < 100) return 'Good';
-    if (stats.avg < 200) return 'Fair';
-    if (stats.avg < 500) return 'Poor';
-    return 'Very Poor';
+  private getLatencyDistribution(stats: {
+    min: number;
+    max: number;
+    avg: number;
+  }): string {
+    if (stats.avg < 50) return "Excellent";
+    if (stats.avg < 100) return "Good";
+    if (stats.avg < 200) return "Fair";
+    if (stats.avg < 500) return "Poor";
+    return "Very Poor";
   }
 
   /**
@@ -765,7 +815,7 @@ export class SmartNetwork {
  */
 export function getSmartNetwork(
   cache: CacheEngine,
-  projectRoot?: string
+  projectRoot?: string,
 ): SmartNetwork {
   return new SmartNetwork(cache, projectRoot);
 }
@@ -773,14 +823,16 @@ export function getSmartNetwork(
 /**
  * CLI-friendly function for running smart network diagnostics
  */
-export async function runSmartNetwork(options: SmartNetworkOptions): Promise<string> {
-  const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
+export async function runSmartNetwork(
+  options: SmartNetworkOptions,
+): Promise<string> {
+  const cache = new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
   const smartNetwork = getSmartNetwork(cache, options.projectRoot);
   try {
     const result = await smartNetwork.run(options);
 
-    let output = `\n🌐 Smart Network Diagnostics ${result.summary.fromCache ? '(cached)' : ''}\n`;
-    output += `${'='.repeat(50)}\n\n`;
+    let output = `\n🌐 Smart Network Diagnostics ${result.summary.fromCache ? "(cached)" : ""}\n`;
+    output += `${"=".repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
@@ -793,15 +845,19 @@ export async function runSmartNetwork(options: SmartNetworkOptions): Promise<str
     if (result.connectivity.length > 0) {
       output += `Connectivity:\n`;
       for (const conn of result.connectivity) {
-        const icon = conn.status === 'online' ? '✓' :
-                     conn.status === 'timeout' ? '⏱' : '✗';
+        const icon =
+          conn.status === "online"
+            ? "✓"
+            : conn.status === "timeout"
+              ? "⏱"
+              : "✗";
         output += `  ${icon} ${conn.host}: ${conn.status}`;
         if (conn.latency) {
           output += ` (${conn.latency}ms)`;
         }
-        output += '\n';
+        output += "\n";
       }
-      output += '\n';
+      output += "\n";
     }
 
     // Latency stats
@@ -817,48 +873,52 @@ export async function runSmartNetwork(options: SmartNetworkOptions): Promise<str
     if (result.ports && result.ports.length > 0) {
       output += `Port Scan Results:\n`;
       for (const port of result.ports) {
-        const icon = port.open ? '🟢' : '🔴';
-        output += `  ${icon} ${port.host}:${port.port} (${port.service || 'Unknown'}) - ${port.open ? 'Open' : 'Closed'}\n`;
+        const icon = port.open ? "🟢" : "🔴";
+        output += `  ${icon} ${port.host}:${port.port} (${port.service || "Unknown"}) - ${port.open ? "Open" : "Closed"}\n`;
       }
-      output += '\n';
+      output += "\n";
     }
 
     // DNS
     if (result.dns && result.dns.length > 0) {
       output += `DNS Resolution:\n`;
       for (const dns of result.dns) {
-        const icon = dns.resolved ? '✓' : '✗';
+        const icon = dns.resolved ? "✓" : "✗";
         output += `  ${icon} ${dns.hostname}`;
         if (dns.resolved) {
-          output += `: ${dns.addresses.join(', ')}`;
+          output += `: ${dns.addresses.join(", ")}`;
         } else {
-          output += ': Failed to resolve';
+          output += ": Failed to resolve";
         }
-        output += '\n';
+        output += "\n";
       }
-      output += '\n';
+      output += "\n";
     }
 
     // Diagnostics
     if (result.diagnostics.length > 0) {
       output += `Diagnostics:\n`;
       for (const diag of result.diagnostics) {
-        const icon = diag.severity === 'critical' ? '🔴' :
-                     diag.severity === 'warning' ? '⚠️' : 'ℹ️';
+        const icon =
+          diag.severity === "critical"
+            ? "🔴"
+            : diag.severity === "warning"
+              ? "⚠️"
+              : "ℹ️";
         output += `  ${icon} [${diag.type}] ${diag.message}\n`;
       }
-      output += '\n';
+      output += "\n";
     }
 
     // Recommendations
     if (result.recommendations.length > 0) {
       output += `Recommendations:\n`;
       for (const rec of result.recommendations) {
-        const icon = rec.impact === 'high' ? '🔴' :
-                     rec.impact === 'medium' ? '🟡' : '🟢';
+        const icon =
+          rec.impact === "high" ? "🔴" : rec.impact === "medium" ? "🟡" : "🟢";
         output += `  ${icon} [${rec.type}] ${rec.message}\n`;
       }
-      output += '\n';
+      output += "\n";
     }
 
     // Metrics

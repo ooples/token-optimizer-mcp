@@ -1,7 +1,7 @@
 ﻿/** * CacheAnalytics - Comprehensive Cache Analytics * * Real-time analytics and reporting for cache performance and usage. * Provides visualization, trend analysis, alerting, and cost analysis capabilities. * * Operations: * 1. dashboard - Get real-time dashboard data * 2. metrics - Get detailed metrics * 3. trends - Analyze trends over time * 4. alerts - Configure and check alerts * 5. heatmap - Generate access heatmap * 6. bottlenecks - Identify performance bottlenecks * 7. cost-analysis - Analyze caching costs * 8. export-data - Export analytics data * * Token Reduction Target: 88%+ */ import { CacheEngine } from "../../core/cache-engine";
 import { TokenCounter } from "../../core/token-counter";
 import { MetricsCollector } from "../../core/metrics";
-import { createWriteStream, existsSync} from "fs";
+import { createWriteStream, existsSync } from "fs";
 import { join } from "path";
 import { createCanvas } from "canvas";
 import { generateCacheKey } from "../shared/hash-utils";
