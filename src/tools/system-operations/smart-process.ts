@@ -12,9 +12,9 @@
  * - Cross-platform support (Windows/Linux/macOS)
  */
 
-import { spawn, ChildProcess } from 'childprocess';
+import { spawn, ChildProcess } from 'child_process';
 import { promisify } from 'util';
-import { exec } from 'childprocess';
+import { exec } from 'child_process';
 import { CacheEngine } from '../../core/cache-engine';
 import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
@@ -262,7 +262,7 @@ export class SmartProcess {
     if (useCache) {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
-        const dataStr = cached.toString('utf-8');
+        const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr);
         const baselineTokens = tokensUsed * 20; // Estimate baseline
 
@@ -359,7 +359,7 @@ export class SmartProcess {
     if (useCache) {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
-        const dataStr = cached.toString('utf-8');
+        const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr);
         const baselineTokens = tokensUsed * 20; // Estimate baseline
 

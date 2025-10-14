@@ -146,7 +146,7 @@ export class SmartSql {
           duration,
           cacheHit: true,
           success: true,
-          savedTokens: this.tokenCounter.count(JSON.stringify(cached)),
+          savedTokens: this.tokenCounter.count(JSON.stringify(cached)).tokens,
         });
         return this.transformOutput(cached, true);
       }
@@ -518,7 +518,8 @@ export class SmartSql {
     fromCache: boolean,
   ): SmartSqlOutput {
     const fullOutput = JSON.stringify(result);
-    const originalTokens = this.tokenCounter.count(fullOutput);
+    const originalTokensResult = this.tokenCounter.count(fullOutput);
+    const originalTokens = originalTokensResult.tokens;
     let compactedTokens: number;
     let reductionPercentage: number;
 
@@ -657,11 +658,12 @@ export class SmartSql {
       timestamp: Date.now(),
     };
 
-    const tokensSaved = this.tokenCounter.count(JSON.stringify(cacheData));
+    const tokensSavedResult = this.tokenCounter.count(JSON.stringify(cacheData));
+    const tokensSaved = tokensSavedResult.tokens;
 
     await this.cache.set(
       key,
-      Buffer.from(JSON.stringify(cacheData)),
+      JSON.stringify(cacheData)),
       ttl,
       tokensSaved,
       "",

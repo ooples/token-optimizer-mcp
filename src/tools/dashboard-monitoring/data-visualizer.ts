@@ -329,10 +329,10 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(chart)).tokens;
-    const cacheData = Buffer.from(JSON.stringify(chart));
+    const cacheData = JSON.stringify(chart));
     this.cache.set(
       cacheKey,
-      cacheData.toString("utf-8"),
+      cacheData,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -462,7 +462,7 @@ export class DataVisualizer {
         exported = await this.exportToHTML(chart, options);
         break;
       case "json":
-        exported = Buffer.from(JSON.stringify(chart, null, 2));
+        exported = JSON.stringify(chart, null, 2));
         break;
       default:
         throw new Error(`Unsupported export format: ${format}`);
@@ -561,7 +561,7 @@ export class DataVisualizer {
     const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData.toString("utf-8"),
+      cacheData,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -620,7 +620,7 @@ export class DataVisualizer {
     const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData.toString("utf-8"),
+      cacheData,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -688,7 +688,7 @@ export class DataVisualizer {
     const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData.toString("utf-8"),
+      cacheData,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -751,7 +751,7 @@ export class DataVisualizer {
     const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData.toString("utf-8"),
+      cacheData,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -824,7 +824,7 @@ export class DataVisualizer {
     const cacheData = Buffer.from(animated);
     this.cache.set(
       cacheKey,
-      cacheData.toString("utf-8"),
+      cacheData,
       tokensUsed,
       options.cacheTTL || 1800,
     );

@@ -873,9 +873,9 @@ export async function runSmartCacheApi(
 ): Promise<string> {
   const { homedir } = await import("os");
   const { join } = await import("path");
-  const { CacheEngine: CacheEngineClass } = await import("../../core/cache.js");
+  const { CacheEngine: CacheEngineClass } = await import("../../core/cache-engine");
   const { globalTokenCounter, globalMetricsCollector } = await import(
-    "../../core/index.js"
+    "../../core/globals"
   );
 
   const cache = new CacheEngineClass(

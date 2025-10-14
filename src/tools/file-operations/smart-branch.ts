@@ -11,7 +11,7 @@
  * Target: 60% reduction vs full git branch output with details
  */
 
-import { execSync } from "childprocess";
+import { execSync } from "child_process";
 import { join } from "path";
 import { homedir } from "os";
 import { CacheEngine } from "../../core/cache-engine";

@@ -660,9 +660,9 @@ export async function runSmartApiFetch(
 ): Promise<string> {
   // Use global instances
   const { globalTokenCounter, globalMetricsCollector } = await import(
-    "../../core/index.js"
+    "../../core/globals"
   );
-  const { CacheEngine } = await import("../../core/cache.js");
+  const { CacheEngine } = await import("../../core/cache-engine");
   const { homedir } = await import("os");
   const { join } = await import("path");
 

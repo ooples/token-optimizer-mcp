@@ -818,7 +818,7 @@ export class SmartTypeScript {
     }
 
     try {
-      const result = JSON.parse(cached.toString('utf-8')) as SmartTypeScriptOutput & { cachedAt: number };
+      const result = JSON.parse(cached) as SmartTypeScriptOutput & { cachedAt: number };
       const age = (Date.now() - result.cachedAt) / 1000;
 
       if (age <= maxAge) {
@@ -841,7 +841,7 @@ export class SmartTypeScript {
       cachedAt: Date.now()
     };
 
-    const buffer = Buffer.from(JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache), 'utf-8');
     const tokensSaved = output.metrics.originalTokens - output.metrics.compactedTokens;
 
     this.cache.set(key, buffer, 300, tokensSaved); // 5 minute TTL

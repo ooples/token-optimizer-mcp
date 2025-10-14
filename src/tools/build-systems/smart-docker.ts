@@ -8,7 +8,7 @@
  * - Token-optimized output
  */
 
-import { spawn } from "childprocess";
+import { spawn } from "child_process";
 import { CacheEngine } from "../../core/cache-engine";
 import { createHash } from "crypto";
 import { readFileSync, existsSync } from "fs";
@@ -558,7 +558,7 @@ export class SmartDocker {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached.toString("utf-8")) as DockerResult & {
+      const result = JSON.parse(cached) as DockerResult & {
         cachedAt: number;
       };
       const age = (Date.now() - result.cachedAt) / 1000;
@@ -584,7 +584,7 @@ export class SmartDocker {
     const cacheData = { ...result, cachedAt: Date.now() };
     this.cache.set(
       this.cacheNamespace + ":" + key,
-      Buffer.from(JSON.stringify(cacheData)),
+      JSON.stringify(cacheData)),
       ttl,
       0,
     );

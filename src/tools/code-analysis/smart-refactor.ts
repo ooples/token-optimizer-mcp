@@ -614,7 +614,7 @@ export class SmartRefactorTool {
     const cached = this.cache.get(key);
     if (!cached) return null;
 
-    const result = JSON.parse(cached.toString('utf-8')) as SmartRefactorResult & { cachedAt: number };
+    const result = JSON.parse(cached) as SmartRefactorResult & { cachedAt: number };
     const age = (Date.now() - result.cachedAt) / 1000;
 
     if (age <= maxAge) {
@@ -627,7 +627,7 @@ export class SmartRefactorTool {
 
   private cacheResult(key: string, output: SmartRefactorResult): void {
     const toCache = { ...output, cachedAt: Date.now() };
-    const buffer = Buffer.from(JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache), 'utf-8');
     const tokensSaved = output.metrics.originalTokens - output.metrics.compactedTokens;
     this.cache.set(key, buffer, 300, tokensSaved);
   }

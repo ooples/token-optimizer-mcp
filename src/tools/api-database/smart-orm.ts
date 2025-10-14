@@ -144,7 +144,7 @@ export class SmartORM {
           duration: Date.now() - startTime,
           cacheHit: true,
           success: true,
-          savedTokens: this.tokenCounter.count(JSON.stringify(cached)),
+          savedTokens: this.tokenCounter.count(JSON.stringify(cached)).tokens,
         });
         return this.transformOutput(cached, true);
       }
@@ -779,9 +779,9 @@ export class SmartORM {
       ...result,
       cached: fromCache,
       metrics: {
-        originalTokens: Math.ceil(this.tokenCounter.count(fullResult)),
+        originalTokens: Math.ceil(this.tokenCounter.count(fullResult).tokens),
         compactedTokens: Math.ceil(
-          this.tokenCounter.count(JSON.stringify(compactedData)),
+          this.tokenCounter.count(JSON.stringify(compactedData)).tokens,
         ),
         reductionPercentage,
       },
@@ -824,7 +824,7 @@ export class SmartORM {
     _ttl?: number,
   ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
-    await this.cache.set(key, Buffer.from(JSON.stringify(cacheData)), 3600);
+    await this.cache.set(key, JSON.stringify(cacheData)), 3600);
   }
 }
 
@@ -847,9 +847,9 @@ export function getSmartOrm(
 export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   const { homedir } = await import("os");
   const { join } = await import("path");
-  const { CacheEngine: CacheEngineClass } = await import("../../core/cache.js");
+  const { CacheEngine: CacheEngineClass } = await import("../../core/cache-engine");
   const { globalTokenCounter, globalMetricsCollector } = await import(
-    "../../core/index.js"
+    "../../core/globals"
   );
 
   const cache = new CacheEngineClass(

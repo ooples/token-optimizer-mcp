@@ -21,17 +21,8 @@ export {
   type AstMatch,
 } from "./smart-ast-grep";
 
-export {
-  SmartAmbianceTool,
-  runSmartAmbiance,
-  SMART_AMBIANCE_TOOL_DEFINITION,
-  type SmartAmbianceOptions,
-  type SmartAmbianceResult,
-  type CodeSymbol,
-  type DependencyNode,
-  type JumpTarget,
-  type ContextChunk,
-} from "./smart-ambiance";
+// SmartAmbiance - Implementation pending
+// Note: Exports temporarily removed until implementation is complete
 
 export {
   SmartSecurity,

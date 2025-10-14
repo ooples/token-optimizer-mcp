@@ -11,7 +11,7 @@
  * Target: 80% reduction vs full git merge/status output
  */
 
-import { execSync } from "childprocess";
+import { execSync } from "child_process";
 import { join } from "path";
 import { homedir } from "os";
 import { CacheEngine } from "../../core/cache-engine";

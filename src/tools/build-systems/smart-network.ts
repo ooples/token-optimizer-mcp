@@ -9,7 +9,7 @@
  * - Token-optimized output
  */
 
-import { spawn } from "childprocess";
+import { spawn } from "child_process";
 import { CacheEngine } from "../../core/cache-engine";
 import { createHash } from "crypto";
 import { homedir } from "os";
@@ -649,7 +649,7 @@ export class SmartNetwork {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached.toString("utf-8")) as NetworkResult & {
+      const result = JSON.parse(cached) as NetworkResult & {
         cachedAt: number;
       };
       const age = (Date.now() - result.cachedAt) / 1000;
@@ -671,7 +671,7 @@ export class SmartNetwork {
     const cacheData = { ...result, cachedAt: Date.now() };
     this.cache.set(
       this.cacheNamespace + ":" + key,
-      Buffer.from(JSON.stringify(cacheData)),
+      JSON.stringify(cacheData)),
       3600,
       0,
     );

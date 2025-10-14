@@ -8,7 +8,7 @@
  * - Token-optimized output
  */
 
-import { spawn } from "childprocess";
+import { spawn } from "child_process";
 import { CacheEngine } from "../../core/cache-engine";
 import { createHash } from "crypto";
 import { homedir } from "os";

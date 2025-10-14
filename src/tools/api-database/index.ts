@@ -47,6 +47,7 @@ export {
 
 export {
   SmartREST,
+  getSmartRest,
   runSmartREST,
   SMART_REST_TOOL_DEFINITION,
   type SmartRESTOptions,
@@ -86,23 +87,8 @@ export {
   type HistoryEntry,
 } from "./smart-sql";
 
-export {
-  SmartDatabase,
-  runSmartDatabase,
-  SMART_DATABASE_TOOL_DEFINITION,
-  type SmartDatabaseOptions,
-  type SmartDatabaseResult,
-  type SmartDatabaseOutput,
-  type DatabaseType,
-  type QueryType,
-  type QueryInfo as DatabaseQueryInfo,
-  type QueryResults,
-  type PlanStep,
-  type QueryPlan,
-  type MissingIndex as DatabaseMissingIndex,
-  type QueryOptimizations,
-  type QueryPerformance,
-} from "./smart-database";
+// SmartDatabase - Implementation pending
+// Note: Exports temporarily removed until implementation is complete
 
 export {
   SmartWebSocket,

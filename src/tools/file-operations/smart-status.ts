@@ -11,7 +11,7 @@
  * Target: 70% reduction vs full git diff output
  */
 
-import { execSync } from "childprocess";
+import { execSync } from "child_process";
 import { existsSync, statSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";

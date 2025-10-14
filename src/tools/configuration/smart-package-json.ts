@@ -13,7 +13,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
-import { execSync } from 'childprocess';
+import { execSync } from 'child_process';
 import { CacheEngine } from '../../core/cache-engine';
 import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
@@ -801,7 +801,7 @@ export class SmartPackageJson {
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached.toString('utf-8')) as ParsedPackageJson & {
+      const result = JSON.parse(cached) as ParsedPackageJson & {
         cachedAt: number;
       };
 
@@ -837,7 +837,7 @@ export class SmartPackageJson {
 
     this.cache.set(
       this.cacheNamespace + ':' + key,
-      Buffer.from(JSON.stringify(cacheData)),
+      JSON.stringify(cacheData)),
       86400, // 24 hour TTL
       tokensSaved,
       fileHash

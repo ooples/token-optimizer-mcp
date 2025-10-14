@@ -11,7 +11,7 @@
  * Target: 83% reduction vs running ast-grep each time
  */
 
-import { execSync } from 'childprocess';
+import { execSync } from 'child_process';
 import { existsSync, statSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { CacheEngine } from '../../core/cache-engine';
@@ -165,7 +165,7 @@ export class SmartAstGrepTool {
       const cached = this.cache.get(patternKey);
       if (cached) {
         try {
-          const parsedResult = JSON.parse(cached.toString('utf-8')) as SmartAstGrepResult;
+          const parsedResult = JSON.parse(cached) as SmartAstGrepResult;
           fromPatternCache = true;
 
           // Update execution time for cached result
@@ -225,9 +225,11 @@ export class SmartAstGrepTool {
 
     // Calculate tokens
     const fullOutput = this.formatFullOutput(limitedMatches);
-    const originalTokens = this.tokenCounter.count(fullOutput);
+    const originalTokensResult = this.tokenCounter.count(fullOutput);
+    const originalTokens = originalTokensResult.tokens;
     const compactOutput = this.formatCompactOutput(limitedMatches);
-    const cachedTokens = this.tokenCounter.count(compactOutput);
+    const cachedTokensResult = this.tokenCounter.count(compactOutput);
+    const cachedTokens = cachedTokensResult.tokens;
     const tokensSaved = Math.max(0, originalTokens - cachedTokens);
     const compressionRatio = originalTokens > 0 ? cachedTokens / originalTokens : 1;
 
@@ -625,7 +627,7 @@ export class SmartAstGrepTool {
       const cached = this.cache.get(key);
       if (!cached) return null;
 
-      const data = JSON.parse(cached.toString('utf-8'));
+      const data = JSON.parse(cached);
 
       // Reconstruct Maps
       const index: AstIndex = {
@@ -683,7 +685,7 @@ export class SmartAstGrepTool {
         lastUpdated: index.lastUpdated,
       };
 
-      const data = Buffer.from(JSON.stringify(serializable), 'utf-8');
+      const data = JSON.stringify(serializable), 'utf-8');
       const tokensSaved = this.estimateTokensSaved(index);
 
       this.cache.set(key, data, ttl, tokensSaved);
@@ -697,7 +699,7 @@ export class SmartAstGrepTool {
    */
   private cachePatternResult(key: string, result: SmartAstGrepResult, ttl: number): void {
     try {
-      const data = Buffer.from(JSON.stringify(result), 'utf-8');
+      const data = JSON.stringify(result), 'utf-8');
       this.cache.set(key, data, ttl, result.metadata.tokensSaved);
     } catch (error) {
       console.warn('Failed to cache pattern result:', error);

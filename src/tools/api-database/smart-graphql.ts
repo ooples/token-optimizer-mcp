@@ -723,7 +723,7 @@ export class SmartGraphQL {
 
     await this.cache.set(
       key,
-      Buffer.from(JSON.stringify(cacheData.toString("utf-8"))),
+      JSON.stringify(cacheData)),
       tokensSaved,
       ttl,
     );

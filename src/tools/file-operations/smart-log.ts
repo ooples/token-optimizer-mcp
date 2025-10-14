@@ -11,7 +11,7 @@
  * Target: 75% reduction vs full git log output
  */
 
-import { execSync } from "childprocess";
+import { execSync } from "child_process";
 import { join } from "path";
 import { homedir } from "os";
 import { CacheEngine } from "../../core/cache-engine";

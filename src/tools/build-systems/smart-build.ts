@@ -8,7 +8,7 @@
  * - Build time optimization suggestions
  */
 
-import { spawn } from "childprocess";
+import { spawn } from "child_process";
 import { CacheEngine } from "../../core/cache-engine";
 import { MetricsCollector } from "../../core/metrics";
 import { createHash } from "crypto";

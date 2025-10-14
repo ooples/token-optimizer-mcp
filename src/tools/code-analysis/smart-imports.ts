@@ -834,7 +834,7 @@ export class SmartImportsTool {
     const cached = this.cache.get(cacheKey);
     if (!cached) return null;
 
-    const data = JSON.parse(cached.toString('utf-8')) as {
+    const data = JSON.parse(cached) as {
       result: SmartImportsResult;
       timestamp: number;
       originalTokens?: number;
@@ -863,7 +863,7 @@ export class SmartImportsTool {
       originalTokens,
       compactedTokens
     };
-    const buffer = Buffer.from(JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache), 'utf-8');
     const tokensSaved = originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
     this.cache.set(cacheKey, buffer, 300, tokensSaved);
   }

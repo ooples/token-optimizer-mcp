@@ -236,10 +236,10 @@ export class CachePartitionTool extends EventEmitter {
       // Check cache
       const cached = this.cache.get(cacheKey);
       if (cached) {
-        const cachedResult = JSON.parse(cached.toString("utf-8"));
+        const cachedResult = JSON.parse(cached);
         const tokensSaved = this.tokenCounter.count(
           JSON.stringify(cachedResult),
-        );
+        ).tokens;
 
         return {
           success: true,
@@ -286,11 +286,12 @@ export class CachePartitionTool extends EventEmitter {
       }
 
       // Cache the result
-      const tokensUsed = this.tokenCounter.count(JSON.stringify(data));
+      const tokensUsedResult = this.tokenCounter.count(JSON.stringify(data));
+      const tokensUsed = tokensUsedResult.tokens;
       if (cacheKey && useCache) {
         this.cache.set(
           cacheKey,
-          Buffer.from(JSON.stringify(data), "utf-8"),
+          JSON.stringify(data), "utf-8"),
           cacheTTL,
           tokensUsed,
         );

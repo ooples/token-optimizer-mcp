@@ -28,52 +28,10 @@ export {
   type DependencyGraph,
 } from "./smart-service";
 
-export {
-  SmartNetwork,
-  runSmartNetwork,
-  SMART_NETWORK_TOOL_DEFINITION,
-  type SmartNetworkOptions,
-  type SmartNetworkResult,
-  type NetworkOperation,
-  type PingResult,
-  type TracerouteHop,
-  type PortScanResult,
-  type DNSResult,
-  type NetworkInterface,
-  type BandwidthResult,
-} from "./smart-network";
-
-export {
-  SmartCleanup,
-  runSmartCleanup,
-  SMART_CLEANUP_TOOL_DEFINITION,
-  type SmartCleanupOptions,
-  type SmartCleanupResult,
-  type CleanupOperation,
-  type CleanupCategory,
-  type FileCandidate,
-  type CleanupAnalysis,
-  type CleanupPreview,
-  type CleanupExecution,
-  type CleanupRollback,
-  type DiskSpaceEstimate,
-} from "./smart-cleanup";
-
-export {
-  SmartMetrics,
-  runSmartMetrics,
-  SMART_METRICS_TOOL_DEFINITION,
-  type SmartMetricsOptions,
-  type SmartMetricsResult,
-  type MetricsOperation,
-  type CPUMetrics,
-  type MemoryMetrics,
-  type DiskMetrics,
-  type NetworkMetrics,
-  type TemperatureMetrics,
-  type TimeSeriesData,
-  type CompressedTimeSeries,
-} from "./smart-metrics";
+// SmartNetwork - Implementation pending
+// SmartCleanup - Implementation pending
+// SmartMetrics - Implementation pending
+// Note: Exports temporarily removed until implementation is complete
 
 export {
   SmartUser,
@@ -90,20 +48,8 @@ export {
   type SecurityAuditReport,
 } from "./smart-user";
 
-export {
-  SmartArchive,
-  runSmartArchive,
-  SMART_ARCHIVE_TOOL_DEFINITION,
-  type SmartArchiveOptions,
-  type SmartArchiveResult,
-  type ArchiveFormat,
-  type CompressionLevel,
-  type ArchiveOperation,
-  type ArchiveEntry,
-  type ArchiveMetadata,
-  type IncrementalBackupInfo,
-  type ArchiveVerificationResult,
-} from "./smart-archive";
+// SmartArchive - Implementation pending
+// Note: Exports temporarily removed until implementation is complete
 
 export {
   SmartCron,

@@ -479,7 +479,7 @@ export class CacheCompressionTool {
       timestamp: Date.now(),
     };
 
-    const metadataBuffer = Buffer.from(JSON.stringify(metadata));
+    const metadataBuffer = JSON.stringify(metadata));
     const metadataLength = Buffer.allocUnsafe(4);
     metadataLength.writeUInt32LE(metadataBuffer.length, 0);
 
@@ -1020,7 +1020,7 @@ export class CacheCompressionTool {
       // Replace repeated strings with dictionary references
       const compressed = this.compressWithDictionary(obj, dict);
 
-      return Buffer.from(JSON.stringify(compressed));
+      return JSON.stringify(compressed));
     } catch {
       // Not JSON, just use gzip
       return Buffer.from(str);
@@ -1041,7 +1041,7 @@ export class CacheCompressionTool {
           compressed.data,
           dict,
         );
-        return Buffer.from(JSON.stringify(decompressed));
+        return JSON.stringify(decompressed));
       }
 
       return data;
@@ -1281,7 +1281,7 @@ export class CacheCompressionTool {
     } else if (typeof data === "string") {
       return Buffer.from(data, "utf-8");
     } else {
-      return Buffer.from(JSON.stringify(data), "utf-8");
+      return JSON.stringify(data), "utf-8");
     }
   }
 
@@ -1301,7 +1301,7 @@ export class CacheCompressionTool {
             active: i % 2 === 0,
           })),
         };
-        return Buffer.from(JSON.stringify(obj));
+        return JSON.stringify(obj));
       }
 
       case "text": {

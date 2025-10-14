@@ -8,7 +8,7 @@
  * - Anomaly detection
  */
 
-import { exec } from "childprocess";
+import { exec } from "child_process";
 import { promisify } from "util";
 import { CacheEngine } from "../../core/cache-engine";
 import { TokenCounter } from "../../core/token-counter";
