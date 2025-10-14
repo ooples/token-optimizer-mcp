@@ -1,0 +1,25 @@
+I have a TypeScript project with 811 compilation errors. I need you to analyze the error patterns and create a ROCK-SOLID fix plan.
+
+ERROR BREAKDOWN:
+278 TS6133 - Declared but never used
+248 TS2305 - Module has no exported member
+85 TS2345 - Argument type not assignable
+47 TS2307 - Cannot find module
+34 TS6192 - All imports are unused
+22 TS2554 - Expected X arguments but got Y
+19 TS2339 - Property does not exist on type
+16 TS2322 - Type not assignable
+15 TS2724 - Module has no exported member (with suggestion)
+10 TS2551 - Property does not exist (typo)
+
+SAMPLE ERRORS ATTACHED IN build-errors-full.txt
+
+YOUR TASK:
+1. Analyze the root causes (not just symptoms)
+2. Identify error dependencies (what MUST be fixed first)
+3. Create optimal fix order to minimize cascading effects
+4. Provide specific fix patterns with before/after code
+5. Design parallel agent team assignments
+6. Estimate error reduction per phase
+
+CRITICAL: I will use your plan to coordinate expert AI agents. Make it specific, actionable, and foolproof.

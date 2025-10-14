@@ -1,0 +1,1198 @@
+﻿# COMPREHENSIVE TYPESCRIPT ERROR ANALYSIS FOR GOOGLE GEMINI
+# Project: token-optimizer-mcp
+# Current State: 729 TypeScript compilation errors
+# Goal: Create a rock-solid comprehensive fix plan with expert AI agent assignments
+
+## 1. FULL BUILD OUTPUT WITH ALL ERRORS
+## =====================================
+
+
+> token-optimizer-mcp@0.1.0 build
+> tsc
+
+src/tools/advanced-caching/cache-analytics.ts(1,607): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/advanced-caching/cache-analytics.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/advanced-caching/cache-analytics.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/advanced-caching/cache-analytics.ts(4,10): error TS2724: '"fs"' has no exported member named '_createWriteStream'. Did you mean 'createWriteStream'?
+src/tools/advanced-caching/cache-analytics.ts(4,30): error TS2724: '"fs"' has no exported member named '_existsSync'. Did you mean 'existsSync'?
+src/tools/advanced-caching/cache-analytics.ts(5,10): error TS2305: Module '"path"' has no exported member '_join'.
+src/tools/advanced-caching/cache-analytics.ts(7,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/advanced-caching/cache-analytics.ts(8,1): error TS6192: All imports in import declaration are unused.
+src/tools/advanced-caching/cache-benchmark.ts(408,16): error TS2554: Expected 4 arguments, but got 3.
+src/tools/advanced-caching/cache-benchmark.ts(867,11): error TS6133: 'cache' is declared but its value is never read.
+src/tools/advanced-caching/cache-compression.ts(231,11): error TS6133: 'deltaStates' is declared but its value is never read.
+src/tools/advanced-caching/cache-compression.ts(232,11): error TS6133: 'compressionDictionaries' is declared but its value is never read.
+src/tools/advanced-caching/cache-invalidation.ts(1,554): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/advanced-caching/cache-invalidation.ts(2,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/advanced-caching/cache-invalidation.ts(3,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/advanced-caching/cache-invalidation.ts(4,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/advanced-caching/cache-optimizer.ts(1,439): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/advanced-caching/cache-optimizer.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/advanced-caching/cache-optimizer.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/advanced-caching/cache-optimizer.ts(4,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/advanced-caching/cache-optimizer.ts(5,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/advanced-caching/cache-partition.ts(26,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/advanced-caching/cache-partition.ts(27,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/advanced-caching/cache-partition.ts(1362,11): error TS6133: '_coAccessPatterns' is declared but its value is never read.
+src/tools/advanced-caching/cache-replication.ts(1,518): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/advanced-caching/cache-replication.ts(2,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/advanced-caching/cache-replication.ts(3,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/advanced-caching/cache-replication.ts(4,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/advanced-caching/cache-warmup.ts(1,657): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/advanced-caching/cache-warmup.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/advanced-caching/cache-warmup.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/advanced-caching/cache-warmup.ts(4,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/advanced-caching/index.ts(44,3): error TS2305: Module '"./cache-analytics"' has no exported member 'CacheAnalytics'.
+src/tools/advanced-caching/index.ts(45,3): error TS2305: Module '"./cache-analytics"' has no exported member 'runCacheAnalytics'.
+src/tools/advanced-caching/index.ts(46,3): error TS2305: Module '"./cache-analytics"' has no exported member 'CACHE_ANALYTICS_TOOL'.
+src/tools/advanced-caching/index.ts(47,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CacheAnalyticsOptions'.
+src/tools/advanced-caching/index.ts(48,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CacheAnalyticsResult'.
+src/tools/advanced-caching/index.ts(49,8): error TS2305: Module '"./cache-analytics"' has no exported member 'DashboardData'.
+src/tools/advanced-caching/index.ts(50,8): error TS2305: Module '"./cache-analytics"' has no exported member 'PerformanceMetrics'.
+src/tools/advanced-caching/index.ts(51,8): error TS2305: Module '"./cache-analytics"' has no exported member 'UsageMetrics'.
+src/tools/advanced-caching/index.ts(52,8): error TS2305: Module '"./cache-analytics"' has no exported member 'EfficiencyMetrics'.
+src/tools/advanced-caching/index.ts(53,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostMetrics'.
+src/tools/advanced-caching/index.ts(54,8): error TS2305: Module '"./cache-analytics"' has no exported member 'HealthMetrics'.
+src/tools/advanced-caching/index.ts(55,8): error TS2305: Module '"./cache-analytics"' has no exported member 'ActivityLog'.
+src/tools/advanced-caching/index.ts(56,8): error TS2305: Module '"./cache-analytics"' has no exported member 'MetricCollection'.
+src/tools/advanced-caching/index.ts(57,8): error TS2305: Module '"./cache-analytics"' has no exported member 'AggregatedMetrics'.
+src/tools/advanced-caching/index.ts(58,8): error TS2305: Module '"./cache-analytics"' has no exported member 'TrendAnalysis'.
+src/tools/advanced-caching/index.ts(59,8): error TS2305: Module '"./cache-analytics"' has no exported member 'TrendMetric'.
+src/tools/advanced-caching/index.ts(60,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Anomaly'.
+src/tools/advanced-caching/index.ts(61,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Prediction'.
+src/tools/advanced-caching/index.ts(62,8): error TS2305: Module '"./cache-analytics"' has no exported member 'RegressionResult'.
+src/tools/advanced-caching/index.ts(63,8): error TS2305: Module '"./cache-analytics"' has no exported member 'SeasonalityPattern'.
+src/tools/advanced-caching/index.ts(64,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Alert'.
+src/tools/advanced-caching/index.ts(65,8): error TS2305: Module '"./cache-analytics"' has no exported member 'AlertConfiguration'.
+src/tools/advanced-caching/index.ts(66,8): error TS2305: Module '"./cache-analytics"' has no exported member 'HeatmapData'.
+src/tools/advanced-caching/index.ts(67,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Bottleneck'.
+src/tools/advanced-caching/index.ts(68,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostBreakdown'.
+src/tools/advanced-caching/index.ts(69,8): error TS2305: Module '"./cache-analytics"' has no exported member 'StorageCost'.
+src/tools/advanced-caching/index.ts(70,8): error TS2305: Module '"./cache-analytics"' has no exported member 'NetworkCost'.
+src/tools/advanced-caching/index.ts(71,8): error TS2305: Module '"./cache-analytics"' has no exported member 'ComputeCost'.
+src/tools/advanced-caching/index.ts(72,8): error TS2305: Module '"./cache-analytics"' has no exported member 'TotalCost'.
+src/tools/advanced-caching/index.ts(73,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostProjection'.
+src/tools/advanced-caching/index.ts(74,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostOptimization'.
+src/tools/advanced-caching/index.ts(75,8): error TS2305: Module '"./cache-analytics"' has no exported member 'SizeDistribution'.
+src/tools/advanced-caching/index.ts(76,8): error TS2305: Module '"./cache-analytics"' has no exported member 'EvictionPattern'.
+src/tools/advanced-caching/predictive-cache.ts(1,877): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/advanced-caching/predictive-cache.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/advanced-caching/predictive-cache.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/advanced-caching/predictive-cache.ts(4,1): error TS6192: All imports in import declaration are unused.
+src/tools/advanced-caching/predictive-cache.ts(5,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/advanced-caching/smart-cache.ts(1,686): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/advanced-caching/smart-cache.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/advanced-caching/smart-cache.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/advanced-caching/smart-cache.ts(4,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/advanced-caching/smart-cache.ts(5,10): error TS2724: '"events"' has no exported member named '_EventEmitter'. Did you mean 'EventEmitter'?
+src/tools/api-database/index.ts(49,3): error TS2305: Module '"./smart-rest"' has no exported member 'SmartREST'.
+src/tools/api-database/index.ts(50,3): error TS2305: Module '"./smart-rest"' has no exported member 'runSmartREST'.
+src/tools/api-database/index.ts(51,3): error TS2305: Module '"./smart-rest"' has no exported member 'SMART_REST_TOOL_DEFINITION'.
+src/tools/api-database/index.ts(52,8): error TS2305: Module '"./smart-rest"' has no exported member 'SmartRESTOptions'.
+src/tools/api-database/index.ts(53,8): error TS2305: Module '"./smart-rest"' has no exported member 'SmartRESTResult'.
+src/tools/api-database/index.ts(54,8): error TS2305: Module '"./smart-rest"' has no exported member 'EndpointInfo'.
+src/tools/api-database/index.ts(55,8): error TS2305: Module '"./smart-rest"' has no exported member 'ResourceGroup'.
+src/tools/api-database/index.ts(56,8): error TS2305: Module '"./smart-rest"' has no exported member 'HealthIssue'.
+src/tools/api-database/index.ts(57,8): error TS2305: Module '"./smart-rest"' has no exported member 'RateLimit'.
+src/tools/api-database/index.ts(90,3): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabase'.
+src/tools/api-database/index.ts(91,3): error TS2305: Module '"./smart-database"' has no exported member 'runSmartDatabase'.
+src/tools/api-database/index.ts(92,3): error TS2305: Module '"./smart-database"' has no exported member 'SMART_DATABASE_TOOL_DEFINITION'.
+src/tools/api-database/index.ts(93,8): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabaseOptions'.
+src/tools/api-database/index.ts(94,8): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabaseResult'.
+src/tools/api-database/index.ts(95,8): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabaseOutput'.
+src/tools/api-database/index.ts(96,8): error TS2305: Module '"./smart-database"' has no exported member 'DatabaseType'.
+src/tools/api-database/index.ts(97,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryType'.
+src/tools/api-database/index.ts(98,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryInfo'.
+src/tools/api-database/index.ts(99,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryResults'.
+src/tools/api-database/index.ts(100,8): error TS2305: Module '"./smart-database"' has no exported member 'PlanStep'.
+src/tools/api-database/index.ts(101,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryPlan'.
+src/tools/api-database/index.ts(102,8): error TS2305: Module '"./smart-database"' has no exported member 'MissingIndex'.
+src/tools/api-database/index.ts(103,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryOptimizations'.
+src/tools/api-database/index.ts(104,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryPerformance'.
+src/tools/api-database/smart-api-fetch.ts(663,5): error TS2307: Cannot find module '../../core/index.js' or its corresponding type declarations.
+src/tools/api-database/smart-api-fetch.ts(665,40): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-cache-api.ts(246,40): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(384,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(407,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(427,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(445,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(498,42): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(876,58): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-cache-api.ts(878,5): error TS2307: Cannot find module '../../core/index.js' or its corresponding type declarations.
+src/tools/api-database/smart-database.ts(1,650): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/api-database/smart-database.ts(2,15): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/api-database/smart-database.ts(3,15): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/api-database/smart-database.ts(4,15): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/api-database/smart-database.ts(5,1): error TS6133: 'CacheEngineClass' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(6,10): error TS2305: Module '"../../core/token-counter"' has no exported member '_globalTokenCounter'.
+src/tools/api-database/smart-database.ts(7,10): error TS2724: '"../../core/metrics"' has no exported member named '_globalMetricsCollector'. Did you mean 'globalMetricsCollector'?
+src/tools/api-database/smart-graphql.ts(572,74): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/api-database/smart-graphql.ts(590,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/api-database/smart-graphql.ts(590,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/api-database/smart-graphql.ts(678,63): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/api-database/smart-graphql.ts(726,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-graphql.ts(726,53): error TS2554: Expected 0 arguments, but got 1.
+src/tools/api-database/smart-graphql.ts(755,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-migration.ts(26,10): error TS2724: '"../../core/token-counter"' has no exported member named 'globalTokenCounter'. Did you mean 'TokenCounter'?
+src/tools/api-database/smart-migration.ts(520,18): error TS2554: Expected 4 arguments, but got 3.
+src/tools/api-database/smart-migration.ts(522,55): error TS2554: Expected 0 arguments, but got 1.
+src/tools/api-database/smart-migration.ts(895,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-orm.ts(14,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-orm.ts(15,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/api-database/smart-orm.ts(178,11): error TS6133: 'relationships' is declared but its value is never read.
+src/tools/api-database/smart-orm.ts(748,58): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-orm.ts(749,71): error TS2307: Cannot find module '../../core/index.js' or its corresponding type declarations.
+src/tools/api-database/smart-schema.ts(25,10): error TS2724: '"../../core/token-counter"' has no exported member named 'globalTokenCounter'. Did you mean 'TokenCounter'?
+src/tools/api-database/smart-schema.ts(1166,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-sql.ts(13,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-sql.ts(14,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/api-database/smart-sql.ts(493,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(503,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(514,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(525,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(532,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-websocket.ts(712,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-build.ts(13,10): error TS2724: '"../../core/token-counter"' has no exported member named '_tokenCounter'. Did you mean 'TokenCounter'?
+src/tools/build-systems/smart-build.ts(14,34): error TS2307: Cannot find module '../../core/_metrics' or its corresponding type declarations.
+src/tools/build-systems/smart-build.ts(120,11): error TS6133: '_tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-build.ts(121,11): error TS6133: '_metrics' is declared but its value is never read.
+src/tools/build-systems/smart-build.ts(601,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-build.ts(602,9): error TS7022: '_tokenCounter' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/tools/build-systems/smart-build.ts(602,29): error TS2448: Block-scoped variable '_tokenCounter' used before its declaration.
+src/tools/build-systems/smart-docker.ts(12,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/build-systems/smart-install.ts(596,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-lint.ts(13,10): error TS2724: '"../../core/token-counter"' has no exported member named '_tokenCounter'. Did you mean 'TokenCounter'?
+src/tools/build-systems/smart-lint.ts(14,34): error TS2307: Cannot find module '../../core/_metrics' or its corresponding type declarations.
+src/tools/build-systems/smart-lint.ts(153,11): error TS6133: '_tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(154,11): error TS6133: '_metrics' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(364,11): error TS6133: '_markAsIgnored' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(611,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-lint.ts(612,9): error TS7022: '_tokenCounter' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/tools/build-systems/smart-lint.ts(612,29): error TS2448: Block-scoped variable '_tokenCounter' used before its declaration.
+src/tools/build-systems/smart-logs.ts(12,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/build-systems/smart-logs.ts(14,10): error TS2724: '"fs"' has no exported member named '_readFileSync'. Did you mean 'readFileSync'?
+src/tools/build-systems/smart-network.ts(13,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/build-systems/smart-network.ts(21,7): error TS6133: '_dnsResolve' is declared but its value is never read.
+src/tools/build-systems/smart-network.ts(183,11): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(148,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(149,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(152,11): error TS6133: '_projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-system-metrics.ts(171,11): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-test.ts(135,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-test.ts(136,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(13,10): error TS2724: '"../../core/token-counter"' has no exported member named '_tokenCounter'. Did you mean 'TokenCounter'?
+src/tools/build-systems/smart-typecheck.ts(14,34): error TS2307: Cannot find module '../../core/_metrics' or its corresponding type declarations.
+src/tools/build-systems/smart-typecheck.ts(113,11): error TS6133: '_tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(114,11): error TS6133: '_metrics' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(656,9): error TS7022: '_tokenCounter' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/tools/build-systems/smart-typecheck.ts(656,29): error TS2448: Block-scoped variable '_tokenCounter' used before its declaration.
+src/tools/code-analysis/index.ts(25,3): error TS2305: Module '"./smart-ambiance"' has no exported member 'SmartAmbianceTool'.
+src/tools/code-analysis/index.ts(26,3): error TS2305: Module '"./smart-ambiance"' has no exported member 'runSmartAmbiance'.
+src/tools/code-analysis/index.ts(27,3): error TS2305: Module '"./smart-ambiance"' has no exported member 'SMART_AMBIANCE_TOOL_DEFINITION'.
+src/tools/code-analysis/index.ts(28,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'SmartAmbianceOptions'.
+src/tools/code-analysis/index.ts(29,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'SmartAmbianceResult'.
+src/tools/code-analysis/index.ts(30,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'CodeSymbol'.
+src/tools/code-analysis/index.ts(31,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'DependencyNode'.
+src/tools/code-analysis/index.ts(32,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'JumpTarget'.
+src/tools/code-analysis/index.ts(33,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'ContextChunk'.
+src/tools/code-analysis/smart-ambiance.ts(1,506): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(8,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/code-analysis/smart-ambiance.ts(9,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/code-analysis/smart-ambiance.ts(10,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/code-analysis/smart-ambiance.ts(11,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(12,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(14,1): error TS6133: 'ts' is declared but its value is never read.
+src/tools/code-analysis/smart-ambiance.ts(15,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/code-analysis/smart-ast-grep.ts(17,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-ast-grep.ts(18,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-ast-grep.ts(161,9): error TS6133: '_cachedResult' is declared but its value is never read.
+src/tools/code-analysis/smart-complexity.ts(746,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-dependencies.ts(16,24): error TS2724: '"fs"' has no exported member named '_statSync'. Did you mean 'statSync'?
+src/tools/code-analysis/smart-dependencies.ts(21,47): error TS2305: Module '"path"' has no exported member '_basename'.
+src/tools/code-analysis/smart-dependencies.ts(22,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-dependencies.ts(23,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-dependencies.ts(25,10): error TS2724: '"../shared/hash-utils.js"' has no exported member named '_hashFile'. Did you mean 'hashFile'?
+src/tools/code-analysis/smart-exports.ts(15,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-exports.ts(17,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-exports.ts(254,11): error TS6133: '_reductionPercentage' is declared but its value is never read.
+src/tools/code-analysis/smart-exports.ts(449,11): error TS6133: '_fileDir' is declared but its value is never read.
+src/tools/code-analysis/smart-imports.ts(15,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-imports.ts(17,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-imports.ts(272,11): error TS6133: '_reductionPercentage' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(14,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-refactor.ts(16,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-refactor.ts(17,54): error TS6133: 'SymbolInfo' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(18,60): error TS6133: 'ComplexityMetrics' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(162,11): error TS6133: '_symbolsResult' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(373,17): error TS6133: 'hash' is declared but its value is never read.
+src/tools/code-analysis/smart-security.ts(17,35): error TS6133: 'dirname' is declared but its value is never read.
+src/tools/code-analysis/smart-security.ts(554,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-security.ts(1291,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-symbols.ts(16,36): error TS6133: 'statSync' is declared but its value is never read.
+src/tools/code-analysis/smart-symbols.ts(119,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-symbols.ts(711,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-typescript.ts(12,10): error TS2724: '"child_process"' has no exported member named '_spawn'. Did you mean 'spawn'?
+src/tools/code-analysis/smart-typescript.ts(13,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-typescript.ts(15,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-typescript.ts(17,46): error TS6133: 'readdirSync' is declared but its value is never read.
+src/tools/code-analysis/smart-typescript.ts(18,35): error TS6133: 'extname' is declared but its value is never read.
+src/tools/code-analysis/smart-typescript.ts(159,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/configuration/index.ts(21,10): error TS2305: Module '"./smart-env"' has no exported member 'SmartEnv'.
+src/tools/configuration/index.ts(21,20): error TS2305: Module '"./smart-env"' has no exported member 'runSmartEnv'.
+src/tools/configuration/index.ts(21,33): error TS2305: Module '"./smart-env"' has no exported member 'SMART_ENV_TOOL_DEFINITION'.
+src/tools/configuration/index.ts(24,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SmartWorkflow'.
+src/tools/configuration/index.ts(25,3): error TS2305: Module '"./smart-workflow"' has no exported member 'runSmartWorkflow'.
+src/tools/configuration/index.ts(26,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SMART_WORKFLOW_TOOL_DEFINITION'.
+src/tools/configuration/index.ts(45,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SmartWorkflowOptions'.
+src/tools/configuration/index.ts(46,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SmartWorkflowOutput'.
+src/tools/configuration/index.ts(47,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowFile'.
+src/tools/configuration/index.ts(48,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowDefinition'.
+src/tools/configuration/index.ts(49,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowJob'.
+src/tools/configuration/index.ts(50,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowStep'.
+src/tools/configuration/index.ts(51,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowError'.
+src/tools/configuration/index.ts(52,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowWarning'.
+src/tools/configuration/index.ts(53,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SecurityIssue'.
+src/tools/configuration/index.ts(54,3): error TS2305: Module '"./smart-workflow"' has no exported member 'OptimizationSuggestion'.
+src/tools/configuration/smart-config-read.ts(142,7): error TS6133: 'includeMetadata' is declared but its value is never read.
+src/tools/configuration/smart-config-read.ts(176,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(177,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(210,11): error TS2345: Argument of type 'Buffer<ArrayBufferLike>' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-config-read.ts(210,22): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(261,37): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(261,54): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(271,13): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(272,15): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(292,9): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(293,9): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(301,35): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-config-read.ts(301,44): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/configuration/smart-config-read.ts(313,37): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-config-read.ts(313,46): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/configuration/smart-config-read.ts(324,30): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(324,44): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(333,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(334,7): error TS2322: Type 'number | TokenCountResult' is not assignable to type 'number | undefined'.
+  Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(357,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(358,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(770,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-env.ts(1,338): error TS6133: 'fs' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(2,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(3,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/configuration/smart-env.ts(4,10): error TS2724: '"../../core/metrics"' has no exported member named '_globalMetricsCollector'. Did you mean 'globalMetricsCollector'?
+src/tools/configuration/smart-env.ts(5,10): error TS2305: Module '"../../core/token-counter"' has no exported member '_globalTokenCounter'.
+src/tools/configuration/smart-package-json.ts(17,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/configuration/smart-package-json.ts(18,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/configuration/smart-package-json.ts(835,11): error TS6133: '_size' is declared but its value is never read.
+src/tools/configuration/smart-tsconfig.ts(12,20): error TS6133: 'stat' is declared but its value is never read.
+src/tools/configuration/smart-tsconfig.ts(130,36): error TS2339: Property 'generateFileHash' does not exist on type 'typeof CacheEngine'.
+src/tools/configuration/smart-tsconfig.ts(131,40): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/configuration/smart-tsconfig.ts(170,20): error TS2339: Property 'invalidateByFileHash' does not exist on type 'CacheEngine'.
+src/tools/configuration/smart-tsconfig.ts(199,25): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-tsconfig.ts(199,34): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/configuration/smart-tsconfig.ts(548,37): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(548,54): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(550,7): error TS2365: Operator '>' cannot be applied to types 'TokenCountResult' and 'number'.
+src/tools/configuration/smart-tsconfig.ts(550,43): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(553,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(554,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(614,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-workflow.ts(1,464): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(8,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/configuration/smart-workflow.ts(9,1): error TS6133: 'parseYAML' is declared but its value is never read.
+src/tools/configuration/smart-workflow.ts(10,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/configuration/smart-workflow.ts(11,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/configuration/smart-workflow.ts(12,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/configuration/smart-workflow.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(14,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/dashboard-monitoring/alert-manager.ts(362,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(373,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/alert-manager.ts(380,30): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(430,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(441,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/alert-manager.ts(448,30): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(492,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(524,85): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(533,60): error TS2339: Property 'tokens' does not exist on type 'MapIterator<Alert>'.
+src/tools/dashboard-monitoring/alert-manager.ts(685,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(766,82): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(871,22): error TS2554: Expected 4 arguments, but got 3.
+src/tools/dashboard-monitoring/alert-manager.ts(940,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(942,22): error TS2554: Expected 4 arguments, but got 3.
+src/tools/dashboard-monitoring/alert-manager.ts(1075,25): error TS2339: Property 'estimateFromBytes' does not exist on type 'TokenCounter'.
+src/tools/dashboard-monitoring/alert-manager.ts(1133,85): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1139,85): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1145,85): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1153,85): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1162,86): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1174,86): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1185,88): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1200,88): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/custom-widget.ts(228,43): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/custom-widget.ts(303,31): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/custom-widget.ts(303,40): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(437,25): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1057,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1092,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1092,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1120,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1160,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1160,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1198,79): error TS2345: Argument of type '"graph"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/health-monitor.ts(1203,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1203,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1235,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1266,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1266,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/index.ts(11,10): error TS2305: Module '"./smart-dashboard"' has no exported member 'SMART_DASHBOARD_TOOL_DEFINITION'.
+src/tools/dashboard-monitoring/index.ts(12,10): error TS2305: Module '"./metric-collector"' has no exported member 'METRIC_COLLECTOR_TOOL_DEFINITION'.
+src/tools/dashboard-monitoring/log-dashboard.ts(1,549): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/dashboard-monitoring/log-dashboard.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/dashboard-monitoring/log-dashboard.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/dashboard-monitoring/log-dashboard.ts(4,1): error TS6133: 'crypto' is declared but its value is never read.
+src/tools/dashboard-monitoring/metric-collector.ts(1,857): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/dashboard-monitoring/metric-collector.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/dashboard-monitoring/metric-collector.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/dashboard-monitoring/metric-collector.ts(4,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/dashboard-monitoring/monitoring-integration.ts(1,739): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/dashboard-monitoring/monitoring-integration.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/dashboard-monitoring/monitoring-integration.ts(3,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/dashboard-monitoring/monitoring-integration.ts(4,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/dashboard-monitoring/performance-tracker.ts(1,650): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/dashboard-monitoring/performance-tracker.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/dashboard-monitoring/performance-tracker.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/dashboard-monitoring/performance-tracker.ts(4,10): error TS2724: '"fs"' has no exported member named '_createWriteStream'. Did you mean 'createWriteStream'?
+src/tools/dashboard-monitoring/performance-tracker.ts(5,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/dashboard-monitoring/performance-tracker.ts(6,10): error TS2305: Module '"path"' has no exported member '_join'.
+src/tools/dashboard-monitoring/report-generator.ts(1,724): error TS6192: All imports in import declaration are unused.
+src/tools/dashboard-monitoring/report-generator.ts(6,10): error TS2305: Module '"path"' has no exported member '_dirname'.
+src/tools/dashboard-monitoring/report-generator.ts(7,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/dashboard-monitoring/report-generator.ts(8,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/dashboard-monitoring/report-generator.ts(9,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/dashboard-monitoring/report-generator.ts(10,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/dashboard-monitoring/report-generator.ts(11,1): error TS6192: All imports in import declaration are unused.
+src/tools/dashboard-monitoring/report-generator.ts(12,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_hashContent'. Did you mean 'hashContent'?
+src/tools/dashboard-monitoring/report-generator.ts(13,25): error TS2307: Cannot find module '_marked' or its corresponding type declarations.
+src/tools/dashboard-monitoring/report-generator.ts(14,1): error TS6133: 'parseExpression' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(1,799): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/dashboard-monitoring/smart-dashboard.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/dashboard-monitoring/smart-dashboard.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/dashboard-monitoring/smart-dashboard.ts(4,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/dashboard-monitoring/smart-dashboard.ts(5,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/dashboard-monitoring/smart-dashboard.ts(6,10): error TS2305: Module '"path"' has no exported member '_join'.
+src/tools/dashboard-monitoring/smart-dashboard.ts(7,10): error TS2724: '"events"' has no exported member named '_EventEmitter'. Did you mean 'EventEmitter'?
+src/tools/file-operations/smart-branch.ts(228,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(231,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(234,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(237,44): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(238,32): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(250,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(265,11): error TS2345: Argument of type 'TokenCountResult' is not assignable to parameter of type 'number'.
+src/tools/file-operations/smart-branch.ts(276,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(593,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-edit.ts(17,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-edit.ts(18,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/file-operations/smart-glob.ts(19,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-glob.ts(20,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/file-operations/smart-grep.ts(19,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-grep.ts(20,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/file-operations/smart-log.ts(568,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-merge.ts(772,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-read.ts(125,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/file-operations/smart-read.ts(190,30): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-read.ts(245,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/file-operations/smart-read.ts(245,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/file-operations/smart-read.ts(377,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-status.ts(641,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-write.ts(16,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-write.ts(17,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/intelligence/anomaly-explainer.ts(1,487): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/anomaly-explainer.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/anomaly-explainer.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/anomaly-explainer.ts(4,1): error TS6192: All imports in import declaration are unused.
+src/tools/intelligence/anomaly-explainer.ts(5,25): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/anomaly-explainer.ts(6,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/intelligence/auto-remediation.ts(1,619): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/auto-remediation.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/auto-remediation.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/auto-remediation.ts(4,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/intelligence/auto-remediation.ts(5,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/intelligence/auto-remediation.ts(5,23): error TS6133: 'randomUUID' is declared but its value is never read.
+src/tools/intelligence/index.ts(8,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SmartSummarizationTool'.
+src/tools/intelligence/index.ts(9,3): error TS2305: Module '"./smart-summarization"' has no exported member 'getSmartSummarizationTool'.
+src/tools/intelligence/index.ts(10,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SMART_SUMMARIZATION_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(13,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RecommendationEngine'.
+src/tools/intelligence/index.ts(14,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'getRecommendationEngine'.
+src/tools/intelligence/index.ts(15,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RECOMMENDATION_ENGINE_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(18,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NaturalLanguageQuery'.
+src/tools/intelligence/index.ts(19,3): error TS2305: Module '"./natural-language-query"' has no exported member 'runNaturalLanguageQuery'.
+src/tools/intelligence/index.ts(20,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NATURAL_LANGUAGE_QUERY_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(23,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'AnomalyExplainerTool'.
+src/tools/intelligence/index.ts(24,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'getAnomalyExplainerTool'.
+src/tools/intelligence/index.ts(25,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'ANOMALY_EXPLAINER_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(35,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SmartSummarizationOptions'.
+src/tools/intelligence/index.ts(36,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SmartSummarizationResult'.
+src/tools/intelligence/index.ts(39,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RecommendationEngineOptions'.
+src/tools/intelligence/index.ts(40,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RecommendationEngineResult'.
+src/tools/intelligence/index.ts(43,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NaturalLanguageQueryOptions'.
+src/tools/intelligence/index.ts(44,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NaturalLanguageQueryResult'.
+src/tools/intelligence/index.ts(45,3): error TS2305: Module '"./natural-language-query"' has no exported member 'ParsedQuery'.
+src/tools/intelligence/index.ts(46,3): error TS2305: Module '"./natural-language-query"' has no exported member 'QuerySuggestion'.
+src/tools/intelligence/index.ts(47,3): error TS2305: Module '"./natural-language-query"' has no exported member 'QueryExplanation'.
+src/tools/intelligence/index.ts(48,3): error TS2305: Module '"./natural-language-query"' has no exported member 'QueryOptimization'.
+src/tools/intelligence/index.ts(51,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'AnomalyExplainerOptions'.
+src/tools/intelligence/index.ts(52,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'AnomalyExplainerResult'.
+src/tools/intelligence/intelligent-assistant.ts(1,279): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/intelligent-assistant.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/intelligent-assistant.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/intelligent-assistant.ts(4,1): error TS6133: 'natural' is declared but its value is never read.
+src/tools/intelligence/intelligent-assistant.ts(5,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/intelligence/intelligent-assistant.ts(6,1): error TS6133: 'nlp' is declared but its value is never read.
+src/tools/intelligence/knowledge-graph.ts(999,21): error TS2304: Cannot find name 'createHash'.
+src/tools/intelligence/knowledge-graph.ts(1004,11): error TS6133: 'getDefaultTTL' is declared but its value is never read.
+src/tools/intelligence/natural-language-query.ts(1,400): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/natural-language-query.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/natural-language-query.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/natural-language-query.ts(4,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/intelligence/natural-language-query.ts(5,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/intelligence/pattern-recognition.ts(1,720): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/pattern-recognition.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/pattern-recognition.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/pattern-recognition.ts(4,25): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/pattern-recognition.ts(5,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/intelligence/pattern-recognition.ts(6,34): error TS6133: 'percentile' is declared but its value is never read.
+src/tools/intelligence/predictive-analytics.ts(1,720): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/predictive-analytics.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/predictive-analytics.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/predictive-analytics.ts(4,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/intelligence/predictive-analytics.ts(5,25): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/recommendation-engine.ts(1,396): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/recommendation-engine.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/recommendation-engine.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/recommendation-engine.ts(4,25): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/recommendation-engine.ts(5,1): error TS6133: 'similarity' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(6,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/intelligence/recommendation-engine.ts(7,1): error TS6133: 'stats' is declared but its value is never read.
+src/tools/intelligence/sentiment-analysis.ts(493,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(494,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(516,20): error TS2554: Expected 4 arguments, but got 2.
+src/tools/intelligence/sentiment-analysis.ts(518,27): error TS2554: Expected 0 arguments, but got 1.
+src/tools/intelligence/sentiment-analysis.ts(518,36): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/intelligence/sentiment-analysis.ts(533,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(546,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/smart-summarization.ts(1,948): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/intelligence/smart-summarization.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/intelligence/smart-summarization.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/intelligence/smart-summarization.ts(4,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/intelligence/smart-summarization.ts(5,10): error TS2305: Module '"path"' has no exported member '_join'.
+src/tools/intelligence/smart-summarization.ts(6,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/intelligence/smart-summarization.ts(7,1): error TS6133: 'natural' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(8,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/intelligence/smart-summarization.ts(9,1): error TS6133: 'nlp' is declared but its value is never read.
+src/tools/output-formatting/index.ts(8,3): error TS2305: Module '"./smart-format"' has no exported member 'SmartFormat'.
+src/tools/output-formatting/index.ts(9,3): error TS2305: Module '"./smart-format"' has no exported member 'runSmartFormat'.
+src/tools/output-formatting/index.ts(10,3): error TS2305: Module '"./smart-format"' has no exported member 'SMART_FORMAT_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(11,8): error TS2305: Module '"./smart-format"' has no exported member 'SmartFormatOptions'.
+src/tools/output-formatting/index.ts(12,8): error TS2305: Module '"./smart-format"' has no exported member 'SmartFormatResult'.
+src/tools/output-formatting/index.ts(13,8): error TS2305: Module '"./smart-format"' has no exported member 'FormatType'.
+src/tools/output-formatting/index.ts(14,8): error TS2305: Module '"./smart-format"' has no exported member 'ConversionOperation'.
+src/tools/output-formatting/index.ts(15,8): error TS2305: Module '"./smart-format"' has no exported member 'FormatConversionResult'.
+src/tools/output-formatting/index.ts(16,8): error TS2305: Module '"./smart-format"' has no exported member 'BatchConversionResult'.
+src/tools/output-formatting/index.ts(17,8): error TS2305: Module '"./smart-format"' has no exported member 'ValidationError'.
+src/tools/output-formatting/index.ts(18,8): error TS2305: Module '"./smart-format"' has no exported member 'FormatDetectionResult'.
+src/tools/output-formatting/index.ts(19,8): error TS2305: Module '"./smart-format"' has no exported member 'StreamConversionResult'.
+src/tools/output-formatting/index.ts(23,3): error TS2305: Module '"./smart-stream"' has no exported member 'SmartStream'.
+src/tools/output-formatting/index.ts(24,3): error TS2305: Module '"./smart-stream"' has no exported member 'runSmartStream'.
+src/tools/output-formatting/index.ts(25,3): error TS2305: Module '"./smart-stream"' has no exported member 'SMART_STREAM_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(26,8): error TS2305: Module '"./smart-stream"' has no exported member 'SmartStreamOptions'.
+src/tools/output-formatting/index.ts(27,8): error TS2305: Module '"./smart-stream"' has no exported member 'SmartStreamResult'.
+src/tools/output-formatting/index.ts(28,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamOperation'.
+src/tools/output-formatting/index.ts(29,8): error TS2305: Module '"./smart-stream"' has no exported member 'CompressionFormat'.
+src/tools/output-formatting/index.ts(30,8): error TS2305: Module '"./smart-stream"' has no exported member 'TransformType'.
+src/tools/output-formatting/index.ts(31,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamMetadata'.
+src/tools/output-formatting/index.ts(32,8): error TS2305: Module '"./smart-stream"' has no exported member 'ProgressState'.
+src/tools/output-formatting/index.ts(33,8): error TS2305: Module '"./smart-stream"' has no exported member 'ChunkSummary'.
+src/tools/output-formatting/index.ts(34,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamReadResult'.
+src/tools/output-formatting/index.ts(35,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamWriteResult'.
+src/tools/output-formatting/index.ts(36,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamTransformResult'.
+src/tools/output-formatting/index.ts(40,3): error TS2305: Module '"./smart-report"' has no exported member 'SmartReport'.
+src/tools/output-formatting/index.ts(41,3): error TS2305: Module '"./smart-report"' has no exported member 'runSmartReport'.
+src/tools/output-formatting/index.ts(42,3): error TS2305: Module '"./smart-report"' has no exported member 'SMART_REPORT_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(43,8): error TS2305: Module '"./smart-report"' has no exported member 'SmartReportOptions'.
+src/tools/output-formatting/index.ts(44,8): error TS2305: Module '"./smart-report"' has no exported member 'SmartReportResult'.
+src/tools/output-formatting/index.ts(45,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportFormat'.
+src/tools/output-formatting/index.ts(46,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportOperation'.
+src/tools/output-formatting/index.ts(47,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportSection'.
+src/tools/output-formatting/index.ts(48,8): error TS2305: Module '"./smart-report"' has no exported member 'ChartData'.
+src/tools/output-formatting/index.ts(49,8): error TS2305: Module '"./smart-report"' has no exported member 'ChartType'.
+src/tools/output-formatting/index.ts(50,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportTemplate'.
+src/tools/output-formatting/index.ts(51,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportMetadata'.
+src/tools/output-formatting/index.ts(52,8): error TS2305: Module '"./smart-report"' has no exported member 'GeneratedReport'.
+src/tools/output-formatting/index.ts(56,3): error TS2305: Module '"./smart-diff"' has no exported member 'SmartDiff'.
+src/tools/output-formatting/index.ts(57,3): error TS2305: Module '"./smart-diff"' has no exported member 'runSmartDiff'.
+src/tools/output-formatting/index.ts(58,3): error TS2305: Module '"./smart-diff"' has no exported member 'SMART_DIFF_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(59,8): error TS2305: Module '"./smart-diff"' has no exported member 'SmartDiffOptions'.
+src/tools/output-formatting/index.ts(60,8): error TS2305: Module '"./smart-diff"' has no exported member 'SmartDiffResult'.
+src/tools/output-formatting/index.ts(61,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffOperation'.
+src/tools/output-formatting/index.ts(62,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffFormat'.
+src/tools/output-formatting/index.ts(63,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffGranularity'.
+src/tools/output-formatting/index.ts(64,8): error TS2305: Module '"./smart-diff"' has no exported member 'ConflictResolutionStrategy'.
+src/tools/output-formatting/index.ts(65,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffHunk'.
+src/tools/output-formatting/index.ts(66,8): error TS2305: Module '"./smart-diff"' has no exported member 'SemanticChange'.
+src/tools/output-formatting/index.ts(67,8): error TS2305: Module '"./smart-diff"' has no exported member 'Conflict'.
+src/tools/output-formatting/index.ts(68,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffResult'.
+src/tools/output-formatting/index.ts(69,8): error TS2305: Module '"./smart-diff"' has no exported member 'SemanticDiffResult'.
+src/tools/output-formatting/index.ts(70,8): error TS2305: Module '"./smart-diff"' has no exported member 'ConflictDetectionResult'.
+src/tools/output-formatting/index.ts(71,8): error TS2305: Module '"./smart-diff"' has no exported member 'MergePreviewResult'.
+src/tools/output-formatting/index.ts(75,3): error TS2305: Module '"./smart-export"' has no exported member 'SmartExport'.
+src/tools/output-formatting/index.ts(76,3): error TS2305: Module '"./smart-export"' has no exported member 'runSmartExport'.
+src/tools/output-formatting/index.ts(77,3): error TS2305: Module '"./smart-export"' has no exported member 'SMART_EXPORT_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(78,8): error TS2305: Module '"./smart-export"' has no exported member 'SmartExportOptions'.
+src/tools/output-formatting/index.ts(79,8): error TS2305: Module '"./smart-export"' has no exported member 'SmartExportResult'.
+src/tools/output-formatting/index.ts(80,8): error TS2305: Module '"./smart-export"' has no exported member 'ExportFormat'.
+src/tools/output-formatting/index.ts(81,8): error TS2305: Module '"./smart-export"' has no exported member 'ExportOperation'.
+src/tools/output-formatting/index.ts(82,8): error TS2305: Module '"./smart-export"' has no exported member 'ExportMetadata'.
+src/tools/output-formatting/index.ts(83,8): error TS2305: Module '"./smart-export"' has no exported member 'ExcelExportResult'.
+src/tools/output-formatting/index.ts(84,8): error TS2305: Module '"./smart-export"' has no exported member 'CSVExportResult'.
+src/tools/output-formatting/index.ts(85,8): error TS2305: Module '"./smart-export"' has no exported member 'JSONExportResult'.
+src/tools/output-formatting/index.ts(86,8): error TS2305: Module '"./smart-export"' has no exported member 'ParquetExportResult'.
+src/tools/output-formatting/index.ts(87,8): error TS2305: Module '"./smart-export"' has no exported member 'SQLExportResult'.
+src/tools/output-formatting/index.ts(88,8): error TS2305: Module '"./smart-export"' has no exported member 'BatchExportResult'.
+src/tools/output-formatting/index.ts(92,3): error TS2305: Module '"./smart-log"' has no exported member 'SmartLog'.
+src/tools/output-formatting/index.ts(93,3): error TS2305: Module '"./smart-log"' has no exported member 'runSmartLog'.
+src/tools/output-formatting/index.ts(94,3): error TS2305: Module '"./smart-log"' has no exported member 'SMART_LOG_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(95,8): error TS2305: Module '"./smart-log"' has no exported member 'SmartLogOptions'.
+src/tools/output-formatting/index.ts(96,8): error TS2305: Module '"./smart-log"' has no exported member 'SmartLogResult'.
+src/tools/output-formatting/index.ts(97,8): error TS2305: Module '"./smart-log"' has no exported member 'LogOperation'.
+src/tools/output-formatting/index.ts(98,8): error TS2305: Module '"./smart-log"' has no exported member 'LogFormat'.
+src/tools/output-formatting/index.ts(99,8): error TS2305: Module '"./smart-log"' has no exported member 'LogLevel'.
+src/tools/output-formatting/index.ts(100,8): error TS2305: Module '"./smart-log"' has no exported member 'TimeFormat'.
+src/tools/output-formatting/index.ts(101,8): error TS2305: Module '"./smart-log"' has no exported member 'PatternType'.
+src/tools/output-formatting/index.ts(102,8): error TS2305: Module '"./smart-log"' has no exported member 'LogEntry'.
+src/tools/output-formatting/index.ts(103,8): error TS2305: Module '"./smart-log"' has no exported member 'LogPattern'.
+src/tools/output-formatting/index.ts(104,8): error TS2305: Module '"./smart-log"' has no exported member 'LogFileMetadata'.
+src/tools/output-formatting/index.ts(105,8): error TS2305: Module '"./smart-log"' has no exported member 'LogIndex'.
+src/tools/output-formatting/index.ts(106,8): error TS2305: Module '"./smart-log"' has no exported member 'AggregateResult'.
+src/tools/output-formatting/index.ts(107,8): error TS2305: Module '"./smart-log"' has no exported member 'ParseResult'.
+src/tools/output-formatting/index.ts(108,8): error TS2305: Module '"./smart-log"' has no exported member 'FilterResult'.
+src/tools/output-formatting/index.ts(109,8): error TS2305: Module '"./smart-log"' has no exported member 'PatternDetectionResult'.
+src/tools/output-formatting/index.ts(110,8): error TS2305: Module '"./smart-log"' has no exported member 'TailResult'.
+src/tools/output-formatting/smart-diff.ts(1,497): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-diff.ts(6,10): error TS2305: Module '"path"' has no exported member '_join'.
+src/tools/output-formatting/smart-diff.ts(7,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/output-formatting/smart-diff.ts(9,3): error TS6133: 'diffLines' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(10,3): error TS6133: 'diffWords' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(11,3): error TS6133: 'diffChars' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(12,3): error TS6133: 'createTwoFilesPatch' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(14,3): error TS6133: 'parsePatch' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(16,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/output-formatting/smart-diff.ts(17,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/output-formatting/smart-diff.ts(18,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/output-formatting/smart-diff.ts(19,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-diff.ts(20,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(1,437): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(7,10): error TS2305: Module '"path"' has no exported member '_dirname'.
+src/tools/output-formatting/smart-export.ts(7,20): error TS2305: Module '"path"' has no exported member '_extname'.
+src/tools/output-formatting/smart-export.ts(7,30): error TS6133: 'join' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(9,7): error TS6133: 'unparseCsv' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(10,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/output-formatting/smart-export.ts(11,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/output-formatting/smart-export.ts(12,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/output-formatting/smart-export.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(14,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_hashFile'. Did you mean 'hashFile'?
+src/tools/output-formatting/smart-export.ts(15,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/output-formatting/smart-export.ts(16,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/output-formatting/smart-format.ts(2,3): error TS2724: '"fs"' has no exported member named '_createReadStream'. Did you mean 'createReadStream'?
+src/tools/output-formatting/smart-format.ts(4,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(5,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(6,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(8,7): error TS6198: All destructured elements are unused.
+src/tools/output-formatting/smart-format.ts(9,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/output-formatting/smart-format.ts(10,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/output-formatting/smart-format.ts(11,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/output-formatting/smart-format.ts(12,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(14,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/output-formatting/smart-format.ts(15,10): error TS2305: Module '"path"' has no exported member '_join'.
+src/tools/output-formatting/smart-log.ts(1,567): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(9,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(10,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/output-formatting/smart-log.ts(11,10): error TS2724: '"readline"' has no exported member named '_createInterface'. Did you mean 'createInterface'?
+src/tools/output-formatting/smart-log.ts(12,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/output-formatting/smart-log.ts(13,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/output-formatting/smart-log.ts(14,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/output-formatting/smart-log.ts(15,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(16,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-pretty.ts(21,36): error TS6133: 'resolveConfig' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(405,11): error TS6133: 'grammarCache' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(510,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(517,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(608,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/output-formatting/smart-pretty.ts(608,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/output-formatting/smart-pretty.ts(792,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(799,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(867,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/output-formatting/smart-pretty.ts(867,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/output-formatting/smart-pretty.ts(1326,3): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(1338,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/output-formatting/smart-report.ts(2,3): error TS2724: '"fs"' has no exported member named '_readFileSync'. Did you mean 'readFileSync'?
+src/tools/output-formatting/smart-report.ts(3,3): error TS6133: 'writeFileSync' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(4,3): error TS6133: 'existsSync' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(5,3): error TS6133: 'mkdirSync' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-report.ts(8,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/output-formatting/smart-report.ts(9,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/output-formatting/smart-report.ts(10,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/output-formatting/smart-report.ts(11,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/output-formatting/smart-report.ts(12,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/output-formatting/smart-report.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-report.ts(14,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_hashContent'. Did you mean 'hashContent'?
+src/tools/output-formatting/smart-stream.ts(1,559): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(9,10): error TS2724: '"stream"' has no exported member named '_Transform'. Did you mean 'Transform'?
+src/tools/output-formatting/smart-stream.ts(9,32): error TS2724: '"stream"' has no exported member named '_Readable'. Did you mean 'Readable'?
+src/tools/output-formatting/smart-stream.ts(9,43): error TS6133: 'Writable' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(10,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(17,10): error TS2724: '"os"' has no exported member named '_homedir'. Did you mean 'homedir'?
+src/tools/output-formatting/smart-stream.ts(18,10): error TS2305: Module '"path"' has no exported member '_join'.
+src/tools/output-formatting/smart-stream.ts(19,10): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/output-formatting/smart-stream.ts(20,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/output-formatting/smart-stream.ts(21,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/output-formatting/smart-stream.ts(22,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(23,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(24,7): error TS6133: '_pipelineAsync' is declared but its value is never read.
+src/tools/system-operations/index.ts(32,3): error TS2305: Module '"./smart-network"' has no exported member 'SmartNetwork'.
+src/tools/system-operations/index.ts(33,3): error TS2305: Module '"./smart-network"' has no exported member 'runSmartNetwork'.
+src/tools/system-operations/index.ts(34,3): error TS2305: Module '"./smart-network"' has no exported member 'SMART_NETWORK_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(35,8): error TS2305: Module '"./smart-network"' has no exported member 'SmartNetworkOptions'.
+src/tools/system-operations/index.ts(36,8): error TS2305: Module '"./smart-network"' has no exported member 'SmartNetworkResult'.
+src/tools/system-operations/index.ts(37,8): error TS2305: Module '"./smart-network"' has no exported member 'NetworkOperation'.
+src/tools/system-operations/index.ts(38,8): error TS2305: Module '"./smart-network"' has no exported member 'PingResult'.
+src/tools/system-operations/index.ts(39,8): error TS2305: Module '"./smart-network"' has no exported member 'TracerouteHop'.
+src/tools/system-operations/index.ts(40,8): error TS2305: Module '"./smart-network"' has no exported member 'PortScanResult'.
+src/tools/system-operations/index.ts(41,8): error TS2305: Module '"./smart-network"' has no exported member 'DNSResult'.
+src/tools/system-operations/index.ts(42,8): error TS2305: Module '"./smart-network"' has no exported member 'NetworkInterface'.
+src/tools/system-operations/index.ts(43,8): error TS2305: Module '"./smart-network"' has no exported member 'BandwidthResult'.
+src/tools/system-operations/index.ts(47,3): error TS2305: Module '"./smart-cleanup"' has no exported member 'SmartCleanup'.
+src/tools/system-operations/index.ts(48,3): error TS2305: Module '"./smart-cleanup"' has no exported member 'runSmartCleanup'.
+src/tools/system-operations/index.ts(49,3): error TS2305: Module '"./smart-cleanup"' has no exported member 'SMART_CLEANUP_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(50,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'SmartCleanupOptions'.
+src/tools/system-operations/index.ts(51,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'SmartCleanupResult'.
+src/tools/system-operations/index.ts(52,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupOperation'.
+src/tools/system-operations/index.ts(53,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupCategory'.
+src/tools/system-operations/index.ts(54,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'FileCandidate'.
+src/tools/system-operations/index.ts(55,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupAnalysis'.
+src/tools/system-operations/index.ts(56,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupPreview'.
+src/tools/system-operations/index.ts(57,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupExecution'.
+src/tools/system-operations/index.ts(58,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupRollback'.
+src/tools/system-operations/index.ts(59,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'DiskSpaceEstimate'.
+src/tools/system-operations/index.ts(63,3): error TS2305: Module '"./smart-metrics"' has no exported member 'SmartMetrics'.
+src/tools/system-operations/index.ts(64,3): error TS2305: Module '"./smart-metrics"' has no exported member 'runSmartMetrics'.
+src/tools/system-operations/index.ts(65,3): error TS2305: Module '"./smart-metrics"' has no exported member 'SMART_METRICS_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(66,8): error TS2305: Module '"./smart-metrics"' has no exported member 'SmartMetricsOptions'.
+src/tools/system-operations/index.ts(67,8): error TS2305: Module '"./smart-metrics"' has no exported member 'SmartMetricsResult'.
+src/tools/system-operations/index.ts(68,8): error TS2305: Module '"./smart-metrics"' has no exported member 'MetricsOperation'.
+src/tools/system-operations/index.ts(69,8): error TS2305: Module '"./smart-metrics"' has no exported member 'CPUMetrics'.
+src/tools/system-operations/index.ts(70,8): error TS2305: Module '"./smart-metrics"' has no exported member 'MemoryMetrics'.
+src/tools/system-operations/index.ts(71,8): error TS2305: Module '"./smart-metrics"' has no exported member 'DiskMetrics'.
+src/tools/system-operations/index.ts(72,8): error TS2305: Module '"./smart-metrics"' has no exported member 'NetworkMetrics'.
+src/tools/system-operations/index.ts(73,8): error TS2305: Module '"./smart-metrics"' has no exported member 'TemperatureMetrics'.
+src/tools/system-operations/index.ts(74,8): error TS2305: Module '"./smart-metrics"' has no exported member 'TimeSeriesData'.
+src/tools/system-operations/index.ts(75,8): error TS2305: Module '"./smart-metrics"' has no exported member 'CompressedTimeSeries'.
+src/tools/system-operations/index.ts(94,3): error TS2305: Module '"./smart-archive"' has no exported member 'SmartArchive'.
+src/tools/system-operations/index.ts(95,3): error TS2305: Module '"./smart-archive"' has no exported member 'runSmartArchive'.
+src/tools/system-operations/index.ts(96,3): error TS2305: Module '"./smart-archive"' has no exported member 'SMART_ARCHIVE_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(97,8): error TS2305: Module '"./smart-archive"' has no exported member 'SmartArchiveOptions'.
+src/tools/system-operations/index.ts(98,8): error TS2305: Module '"./smart-archive"' has no exported member 'SmartArchiveResult'.
+src/tools/system-operations/index.ts(99,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveFormat'.
+src/tools/system-operations/index.ts(100,8): error TS2305: Module '"./smart-archive"' has no exported member 'CompressionLevel'.
+src/tools/system-operations/index.ts(101,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveOperation'.
+src/tools/system-operations/index.ts(102,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveEntry'.
+src/tools/system-operations/index.ts(103,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveMetadata'.
+src/tools/system-operations/index.ts(104,8): error TS2305: Module '"./smart-archive"' has no exported member 'IncrementalBackupInfo'.
+src/tools/system-operations/index.ts(105,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveVerificationResult'.
+src/tools/system-operations/smart-archive.ts(1,474): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/system-operations/smart-archive.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/system-operations/smart-archive.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/system-operations/smart-archive.ts(4,1): error TS6133: 'tarStream' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(4,33): error TS7016: Could not find a declaration file for module 'tar-stream'. 'C:/Users/yolan/source/repos/token-optimizer-mcp/node_modules/tar-stream/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/tar-stream` if it exists or add a new declaration (.d.ts) file containing `declare module 'tar-stream';`
+src/tools/system-operations/smart-archive.ts(5,1): error TS6133: 'archiver' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(6,1): error TS6133: 'tar' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(6,22): error TS7016: Could not find a declaration file for module 'tar-stream'. 'C:/Users/yolan/source/repos/token-optimizer-mcp/node_modules/tar-stream/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/tar-stream` if it exists or add a new declaration (.d.ts) file containing `declare module 'tar-stream';`
+src/tools/system-operations/smart-archive.ts(7,1): error TS6133: 'zlib' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(9,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(12,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/system-operations/smart-archive.ts(13,1): error TS6133: 'unzipper' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(14,7): error TS6133: '_pipelineAsync' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(15,7): error TS6133: '_stat' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(15,28): error TS2551: Property '_stat' does not exist on type 'typeof import("fs")'. Did you mean 'stat'?
+src/tools/system-operations/smart-archive.ts(16,7): error TS6133: '_readdir' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(16,31): error TS2551: Property '_readdir' does not exist on type 'typeof import("fs")'. Did you mean 'readdir'?
+src/tools/system-operations/smart-archive.ts(17,7): error TS6133: '_mkdir' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(17,29): error TS2551: Property '_mkdir' does not exist on type 'typeof import("fs")'. Did you mean 'mkdir'?
+src/tools/system-operations/smart-cleanup.ts(1,480): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/system-operations/smart-cleanup.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/system-operations/smart-cleanup.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/system-operations/smart-cleanup.ts(5,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(7,10): error TS2724: '"../shared/hash-utils"' has no exported member named '_generateCacheKey'. Did you mean 'generateCacheKey'?
+src/tools/system-operations/smart-cleanup.ts(8,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/system-operations/smart-cleanup.ts(9,7): error TS6133: '_stat' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(9,28): error TS2551: Property '_stat' does not exist on type 'typeof import("fs")'. Did you mean 'stat'?
+src/tools/system-operations/smart-cleanup.ts(10,7): error TS6133: '_readdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(10,31): error TS2551: Property '_readdir' does not exist on type 'typeof import("fs")'. Did you mean 'readdir'?
+src/tools/system-operations/smart-cleanup.ts(11,7): error TS6133: '_unlink' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(11,30): error TS2551: Property '_unlink' does not exist on type 'typeof import("fs")'. Did you mean 'unlink'?
+src/tools/system-operations/smart-cleanup.ts(12,7): error TS6133: '_rmdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(12,29): error TS2551: Property '_rmdir' does not exist on type 'typeof import("fs")'. Did you mean 'rmdir'?
+src/tools/system-operations/smart-cleanup.ts(13,7): error TS6133: '_mkdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(13,29): error TS2551: Property '_mkdir' does not exist on type 'typeof import("fs")'. Did you mean 'mkdir'?
+src/tools/system-operations/smart-cleanup.ts(14,7): error TS6133: '_rename' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(14,30): error TS2551: Property '_rename' does not exist on type 'typeof import("fs")'. Did you mean 'rename'?
+src/tools/system-operations/smart-cleanup.ts(15,7): error TS6133: '_access' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(15,30): error TS2551: Property '_access' does not exist on type 'typeof import("fs")'. Did you mean 'access'?
+src/tools/system-operations/smart-cron.ts(288,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(325,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(570,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(715,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(844,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(919,79): error TS2345: Argument of type '`undefined:${string}` | `auto:${string}` | `cron:${string}` | `windows-task:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(955,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1076,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/system-operations/smart-cron.ts(1132,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1403,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-metrics.ts(1,627): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/system-operations/smart-metrics.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/system-operations/smart-metrics.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/system-operations/smart-metrics.ts(4,10): error TS2724: '"crypto"' has no exported member named '_createHash'. Did you mean 'createHash'?
+src/tools/system-operations/smart-metrics.ts(5,1): error TS6133: 'si' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(1,503): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/system-operations/smart-network.ts(2,10): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/system-operations/smart-network.ts(3,10): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/system-operations/smart-network.ts(7,1): error TS6133: 'net' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(8,1): error TS6133: 'crypto' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(9,7): error TS6133: '_execAsync' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(10,7): error TS6133: '_dnsLookup' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(11,7): error TS6133: '_dnsReverse' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(12,7): error TS6133: '_dnsResolve' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(13,7): error TS6133: '_dnsResolve4' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(14,7): error TS6133: '_dnsResolve6' is declared but its value is never read.
+src/tools/system-operations/smart-process.ts(18,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/system-operations/smart-process.ts(19,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/system-operations/smart-process.ts(555,11): error TS6133: '_stdout' is declared but its value is never read.
+src/tools/system-operations/smart-process.ts(555,13): error TS2339: Property '_stdout' does not exist on type '{ stdout: string; stderr: string; }'.
+src/tools/system-operations/smart-service.ts(248,81): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(476,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(526,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(579,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(789,79): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(934,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-user.ts(264,77): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+  Type '"include-system:undefined"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-user.ts(318,78): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+  Type '"include-system:undefined"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-user.ts(378,76): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(436,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(495,78): error TS2345: Argument of type '`${string}:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(527,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(551,70): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(583,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(604,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(636,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(658,81): error TS2345: Argument of type '"full"' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(690,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(1486,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+
+## 2. ERROR BREAKDOWN BY TYPE
+## ===========================
+
+259 TS2305
+169 TS2724
+102 TS6133
+85 TS2345
+47 TS2307
+33 TS6192
+22 TS2554
+19 TS2339
+16 TS2322
+10 TS2551
+9 TS2362
+8 TS2363
+3 TS7022
+3 TS2448
+2 TS7016
+1 TS2365
+1 TS2304
+1 TS6198
+
+## 3. ERROR BREAKDOWN BY FILE (Top 30)
+## ====================================
+
+88 errors in src/tools/output-formatting/index.ts
+50 errors in src/tools/system-operations/index.ts
+33 errors in src/tools/advanced-caching/index.ts
+24 errors in src/tools/api-database/index.ts
+24 errors in src/tools/intelligence/index.ts
+23 errors in src/tools/dashboard-monitoring/alert-manager.ts
+22 errors in src/tools/configuration/smart-config-read.ts
+20 errors in src/tools/system-operations/smart-cleanup.ts
+19 errors in src/tools/system-operations/smart-archive.ts
+16 errors in src/tools/configuration/index.ts
+13 errors in src/tools/output-formatting/smart-diff.ts
+13 errors in src/tools/output-formatting/smart-stream.ts
+13 errors in src/tools/system-operations/smart-user.ts
+13 errors in src/tools/configuration/smart-tsconfig.ts
+12 errors in src/tools/dashboard-monitoring/health-monitor.ts
+12 errors in src/tools/output-formatting/smart-pretty.ts
+12 errors in src/tools/output-formatting/smart-report.ts
+12 errors in src/tools/output-formatting/smart-format.ts
+12 errors in src/tools/output-formatting/smart-export.ts
+11 errors in src/tools/system-operations/smart-network.ts
+10 errors in src/tools/system-operations/smart-cron.ts
+10 errors in src/tools/dashboard-monitoring/report-generator.ts
+10 errors in src/tools/code-analysis/smart-ambiance.ts
+9 errors in src/tools/code-analysis/index.ts
+9 errors in src/tools/output-formatting/smart-log.ts
+9 errors in src/tools/file-operations/smart-branch.ts
+9 errors in src/tools/configuration/smart-workflow.ts
+9 errors in src/tools/intelligence/smart-summarization.ts
+8 errors in src/tools/api-database/smart-cache-api.ts
+8 errors in src/tools/build-systems/smart-lint.ts
+
+## 4. KEY INTERFACE DEFINITIONS
+## =============================
+
+### TokenCountResult Interface
+
+> export interface TokenCountResult {
+    tokens: number;
+    characters: number;
+    estimatedCost?: number;
+  }
+  
+
+
+
+### CacheEngine Class
+import Database from 'better-sqlite3';
+import { LRUCache } from 'lru-cache';
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
+
+export interface CacheEntry {
+  key: string;
+  value: string;
+  compressedSize: number;
+  originalSize: number;
+  hitCount: number;
+  createdAt: number;
+  lastAccessedAt: number;
+}
+
+export interface CacheStats {
+  totalEntries: number;
+  totalHits: number;
+  totalMisses: number;
+  hitRate: number;
+  totalCompressedSize: number;
+  totalOriginalSize: number;
+  compressionRatio: number;
+}
+
+export class CacheEngine {
+  private db: Database.Database;
+  private memoryCache: LRUCache<string, string>;
+  private stats = {
+    hits: 0,
+    misses: 0,
+  };
+
+  constructor(
+    dbPath?: string,
+    maxMemoryItems: number = 1000
+  ) {
+    // Use user-provided path or default to ~/.token-optimizer-cache
+    const cacheDir = dbPath
+      ? path.dirname(dbPath)
+      : path.join(os.homedir(), '.token-optimizer-cache');
+
+    // Ensure cache directory exists
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    const fullDbPath = dbPath || path.join(cacheDir, 'cache.db');
+
+    // Initialize SQLite database
+    this.db = new Database(fullDbPath);
+    this.db.pragma('journal_mode = WAL'); // Write-Ahead Logging for better concurrency
+
+    // Create cache table if it doesn't exist
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS cache (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        compressed_size INTEGER NOT NULL,
+        original_size INTEGER NOT NULL,
+        hit_count INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        last_accessed_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
+      CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
+    `);
+
+    // Initialize in-memory LRU cache for frequently accessed items
+    this.memoryCache = new LRUCache<string, string>({
+      max: maxMemoryItems,
+      ttl: 1000 * 60 * 60, // 1 hour TTL
+    });
+  }
+
+  /**
+   * Get a value from cache
+   */
+  get(key: string): string | null {
+    // Check memory cache first
+    const memValue = this.memoryCache.get(key);
+    if (memValue !== undefined) {
+      this.stats.hits++;
+      this.updateHitCount(key);
+      return memValue;
+    }
+
+    // Check SQLite cache
+    const stmt = this.db.prepare(`
+      SELECT value, hit_count FROM cache WHERE key = ?
+    `);
+    const row = stmt.get(key) as { value: string; hit_count: number } | undefined;
+
+    if (row) {
+      this.stats.hits++;
+      // Update hit count and last accessed time
+      this.updateHitCount(key);
+      // Add to memory cache for faster access
+
+## 5. SAMPLE FILES SHOWING ERROR PATTERNS
+## =======================================
+
+### TS2345 Sample (smart-user.ts)
+/**
+ * SmartUser - Intelligent User & Permission Management
+ *
+ * Track 2C - Tool #7: User/permission management with smart caching (86%+ token reduction)
+ *
+ * Capabilities:
+ * - User/group information retrieval
+ * - Permission analysis and ACL management
+ * - Sudo/privilege escalation checks
+ * - Security audit recommendations
+ * - Cross-platform support (Linux/Windows/macOS)
+ *
+ * Token Reduction Strategy:
+ * - Cache user/group databases (95% reduction)
+ * - Incremental permission changes (86% reduction)
+ * - Compressed ACL trees (88% reduction)
+ */
+
+import { CacheEngine } from "../../core/cache-engine";
+import { TokenCounter } from "../../core/token-counter";
+import { MetricsCollector } from "../../core/metrics";
+import { exec } from "child_process";
+import { promisify } from "util";
+import * as crypto from "crypto";
+
+const execAsync = promisify(exec);
+
+// ===========================
+// Types & Interfaces
+// ===========================
+
+export type UserOperation =
+  | "list-users"
+  | "list-groups"
+  | "check-permissions"
+  | "audit-security"
+  | "get-acl"
+  | "get-user-info"
+  | "get-group-info"
+  | "check-sudo";
+
+export interface SmartUserOptions {
+  operation: UserOperation;
+  username?: string;
+  groupname?: string;
+  path?: string;
+  includeSystemUsers?: boolean;
+  includeSystemGroups?: boolean;
+  useCache?: boolean;
+  ttl?: number;
+
+### TS2322 Sample (cache files)
+/** * CacheAnalytics - Comprehensive Cache Analytics * * Real-time analytics and reporting for cache performance and usage. * Provides visualization, trend analysis, alerting, and cost analysis capabilities. * * Operations: * 1. dashboard - Get real-time dashboard data * 2. metrics - Get detailed metrics * 3. trends - Analyze trends over time * 4. alerts - Configure and check alerts * 5. heatmap - Generate access heatmap * 6. bottlenecks - Identify performance bottlenecks * 7. cost-analysis - Analyze caching costs * 8. export-data - Export analytics data * * Token Reduction Target: 88%+ */ import { _CacheEngine } from "../../core/cache-engine";
+import { _TokenCounter } from "../../core/token-counter";
+import { _MetricsCollector } from "../../core/metrics";
+import { _createWriteStream, _existsSync} from "fs";
+import { _join } from "path";
+import { _createCanvas } from "canvas";
+import { _generateCacheKey } from "../shared/hash-utils";
+import { Chart, registerables } from "chart"; // Register Chart.js componentsChart.register(...registerables);// ============================================================================// Type Definitions// ============================================================================export interface CacheAnalyticsOptions {  operation: 'dashboard' | 'metrics' | 'trends' | 'alerts' | 'heatmap' | 'bottlenecks' | 'cost-analysis' | 'export-data';  // Common options  timeRange?: { start: number; end: number };  granularity?: 'second' | 'minute' | 'hour' | 'day';  // Metrics operation  metricTypes?: Array<'performance' | 'usage' | 'efficiency' | 'cost' | 'health'>;  aggregation?: 'sum' | 'avg' | 'min' | 'max' | 'p95' | 'p99';  // Trends operation  compareWith?: 'previous-period' | 'last-week' | 'last-month';  trendType?: 'absolute' | 'percentage' | 'rate';  // Alerts operation  alertType?: 'threshold' | 'anomaly' | 'trend';  threshold?: number;  alertConfig?: AlertConfiguration;  // Heatmap operation  heatmapType?: 'temporal' | 'key-correlation' | 'memory';  resolution?: 'low' | 'medium' | 'high';  // Export operation  format?: 'json' | 'csv' | 'excel';  filePath?: string;  // Caching options  useCache?: boolean;  cacheTTL?: number;}export interface CacheAnalyticsResult {  success: boolean;  operation: string;  data: {    dashboard?: DashboardData;    metrics?: MetricCollection;    trends?: TrendAnalysis;    alerts?: Alert[];    heatmap?: HeatmapData;    bottlenecks?: Bottleneck[];    costAnalysis?: CostBreakdown;    exportPath?: string;  };  metadata: {    tokensUsed: number;    tokensSaved: number;    cacheHit: boolean;    executionTime: number;  };}// Dashboard Typesexport interface DashboardData {  timestamp: number;  performance: PerformanceMetrics;  usage: UsageMetrics;  efficiency: EfficiencyMetrics;  cost: CostMetrics;  health: HealthMetrics;  recentActivity: ActivityLog[];}export interface PerformanceMetrics {  hitRate: number;  latencyP50: number;  latencyP95: number;  latencyP99: number;  throughput: number;  operationsPerSecond: number;  averageResponseTime: number;}export interface UsageMetrics {  totalKeys: number;  totalSize: number;  keyAccessFrequency: Map<string, number>;  valueSizeDistribution: SizeDistribution;  topAccessedKeys: Array<{ key: string; hits: number }>;  recentlyAdded: Array<{ key: string; timestamp: number }>;}export interface EfficiencyMetrics {  memoryUtilization: number;  evictionRate: number;  evictionPatterns: EvictionPattern[];  compressionRatio: number;  fragmentationIndex: number;}export interface CostMetrics {  memoryCost: number;  diskCost: number;  networkCost: number;  totalCost: number;  costPerOperation: number;  costTrend: number;}export interface HealthMetrics {  errorRate: number;  timeoutRate: number;  fragmentationLevel: number;  warningCount: number;  criticalIssues: string[];  healthScore: number;}export interface ActivityLog {  timestamp: number;  operation: string;  key?: string;  duration: number;  status: 'success' | 'error' | 'timeout';}// Metrics Typesexport interface MetricCollection {  timestamp: number;  timeRange: { start: number; end: number };  performance?: PerformanceMetrics;  usage?: UsageMetrics;  efficiency?: EfficiencyMetrics;  cost?: CostMetrics;  health?: HealthMetrics;  aggregatedData: AggregatedMetrics;}export interface AggregatedMetrics {  totalOperations: number;  successfulOperations: number;  failedOperations: number;  averageDuration: number;  totalCacheHits: number;  totalCacheMisses: number;}// Trend Analysis Typesexport interface TrendAnalysis {  timestamp: number;  timeRange: { start: number; end: number };  metrics: TrendMetric[];  anomalies: Anomaly[];  predictions: Prediction[];  regression: RegressionResult;  seasonality: SeasonalityPattern;}export interface TrendMetric {  name: string;  current: number;  previous: number;  change: number;  changePercent: number;  trend: 'up' | 'down' | 'stable';  velocity: number;}export interface Anomaly {  timestamp: number;  metric: string;  value: number;  expected: number;  deviation: number;  severity: 'low' | 'medium' | 'high';  confidence: number;}export interface Prediction {  metric: string;  timestamp: number;  predictedValue: number;  confidenceInterval: { lower: number; upper: number };  confidence: number;}export interface RegressionResult {  slope: number;  intercept: number;  rSquared: number;  equation: string;}export interface SeasonalityPattern {  detected: boolean;  period: number;  strength: number;  peaks: number[];  troughs: number[];}// Alert Typesexport interface Alert {  id: string;  type: 'threshold' | 'anomaly' | 'trend';  metric: string;  severity: 'info' | 'warning' | 'critical';  message: string;  timestamp: number;  value: number;  threshold?: number;  triggered: boolean;}export interface AlertConfiguration {  metric: string;  condition: 'gt' | 'lt' | 'eq' | 'ne';  threshold: number;  severity: 'info' | 'warning' | 'critical';  enabled: boolean;}// Heatmap Typesexport interface HeatmapData {  type: 'temporal' | 'key-correlation' | 'memory';  dimensions: { width: number; height: number };  data: number[][];  labels: { x: string[]; y: string[] };  colorScale: { min: number; max: number };  visualization?: string; // Base64 encoded image}// Bottleneck Typesexport interface Bottleneck {  type: 'slow-operation' | 'hot-key' | 'memory-pressure' | 'high-eviction';  severity: 'low' | 'medium' | 'high';  description: string;  impact: number;  recommendation: string;  affectedKeys?: string[];  metrics: {    current: number;    threshold: number;    duration: number;  };}// Cost Analysis Typesexport interface CostBreakdown {  timestamp: number;  timeRange: { start: number; end: number };  storage: StorageCost;  network: NetworkCost;  compute: ComputeCost;  total: TotalCost;  projections: CostProjection[];  optimizations: CostOptimization[];}export interface StorageCost {  memoryCost: number;  diskCost: number;  totalStorage: number;  utilizationPercent: number;}export interface NetworkCost {  ingressCost: number;  egressCost: number;  totalTraffic: number;  bandwidthUtilization: number;}export interface ComputeCost {  cpuCost: number;  operationCost: number;  totalOperations: number;  efficiency: number;}export interface TotalCost {  current: number;  projected: number;  trend: number;  costPerGB: number;  costPerOperation: number;}export interface CostProjection {  period: string;  estimatedCost: number;  confidence: number;}export interface CostOptimization {  category: string;  potentialSavings: number;  effort: 'low' | 'medium' | 'high';  recommendation: string;}// Supporting Typesexport interface SizeDistribution {  small: number; // < 1KB  medium: number; // 1KB - 10KB  large: number; // 10KB - 100KB  xlarge: number; // > 100KB}export interface EvictionPattern {  reason: string;  count: number;  percentage: number;  trend: 'increasing' | 'stable' | 'decreasing';}// ============================================================================// Main Implementation// ============================================================================export class CacheAnalytics {  private cache: CacheEngine;  private tokenCounter: TokenCounter;  private metricsCollector: MetricsCollector;  private alertConfigs: Map<string, AlertConfiguration> = new Map();  private historicalData: Map<number, DashboardData> = new Map();  constructor(    cache: CacheEngine,    tokenCounter: TokenCounter,    metricsCollector: MetricsCollector  ) {    this.cache = cache;    this.tokenCounter = tokenCounter;    this.metricsCollector = metricsCollector;    this.initializeDefaults();  }  /**   * Initialize default alert configurations   */  private initializeDefaults(): void {    // Default alert configurations    this.alertConfigs.set('high-error-rate', {      metric: 'errorRate',      condition: 'gt',      threshold: 5.0,      severity: 'critical',      enabled: true    });    this.alertConfigs.set('low-hit-rate', {      metric: 'hitRate',      condition: 'lt',      threshold: 70.0,      severity: 'warning',      enabled: true    });    this.alertConfigs.set('high-latency', {      metric: 'latencyP95',      condition: 'gt',      threshold: 100.0,      severity: 'warning',      enabled: true    });  }  /**   * Main entry point for cache analytics operations   */  async run(options: CacheAnalyticsOptions): Promise<CacheAnalyticsResult> {    const startTime = Date.now();    // Generate cache key    const cacheKey = generateCacheKey('cache-analytics', {        op: options.operation,        time: options.timeRange,        gran: options.granularity      });    // Check cache if enabled    if (options.useCache !== false) {      const cached = this.cache.get(cacheKey);      if (cached) {        try {          const data = JSON.parse(cached.toString());          const tokenCountResult = this.tokenCounter.count(JSON.stringify(data));          const tokensSaved = tokenCountResult.tokens;          return {            success: true,            operation: options.operation,            data,            metadata: {              tokensUsed: 0,              tokensSaved,              cacheHit: true,              executionTime: Date.now() - startTime            }          };        } catch (error) {          // Cache parse error, continue with fresh execution        }      }    }    // Execute operation    let data: CacheAnalyticsResult['data'];    try {      switch (options.operation) {        case 'dashboard':          data = { dashboard: await this.getDashboard(options) };          break;        case 'metrics':          data = { metrics: await this.getMetrics(options) };          break;        case 'trends':          data = { trends: await this.analyzeTrends(options) };          break;        case 'alerts':          data = { alerts: await this.checkAlerts(options) };          break;        case 'heatmap':          data = { heatmap: await this.generateHeatmap(options) };          break;        case 'bottlenecks':          data = { bottlenecks: await this.identifyBottlenecks(options) };          break;        case 'cost-analysis':          data = { costAnalysis: await this.analyzeCosts(options) };          break;        case 'export-data':          data = { exportPath: await this.exportData(options) };          break;        default:          throw new Error(`Unknown operation: ${options.operation}`);      }    } catch (error) {      const _errorMsg = error instanceof Error ? error.message : String(error);      return {        success: false,        operation: options.operation,        data: {},        metadata: {          tokensUsed: 0,          tokensSaved: 0,          cacheHit: false,          executionTime: Date.now() - startTime        }      };    }    // Calculate tokens and cache result    const tokenCountResult = this.tokenCounter.count(JSON.stringify(data));    const tokensUsed = tokenCountResult.tokens;    const cacheTTL = options.cacheTTL || 30; // 30 seconds default for dashboard    this.cache.set(cacheKey, JSON.stringify(data), tokensUsed, cacheTTL);    // Record metrics    this.metricsCollector.record({      operation: `analytics-${options.operation}`,      duration: Date.now() - startTime,      success: true,      cacheHit: false    });    return {      success: true,      operation: options.operation,      data,      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: Date.now() - startTime      }    };  }  // ============================================================================  // Dashboard Operations  // ============================================================================  /**   * Get real-time dashboard data   */  private async getDashboard(options: CacheAnalyticsOptions): Promise<DashboardData> {    const now = Date.now();    const timeRange = options.timeRange || { start: now - 3600000, end: now }; // Last hour    // Gather all metrics    const performance = this.getPerformanceMetrics(timeRange);    const usage = this.getUsageMetrics(timeRange);    const efficiency = this.getEfficiencyMetrics(timeRange);    const cost = this.getCostMetrics(timeRange);    const health = this.getHealthMetrics(timeRange);    const recentActivity = this.getRecentActivity(10);    const dashboard: DashboardData = {      timestamp: now,      performance,      usage,      efficiency,      cost,      health,      recentActivity    };    // Store for trend analysis    this.historicalData.set(now, dashboard);    if (this.historicalData.size > 1000) {      const oldestKey = Array.from(this.historicalData.keys()).sort((a, b) => a - b)[0];      this.historicalData.delete(oldestKey);    }    return dashboard;  }  /**   * Get performance metrics   */  private getPerformanceMetrics(timeRange: { start: number; end: number }): PerformanceMetrics {    const stats = this.metricsCollector.getCacheStats(timeRange.start);    const percentiles = this.metricsCollector.getPerformancePercentiles(timeRange.start);    const duration = (timeRange.end - timeRange.start) / 1000;    return {      hitRate: stats.cacheHitRate,      latencyP50: percentiles.p50,      latencyP95: percentiles.p95,      latencyP99: percentiles.p99,      throughput: stats.totalOperations / duration,      operationsPerSecond: stats.totalOperations / duration,      averageResponseTime: stats.averageDuration    };  }  /**   * Get usage metrics   */  private getUsageMetrics(timeRange: { start: number; end: number }): UsageMetrics {    const cacheStats = this.cache.getStats();    const operations = this.metricsCollector.getOperations(timeRange.start);    // Calculate key access frequency    const keyAccessFrequency = new Map<string, number>();    operations.forEach(op => {      if (op.operation.includes('get') || op.operation.includes('set')) {        const key = this.extractKeyFromOperation(op.operation);        keyAccessFrequency.set(key, (keyAccessFrequency.get(key) || 0) + 1);      }    });    // Get top accessed keys    const topAccessedKeys = Array.from(keyAccessFrequency.entries())      .sort((a, b) => b[1] - a[1])      .slice(0, 10)      .map(([key, hits]) => ({ key, hits }));    // Size distribution (simulated)    const valueSizeDistribution: SizeDistribution = {      small: Math.floor(cacheStats.totalEntries * 0.6),      medium: Math.floor(cacheStats.totalEntries * 0.25),      large: Math.floor(cacheStats.totalEntries * 0.1),      xlarge: Math.floor(cacheStats.totalEntries * 0.05)    };    return {      totalKeys: cacheStats.totalEntries,      totalSize: cacheStats.totalCompressedSize,      keyAccessFrequency,      valueSizeDistribution,      topAccessedKeys,      recentlyAdded: []    };  }  /**   * Get efficiency metrics   */  private getEfficiencyMetrics(timeRange: { start: number; end: number }): EfficiencyMetrics {    const cacheStats = this.cache.getStats();    const operations = this.metricsCollector.getOperations(timeRange.start);    // Calculate eviction rate    const evictionOps = operations.filter(op => op.operation.includes('evict')).length;    const totalOps = operations.length || 1;    const evictionRate = (evictionOps / totalOps) * 100;    // Eviction patterns (simulated)    const evictionPatterns: EvictionPattern[] = [      { reason: 'TTL Expired', count: Math.floor(evictionOps * 0.5), percentage: 50, trend: 'stable' },      { reason: 'Size Limit', count: Math.floor(evictionOps * 0.3), percentage: 30, trend: 'increasing' },      { reason: 'Manual', count: Math.floor(evictionOps * 0.2), percentage: 20, trend: 'stable' }    ];    return {      memoryUtilization: (cacheStats.totalCompressedSize / (500 * 1024 * 1024)) * 100, // Assuming 500MB max      evictionRate,      evictionPatterns,      compressionRatio: cacheStats.compressionRatio,      fragmentationIndex: this.calculateFragmentation()    };  }  /**   * Get cost metrics   */  private getCostMetrics(timeRange: { start: number; end: number }): CostMetrics {    const cacheStats = this.cache.getStats();    const operations = this.metricsCollector.getOperations(timeRange.start);    // Cost calculations (simulated pricing)    const memoryCostPerGB = 0.10; // $0.10 per GB-hour    const diskCostPerGB = 0.02; // $0.02 per GB-hour    const networkCostPerGB = 0.05; // $0.05 per GB    const operationCost = 0.000001; // $0.000001 per operation    const memoryGB = cacheStats.totalCompressedSize / (1024 * 1024 * 1024);    const hours = (timeRange.end - timeRange.start) / 3600000;    const memoryCost = memoryGB * memoryCostPerGB * hours;    const diskCost = memoryGB * diskCostPerGB * hours;    const networkCost = memoryGB * networkCostPerGB;    const totalCost = memoryCost + diskCost + networkCost + (operations.length * operationCost);    return {      memoryCost,      diskCost,      networkCost,      totalCost,      costPerOperation: totalCost / (operations.length || 1),      costTrend: 0 // Calculate from historical data    };  }  /**   * Get health metrics   */  private getHealthMetrics(timeRange: { start: number; end: number }): HealthMetrics {    const operations = this.metricsCollector.getOperations(timeRange.start);    const stats = this.metricsCollector.getCacheStats(timeRange.start);    const errorOps = operations.filter(op => !op.success).length;    const timeoutOps = operations.filter(op => op.duration > 1000).length;    const totalOps = operations.length || 1;    const errorRate = (errorOps / totalOps) * 100;    const timeoutRate = (timeoutOps / totalOps) * 100;    const criticalIssues: string[] = [];    if (errorRate > 5) criticalIssues.push(`High error rate: ${errorRate.toFixed(2)}%`);    if (timeoutRate > 10) criticalIssues.push(`High timeout rate: ${timeoutRate.toFixed(2)}%`);    if (stats.cacheHitRate < 50) criticalIssues.push(`Low cache hit rate: ${stats.cacheHitRate.toFixed(2)}%`);    // Calculate health score (0-100)    const healthScore = Math.max(0, 100 - (errorRate * 2) - (timeoutRate * 1.5) - ((100 - stats.cacheHitRate) * 0.5));    return {      errorRate,      timeoutRate,      fragmentationLevel: this.calculateFragmentation(),      warningCount: criticalIssues.length,      criticalIssues,      healthScore    };  }  /**   * Get recent activity   */  private getRecentActivity(limit: number): ActivityLog[] {    const operations = this.metricsCollector.getOperations();    return operations.slice(-limit).map(op => ({      timestamp: op.timestamp,      operation: op.operation,      duration: op.duration,      status: op.success ? 'success' : 'error'    }));  }  // ============================================================================  // Metrics Operations  // ============================================================================  /**   * Get detailed metrics   */  private async getMetrics(options: CacheAnalyticsOptions): Promise<MetricCollection> {    const now = Date.now();    const timeRange = options.timeRange || { start: now - 3600000, end: now };    const operations = this.metricsCollector.getOperations(timeRange.start);    const metricTypes = options.metricTypes || ['performance', 'usage', 'efficiency', 'cost', 'health'];    const metrics: Partial<MetricCollection> = {      timestamp: now,      timeRange    };    if (metricTypes.includes('performance')) {      metrics.performance = this.getPerformanceMetrics(timeRange);    }    if (metricTypes.includes('usage')) {      metrics.usage = this.getUsageMetrics(timeRange);    }    if (metricTypes.includes('efficiency')) {      metrics.efficiency = this.getEfficiencyMetrics(timeRange);    }    if (metricTypes.includes('cost')) {      metrics.cost = this.getCostMetrics(timeRange);    }    if (metricTypes.includes('health')) {      metrics.health = this.getHealthMetrics(timeRange);    }    // Aggregated data    const successfulOps = operations.filter(op => op.success).length;    const failedOps = operations.length - successfulOps;    const totalDuration = operations.reduce((sum, op) => sum + op.duration, 0);    const cacheHits = operations.filter(op => op.cacheHit).length;    metrics.aggregatedData = {      totalOperations: operations.length,      successfulOperations: successfulOps,      failedOperations: failedOps,      averageDuration: totalDuration / (operations.length || 1),      totalCacheHits: cacheHits,      totalCacheMisses: operations.length - cacheHits    };    return metrics as MetricCollection;  }  // ============================================================================  // Trend Analysis Operations  // ============================================================================  /**   * Analyze trends over time   */  private async analyzeTrends(options: CacheAnalyticsOptions): Promise<TrendAnalysis> {    const now = Date.now();    const timeRange = options.timeRange || { start: now - 86400000, end: now }; // Last 24 hours    // Get current and previous period data    const currentPeriod = this.metricsCollector.getCacheStats(timeRange.start);    const previousStart = timeRange.start - (timeRange.end - timeRange.start);    const previousPeriod = this.metricsCollector.getCacheStats(previousStart);    // Calculate trend metrics    const metrics: TrendMetric[] = [      this.calculateTrendMetric('Hit Rate', currentPeriod.cacheHitRate, previousPeriod.cacheHitRate),      this.calculateTrendMetric('Operations', currentPeriod.totalOperations, previousPeriod.totalOperations),      this.calculateTrendMetric('Avg Duration', currentPeriod.averageDuration, previousPeriod.averageDuration),      this.calculateTrendMetric('Success Rate', currentPeriod.successRate, previousPeriod.successRate)    ];    // Detect anomalies    const anomalies = this.detectAnomalies(timeRange);    // Generate predictions    const predictions = this.generatePredictions(timeRange);    // Perform regression analysis    const regression = this.performRegression(timeRange);    // Detect seasonality    const seasonality = this.detectSeasonality(timeRange);    return {      timestamp: now,      timeRange,      metrics,      anomalies,      predictions,      regression,      seasonality    };  }  /**   * Calculate trend metric   */  private calculateTrendMetric(name: string, current: number, previous: number): TrendMetric {    const change = current - previous;    const changePercent = previous !== 0 ? (change / previous) * 100 : 0;    const trend = Math.abs(changePercent) < 5 ? 'stable' : (changePercent > 0 ? 'up' : 'down');    const velocity = changePercent / 100; // Rate of change    return {      name,      current,      previous,      change,      changePercent,      trend,      velocity    };  }  /**   * Detect anomalies in metrics   */  private detectAnomalies(timeRange: { start: number; end: number }): Anomaly[] {    const operations = this.metricsCollector.getOperations(timeRange.start);    const anomalies: Anomaly[] = [];    if (operations.length === 0) return anomalies;    // Calculate statistics    const durations = operations.map(op => op.duration);    const mean = durations.reduce((a, b) => a + b, 0) / durations.length;    const variance = durations.reduce((sum, d) => sum + Math.pow(d - mean, 2), 0) / durations.length;    const stdDev = Math.sqrt(variance);    // Detect anomalous operations (> 3 standard deviations)    operations.forEach(op => {      const deviation = Math.abs(op.duration - mean) / stdDev;      if (deviation > 3) {        anomalies.push({          timestamp: op.timestamp,          metric: 'duration',          value: op.duration,          expected: mean,          deviation: deviation,          severity: deviation > 5 ? 'high' : 'medium',          confidence: Math.min(0.99, deviation / 5)        });      }    });    return anomalies.slice(0, 10); // Top 10 anomalies  }  /**   * Generate predictions   */  private generatePredictions(timeRange: { start: number; end: number }): Prediction[] {    const operations = this.metricsCollector.getOperations(timeRange.start);    if (operations.length < 10) return [];    // Simple linear prediction    const durations = operations.map(op => op.duration);    const mean = durations.reduce((a, b) => a + b, 0) / durations.length;    const stdDev = Math.sqrt(durations.reduce((sum, d) => sum + Math.pow(d - mean, 2), 0) / durations.length);    const predictions: Prediction[] = [];    const now = Date.now();    // Predict next hour    for (let i = 1; i <= 4; i++) {      const timestamp = now + (i * 900000); // 15 minute intervals      predictions.push({        metric: 'duration',        timestamp,        predictedValue: mean,        confidenceInterval: {          lower: mean - (2 * stdDev),          upper: mean + (2 * stdDev)        },        confidence: 0.95      });    }    return predictions;  }  /**   * Perform linear regression   */  private performRegression(timeRange: { start: number; end: number }): RegressionResult {    const operations = this.metricsCollector.getOperations(timeRange.start);    if (operations.length < 2) {      return {        slope: 0,        intercept: 0,        rSquared: 0,        equation: 'y = 0'      };    }    // Simple linear regression on operation count over time    const points = operations.map((op, i) => ({ x: i, y: op.duration }));    const n = points.length;    const sumX = points.reduce((sum, p) => sum + p.x, 0);    const sumY = points.reduce((sum, p) => sum + p.y, 0);    const sumXY = points.reduce((sum, p) => sum + (p.x * p.y), 0);    const sumX2 = points.reduce((sum, p) => sum + (p.x * p.x), 0);    const _sumY2 = points.reduce((sum, p) => sum + (p.y * p.y), 0);    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);    const intercept = (sumY - slope * sumX) / n;    // Calculate R-squared    const yMean = sumY / n;    const ssTotal = points.reduce((sum, p) => sum + Math.pow(p.y - yMean, 2), 0);    const ssResidual = points.reduce((sum, p) => sum + Math.pow(p.y - (slope * p.x + intercept), 2), 0);    const rSquared = 1 - (ssResidual / ssTotal);    return {      slope,      intercept,      rSquared,      equation: `y = ${slope.toFixed(4)}x + ${intercept.toFixed(4)}`    };  }  /**   * Detect seasonality patterns   */  private detectSeasonality(timeRange: { start: number; end: number }): SeasonalityPattern {    const operations = this.metricsCollector.getOperations(timeRange.start);    if (operations.length < 24) {      return {        detected: false,        period: 0,        strength: 0,        peaks: [],        troughs: []      };    }    // Group by hour to detect daily patterns    const hourlyData = new Array(24).fill(0);    operations.forEach(op => {      const hour = new Date(op.timestamp).getHours();      hourlyData[hour]++;    });    // Find peaks and troughs    const mean = hourlyData.reduce((a, b) => a + b, 0) / hourlyData.length;    const peaks: number[] = [];    const troughs: number[] = [];    hourlyData.forEach((count, hour) => {      if (count > mean * 1.5) peaks.push(hour);      if (count < mean * 0.5) troughs.push(hour);    });    const strength = peaks.length > 0 || troughs.length > 0 ? 0.7 : 0;    return {      detected: peaks.length > 0 || troughs.length > 0,      period: 24, // Daily pattern      strength,      peaks,      troughs    };  }  // ============================================================================  // Alert Operations  // ============================================================================  /**   * Check and generate alerts   */  private async checkAlerts(options: CacheAnalyticsOptions): Promise<Alert[]> {    const alerts: Alert[] = [];    const now = Date.now();    const timeRange = options.timeRange || { start: now - 3600000, end: now };    // Add custom alert config if provided    if (options.alertConfig) {      this.alertConfigs.set(        `custom-${options.alertConfig.metric}`,        options.alertConfig      );    }    // Get current metrics    const health = this.getHealthMetrics(timeRange);    const performance = this.getPerformanceMetrics(timeRange);    // Check each alert configuration    for (const [id, config] of Array.from(this.alertConfigs.entries())) {      if (!config.enabled) continue;      let currentValue = 0;      let metricName = config.metric;      // Get metric value      switch (config.metric) {        case 'errorRate':          currentValue = health.errorRate;          break;        case 'hitRate':          currentValue = performance.hitRate;          break;        case 'latencyP95':          currentValue = performance.latencyP95;          break;        default:          continue;      }      // Check condition      let triggered = false;      switch (config.condition) {        case 'gt':          triggered = currentValue > config.threshold;          break;        case 'lt':          triggered = currentValue < config.threshold;          break;        case 'eq':          triggered = currentValue === config.threshold;          break;        case 'ne':          triggered = currentValue !== config.threshold;          break;      }      if (triggered) {        alerts.push({          id,          type: 'threshold',          metric: metricName,          severity: config.severity,          message: `${metricName} (${currentValue.toFixed(2)}) ${config.condition} threshold (${config.threshold})`,          timestamp: now,          value: currentValue,          threshold: config.threshold,          triggered: true        });      }    }    // Check for anomaly alerts    const anomalies = this.detectAnomalies(timeRange);    anomalies.forEach(anomaly => {      if (anomaly.severity === 'high') {        alerts.push({          id: `anomaly-${anomaly.timestamp}`,          type: 'anomaly',          metric: anomaly.metric,          severity: 'warning',          message: `Anomaly detected in ${anomaly.metric}: ${anomaly.value.toFixed(2)} (expected ${anomaly.expected.toFixed(2)})`,          timestamp: anomaly.timestamp,          value: anomaly.value,          triggered: true        });      }    });    return alerts;  }  // ============================================================================  // Heatmap Operations  // ============================================================================  /**   * Generate access heatmap   */  private async generateHeatmap(options: CacheAnalyticsOptions): Promise<HeatmapData> {    const heatmapType = options.heatmapType || 'temporal';    const resolution = options.resolution || 'medium';    switch (heatmapType) {      case 'temporal':        return this.generateTemporalHeatmap(resolution);      case 'key-correlation':        return this.generateKeyCorrelationHeatmap(resolution);      case 'memory':        return this.generateMemoryHeatmap(resolution);      default:        throw new Error(`Unknown heatmap type: ${heatmapType}`);    }  }  /**   * Generate temporal access heatmap (hour x day)   */  private async generateTemporalHeatmap(_resolution: string): Promise<HeatmapData> {    const now = Date.now();    const operations = this.metricsCollector.getOperations(now - 604800000); // Last 7 days    // Create 7-day x 24-hour grid    const data: number[][] = Array(7).fill(0).map(() => Array(24).fill(0));    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];    const hourLabels = Array.from({ length: 24 }, (_, i) => `${i}:00`);    operations.forEach(op => {      const date = new Date(op.timestamp);      const day = date.getDay();      const hour = date.getHours();      data[day][hour]++;    });    // Find min/max for color scale    const flatData = data.flat();    const min = Math.min(...flatData);    const max = Math.max(...flatData);    // Generate visualization    const visualization = await this.renderHeatmapChart(data, dayLabels, hourLabels);    return {      type: 'temporal',      dimensions: { width: 24, height: 7 },      data,      labels: { x: hourLabels, y: dayLabels },      colorScale: { min, max },      visualization    };  }  /**   * Generate key correlation heatmap   */  private async generateKeyCorrelationHeatmap(_resolution: string): Promise<HeatmapData> {    const operations = this.metricsCollector.getOperations();    const keys = new Set<string>();    operations.forEach(op => {      const key = this.extractKeyFromOperation(op.operation);      if (key) keys.add(key);    });    const keyList = Array.from(keys).slice(0, 20); // Top 20 keys    const size = keyList.length;    const data: number[][] = Array(size).fill(0).map(() => Array(size).fill(0));    // Calculate correlation (co-occurrence in operations)    operations.forEach(op => {      const key = this.extractKeyFromOperation(op.operation);      if (key) {        const idx = keyList.indexOf(key);        if (idx >= 0) {          data[idx][idx]++;        }      }    });    const flatData = data.flat();    const min = Math.min(...flatData);    const max = Math.max(...flatData);    return {      type: 'key-correlation',      dimensions: { width: size, height: size },      data,      labels: { x: keyList, y: keyList },      colorScale: { min, max }    };  }  /**   * Generate memory usage heatmap   */  private async generateMemoryHeatmap(_resolution: string): Promise<HeatmapData> {    const stats = this.cache.getStats();    // Simulate memory distribution across time    const hours = 24;    const categories = ['L1 Cache', 'L2 Cache', 'L3 Cache', 'Overflow'];    const data: number[][] = Array(categories.length).fill(0).map(() =>      Array(hours).fill(0).map(() => Math.random() * stats.totalCompressedSize / 4)    );    const hourLabels = Array.from({ length: hours }, (_, i) => `${i}:00`);    const flatData = data.flat();    const min = Math.min(...flatData);    const max = Math.max(...flatData);    return {      type: 'memory',      dimensions: { width: hours, height: categories.length },      data,      labels: { x: hourLabels, y: categories },      colorScale: { min, max }    };  }  /**   * Render heatmap as chart image   */  private async renderHeatmapChart(    data: number[][],    xLabels: string[],    yLabels: string[]  ): Promise<string> {    const width = 800;    const height = 400;    const canvas = createCanvas(width, height);    const ctx = canvas.getContext('2d');    // Create gradient for heatmap colors    const flatData = data.flat();    const max = Math.max(...flatData);    // Draw heatmap    const cellWidth = width / xLabels.length;    const cellHeight = height / yLabels.length;    data.forEach((row, y) => {      row.forEach((value, x) => {        const intensity = max > 0 ? value / max : 0;        ctx.fillStyle = this.getHeatmapColor(intensity);        ctx.fillRect(x * cellWidth, y * cellHeight, cellWidth, cellHeight);      });    });    // Convert to base64    return canvas.toDataURL();  }  /**   * Get heatmap color based on intensity   */  private getHeatmapColor(intensity: number): string {    const r = Math.floor(255 * intensity);    const g = Math.floor(128 * (1 - intensity));    const b = Math.floor(64 * (1 - intensity));    return `rgb(${r},${g},${b})`;  }  // ============================================================================  // Bottleneck Operations  // ============================================================================  /**   * Identify performance bottlenecks   */  private async identifyBottlenecks(options: CacheAnalyticsOptions): Promise<Bottleneck[]> {    const bottlenecks: Bottleneck[] = [];    const now = Date.now();    const timeRange = options.timeRange || { start: now - 3600000, end: now };    const operations = this.metricsCollector.getOperations(timeRange.start);    const performance = this.getPerformanceMetrics(timeRange);    const efficiency = this.getEfficiencyMetrics(timeRange);    // Check for slow operations    if (performance.latencyP95 > 100) {      const slowOps = operations.filter(op => op.duration > 100);      bottlenecks.push({        type: 'slow-operation',        severity: performance.latencyP95 > 200 ? 'high' : 'medium',        description: `P95 latency is ${performance.latencyP95.toFixed(2)}ms`,        impact: (performance.latencyP95 - 100) / 100,        recommendation: 'Optimize slow operations or increase cache TTL',        affectedKeys: slowOps.slice(0, 5).map(op => this.extractKeyFromOperation(op.operation)),        metrics: {          current: performance.latencyP95,          threshold: 100,          duration: timeRange.end - timeRange.start        }      });    }    // Check for hot keys    const keyAccessCounts = new Map<string, number>();    operations.forEach(op => {      const key = this.extractKeyFromOperation(op.operation);      if (key) {        keyAccessCounts.set(key, (keyAccessCounts.get(key) || 0) + 1);      }    });    const hotKeys = Array.from(keyAccessCounts.entries())      .filter(([_, count]) => count > operations.length * 0.1)      .sort((a, b) => b[1] - a[1]);    if (hotKeys.length > 0) {      bottlenecks.push({        type: 'hot-key',        severity: 'medium',        description: `${hotKeys.length} hot keys detected`,        impact: hotKeys[0][1] / operations.length,        recommendation: 'Consider partitioning or replication for hot keys',        affectedKeys: hotKeys.slice(0, 5).map(([key]) => key),        metrics: {          current: hotKeys[0][1],          threshold: operations.length * 0.1,          duration: timeRange.end - timeRange.start        }      });    }    // Check for memory pressure    if (efficiency.memoryUtilization > 80) {      bottlenecks.push({        type: 'memory-pressure',        severity: efficiency.memoryUtilization > 90 ? 'high' : 'medium',        description: `Memory utilization is ${efficiency.memoryUtilization.toFixed(2)}%`,        impact: efficiency.memoryUtilization / 100,        recommendation: 'Increase cache size or implement more aggressive eviction',        metrics: {          current: efficiency.memoryUtilization,          threshold: 80,          duration: timeRange.end - timeRange.start        }      });    }    // Check for high eviction rate    if (efficiency.evictionRate > 10) {      bottlenecks.push({        type: 'high-eviction',        severity: efficiency.evictionRate > 20 ? 'high' : 'medium',        description: `Eviction rate is ${efficiency.evictionRate.toFixed(2)}%`,        impact: efficiency.evictionRate / 100,        recommendation: 'Review TTL settings or increase cache capacity',        metrics: {          current: efficiency.evictionRate,          threshold: 10,          duration: timeRange.end - timeRange.start        }      });    }    return bottlenecks;  }  // ============================================================================  // Cost Analysis Operations  // ============================================================================  /**   * Analyze caching costs   */  private async analyzeCosts(options: CacheAnalyticsOptions): Promise<CostBreakdown> {    const now = Date.now();    const timeRange = options.timeRange || { start: now - 2592000000, end: now }; // Last 30 days    const cacheStats = this.cache.getStats();    const operations = this.metricsCollector.getOperations(timeRange.start);    // Storage costs    const storage = this.calculateStorageCost(cacheStats, timeRange);    // Network costs    const network = this.calculateNetworkCost(operations, timeRange);    // Compute costs    const compute = this.calculateComputeCost(operations, timeRange);    // Total costs    const totalCost = storage.memoryCost + storage.diskCost + network.ingressCost + network.egressCost + compute.cpuCost;    const total: TotalCost = {      current: totalCost,      projected: totalCost * 1.1, // 10% growth projection      trend: 0.1,      costPerGB: totalCost / (cacheStats.totalCompressedSize / (1024 * 1024 * 1024)),      costPerOperation: totalCost / (operations.length || 1)    };    // Cost projections    const projections: CostProjection[] = [      { period: '1-month', estimatedCost: totalCost * 1.1, confidence: 0.9 },      { period: '3-month', estimatedCost: totalCost * 3 * 1.15, confidence: 0.75 },      { period: '6-month', estimatedCost: totalCost * 6 * 1.20, confidence: 0.6 }    ];    // Cost optimization recommendations    const optimizations: CostOptimization[] = [];    if (storage.utilizationPercent < 50) {      optimizations.push({        category: 'Storage Optimization',        potentialSavings: storage.memoryCost * 0.3,        effort: 'low',        recommendation: 'Reduce cache size to match actual usage'      });    }    if (compute.efficiency < 0.7) {      optimizations.push({        category: 'Compute Efficiency',        potentialSavings: compute.cpuCost * 0.2,        effort: 'medium',        recommendation: 'Optimize slow operations to reduce CPU usage'      });    }    return {      timestamp: now,      timeRange,      storage,      network,      compute,      total,      projections,      optimizations    };  }  /**   * Calculate storage costs   */  private calculateStorageCost(    stats: { totalSize: number; totalEntries: number },    timeRange: { start: number; end: number }  ): StorageCost {    const sizeGB = stats.totalSize / (1024 * 1024 * 1024);    const hours = (timeRange.end - timeRange.start) / 3600000;    const maxSizeGB = 0.5; // 500MB    const memoryCostPerGBHour = 0.10;    const diskCostPerGBHour = 0.02;    return {      memoryCost: sizeGB * memoryCostPerGBHour * hours,      diskCost: sizeGB * diskCostPerGBHour * hours,      totalStorage: stats.totalSize,      utilizationPercent: (sizeGB / maxSizeGB) * 100    };  }  /**   * Calculate network costs   */  private calculateNetworkCost(    operations: any[],    _timeRange: { start: number; end: number }  ): NetworkCost {    // Estimate network traffic based on operations    const avgOperationSize = 1024; // 1KB average    const totalTraffic = operations.length * avgOperationSize;    const trafficGB = totalTraffic / (1024 * 1024 * 1024);    const ingressCostPerGB = 0.02;    const egressCostPerGB = 0.05;    return {      ingressCost: trafficGB * ingressCostPerGB * 0.5, // 50% ingress      egressCost: trafficGB * egressCostPerGB * 0.5, // 50% egress      totalTraffic,      bandwidthUtilization: 0.3 // 30% of available bandwidth    };  }  /**   * Calculate compute costs   */  private calculateComputeCost(    operations: any[],    _timeRange: { start: number; end: number }  ): ComputeCost {    const totalDuration = operations.reduce((sum, op) => sum + op.duration, 0);    const cpuSeconds = totalDuration / 1000;    const costPerCPUSecond = 0.00001;    const operationCost = operations.length * 0.000001;    return {      cpuCost: cpuSeconds * costPerCPUSecond,      operationCost,      totalOperations: operations.length,      efficiency: operations.filter(op => op.cacheHit).length / (operations.length || 1)    };  }  // ============================================================================  // Export Operations  // ============================================================================  /**   * Export analytics data   */  private async exportData(options: CacheAnalyticsOptions): Promise<string> {    const format = options.format || 'json';    const filePath = options.filePath || join(process.cwd(), `cache-analytics-${Date.now()}.${format}`);    const now = Date.now();    const timeRange = options.timeRange || { start: now - 86400000, end: now };    // Collect all data    const data = {      exportDate: new Date(now).toISOString(),      timeRange,      dashboard: await this.getDashboard({ ...options, timeRange }),      metrics: await this.getMetrics({ ...options, timeRange }),      trends: await this.analyzeTrends({ ...options, timeRange }),      alerts: await this.checkAlerts({ ...options, timeRange }),      bottlenecks: await this.identifyBottlenecks({ ...options, timeRange }),      costAnalysis: await this.analyzeCosts({ ...options, timeRange })    };    // Export based on format    switch (format) {      case 'json':        await this.exportJSON(data, filePath);        break;      case 'csv':        await this.exportCSV(data, filePath);        break;      case 'excel':        throw new Error('Excel export not yet implemented');      default:        throw new Error(`Unknown export format: ${format}`);    }    return filePath;  }  /**   * Export data as JSON   */  private async exportJSON(data: any, filePath: string): Promise<void> {    const stream = createWriteStream(filePath);    stream.write(JSON.stringify(data, null, 2));    stream.end();  }  /**   * Export data as CSV   */  private async exportCSV(data: any, filePath: string): Promise<void> {    const stream = createWriteStream(filePath);    // Write header    stream.write('Metric,Value,Timestamp\n');    // Write performance metrics    if (data.metrics?.performance) {      const perf = data.metrics.performance;      stream.write(`Hit Rate,${perf.hitRate},${data.exportDate}\n`);      stream.write(`P50 Latency,${perf.latencyP50},${data.exportDate}\n`);      stream.write(`P95 Latency,${perf.latencyP95},${data.exportDate}\n`);      stream.write(`P99 Latency,${perf.latencyP99},${data.exportDate}\n`);      stream.write(`Throughput,${perf.throughput},${data.exportDate}\n`);    }    stream.end();  }  // ============================================================================  // Helper Methods  // ============================================================================  /**   * Extract key from operation name   */  private extractKeyFromOperation(operation: string): string {    // Simple extraction - in practice would parse operation details    const match = operation.match(/key:([a-zA-Z0-9-]+)/);    return match ? match[1] : 'unknown';  }  /**   * Calculate fragmentation index   */  private calculateFragmentation(): number {    // Simulated fragmentation calculation    return Math.random() * 20; // 0-20% fragmentation  }}// ============================================================================// MCP Tool Definition// ============================================================================export const CACHE_ANALYTICS_TOOL = {  name: 'cache_analytics',  description: 'Comprehensive cache analytics with real-time dashboard, trend analysis, alerts, and cost analysis',  inputSchema: {    type: 'object',    properties: {      operation: {        type: 'string',        enum: ['dashboard', 'metrics', 'trends', 'alerts', 'heatmap', 'bottlenecks', 'cost-analysis', 'export-data'],        description: 'Analytics operation to perform'      },      timeRange: {        type: 'object',        properties: {          start: { type: 'number', description: 'Start timestamp' },          end: { type: 'number', description: 'End timestamp' }        },        description: 'Time range for analysis'      },      granularity: {        type: 'string',        enum: ['second', 'minute', 'hour', 'day'],        description: 'Data granularity'      },      metricTypes: {        type: 'array',        items: {          type: 'string',          enum: ['performance', 'usage', 'efficiency', 'cost', 'health']        },        description: 'Metric types to include'      },      aggregation: {        type: 'string',        enum: ['sum', 'avg', 'min', 'max', 'p95', 'p99'],        description: 'Aggregation method'      },      compareWith: {        type: 'string',        enum: ['previous-period', 'last-week', 'last-month'],        description: 'Comparison period'      },      trendType: {        type: 'string',        enum: ['absolute', 'percentage', 'rate'],        description: 'Trend calculation type'      },      alertType: {        type: 'string',        enum: ['threshold', 'anomaly', 'trend'],        description: 'Alert type'      },      threshold: {        type: 'number',        description: 'Alert threshold value'      },      heatmapType: {        type: 'string',        enum: ['temporal', 'key-correlation', 'memory'],        description: 'Heatmap visualization type'      },      resolution: {        type: 'string',        enum: ['low', 'medium', 'high'],        description: 'Visualization resolution'      },      format: {        type: 'string',        enum: ['json', 'csv', 'excel'],        description: 'Export format'      },      filePath: {        type: 'string',        description: 'Export file path'      },      useCache: {        type: 'boolean',        description: 'Enable caching of analytics results',        default: true      },      cacheTTL: {        type: 'number',        description: 'Cache TTL in seconds',        default: 30      }    },    required: ['operation']  }} as const;// ============================================================================// MCP Tool Runner// ============================================================================export async function runCacheAnalytics(options: CacheAnalyticsOptions): Promise<CacheAnalyticsResult> {  const cache = new CacheEngine();  const tokenCounter = new TokenCounter();  const metricsCollector = new MetricsCollector();  const tool = new CacheAnalytics(cache, tokenCounter, metricsCollector);  return await tool.run(options);}
+
+## 6. PROJECT STRUCTURE
+## =====================
+
+Folder PATH listing for volume Windows
+Volume serial number is AE06-1B20
+C:\USERS\YOLAN\SOURCE\REPOS\TOKEN-OPTIMIZER-MCP\SRC
++---analysis
+ª       report-generator.ts
+ª       session-analyzer.ts
+ª       
++---core
+ª       cache-engine.ts
+ª       compression-engine.ts
+ª       config.ts
+ª       globals.ts
+ª       metrics.ts
+ª       token-counter.ts
+ª       types.ts
+ª       
++---intelligence
++---modules
++---server
+ª       index-backup.ts
+ª       index.ts
+ª       index.ts.backup
+ª       
++---templates
++---tools
+ª   +---advanced-caching
+ª   ª       cache-analytics.ts
+ª   ª       cache-benchmark.ts
+ª   ª       cache-compression.ts
+ª   ª       cache-invalidation.ts
+ª   ª       cache-optimizer.ts
+ª   ª       cache-partition.ts
+ª   ª       cache-replication.ts
+ª   ª       cache-warmup.ts
+ª   ª       index.ts
+ª   ª       predictive-cache.ts
+ª   ª       smart-cache.ts
+ª   ª       
+ª   +---api-database
+ª   ª       index.ts
+ª   ª       smart-api-fetch.ts
+ª   ª       smart-cache-api.ts
+ª   ª       smart-database.ts
+ª   ª       smart-graphql.ts
+ª   ª       smart-migration.ts
+ª   ª       smart-orm.ts
+ª   ª       smart-rest.ts
+ª   ª       smart-schema.ts
+ª   ª       smart-sql.ts
+ª   ª       smart-websocket.ts
+ª   ª       
+ª   +---build-systems
+ª   ª       index.ts
+ª   ª       smart-build.ts
+ª   ª       smart-docker.ts
+ª   ª       smart-install.ts
+ª   ª       smart-lint.ts
+ª   ª       smart-logs.ts
+ª   ª       smart-network.ts
+ª   ª       smart-processes.ts
+ª   ª       smart-system-metrics.ts
+ª   ª       smart-test.ts
+ª   ª       smart-typecheck.ts
+ª   ª       
+ª   +---code-analysis
+ª   ª       index.ts
+ª   ª       smart-ambiance.ts
+ª   ª       smart-ast-grep.ts
+ª   ª       smart-complexity.ts
+ª   ª       smart-dependencies.ts
+ª   ª       smart-exports.ts
+ª   ª       smart-imports.ts
+ª   ª       smart-refactor.ts
+ª   ª       smart-security.ts
+ª   ª       smart-symbols.ts
+ª   ª       smart-typescript.ts
+ª   ª       
+ª   +---configuration
+ª   ª       index.ts
+ª   ª       smart-config-read.ts
+ª   ª       smart-env.ts
+ª   ª       smart-package-json.ts
+ª   ª       smart-tsconfig.ts
+ª   ª       smart-workflow.ts
+ª   ª       
+ª   +---dashboard-monitoring
+ª   ª       alert-manager.ts
+ª   ª       custom-widget.ts
+ª   ª       data-visualizer.ts
+ª   ª       health-monitor.ts
+ª   ª       index.ts
+ª   ª       log-dashboard.ts
+ª   ª       metric-collector.ts
+ª   ª       monitoring-integration.ts
+ª   ª       performance-tracker.ts
+ª   ª       report-generator.ts
+ª   ª       smart-dashboard.ts
+ª   ª       
+ª   +---file-operations
+ª   ª       index.ts
+
+## 7. PREVIOUS FIX ATTEMPTS AND RESULTS
+## =====================================
+
+- Started with: 897 errors
+- After bad fix: 1039 errors
+- After revert: 896 errors
+- After variable definitions: 895 errors
+- After crypto fixes: 890 errors
+- After Agent A (Bufferâ†’String): ~850 errors
+- After Agent B (Function signatures): ~750 errors
+- After Agent C (Type annotations): 729 errors (CURRENT)
+
+Agents A, B, C made good progress but we need a comprehensive approach for the remaining 729 errors.
+
+## 8. REQUEST TO GOOGLE GEMINI
+## ============================
+
+Please analyze all the errors above and create a comprehensive, rock-solid fix plan that:
+
+1. **Groups errors by root cause** (not just by error code)
+2. **Identifies dependencies** between errors (which must be fixed first)
+3. **Creates optimal fix order** to minimize cascading effects
+4. **Provides specific fix strategies** for each error group with exact code patterns
+5. **Assigns errors to expert AI agents** with clear, actionable instructions
+6. **Estimates impact** (how many errors each fix will resolve)
+7. **Includes verification steps** to ensure fixes don't break other code
+
+The plan should enable one final coordinated effort by expert AI agents to fix ALL remaining errors efficiently.
+
+Please provide:
+- Root cause analysis for each major error category
+- Specific fix patterns with before/after code examples
+- Agent assignments with file lists and exact instructions
+- Expected error reduction per agent
+- Overall execution strategy (parallel vs sequential, dependencies)
+
