@@ -14,7 +14,7 @@ import { MetricsCollector } from "../../core/metrics";
 import { TokenCounter } from "../../core/token-counter";
 import { createHash } from "crypto";
 import { readFileSync, existsSync, statSync, readdirSync } from "fs";
-import { join, relative, extname, dirname } from "path";
+import { join, relative, extname } from "path";
 import { homedir } from "os";
 
 /**

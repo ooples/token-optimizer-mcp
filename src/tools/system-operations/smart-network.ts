@@ -1,6 +1,4 @@
 ﻿/** * SmartNetwork - Intelligent Network Operations * * Track 2C - Tool #3: Network operations with smart caching (85%+ token reduction) * * Capabilities: * - Connectivity checks (ping, traceroute) * - Port scanning and availability * - DNS resolution and lookup * - Network interface information * - Bandwidth monitoring * * Token Reduction Strategy: * - Cache DNS lookups (96% reduction) * - Incremental connectivity status (85% reduction) * - Compressed network topology (87% reduction) */ import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
 import { exec } from "childprocess";
 import { promisify } from "util";
 import * as dns from "dns";

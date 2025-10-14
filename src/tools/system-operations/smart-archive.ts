@@ -1,16 +1,11 @@
 ﻿/** * SmartArchive - Intelligent Archive Operations * * Track 2C - Tool #5: Archive operations with smart caching (84%+ token reduction) * * Capabilities: * - TAR/ZIP/GZ compression * - Archive extraction * - Incremental backups * - Archive integrity verification * - Smart compression selection * * Token Reduction Strategy: * - Cache archive metadata (93% reduction) * - Incremental file lists (84% reduction) * - Compressed integrity reports (86% reduction) */ import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
 import type * as tarStream from "tar-stream";
-import archiver from "archiver";
 import * as tar from "tar-stream";
 import * as zlib from "zlib";
 import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
 import { pipeline } from "stream";
-import { createHash } from "crypto";
-import unzipper from "unzipper";
 const _pipelineAsync = promisify(pipeline);
 const _stat = promisify(fs._stat);
 const _readdir = promisify(fs._readdir);

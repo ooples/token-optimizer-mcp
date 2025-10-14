@@ -228,8 +228,6 @@ export class CacheCompressionTool {
   private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
   private config: CompressionConfig;
-  private deltaStates: Map<string, DeltaState>;
-  private compressionDictionaries: Map<DataType, Buffer>;
 
   // Dynamic imports for optional packages
   private lz4Module: any = null;
@@ -259,9 +257,6 @@ export class CacheCompressionTool {
         ["time-series", "zstd"],
       ]),
     };
-
-    this.deltaStates = new Map();
-    this.compressionDictionaries = new Map();
   }
 
   /**

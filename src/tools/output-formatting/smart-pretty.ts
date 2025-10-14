@@ -18,7 +18,7 @@
  */
 
 import hljs from "highlight";
-import { format as prettierFormat, resolveConfig } from "prettier";
+import { format as prettierFormat } from "prettier";
 import chalk from "chalk";
 import { CacheEngine } from "../../core/cache-engine";
 import { TokenCounter } from "../../core/token-counter";

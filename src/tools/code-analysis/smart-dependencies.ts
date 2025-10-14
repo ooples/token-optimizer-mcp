@@ -13,16 +13,16 @@
  * Week 5 - Phase 2 Track 2A
  */
 
-import { readFileSync, statSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { parse as parseTypescript } from '@typescript-eslint/typescript-estree';
 import { parse as parseBabel } from '@babel/parser';
 import pkg from 'glob';
 const { globSync } = pkg;
-import { relative, resolve, dirname, extname, basename, join } from 'path';
+import { relative, resolve, dirname, extname, join } from 'path';
 import { CacheEngine } from '../../core/cache-engine';
 import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
-import { hashFile, hashFileMetadata, generateCacheKey } from '../shared/hash-utils';
+import { hashFileMetadata, generateCacheKey } from '../shared/hash-utils';
 
 /**
  * Represents an import in a file

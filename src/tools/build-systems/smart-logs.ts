@@ -11,7 +11,7 @@
 import { spawn } from "childprocess";
 import { CacheEngine } from "../../core/cache-engine";
 import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
+import { existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 

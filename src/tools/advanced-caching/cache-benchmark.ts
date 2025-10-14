@@ -864,7 +864,6 @@ class ReportGenerator {
 // ===== Main Class =====
 
 export class CacheBenchmark {
-  private cache: CacheEngine;
   private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
   private executor: BenchmarkExecutor;
@@ -876,7 +875,6 @@ export class CacheBenchmark {
     tokenCounter: TokenCounter,
     metrics: MetricsCollector,
   ) {
-    this.cache = cache;
     this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.executor = new BenchmarkExecutor(cache);

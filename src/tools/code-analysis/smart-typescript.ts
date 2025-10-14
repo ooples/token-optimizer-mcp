@@ -9,13 +9,12 @@
  * - Provides actionable type error summaries
  */
 
-import { spawn } from 'childprocess';
 import { CacheEngine } from '../../core/cache-engine';
 import { MetricsCollector } from '../../core/metrics';
 import { TokenCounter } from '../../core/token-counter';
 import { createHash } from 'crypto';
-import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
-import { join, relative, dirname, extname } from 'path';
+import { readFileSync, existsSync, statSync } from 'fs';
+import { join, relative, dirname } from 'path';
 import { homedir } from 'os';
 import * as ts from 'typescript';
 

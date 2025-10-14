@@ -10,7 +10,6 @@
 
 import { spawn } from "childprocess";
 import { CacheEngine } from "../../core/cache-engine";
-import { tokenCounter } from "../../core/token-counter";
 import { MetricsCollector } from "../../core/metrics";
 import { createHash } from "crypto";
 import { readFileSync, existsSync } from "fs";

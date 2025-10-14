@@ -1,11 +1,7 @@
 ﻿/** * SmartCleanup - Intelligent Cleanup Operations * * Track 2C - Tool #8: System cleanup with smart caching (87%+ token reduction) * * Capabilities: * - Temporary file detection * - Cache directory analysis * - Old artifact cleanup * - Disk space recovery estimates * - Safe deletion with rollback * * Token Reduction Strategy: * - Cache filesystem scans (90% reduction) * - Incremental cleanup reports (87% reduction) * - Compressed deletion plans (89% reduction) */ import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
 import * as fs from "fs";
 import * as path from "path";
 import { promisify } from "util";
-import { generateCacheKey } from "../shared/hash-utils";
-import { createHash } from "crypto";
 const _stat = promisify(fs._stat);
 const _readdir = promisify(fs._readdir);
 const _unlink = promisify(fs._unlink);

@@ -13,7 +13,7 @@ import { CacheEngine } from "../../core/cache-engine";
 import { MetricsCollector } from "../../core/metrics";
 import { TokenCounter } from "../../core/token-counter";
 import { createHash } from "crypto";
-import { readFileSync, existsSync, statSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join, relative } from "path";
 import { homedir } from "os";
 import * as ts from "typescript";

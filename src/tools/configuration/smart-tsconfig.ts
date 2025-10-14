@@ -9,7 +9,7 @@
  * - Optimization suggestions
  */
 
-import { readFile, stat } from "fs/promises";
+import { readFile } from "fs/promises";
 import { resolve, dirname, join } from "path";
 import { existsSync } from "fs";
 import { homedir } from "os";
