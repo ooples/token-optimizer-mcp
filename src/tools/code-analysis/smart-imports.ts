@@ -863,7 +863,7 @@ export class SmartImportsTool {
       originalTokens,
       compactedTokens
     };
-    const buffer = JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache);
     const tokensSaved = originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
     this.cache.set(cacheKey, buffer, 300, tokensSaved);
   }

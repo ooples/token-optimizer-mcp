@@ -837,7 +837,7 @@ export class SmartPackageJson {
 
     this.cache.set(
       this.cacheNamespace + ':' + key,
-      JSON.stringify(cacheData)),
+      JSON.stringify(cacheData),
       86400, // 24 hour TTL
       tokensSaved,
       fileHash

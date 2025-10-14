@@ -824,7 +824,7 @@ export class SmartORM {
     _ttl?: number,
   ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
-    await this.cache.set(key, JSON.stringify(cacheData)), 3600);
+    await this.cache.set(key, JSON.stringify(cacheData), 3600);
   }
 }
 

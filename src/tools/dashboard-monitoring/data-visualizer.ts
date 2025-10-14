@@ -329,7 +329,7 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(chart)).tokens;
-    const cacheData = JSON.stringify(chart));
+    const cacheData = JSON.stringify(chart);
     this.cache.set(
       cacheKey,
       cacheData,
@@ -462,7 +462,7 @@ export class DataVisualizer {
         exported = await this.exportToHTML(chart, options);
         break;
       case "json":
-        exported = JSON.stringify(chart, null, 2));
+        exported = JSON.stringify(chart, null, 2);
         break;
       default:
         throw new Error(`Unsupported export format: ${format}`);
@@ -1630,7 +1630,7 @@ export class DataVisualizer {
         });
       }
     } else if (layout === "grid") {
-      const cols = Math.ceil(Math.sqrt(nodes.length));
+      const cols = Math.ceil(Math.sqrt(nodes.length);
       const cellWidth = (width - 100) / cols;
       const cellHeight = (height - 100) / Math.ceil(nodes.length / cols);
 
@@ -1714,7 +1714,7 @@ export class DataVisualizer {
       const outgoing = links
         .filter((l) => l.source === node.name)
         .reduce((sum, l) => sum + l.value, 0);
-      values.set(node.name, Math.max(incoming, outgoing));
+      values.set(node.name, Math.max(incoming, outgoing);
     }
 
     return values;
@@ -1788,7 +1788,7 @@ export class DataVisualizer {
       t = Math.log(1 + t * (Math.E - 1)) / Math.log(Math.E);
     }
 
-    t = Math.max(0, Math.min(1, t));
+    t = Math.max(0, Math.min(1, t);
 
     const rgb1 = this.hexToRgb(colorMin);
     const rgb2 = this.hexToRgb(colorMax);

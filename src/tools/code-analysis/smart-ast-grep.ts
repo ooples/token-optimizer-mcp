@@ -685,7 +685,7 @@ export class SmartAstGrepTool {
         lastUpdated: index.lastUpdated,
       };
 
-      const data = JSON.stringify(serializable), 'utf-8');
+      const data = JSON.stringify(serializable);
       const tokensSaved = this.estimateTokensSaved(index);
 
       this.cache.set(key, data, ttl, tokensSaved);
@@ -699,7 +699,7 @@ export class SmartAstGrepTool {
    */
   private cachePatternResult(key: string, result: SmartAstGrepResult, ttl: number): void {
     try {
-      const data = JSON.stringify(result), 'utf-8');
+      const data = JSON.stringify(result);
       this.cache.set(key, data, ttl, result.metadata.tokensSaved);
     } catch (error) {
       console.warn('Failed to cache pattern result:', error);

@@ -170,7 +170,7 @@ export class SmartGraphQL {
           cacheHit: true,
           success: true,
           savedTokens: (() => {
-            const tokenResult = this.tokenCounter.count(JSON.stringify(cached));
+            const tokenResult = this.tokenCounter.count(JSON.stringify(cached);
             return tokenResult.tokens;
           })(),
         });
@@ -484,7 +484,7 @@ export class SmartGraphQL {
     // Check for deeply nested queries
     if (parsed.selections.length > 0) {
       const maxDepth = Math.max(
-        ...parsed.selections.map((s) => this.getSelectionDepth(s)),
+        ...parsed.selections.map((s) => this.getSelectionDepth(s,
       );
       if (maxDepth > 4) {
         reductions.push({
@@ -587,7 +587,7 @@ export class SmartGraphQL {
     // Cache for 1 hour
     await this.cache.set(
       cacheKey,
-      Buffer.toString("utf-8").from(JSON.stringify(schemaInfo)),
+      Buffer.toString("utf-8").from(JSON.stringify(schemaInfo),
       0,
       3600,
     );
@@ -723,7 +723,7 @@ export class SmartGraphQL {
 
     await this.cache.set(
       key,
-      JSON.stringify(cacheData)),
+      JSON.stringify(cacheData),
       tokensSaved,
       ttl,
     );

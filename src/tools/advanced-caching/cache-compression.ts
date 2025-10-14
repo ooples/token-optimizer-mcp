@@ -373,7 +373,7 @@ export class CacheCompressionTool {
       ["analyze", "benchmark", "optimize"].includes(options.operation)
     ) {
       const serialized = JSON.stringify(result.data);
-      const compressed = await gzipAsync(Buffer.from(serialized));
+      const compressed = await gzipAsync(Buffer.from(serialized);
       this.cache.set(
         cacheKey,
         compressed.toString("utf-8"),
@@ -479,7 +479,7 @@ export class CacheCompressionTool {
       timestamp: Date.now(),
     };
 
-    const metadataBuffer = JSON.stringify(metadata));
+    const metadataBuffer = JSON.stringify(metadata);
     const metadataLength = Buffer.allocUnsafe(4);
     metadataLength.writeUInt32LE(metadataBuffer.length, 0);
 
@@ -649,7 +649,7 @@ export class CacheCompressionTool {
       timeSeries,
     };
 
-    const tokenCountResult = this.tokenCounter.count(JSON.stringify(analysis));
+    const tokenCountResult = this.tokenCounter.count(JSON.stringify(analysis);
     const tokens = tokenCountResult.tokens;
 
     return {
@@ -818,7 +818,7 @@ export class CacheCompressionTool {
     // Sort by compression ratio (best first)
     results.sort((a, b) => a.compressionRatio - b.compressionRatio);
 
-    const tokenCountResult = this.tokenCounter.count(JSON.stringify(results));
+    const tokenCountResult = this.tokenCounter.count(JSON.stringify(results);
     const tokens = tokenCountResult.tokens;
 
     return {
@@ -910,7 +910,7 @@ export class CacheCompressionTool {
           console.warn("[CacheCompression] LZ4 not available, using gzip");
           return await gzipAsync(data, { level });
         }
-        return Buffer.from(this.lz4Module.encode(data));
+        return Buffer.from(this.lz4Module.encode(data);
 
       case "zstd":
         if (!this.zstdModule) {
@@ -927,7 +927,7 @@ export class CacheCompressionTool {
           this.zstdModule.run((zstd: any) => {
             try {
               const compressed = zstd.compress(data, level);
-              resolve(Buffer.from(compressed));
+              resolve(Buffer.from(compressed);
             } catch (error) {
               reject(error);
             }
@@ -971,7 +971,7 @@ export class CacheCompressionTool {
           // Assume it was compressed with gzip fallback
           return await gunzipAsync(data);
         }
-        return Buffer.from(this.lz4Module.decode(data));
+        return Buffer.from(this.lz4Module.decode(data);
 
       case "zstd":
         if (!this.zstdModule) {
@@ -982,7 +982,7 @@ export class CacheCompressionTool {
           this.zstdModule.run((zstd: any) => {
             try {
               const decompressed = zstd.decompress(data);
-              resolve(Buffer.from(decompressed));
+              resolve(Buffer.from(decompressed);
             } catch (error) {
               reject(error);
             }
@@ -1020,7 +1020,7 @@ export class CacheCompressionTool {
       // Replace repeated strings with dictionary references
       const compressed = this.compressWithDictionary(obj, dict);
 
-      return JSON.stringify(compressed));
+      return JSON.stringify(compressed);
     } catch {
       // Not JSON, just use gzip
       return Buffer.from(str);
@@ -1041,7 +1041,7 @@ export class CacheCompressionTool {
           compressed.data,
           dict,
         );
-        return JSON.stringify(decompressed));
+        return JSON.stringify(decompressed);
       }
 
       return data;
@@ -1212,7 +1212,7 @@ export class CacheCompressionTool {
    */
   private detectPatterns(data: Buffer, sampleSize: number = 1000): string[] {
     const patterns: string[] = [];
-    const sample = data.subarray(0, Math.min(sampleSize, data.length));
+    const sample = data.subarray(0, Math.min(sampleSize, data.length);
 
     // Check for common patterns
     if (sample.includes(0x7b) && sample.includes(0x7d)) {
@@ -1224,7 +1224,7 @@ export class CacheCompressionTool {
     }
 
     // Check for repeated sequences
-    const str = sample.toString("utf-8", 0, Math.min(100, sample.length));
+    const str = sample.toString("utf-8", 0, Math.min(100, sample.length);
     if (/(.{3,})\1{2,}/.test(str)) {
       patterns.push("repeated-sequences");
     }
@@ -1281,7 +1281,7 @@ export class CacheCompressionTool {
     } else if (typeof data === "string") {
       return Buffer.from(data, "utf-8");
     } else {
-      return JSON.stringify(data), "utf-8");
+      return JSON.stringify(data);
     }
   }
 
@@ -1301,7 +1301,7 @@ export class CacheCompressionTool {
             active: i % 2 === 0,
           })),
         };
-        return JSON.stringify(obj));
+        return JSON.stringify(obj);
       }
 
       case "text": {

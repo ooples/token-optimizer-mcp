@@ -323,7 +323,7 @@ export class SmartTypeScript {
 
         if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
           const importPath = moduleSpecifier.text;
-          const resolvedPath = this.resolveImport(importPath, dirname(sourceFile.fileName));
+          const resolvedPath = this.resolveImport(importPath, dirname(sourceFile.fileName);
 
           if (resolvedPath && !resolvedPath.includes('node_modules')) {
             imports.push(resolvedPath);
@@ -594,7 +594,7 @@ export class SmartTypeScript {
 
     for (const [file, deps] of this.dependencyGraph.entries()) {
       const relPath = relative(this.projectRoot, file);
-      dependencyGraph[relPath] = Array.from(deps).map(d => relative(this.projectRoot, d));
+      dependencyGraph[relPath] = Array.from(deps).map(d => relative(this.projectRoot, d);
     }
 
     // Calculate token metrics
@@ -628,8 +628,8 @@ export class SmartTypeScript {
       diagnosticsByCategory,
       dependencies: incrementalMode ? {
         totalFiles: this.fileRegistry.size,
-        changedFiles: changedFiles.map(f => relative(this.projectRoot, f)),
-        affectedFiles: affectedFiles.map(f => relative(this.projectRoot, f)),
+        changedFiles: changedFiles.map(f => relative(this.projectRoot, f,
+        affectedFiles: affectedFiles.map(f => relative(this.projectRoot, f,
         dependencyGraph
       } : undefined,
       typeInfo,
@@ -841,7 +841,7 @@ export class SmartTypeScript {
       cachedAt: Date.now()
     };
 
-    const buffer = JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache);
     const tokensSaved = output.metrics.originalTokens - output.metrics.compactedTokens;
 
     this.cache.set(key, buffer, 300, tokensSaved); // 5 minute TTL

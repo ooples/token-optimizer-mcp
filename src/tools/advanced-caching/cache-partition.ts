@@ -291,7 +291,7 @@ export class CachePartitionTool extends EventEmitter {
       if (cacheKey && useCache) {
         this.cache.set(
           cacheKey,
-          JSON.stringify(data), "utf-8"),
+          JSON.stringify(data),
           cacheTTL,
           tokensUsed,
         );

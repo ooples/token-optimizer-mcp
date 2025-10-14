@@ -627,7 +627,7 @@ export class SmartRefactorTool {
 
   private cacheResult(key: string, output: SmartRefactorResult): void {
     const toCache = { ...output, cachedAt: Date.now() };
-    const buffer = JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache);
     const tokensSaved = output.metrics.originalTokens - output.metrics.compactedTokens;
     this.cache.set(key, buffer, 300, tokensSaved);
   }

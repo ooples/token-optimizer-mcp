@@ -361,7 +361,7 @@ export class AlertManager {
     // Cache alert metadata (92% reduction, 6-hour TTL)
     const cacheKey = `cache-${createHash("md5").update("alert-manager:alert", alertId).digest("hex")}`;
     const alertMetadata = this.compressAlertMetadata(alert);
-    const cachedData = JSON.stringify(alertMetadata));
+    const cachedData = JSON.stringify(alertMetadata);
 
     const tokensUsed = this.tokenCounter.count(JSON.stringify(alert)).tokens;
     const tokensSaved =
@@ -429,7 +429,7 @@ export class AlertManager {
     // Update cache
     const cacheKey = `cache-${createHash("md5").update("alert-manager:alert", alertId).digest("hex")}`;
     const alertMetadata = this.compressAlertMetadata(alert);
-    const cachedData = JSON.stringify(alertMetadata));
+    const cachedData = JSON.stringify(alertMetadata);
 
     const tokensUsed = this.tokenCounter.count(JSON.stringify(alert)).tokens;
     const tokensSaved =
@@ -530,7 +530,7 @@ export class AlertManager {
         const cachedAlerts = JSON.parse(cached);
         const tokensSaved =
           this.tokenCounter.count(
-            JSON.stringify(Array.from(this.alerts.values().tokens)),
+            JSON.stringify(Array.from(this.alerts.values().tokens,
           ).tokens -
           this.tokenCounter.count(JSON.stringify(cachedAlerts)).tokens;
 
@@ -567,7 +567,7 @@ export class AlertManager {
     const tokensSaved = fullTokens - compressedTokens;
 
     // Cache compressed list (92% reduction, 6-hour TTL)
-    const cachedData = JSON.stringify(compressedAlerts));
+    const cachedData = JSON.stringify(compressedAlerts);
     await this.cache.set(
       cacheKey,
       cachedData.toString("utf-8"),
@@ -730,7 +730,7 @@ export class AlertManager {
     const tokensSaved = fullTokens - aggregatedTokens;
 
     // Cache aggregated history (88% reduction, 5-minute TTL)
-    const cachedData = JSON.stringify(aggregatedHistory));
+    const cachedData = JSON.stringify(aggregatedHistory);
     await this.cache.set(
       cacheKey,
       cachedData.toString("utf-8"),
@@ -867,7 +867,7 @@ export class AlertManager {
     const tokensSaved = fullTokens - compressedTokens;
 
     // Cache channel configuration (95% reduction, 24-hour TTL)
-    const cachedData = JSON.stringify(compressedChannels));
+    const cachedData = JSON.stringify(compressedChannels);
     await this.cache.set(cacheKey, cachedData.toString("utf-8"), tokensSaved);
 
     // Persist channels
@@ -938,7 +938,7 @@ export class AlertManager {
 
     // Cache silence state (90% reduction, based on duration)
     const cacheKey = `cache-${createHash("md5").update("alert-manager:silence", silenceId).digest("hex")}`;
-    const cachedData = JSON.stringify(compressedSilence));
+    const cachedData = JSON.stringify(compressedSilence);
     await this.cache.set(cacheKey, cachedData.toString("utf-8"), tokensSaved);
 
     // Persist changes
@@ -1137,7 +1137,7 @@ export class AlertManager {
 
   private async persistEvents(): Promise<void> {
     const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence", "events").digest("hex")}`;
-    const data = JSON.stringify(this.alertEvents));
+    const data = JSON.stringify(this.alertEvents);
     await this.cache.set(cacheKey, data.toString("utf-8"), 0, 86400 * 30); // 30 days TTL
   }
 

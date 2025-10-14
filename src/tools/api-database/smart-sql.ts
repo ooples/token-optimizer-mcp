@@ -663,7 +663,7 @@ export class SmartSql {
 
     await this.cache.set(
       key,
-      JSON.stringify(cacheData)),
+      JSON.stringify(cacheData),
       ttl,
       tokensSaved,
       "",

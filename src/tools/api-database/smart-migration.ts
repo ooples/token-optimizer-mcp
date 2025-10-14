@@ -519,7 +519,7 @@ CREATE TABLE IF NOT EXISTS example (
       // Cache for specified TTL (default: 1 hour)
       this.cache.set(
         key,
-        JSON.stringify(cacheData)), // Convert to milliseconds
+        JSON.stringify(cacheData), // Convert to milliseconds
         tokensSaved,
       );
     } catch (error) {

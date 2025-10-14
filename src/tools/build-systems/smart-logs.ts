@@ -695,7 +695,7 @@ export class SmartLogs {
     const cacheData = { ...result, cachedAt: Date.now() };
     this.cache.set(
       this.cacheNamespace + ":" + key,
-      JSON.stringify(cacheData)),
+      JSON.stringify(cacheData),
       3600,
       0,
     );
