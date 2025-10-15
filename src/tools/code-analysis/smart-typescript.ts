@@ -913,7 +913,7 @@ export function getSmartTypeScriptTool(
  */
 export async function runSmartTypescript(options: SmartTypeScriptOptions = {}): Promise<string> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartTS = new SmartTypeScript(cache, tokenCounter, metrics, options.projectRoot);
   try {

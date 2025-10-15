@@ -405,7 +405,8 @@ class BenchmarkExecutor {
   ): Promise<void> {
     const startTime = process.hrtime.bigint();
     const value = this.generateValue(workload.valueSize);
-    this.cache.set(key, value.toString("utf-8"), 0);
+    const valueStr = value.toString("utf-8");
+    this.cache.set(key, valueStr, valueStr.length, valueStr.length);
     const endTime = process.hrtime.bigint();
 
     const latency = Number(endTime - startTime) / 1_000_000; // Convert to ms

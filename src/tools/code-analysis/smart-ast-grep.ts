@@ -602,7 +602,7 @@ export class SmartAstGrepTool {
    * Generate cache key for AST index
    */
   private generateIndexKey(projectPath: string, language: string): string {
-    return CacheEngine.generateKey('ast-index', `${projectPath}:${language}:${SmartAstGrepTool.INDEX_VERSION}`);
+    return `ast-index:${projectPath}:${language}:${SmartAstGrepTool.INDEX_VERSION}`;
   }
 
   /**
@@ -616,7 +616,7 @@ export class SmartAstGrepTool {
       filePattern: options.filePattern,
       contextLines: options.contextLines,
     });
-    return CacheEngine.generateKey('ast-pattern', keyContent);
+    return `ast-pattern:${keyContent}`;
   }
 
   /**

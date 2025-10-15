@@ -800,7 +800,7 @@ export class SmartORM {
       suggestEagerLoading: options.suggestEagerLoading,
       analyzeRelationships: options.analyzeRelationships,
     };
-    return CacheEngine.generateKey("smart_orm", JSON.stringify(keyData));
+    return `smart_orm:${JSON.stringify(keyData)}`;
   }
 
   private async getCachedResult(key: string, ttl: number): Promise<any | null> {
@@ -824,7 +824,8 @@ export class SmartORM {
     _ttl?: number,
   ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
-    await this.cache.set(key, JSON.stringify(cacheData), 3600);
+    const cacheStr = JSON.stringify(cacheData);
+    await this.cache.set(key, cacheStr, cacheStr.length, cacheStr.length);
   }
 }
 

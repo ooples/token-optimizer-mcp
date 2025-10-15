@@ -1089,7 +1089,7 @@ export class HealthMonitor {
     const ttl = options.cacheTTL || 30; // 30 seconds
     this.cache.set(
       cacheKey,
-      Buffer.toString("utf-8").from(JSON.stringify(status)),
+      Buffer.from(JSON.stringify(status)).toString("utf-8"),
       tokensUsed,
       ttl,
     );
@@ -1157,7 +1157,7 @@ export class HealthMonitor {
     const ttl = options.cacheTTL || 60; // 1 minute
     this.cache.set(
       cacheKey,
-      Buffer.toString("utf-8").from(JSON.stringify(aggregatedHistory)),
+      Buffer.from(JSON.stringify(aggregatedHistory)).toString("utf-8"),
       tokensUsed,
       ttl,
     );
@@ -1200,7 +1200,7 @@ export class HealthMonitor {
     const ttl = options.cacheTTL || 600; // 10 minutes
     this.cache.set(
       cacheKey,
-      Buffer.toString("utf-8").from(JSON.stringify(graph)),
+      Buffer.from(JSON.stringify(graph)).toString("utf-8"),
       tokensUsed,
       ttl,
     );
@@ -1263,7 +1263,7 @@ export class HealthMonitor {
     const ttl = options.cacheTTL || 600; // 10 minutes
     this.cache.set(
       cacheKey,
-      Buffer.toString("utf-8").from(JSON.stringify(impact)),
+      Buffer.from(JSON.stringify(impact)).toString("utf-8"),
       tokensUsed,
       ttl,
     );

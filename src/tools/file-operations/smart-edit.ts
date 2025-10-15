@@ -118,7 +118,7 @@ export class SmartEditTool {
       // Read original content
       const originalContent = readFileSync(filePath, opts.encoding);
       const originalLines = originalContent.split('\n');
-      const originalTokens = this.tokenCounter.count(originalContent);
+      const originalTokens = this.tokenCounter.count(originalContent).tokens;
 
       // Normalize operations to array
       const ops = Array.isArray(operations) ? operations : [operations];
@@ -168,13 +168,13 @@ export class SmartEditTool {
       // Calculate diff
       const diff = this.calculateDiff(originalContent, editedContent, filePath, opts.contextLines);
       const diffTokens = opts.returnDiff
-        ? this.tokenCounter.count(diff.unifiedDiff)
-        : this.tokenCounter.count(editedContent);
+        ? this.tokenCounter.count(diff.unifiedDiff).tokens
+        : this.tokenCounter.count(editedContent).tokens;
 
       // If dry run, return preview without applying
       if (opts.dryRun) {
         const duration = Date.now() - startTime;
-        const tokensSaved = originalTokens + this.tokenCounter.count(editedContent) - diffTokens;
+        const tokensSaved = originalTokens + this.tokenCounter.count(editedContent).tokens - diffTokens;
 
         this.metrics.record({
           operation: 'smart_edit',
@@ -223,7 +223,7 @@ export class SmartEditTool {
         const fileHash = hashContent(editedContent);
         const cacheKey = generateCacheKey('file-edit', { path: filePath });
         const tokensSaved = originalTokens - diffTokens;
-        this.cache.set(cacheKey, editedContent as any, opts.ttl, tokensSaved, fileHash);
+        this.cache.set(cacheKey, editedContent as any, opts.ttl, tokensSaved);
       }
 
       // Record metrics
@@ -469,7 +469,7 @@ export async function runSmartEdit(
   options: SmartEditOptions = {}
 ): Promise<SmartEditResult> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
   const tool = getSmartEditTool(cache, tokenCounter, metrics);

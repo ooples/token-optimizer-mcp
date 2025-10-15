@@ -149,10 +149,10 @@ export class SmartReadTool {
         const cachedContent = decompressed;
 
         // Check if content has meaningful changes
-        if (hasMeaningfulChanges(cachedContent.toString("utf-8"), rawContent)) {
+        if (hasMeaningfulChanges(cachedContent.toString(), rawContent)) {
           // Generate diff
           const diff = generateDiff(
-            cachedContent.toString("utf-8"),
+            cachedContent.toString(),
             rawContent,
             {
               contextLines: 3,
@@ -187,7 +187,7 @@ export class SmartReadTool {
           isDiff = true;
           tokensSaved = Math.max(
             0,
-            originalTokens - this.tokenCounter.count(finalContent),
+            originalTokens - this.tokenCounter.count(finalContent).tokens,
           );
         }
       } catch (error) {
@@ -242,7 +242,7 @@ export class SmartReadTool {
       const compressed = compress(rawContent, "gzip");
       this.cache.set(
         cacheKey,
-        compressed.toString("utf-8").compressed,
+        compressed.toString(),
         tokensSaved,
         ttl,
       );

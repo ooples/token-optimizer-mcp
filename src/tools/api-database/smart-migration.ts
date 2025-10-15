@@ -517,10 +517,12 @@ CREATE TABLE IF NOT EXISTS example (
       const tokensSaved = this.tokenCounter.count(fullOutput).tokens;
 
       // Cache for specified TTL (default: 1 hour)
+      const cacheStr = JSON.stringify(cacheData);
       this.cache.set(
         key,
-        JSON.stringify(cacheData), // Convert to milliseconds
+        cacheStr,
         tokensSaved,
+        cacheStr.length,
       );
     } catch (error) {
       // Caching failure should not break the operation

@@ -249,8 +249,8 @@ export class SmartExportsTool {
     // Calculate token metrics
     const fullOutput = JSON.stringify(result, null, 2);
     const compactOutput = this.compactResult(result);
-    const originalTokens = this.tokenCounter.count(fullOutput);
-    const compactedTokens = this.tokenCounter.count(compactOutput);
+    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
+    const compactedTokens = this.tokenCounter.count(compactOutput).tokens;
     const _reductionPercentage = ((originalTokens - compactedTokens) / originalTokens) * 100;
 
     // Cache result
@@ -823,7 +823,7 @@ export async function runSmartExports(
   options: SmartExportsOptions
 ): Promise<SmartExportsResult> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartExportsTool(cache, tokenCounter, metrics, options.projectRoot);
   return tool.run(options);

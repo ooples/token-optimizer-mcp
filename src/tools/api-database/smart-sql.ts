@@ -613,7 +613,7 @@ export class SmartSql {
       .digest("hex")
       .substring(0, 16);
 
-    return CacheEngine.generateKey("smart_sql", hash);
+    return `smart_sql:${hash}`;
   }
 
   private async getCachedResult(
@@ -658,15 +658,15 @@ export class SmartSql {
       timestamp: Date.now(),
     };
 
-    const tokensSavedResult = this.tokenCounter.count(JSON.stringify(cacheData));
+    const cacheStr = JSON.stringify(cacheData);
+    const tokensSavedResult = this.tokenCounter.count(cacheStr);
     const tokensSaved = tokensSavedResult.tokens;
 
     await this.cache.set(
       key,
-      JSON.stringify(cacheData),
-      ttl,
-      tokensSaved,
-      "",
+      cacheStr,
+      cacheStr.length,
+      cacheStr.length,
     );
   }
 }
@@ -694,7 +694,7 @@ export async function runSmartSql(options: SmartSqlOptions): Promise<string> {
   const cache = new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
   const sql = getSmartSql(
     cache,
-    new TokenCounter("gpt-4"),
+    new TokenCounter(),
     new MetricsCollector(),
   );
 

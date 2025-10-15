@@ -288,8 +288,7 @@ export class SmartGlobTool {
           cacheKey,
           JSON.stringify(result) as any,
           opts.ttl,
-          tokensSaved,
-          hashContent(pattern)
+          tokensSaved
         );
       }
 
@@ -427,7 +426,7 @@ export async function runSmartGlob(
   options: SmartGlobOptions = {}
 ): Promise<SmartGlobResult> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
   const tool = getSmartGlobTool(cache, tokenCounter, metrics);

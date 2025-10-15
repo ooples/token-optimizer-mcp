@@ -765,7 +765,7 @@ export class SmartDependenciesTool {
 
     // Calculate tokens
     const resultData = { circular };
-    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData));
+    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
     const originalTokens = this.estimateFullFileTokens(Array.from(graph.keys()));
     const tokensSaved = originalTokens - resultTokens;
 
@@ -836,7 +836,7 @@ export class SmartDependenciesTool {
 
     // Calculate tokens
     const resultData = { unused };
-    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData));
+    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
     const originalTokens = this.estimateFullFileTokens(Array.from(graph.keys()));
     const tokensSaved = originalTokens - resultTokens;
 
@@ -959,7 +959,7 @@ export class SmartDependenciesTool {
 
     // Calculate tokens
     const resultData = { impact };
-    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData));
+    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
     const originalTokens = this.estimateFullFileTokens([opts.targetFile, ...directDependents, ...indirectDependents]);
     const tokensSaved = originalTokens - resultTokens;
 
@@ -1009,7 +1009,7 @@ export class SmartDependenciesTool {
       ? this.compactGraphRepresentation(filteredGraph)
       : Array.from(filteredGraph.entries());
 
-    const resultTokens = this.tokenCounter.count(JSON.stringify(graphData));
+    const resultTokens = this.tokenCounter.count(JSON.stringify(graphData)).tokens;
     const originalTokens = this.estimateFullFileTokens(Array.from(graph.keys()));
     const tokensSaved = originalTokens - resultTokens;
 
@@ -1160,8 +1160,7 @@ export class SmartDependenciesTool {
       cacheKey,
       serialized as any,
       ttlSeconds,
-      tokensSaved,
-      '' // No specific file hash for full graph
+      tokensSaved
     );
   }
 
