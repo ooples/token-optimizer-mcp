@@ -530,7 +530,7 @@ export class AlertManager {
         const cachedAlerts = JSON.parse(cached);
         const tokensSaved =
           this.tokenCounter.count(
-            JSON.stringify(Array.from(this.alerts.values().tokens,
+            JSON.stringify(Array.from(this.alerts.values()))
           ).tokens -
           this.tokenCounter.count(JSON.stringify(cachedAlerts)).tokens;
 
@@ -1131,7 +1131,7 @@ export class AlertManager {
     // In production, persist to database
     // For now, use cache as simple persistence
     const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence", "alerts").digest("hex")}`;
-    const data = JSON.stringify(Array.from(this.alerts.entries())));
+    const data = JSON.stringify(Array.from(this.alerts.entries()));
     await this.cache.set(cacheKey, data.toString("utf-8"), 0, 86400 * 365); // 1 year TTL
   }
 
