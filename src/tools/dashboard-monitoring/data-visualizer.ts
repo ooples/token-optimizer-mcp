@@ -1630,7 +1630,7 @@ export class DataVisualizer {
         });
       }
     } else if (layout === "grid") {
-      const cols = Math.ceil(Math.sqrt(nodes.length);
+      const cols = Math.ceil(Math.sqrt(nodes.length));
       const cellWidth = (width - 100) / cols;
       const cellHeight = (height - 100) / Math.ceil(nodes.length / cols);
 
@@ -1714,7 +1714,7 @@ export class DataVisualizer {
       const outgoing = links
         .filter((l) => l.source === node.name)
         .reduce((sum, l) => sum + l.value, 0);
-      values.set(node.name, Math.max(incoming, outgoing);
+      values.set(node.name, Math.max(incoming, outgoing));
     }
 
     return values;
@@ -1788,7 +1788,7 @@ export class DataVisualizer {
       t = Math.log(1 + t * (Math.E - 1)) / Math.log(Math.E);
     }
 
-    t = Math.max(0, Math.min(1, t);
+    t = Math.max(0, Math.min(1, t));
 
     const rgb1 = this.hexToRgb(colorMin);
     const rgb2 = this.hexToRgb(colorMax);
