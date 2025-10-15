@@ -22,8 +22,8 @@ import type { CacheEngine } from "../../core/cache-engine";
 import type { TokenCounter } from "../../core/token-counter";
 import type { MetricsCollector } from "../../core/metrics";
 import { CacheEngine as CacheEngineClass } from "../../core/cache-engine";
-import { globalTokenCounter } from "../../core/token-counter";
-import { globalMetricsCollector } from "../../core/metrics";
+import { TokenCounter } from "../../core/token-counter";
+import { MetricsCollector } from "../../core/metrics";
 import { generateCacheKey } from "../shared/hash-utils";
 
 // ============================================================================
@@ -1166,10 +1166,12 @@ export async function runSmartSchema(
     100,
     join(homedir(), ".hypercontext", "cache"),
   );
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const schema = getSmartSchema(
     cacheInstance,
-    globalTokenCounter,
-    globalMetricsCollector,
+    tokenCounter,
+    metrics,
   );
 
   const result = await schema.run(options);

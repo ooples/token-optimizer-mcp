@@ -212,15 +212,6 @@ export interface CacheCompressionResult {
 }
 
 /**
- * Delta compression state for time-series data
- */
-interface DeltaState {
-  baseline: any;
-  timestamp: number;
-  version: number;
-}
-
-/**
  * Cache Compression Tool - Advanced compression strategies
  */
 export class CacheCompressionTool {
