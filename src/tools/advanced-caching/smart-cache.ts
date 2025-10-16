@@ -845,7 +845,7 @@ export class SmartCacheTool extends EventEmitter {
       }
     }
 
-    const stats = await this.getStats({});
+    const stats = await this.getStats({ operation: "stats" });
     return { stats: stats.stats };
   }
 
