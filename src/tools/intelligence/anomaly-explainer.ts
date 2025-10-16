@@ -996,18 +996,18 @@ export class AnomalyExplainer {
     // Check for cyclical pattern
     const seasonality = this.detectSeasonality(historicalData);
 
-    if (seasonality.detected && seasonality.strength && seasonality.strength > 0.6) {
+    if (seasonality?.detected && seasonality.strength && seasonality.strength > 0.6) {
       causes.push({
         id: 'rc-seasonal',
-        description: `Seasonality pattern detected with ${seasonality.period}ms period`,
+        description: `Seasonality pattern detected with ${seasonality.period ?? 0}ms period`,
         probability: seasonality.strength,
         evidence: [{
           type: 'temporal',
-          description: `Regular pattern repeats every ${seasonality.period}ms`,
+          description: `Regular pattern repeats every ${seasonality.period ?? 0}ms`,
           strength: seasonality.strength
         }],
         relatedMetrics: [anomaly.metric],
-        timeRange: { start: anomaly.timestamp - (seasonality.period || 0), end: anomaly.timestamp }
+        timeRange: { start: anomaly.timestamp - (seasonality.period ?? 0), end: anomaly.timestamp }
       });
     }
 
@@ -1217,11 +1217,11 @@ export class AnomalyExplainer {
     correlation: number;
     lag: number;
   } {
-    const maxLag = Math.min(10, Math.floor(series1.length / 2));
+    const maxLagWindow = Math.min(10, Math.floor(series1.length / 2));
     let maxCorr = 0;
     let maxLag = 0;
 
-    for (let lag = -maxLag; lag <= maxLag; lag++) {
+    for (let lag = -maxLagWindow; lag <= maxLagWindow; lag++) {
       const corr = this.correlationAtLag(series1, series2, lag);
       if (Math.abs(corr) > Math.abs(maxCorr)) {
         maxCorr = corr;

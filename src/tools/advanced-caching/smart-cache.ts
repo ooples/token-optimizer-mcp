@@ -520,7 +520,11 @@ export class SmartCacheTool extends EventEmitter {
         tierStats: [],
         evictionStrategy: this.evictionStrategy,
         writeMode: this.writeMode,
-        stampedePrevention: { ...this.lockStats },
+        stampedePrevention: {
+          locksAcquired: this.lockStats.acquired,
+          locksReleased: this.lockStats.released,
+          contentionCount: this.lockStats.contention,
+        },
       },
     };
   }
@@ -549,7 +553,11 @@ export class SmartCacheTool extends EventEmitter {
       tierStats: [l1Stats, l2Stats, l3Stats],
       evictionStrategy: this.evictionStrategy,
       writeMode: this.writeMode,
-      stampedePrevention: { ...this.lockStats },
+      stampedePrevention: {
+        locksAcquired: this.lockStats.acquired,
+        locksReleased: this.lockStats.released,
+        contentionCount: this.lockStats.contention,
+      },
     };
 
     return { stats };
