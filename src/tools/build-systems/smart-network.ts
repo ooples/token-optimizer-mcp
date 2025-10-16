@@ -18,7 +18,6 @@ import * as dns from "dns";
 import * as net from "net";
 import { promisify } from "util";
 
-const _dnsResolve = promisify(dns.resolve);
 const dnsLookup = promisify(dns.lookup);
 
 interface ConnectivityResult {
@@ -180,11 +179,9 @@ interface SmartNetworkOutput {
 export class SmartNetwork {
   private cache: CacheEngine;
   private cacheNamespace = "smart_network";
-  private projectRoot: string;
 
-  constructor(cache: CacheEngine, projectRoot?: string) {
+  constructor(cache: CacheEngine, _projectRoot?: string) {
     this.cache = cache;
-    this.projectRoot = projectRoot || process.cwd();
   }
 
   /**

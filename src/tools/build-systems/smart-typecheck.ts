@@ -110,20 +110,16 @@ interface SmartTypeCheckOutput {
 
 export class SmartTypeCheck {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
-  private _metrics: MetricsCollector;
   private cacheNamespace = "smart_typecheck";
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    _tokenCounter: TokenCounter,
     _metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
-    this._metrics = _metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
 

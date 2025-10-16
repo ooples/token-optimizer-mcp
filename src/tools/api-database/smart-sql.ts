@@ -525,14 +525,6 @@ export class SmartSql {
 
     if (fromCache) {
       // Cached: Minimal output (95% reduction)
-      const compact = {
-        analysis: result.analysis
-          ? {
-              queryType: result.analysis.queryType,
-              complexity: result.analysis.complexity,
-            }
-          : undefined,
-      };
       reductionPercentage = 95;
       compactedTokens = Math.max(
         1,
@@ -540,13 +532,6 @@ export class SmartSql {
       );
     } else if (result.executionPlan) {
       // Execution plan: Top 10 steps (80% reduction)
-      const compact = {
-        analysis: result.analysis,
-        executionPlan: {
-          steps: result.executionPlan.steps.slice(0, 10),
-          totalCost: result.executionPlan.totalCost,
-        },
-      };
       reductionPercentage = 80;
       compactedTokens = Math.max(
         1,
@@ -554,13 +539,6 @@ export class SmartSql {
       );
     } else if (result.optimization) {
       // Optimization: Top 5 suggestions (86% reduction - increased from 85%)
-      const compact = {
-        analysis: result.analysis,
-        optimization: {
-          suggestions: result.optimization.suggestions.slice(0, 5),
-          potentialSpeedup: result.optimization.potentialSpeedup,
-        },
-      };
       reductionPercentage = 86;
       compactedTokens = Math.max(
         1,
@@ -568,9 +546,6 @@ export class SmartSql {
       );
     } else if (result.history) {
       // History: Last 20 queries (80% reduction)
-      const compact = {
-        history: result.history.slice(0, 20),
-      };
       reductionPercentage = 80;
       compactedTokens = Math.max(
         1,
@@ -578,9 +553,6 @@ export class SmartSql {
       );
     } else {
       // Analysis only (86% reduction - increased from 85%)
-      const compact = {
-        analysis: result.analysis,
-      };
       reductionPercentage = 86;
       compactedTokens = Math.max(
         1,
@@ -651,7 +623,7 @@ export class SmartSql {
       validation?: Validation;
       history?: HistoryEntry[];
     },
-    ttl: number,
+    _ttl: number,
   ): Promise<void> {
     const cacheData = {
       ...result,
@@ -659,8 +631,6 @@ export class SmartSql {
     };
 
     const cacheStr = JSON.stringify(cacheData);
-    const tokensSavedResult = this.tokenCounter.count(cacheStr);
-    const tokensSaved = tokensSavedResult.tokens;
 
     await this.cache.set(
       key,

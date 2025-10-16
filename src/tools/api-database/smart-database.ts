@@ -908,10 +908,9 @@ export class SmartDatabase {
   }
 
   private async explainQuery(
-    options: SmartDatabaseOptions
+    _options: SmartDatabaseOptions
   ): Promise<SmartDatabaseResult> {
     const startTime = Date.now();
-    const query = options.query!;
 
     // NOTE: Placeholder implementation
     // Real implementation would execute EXPLAIN query
@@ -1402,7 +1401,7 @@ export class SmartDatabase {
   private async cacheResult(
     key: string,
     result: SmartDatabaseResult,
-    ttl?: number
+    _ttl?: number
   ): Promise<void> {
     try {
       // Add timestamp

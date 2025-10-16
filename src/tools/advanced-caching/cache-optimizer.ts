@@ -279,7 +279,6 @@ export class CacheOptimizerTool extends EventEmitter {
   private maxHistorySize = 100000;
 
   // Performance tracking
-  private latencyMeasurements: number[] = [];
   private evictionEvents: Array<{ timestamp: number; strategy: EvictionStrategy }> = [];
 
   // ML models for optimization
@@ -302,7 +301,7 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   async run(options: CacheOptimizerOptions): Promise<CacheOptimizerResult> {
     const startTime = Date.now();
-    const { operation, useCache = true, cacheTTL = 300 } = options;
+    const { operation, useCache = true } = options;
 
     // Generate cache key for cacheable operations
     let cacheKey: string | null = null;
@@ -557,7 +556,6 @@ export class CacheOptimizerTool extends EventEmitter {
   private async optimize(
     options: CacheOptimizerOptions
   ): Promise<CacheOptimizerResult["data"]> {
-    const objective = options.objective || "balanced";
     const constraints = options.constraints || {};
 
     // Run benchmarks
@@ -572,9 +570,6 @@ export class CacheOptimizerTool extends EventEmitter {
     if (feasibleBenchmarks.length === 0) {
       throw new Error("No strategies meet the specified constraints");
     }
-
-    // Get top recommendation
-    const best = feasibleBenchmarks[0];
 
     // Generate recommendations
     const recommendations = await this.generateRecommendations(
@@ -924,7 +919,7 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async benchmarkStrategy(
     strategy: EvictionStrategy,
-    config: CacheConfiguration,
+    _config: CacheConfiguration,
     workloadSize: number,
     iterations: number,
     pattern: WorkloadPattern
@@ -939,7 +934,7 @@ export class CacheOptimizerTool extends EventEmitter {
     for (let i = 0; i < iterations; i++) {
       const accessPattern = this.generateAccessPattern(workloadSize, pattern);
 
-      for (const key of accessPattern) {
+      for (const _key of accessPattern) {
         const accessStart = Date.now();
 
         // Simulate cache access
@@ -1080,7 +1075,7 @@ export class CacheOptimizerTool extends EventEmitter {
   private async generateRecommendations(
     benchmarks: StrategyBenchmark[],
     currentStrategy?: EvictionStrategy,
-    currentConfig?: CacheConfiguration,
+    _currentConfig?: CacheConfiguration,
     currentMetrics?: PerformanceMetrics
   ): Promise<OptimizationRecommendation[]> {
     const recommendations: OptimizationRecommendation[] = [];
@@ -1147,7 +1142,7 @@ export class CacheOptimizerTool extends EventEmitter {
     strategy: EvictionStrategy,
     config: CacheConfiguration,
     duration: number,
-    currentState: CacheState
+    _currentState: CacheState
   ): Promise<SimulationResult> {
     const events: SimulationEvent[] = [];
     const startTime = Date.now();
@@ -2032,7 +2027,6 @@ export class CacheOptimizerTool extends EventEmitter {
   dispose(): void {
     this.accessHistory = [];
     this.evictionEvents = [];
-    this.latencyMeasurements = [];
     this.optimizationState.clear();
     this.removeAllListeners();
   }

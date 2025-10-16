@@ -132,20 +132,16 @@ interface SmartTestOutput {
 
 export class SmartTest {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
-  private metrics: MetricsCollector;
   private cacheNamespace = "smart_test";
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    _tokenCounter: TokenCounter,
+    _metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
-    this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
 

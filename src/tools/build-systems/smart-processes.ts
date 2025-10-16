@@ -145,23 +145,16 @@ interface SmartProcessesOutput {
 
 export class SmartProcesses {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
-  private metrics: MetricsCollector;
   private cacheNamespace = "smart_processes";
-  //  Reserved for future project root path feature
-  private _projectRoot: string;
   private platform: NodeJS.Platform;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
-    projectRoot?: string,
+    _tokenCounter: TokenCounter,
+    _metrics: MetricsCollector,
+    _projectRoot?: string,
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
-    this.metrics = metrics;
-    this._projectRoot = projectRoot || process.cwd();
     this.platform = process.platform;
   }
 
