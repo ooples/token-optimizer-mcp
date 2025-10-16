@@ -1071,10 +1071,10 @@ export class SmartCron {
       );
     }
 
-    const cacheKey = generateCacheKey(
-      "cron-predict",
-      options.taskName || options.schedule!,
-    );
+    const keyInput = options.taskName
+      ? { taskName: options.taskName }
+      : { schedule: options.schedule };
+    const cacheKey = generateCacheKey("cron-predict", keyInput);
     const useCache = options.useCache !== false;
 
     // Check cache
