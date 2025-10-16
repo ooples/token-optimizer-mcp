@@ -113,11 +113,7 @@ export class SmartConfigReadTool {
   private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
 
-  constructor(
-    cache: CacheEngine,
-    tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
-  ) {
+  constructor(cache: CacheEngine, tokenCounter: TokenCounter, metrics: MetricsCollector) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
     this.metrics = metrics;
@@ -128,7 +124,7 @@ export class SmartConfigReadTool {
    */
   async read(
     filePath: string,
-    options: SmartConfigReadOptions = {},
+    options: SmartConfigReadOptions = {}
   ): Promise<SmartConfigReadResult> {
     const startTime = Date.now();
 
@@ -168,8 +164,8 @@ export class SmartConfigReadTool {
     });
 
     // Check cache
-    let cachedData: Buffer | null = null;
-    let cachedSchema: Buffer | null = null;
+    let cachedData: string | null = null;
+    let cachedSchema: string | null = null;
     let fromCache = false;
 
     if (enableCache) {
@@ -188,9 +184,7 @@ export class SmartConfigReadTool {
     const parseTime = Date.now() - parseStartTime;
 
     // Calculate original tokens
-    const originalTokens = this.tokenCounter.count(
-      JSON.stringify(parsedConfig, null, 2),
-    ).tokens;
+    const originalTokens = this.tokenCounter.count(JSON.stringify(parsedConfig, null, 2)).tokens;
 
     let finalOutput: Record<string, unknown> = parsedConfig;
     let isDiff = false;
@@ -207,44 +201,32 @@ export class SmartConfigReadTool {
       // Check schema cache
       if (cachedSchema) {
         const cachedSchemaObj = JSON.parse(
-          decompress(cachedSchema.toString(), "gzip"),
+          decompress(Buffer.from(cachedSchema, 'utf-8'), "gzip").toString()
         ) as ConfigSchema;
 
         // Compare schemas to detect structural changes
         if (!this.schemasMatch(cachedSchemaObj, inferredSchema)) {
-          suggestions.push(
-            "Configuration schema has changed - review new/removed properties",
-          );
+          suggestions.push("Configuration schema has changed - review new/removed properties");
         }
       }
     }
 
     // Validate against provided or inferred schema
     if (validateSchema && (schema || inferredSchema)) {
-      const schemaToValidate =
-        (schema as unknown as ConfigSchema) || inferredSchema!;
-      validationErrors = this.validateConfig(
-        parsedConfig,
-        schemaToValidate,
-        strictMode,
-      );
+      const schemaToValidate = (schema as unknown as ConfigSchema) || inferredSchema!;
+      validationErrors = this.validateConfig(parsedConfig, schemaToValidate, strictMode);
     }
 
     // Generate improvement suggestions
     if (includeSuggestions) {
-      suggestions = [
-        ...suggestions,
-        ...this.generateSuggestions(parsedConfig, validationErrors),
-      ];
+      suggestions = [...suggestions, ...this.generateSuggestions(parsedConfig, validationErrors)];
     }
 
     // Handle diff mode if we have cached data
     if (cachedData && diffMode) {
       try {
-        const decompressed = decompress(cachedData, "gzip");
-        const cachedConfig = JSON.parse(
-          decompressed.toString(),
-        ) as Record<string, unknown>;
+        const decompressed = decompress(Buffer.from(cachedData, 'utf-8'), "gzip");
+        const cachedConfig = JSON.parse(decompressed.toString()) as Record<string, unknown>;
 
         // Calculate diff
         diffData = this.calculateDiff(cachedConfig, parsedConfig);
@@ -255,9 +237,7 @@ export class SmartConfigReadTool {
           isDiff = true;
           finalOutput = this.transformOutput(diffData, validateOnly);
 
-          const diffTokens = this.tokenCounter.count(
-            JSON.stringify(finalOutput, null, 2),
-          ).tokens;
+          const diffTokens = this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
           tokensSaved = Math.max(0, originalTokens - diffTokens);
         } else {
           // No changes - return minimal response
@@ -268,8 +248,7 @@ export class SmartConfigReadTool {
           };
           tokensSaved = Math.max(
             0,
-            originalTokens -
-              this.tokenCounter.count(JSON.stringify(finalOutput)).tokens,
+            originalTokens - this.tokenCounter.count(JSON.stringify(finalOutput)).tokens
           );
         }
       } catch (error) {
@@ -281,46 +260,28 @@ export class SmartConfigReadTool {
     // If validateOnly mode, return minimal output
     if (validateOnly && !isDiff) {
       finalOutput = {
-        valid:
-          validationErrors.filter((e) => e.severity === "error").length === 0,
+        valid: validationErrors.filter((e) => e.severity === "error").length === 0,
         errors: validationErrors.length,
-        warnings: validationErrors.filter((e) => e.severity === "warning")
-          .length,
+        warnings: validationErrors.filter((e) => e.severity === "warning").length,
       };
 
       tokensSaved =
-        originalTokens -
-        this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
+        originalTokens - this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
     }
 
     // Cache the parsed config and schema
     if (enableCache && !fromCache) {
       const configCompressed = compress(JSON.stringify(parsedConfig), "gzip");
-      this.cache.set(
-        configCacheKey,
-        configCompressed.toString(),
-        tokensSaved,
-        ttl,
-      );
+      this.cache.set(configCacheKey, configCompressed.toString(), tokensSaved, ttl);
 
       if (inferredSchema) {
-        const schemaCompressed = compress(
-          JSON.stringify(inferredSchema),
-          "gzip",
-        );
-        this.cache.set(
-          schemaCacheKey,
-          schemaCompressed.toString(),
-          0,
-          ttl,
-        );
+        const schemaCompressed = compress(JSON.stringify(inferredSchema), "gzip");
+        this.cache.set(schemaCacheKey, schemaCompressed.toString(), 0, ttl);
       }
     }
 
     // Calculate final metrics
-    const finalTokens = this.tokenCounter.count(
-      JSON.stringify(finalOutput, null, 2),
-    ).tokens;
+    const finalTokens = this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
     const compressionRatio = finalTokens / originalTokens;
 
     // Record metrics
@@ -390,10 +351,7 @@ export class SmartConfigReadTool {
     }
   }
 
-  private parseConfig(
-    content: string,
-    format: ConfigFormat,
-  ): Record<string, unknown> {
+  private parseConfig(content: string, format: ConfigFormat): Record<string, unknown> {
     try {
       switch (format) {
         case "json":
@@ -445,8 +403,7 @@ export class SmartConfigReadTool {
     }
 
     if (Array.isArray(value)) {
-      const itemType =
-        value.length > 0 ? this.inferPropertySchema(value[0]) : { type: "any" };
+      const itemType = value.length > 0 ? this.inferPropertySchema(value[0]) : { type: "any" };
       return {
         type: "array",
         items: itemType,
@@ -468,7 +425,7 @@ export class SmartConfigReadTool {
   private validateConfig(
     config: Record<string, unknown>,
     schema: ConfigSchema,
-    strictMode: boolean,
+    strictMode: boolean
   ): ConfigValidationError[] {
     const errors: ConfigValidationError[] = [];
 
@@ -515,13 +472,11 @@ export class SmartConfigReadTool {
   private validatePropertyType(
     path: string,
     value: unknown,
-    property: ConfigSchemaProperty,
+    property: ConfigSchemaProperty
   ): ConfigValidationError[] {
     const errors: ConfigValidationError[] = [];
     const actualType = Array.isArray(value) ? "array" : typeof value;
-    const expectedTypes = Array.isArray(property.type)
-      ? property.type
-      : [property.type];
+    const expectedTypes = Array.isArray(property.type) ? property.type : [property.type];
 
     if (!expectedTypes.includes(actualType)) {
       errors.push({
@@ -551,16 +506,12 @@ export class SmartConfigReadTool {
         required: property.required,
       };
 
-      const nestedErrors = this.validateConfig(
-        nestedConfig,
-        nestedSchema,
-        false,
-      );
+      const nestedErrors = this.validateConfig(nestedConfig, nestedSchema, false);
       errors.push(
         ...nestedErrors.map((err) => ({
           ...err,
           path: `${path}.${err.path}`,
-        })),
+        }))
       );
     }
 
@@ -597,7 +548,7 @@ export class SmartConfigReadTool {
 
   private calculateDiff(
     oldConfig: Record<string, unknown>,
-    newConfig: Record<string, unknown>,
+    newConfig: Record<string, unknown>
   ): ConfigDiff {
     const added: Record<string, unknown> = {};
     const removed: Record<string, unknown> = {};
@@ -651,8 +602,8 @@ export class SmartConfigReadTool {
       return keys1.every((key) =>
         this.deepEqual(
           (val1 as Record<string, unknown>)[key],
-          (val2 as Record<string, unknown>)[key],
-        ),
+          (val2 as Record<string, unknown>)[key]
+        )
       );
     }
 
@@ -671,10 +622,7 @@ export class SmartConfigReadTool {
   // Private Methods - Output Transformation
   // ============================================================================
 
-  private transformOutput(
-    diff: ConfigDiff,
-    validateOnly: boolean,
-  ): Record<string, unknown> {
+  private transformOutput(diff: ConfigDiff, validateOnly: boolean): Record<string, unknown> {
     if (validateOnly) {
       return {
         hasChanges: this.hasMeaningfulChanges(diff),
@@ -701,7 +649,7 @@ export class SmartConfigReadTool {
 
   private generateSuggestions(
     config: Record<string, unknown>,
-    errors: ConfigValidationError[],
+    errors: ConfigValidationError[]
   ): string[] {
     const suggestions: string[] = [];
 
@@ -709,7 +657,7 @@ export class SmartConfigReadTool {
     const errorCount = errors.filter((e) => e.severity === "error").length;
     if (errorCount > 0) {
       suggestions.push(
-        `Fix ${errorCount} validation error${errorCount > 1 ? "s" : ""} before deployment`,
+        `Fix ${errorCount} validation error${errorCount > 1 ? "s" : ""} before deployment`
       );
     }
 
@@ -729,7 +677,7 @@ export class SmartConfigReadTool {
       configStr.includes("apikey")
     ) {
       suggestions.push(
-        "WARNING: Configuration may contain sensitive data - use environment variables instead",
+        "WARNING: Configuration may contain sensitive data - use environment variables instead"
       );
     }
 
@@ -737,7 +685,7 @@ export class SmartConfigReadTool {
     const configSize = JSON.stringify(config).length;
     if (configSize > 50000) {
       suggestions.push(
-        "Large configuration file - consider splitting into multiple files or using external references",
+        "Large configuration file - consider splitting into multiple files or using external references"
       );
     }
 
@@ -755,7 +703,7 @@ export class SmartConfigReadTool {
 export function getSmartConfigReadTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartConfigReadTool {
   return new SmartConfigReadTool(cache, tokenCounter, metrics);
 }
@@ -765,7 +713,7 @@ export function getSmartConfigReadTool(
  */
 export async function runSmartConfigRead(
   filePath: string,
-  options: SmartConfigReadOptions = {},
+  options: SmartConfigReadOptions = {}
 ): Promise<SmartConfigReadResult> {
   const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
   const tokenCounter = new TokenCounter();
@@ -794,14 +742,12 @@ export const SMART_CONFIG_READ_TOOL_DEFINITION = {
       },
       diffMode: {
         type: "boolean",
-        description:
-          "Return only diff if configuration changed (default: true)",
+        description: "Return only diff if configuration changed (default: true)",
         default: true,
       },
       validateSchema: {
         type: "boolean",
-        description:
-          "Validate configuration against inferred or provided schema (default: true)",
+        description: "Validate configuration against inferred or provided schema (default: true)",
         default: true,
       },
       inferSchema: {
@@ -816,8 +762,7 @@ export const SMART_CONFIG_READ_TOOL_DEFINITION = {
       },
       validateOnly: {
         type: "boolean",
-        description:
-          "Only validate configuration without returning full content (default: false)",
+        description: "Only validate configuration without returning full content (default: false)",
         default: false,
       },
       schema: {
