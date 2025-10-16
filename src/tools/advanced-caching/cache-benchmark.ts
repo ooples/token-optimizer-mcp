@@ -411,10 +411,7 @@ class BenchmarkExecutor {
 
     const latency = Number(endTime - startTime) / 1_000_000; // Convert to ms
 
-    this.latencies.push(
-      latency /* originalSize */,
-      config.ttl || 3600 /* compressedSize */,
-    );
+    this.latencies.push(latency);
     this.operations.push({ type: "write", timestamp: Date.now(), latency });
   }
 

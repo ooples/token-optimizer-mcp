@@ -1272,7 +1272,7 @@ export class CacheCompressionTool {
     } else if (typeof data === "string") {
       return Buffer.from(data, "utf-8");
     } else {
-      return Buffer.from(JSON.stringify(data), 'utf-8');
+      return Buffer.from(JSON.stringify(data), "utf-8");
     }
   }
 
@@ -1292,7 +1292,7 @@ export class CacheCompressionTool {
             active: i % 2 === 0,
           })),
         };
-        return Buffer.from(JSON.stringify(obj), 'utf-8');
+        return Buffer.from(JSON.stringify(obj), "utf-8");
       }
 
       case "text": {
