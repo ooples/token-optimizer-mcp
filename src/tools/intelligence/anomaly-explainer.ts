@@ -996,7 +996,7 @@ export class AnomalyExplainer {
     // Check for cyclical pattern
     const seasonality = this.detectSeasonality(historicalData);
 
-    if (seasonality?.detected && seasonality.strength && seasonality.strength > 0.6) {
+    if (seasonality?.detected && (seasonality?.strength ?? 0) > 0.6) {
       causes.push({
         id: 'rc-seasonal',
         description: `Seasonality pattern detected with ${seasonality.period ?? 0}ms period`,
