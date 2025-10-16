@@ -212,15 +212,6 @@ export interface CacheCompressionResult {
 }
 
 /**
- * Delta compression state for time-series data
- */
-interface DeltaState {
-  baseline: any;
-  timestamp: number;
-  version: number;
-}
-
-/**
  * Cache Compression Tool - Advanced compression strategies
  */
 export class CacheCompressionTool {
@@ -479,7 +470,7 @@ export class CacheCompressionTool {
       timestamp: Date.now(),
     };
 
-    const metadataBuffer = JSON.stringify(metadata));
+    const metadataBuffer = JSON.stringify(metadata);
     const metadataLength = Buffer.allocUnsafe(4);
     metadataLength.writeUInt32LE(metadataBuffer.length, 0);
 
@@ -1020,7 +1011,7 @@ export class CacheCompressionTool {
       // Replace repeated strings with dictionary references
       const compressed = this.compressWithDictionary(obj, dict);
 
-      return JSON.stringify(compressed));
+      return Buffer.from(JSON.stringify(compressed), 'utf-8');
     } catch {
       // Not JSON, just use gzip
       return Buffer.from(str);
@@ -1041,7 +1032,7 @@ export class CacheCompressionTool {
           compressed.data,
           dict,
         );
-        return JSON.stringify(decompressed));
+        return Buffer.from(JSON.stringify(decompressed), 'utf-8');
       }
 
       return data;
@@ -1281,7 +1272,7 @@ export class CacheCompressionTool {
     } else if (typeof data === "string") {
       return Buffer.from(data, "utf-8");
     } else {
-      return JSON.stringify(data), "utf-8");
+      return Buffer.from(JSON.stringify(data), "utf-8");
     }
   }
 
@@ -1301,7 +1292,7 @@ export class CacheCompressionTool {
             active: i % 2 === 0,
           })),
         };
-        return JSON.stringify(obj));
+        return Buffer.from(JSON.stringify(obj), "utf-8");
       }
 
       case "text": {

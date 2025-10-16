@@ -11,6 +11,7 @@
 import { spawn } from "child_process";
 import { CacheEngine } from "../../core/cache-engine";
 import { MetricsCollector } from "../../core/metrics";
+import { TokenCounter } from "../../core/token-counter";
 import { createHash } from "crypto";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
@@ -109,19 +110,19 @@ interface SmartTypeCheckOutput {
 
 export class SmartTypeCheck {
   private cache: CacheEngine;
-  private _tokenCounter: _tokenCounter;
+  private tokenCounter: TokenCounter;
   private _metrics: MetricsCollector;
   private cacheNamespace = "smart_typecheck";
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    _tokenCounter: _tokenCounter,
+    tokenCounter: TokenCounter,
     _metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this._tokenCounter = _tokenCounter;
+    this.tokenCounter = tokenCounter;
     this._metrics = _metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -636,10 +637,10 @@ export class SmartTypeCheck {
  */
 export function getSmartTypeCheckTool(
   cache: CacheEngine,
-  _tokenCounter: _tokenCounter,
+  tokenCounter: TokenCounter,
   _metrics: MetricsCollector,
 ): SmartTypeCheck {
-  return new SmartTypeCheck(cache, _tokenCounter, _metrics);
+  return new SmartTypeCheck(cache, tokenCounter, _metrics);
 }
 
 /**
@@ -652,12 +653,12 @@ export async function runSmartTypeCheck(
   const cache = new CacheEngine(
     join(homedir(), ".token-optimizer-cache", "cache.db"),
   );
-  const _tokenCounter = new _tokenCounter();
-  const _metrics = new MetricsCollector();
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const smartTypeCheck = new SmartTypeCheck(
     cache,
-    _tokenCounter,
-    _metrics,
+    tokenCounter,
+    metrics,
     options.projectRoot,
   );
   try {

@@ -627,7 +627,7 @@ export class SmartRefactorTool {
 
   private cacheResult(key: string, output: SmartRefactorResult): void {
     const toCache = { ...output, cachedAt: Date.now() };
-    const buffer = JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache);
     const tokensSaved = output.metrics.originalTokens - output.metrics.compactedTokens;
     this.cache.set(key, buffer, 300, tokensSaved);
   }
@@ -646,7 +646,7 @@ export function getSmartRefactorTool(
 // Standalone function for CLI usage
 export async function runSmartRefactor(options: SmartRefactorOptions): Promise<SmartRefactorResult> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartRefactorTool(cache, tokenCounter, metrics, options.projectRoot);
   return tool.run(options);

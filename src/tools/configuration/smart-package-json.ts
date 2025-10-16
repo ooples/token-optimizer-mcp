@@ -837,10 +837,9 @@ export class SmartPackageJson {
 
     this.cache.set(
       this.cacheNamespace + ':' + key,
-      JSON.stringify(cacheData)),
+      JSON.stringify(cacheData),
       86400, // 24 hour TTL
-      tokensSaved,
-      fileHash
+      tokensSaved
     );
   }
 
@@ -849,7 +848,7 @@ export class SmartPackageJson {
    */
   private estimateTokensSaved(result: ParsedPackageJson): number {
     const fullOutput = JSON.stringify(result);
-    const originalTokens = this.tokenCounter.count(fullOutput);
+    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
     const compactTokens = Math.ceil(originalTokens * 0.05); // 95% reduction
     return originalTokens - compactTokens;
   }

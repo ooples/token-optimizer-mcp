@@ -484,7 +484,7 @@ export class SmartGraphQL {
     // Check for deeply nested queries
     if (parsed.selections.length > 0) {
       const maxDepth = Math.max(
-        ...parsed.selections.map((s) => this.getSelectionDepth(s)),
+        ...parsed.selections.map((s) => this.getSelectionDepth(s))
       );
       if (maxDepth > 4) {
         reductions.push({
@@ -587,7 +587,7 @@ export class SmartGraphQL {
     // Cache for 1 hour
     await this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(schemaInfo), "utf-8"),
+      JSON.stringify(schemaInfo),
       0,
       3600,
     );
@@ -723,7 +723,7 @@ export class SmartGraphQL {
 
     await this.cache.set(
       key,
-      JSON.stringify(cacheData)),
+      JSON.stringify(cacheData),
       tokensSaved,
       ttl,
     );

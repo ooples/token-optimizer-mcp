@@ -10,6 +10,7 @@
 
 import { spawn } from "child_process";
 import { CacheEngine } from "../../core/cache-engine";
+import { TokenCounter } from "../../core/token-counter";
 import { MetricsCollector } from "../../core/metrics";
 import { createHash } from "crypto";
 import { readFileSync, existsSync, readdirSync, statSync } from "fs";
@@ -116,20 +117,20 @@ interface SmartBuildOutput {
 
 export class SmartBuild {
   private cache: CacheEngine;
-  private _tokenCounter: _tokenCounter;
-  private _metrics: MetricsCollector;
+  private tokenCounter: TokenCounter;
+  private metrics: MetricsCollector;
   private cacheNamespace = "smart_build";
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    _tokenCounter: _tokenCounter,
-    _metrics: MetricsCollector,
+    tokenCounter: TokenCounter,
+    metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this._tokenCounter = _tokenCounter;
-    this._metrics = _metrics;
+    this.tokenCounter = tokenCounter;
+    this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
 
@@ -583,11 +584,11 @@ export class SmartBuild {
  */
 export function getSmartBuildTool(
   cache: CacheEngine,
-  _tokenCounter: _tokenCounter,
-  _metrics: MetricsCollector,
+  tokenCounter: TokenCounter,
+  metrics: MetricsCollector,
   projectRoot?: string,
 ): SmartBuild {
-  return new SmartBuild(cache, _tokenCounter, _metrics, projectRoot);
+  return new SmartBuild(cache, tokenCounter, metrics, projectRoot);
 }
 
 /**
@@ -598,13 +599,13 @@ export async function runSmartBuild(
 ): Promise<string> {
   // Create standalone resources for CLI usage
   const cache = new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
-  const _tokenCounter = new _tokenCounter();
-  const _metrics = new MetricsCollector();
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
 
   const smartBuild = new SmartBuild(
     cache,
-    _tokenCounter,
-    _metrics,
+    tokenCounter,
+    metrics,
     options.projectRoot,
   );
   try {

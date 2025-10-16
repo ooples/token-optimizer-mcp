@@ -516,7 +516,7 @@ export class SmartPretty {
       if (cached) {
         const decompressed = decompress(cached, "gzip");
         const cachedResult = JSON.parse(
-          decompressed.toString("utf-8"),
+          decompressed.toString(),
         ) as HighlightResult;
 
         const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
@@ -605,7 +605,7 @@ export class SmartPretty {
       const resultTokens = this.tokenCounter.count(highlightedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressed.toString("utf-8").compressed,
+        compressed.toString(),
         resultTokens,
         options.ttl || 3600,
       );
@@ -798,7 +798,7 @@ export class SmartPretty {
       if (cached) {
         const decompressed = decompress(cached, "gzip");
         const cachedResult = JSON.parse(
-          decompressed.toString("utf-8"),
+          decompressed.toString(),
         ) as FormatResult;
 
         const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
@@ -864,7 +864,7 @@ export class SmartPretty {
       const resultTokens = this.tokenCounter.count(formattedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressed.toString("utf-8").compressed,
+        compressed.toString(),
         resultTokens,
         options.ttl || 3600,
       );

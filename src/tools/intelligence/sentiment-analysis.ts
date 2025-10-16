@@ -513,13 +513,12 @@ export class SentimentAnalysisTool {
       const ttl = this.getCacheTTL(options);
 
       if (options.useCache !== false) {
+        const resultStr = JSON.stringify(result);
         this.cache.set(
           cacheKey,
-          Buffer.toString("utf-8").from(
-            JSON.stringify(result),
-            ttl /* originalSize */,
-            "utf-8",
-          ) /* compressedSize */,
+          resultStr,
+          tokensUsed,
+          tokensUsed
         );
       }
 

@@ -190,7 +190,7 @@ export class SmartConfigReadTool {
     // Calculate original tokens
     const originalTokens = this.tokenCounter.count(
       JSON.stringify(parsedConfig, null, 2),
-    );
+    ).tokens;
 
     let finalOutput: Record<string, unknown> = parsedConfig;
     let isDiff = false;
@@ -207,7 +207,7 @@ export class SmartConfigReadTool {
       // Check schema cache
       if (cachedSchema) {
         const cachedSchemaObj = JSON.parse(
-          decompress(cachedSchema.toString("utf-8"), "gzip"),
+          decompress(cachedSchema.toString(), "gzip"),
         ) as ConfigSchema;
 
         // Compare schemas to detect structural changes
@@ -243,7 +243,7 @@ export class SmartConfigReadTool {
       try {
         const decompressed = decompress(cachedData, "gzip");
         const cachedConfig = JSON.parse(
-          decompressed.toString("utf-8"),
+          decompressed.toString(),
         ) as Record<string, unknown>;
 
         // Calculate diff
@@ -257,7 +257,7 @@ export class SmartConfigReadTool {
 
           const diffTokens = this.tokenCounter.count(
             JSON.stringify(finalOutput, null, 2),
-          );
+          ).tokens;
           tokensSaved = Math.max(0, originalTokens - diffTokens);
         } else {
           // No changes - return minimal response
@@ -269,7 +269,7 @@ export class SmartConfigReadTool {
           tokensSaved = Math.max(
             0,
             originalTokens -
-              this.tokenCounter.count(JSON.stringify(finalOutput)),
+              this.tokenCounter.count(JSON.stringify(finalOutput)).tokens,
           );
         }
       } catch (error) {
@@ -290,7 +290,7 @@ export class SmartConfigReadTool {
 
       tokensSaved =
         originalTokens -
-        this.tokenCounter.count(JSON.stringify(finalOutput, null, 2));
+        this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
     }
 
     // Cache the parsed config and schema
@@ -298,7 +298,7 @@ export class SmartConfigReadTool {
       const configCompressed = compress(JSON.stringify(parsedConfig), "gzip");
       this.cache.set(
         configCacheKey,
-        configCompressed.toString("utf-8").compressed,
+        configCompressed.toString(),
         tokensSaved,
         ttl,
       );
@@ -310,7 +310,7 @@ export class SmartConfigReadTool {
         );
         this.cache.set(
           schemaCacheKey,
-          schemaCompressed.toString("utf-8").compressed,
+          schemaCompressed.toString(),
           0,
           ttl,
         );
@@ -320,7 +320,7 @@ export class SmartConfigReadTool {
     // Calculate final metrics
     const finalTokens = this.tokenCounter.count(
       JSON.stringify(finalOutput, null, 2),
-    );
+    ).tokens;
     const compressionRatio = finalTokens / originalTokens;
 
     // Record metrics

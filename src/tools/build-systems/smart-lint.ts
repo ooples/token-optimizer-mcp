@@ -10,6 +10,7 @@
 
 import { spawn } from "child_process";
 import { CacheEngine } from "../../core/cache-engine";
+import { TokenCounter } from "../../core/token-counter";
 import { MetricsCollector } from "../../core/metrics";
 import { createHash } from "crypto";
 import { readFileSync, existsSync } from "fs";
@@ -149,21 +150,21 @@ interface SmartLintOutput {
 
 export class SmartLint {
   private cache: CacheEngine;
-  private _tokenCounter: _tokenCounter;
-  private _metrics: MetricsCollector;
+  private tokenCounter: TokenCounter;
+  private metrics: MetricsCollector;
   private cacheNamespace = "smart_lint";
   private projectRoot: string;
   private ignoredIssuesKey = "ignored_issues";
 
   constructor(
     cache: CacheEngine,
-    _tokenCounter: _tokenCounter,
-    _metrics: MetricsCollector,
+    tokenCounter: TokenCounter,
+    metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this._tokenCounter = _tokenCounter;
-    this._metrics = _metrics;
+    this.tokenCounter = tokenCounter;
+    this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
 
@@ -593,11 +594,11 @@ export class SmartLint {
  */
 export function getSmartLintTool(
   cache: CacheEngine,
-  _tokenCounter: _tokenCounter,
-  _metrics: MetricsCollector,
+  tokenCounter: TokenCounter,
+  metrics: MetricsCollector,
   projectRoot?: string,
 ): SmartLint {
-  return new SmartLint(cache, _tokenCounter, _metrics, projectRoot);
+  return new SmartLint(cache, tokenCounter, metrics, projectRoot);
 }
 
 /**
@@ -608,12 +609,12 @@ export async function runSmartLint(
 ): Promise<string> {
   const cacheDir = join(homedir(), ".hypercontext", "cache");
   const cache = new CacheEngine(100, cacheDir);
-  const _tokenCounter = new _tokenCounter();
-  const _metrics = new MetricsCollector();
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const smartLint = new SmartLint(
     cache,
-    _tokenCounter,
-    _metrics,
+    tokenCounter,
+    metrics,
     options.projectRoot,
   );
   try {

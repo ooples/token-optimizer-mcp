@@ -23,8 +23,8 @@ import type { CacheEngine } from "../../core/cache-engine";
 import type { TokenCounter } from "../../core/token-counter";
 import type { MetricsCollector } from "../../core/metrics";
 import { CacheEngine as CacheEngineClass } from "../../core/cache-engine";
-import { globalTokenCounter } from "../../core/token-counter";
-import { globalMetricsCollector } from "../../core/metrics";
+import { TokenCounter } from "../../core/token-counter";
+import { MetricsCollector } from "../../core/metrics";
 
 // ============================================================================
 // Type Definitions
@@ -517,16 +517,18 @@ CREATE TABLE IF NOT EXISTS example (
       const tokensSaved = this.tokenCounter.count(fullOutput).tokens;
 
       // Cache for specified TTL (default: 1 hour)
+      const cacheStr = JSON.stringify(cacheData);
       this.cache.set(
         key,
-        JSON.stringify(cacheData)), // Convert to milliseconds
+        cacheStr,
         tokensSaved,
+        cacheStr.length,
       );
     } catch (error) {
       // Caching failure should not break the operation
       console.error(
-        "Failed to cache migration result:" /* originalSize */,
-        (ttl || 3600) * 1000 /* compressedSize */,
+        "Failed to cache migration result:",
+        error
       );
     }
   }
@@ -895,10 +897,12 @@ export async function runSmartMigration(
     100,
     join(homedir(), ".hypercontext", "cache"),
   );
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const migration = getSmartMigration(
     cache,
-    globalTokenCounter,
-    globalMetricsCollector,
+    tokenCounter,
+    metrics,
   );
 
   const result = await migration.run(options);

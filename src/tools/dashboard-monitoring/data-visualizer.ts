@@ -329,7 +329,7 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(chart)).tokens;
-    const cacheData = JSON.stringify(chart));
+    const cacheData = JSON.stringify(chart);
     this.cache.set(
       cacheKey,
       cacheData,
@@ -462,7 +462,7 @@ export class DataVisualizer {
         exported = await this.exportToHTML(chart, options);
         break;
       case "json":
-        exported = JSON.stringify(chart, null, 2));
+        exported = JSON.stringify(chart, null, 2);
         break;
       default:
         throw new Error(`Unsupported export format: ${format}`);

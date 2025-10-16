@@ -1,171 +1,77 @@
-#!/usr/bin/env node
-/**
- * Fix malformed cache.set() calls created by previous regex script
- *
- * The previous fix-migrated-tools.cjs created syntax errors like:
- * cache.set(key, value, BAD SYNTAX)
- *
- * This needs to be:
- * cache.set(key, value, originalSize, compressedSize)
- *
- * Strategy:
- * 1. Find all cache.set() calls with malformed syntax
- * 2. Extract actual values for originalSize and compressedSize
- * 3. Reconstruct proper call
- */
-
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
-// Find all TypeScript files in src/tools
-function findToolFiles(dir, files = []) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+console.log('Getting list of syntax errors from build...');
 
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      findToolFiles(fullPath, files);
-    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
-      files.push(fullPath);
-    }
+let buildOutput;
+try {
+  buildOutput = execSync('npm run build 2>&1', {
+    cwd: __dirname,
+    encoding: 'utf-8',
+    maxBuffer: 10 * 1024 * 1024
+  });
+} catch (error) {
+  buildOutput = error.stdout || error.output.join('');
+}
+
+const lines = buildOutput.split('\n');
+const errorFiles = new Set();
+
+lines.forEach(line => {
+  const cleanLine = line.replace(/\r/g, '');
+  const syntaxMatch = cleanLine.match(/^(.+\.ts)\(\d+,\d+\): error TS1(005|109|134|128):/);
+  if (syntaxMatch) {
+    errorFiles.add(syntaxMatch[1]);
   }
+});
 
-  return files;
-}
+console.log(`Found ${errorFiles.size} files with syntax errors`);
 
-/**
- * Fix cache.set() syntax errors
- *
- * Patterns to fix:
- * 1. cache.set calls with malformed parameter comments
- * 2. cache.set calls with wrong parameters
- */
-function fixCacheSetSyntax(content, filePath) {
-  let fixed = content;
-  let changesMade = false;
+let filesModified = 0;
 
-  // Pattern 1: Remove malformed syntax with duration label and fix parameters
-  // Example: cache.set with bad comment syntax
-  const pattern1 = /this\.cache\.set\(\s*([^,]+),\s*([^,]+),\s*(?:duration:\s*)?([^\/,]+)\s*\/\*\s*originalSize\s*\*\/\s*,\s*([^)]+)\s*\/\*\s*compressedSize\s*\*\/\s*\)/g;
+for (const relativeFilePath of errorFiles) {
+  const filePath = path.join(__dirname, relativeFilePath);
 
-  fixed = fixed.replace(pattern1, (match, key, value, param3, param4) => {
-    changesMade = true;
-
-    // Extract actual variable names from param3 and param4
-    const originalSize = param3.trim();
-    const compressedSize = param4.trim();
-
-    console.log(`  Fixing: ${match.substring(0, 80)}...`);
-    console.log(`    Key: ${key.trim()}`);
-    console.log(`    Value: ${value.trim()}`);
-    console.log(`    OriginalSize: ${originalSize}`);
-    console.log(`    CompressedSize: ${compressedSize}`);
-
-    return `this.cache.set(${key}, ${value}, ${originalSize}, ${compressedSize})`;
-  });
-
-  // Pattern 2: Fix any remaining malformed cache.set() with comments in wrong places
-  // Example: cache.set with label syntax
-  const pattern2 = /this\.cache\.set\(\s*([^,]+),\s*([^,]+),\s*([^:;,]+):\s*([^)]+)\s*\)/g;
-
-  fixed = fixed.replace(pattern2, (match, key, value, label, rest) => {
-    changesMade = true;
-    console.log(`  Fixing labeled parameter: ${match.substring(0, 80)}...`);
-
-    // This pattern indicates broken syntax - we need context to fix it properly
-    // For now, mark it for manual review
-    return `this.cache.set(${key}, ${value}, 0, 0) /* FIXME: Manual review needed */`;
-  });
-
-  // Pattern 3: Fix cache.set() calls with only 2 parameters (missing originalSize and compressedSize)
-  const pattern3 = /this\.cache\.set\(\s*([^,]+),\s*([^,)]+)\s*\);/g;
-
-  // Only fix if the match doesn't have 4 parameters already
-  fixed = fixed.replace(pattern3, (match, key, value) => {
-    // Check if this is actually a 2-parameter call or if it's just a formatting issue
-    const fullMatch = match.trim();
-    if (!fullMatch.includes('/*') && fullMatch.split(',').length === 2) {
-      changesMade = true;
-      console.log(`  Adding missing parameters to: ${match.substring(0, 60)}...`);
-      return `this.cache.set(${key}, ${value}, 0, 0) /* FIXME: Add originalSize and compressedSize */`;
-    }
-    return match;
-  });
-
-  return { fixed, changesMade };
-}
-
-/**
- * Analyze file to understand cache.set() context
- */
-function analyzeFileContext(content, filePath) {
-  const lines = content.split('\n');
-  const cacheSetLines = [];
-
-  lines.forEach((line, index) => {
-    if (line.includes('cache.set')) {
-      cacheSetLines.push({
-        line: index + 1,
-        content: line.trim(),
-        context: lines.slice(Math.max(0, index - 3), Math.min(lines.length, index + 3))
-      });
-    }
-  });
-
-  return cacheSetLines;
-}
-
-// Main processing
-function processFile(filePath) {
-  const relativePath = path.relative(process.cwd(), filePath);
+  if (!fs.existsSync(filePath)) {
+    console.log(`Skipping ${relativeFilePath} - file not found`);
+    continue;
+  }
 
   let content = fs.readFileSync(filePath, 'utf-8');
-  const original = content;
+  const originalContent = content;
 
-  // Analyze context first
-  const cacheSetCalls = analyzeFileContext(content, filePath);
+  // Fix: JSON.stringify(data), "utf-8"), -> JSON.stringify(data),
+  content = content.replace(/JSON\.stringify\(([^)]+)\),\s*"utf-8"\),/g, 'JSON.stringify($1),');
 
-  if (cacheSetCalls.length > 0) {
-    console.log(`\n${relativePath} - ${cacheSetCalls.length} cache.set() calls found`);
+  // Fix: variable), "utf-8"), -> variable,
+  content = content.replace(/([a-zA-Z_$][a-zA-Z0-9_$]*)\),\s*"utf-8"\),/g, '$1,');
 
-    // Apply fixes
-    const { fixed, changesMade } = fixCacheSetSyntax(content, filePath);
+  // Fix: JSON.stringify(data)), -> JSON.stringify(data),
+  content = content.replace(/JSON\.stringify\(([^)]+)\)\),/g, 'JSON.stringify($1),');
 
-    // Only write if changes were made
-    if (changesMade && fixed !== original) {
-      fs.writeFileSync(filePath, fixed, 'utf-8');
-      console.log(`  ✓ Fixed and saved`);
-      return true;
-    } else if (cacheSetCalls.length > 0) {
-      console.log(`  - No auto-fix applied (may need manual review)`);
-    }
-  }
+  // Fix: variable)), -> variable,
+  content = content.replace(/([a-zA-Z_$][a-zA-Z0-9_$]*)\)\),/g, '$1,');
 
-  return false;
-}
+  // Fix: JSON.stringify(data), 'utf-8'); -> JSON.stringify(data);
+  content = content.replace(/JSON\.stringify\(([^)]+)\),\s*['"]utf-8['"]?\);/g, 'JSON.stringify($1);');
 
-// Run
-const toolsDir = path.join(__dirname, 'src', 'tools');
+  // Fix: variable), 'utf-8'); -> variable;
+  content = content.replace(/([a-zA-Z_$][a-zA-Z0-9_$]*)\),\s*['"]utf-8['"]?\);/g, '$1);');
 
-if (!fs.existsSync(toolsDir)) {
-  console.error(`Error: ${toolsDir} not found`);
-  process.exit(1);
-}
+  // Fix: JSON.stringify(data)); -> JSON.stringify(data);
+  content = content.replace(/JSON\.stringify\(([^)]+)\)\);/g, 'JSON.stringify($1);');
 
-const files = findToolFiles(toolsDir);
+  // Fix: variable)); -> variable;
+  content = content.replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\)\);/g, '$1);');
 
-console.log(`Analyzing ${files.length} tool files for cache.set() syntax errors...\n`);
-
-let fixedCount = 0;
-for (const file of files) {
-  try {
-    if (processFile(file)) {
-      fixedCount++;
-    }
-  } catch (error) {
-    console.error(`  ✗ Error processing ${file}: ${error.message}`);
+  if (content !== originalContent) {
+    fs.writeFileSync(filePath, content, 'utf-8');
+    filesModified++;
+    console.log(`✓ ${relativeFilePath}: Fixed syntax errors`);
   }
 }
 
-console.log(`\n✓ Fixed cache.set() syntax in ${fixedCount} files out of ${files.length}`);
-console.log(`\nNext: Run 'npm run build' to verify TypeScript compilation`);
+console.log(`\n✅ Summary:`);
+console.log(`   Files modified: ${filesModified}`);
+console.log(`\nRun 'npm run build' to verify all syntax errors are fixed.`);

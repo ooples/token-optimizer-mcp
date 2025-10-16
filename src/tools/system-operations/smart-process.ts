@@ -156,7 +156,7 @@ export class SmartProcess {
         operation,
         data: { error: errorMessage },
         metadata: {
-          tokensUsed: this.tokenCounter.count(errorMessage),
+          tokensUsed: this.tokenCounter.count(errorMessage).tokens,
           tokensSaved: 0,
           cacheHit: false,
           executionTime: Date.now() - startTime
@@ -191,7 +191,7 @@ export class SmartProcess {
     };
 
     const dataStr = JSON.stringify(processInfo);
-    const tokensUsed = this.tokenCounter.count(dataStr);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
     return {
       success: true,
@@ -239,7 +239,7 @@ export class SmartProcess {
 
     const result = { pid, stopped: true };
     const dataStr = JSON.stringify(result);
-    const tokensUsed = this.tokenCounter.count(dataStr);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
     return {
       success: true,
@@ -255,7 +255,7 @@ export class SmartProcess {
   }
 
   private async getProcessStatus(options: SmartProcessOptions): Promise<SmartProcessResult> {
-    const cacheKey = CacheEngine.generateKey('process-status', `${options.pid || options.name}`);
+    const cacheKey = `process-status:${options.pid || options.name}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -352,7 +352,7 @@ export class SmartProcess {
   }
 
   private async getProcessTree(options: SmartProcessOptions): Promise<SmartProcessResult> {
-    const cacheKey = CacheEngine.generateKey('process-tree', `${options.pid || 'all'}`);
+    const cacheKey = `process-tree:${options.pid || 'all'}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -552,7 +552,7 @@ export class SmartProcess {
   private async buildProcessTreeUnix(rootPid?: number): Promise<ProcessTreeNode> {
     // Use pstree on Unix
     const pid = rootPid || process.pid;
-    const { _stdout } = await execAsync(`pstree -p ${pid}`);
+    const { stdout } = await execAsync(`pstree -p ${pid}`);
 
     // Parse pstree output (simplified)
     return {
@@ -589,7 +589,7 @@ export async function runSmartProcess(
   const { join } = await import('path');
 
   const cacheInstance = cache || new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounterInstance = tokenCounter || new TokenCounter('gpt-4');
+  const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
   const tool = getSmartProcess(cacheInstance, tokenCounterInstance, metricsInstance);

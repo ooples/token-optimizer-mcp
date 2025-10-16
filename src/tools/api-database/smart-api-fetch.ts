@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart API Fetch Tool - 83% Token Reduction
  *
  * HTTP client with intelligent features:
@@ -427,7 +427,7 @@ export class SmartApiFetch {
     }
 
     try {
-      const result = JSON.parse(cached) as SmartApiFetchResult;
+      const result = JSON.parse(cached.toString('utf-8')) as SmartApiFetchResult;
 
       // Check if cache is still valid
       const age = (Date.now() - result.timestamp) / 1000;

@@ -126,7 +126,7 @@ export class SmartWriteTool {
       // Step 1: Verify before write (skip if identical)
       if (opts.verifyBeforeWrite && fileExists && originalContent === content) {
         const duration = Date.now() - startTime;
-        const originalTokens = this.tokenCounter.count(originalContent);
+        const originalTokens = this.tokenCounter.count(originalContent).tokens;
 
         // Smart threshold: scale overhead based on content size
         // For very small files (1-5 tokens), use 0 overhead to ensure we show savings
@@ -213,9 +213,9 @@ export class SmartWriteTool {
 
       // Step 6: Calculate changes and token savings
       const originalTokens = originalContent
-        ? this.tokenCounter.count(originalContent)
+        ? this.tokenCounter.count(originalContent).tokens
         : 0;
-      const newTokens = this.tokenCounter.count(finalContent);
+      const newTokens = this.tokenCounter.count(finalContent).tokens;
 
       // Only generate diff if there's original content AND options require it
       const shouldGenerateDiff = (opts.trackChanges || opts.returnDiff) && originalContent;
@@ -225,7 +225,7 @@ export class SmartWriteTool {
 
       // Token reduction: return only diff instead of full content (only if we have a meaningful diff)
       const diffTokens = (diff && opts.returnDiff && originalContent)
-        ? this.tokenCounter.count(diff.unifiedDiff)
+        ? this.tokenCounter.count(diff.unifiedDiff).tokens
         : newTokens;
 
       // Only claim token savings if diff is actually smaller than full content
@@ -236,7 +236,7 @@ export class SmartWriteTool {
       if (opts.updateCache) {
         const fileHash = hashContent(finalContent);
         const cacheKey = generateCacheKey('file-write', { path: filePath });
-        this.cache.set(cacheKey, finalContent as any, opts.ttl, tokensSaved, fileHash);
+        this.cache.set(cacheKey, finalContent as any, opts.ttl, tokensSaved);
       }
 
       // Step 8: Record metrics
@@ -525,7 +525,7 @@ export async function runSmartWrite(
   options: SmartWriteOptions = {}
 ): Promise<SmartWriteResult> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
   const tool = getSmartWriteTool(cache, tokenCounter, metrics);

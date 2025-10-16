@@ -326,8 +326,7 @@ export class SmartGrepTool {
           cacheKey,
           JSON.stringify(result) as any,
           opts.ttl,
-          tokensSaved,
-          hashContent(pattern)
+          tokensSaved
         );
       }
 
@@ -478,7 +477,7 @@ export async function runSmartGrep(
   options: SmartGrepOptions = {}
 ): Promise<SmartGrepResult> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
   const tool = getSmartGrepTool(cache, tokenCounter, metrics);

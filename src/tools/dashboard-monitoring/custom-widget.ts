@@ -227,7 +227,7 @@ export class CustomWidget {
         if (cached) {
           const decompressed = decompress(cached, "gzip");
           const cachedResult = JSON.parse(
-            decompressed.toString("utf-8"),
+            decompressed.toString(),
           ) as CustomWidgetResult;
 
           const tokensSaved = this.tokenCounter.count(
@@ -300,7 +300,7 @@ export class CustomWidget {
         const ttl = this.getCacheTTL(options);
         this.cache.set(
           cacheKey,
-          compressed.toString("utf-8").compressed,
+          compressed.toString(),
           tokensUsed,
           ttl,
         );

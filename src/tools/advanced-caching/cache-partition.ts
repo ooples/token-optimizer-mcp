@@ -225,13 +225,10 @@ export class CachePartitionTool extends EventEmitter {
     // Generate cache key for cacheable operations
     let cacheKey: string | null = null;
     if (useCache && this.isCacheableOperation(operation)) {
-      cacheKey = CacheEngine.generateKey(
-        "cache-partition",
-        JSON.stringify({
-          operation,
-          ...this.getCacheKeyParams(options),
-        }),
-      );
+      cacheKey = `cache-partition:${JSON.stringify({
+        operation,
+        ...this.getCacheKeyParams(options),
+      })}`;
 
       // Check cache
       const cached = this.cache.get(cacheKey);
@@ -291,7 +288,7 @@ export class CachePartitionTool extends EventEmitter {
       if (cacheKey && useCache) {
         this.cache.set(
           cacheKey,
-          JSON.stringify(data), "utf-8"),
+          JSON.stringify(data),
           cacheTTL,
           tokensUsed,
         );

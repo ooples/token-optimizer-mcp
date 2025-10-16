@@ -16,6 +16,7 @@ import { homedir } from "os";
 import { CacheEngine } from "../../core/cache-engine";
 import { globalMetricsCollector } from "../../core/metrics";
 import { TokenCounter } from "../../core/token-counter";
+import { hashContent, generateCacheKey } from "../shared/hash-utils";
 
 // ==================== Type Definitions ====================
 
@@ -127,8 +128,8 @@ class SmartTsConfig {
     try {
       // Generate cache key based on file content and path
       const configContent = await readFile(configPath, "utf-8");
-      const fileHash = CacheEngine.generateFileHash(configPath, configContent);
-      const cacheKey = `cache-${crypto.createHash("md5").update("tsconfig", configPath).digest("hex")}`;
+      const fileHash = hashContent(configContent);
+      const cacheKey = generateCacheKey("tsconfig", { path: configPath, hash: fileHash });
 
       // Check cache first
       const cached = this.cache.get(cacheKey);
@@ -166,8 +167,8 @@ class SmartTsConfig {
           return output;
         }
 
-        // Cache invalid, invalidate it
-        this.cache.invalidateByFileHash(fileHash);
+        // Cache invalid, delete it
+        this.cache.delete(cacheKey);
       }
 
       // Resolve the config with extends chain
@@ -196,7 +197,7 @@ class SmartTsConfig {
       const maxAge = options.maxCacheAge ?? 7 * 24 * 60 * 60; // 7 days default
       this.cache.set(
         cacheKey,
-        Buffer.toString("utf-8").from(JSON.stringify(toCache)),
+        Buffer.from(JSON.stringify(toCache)).toString("utf-8"),
         0,
         maxAge,
       );
@@ -541,10 +542,10 @@ class SmartTsConfig {
     // Calculate token metrics
     const originalTokens = this.tokenCounter.count(
       JSON.stringify(originalOutput),
-    );
+    ).tokens;
     const compactTokens = this.tokenCounter.count(
       JSON.stringify(compactOutput),
-    );
+    ).tokens;
     const savedTokens = Math.max(0, originalTokens - compactTokens);
     const savingsPercent =
       originalTokens > 0 ? (savedTokens / originalTokens) * 100 : 0;

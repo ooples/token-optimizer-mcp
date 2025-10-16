@@ -267,8 +267,8 @@ export class SmartImportsTool {
     // Calculate token metrics
     const fullOutput = JSON.stringify(result, null, 2);
     const compactOutput = this.compactResult(result);
-    const originalTokens = this.tokenCounter.count(fullOutput);
-    const compactedTokens = this.tokenCounter.count(compactOutput);
+    const originalTokens = this.tokenCounter.count(fullOutput).tokens;
+    const compactedTokens = this.tokenCounter.count(compactOutput).tokens;
     const _reductionPercentage = ((originalTokens - compactedTokens) / originalTokens) * 100;
 
     // Cache result
@@ -863,7 +863,7 @@ export class SmartImportsTool {
       originalTokens,
       compactedTokens
     };
-    const buffer = JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache);
     const tokensSaved = originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
     this.cache.set(cacheKey, buffer, 300, tokensSaved);
   }
@@ -921,7 +921,7 @@ export async function runSmartImports(
   options: SmartImportsOptions
 ): Promise<SmartImportsResult> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartImportsTool(cache, tokenCounter, metrics, options.projectRoot);
   return tool.run(options);

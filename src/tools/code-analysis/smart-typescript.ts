@@ -841,7 +841,7 @@ export class SmartTypeScript {
       cachedAt: Date.now()
     };
 
-    const buffer = JSON.stringify(toCache), 'utf-8');
+    const buffer = JSON.stringify(toCache);
     const tokensSaved = output.metrics.originalTokens - output.metrics.compactedTokens;
 
     this.cache.set(key, buffer, 300, tokensSaved); // 5 minute TTL
@@ -913,7 +913,7 @@ export function getSmartTypeScriptTool(
  */
 export async function runSmartTypescript(options: SmartTypeScriptOptions = {}): Promise<string> {
   const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
-  const tokenCounter = new TokenCounter('gpt-4');
+  const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartTS = new SmartTypeScript(cache, tokenCounter, metrics, options.projectRoot);
   try {
