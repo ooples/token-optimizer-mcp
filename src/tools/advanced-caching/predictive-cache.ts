@@ -76,7 +76,7 @@ export interface PredictiveCacheResult {
   operation: string;
   data: {
     predictions?: Prediction[];
-    metrics?: ModelMetrics;
+    metrics?: ModelMetrics | null;
     patterns?: AccessPattern[];
     modelExport?: string;
     warmedKeys?: string[];
