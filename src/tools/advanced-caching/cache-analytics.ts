@@ -887,7 +887,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       0
     );
     const compressionSavings = operations.reduce(
-      (sum, op) => sum + (op.outputTokens - op.cachedTokens || 0),
+      (sum, op) => sum + (((op.outputTokens ?? 0) - (op.cachedTokens ?? 0)) || 0),
       0
     );
 
