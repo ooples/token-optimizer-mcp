@@ -249,7 +249,7 @@ export class SmartGlobTool {
       }
 
       // Calculate tokens
-      const resultTokens = this.tokenCounter.count(JSON.stringify(results));
+      const resultTokens = this.tokenCounter.count(JSON.stringify(results)).tokens;
 
       // Estimate original tokens (if we had returned all content)
       let originalTokens = resultTokens;

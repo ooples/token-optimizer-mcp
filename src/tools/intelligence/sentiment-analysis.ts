@@ -509,7 +509,7 @@ export class SentimentAnalysisTool {
       const result = await this.executeOperation(options);
 
       // 4. Cache result
-      const tokensUsed = this.tokenCounter.count(JSON.stringify(result));
+      const tokensUsed = this.tokenCounter.count(JSON.stringify(result)).tokens;
       const ttl = this.getCacheTTL(options);
 
       if (options.useCache !== false) {
