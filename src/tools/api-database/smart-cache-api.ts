@@ -879,8 +879,8 @@ export async function runSmartCacheApi(
   );
 
   const cache = new CacheEngineClass(
-    100,
     join(homedir(), ".hypercontext", "cache"),
+    100,
   );
   const tool = getSmartCacheApi(
     cache,

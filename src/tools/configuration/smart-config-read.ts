@@ -767,7 +767,7 @@ export async function runSmartConfigRead(
   filePath: string,
   options: SmartConfigReadOptions = {},
 ): Promise<SmartConfigReadResult> {
-  const cache = new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
+  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartConfigReadTool(cache, tokenCounter, metrics);

@@ -638,7 +638,7 @@ export function getSmartStatusTool(
 export async function runSmartStatus(
   options: SmartStatusOptions = {},
 ): Promise<SmartStatusResult> {
-  const cache = new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
+  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
