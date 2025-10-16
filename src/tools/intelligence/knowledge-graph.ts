@@ -19,6 +19,7 @@
  * - Ranking caching (92% reduction, 15-min TTL)
  */
 
+import { createHash } from "crypto";
 import { CacheEngine } from "../../core/cache-engine";
 import { TokenCounter } from "../../core/token-counter";
 import { MetricsCollector } from "../../core/metrics";
