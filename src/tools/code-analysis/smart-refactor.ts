@@ -14,8 +14,7 @@ import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine';
 import { MetricsCollector } from '../../core/metrics';
 import { TokenCounter } from '../../core/token-counter';
-import { SmartSymbolsTool, getSmartSymbolsTool } from './smart-symbols';
-import { SmartComplexityTool, getSmartComplexityTool } from './smart-complexity';
+import { SmartComplexityTool, getSmartComplexityTool, type ComplexityMetrics } from './smart-complexity';
 
 export interface SmartRefactorOptions {
   filePath?: string;
@@ -156,7 +155,7 @@ export class SmartRefactorTool {
       true
     );
 
-    // Get symbols and complexity metrics
+    // Get complexity metrics
     const complexityResult = await this.complexityTool.run({
       fileContent: content,
       projectRoot,
