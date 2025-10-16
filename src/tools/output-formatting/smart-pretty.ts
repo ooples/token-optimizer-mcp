@@ -514,7 +514,7 @@ export class SmartPretty {
     if (useCache) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
-        const decompressed = decompress(Buffer.from(cached, 'utf-8'), "gzip");
+        const decompressed = decompress(Buffer.from(cached, 'base64'), "gzip");
         const cachedResult = JSON.parse(
           decompressed.toString(),
         ) as HighlightResult;
@@ -796,7 +796,7 @@ export class SmartPretty {
     if (useCache) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
-        const decompressed = decompress(Buffer.from(cached, 'utf-8'), "gzip");
+        const decompressed = decompress(Buffer.from(cached, 'base64'), "gzip");
         const cachedResult = JSON.parse(
           decompressed.toString(),
         ) as FormatResult;

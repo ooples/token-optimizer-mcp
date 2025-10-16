@@ -427,14 +427,15 @@ export class DataVisualizer {
       if (cached) {
         const tokensSaved = this.tokenCounter.count(cached.toString()).tokens;
 
+        const cachedBuffer = Buffer.from(cached, 'base64');
         return {
           success: true,
           data: {
             rendered:
               format === "svg" || format === "html"
                 ? cached.toString()
-                : Buffer.from(cached, 'utf-8'),
-            exported: { data: Buffer.from(cached, 'utf-8') },
+                : cachedBuffer,
+            exported: { data: cachedBuffer },
           },
           metadata: {
             tokensSaved,
