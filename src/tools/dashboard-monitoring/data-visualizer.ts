@@ -433,8 +433,8 @@ export class DataVisualizer {
             rendered:
               format === "svg" || format === "html"
                 ? cached.toString()
-                : cached,
-            exported: { data: cached },
+                : Buffer.from(cached, 'utf-8'),
+            exported: { data: Buffer.from(cached, 'utf-8') },
           },
           metadata: {
             tokensSaved,
@@ -462,7 +462,7 @@ export class DataVisualizer {
         exported = await this.exportToHTML(chart, options);
         break;
       case "json":
-        exported = JSON.stringify(chart, null, 2);
+        exported = Buffer.from(JSON.stringify(chart, null, 2), 'utf-8');
         break;
       default:
         throw new Error(`Unsupported export format: ${format}`);
@@ -558,10 +558,9 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData,
+      svg,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -617,10 +616,9 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData,
+      svg,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -685,10 +683,9 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData,
+      svg,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -748,10 +745,9 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    const cacheData = Buffer.from(svg);
     this.cache.set(
       cacheKey,
-      cacheData,
+      svg,
       tokensUsed,
       options.cacheTTL || 3600,
     );
@@ -821,10 +817,9 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(animated).tokens;
-    const cacheData = Buffer.from(animated);
     this.cache.set(
       cacheKey,
-      cacheData,
+      animated,
       tokensUsed,
       options.cacheTTL || 1800,
     );
