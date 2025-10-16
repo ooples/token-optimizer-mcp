@@ -243,7 +243,7 @@ export class SmartCacheAPI {
     const cacheKey = this.generateCacheKey(options.request, options);
     const cachedString = this.cache.get(cacheKey);
     const cached = cachedString
-      ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
+      ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
       : null;
 
     // Update stats
@@ -381,7 +381,7 @@ export class SmartCacheAPI {
           if (regex.test(key)) {
             const cachedString = this.cache.get(key);
             const cached = cachedString
-              ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
+              ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
               : null;
             if (cached) {
               totalSize += cached.size;
@@ -404,7 +404,7 @@ export class SmartCacheAPI {
         for (const key of allKeysForTags) {
           const cachedString = this.cache.get(key);
           const cached = cachedString
-            ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
             : null;
           if (cached && cached.tags) {
             const hasMatchingTag = cached.tags.some((tag: string) =>
@@ -424,7 +424,7 @@ export class SmartCacheAPI {
           const cacheKey = this.generateCacheKey(options.request, options);
           const cachedString = this.cache.get(cacheKey);
           const cached = cachedString
-            ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
             : null;
           if (cached) {
             totalSize += cached.size;
@@ -442,7 +442,7 @@ export class SmartCacheAPI {
         for (const key of allKeysForTime) {
           const cachedString = this.cache.get(key);
           const cached = cachedString
-            ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
             : null;
           if (cached) {
             const age = Math.floor((now - cached.timestamp) / 1000);

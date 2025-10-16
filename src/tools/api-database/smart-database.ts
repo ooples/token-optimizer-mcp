@@ -19,12 +19,18 @@
  */
 
 import { createHash } from "crypto";
-import type { CacheEngine } from "../../core/cache-engine";
-import type { TokenCounter } from "../../core/token-counter";
-import type { MetricsCollector } from "../../core/metrics";
-import { CacheEngine as CacheEngineClass } from "../../core/cache-engine";
-import { TokenCounter as TokenCounterClass } from "../../core/token-counter";
-import { MetricsCollector as MetricsCollectorClass } from "../../core/metrics";
+import {
+  CacheEngine,
+  CacheEngine as CacheEngineClass,
+} from "../../core/cache-engine";
+import {
+  TokenCounter,
+  TokenCounter as TokenCounterClass,
+} from "../../core/token-counter";
+import {
+  MetricsCollector,
+  MetricsCollector as MetricsCollectorClass,
+} from "../../core/metrics";
 
 // ============================================================================
 // Type Definitions
