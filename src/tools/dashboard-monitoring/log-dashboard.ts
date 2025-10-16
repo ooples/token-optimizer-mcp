@@ -126,7 +126,7 @@ export interface LogEntry {
   raw?: string;
 }
 
-export interface LogDashboard {
+export interface LogDashboardData {
   id: string;
   name: string;
   description?: string;
@@ -175,7 +175,7 @@ export interface LogAnomaly {
 export interface LogDashboardResult {
   success: boolean;
   data?: {
-    dashboard?: LogDashboard;
+    dashboard?: LogDashboardData;
     logs?: LogEntry[];
     aggregations?: LogAggregation[];
     anomalies?: LogAnomaly[];
@@ -207,8 +207,8 @@ export class LogDashboard {
   private eventEmitter: EventEmitter;
 
   // In-memory storage
-  private dashboards: Map<string, LogDashboard> = new Map();
-  private filters: Map<string, LogFilter> = new Map();
+  private dashboards: Map<string, LogDashboardData> = new Map();
+  private savedFilters: Map<string, LogFilter> = new Map();
   private logBuffer: LogEntry[] = [];
   private readonly maxLogBuffer = 100000;
 
@@ -318,7 +318,7 @@ export class LogDashboard {
       throw new Error(`Dashboard '${options.dashboardName}' already exists`);
     }
 
-    const dashboard: LogDashboard = {
+    const dashboard: LogDashboardData = {
       id: dashboardId,
       name: options.dashboardName,
       sources: options.logSources || [],
@@ -659,7 +659,7 @@ export class LogDashboard {
       createdAt: Date.now(),
     };
 
-    this.filters.set(filterId, filter);
+    this.savedFilters.set(filterId, filter);
 
     await this.persistFilters();
 
@@ -810,7 +810,7 @@ export class LogDashboard {
     return `cache-${hash.digest("hex")}`;
   }
 
-  private compressDashboardMetadata(dashboard: LogDashboard): any {
+  private compressDashboardMetadata(dashboard: LogDashboardData): any {
     return {
       id: dashboard.id,
       name: dashboard.name,
@@ -1145,7 +1145,7 @@ export class LogDashboard {
 
   private async persistFilters(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "filters");
-    const data = JSON.stringify(Array.from(this.filters.entries()));
+    const data = JSON.stringify(Array.from(this.savedFilters.entries()));
     this.cache.set(cacheKey, data, data.length, data.length);
   }
 
@@ -1168,7 +1168,7 @@ export class LogDashboard {
     if (filtersData) {
       try {
         const entries = JSON.parse(filtersData);
-        this.filters = new Map(entries);
+        this.savedFilters = new Map(entries);
       } catch (error) {
         console.error("[LogDashboard] Error loading filters:", error);
       }
