@@ -208,7 +208,7 @@ export class LogDashboard {
 
   // In-memory storage
   private dashboards: Map<string, LogDashboardData> = new Map();
-  private savedFilters: Map<string, LogFilter> = new Map();
+  private filtersMap: Map<string, LogFilter> = new Map();
   private logBuffer: LogEntry[] = [];
   private readonly maxLogBuffer = 100000;
 
@@ -659,7 +659,7 @@ export class LogDashboard {
       createdAt: Date.now(),
     };
 
-    this.savedFilters.set(filterId, filter);
+    this.filtersMap.set(filterId, filter);
 
     await this.persistFilters();
 
@@ -804,6 +804,7 @@ export class LogDashboard {
     return undefined;
   }
 
+  // NOTE: Cache key format changed - existing cache entries will be invalidated after deployment
   private getCacheKey(prefix: string, suffix: string): string {
     const hash = createHash("md5");
     hash.update(`log-dashboard:${prefix}:${suffix}`);
@@ -1140,13 +1141,13 @@ export class LogDashboard {
   private async persistDashboards(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "dashboards");
     const data = JSON.stringify(Array.from(this.dashboards.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistFilters(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "filters");
-    const data = JSON.stringify(Array.from(this.savedFilters.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    const data = JSON.stringify(Array.from(this.filtersMap.entries()));
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {
@@ -1168,7 +1169,7 @@ export class LogDashboard {
     if (filtersData) {
       try {
         const entries = JSON.parse(filtersData);
-        this.savedFilters = new Map(entries);
+        this.filtersMap = new Map(entries);
       } catch (error) {
         console.error("[LogDashboard] Error loading filters:", error);
       }
