@@ -569,7 +569,7 @@ export class SmartGraphQL {
   private async introspectSchema(endpoint: string): Promise<SchemaInfo> {
     // Placeholder for Phase 3 - return cached mock data
     // In production, this would execute an introspection query
-    const cacheKey = `cache-${createHash("md5").update("graphql_schema", endpoint).digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update("graphql_schema:" + endpoint).digest("hex")}`;
     const cached = await this.cache.get(cacheKey);
 
     if (cached) {
@@ -587,7 +587,7 @@ export class SmartGraphQL {
     // Cache for 1 hour
     await this.cache.set(
       cacheKey,
-      Buffer.toString("utf-8").from(JSON.stringify(schemaInfo)),
+      Buffer.from(JSON.stringify(schemaInfo), "utf-8"),
       0,
       3600,
     );
@@ -675,7 +675,7 @@ export class SmartGraphQL {
       .digest("hex")
       .substring(0, 16);
 
-    return `cache-${createHash("md5").update("smart_graphql", hash).digest("hex")}`;
+    return `cache-${createHash("md5").update("smart_graphql").update(hash).digest("hex")}`;
   }
 
   private async getCachedResult(
