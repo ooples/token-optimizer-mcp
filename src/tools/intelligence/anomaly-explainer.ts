@@ -1000,11 +1000,11 @@ export class AnomalyExplainer {
       causes.push({
         id: 'rc-seasonal',
         description: `Seasonality pattern detected with ${seasonality.period ?? 0}ms period`,
-        probability: seasonality.strength,
+        probability: seasonality.strength ?? 0,
         evidence: [{
           type: 'temporal',
           description: `Regular pattern repeats every ${seasonality.period ?? 0}ms`,
-          strength: seasonality.strength
+          strength: seasonality.strength ?? 0
         }],
         relatedMetrics: [anomaly.metric],
         timeRange: { start: anomaly.timestamp - (seasonality.period ?? 0), end: anomaly.timestamp }
