@@ -218,7 +218,7 @@ export class SmartCacheTool extends EventEmitter {
    */
   async run(options: SmartCacheOptions): Promise<SmartCacheResult> {
     const startTime = Date.now();
-    const { operation, useCache = true, cacheTTL = 300 } = options;
+    const { operation, useCache = true } = options;
 
     // Generate cache key for cacheable operations
     let cacheKey: string | null = null;

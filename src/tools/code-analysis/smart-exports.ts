@@ -251,7 +251,6 @@ export class SmartExportsTool {
     const compactOutput = this.compactResult(result);
     const originalTokens = this.tokenCounter.count(fullOutput).tokens;
     const compactedTokens = this.tokenCounter.count(compactOutput).tokens;
-    const _reductionPercentage = ((originalTokens - compactedTokens) / originalTokens) * 100;
 
     // Cache result
     this.cacheResult(cacheKey, result, originalTokens, compactedTokens);
@@ -446,7 +445,6 @@ export class SmartExportsTool {
     scanDepth: number
   ): ExportDependency[] {
     const dependencies: ExportDependency[] = [];
-    const _fileDir = filePath.substring(0, filePath.lastIndexOf('/') || filePath.lastIndexOf('\\'));
 
     // Scan project files
     const filesToScan = this.scanProjectFiles(projectRoot, scanDepth);

@@ -158,7 +158,6 @@ export class SmartAstGrepTool {
     const patternKey = this.generatePatternKey(pattern, projectPath, options);
 
     // Check pattern cache first (fastest path)
-    let _cachedResult: SmartAstGrepResult | null = null;
     let fromPatternCache = false;
 
     if (enableCache) {

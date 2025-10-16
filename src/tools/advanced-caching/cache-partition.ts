@@ -1463,7 +1463,8 @@ export class CachePartitionTool extends EventEmitter {
     }> = [];
 
     // Analyze co-access patterns
-    const _coAccessPatterns = this.analyzeCoAccessPatterns(keyGroups);
+    // Note: Co-access pattern analysis reserved for future use
+    // this.analyzeCoAccessPatterns(keyGroups);
 
     // Find keys that should be co-located
     for (const [group, keys] of Array.from(keyGroups.entries())) {
@@ -1524,22 +1525,6 @@ export class CachePartitionTool extends EventEmitter {
       recommendedMigrations,
       estimatedImprovement,
     };
-  }
-
-  /**
-   * Analyze co-access patterns for key groups
-   */
-  private analyzeCoAccessPatterns(
-    keyGroups: Map<string, string[]>,
-  ): Map<string, number> {
-    const coAccessCounts = new Map<string, number>();
-
-    // Simple implementation: count how often key groups are accessed together
-    for (const [group, _keys] of Array.from(keyGroups.entries())) {
-      coAccessCounts.set(group, (coAccessCounts.get(group) || 0) + 1);
-    }
-
-    return coAccessCounts;
   }
 
   /**

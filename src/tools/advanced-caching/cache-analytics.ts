@@ -1454,7 +1454,7 @@ export class CacheAnalyticsTool extends EventEmitter {
    */
   private generateTemporalHeatmap(
     timeRange: { start: number; end: number },
-    resolution: string
+    _resolution: string
   ): HeatmapData {
     const operations = this.metrics.getOperations(timeRange.start);
 
@@ -1515,7 +1515,7 @@ export class CacheAnalyticsTool extends EventEmitter {
    */
   private generateKeyCorrelationHeatmap(
     timeRange: { start: number; end: number },
-    resolution: string
+    _resolution: string
   ): HeatmapData {
     const operations = this.metrics.getOperations(timeRange.start);
 
@@ -1608,8 +1608,8 @@ export class CacheAnalyticsTool extends EventEmitter {
    * Generate memory usage heatmap
    */
   private generateMemoryHeatmap(
-    timeRange: { start: number; end: number },
-    resolution: string
+    _timeRange: { start: number; end: number },
+    _resolution: string
   ): HeatmapData {
     const cacheStats = this.cache.getStats();
 
@@ -1681,7 +1681,6 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     const operations = this.metrics.getOperations(timeRange.start);
     const percentiles = this.metrics.getPerformancePercentiles(timeRange.start);
-    const stats = this.metrics.getCacheStats(timeRange.start);
 
     // Check for slow operations
     const slowOps = operations.filter((op) => op.duration > percentiles.p95);
@@ -2041,7 +2040,7 @@ export class CacheAnalyticsTool extends EventEmitter {
   /**
    * Calculate eviction trend
    */
-  private calculateEvictionTrend(reason: string): "increasing" | "stable" | "decreasing" {
+  private calculateEvictionTrend(_reason: string): "increasing" | "stable" | "decreasing" {
     // Simplified trend calculation
     return "stable";
   }

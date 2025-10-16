@@ -14,7 +14,6 @@ import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine';
 import { MetricsCollector } from '../../core/metrics';
 import { TokenCounter } from '../../core/token-counter';
-import { SmartSymbolsTool, getSmartSymbolsTool, type SymbolInfo } from './smart-symbols';
 import { SmartComplexityTool, getSmartComplexityTool, type ComplexityMetrics } from './smart-complexity';
 
 export interface SmartRefactorOptions {
@@ -75,7 +74,6 @@ export class SmartRefactorTool {
   private tokenCounter: TokenCounter;
   private cacheNamespace = 'smart_refactor';
   private projectRoot: string;
-  private symbolsTool: SmartSymbolsTool;
   private complexityTool: SmartComplexityTool;
 
   constructor(
@@ -88,7 +86,6 @@ export class SmartRefactorTool {
     this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
-    this.symbolsTool = getSmartSymbolsTool(cache, tokenCounter, metrics);
     this.complexityTool = getSmartComplexityTool(cache, tokenCounter, metrics);
   }
 
@@ -158,11 +155,7 @@ export class SmartRefactorTool {
       true
     );
 
-    // Get symbols and complexity metrics
-    const _symbolsResult = filePath
-      ? await this.symbolsTool.run({ filePath, projectRoot, force: true })
-      : undefined;
-
+    // Get complexity metrics
     const complexityResult = await this.complexityTool.run({
       fileContent: content,
       projectRoot,
@@ -370,7 +363,7 @@ export class SmartRefactorTool {
     visit(sourceFile);
 
     // Report duplicates
-    for (const [hash, blocks] of codeBlocks) {
+    for (const [_hash, blocks] of codeBlocks) {
       if (blocks.length > 1) {
         const firstBlock = blocks[0];
         const pos = sourceFile.getLineAndCharacterOfPosition(firstBlock.location.pos);

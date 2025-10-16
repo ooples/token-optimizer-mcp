@@ -150,21 +150,17 @@ interface SmartLintOutput {
 
 export class SmartLint {
   private cache: CacheEngine;
-  private tokenCounter: TokenCounter;
-  private metrics: MetricsCollector;
   private cacheNamespace = "smart_lint";
   private projectRoot: string;
   private ignoredIssuesKey = "ignored_issues";
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    _tokenCounter: TokenCounter,
+    _metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
-    this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
 
@@ -355,21 +351,6 @@ export class SmartLint {
     } catch (err) {
       return new Set();
     }
-  }
-
-  /**
-   * Mark issues as ignored
-   * Reserved for future manual issue ignore feature
-   */
-  private _markAsIgnored(issueKeys: string[]): void {
-    const existing = this.getIgnoredIssues();
-    for (const key of issueKeys) {
-      existing.add(key);
-    }
-
-    const dataToCache = JSON.stringify([...existing]);
-    const dataSize = dataToCache.length;
-    this.cache.set(this.ignoredIssuesKey, dataToCache, dataSize, dataSize);
   }
 
   /**

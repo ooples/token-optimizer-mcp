@@ -246,7 +246,6 @@ export class CacheWarmupTool extends EventEmitter {
 
   // Active jobs
   private activeJobs: Map<string, WarmupJob> = new Map();
-  private jobQueue: WarmupJob[] = [];
   private jobCounter = 0;
 
   // Schedules
@@ -286,7 +285,7 @@ export class CacheWarmupTool extends EventEmitter {
    */
   async run(options: CacheWarmupOptions): Promise<WarmupResult> {
     const startTime = Date.now();
-    const { operation, useCache = true, cacheTTL = 300 } = options;
+    const { operation, useCache = true } = options;
 
     // Generate cache key for cacheable operations
     let cacheKey: string | null = null;
@@ -1070,7 +1069,7 @@ export class CacheWarmupTool extends EventEmitter {
   private resolveDependencies(keys: string[]): string[] {
     if (!this.dependencyGraph) return keys;
 
-    const { nodes, edges } = this.dependencyGraph;
+    const { edges } = this.dependencyGraph;
     const resolved: string[] = [];
     const visited = new Set<string>();
 

@@ -551,19 +551,17 @@ const VULNERABILITY_PATTERNS: VulnerabilityPattern[] = [
 export class SmartSecurity {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private tokenCounter: TokenCounter;
   private cacheNamespace = "smart_security";
   private projectRoot: string;
   private fileHashes: Map<string, string> = new Map();
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
