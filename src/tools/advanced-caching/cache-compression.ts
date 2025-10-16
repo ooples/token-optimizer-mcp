@@ -470,7 +470,7 @@ export class CacheCompressionTool {
       timestamp: Date.now(),
     };
 
-    const metadataBuffer = JSON.stringify(metadata);
+    const metadataBuffer = Buffer.from(JSON.stringify(metadata), "utf-8");
     const metadataLength = Buffer.allocUnsafe(4);
     metadataLength.writeUInt32LE(metadataBuffer.length, 0);
 

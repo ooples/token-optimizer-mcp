@@ -263,7 +263,7 @@ export class SmartProcess {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const dataStr = cached;
-        const tokensUsed = this.tokenCounter.count(dataStr);
+        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
         const baselineTokens = tokensUsed * 20; // Estimate baseline
 
         return {
@@ -283,7 +283,7 @@ export class SmartProcess {
     // Fresh status check
     const processes = await this.listProcesses(options.pid, options.name);
     const dataStr = JSON.stringify({ processes });
-    const tokensUsed = this.tokenCounter.count(dataStr);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
     // Cache the result
     if (useCache) {
@@ -336,7 +336,7 @@ export class SmartProcess {
     }
 
     const dataStr = JSON.stringify({ snapshots });
-    const tokensUsed = this.tokenCounter.count(dataStr);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
     return {
       success: true,
@@ -360,7 +360,7 @@ export class SmartProcess {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const dataStr = cached;
-        const tokensUsed = this.tokenCounter.count(dataStr);
+        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
         const baselineTokens = tokensUsed * 20; // Estimate baseline
 
         return {
@@ -380,7 +380,7 @@ export class SmartProcess {
     // Build process tree
     const tree = await this.buildProcessTree(options.pid);
     const dataStr = JSON.stringify({ tree });
-    const tokensUsed = this.tokenCounter.count(dataStr);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
     // Cache the result
     if (useCache) {

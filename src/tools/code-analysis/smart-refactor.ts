@@ -231,8 +231,8 @@ export class SmartRefactorTool {
     // Calculate token metrics
     const originalText = JSON.stringify(result, null, 2);
     const compactText = this.compactResult(result);
-    result.metrics.originalTokens = this.tokenCounter.count(originalText);
-    result.metrics.compactedTokens = this.tokenCounter.count(compactText);
+    result.metrics.originalTokens = this.tokenCounter.count(originalText).tokens;
+    result.metrics.compactedTokens = this.tokenCounter.count(compactText).tokens;
     result.metrics.reductionPercentage = ((result.metrics.originalTokens - result.metrics.compactedTokens) / result.metrics.originalTokens) * 100;
 
     // Cache result

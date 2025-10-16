@@ -641,7 +641,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           let operationsCompressed = 0;
           const fileOpsToCompress = new Set<string>();
 
+          // DEBUG: Track filtering and security logic
+          const debugInfo = {
+            totalLines: lines.length,
+            securityRejected: 0,
+          };
+
           const fileToolNames = ['Read', 'Write', 'Edit'];
+
+          // SECURITY: Define secure base directory for file access
+          // Resolve to absolute path to prevent bypasses
+          const secureBaseDir = path.resolve(os.homedir());
 
           for (const line of lines) {
             if (!line.trim()) continue;
@@ -650,15 +660,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             const toolName = parts[1];
             const tokens = parseInt(parts[2], 10) || 0;
-            const metadata = parts[3] || '';
+            let metadata = parts[3] || '';
+
+            // Strip surrounding quotes from file path
+            metadata = metadata.trim().replace(/^"(.*)"$/, '$1');
 
             if (fileToolNames.includes(toolName) && tokens > min_token_threshold && metadata) {
-              fileOpsToCompress.add(metadata);
+              // SECURITY FIX: Validate file path to prevent path traversal
+              // Resolve the file path to absolute path
+              const resolvedFilePath = path.resolve(metadata);
+
+              // Check if the resolved path is within the secure base directory
+              if (!resolvedFilePath.startsWith(secureBaseDir)) {
+                // Log security event for rejected access attempt
+                console.error(`[SECURITY] Path traversal attempt detected and blocked: ${metadata}`);
+                console.error(`[SECURITY] Resolved path: ${resolvedFilePath}`);
+                console.error(`[SECURITY] Secure base directory: ${secureBaseDir}`);
+                debugInfo.securityRejected++;
+                continue;
+              }
+
+              fileOpsToCompress.add(resolvedFilePath);
             }
           }
 
           // --- 4. Batch Compress and Cache ---
           for (const filePath of fileOpsToCompress) {
+            // Additional security check before file access
+            const resolvedPath = path.resolve(filePath);
+            if (!resolvedPath.startsWith(secureBaseDir)) {
+              console.error(`[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`);
+              debugInfo.securityRejected++;
+              continue;
+            }
+
             if (!fs.existsSync(filePath)) continue;
 
             const fileContent = fs.readFileSync(filePath, 'utf-8');
@@ -680,7 +715,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             operationsCompressed++;
           }
 
-          // --- 5. Return Summary ---
+          // --- 5. Return Summary with Debug Info ---
           const tokensSaved = originalTokens - compressedTokens;
           const percentSaved = originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
 
@@ -692,13 +727,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   {
                     success: true,
                     sessionId: targetSessionId,
-                    operationsAnalyzed: lines.length - 1,
+                    operationsAnalyzed: lines.length,
                     operationsCompressed,
                     tokens: {
                       before: originalTokens,
                       after: compressedTokens,
                       saved: tokensSaved,
                       percentSaved: percentSaved,
+                    },
+                    security: {
+                      pathsRejected: debugInfo.securityRejected,
+                      secureBaseDir: secureBaseDir,
                     },
                   },
                   null,

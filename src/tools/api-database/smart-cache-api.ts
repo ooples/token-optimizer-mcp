@@ -241,9 +241,9 @@ export class SmartCacheAPI {
     }
 
     const cacheKey = this.generateCacheKey(options.request, options);
-    const cachedBuffer = this.cache.get(cacheKey);
-    const cached = cachedBuffer
-      ? this.deserializeCachedResponse(cachedBuffer)
+    const cachedString = this.cache.get(cacheKey);
+    const cached = cachedString
+      ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
       : null;
 
     // Update stats
@@ -379,9 +379,9 @@ export class SmartCacheAPI {
 
         for (const key of allKeys) {
           if (regex.test(key)) {
-            const cachedBuffer = this.cache.get(key);
-            const cached = cachedBuffer
-              ? this.deserializeCachedResponse(cachedBuffer)
+            const cachedString = this.cache.get(key);
+            const cached = cachedString
+              ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
               : null;
             if (cached) {
               totalSize += cached.size;
@@ -402,9 +402,9 @@ export class SmartCacheAPI {
         const allKeysForTags = this.getAllCacheKeys();
 
         for (const key of allKeysForTags) {
-          const cachedBuffer = this.cache.get(key);
-          const cached = cachedBuffer
-            ? this.deserializeCachedResponse(cachedBuffer)
+          const cachedString = this.cache.get(key);
+          const cached = cachedString
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
             : null;
           if (cached && cached.tags) {
             const hasMatchingTag = cached.tags.some((tag: string) =>
@@ -422,9 +422,9 @@ export class SmartCacheAPI {
       case "manual":
         if (options.request) {
           const cacheKey = this.generateCacheKey(options.request, options);
-          const cachedBuffer = this.cache.get(cacheKey);
-          const cached = cachedBuffer
-            ? this.deserializeCachedResponse(cachedBuffer)
+          const cachedString = this.cache.get(cacheKey);
+          const cached = cachedString
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
             : null;
           if (cached) {
             totalSize += cached.size;
@@ -440,9 +440,9 @@ export class SmartCacheAPI {
         const now = Date.now();
 
         for (const key of allKeysForTime) {
-          const cachedBuffer = this.cache.get(key);
-          const cached = cachedBuffer
-            ? this.deserializeCachedResponse(cachedBuffer)
+          const cachedString = this.cache.get(key);
+          const cached = cachedString
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
             : null;
           if (cached) {
             const age = Math.floor((now - cached.timestamp) / 1000);
@@ -879,8 +879,8 @@ export async function runSmartCacheApi(
   );
 
   const cache = new CacheEngineClass(
-    100,
     join(homedir(), ".hypercontext", "cache"),
+    100,
   );
   const tool = getSmartCacheApi(
     cache,

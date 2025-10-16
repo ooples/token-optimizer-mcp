@@ -87,8 +87,29 @@ export {
   type HistoryEntry,
 } from "./smart-sql";
 
-// SmartDatabase - Implementation pending
-// Note: Exports temporarily removed until implementation is complete
+export {
+  SmartDatabase,
+  getSmartDatabase,
+  runSmartDatabase,
+  SMART_DATABASE_TOOL_DEFINITION,
+  type SmartDatabaseOptions,
+  type SmartDatabaseResult,
+  type SmartDatabaseOutput,
+  type DatabaseAction,
+  type DatabaseEngine,
+  type QueryType,
+  type QueryResult,
+  type FieldInfo,
+  type QueryPlan,
+  type QueryPlanStep,
+  type QueryAnalysis as DatabaseQueryAnalysis,
+  type MissingIndex as DatabaseMissingIndex,
+  type Optimization as DatabaseOptimization,
+  type HealthMetrics,
+  type PoolInfo,
+  type SlowQuery,
+  type BatchResult,
+} from "./smart-database";
 
 export {
   SmartWebSocket,

@@ -271,15 +271,15 @@ export class SmartGrepTool {
       if (opts.count) {
         // Count mode: return counts only
         resultData = { counts: Object.fromEntries(matchCounts) };
-        resultTokens = this.tokenCounter.count(JSON.stringify(resultData));
+        resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
       } else if (opts.filesWithMatches) {
         // Files-with-matches mode: return filenames only
         resultData = { files: Array.from(filesWithMatches) };
-        resultTokens = this.tokenCounter.count(JSON.stringify(resultData));
+        resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
       } else {
         // Normal mode: return matches
         resultData = { matches: paginatedMatches };
-        resultTokens = this.tokenCounter.count(JSON.stringify(resultData));
+        resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
       }
 
       // Estimate original tokens (if we had returned all file contents)

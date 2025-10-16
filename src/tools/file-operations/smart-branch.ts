@@ -590,7 +590,7 @@ export function getSmartBranchTool(
 export async function runSmartBranch(
   options: SmartBranchOptions = {},
 ): Promise<SmartBranchResult> {
-  const cache = new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
+  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
