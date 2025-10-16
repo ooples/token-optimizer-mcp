@@ -1,0 +1,32 @@
+src/tools/advanced-caching/cache-analytics.ts(1430,26): error TS2339: Property 'totalCompressedSize' does not exist on type '{ totalSize: number; totalEntries: number; }'.
+src/tools/advanced-caching/cache-analytics.ts(1440,27): error TS2339: Property 'totalCompressedSize' does not exist on type '{ totalSize: number; totalEntries: number; }'.
+src/tools/build-systems/smart-docker.ts(729,51): error TS2339: Property 'totalCompressedSize' does not exist on type '{ layers: number; cacheHits: number; totalSize: string; }'.
+src/tools/code-analysis/smart-ast-grep.ts(603,28): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/code-analysis/smart-ast-grep.ts(617,28): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/configuration/smart-tsconfig.ts(124,36): error TS2339: Property 'generateFileHash' does not exist on type 'typeof CacheEngine'.
+src/tools/configuration/smart-tsconfig.ts(125,40): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/configuration/smart-tsconfig.ts(164,20): error TS2339: Property 'invalidateByFileHash' does not exist on type 'CacheEngine'.
+src/tools/dashboard-monitoring/alert-manager.ts(478,100): error TS2339: Property 'tokens' does not exist on type 'MapIterator<Alert>'.
+src/tools/dashboard-monitoring/alert-manager.ts(974,42): error TS2339: Property 'estimateFromBytes' does not exist on type 'TokenCounter'.
+src/tools/dashboard-monitoring/report-generator.ts(354,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/dashboard-monitoring/report-generator.ts(437,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/dashboard-monitoring/report-generator.ts(585,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/dashboard-monitoring/report-generator.ts(652,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/dashboard-monitoring/report-generator.ts(689,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/dashboard-monitoring/smart-dashboard.ts(499,24): error TS2339: Property 'totalCompressedSize' does not exist on type '{ widgetCount: number; dataSourceCount: number; totalSize: number; }'.
+src/tools/intelligence/smart-summarization.ts(943,40): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/output-formatting/smart-diff.ts(317,64): error TS2339: Property 'tokens' does not exist on type 'string'.
+src/tools/output-formatting/smart-diff.ts(355,56): error TS2339: Property 'tokens' does not exist on type 'string'.
+src/tools/output-formatting/smart-format.ts(324,51): error TS2339: Property 'tokens' does not exist on type 'string'.
+src/tools/output-formatting/smart-format.ts(361,68): error TS2339: Property 'tokens' does not exist on type 'string'.
+src/tools/output-formatting/smart-log.ts(473,30): error TS2339: Property 'totalCompressedSize' does not exist on type 'LogIndex'.
+src/tools/output-formatting/smart-report.ts(325,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/output-formatting/smart-report.ts(457,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/system-operations/smart-cleanup.ts(405,35): error TS2339: Property 'totalCompressedSize' does not exist on type '{ candidates: FileCandidate[]; totalFiles: number; totalSize: number; }'.
+src/tools/system-operations/smart-cleanup.ts(662,30): error TS2339: Property 'totalCompressedSize' does not exist on type 'CleanupAnalysis'.
+src/tools/system-operations/smart-metrics.ts(266,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/system-operations/smart-metrics.ts(361,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/system-operations/smart-metrics.ts(430,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/system-operations/smart-metrics.ts(511,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/system-operations/smart-metrics.ts(593,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/system-operations/smart-metrics.ts(668,38): error TS2339: Property 'createHash' does not exist on type 'Crypto'.

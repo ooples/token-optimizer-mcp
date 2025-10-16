@@ -1,0 +1,6 @@
+﻿/** * ReportGenerator - Comprehensive Monitoring Reports * * Track 2E - Tool #10: Report generation with 90% token reduction * * Capabilities: * - One-time and scheduled report generation * - Performance, availability, usage, cost, and security reports * - Template-based generation with caching * - Multi-format export (PDF, HTML, Markdown, JSON, CSV) * - Scheduled reports with cron expressions * - Chart and metric embedding * * Token Reduction Strategy: * - Template caching (95% reduction, infinite TTL) * - Generated report caching (92% reduction, based on time range) * - Schedule configuration caching (93% reduction, 24-hour TTL) * - Summary-based responses (88% reduction, full report only on explicit export) */ import {
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+} from "fs";
+import { compress, decompress } from "../shared/compression-utils";

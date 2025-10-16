@@ -1,0 +1,833 @@
+
+> token-optimizer-mcp@0.1.0 build
+> tsc
+
+src/tools/advanced-caching/cache-analytics.ts(1,598): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/cache-analytics.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/advanced-caching/cache-analytics.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/advanced-caching/cache-analytics.ts(4,10): error TS6133: 'createWriteStream' is declared but its value is never read.
+src/tools/advanced-caching/cache-analytics.ts(4,29): error TS2724: '"fs"' has no exported member named '_existsSync'. Did you mean 'existsSync'?
+src/tools/advanced-caching/cache-analytics.ts(5,1): error TS6133: 'join' is declared but its value is never read.
+src/tools/advanced-caching/cache-analytics.ts(6,1): error TS6133: 'createCanvas' is declared but its value is never read.
+src/tools/advanced-caching/cache-analytics.ts(7,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/advanced-caching/cache-analytics.ts(8,1): error TS6192: All imports in import declaration are unused.
+src/tools/advanced-caching/cache-benchmark.ts(408,16): error TS2554: Expected 4 arguments, but got 3.
+src/tools/advanced-caching/cache-benchmark.ts(867,11): error TS6133: 'cache' is declared but its value is never read.
+src/tools/advanced-caching/cache-compression.ts(231,11): error TS6133: 'deltaStates' is declared but its value is never read.
+src/tools/advanced-caching/cache-compression.ts(232,11): error TS6133: 'compressionDictionaries' is declared but its value is never read.
+src/tools/advanced-caching/cache-invalidation.ts(1,545): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/cache-invalidation.ts(2,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/cache-invalidation.ts(3,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/advanced-caching/cache-invalidation.ts(4,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/advanced-caching/cache-optimizer.ts(1,430): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/cache-optimizer.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/advanced-caching/cache-optimizer.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/advanced-caching/cache-optimizer.ts(4,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/advanced-caching/cache-optimizer.ts(5,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/cache-partition.ts(26,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/advanced-caching/cache-partition.ts(27,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/advanced-caching/cache-partition.ts(1362,11): error TS6133: '_coAccessPatterns' is declared but its value is never read.
+src/tools/advanced-caching/cache-replication.ts(1,509): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/cache-replication.ts(2,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/cache-replication.ts(3,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/advanced-caching/cache-replication.ts(4,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/advanced-caching/cache-warmup.ts(1,648): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/cache-warmup.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/advanced-caching/cache-warmup.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/advanced-caching/cache-warmup.ts(4,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/index.ts(44,3): error TS2305: Module '"./cache-analytics"' has no exported member 'CacheAnalytics'.
+src/tools/advanced-caching/index.ts(45,3): error TS2305: Module '"./cache-analytics"' has no exported member 'runCacheAnalytics'.
+src/tools/advanced-caching/index.ts(46,3): error TS2305: Module '"./cache-analytics"' has no exported member 'CACHE_ANALYTICS_TOOL'.
+src/tools/advanced-caching/index.ts(47,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CacheAnalyticsOptions'.
+src/tools/advanced-caching/index.ts(48,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CacheAnalyticsResult'.
+src/tools/advanced-caching/index.ts(49,8): error TS2305: Module '"./cache-analytics"' has no exported member 'DashboardData'.
+src/tools/advanced-caching/index.ts(50,8): error TS2305: Module '"./cache-analytics"' has no exported member 'PerformanceMetrics'.
+src/tools/advanced-caching/index.ts(51,8): error TS2305: Module '"./cache-analytics"' has no exported member 'UsageMetrics'.
+src/tools/advanced-caching/index.ts(52,8): error TS2305: Module '"./cache-analytics"' has no exported member 'EfficiencyMetrics'.
+src/tools/advanced-caching/index.ts(53,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostMetrics'.
+src/tools/advanced-caching/index.ts(54,8): error TS2305: Module '"./cache-analytics"' has no exported member 'HealthMetrics'.
+src/tools/advanced-caching/index.ts(55,8): error TS2305: Module '"./cache-analytics"' has no exported member 'ActivityLog'.
+src/tools/advanced-caching/index.ts(56,8): error TS2305: Module '"./cache-analytics"' has no exported member 'MetricCollection'.
+src/tools/advanced-caching/index.ts(57,8): error TS2305: Module '"./cache-analytics"' has no exported member 'AggregatedMetrics'.
+src/tools/advanced-caching/index.ts(58,8): error TS2305: Module '"./cache-analytics"' has no exported member 'TrendAnalysis'.
+src/tools/advanced-caching/index.ts(59,8): error TS2305: Module '"./cache-analytics"' has no exported member 'TrendMetric'.
+src/tools/advanced-caching/index.ts(60,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Anomaly'.
+src/tools/advanced-caching/index.ts(61,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Prediction'.
+src/tools/advanced-caching/index.ts(62,8): error TS2305: Module '"./cache-analytics"' has no exported member 'RegressionResult'.
+src/tools/advanced-caching/index.ts(63,8): error TS2305: Module '"./cache-analytics"' has no exported member 'SeasonalityPattern'.
+src/tools/advanced-caching/index.ts(64,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Alert'.
+src/tools/advanced-caching/index.ts(65,8): error TS2305: Module '"./cache-analytics"' has no exported member 'AlertConfiguration'.
+src/tools/advanced-caching/index.ts(66,8): error TS2305: Module '"./cache-analytics"' has no exported member 'HeatmapData'.
+src/tools/advanced-caching/index.ts(67,8): error TS2305: Module '"./cache-analytics"' has no exported member 'Bottleneck'.
+src/tools/advanced-caching/index.ts(68,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostBreakdown'.
+src/tools/advanced-caching/index.ts(69,8): error TS2305: Module '"./cache-analytics"' has no exported member 'StorageCost'.
+src/tools/advanced-caching/index.ts(70,8): error TS2305: Module '"./cache-analytics"' has no exported member 'NetworkCost'.
+src/tools/advanced-caching/index.ts(71,8): error TS2305: Module '"./cache-analytics"' has no exported member 'ComputeCost'.
+src/tools/advanced-caching/index.ts(72,8): error TS2305: Module '"./cache-analytics"' has no exported member 'TotalCost'.
+src/tools/advanced-caching/index.ts(73,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostProjection'.
+src/tools/advanced-caching/index.ts(74,8): error TS2305: Module '"./cache-analytics"' has no exported member 'CostOptimization'.
+src/tools/advanced-caching/index.ts(75,8): error TS2305: Module '"./cache-analytics"' has no exported member 'SizeDistribution'.
+src/tools/advanced-caching/index.ts(76,8): error TS2305: Module '"./cache-analytics"' has no exported member 'EvictionPattern'.
+src/tools/advanced-caching/predictive-cache.ts(1,868): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/predictive-cache.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/advanced-caching/predictive-cache.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/advanced-caching/predictive-cache.ts(4,1): error TS6192: All imports in import declaration are unused.
+src/tools/advanced-caching/predictive-cache.ts(5,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/smart-cache.ts(1,677): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/smart-cache.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/advanced-caching/smart-cache.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/advanced-caching/smart-cache.ts(4,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/smart-cache.ts(5,1): error TS6133: 'EventEmitter' is declared but its value is never read.
+src/tools/api-database/index.ts(49,3): error TS2305: Module '"./smart-rest"' has no exported member 'SmartREST'.
+src/tools/api-database/index.ts(50,3): error TS2305: Module '"./smart-rest"' has no exported member 'runSmartREST'.
+src/tools/api-database/index.ts(51,3): error TS2305: Module '"./smart-rest"' has no exported member 'SMART_REST_TOOL_DEFINITION'.
+src/tools/api-database/index.ts(52,8): error TS2305: Module '"./smart-rest"' has no exported member 'SmartRESTOptions'.
+src/tools/api-database/index.ts(53,8): error TS2305: Module '"./smart-rest"' has no exported member 'SmartRESTResult'.
+src/tools/api-database/index.ts(54,8): error TS2305: Module '"./smart-rest"' has no exported member 'EndpointInfo'.
+src/tools/api-database/index.ts(55,8): error TS2305: Module '"./smart-rest"' has no exported member 'ResourceGroup'.
+src/tools/api-database/index.ts(56,8): error TS2305: Module '"./smart-rest"' has no exported member 'HealthIssue'.
+src/tools/api-database/index.ts(57,8): error TS2305: Module '"./smart-rest"' has no exported member 'RateLimit'.
+src/tools/api-database/index.ts(90,3): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabase'.
+src/tools/api-database/index.ts(91,3): error TS2305: Module '"./smart-database"' has no exported member 'runSmartDatabase'.
+src/tools/api-database/index.ts(92,3): error TS2305: Module '"./smart-database"' has no exported member 'SMART_DATABASE_TOOL_DEFINITION'.
+src/tools/api-database/index.ts(93,8): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabaseOptions'.
+src/tools/api-database/index.ts(94,8): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabaseResult'.
+src/tools/api-database/index.ts(95,8): error TS2305: Module '"./smart-database"' has no exported member 'SmartDatabaseOutput'.
+src/tools/api-database/index.ts(96,8): error TS2305: Module '"./smart-database"' has no exported member 'DatabaseType'.
+src/tools/api-database/index.ts(97,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryType'.
+src/tools/api-database/index.ts(98,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryInfo'.
+src/tools/api-database/index.ts(99,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryResults'.
+src/tools/api-database/index.ts(100,8): error TS2305: Module '"./smart-database"' has no exported member 'PlanStep'.
+src/tools/api-database/index.ts(101,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryPlan'.
+src/tools/api-database/index.ts(102,8): error TS2305: Module '"./smart-database"' has no exported member 'MissingIndex'.
+src/tools/api-database/index.ts(103,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryOptimizations'.
+src/tools/api-database/index.ts(104,8): error TS2305: Module '"./smart-database"' has no exported member 'QueryPerformance'.
+src/tools/api-database/smart-api-fetch.ts(663,5): error TS2307: Cannot find module '../../core/index.js' or its corresponding type declarations.
+src/tools/api-database/smart-api-fetch.ts(665,40): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-cache-api.ts(246,40): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(384,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(407,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(427,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(445,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(498,42): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(876,58): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-cache-api.ts(878,5): error TS2307: Cannot find module '../../core/index.js' or its corresponding type declarations.
+src/tools/api-database/smart-database.ts(1,641): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(2,15): error TS2724: '"../../core/cache-engine"' has no exported member named '_CacheEngine'. Did you mean 'CacheEngine'?
+src/tools/api-database/smart-database.ts(3,15): error TS2724: '"../../core/token-counter"' has no exported member named '_TokenCounter'. Did you mean 'TokenCounter'?
+src/tools/api-database/smart-database.ts(4,15): error TS2724: '"../../core/metrics"' has no exported member named '_MetricsCollector'. Did you mean 'MetricsCollector'?
+src/tools/api-database/smart-database.ts(5,1): error TS6133: 'CacheEngineClass' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(6,1): error TS6133: 'globalTokenCounter' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(6,10): error TS2724: '"../../core/token-counter"' has no exported member named 'globalTokenCounter'. Did you mean 'TokenCounter'?
+src/tools/api-database/smart-database.ts(7,1): error TS6133: 'globalMetricsCollector' is declared but its value is never read.
+src/tools/api-database/smart-graphql.ts(572,74): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/api-database/smart-graphql.ts(590,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/api-database/smart-graphql.ts(590,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/api-database/smart-graphql.ts(678,63): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/api-database/smart-graphql.ts(726,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-graphql.ts(726,53): error TS2554: Expected 0 arguments, but got 1.
+src/tools/api-database/smart-graphql.ts(755,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-migration.ts(26,10): error TS2724: '"../../core/token-counter"' has no exported member named 'globalTokenCounter'. Did you mean 'TokenCounter'?
+src/tools/api-database/smart-migration.ts(520,18): error TS2554: Expected 4 arguments, but got 3.
+src/tools/api-database/smart-migration.ts(522,55): error TS2554: Expected 0 arguments, but got 1.
+src/tools/api-database/smart-migration.ts(895,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-orm.ts(14,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-orm.ts(15,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/api-database/smart-orm.ts(178,11): error TS6133: 'relationships' is declared but its value is never read.
+src/tools/api-database/smart-orm.ts(748,58): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-orm.ts(749,71): error TS2307: Cannot find module '../../core/index.js' or its corresponding type declarations.
+src/tools/api-database/smart-schema.ts(25,10): error TS2724: '"../../core/token-counter"' has no exported member named 'globalTokenCounter'. Did you mean 'TokenCounter'?
+src/tools/api-database/smart-schema.ts(1166,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-sql.ts(13,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/api-database/smart-sql.ts(14,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/api-database/smart-sql.ts(493,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(503,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(514,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(525,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(532,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-websocket.ts(712,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-build.ts(13,1): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-build.ts(13,10): error TS2724: '"../../core/token-counter"' has no exported member named 'tokenCounter'. Did you mean 'TokenCounter'?
+src/tools/build-systems/smart-build.ts(14,34): error TS2307: Cannot find module '../../core/_metrics' or its corresponding type declarations.
+src/tools/build-systems/smart-build.ts(120,11): error TS6133: '_tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-build.ts(120,26): error TS2304: Cannot find name '_tokenCounter'.
+src/tools/build-systems/smart-build.ts(121,11): error TS6133: '_metrics' is declared but its value is never read.
+src/tools/build-systems/smart-build.ts(127,20): error TS2749: '_tokenCounter' refers to a value, but is being used as a type here. Did you mean 'typeof _tokenCounter'?
+src/tools/build-systems/smart-build.ts(587,18): error TS2749: '_tokenCounter' refers to a value, but is being used as a type here. Did you mean 'typeof _tokenCounter'?
+src/tools/build-systems/smart-build.ts(601,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-build.ts(602,9): error TS7022: '_tokenCounter' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/tools/build-systems/smart-build.ts(602,29): error TS2448: Block-scoped variable '_tokenCounter' used before its declaration.
+src/tools/build-systems/smart-docker.ts(12,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/build-systems/smart-install.ts(596,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-lint.ts(13,1): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(13,10): error TS2724: '"../../core/token-counter"' has no exported member named 'tokenCounter'. Did you mean 'TokenCounter'?
+src/tools/build-systems/smart-lint.ts(14,34): error TS2307: Cannot find module '../../core/_metrics' or its corresponding type declarations.
+src/tools/build-systems/smart-lint.ts(153,11): error TS6133: '_tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(153,26): error TS2304: Cannot find name '_tokenCounter'.
+src/tools/build-systems/smart-lint.ts(154,11): error TS6133: '_metrics' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(161,20): error TS2749: '_tokenCounter' refers to a value, but is being used as a type here. Did you mean 'typeof _tokenCounter'?
+src/tools/build-systems/smart-lint.ts(364,11): error TS6133: '_markAsIgnored' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(597,18): error TS2749: '_tokenCounter' refers to a value, but is being used as a type here. Did you mean 'typeof _tokenCounter'?
+src/tools/build-systems/smart-lint.ts(611,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-lint.ts(612,9): error TS7022: '_tokenCounter' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/tools/build-systems/smart-lint.ts(612,29): error TS2448: Block-scoped variable '_tokenCounter' used before its declaration.
+src/tools/build-systems/smart-logs.ts(12,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/build-systems/smart-logs.ts(14,10): error TS6133: 'readFileSync' is declared but its value is never read.
+src/tools/build-systems/smart-network.ts(13,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/build-systems/smart-network.ts(21,7): error TS6133: '_dnsResolve' is declared but its value is never read.
+src/tools/build-systems/smart-network.ts(183,11): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(148,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(149,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(152,11): error TS6133: '_projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-system-metrics.ts(171,11): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-test.ts(135,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-test.ts(136,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(13,1): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(13,10): error TS2724: '"../../core/token-counter"' has no exported member named 'tokenCounter'. Did you mean 'TokenCounter'?
+src/tools/build-systems/smart-typecheck.ts(14,34): error TS2307: Cannot find module '../../core/_metrics' or its corresponding type declarations.
+src/tools/build-systems/smart-typecheck.ts(113,11): error TS6133: '_tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(113,26): error TS2304: Cannot find name '_tokenCounter'.
+src/tools/build-systems/smart-typecheck.ts(114,11): error TS6133: '_metrics' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(120,20): error TS2749: '_tokenCounter' refers to a value, but is being used as a type here. Did you mean 'typeof _tokenCounter'?
+src/tools/build-systems/smart-typecheck.ts(640,18): error TS2749: '_tokenCounter' refers to a value, but is being used as a type here. Did you mean 'typeof _tokenCounter'?
+src/tools/build-systems/smart-typecheck.ts(656,9): error TS7022: '_tokenCounter' implicitly has type 'any' because it does not have a type annotation and is referenced directly or indirectly in its own initializer.
+src/tools/build-systems/smart-typecheck.ts(656,29): error TS2448: Block-scoped variable '_tokenCounter' used before its declaration.
+src/tools/code-analysis/index.ts(25,3): error TS2305: Module '"./smart-ambiance"' has no exported member 'SmartAmbianceTool'.
+src/tools/code-analysis/index.ts(26,3): error TS2305: Module '"./smart-ambiance"' has no exported member 'runSmartAmbiance'.
+src/tools/code-analysis/index.ts(27,3): error TS2305: Module '"./smart-ambiance"' has no exported member 'SMART_AMBIANCE_TOOL_DEFINITION'.
+src/tools/code-analysis/index.ts(28,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'SmartAmbianceOptions'.
+src/tools/code-analysis/index.ts(29,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'SmartAmbianceResult'.
+src/tools/code-analysis/index.ts(30,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'CodeSymbol'.
+src/tools/code-analysis/index.ts(31,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'DependencyNode'.
+src/tools/code-analysis/index.ts(32,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'JumpTarget'.
+src/tools/code-analysis/index.ts(33,8): error TS2305: Module '"./smart-ambiance"' has no exported member 'ContextChunk'.
+src/tools/code-analysis/smart-ambiance.ts(1,506): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(8,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/code-analysis/smart-ambiance.ts(9,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-ambiance.ts(10,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/code-analysis/smart-ambiance.ts(11,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(12,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(14,1): error TS6133: 'ts' is declared but its value is never read.
+src/tools/code-analysis/smart-ambiance.ts(15,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/code-analysis/smart-ast-grep.ts(17,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-ast-grep.ts(18,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-ast-grep.ts(161,9): error TS6133: '_cachedResult' is declared but its value is never read.
+src/tools/code-analysis/smart-complexity.ts(746,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-dependencies.ts(16,24): error TS2724: '"fs"' has no exported member named '_statSync'. Did you mean 'statSync'?
+src/tools/code-analysis/smart-dependencies.ts(21,47): error TS2305: Module '"path"' has no exported member '_basename'.
+src/tools/code-analysis/smart-dependencies.ts(22,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-dependencies.ts(23,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-dependencies.ts(25,10): error TS6133: 'hashFile' is declared but its value is never read.
+src/tools/code-analysis/smart-exports.ts(15,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-exports.ts(17,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-exports.ts(254,11): error TS6133: '_reductionPercentage' is declared but its value is never read.
+src/tools/code-analysis/smart-exports.ts(449,11): error TS6133: '_fileDir' is declared but its value is never read.
+src/tools/code-analysis/smart-imports.ts(15,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-imports.ts(17,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-imports.ts(272,11): error TS6133: '_reductionPercentage' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(14,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-refactor.ts(16,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-refactor.ts(17,54): error TS6133: 'SymbolInfo' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(18,60): error TS6133: 'ComplexityMetrics' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(162,11): error TS6133: '_symbolsResult' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(373,17): error TS6133: 'hash' is declared but its value is never read.
+src/tools/code-analysis/smart-security.ts(17,35): error TS6133: 'dirname' is declared but its value is never read.
+src/tools/code-analysis/smart-security.ts(554,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-security.ts(1291,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-symbols.ts(16,36): error TS6133: 'statSync' is declared but its value is never read.
+src/tools/code-analysis/smart-symbols.ts(119,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-symbols.ts(711,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-typescript.ts(12,1): error TS6133: 'spawn' is declared but its value is never read.
+src/tools/code-analysis/smart-typescript.ts(13,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-typescript.ts(15,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/code-analysis/smart-typescript.ts(17,46): error TS6133: 'readdirSync' is declared but its value is never read.
+src/tools/code-analysis/smart-typescript.ts(18,35): error TS6133: 'extname' is declared but its value is never read.
+src/tools/code-analysis/smart-typescript.ts(159,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/configuration/index.ts(21,10): error TS2305: Module '"./smart-env"' has no exported member 'SmartEnv'.
+src/tools/configuration/index.ts(21,20): error TS2305: Module '"./smart-env"' has no exported member 'runSmartEnv'.
+src/tools/configuration/index.ts(21,33): error TS2305: Module '"./smart-env"' has no exported member 'SMART_ENV_TOOL_DEFINITION'.
+src/tools/configuration/index.ts(24,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SmartWorkflow'.
+src/tools/configuration/index.ts(25,3): error TS2305: Module '"./smart-workflow"' has no exported member 'runSmartWorkflow'.
+src/tools/configuration/index.ts(26,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SMART_WORKFLOW_TOOL_DEFINITION'.
+src/tools/configuration/index.ts(45,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SmartWorkflowOptions'.
+src/tools/configuration/index.ts(46,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SmartWorkflowOutput'.
+src/tools/configuration/index.ts(47,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowFile'.
+src/tools/configuration/index.ts(48,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowDefinition'.
+src/tools/configuration/index.ts(49,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowJob'.
+src/tools/configuration/index.ts(50,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowStep'.
+src/tools/configuration/index.ts(51,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowError'.
+src/tools/configuration/index.ts(52,3): error TS2305: Module '"./smart-workflow"' has no exported member 'WorkflowWarning'.
+src/tools/configuration/index.ts(53,3): error TS2305: Module '"./smart-workflow"' has no exported member 'SecurityIssue'.
+src/tools/configuration/index.ts(54,3): error TS2305: Module '"./smart-workflow"' has no exported member 'OptimizationSuggestion'.
+src/tools/configuration/smart-config-read.ts(142,7): error TS6133: 'includeMetadata' is declared but its value is never read.
+src/tools/configuration/smart-config-read.ts(176,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(177,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(210,11): error TS2345: Argument of type 'Buffer<ArrayBufferLike>' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-config-read.ts(210,22): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(261,37): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(261,54): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(271,13): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(272,15): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(292,9): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(293,9): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(301,35): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-config-read.ts(301,44): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/configuration/smart-config-read.ts(313,37): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-config-read.ts(313,46): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/configuration/smart-config-read.ts(324,30): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(324,44): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-config-read.ts(333,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(334,7): error TS2322: Type 'number | TokenCountResult' is not assignable to type 'number | undefined'.
+  Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(357,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(358,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(770,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-env.ts(1,338): error TS6133: 'fs' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(2,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(3,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(4,1): error TS6133: 'globalMetricsCollector' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(5,1): error TS6133: 'globalTokenCounter' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(5,10): error TS2724: '"../../core/token-counter"' has no exported member named 'globalTokenCounter'. Did you mean 'TokenCounter'?
+src/tools/configuration/smart-package-json.ts(17,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/configuration/smart-package-json.ts(18,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/configuration/smart-package-json.ts(835,11): error TS6133: '_size' is declared but its value is never read.
+src/tools/configuration/smart-tsconfig.ts(12,20): error TS6133: 'stat' is declared but its value is never read.
+src/tools/configuration/smart-tsconfig.ts(130,36): error TS2339: Property 'generateFileHash' does not exist on type 'typeof CacheEngine'.
+src/tools/configuration/smart-tsconfig.ts(131,40): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/configuration/smart-tsconfig.ts(170,20): error TS2339: Property 'invalidateByFileHash' does not exist on type 'CacheEngine'.
+src/tools/configuration/smart-tsconfig.ts(199,25): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-tsconfig.ts(199,34): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/configuration/smart-tsconfig.ts(548,37): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(548,54): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(550,7): error TS2365: Operator '>' cannot be applied to types 'TokenCountResult' and 'number'.
+src/tools/configuration/smart-tsconfig.ts(550,43): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(553,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(554,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(614,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-workflow.ts(1,464): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(8,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/configuration/smart-workflow.ts(9,1): error TS6133: 'parseYAML' is declared but its value is never read.
+src/tools/configuration/smart-workflow.ts(10,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/configuration/smart-workflow.ts(11,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/configuration/smart-workflow.ts(12,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/configuration/smart-workflow.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(14,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/dashboard-monitoring/alert-manager.ts(362,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(373,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/alert-manager.ts(380,30): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(430,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(441,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/alert-manager.ts(448,30): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(492,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(524,85): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(533,60): error TS2339: Property 'tokens' does not exist on type 'MapIterator<Alert>'.
+src/tools/dashboard-monitoring/alert-manager.ts(685,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(766,82): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(871,22): error TS2554: Expected 4 arguments, but got 3.
+src/tools/dashboard-monitoring/alert-manager.ts(940,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(942,22): error TS2554: Expected 4 arguments, but got 3.
+src/tools/dashboard-monitoring/alert-manager.ts(1075,25): error TS2339: Property 'estimateFromBytes' does not exist on type 'TokenCounter'.
+src/tools/dashboard-monitoring/alert-manager.ts(1133,85): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1139,85): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1145,85): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1153,85): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1162,86): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1174,86): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1185,88): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1200,88): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/custom-widget.ts(228,43): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/custom-widget.ts(303,31): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/custom-widget.ts(303,40): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(437,25): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1057,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1092,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1092,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1120,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1160,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1160,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1198,79): error TS2345: Argument of type '"graph"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/health-monitor.ts(1203,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1203,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1235,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1266,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1266,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/index.ts(11,10): error TS2305: Module '"./smart-dashboard"' has no exported member 'SMART_DASHBOARD_TOOL_DEFINITION'.
+src/tools/dashboard-monitoring/index.ts(12,10): error TS2305: Module '"./metric-collector"' has no exported member 'METRIC_COLLECTOR_TOOL_DEFINITION'.
+src/tools/dashboard-monitoring/log-dashboard.ts(1,540): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/log-dashboard.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/dashboard-monitoring/log-dashboard.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/dashboard-monitoring/log-dashboard.ts(4,1): error TS6133: 'crypto' is declared but its value is never read.
+src/tools/dashboard-monitoring/metric-collector.ts(1,848): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/metric-collector.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/dashboard-monitoring/metric-collector.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/dashboard-monitoring/metric-collector.ts(4,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/dashboard-monitoring/monitoring-integration.ts(1,730): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/monitoring-integration.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/dashboard-monitoring/monitoring-integration.ts(3,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/dashboard-monitoring/monitoring-integration.ts(4,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/dashboard-monitoring/performance-tracker.ts(1,641): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/performance-tracker.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/dashboard-monitoring/performance-tracker.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/dashboard-monitoring/performance-tracker.ts(4,1): error TS6133: 'createWriteStream' is declared but its value is never read.
+src/tools/dashboard-monitoring/performance-tracker.ts(5,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/dashboard-monitoring/performance-tracker.ts(6,1): error TS6133: 'join' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(1,724): error TS6192: All imports in import declaration are unused.
+src/tools/dashboard-monitoring/report-generator.ts(6,1): error TS6133: 'dirname' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(7,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(8,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(9,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(10,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(11,1): error TS6192: All imports in import declaration are unused.
+src/tools/dashboard-monitoring/report-generator.ts(12,1): error TS6133: 'hashContent' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(13,1): error TS6133: 'marked' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(13,24): error TS2307: Cannot find module '_marked' or its corresponding type declarations.
+src/tools/dashboard-monitoring/report-generator.ts(14,1): error TS6133: 'parseExpression' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(1,790): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(4,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(5,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(6,1): error TS6133: 'join' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(7,1): error TS6133: 'EventEmitter' is declared but its value is never read.
+src/tools/dashboard-monitoring/smart-dashboard.ts(8,1): error TS6133: 'ChartConfiguration' is declared but its value is never read.
+src/tools/file-operations/smart-branch.ts(228,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(231,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(234,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(237,44): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(238,32): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(250,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(265,11): error TS2345: Argument of type 'TokenCountResult' is not assignable to parameter of type 'number'.
+src/tools/file-operations/smart-branch.ts(276,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(593,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-edit.ts(17,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-edit.ts(18,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/file-operations/smart-glob.ts(19,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-glob.ts(20,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/file-operations/smart-grep.ts(19,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-grep.ts(20,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/file-operations/smart-log.ts(568,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-merge.ts(772,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-read.ts(125,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/file-operations/smart-read.ts(190,30): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-read.ts(245,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/file-operations/smart-read.ts(245,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/file-operations/smart-read.ts(377,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-status.ts(641,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-write.ts(16,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/file-operations/smart-write.ts(17,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/intelligence/anomaly-explainer.ts(1,478): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/anomaly-explainer.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/anomaly-explainer.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/anomaly-explainer.ts(4,1): error TS6192: All imports in import declaration are unused.
+src/tools/intelligence/anomaly-explainer.ts(5,1): error TS6133: 'Matrix' is declared but its value is never read.
+src/tools/intelligence/anomaly-explainer.ts(5,24): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/anomaly-explainer.ts(6,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/intelligence/auto-remediation.ts(1,610): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/auto-remediation.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/auto-remediation.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/auto-remediation.ts(4,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/intelligence/auto-remediation.ts(5,1): error TS6192: All imports in import declaration are unused.
+src/tools/intelligence/index.ts(8,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SmartSummarizationTool'.
+src/tools/intelligence/index.ts(9,3): error TS2305: Module '"./smart-summarization"' has no exported member 'getSmartSummarizationTool'.
+src/tools/intelligence/index.ts(10,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SMART_SUMMARIZATION_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(13,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RecommendationEngine'.
+src/tools/intelligence/index.ts(14,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'getRecommendationEngine'.
+src/tools/intelligence/index.ts(15,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RECOMMENDATION_ENGINE_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(18,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NaturalLanguageQuery'.
+src/tools/intelligence/index.ts(19,3): error TS2305: Module '"./natural-language-query"' has no exported member 'runNaturalLanguageQuery'.
+src/tools/intelligence/index.ts(20,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NATURAL_LANGUAGE_QUERY_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(23,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'AnomalyExplainerTool'.
+src/tools/intelligence/index.ts(24,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'getAnomalyExplainerTool'.
+src/tools/intelligence/index.ts(25,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'ANOMALY_EXPLAINER_TOOL_DEFINITION'.
+src/tools/intelligence/index.ts(35,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SmartSummarizationOptions'.
+src/tools/intelligence/index.ts(36,3): error TS2305: Module '"./smart-summarization"' has no exported member 'SmartSummarizationResult'.
+src/tools/intelligence/index.ts(39,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RecommendationEngineOptions'.
+src/tools/intelligence/index.ts(40,3): error TS2305: Module '"./recommendation-engine"' has no exported member 'RecommendationEngineResult'.
+src/tools/intelligence/index.ts(43,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NaturalLanguageQueryOptions'.
+src/tools/intelligence/index.ts(44,3): error TS2305: Module '"./natural-language-query"' has no exported member 'NaturalLanguageQueryResult'.
+src/tools/intelligence/index.ts(45,3): error TS2305: Module '"./natural-language-query"' has no exported member 'ParsedQuery'.
+src/tools/intelligence/index.ts(46,3): error TS2305: Module '"./natural-language-query"' has no exported member 'QuerySuggestion'.
+src/tools/intelligence/index.ts(47,3): error TS2305: Module '"./natural-language-query"' has no exported member 'QueryExplanation'.
+src/tools/intelligence/index.ts(48,3): error TS2305: Module '"./natural-language-query"' has no exported member 'QueryOptimization'.
+src/tools/intelligence/index.ts(51,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'AnomalyExplainerOptions'.
+src/tools/intelligence/index.ts(52,3): error TS2305: Module '"./anomaly-explainer"' has no exported member 'AnomalyExplainerResult'.
+src/tools/intelligence/intelligent-assistant.ts(1,270): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/intelligent-assistant.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/intelligent-assistant.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/intelligent-assistant.ts(4,1): error TS6133: 'natural' is declared but its value is never read.
+src/tools/intelligence/intelligent-assistant.ts(5,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/intelligence/intelligent-assistant.ts(6,1): error TS6133: 'nlp' is declared but its value is never read.
+src/tools/intelligence/knowledge-graph.ts(999,21): error TS2304: Cannot find name 'createHash'.
+src/tools/intelligence/knowledge-graph.ts(1004,11): error TS6133: 'getDefaultTTL' is declared but its value is never read.
+src/tools/intelligence/natural-language-query.ts(1,391): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/natural-language-query.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/natural-language-query.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/natural-language-query.ts(4,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/intelligence/natural-language-query.ts(5,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(1,711): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(4,1): error TS6133: 'Matrix' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(4,24): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/pattern-recognition.ts(5,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(6,10): error TS6133: 'mean' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(6,33): error TS6133: 'percentile' is declared but its value is never read.
+src/tools/intelligence/predictive-analytics.ts(1,711): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/predictive-analytics.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/predictive-analytics.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/predictive-analytics.ts(4,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/intelligence/predictive-analytics.ts(5,1): error TS6133: 'Matrix' is declared but its value is never read.
+src/tools/intelligence/predictive-analytics.ts(5,24): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/recommendation-engine.ts(1,387): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(4,1): error TS6133: 'Matrix' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(4,24): error TS2307: Cannot find module 'ml-_Matrix' or its corresponding type declarations.
+src/tools/intelligence/recommendation-engine.ts(5,1): error TS6133: 'similarity' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(6,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(7,1): error TS6133: 'stats' is declared but its value is never read.
+src/tools/intelligence/sentiment-analysis.ts(493,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(494,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(516,20): error TS2554: Expected 4 arguments, but got 2.
+src/tools/intelligence/sentiment-analysis.ts(518,27): error TS2554: Expected 0 arguments, but got 1.
+src/tools/intelligence/sentiment-analysis.ts(518,36): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/intelligence/sentiment-analysis.ts(533,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(546,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/smart-summarization.ts(1,939): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(4,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(5,1): error TS6133: 'join' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(6,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(7,1): error TS6133: 'natural' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(8,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/intelligence/smart-summarization.ts(9,1): error TS6133: 'nlp' is declared but its value is never read.
+src/tools/output-formatting/index.ts(8,3): error TS2305: Module '"./smart-format"' has no exported member 'SmartFormat'.
+src/tools/output-formatting/index.ts(9,3): error TS2305: Module '"./smart-format"' has no exported member 'runSmartFormat'.
+src/tools/output-formatting/index.ts(10,3): error TS2305: Module '"./smart-format"' has no exported member 'SMART_FORMAT_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(11,8): error TS2305: Module '"./smart-format"' has no exported member 'SmartFormatOptions'.
+src/tools/output-formatting/index.ts(12,8): error TS2305: Module '"./smart-format"' has no exported member 'SmartFormatResult'.
+src/tools/output-formatting/index.ts(13,8): error TS2305: Module '"./smart-format"' has no exported member 'FormatType'.
+src/tools/output-formatting/index.ts(14,8): error TS2305: Module '"./smart-format"' has no exported member 'ConversionOperation'.
+src/tools/output-formatting/index.ts(15,8): error TS2305: Module '"./smart-format"' has no exported member 'FormatConversionResult'.
+src/tools/output-formatting/index.ts(16,8): error TS2305: Module '"./smart-format"' has no exported member 'BatchConversionResult'.
+src/tools/output-formatting/index.ts(17,8): error TS2305: Module '"./smart-format"' has no exported member 'ValidationError'.
+src/tools/output-formatting/index.ts(18,8): error TS2305: Module '"./smart-format"' has no exported member 'FormatDetectionResult'.
+src/tools/output-formatting/index.ts(19,8): error TS2305: Module '"./smart-format"' has no exported member 'StreamConversionResult'.
+src/tools/output-formatting/index.ts(23,3): error TS2305: Module '"./smart-stream"' has no exported member 'SmartStream'.
+src/tools/output-formatting/index.ts(24,3): error TS2305: Module '"./smart-stream"' has no exported member 'runSmartStream'.
+src/tools/output-formatting/index.ts(25,3): error TS2305: Module '"./smart-stream"' has no exported member 'SMART_STREAM_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(26,8): error TS2305: Module '"./smart-stream"' has no exported member 'SmartStreamOptions'.
+src/tools/output-formatting/index.ts(27,8): error TS2305: Module '"./smart-stream"' has no exported member 'SmartStreamResult'.
+src/tools/output-formatting/index.ts(28,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamOperation'.
+src/tools/output-formatting/index.ts(29,8): error TS2305: Module '"./smart-stream"' has no exported member 'CompressionFormat'.
+src/tools/output-formatting/index.ts(30,8): error TS2305: Module '"./smart-stream"' has no exported member 'TransformType'.
+src/tools/output-formatting/index.ts(31,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamMetadata'.
+src/tools/output-formatting/index.ts(32,8): error TS2305: Module '"./smart-stream"' has no exported member 'ProgressState'.
+src/tools/output-formatting/index.ts(33,8): error TS2305: Module '"./smart-stream"' has no exported member 'ChunkSummary'.
+src/tools/output-formatting/index.ts(34,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamReadResult'.
+src/tools/output-formatting/index.ts(35,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamWriteResult'.
+src/tools/output-formatting/index.ts(36,8): error TS2305: Module '"./smart-stream"' has no exported member 'StreamTransformResult'.
+src/tools/output-formatting/index.ts(40,3): error TS2305: Module '"./smart-report"' has no exported member 'SmartReport'.
+src/tools/output-formatting/index.ts(41,3): error TS2305: Module '"./smart-report"' has no exported member 'runSmartReport'.
+src/tools/output-formatting/index.ts(42,3): error TS2305: Module '"./smart-report"' has no exported member 'SMART_REPORT_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(43,8): error TS2305: Module '"./smart-report"' has no exported member 'SmartReportOptions'.
+src/tools/output-formatting/index.ts(44,8): error TS2305: Module '"./smart-report"' has no exported member 'SmartReportResult'.
+src/tools/output-formatting/index.ts(45,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportFormat'.
+src/tools/output-formatting/index.ts(46,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportOperation'.
+src/tools/output-formatting/index.ts(47,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportSection'.
+src/tools/output-formatting/index.ts(48,8): error TS2305: Module '"./smart-report"' has no exported member 'ChartData'.
+src/tools/output-formatting/index.ts(49,8): error TS2305: Module '"./smart-report"' has no exported member 'ChartType'.
+src/tools/output-formatting/index.ts(50,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportTemplate'.
+src/tools/output-formatting/index.ts(51,8): error TS2305: Module '"./smart-report"' has no exported member 'ReportMetadata'.
+src/tools/output-formatting/index.ts(52,8): error TS2305: Module '"./smart-report"' has no exported member 'GeneratedReport'.
+src/tools/output-formatting/index.ts(56,3): error TS2305: Module '"./smart-diff"' has no exported member 'SmartDiff'.
+src/tools/output-formatting/index.ts(57,3): error TS2305: Module '"./smart-diff"' has no exported member 'runSmartDiff'.
+src/tools/output-formatting/index.ts(58,3): error TS2305: Module '"./smart-diff"' has no exported member 'SMART_DIFF_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(59,8): error TS2305: Module '"./smart-diff"' has no exported member 'SmartDiffOptions'.
+src/tools/output-formatting/index.ts(60,8): error TS2305: Module '"./smart-diff"' has no exported member 'SmartDiffResult'.
+src/tools/output-formatting/index.ts(61,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffOperation'.
+src/tools/output-formatting/index.ts(62,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffFormat'.
+src/tools/output-formatting/index.ts(63,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffGranularity'.
+src/tools/output-formatting/index.ts(64,8): error TS2305: Module '"./smart-diff"' has no exported member 'ConflictResolutionStrategy'.
+src/tools/output-formatting/index.ts(65,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffHunk'.
+src/tools/output-formatting/index.ts(66,8): error TS2305: Module '"./smart-diff"' has no exported member 'SemanticChange'.
+src/tools/output-formatting/index.ts(67,8): error TS2305: Module '"./smart-diff"' has no exported member 'Conflict'.
+src/tools/output-formatting/index.ts(68,8): error TS2305: Module '"./smart-diff"' has no exported member 'DiffResult'.
+src/tools/output-formatting/index.ts(69,8): error TS2305: Module '"./smart-diff"' has no exported member 'SemanticDiffResult'.
+src/tools/output-formatting/index.ts(70,8): error TS2305: Module '"./smart-diff"' has no exported member 'ConflictDetectionResult'.
+src/tools/output-formatting/index.ts(71,8): error TS2305: Module '"./smart-diff"' has no exported member 'MergePreviewResult'.
+src/tools/output-formatting/index.ts(75,3): error TS2305: Module '"./smart-export"' has no exported member 'SmartExport'.
+src/tools/output-formatting/index.ts(76,3): error TS2305: Module '"./smart-export"' has no exported member 'runSmartExport'.
+src/tools/output-formatting/index.ts(77,3): error TS2305: Module '"./smart-export"' has no exported member 'SMART_EXPORT_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(78,8): error TS2305: Module '"./smart-export"' has no exported member 'SmartExportOptions'.
+src/tools/output-formatting/index.ts(79,8): error TS2305: Module '"./smart-export"' has no exported member 'SmartExportResult'.
+src/tools/output-formatting/index.ts(80,8): error TS2305: Module '"./smart-export"' has no exported member 'ExportFormat'.
+src/tools/output-formatting/index.ts(81,8): error TS2305: Module '"./smart-export"' has no exported member 'ExportOperation'.
+src/tools/output-formatting/index.ts(82,8): error TS2305: Module '"./smart-export"' has no exported member 'ExportMetadata'.
+src/tools/output-formatting/index.ts(83,8): error TS2305: Module '"./smart-export"' has no exported member 'ExcelExportResult'.
+src/tools/output-formatting/index.ts(84,8): error TS2305: Module '"./smart-export"' has no exported member 'CSVExportResult'.
+src/tools/output-formatting/index.ts(85,8): error TS2305: Module '"./smart-export"' has no exported member 'JSONExportResult'.
+src/tools/output-formatting/index.ts(86,8): error TS2305: Module '"./smart-export"' has no exported member 'ParquetExportResult'.
+src/tools/output-formatting/index.ts(87,8): error TS2305: Module '"./smart-export"' has no exported member 'SQLExportResult'.
+src/tools/output-formatting/index.ts(88,8): error TS2305: Module '"./smart-export"' has no exported member 'BatchExportResult'.
+src/tools/output-formatting/index.ts(92,3): error TS2305: Module '"./smart-log"' has no exported member 'SmartLog'.
+src/tools/output-formatting/index.ts(93,3): error TS2305: Module '"./smart-log"' has no exported member 'runSmartLog'.
+src/tools/output-formatting/index.ts(94,3): error TS2305: Module '"./smart-log"' has no exported member 'SMART_LOG_TOOL_DEFINITION'.
+src/tools/output-formatting/index.ts(95,8): error TS2305: Module '"./smart-log"' has no exported member 'SmartLogOptions'.
+src/tools/output-formatting/index.ts(96,8): error TS2305: Module '"./smart-log"' has no exported member 'SmartLogResult'.
+src/tools/output-formatting/index.ts(97,8): error TS2305: Module '"./smart-log"' has no exported member 'LogOperation'.
+src/tools/output-formatting/index.ts(98,8): error TS2305: Module '"./smart-log"' has no exported member 'LogFormat'.
+src/tools/output-formatting/index.ts(99,8): error TS2305: Module '"./smart-log"' has no exported member 'LogLevel'.
+src/tools/output-formatting/index.ts(100,8): error TS2305: Module '"./smart-log"' has no exported member 'TimeFormat'.
+src/tools/output-formatting/index.ts(101,8): error TS2305: Module '"./smart-log"' has no exported member 'PatternType'.
+src/tools/output-formatting/index.ts(102,8): error TS2305: Module '"./smart-log"' has no exported member 'LogEntry'.
+src/tools/output-formatting/index.ts(103,8): error TS2305: Module '"./smart-log"' has no exported member 'LogPattern'.
+src/tools/output-formatting/index.ts(104,8): error TS2305: Module '"./smart-log"' has no exported member 'LogFileMetadata'.
+src/tools/output-formatting/index.ts(105,8): error TS2305: Module '"./smart-log"' has no exported member 'LogIndex'.
+src/tools/output-formatting/index.ts(106,8): error TS2305: Module '"./smart-log"' has no exported member 'AggregateResult'.
+src/tools/output-formatting/index.ts(107,8): error TS2305: Module '"./smart-log"' has no exported member 'ParseResult'.
+src/tools/output-formatting/index.ts(108,8): error TS2305: Module '"./smart-log"' has no exported member 'FilterResult'.
+src/tools/output-formatting/index.ts(109,8): error TS2305: Module '"./smart-log"' has no exported member 'PatternDetectionResult'.
+src/tools/output-formatting/index.ts(110,8): error TS2305: Module '"./smart-log"' has no exported member 'TailResult'.
+src/tools/output-formatting/smart-diff.ts(1,497): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-diff.ts(6,1): error TS6133: 'join' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(7,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(9,3): error TS6133: 'diffLines' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(10,3): error TS6133: 'diffWords' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(11,3): error TS6133: 'diffChars' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(12,3): error TS6133: 'createTwoFilesPatch' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(14,3): error TS6133: 'parsePatch' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(16,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(17,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(18,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(19,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-diff.ts(20,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(1,437): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(7,10): error TS6133: 'dirname' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(7,19): error TS2305: Module '"path"' has no exported member '_extname'.
+src/tools/output-formatting/smart-export.ts(7,29): error TS6133: 'join' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(9,7): error TS6133: 'unparseCsv' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(10,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(11,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(12,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(14,1): error TS6133: 'hashFile' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(15,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(16,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/output-formatting/smart-format.ts(2,3): error TS2724: '"fs"' has no exported member named '_createReadStream'. Did you mean 'createReadStream'?
+src/tools/output-formatting/smart-format.ts(4,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(5,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(6,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(8,7): error TS6198: All destructured elements are unused.
+src/tools/output-formatting/smart-format.ts(9,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/output-formatting/smart-format.ts(10,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/output-formatting/smart-format.ts(11,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/output-formatting/smart-format.ts(12,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(14,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/output-formatting/smart-format.ts(15,1): error TS6133: 'join' is declared but its value is never read.
+src/tools/output-formatting/smart-log.ts(1,567): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(9,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(10,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/output-formatting/smart-log.ts(11,1): error TS6133: 'createInterface' is declared but its value is never read.
+src/tools/output-formatting/smart-log.ts(12,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/output-formatting/smart-log.ts(13,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/output-formatting/smart-log.ts(14,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/output-formatting/smart-log.ts(15,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(16,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-pretty.ts(21,36): error TS6133: 'resolveConfig' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(405,11): error TS6133: 'grammarCache' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(510,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(517,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(608,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/output-formatting/smart-pretty.ts(608,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/output-formatting/smart-pretty.ts(792,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(799,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(867,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/output-formatting/smart-pretty.ts(867,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/output-formatting/smart-pretty.ts(1326,3): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(1338,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/output-formatting/smart-report.ts(2,3): error TS2724: '"fs"' has no exported member named '_readFileSync'. Did you mean 'readFileSync'?
+src/tools/output-formatting/smart-report.ts(3,3): error TS6133: 'writeFileSync' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(4,3): error TS6133: 'existsSync' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(5,3): error TS6133: 'mkdirSync' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-report.ts(8,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(9,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(10,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(11,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(12,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/output-formatting/smart-report.ts(13,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-report.ts(14,1): error TS6133: 'hashContent' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(1,559): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(9,10): error TS6133: 'Transform' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(9,31): error TS2724: '"stream"' has no exported member named '_Readable'. Did you mean 'Readable'?
+src/tools/output-formatting/smart-stream.ts(9,42): error TS6133: 'Writable' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(10,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(17,1): error TS6133: 'homedir' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(18,1): error TS6133: 'join' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(19,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(20,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(21,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/output-formatting/smart-stream.ts(22,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(23,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(24,7): error TS6133: '_pipelineAsync' is declared but its value is never read.
+src/tools/system-operations/index.ts(32,3): error TS2305: Module '"./smart-network"' has no exported member 'SmartNetwork'.
+src/tools/system-operations/index.ts(33,3): error TS2305: Module '"./smart-network"' has no exported member 'runSmartNetwork'.
+src/tools/system-operations/index.ts(34,3): error TS2305: Module '"./smart-network"' has no exported member 'SMART_NETWORK_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(35,8): error TS2305: Module '"./smart-network"' has no exported member 'SmartNetworkOptions'.
+src/tools/system-operations/index.ts(36,8): error TS2305: Module '"./smart-network"' has no exported member 'SmartNetworkResult'.
+src/tools/system-operations/index.ts(37,8): error TS2305: Module '"./smart-network"' has no exported member 'NetworkOperation'.
+src/tools/system-operations/index.ts(38,8): error TS2305: Module '"./smart-network"' has no exported member 'PingResult'.
+src/tools/system-operations/index.ts(39,8): error TS2305: Module '"./smart-network"' has no exported member 'TracerouteHop'.
+src/tools/system-operations/index.ts(40,8): error TS2305: Module '"./smart-network"' has no exported member 'PortScanResult'.
+src/tools/system-operations/index.ts(41,8): error TS2305: Module '"./smart-network"' has no exported member 'DNSResult'.
+src/tools/system-operations/index.ts(42,8): error TS2305: Module '"./smart-network"' has no exported member 'NetworkInterface'.
+src/tools/system-operations/index.ts(43,8): error TS2305: Module '"./smart-network"' has no exported member 'BandwidthResult'.
+src/tools/system-operations/index.ts(47,3): error TS2305: Module '"./smart-cleanup"' has no exported member 'SmartCleanup'.
+src/tools/system-operations/index.ts(48,3): error TS2305: Module '"./smart-cleanup"' has no exported member 'runSmartCleanup'.
+src/tools/system-operations/index.ts(49,3): error TS2305: Module '"./smart-cleanup"' has no exported member 'SMART_CLEANUP_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(50,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'SmartCleanupOptions'.
+src/tools/system-operations/index.ts(51,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'SmartCleanupResult'.
+src/tools/system-operations/index.ts(52,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupOperation'.
+src/tools/system-operations/index.ts(53,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupCategory'.
+src/tools/system-operations/index.ts(54,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'FileCandidate'.
+src/tools/system-operations/index.ts(55,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupAnalysis'.
+src/tools/system-operations/index.ts(56,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupPreview'.
+src/tools/system-operations/index.ts(57,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupExecution'.
+src/tools/system-operations/index.ts(58,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'CleanupRollback'.
+src/tools/system-operations/index.ts(59,8): error TS2305: Module '"./smart-cleanup"' has no exported member 'DiskSpaceEstimate'.
+src/tools/system-operations/index.ts(63,3): error TS2305: Module '"./smart-metrics"' has no exported member 'SmartMetrics'.
+src/tools/system-operations/index.ts(64,3): error TS2305: Module '"./smart-metrics"' has no exported member 'runSmartMetrics'.
+src/tools/system-operations/index.ts(65,3): error TS2305: Module '"./smart-metrics"' has no exported member 'SMART_METRICS_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(66,8): error TS2305: Module '"./smart-metrics"' has no exported member 'SmartMetricsOptions'.
+src/tools/system-operations/index.ts(67,8): error TS2305: Module '"./smart-metrics"' has no exported member 'SmartMetricsResult'.
+src/tools/system-operations/index.ts(68,8): error TS2305: Module '"./smart-metrics"' has no exported member 'MetricsOperation'.
+src/tools/system-operations/index.ts(69,8): error TS2305: Module '"./smart-metrics"' has no exported member 'CPUMetrics'.
+src/tools/system-operations/index.ts(70,8): error TS2305: Module '"./smart-metrics"' has no exported member 'MemoryMetrics'.
+src/tools/system-operations/index.ts(71,8): error TS2305: Module '"./smart-metrics"' has no exported member 'DiskMetrics'.
+src/tools/system-operations/index.ts(72,8): error TS2305: Module '"./smart-metrics"' has no exported member 'NetworkMetrics'.
+src/tools/system-operations/index.ts(73,8): error TS2305: Module '"./smart-metrics"' has no exported member 'TemperatureMetrics'.
+src/tools/system-operations/index.ts(74,8): error TS2305: Module '"./smart-metrics"' has no exported member 'TimeSeriesData'.
+src/tools/system-operations/index.ts(75,8): error TS2305: Module '"./smart-metrics"' has no exported member 'CompressedTimeSeries'.
+src/tools/system-operations/index.ts(94,3): error TS2305: Module '"./smart-archive"' has no exported member 'SmartArchive'.
+src/tools/system-operations/index.ts(95,3): error TS2305: Module '"./smart-archive"' has no exported member 'runSmartArchive'.
+src/tools/system-operations/index.ts(96,3): error TS2305: Module '"./smart-archive"' has no exported member 'SMART_ARCHIVE_TOOL_DEFINITION'.
+src/tools/system-operations/index.ts(97,8): error TS2305: Module '"./smart-archive"' has no exported member 'SmartArchiveOptions'.
+src/tools/system-operations/index.ts(98,8): error TS2305: Module '"./smart-archive"' has no exported member 'SmartArchiveResult'.
+src/tools/system-operations/index.ts(99,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveFormat'.
+src/tools/system-operations/index.ts(100,8): error TS2305: Module '"./smart-archive"' has no exported member 'CompressionLevel'.
+src/tools/system-operations/index.ts(101,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveOperation'.
+src/tools/system-operations/index.ts(102,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveEntry'.
+src/tools/system-operations/index.ts(103,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveMetadata'.
+src/tools/system-operations/index.ts(104,8): error TS2305: Module '"./smart-archive"' has no exported member 'IncrementalBackupInfo'.
+src/tools/system-operations/index.ts(105,8): error TS2305: Module '"./smart-archive"' has no exported member 'ArchiveVerificationResult'.
+src/tools/system-operations/smart-archive.ts(1,465): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(4,1): error TS6133: 'tarStream' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(4,33): error TS7016: Could not find a declaration file for module 'tar-stream'. 'C:/Users/yolan/source/repos/token-optimizer-mcp/node_modules/tar-stream/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/tar-stream` if it exists or add a new declaration (.d.ts) file containing `declare module 'tar-stream';`
+src/tools/system-operations/smart-archive.ts(5,1): error TS6133: 'archiver' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(6,1): error TS6133: 'tar' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(6,22): error TS7016: Could not find a declaration file for module 'tar-stream'. 'C:/Users/yolan/source/repos/token-optimizer-mcp/node_modules/tar-stream/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/tar-stream` if it exists or add a new declaration (.d.ts) file containing `declare module 'tar-stream';`
+src/tools/system-operations/smart-archive.ts(7,1): error TS6133: 'zlib' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(9,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(12,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(13,1): error TS6133: 'unzipper' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(14,7): error TS6133: '_pipelineAsync' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(15,7): error TS6133: '_stat' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(15,28): error TS2551: Property '_stat' does not exist on type 'typeof import("fs")'. Did you mean 'stat'?
+src/tools/system-operations/smart-archive.ts(16,7): error TS6133: '_readdir' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(16,31): error TS2551: Property '_readdir' does not exist on type 'typeof import("fs")'. Did you mean 'readdir'?
+src/tools/system-operations/smart-archive.ts(17,7): error TS6133: '_mkdir' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(17,29): error TS2551: Property '_mkdir' does not exist on type 'typeof import("fs")'. Did you mean 'mkdir'?
+src/tools/system-operations/smart-cleanup.ts(1,471): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(5,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(7,1): error TS6133: 'generateCacheKey' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(8,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(9,7): error TS6133: '_stat' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(9,28): error TS2551: Property '_stat' does not exist on type 'typeof import("fs")'. Did you mean 'stat'?
+src/tools/system-operations/smart-cleanup.ts(10,7): error TS6133: '_readdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(10,31): error TS2551: Property '_readdir' does not exist on type 'typeof import("fs")'. Did you mean 'readdir'?
+src/tools/system-operations/smart-cleanup.ts(11,7): error TS6133: '_unlink' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(11,30): error TS2551: Property '_unlink' does not exist on type 'typeof import("fs")'. Did you mean 'unlink'?
+src/tools/system-operations/smart-cleanup.ts(12,7): error TS6133: '_rmdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(12,29): error TS2551: Property '_rmdir' does not exist on type 'typeof import("fs")'. Did you mean 'rmdir'?
+src/tools/system-operations/smart-cleanup.ts(13,7): error TS6133: '_mkdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(13,29): error TS2551: Property '_mkdir' does not exist on type 'typeof import("fs")'. Did you mean 'mkdir'?
+src/tools/system-operations/smart-cleanup.ts(14,7): error TS6133: '_rename' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(14,30): error TS2551: Property '_rename' does not exist on type 'typeof import("fs")'. Did you mean 'rename'?
+src/tools/system-operations/smart-cleanup.ts(15,7): error TS6133: '_access' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(15,30): error TS2551: Property '_access' does not exist on type 'typeof import("fs")'. Did you mean 'access'?
+src/tools/system-operations/smart-cron.ts(288,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(325,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(570,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(715,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(844,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(919,79): error TS2345: Argument of type '`undefined:${string}` | `auto:${string}` | `cron:${string}` | `windows-task:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(955,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1076,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/system-operations/smart-cron.ts(1132,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1403,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-metrics.ts(1,618): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-metrics.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/system-operations/smart-metrics.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/system-operations/smart-metrics.ts(4,1): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/system-operations/smart-metrics.ts(5,1): error TS6133: 'si' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(1,494): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(2,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(3,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(7,1): error TS6133: 'net' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(8,1): error TS6133: 'crypto' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(9,7): error TS6133: '_execAsync' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(10,7): error TS6133: '_dnsLookup' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(11,7): error TS6133: '_dnsReverse' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(12,7): error TS6133: '_dnsResolve' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(13,7): error TS6133: '_dnsResolve4' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(14,7): error TS6133: '_dnsResolve6' is declared but its value is never read.
+src/tools/system-operations/smart-process.ts(18,29): error TS2307: Cannot find module '../../core/cache.js' or its corresponding type declarations.
+src/tools/system-operations/smart-process.ts(19,30): error TS2307: Cannot find module '../../core/tokens.js' or its corresponding type declarations.
+src/tools/system-operations/smart-process.ts(555,11): error TS6133: '_stdout' is declared but its value is never read.
+src/tools/system-operations/smart-process.ts(555,13): error TS2339: Property '_stdout' does not exist on type '{ stdout: string; stderr: string; }'.
+src/tools/system-operations/smart-service.ts(248,81): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(476,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(526,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(579,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(789,79): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(934,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-user.ts(264,77): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+  Type '"include-system:undefined"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-user.ts(318,78): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+  Type '"include-system:undefined"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-user.ts(378,76): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(436,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(495,78): error TS2345: Argument of type '`${string}:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(527,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(551,70): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(583,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(604,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(636,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(658,81): error TS2345: Argument of type '"full"' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(690,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(1486,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
