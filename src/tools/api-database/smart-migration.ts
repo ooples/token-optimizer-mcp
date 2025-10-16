@@ -524,8 +524,8 @@ CREATE TABLE IF NOT EXISTS example (
     } catch (error) {
       // Caching failure should not break the operation
       console.error(
-        "Failed to cache migration result:" /* originalSize */,
-        (ttl || 3600) * 1000 /* compressedSize */,
+        "Failed to cache migration result:",
+        error
       );
     }
   }
