@@ -481,7 +481,7 @@ export class SentimentAnalysisTool {
           const cachedResult = JSON.parse(cached);
           const tokensSaved = this.tokenCounter.count(
             JSON.stringify(cachedResult),
-          );
+          ).tokens;
 
           this.metrics.record({
             operation: `sentiment-analysis:${options.operation}`,
