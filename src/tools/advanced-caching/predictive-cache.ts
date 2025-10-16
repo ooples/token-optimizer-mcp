@@ -171,7 +171,7 @@ export class PredictiveCacheTool extends EventEmitter {
    */
   async run(options: PredictiveCacheOptions): Promise<PredictiveCacheResult> {
     const startTime = Date.now();
-    const { operation, useCache = true, cacheTTL = 300 } = options;
+    const { operation, useCache = true } = options;
 
     // Generate cache key for cacheable operations
     let cacheKey: string | null = null;
@@ -983,7 +983,7 @@ export class PredictiveCacheTool extends EventEmitter {
    */
   private async updateClustering(
     key: string,
-    pattern: AccessPattern
+    _pattern: AccessPattern
   ): Promise<void> {
     // Find similar keys based on access patterns
     const similarKeys = this.findSimilarKeys(key);

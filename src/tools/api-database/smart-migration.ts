@@ -503,7 +503,7 @@ CREATE TABLE IF NOT EXISTS example (
   private async cacheResult(
     key: string,
     result: SmartMigrationResult,
-    ttl?: number,
+    _ttl?: number,
   ): Promise<void> {
     try {
       // Add timestamp

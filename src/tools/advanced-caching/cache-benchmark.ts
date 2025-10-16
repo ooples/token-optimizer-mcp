@@ -400,7 +400,7 @@ class BenchmarkExecutor {
    */
   private async executeWrite(
     key: string,
-    config: CacheConfig,
+    _config: CacheConfig,
     workload: WorkloadConfig,
   ): Promise<void> {
     const startTime = process.hrtime.bigint();

@@ -678,7 +678,7 @@ export class CacheReplicationTool extends EventEmitter {
   private async sync(
     options: CacheReplicationOptions
   ): Promise<{ data: CacheReplicationResult["data"]; entriesSynced: number }> {
-    const { force = false, deltaOnly = true } = options;
+    const { deltaOnly = true } = options;
 
     const delta = this.createSyncDelta(deltaOnly);
     let entriesSynced = 0;
@@ -1294,7 +1294,7 @@ export class CacheReplicationTool extends EventEmitter {
   /**
    * Calculate node throughput
    */
-  private calculateNodeThroughput(nodeId: string): number {
+  private calculateNodeThroughput(_nodeId: string): number {
     // In production, this would track actual throughput per node
     const uptime = Date.now() - this.stats.startTime;
     return this.stats.syncCount / (uptime / 1000);

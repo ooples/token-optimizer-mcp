@@ -181,15 +181,6 @@ export class SmartORM {
       ? this.suggestEagerLoading(queryInfo, n1Problems, options.ormType)
       : [];
 
-    // Analyze relationships
-    const relationships = options.analyzeRelationships
-      ? this.analyzeRelationships(
-          options.ormCode,
-          options.modelDefinitions,
-          options.ormType,
-        )
-      : [];
-
     // Generate query reductions
     const queryReductions = this.generateQueryReductions(queryInfo, n1Problems);
 
@@ -639,28 +630,6 @@ export class SmartORM {
     }
 
     return suggestions.slice(0, 3); // Limit to top 3
-  }
-
-  private analyzeRelationships(
-    code: string,
-    modelDefinitions?: string,
-    ormType?: ORMType,
-  ): Relationship[] {
-    // Avoid unused parameter warnings
-    void modelDefinitions;
-    // Extended relationship analysis
-    const relationships = this.extractRelationships(code, ormType || "generic");
-
-    // Add metadata if model definitions are provided
-    if (modelDefinitions) {
-      // Parse model definitions to enrich relationship data
-      // This is a placeholder for more sophisticated analysis
-      relationships.forEach((rel) => {
-        rel.nested = code.includes(`${rel.name}: { include:`);
-      });
-    }
-
-    return relationships;
   }
 
   private estimateGeneratedSQL(

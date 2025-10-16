@@ -168,11 +168,9 @@ interface SmartSystemMetricsOutput {
 export class SmartSystemMetrics {
   private cache: CacheEngine;
   private cacheNamespace = "smart_system_metrics";
-  private projectRoot: string;
 
-  constructor(cache: CacheEngine, projectRoot?: string) {
+  constructor(cache: CacheEngine, _projectRoot?: string) {
     this.cache = cache;
-    this.projectRoot = projectRoot || process.cwd();
   }
 
   /**
