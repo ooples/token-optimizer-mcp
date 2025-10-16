@@ -440,7 +440,7 @@ export class CacheAnalyticsTool extends EventEmitter {
    */
   async run(options: CacheAnalyticsOptions): Promise<CacheAnalyticsResult> {
     const startTime = Date.now();
-    const { operation, useCache = true, cacheTTL = 30 } = options;
+    const { operation, useCache = true } = options;
 
     // Generate cache key for cacheable operations
     let cacheKey: string | null = null;
@@ -512,7 +512,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
       if (cacheKey && useCache) {
         const serialized = JSON.stringify(data);
-        this.cache.set(cacheKey, serialized, serialized.length, tokensUsed);
+        this.cache.set(cacheKey, serialized, tokensUsed, serialized.length);
       }
 
       // Record metrics
@@ -1106,7 +1106,7 @@ export class CacheAnalyticsTool extends EventEmitter {
   /**
    * Generate predictions
    */
-  private generatePredictions(timeRange: {
+  private generatePredictions(_timeRange: {
     start: number;
     end: number;
   }): Prediction[] {
@@ -1187,7 +1187,7 @@ export class CacheAnalyticsTool extends EventEmitter {
   /**
    * Calculate regression
    */
-  private calculateRegression(timeRange: {
+  private calculateRegression(_timeRange: {
     start: number;
     end: number;
   }): RegressionResult {
@@ -1245,7 +1245,7 @@ export class CacheAnalyticsTool extends EventEmitter {
   /**
    * Detect seasonality
    */
-  private detectSeasonality(timeRange: {
+  private detectSeasonality(_timeRange: {
     start: number;
     end: number;
   }): SeasonalityPattern {

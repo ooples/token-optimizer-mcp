@@ -217,25 +217,25 @@ export class SmartBranchTool {
         : paginatedBranches;
 
       // Calculate tokens
-      const resultTokens = this.tokenCounter.count(
+      const resultTokenCount = this.tokenCounter.count(
         JSON.stringify(resultBranches),
-      );
+      ).tokens;
 
       // Estimate original tokens (if we had returned full git branch -vv output)
       let originalTokens: number;
       if (opts.namesOnly) {
         // Name-only mode: estimate full output would be 10x more tokens
-        originalTokens = resultTokens * 10;
+        originalTokens = resultTokenCount * 10;
       } else if (!opts.includeCommit && !opts.includeTracking) {
         // Basic info mode: estimate full output would be 5x more tokens
-        originalTokens = resultTokens * 5;
+        originalTokens = resultTokenCount * 5;
       } else {
         // Full info mode: estimate full output would be 2.5x more tokens
-        originalTokens = resultTokens * 2.5;
+        originalTokens = resultTokenCount * 2.5;
       }
 
-      const tokensSaved = originalTokens - resultTokens;
-      const compressionRatio = resultTokens / originalTokens;
+      const tokensSaved = originalTokens - resultTokenCount;
+      const compressionRatio = resultTokenCount / originalTokens;
 
       // Build result
       const result: SmartBranchResult = {
@@ -247,7 +247,7 @@ export class SmartBranchTool {
           currentBranch,
           repository: opts.cwd,
           tokensSaved,
-          tokenCount: resultTokens,
+          tokenCount: resultTokenCount,
           originalTokenCount: originalTokens,
           compressionRatio,
           duration: 0, // Will be set below
@@ -262,7 +262,7 @@ export class SmartBranchTool {
           cacheKey,
           JSON.stringify(result) as any,
           originalTokens,
-          resultTokens,
+          resultTokenCount,
         );
       }
 
@@ -273,7 +273,7 @@ export class SmartBranchTool {
       this.metrics.record({
         operation: "smart_branch",
         duration,
-        inputTokens: resultTokens,
+        inputTokens: resultTokenCount,
         outputTokens: 0,
         cachedTokens: 0,
         savedTokens: tokensSaved,

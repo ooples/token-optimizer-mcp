@@ -1217,11 +1217,11 @@ export class AnomalyExplainer {
     correlation: number;
     lag: number;
   } {
-    const maxLag = Math.min(10, Math.floor(series1.length / 2));
+    const maxLagWindow = Math.min(10, Math.floor(series1.length / 2));
     let maxCorr = 0;
     let maxLag = 0;
 
-    for (let lag = -maxLag; lag <= maxLag; lag++) {
+    for (let lag = -maxLagWindow; lag <= maxLagWindow; lag++) {
       const corr = this.correlationAtLag(series1, series2, lag);
       if (Math.abs(corr) > Math.abs(maxCorr)) {
         maxCorr = corr;
