@@ -587,7 +587,7 @@ export class SmartGraphQL {
     // Cache for 1 hour
     await this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(schemaInfo)).toString("utf-8"),
+      JSON.stringify(schemaInfo),
       0,
       3600,
     );
