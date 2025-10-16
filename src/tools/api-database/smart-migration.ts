@@ -891,8 +891,8 @@ export async function runSmartMigration(
   const { join } = await import("path");
 
   const cache = new CacheEngineClass(
-    100,
     join(homedir(), ".hypercontext", "cache"),
+    100,
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

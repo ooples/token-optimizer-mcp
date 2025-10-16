@@ -1160,8 +1160,8 @@ export async function runSmartSchema(
   const { join } = await import("path");
 
   const cacheInstance = new CacheEngineClass(
-    100,
     join(homedir(), ".hypercontext", "cache"),
+    100,
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
