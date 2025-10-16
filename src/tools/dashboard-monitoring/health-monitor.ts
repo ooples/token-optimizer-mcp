@@ -1195,14 +1195,14 @@ export class HealthMonitor {
     const graph = dependencyAnalyzer.buildDependencyGraph();
 
     // Cache dependency graph (10-minute TTL for 88% reduction)
-    const cacheKey = `cache-${createHash("md5").update("health-dependencies", "graph").digest("hex")}`;
-    const tokensUsed = this.tokenCounter.count(JSON.stringify(graph)).tokens;
-    const ttl = options.cacheTTL || 600; // 10 minutes
+    const cacheKey = `cache-${createHash("md5").update("health-dependencies:graph").digest("hex")}`;
+    const graphData = JSON.stringify(graph);
+    const tokensUsed = this.tokenCounter.count(graphData).tokens;
     this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(graph)).toString("utf-8"),
+      graphData,
       tokensUsed,
-      ttl,
+      tokensUsed,
     );
 
     return {
