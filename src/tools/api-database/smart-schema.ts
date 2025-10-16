@@ -18,10 +18,7 @@
  */
 
 import { createHash } from "crypto";
-import type { CacheEngine } from "../../core/cache-engine";
-import type { TokenCounter } from "../../core/token-counter";
-import type { MetricsCollector } from "../../core/metrics";
-import { CacheEngine as CacheEngineClass } from "../../core/cache-engine";
+import { CacheEngine, CacheEngine as CacheEngineClass } from "../../core/cache-engine";
 import { TokenCounter } from "../../core/token-counter";
 import { MetricsCollector } from "../../core/metrics";
 import { generateCacheKey } from "../shared/hash-utils";

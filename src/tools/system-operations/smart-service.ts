@@ -931,7 +931,7 @@ export async function runSmartService(
   const { join } = await import("path");
 
   const cacheInstance =
-    cache || new CacheEngine(100, join(homedir(), ".hypercontext", "cache"));
+    cache || new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
