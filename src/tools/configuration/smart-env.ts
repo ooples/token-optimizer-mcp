@@ -471,7 +471,7 @@ export class SmartEnv {
 
     for (const variable of parsed) {
       // Check for secrets in variable names
-      for (const { pattern, severity } of secretPatterns) {
+      for (const { pattern } of secretPatterns) {
         if (pattern.test(variable.key)) {
           hasSecrets = true;
 

@@ -116,18 +116,16 @@ export interface SmartSymbolsResult {
 export class SmartSymbolsTool {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private tokenCounter: TokenCounter;
   private cacheNamespace = "smart_symbols";
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string,
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }

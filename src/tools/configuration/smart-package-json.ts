@@ -832,7 +832,6 @@ export class SmartPackageJson {
       cachedAt: Date.now()
     };
 
-    const _size = JSON.stringify(cacheData).length;
     const tokensSaved = this.estimateTokensSaved(result);
 
     this.cache.set(

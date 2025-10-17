@@ -297,8 +297,6 @@ export class AnomalyExplainer {
           throw new Error(`Unknown operation: ${options.operation}`);
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-
       return {
         success: false,
         operation: options.operation,
@@ -354,7 +352,6 @@ export class AnomalyExplainer {
     const historicalData = options.historicalData || [];
 
     // Calculate anomaly score
-    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
 
     // Identify root causes
     const rootCauses = await this.identifyRootCauses(anomaly, historicalData, options.events);
@@ -408,7 +405,6 @@ export class AnomalyExplainer {
 
     const contributingFactors = this.identifyContributingFactors(anomaly, historicalData);
     const confidence = this.calculateExplanationConfidence(enrichedCauses, contributingFactors);
-    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
 
     return {
       summary: this.generateRootCauseSummary(enrichedCauses),
@@ -633,7 +629,7 @@ export class AnomalyExplainer {
 
   private async correlateEvents(options: AnomalyExplainerOptions): Promise<Correlation[]> {
     const events = options.events || [];
-    const anomaly = options.anomaly;
+    
 
     if (events.length === 0) {
       return [];
@@ -801,7 +797,6 @@ export class AnomalyExplainer {
     }
 
     const values = historicalData.map(d => d.value);
-    const meanVal = mean(values);
     const stdDevVal = stdev(values);
 
     // Z-score
@@ -822,7 +817,7 @@ export class AnomalyExplainer {
 
   private async identifyRootCauses(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
-    historicalData: Array<{ timestamp: number; value: number }>,
+    _historicalData: Array<{ timestamp: number; value: number }>,
     events?: Array<{ timestamp: number; type: string; description: string }>
   ): Promise<RootCause[]> {
     const causes: RootCause[] = [];
@@ -928,7 +923,7 @@ export class AnomalyExplainer {
     return factors.sort((a, b) => b.contribution - a.contribution);
   }
 
-  private calculateExplanationConfidence(rootCauses: RootCause[], factors: Factor[]): number {
+  private calculateExplanationConfidence(rootCauses: RootCause[], _factors: Factor[]): number {
     if (rootCauses.length === 0) return 0.5;
 
     // Confidence based on top root cause probability and number of causes
@@ -1069,7 +1064,7 @@ export class AnomalyExplainer {
   private enrichRootCauseWithEvidence(
     cause: RootCause,
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
-    historicalData: Array<{ timestamp: number; value: number }>
+    _historicalData: Array<{ timestamp: number; value: number }>
   ): RootCause {
     // Add additional evidence if not already present
     if (cause.evidence.length === 0) {
@@ -1107,7 +1102,6 @@ export class AnomalyExplainer {
 
     // Simple autocorrelation-based seasonality detection
     const values = data.map(d => d.value);
-    const meanVal = mean(values);
 
     // Check common periods: hourly, daily, weekly
     const periods = [3600000, 86400000, 604800000]; // 1h, 24h, 7d in ms
@@ -1269,7 +1263,7 @@ export class AnomalyExplainer {
     return systems.length > 0 ? systems : ['Unknown System'];
   }
 
-  private generateBusinessImpact(severity: string, anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>): string {
+  private generateBusinessImpact(severity: string, _anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>): string {
     switch (severity) {
       case 'critical':
         return 'Service outage affecting all users, potential revenue loss and SLA breach';

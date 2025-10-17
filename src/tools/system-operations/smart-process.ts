@@ -429,7 +429,7 @@ export class SmartProcess {
       ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
       : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
 
-    const { stdout } = await execAsync(query);
+    await execAsync(query);
 
     // Parse CSV output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
@@ -465,7 +465,7 @@ export class SmartProcess {
       ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
       : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
 
-    const { stdout } = await execAsync(query);
+    await execAsync(query);
 
     // Parse ps output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
@@ -510,7 +510,7 @@ export class SmartProcess {
 
   private async buildProcessTreeWindows(rootPid?: number): Promise<ProcessTreeNode> {
     // Use WMIC to get parent-child relationships
-    const { stdout } = await execAsync('wmic process get ProcessId,ParentProcessId,Name /format:csv');
+    await execAsync('wmic process get ProcessId,ParentProcessId,Name /format:csv');
 
     const lines = stdout.trim().split('\n').slice(1);
     const processMap = new Map<number, { name: string; children: number[] }>();
@@ -552,7 +552,7 @@ export class SmartProcess {
   private async buildProcessTreeUnix(rootPid?: number): Promise<ProcessTreeNode> {
     // Use pstree on Unix
     const pid = rootPid || process.pid;
-    const { stdout } = await execAsync(`pstree -p ${pid}`);
+    const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
 
     // Parse pstree output (simplified)
     return {

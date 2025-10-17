@@ -16,7 +16,7 @@ import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine';
 import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
-import { hashContent, generateCacheKey } from '../shared/hash-utils';
+import { generateCacheKey } from '../shared/hash-utils';
 import { generateUnifiedDiff } from '../shared/diff-utils';
 import { detectFileType } from '../shared/syntax-utils';
 
@@ -234,7 +234,6 @@ export class SmartWriteTool {
 
       // Step 7: Update cache
       if (opts.updateCache) {
-        const fileHash = hashContent(finalContent);
         const cacheKey = generateCacheKey('file-write', { path: filePath });
         this.cache.set(cacheKey, finalContent as any, opts.ttl, tokensSaved);
       }
