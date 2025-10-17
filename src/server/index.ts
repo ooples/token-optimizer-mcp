@@ -10,6 +10,7 @@ import {
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
+import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -192,6 +193,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             min_token_threshold: {
               type: 'number',
               description: 'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+            },
+          },
+        },
+      },
+      {
+        name: 'analyze_project_tokens',
+        description:
+          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log CSV files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectPath: {
+              type: 'string',
+              description: 'Path to the project directory. If not provided, uses the hooks data directory.',
+            },
+            startDate: {
+              type: 'string',
+              description: 'Optional start date filter (YYYY-MM-DD format).',
+            },
+            endDate: {
+              type: 'string',
+              description: 'Optional end date filter (YYYY-MM-DD format).',
+            },
+            costPerMillionTokens: {
+              type: 'number',
+              description: 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
             },
           },
         },
@@ -743,6 +770,72 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   null,
                   2
                 ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'analyze_project_tokens': {
+        const { projectPath, startDate, endDate, costPerMillionTokens } = args as {
+          projectPath?: string;
+          startDate?: string;
+          endDate?: string;
+          costPerMillionTokens?: number;
+        };
+
+        try {
+          // Use provided path or default to global hooks directory
+          const targetPath = projectPath || path.join(os.homedir());
+
+          const result = analyzeProjectTokens({
+            projectPath: targetPath,
+            startDate,
+            endDate,
+            costPerMillionTokens,
+          });
+
+          // Generate token-optimized summary
+          const summary = {
+            success: true,
+            projectPath: result.projectPath,
+            analysisTimestamp: result.analysisTimestamp,
+            dateRange: result.dateRange,
+            summary: result.summary,
+            topContributingSessions: result.topContributingSessions.slice(0, 5).map((s) => ({
+              sessionId: s.sessionId,
+              totalTokens: s.totalTokens,
+              duration: s.duration,
+              topTool: s.topTools[0]?.toolName || 'N/A',
+            })),
+            topTools: result.topTools.slice(0, 10).map((t) => ({
+              toolName: t.toolName,
+              totalTokens: t.totalTokens,
+              sessionCount: t.sessionCount,
+            })),
+            serverBreakdown: result.serverBreakdown,
+            costEstimation: result.costEstimation,
+            recommendations: result.recommendations,
+          };
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(summary, null, 2),
               },
             ],
           };
