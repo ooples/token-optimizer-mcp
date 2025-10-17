@@ -3,8 +3,8 @@
 
 // Note: .js extensions are required for ES module imports in TypeScript.
 // This is the correct syntax for runtime module resolution in Node.js ESM.
-import { analyzeTokenUsage } from './analysis/session-analyzer.js';
-import { TurnData } from './utils/thinking-mode.js';
+import { analyzeTokenUsage } from './analysis/session-analyzer';
+import { TurnData } from './utils/thinking-mode';
 
 // Analysis configuration constants
 const TOP_N_DEFAULT = 10;
@@ -193,19 +193,19 @@ case 'get_session_summary': {
       tokensByCategory: {
         tools: {
           tokens: tokensByCategory.tools,
-          percent: totalTokens > 0 ? (tokensByCategory.tools / totalTokens * 100).toFixed(2) : '0.00',
+          percent: totalTokens > 0 ? Math.round(tokensByCategory.tools / totalTokens * 10000) / 100 : 0,
         },
         hooks: {
           tokens: tokensByCategory.hooks,
-          percent: totalTokens > 0 ? (tokensByCategory.hooks / totalTokens * 100).toFixed(2) : '0.00',
+          percent: totalTokens > 0 ? Math.round(tokensByCategory.hooks / totalTokens * 10000) / 100 : 0,
         },
         responses: {
           tokens: tokensByCategory.responses,
-          percent: totalTokens > 0 ? (tokensByCategory.responses / totalTokens * 100).toFixed(2) : '0.00',
+          percent: totalTokens > 0 ? Math.round(tokensByCategory.responses / totalTokens * 10000) / 100 : 0,
         },
         system_reminders: {
           tokens: tokensByCategory.system_reminders,
-          percent: totalTokens > 0 ? (tokensByCategory.system_reminders / totalTokens * 100).toFixed(2) : '0.00',
+          percent: totalTokens > 0 ? Math.round(tokensByCategory.system_reminders / totalTokens * 10000) / 100 : 0,
         },
       },
       tokensByServer,
