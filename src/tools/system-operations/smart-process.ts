@@ -287,7 +287,7 @@ export class SmartProcess {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, Buffer.byteLength(dataStr, 'utf8'), tokensUsed);
+      await this.cache.set(cacheKey, dataStr, Buffer.byteLength(dataStr, 'utf8'), Buffer.byteLength(dataStr, 'utf8'));
     }
 
     return {
@@ -384,7 +384,7 @@ export class SmartProcess {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, Buffer.byteLength(dataStr, 'utf8'), tokensUsed);
+      await this.cache.set(cacheKey, dataStr, Buffer.byteLength(dataStr, 'utf8'), Buffer.byteLength(dataStr, 'utf8'));
     }
 
     return {
