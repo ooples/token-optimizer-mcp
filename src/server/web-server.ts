@@ -19,6 +19,9 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = 3100;
 
+// BOM (Byte Order Mark) removal regex - used to strip UTF-8 BOM character (\uFEFF) from file content
+const BOM_REGEX = /^\uFEFF/;
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -36,7 +39,7 @@ function getCurrentSessionId(): string | null {
     if (!fs.existsSync(sessionFilePath)) {
       return null;
     }
-    const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+    const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(BOM_REGEX, '');
     const sessionData = JSON.parse(sessionContent);
     return sessionData.sessionId;
   } catch (error) {
@@ -323,6 +326,6 @@ export function startWebServer() {
 }
 
 // Start server if this file is run directly
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (__filename === process.argv[1]) {
   startWebServer();
 }

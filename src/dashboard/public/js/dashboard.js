@@ -14,6 +14,8 @@ let charts = {
 // Configuration
 const API_BASE = 'http://localhost:3100/api';
 const REFRESH_INTERVAL = 5000; // 5 seconds
+const NO_SERVER_DATA_LABEL = 'No MCP Server Data'; // Placeholder label when no server attribution data is available
+const NO_SERVER_DATA_COLOR = '#334155'; // Gray color for placeholder data
 let refreshTimer = null;
 
 // Initialize dashboard
@@ -212,9 +214,9 @@ function updateCharts() {
 
     if (serverLabels.length === 0) {
         // No server data, show placeholder
-        charts.serverChart.data.labels = ['No MCP Server Data'];
+        charts.serverChart.data.labels = [NO_SERVER_DATA_LABEL];
         charts.serverChart.data.datasets[0].data = [1];
-        charts.serverChart.data.datasets[0].backgroundColor = ['#334155'];
+        charts.serverChart.data.datasets[0].backgroundColor = [NO_SERVER_DATA_COLOR];
     } else {
         charts.serverChart.data.labels = serverLabels;
         charts.serverChart.data.datasets[0].data = serverValues;
