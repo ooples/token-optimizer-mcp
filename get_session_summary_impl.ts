@@ -1,10 +1,10 @@
 // Implementation for get_session_summary tool
 // To be integrated into src/server/index.ts
 
-// Note: TypeScript handles module resolution at compile time, so we use
-// extensionless imports. The build system resolves these to .js at runtime.
-import { analyzeTokenUsage } from './analysis/session-analyzer';
-import { TurnData } from './utils/thinking-mode';
+// Note: .js extensions are required for ES module imports in TypeScript.
+// This is the correct syntax for runtime module resolution in Node.js ESM.
+import { analyzeTokenUsage, SessionAnalysisOptions } from './analysis/session-analyzer.js';
+import { TurnData } from './utils/thinking-mode.js';
 
 // Analysis configuration constants
 const TOP_N_DEFAULT = 10;
@@ -180,7 +180,8 @@ case 'get_session_summary': {
     let analysis = null;
     if (turnDataForAnalysis.length > 0) {
       try {
-        analysis = analyzeTokenUsage(turnDataForAnalysis, { topN: TOP_N_DEFAULT, anomalyThreshold: ANOMALY_THRESHOLD_DEFAULT });
+        const options: SessionAnalysisOptions = { topN: TOP_N_DEFAULT, anomalyThreshold: ANOMALY_THRESHOLD_DEFAULT };
+        analysis = analyzeTokenUsage(turnDataForAnalysis, options);
       } catch (err) {
         // Gracefully degrade if analysis fails - session summary will continue without enhanced analytics
         analysis = null;
@@ -235,7 +236,7 @@ case 'get_session_summary': {
         thinkingTurns: analysis.summary.thinkingTurns,
         planningTurns: analysis.summary.planningTurns,
         normalTurns: analysis.summary.normalTurns,
-        thinkingModePercent: Math.round(analysis.efficiency.thinkingModePercent * 100) / 100,
+        thinkingModePercent: analysis.efficiency.thinkingModePercent,
       } : null,
       anomalies: analysis?.anomalies || [],
       recommendations: analysis?.recommendations || [],
