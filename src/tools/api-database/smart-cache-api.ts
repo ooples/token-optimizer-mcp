@@ -493,9 +493,9 @@ export class SmartCacheAPI {
     }> = [];
 
     for (const key of allKeys) {
-      const cachedBuffer = this.cache.get(key);
-      const cached = cachedBuffer
-        ? this.deserializeCachedResponse(cachedBuffer)
+      const cachedString = this.cache.get(key);
+      const cached = cachedString
+        ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
         : null;
       if (cached) {
         entryCount++;
