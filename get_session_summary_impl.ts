@@ -1,6 +1,15 @@
 // Implementation for get_session_summary tool
 // To be integrated into src/server/index.ts
 
+// Note: .js extensions are required for ES module imports in TypeScript.
+// This is the correct syntax for runtime module resolution in Node.js ESM.
+import { analyzeTokenUsage, SessionAnalysisOptions } from './analysis/session-analyzer.js';
+import { TurnData } from './utils/thinking-mode.js';
+
+// Analysis configuration constants
+const TOP_N_DEFAULT = 10;
+const ANOMALY_THRESHOLD_DEFAULT = 3;
+
 case 'get_session_summary': {
   const { sessionId } = args as { sessionId?: string };
 
@@ -61,6 +70,7 @@ case 'get_session_summary': {
     const toolDurations: number[] = [];
     const toolBreakdown: Record<string, { count: number; tokens: number; totalDuration: number }> = {};
     const hookBreakdown: Record<string, { count: number; tokens: number }> = {};
+    const turnDataForAnalysis: TurnData[] = [];
 
     // Parse each JSONL event
     for (const line of lines) {
@@ -101,6 +111,14 @@ case 'get_session_summary': {
             const serverName = event.toolName.split('__')[1] || 'unknown';
             tokensByServer[serverName] = (tokensByServer[serverName] || 0) + tokens;
           }
+
+          // Collect data for advanced analysis
+          turnDataForAnalysis.push({
+            timestamp: event.timestamp,
+            toolName: event.toolName,
+            tokens,
+            metadata: event.metadata || '',
+          });
         }
 
         // Process tool results (duration tracking)
@@ -158,6 +176,23 @@ case 'get_session_summary': {
       ? Math.round(toolDurations.reduce((sum, d) => sum + d, 0) / toolDurations.length)
       : 0;
 
+    // Run advanced analysis with error handling
+    let analysis = null;
+    if (turnDataForAnalysis.length > 0) {
+      try {
+        const options: SessionAnalysisOptions = { topN: TOP_N_DEFAULT, anomalyThreshold: ANOMALY_THRESHOLD_DEFAULT };
+        analysis = analyzeTokenUsage(turnDataForAnalysis, options);
+      } catch (err) {
+        // Gracefully degrade if analysis fails - session summary will continue without enhanced analytics
+        analysis = null;
+      }
+    }
+
+    // Helper function to calculate percentage with 2 decimal precision
+    const calculatePercentage = (value: number, total: number): number => {
+      return total > 0 ? Math.round(value / total * 10000) / 100 : 0;
+    };
+
     // Build response
     const summary = {
       success: true,
@@ -170,19 +205,19 @@ case 'get_session_summary': {
       tokensByCategory: {
         tools: {
           tokens: tokensByCategory.tools,
-          percent: totalTokens > 0 ? (tokensByCategory.tools / totalTokens * 100).toFixed(2) : '0.00',
+          percent: calculatePercentage(tokensByCategory.tools, totalTokens),
         },
         hooks: {
           tokens: tokensByCategory.hooks,
-          percent: totalTokens > 0 ? (tokensByCategory.hooks / totalTokens * 100).toFixed(2) : '0.00',
+          percent: calculatePercentage(tokensByCategory.hooks, totalTokens),
         },
         responses: {
           tokens: tokensByCategory.responses,
-          percent: totalTokens > 0 ? (tokensByCategory.responses / totalTokens * 100).toFixed(2) : '0.00',
+          percent: calculatePercentage(tokensByCategory.responses, totalTokens),
         },
         system_reminders: {
           tokens: tokensByCategory.system_reminders,
-          percent: totalTokens > 0 ? (tokensByCategory.system_reminders / totalTokens * 100).toFixed(2) : '0.00',
+          percent: calculatePercentage(tokensByCategory.system_reminders, totalTokens),
         },
       },
       tokensByServer,
@@ -193,6 +228,22 @@ case 'get_session_summary': {
         totalToolCalls: totalTools,
         toolsWithDuration: toolDurations.length,
       },
+      // Enhanced analytics
+      hourlyTrends: analysis?.hourlyTrend || [],
+      toolCallPatterns: analysis?.topConsumers || [],
+      serverEfficiency: analysis?.byServer || [],
+      thinkingModeAnalysis: analysis ? {
+        thinkingTurns: analysis.summary.thinkingTurns,
+        planningTurns: analysis.summary.planningTurns,
+        normalTurns: analysis.summary.normalTurns,
+        thinkingModePercent: analysis.efficiency.thinkingModePercent,
+      } : null,
+      anomalies: analysis?.anomalies || [],
+      recommendations: analysis?.recommendations || [],
+      efficiency: analysis ? {
+        tokensPerTool: Math.round(analysis.efficiency.tokensPerTool),
+        cacheHitPotential: analysis.efficiency.cacheHitPotential,
+      } : null,
     };
 
     return {
