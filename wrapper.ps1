@@ -186,6 +186,9 @@ The log directory to validate.
 
 .PARAMETER BaseLogDir
 The base directory against which to validate the log directory.
+
+.OUTPUTS
+[bool] Returns $true if $LogDir is safe, $false otherwise.
 #>
 function Test-LogDirIsSafe {
     param(
@@ -197,13 +200,23 @@ function Test-LogDirIsSafe {
     $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
     $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
 
-    # Check if LogDir starts with BaseLogDir (case-insensitive for Windows compatibility)
-    # This ensures LogDir is either the same as BaseLogDir or a subdirectory of it
-    if (-not $resolvedLogDir.StartsWith($resolvedBaseLogDir, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $false
+    # Normalize paths to lowercase for case-insensitive comparison (Windows)
+    $logDirNorm = $resolvedLogDir.ToLower()
+    $baseLogDirNorm = $resolvedBaseLogDir.ToLower()
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+
+    # Allow if $LogDir is exactly $BaseLogDir
+    if ($logDirNorm -eq $baseLogDirNorm) {
+        return $true
     }
 
-    return $true
+    # Allow if $LogDir is a subdirectory of $BaseLogDir
+    if ($logDirNorm.StartsWith($baseLogDirNorm + $sep)) {
+        return $true
+    }
+
+    # Otherwise, path traversal detected
+    return $false
 }
 
 function Initialize-Session {
@@ -337,7 +350,7 @@ The algorithm uses configurable lookback to balance accuracy vs performance.
 The current line from the input stream to analyze.
 
 .PARAMETER PreviousLines
-Array of previous lines to search for tool call context.
+Queue or array of previous lines to search for tool call context.
 
 .PARAMETER LookbackLimit
 Maximum number of previous lines to search (default: 20).
@@ -345,7 +358,7 @@ Maximum number of previous lines to search (default: 20).
 function Parse-ToolCallFromContext {
     param(
         [string]$CurrentLine,
-        [string[]]$PreviousLines,
+        $PreviousLines,  # Accept Queue or Array
         [int]$LookbackLimit = 20
     )
 
@@ -357,9 +370,16 @@ function Parse-ToolCallFromContext {
     }
 
     # Pattern 2: Search previous lines for recent tool invocation
-    $lookback = [Math]::Min($LookbackLimit, $PreviousLines.Count)
-    for ($i = $PreviousLines.Count - 1; $i -ge [Math]::Max(0, $PreviousLines.Count - $lookback); $i--) {
-        if ($PreviousLines[$i] -match $toolCallPattern) {
+    # Handle both Queue and Array types efficiently
+    $linesArray = if ($PreviousLines -is [System.Collections.Generic.Queue[string]]) {
+        $PreviousLines.ToArray()
+    } else {
+        $PreviousLines
+    }
+
+    $lookback = [Math]::Min($LookbackLimit, $linesArray.Count)
+    for ($i = $linesArray.Count - 1; $i -ge [Math]::Max(0, $linesArray.Count - $lookback); $i--) {
+        if ($linesArray[$i] -match $toolCallPattern) {
             return $matches[1]
         }
     }
@@ -513,10 +533,10 @@ function Invoke-ClaudeCodeWrapper {
             # Add to line buffer (for context lookback)
             # Note: LineBufferSize is configurable via parameter (default: 100)
             # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
-            $lineBuffer.Enqueue($line)
-            if ($lineBuffer.Count -gt $LineBufferSize) {
+            if ($lineBuffer.Count -ge $LineBufferSize) {
                 $lineBuffer.Dequeue()  # Remove oldest line efficiently
             }
+            $lineBuffer.Enqueue($line)
 
             # Performance tracking
             $parseStartTime = Get-Date
@@ -530,8 +550,8 @@ function Invoke-ClaudeCodeWrapper {
                 # Performance optimization: Only call Parse-ToolCallFromContext when token count increases
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
                     # Detect tool call from context (ONLY when tokens increased)
-                    # Convert Queue to array for pattern matching
-                    $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines @($lineBuffer.ToArray())
+                    # Pass Queue directly to avoid ToArray() conversion overhead
+                    $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
 
                     if ($toolName) {
                         Write-VerboseLog "Detected tool call: $toolName"
