@@ -804,7 +804,7 @@ export class LogDashboard {
     return undefined;
   }
 
-  // NOTE: Cache key format: log-dashboard:${prefix}:${suffix}
+  // NOTE: Cache key is the md5 hash of `log-dashboard:${prefix}:${suffix}`, prefixed with "cache-"
   private getCacheKey(prefix: string, suffix: string): string {
     const hash = createHash("md5");
     hash.update(`log-dashboard:${prefix}:${suffix}`);
