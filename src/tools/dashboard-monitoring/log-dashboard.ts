@@ -804,7 +804,7 @@ export class LogDashboard {
     return undefined;
   }
 
-  // NOTE: Cache key format changed - existing cache entries will be invalidated after deployment
+  // NOTE: Cache key format: log-dashboard:${prefix}:${suffix}
   private getCacheKey(prefix: string, suffix: string): string {
     const hash = createHash("md5");
     hash.update(`log-dashboard:${prefix}:${suffix}`);
