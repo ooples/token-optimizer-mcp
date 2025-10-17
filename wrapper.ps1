@@ -418,16 +418,23 @@ function Invoke-ClaudeCodeWrapper {
         Write-VerboseLog "Wrapper ready - real-time stream processing active"
 
         # Configure console encoding for proper Unicode handling
-        # IMPORTANT: This prevents encoding issues when reading from stdin with ReadLine()
+        # IMPORTANT: Setting InputEncoding and OutputEncoding to UTF8 prevents encoding mismatches
+        # between the console and piped data, ensuring Unicode characters are handled correctly.
+        # This addresses the concern that [Console]::In.ReadLine() could have encoding issues.
         [Console]::InputEncoding = [System.Text.Encoding]::UTF8
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
         $input = [Console]::In
         while ($true) {
-            # DESIGN NOTE: ReadLine() uses blocking I/O intentionally. The wrapper is designed
-            # to run as a piped subprocess where stdin is managed by the parent process (e.g., Claude Code).
-            # The stream closes automatically when the parent terminates, preventing indefinite hangs.
-            # For other contexts requiring timeout mechanisms, see CLI_INTEGRATION.md recommendations.
+            # DESIGN NOTE - Blocking I/O is intentional:
+            # This wrapper is designed to run as a piped subprocess where stdin is managed by the
+            # parent process (e.g., Claude Code CLI). The stream closes automatically when the parent
+            # terminates, preventing indefinite hangs. The explicit null check (line 434) ensures we
+            # detect EOF and exit gracefully. Timeout mechanisms are not required as the wrapper
+            # lifecycle is controlled by the parent process. For alternative contexts, consider:
+            # - Using async I/O with CancellationToken for timeout support
+            # - Implementing heartbeat detection for stalled streams
+            # - Using StreamReader with timeout for non-console scenarios
             $line = $input.ReadLine()
 
             # Check for end of stream
