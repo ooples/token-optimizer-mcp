@@ -638,7 +638,7 @@ export function getSmartRefactorTool(
 
 // Standalone function for CLI usage
 export async function runSmartRefactor(options: SmartRefactorOptions): Promise<SmartRefactorResult> {
-  const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartRefactorTool(cache, tokenCounter, metrics, options.projectRoot);

@@ -468,7 +468,7 @@ export async function runSmartEdit(
   operations: EditOperation | EditOperation[],
   options: SmartEditOptions = {}
 ): Promise<SmartEditResult> {
-  const cache = new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

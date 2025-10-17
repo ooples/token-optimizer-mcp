@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart ORM - 83% token reduction through intelligent ORM query optimization
  *
  * Features:
@@ -823,8 +823,8 @@ export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   );
 
   const cache = new CacheEngineClass(
-    100,
     join(homedir(), ".hypercontext", "cache"),
+    100,
   );
   const orm = getSmartOrm(cache, globalTokenCounter, globalMetricsCollector);
   const result = await orm.run(options);

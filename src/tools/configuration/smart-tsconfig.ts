@@ -612,7 +612,7 @@ export function getSmartTsConfig(
 export async function runSmartTsconfig(
   options: SmartTsConfigOptions = {},
 ): Promise<SmartTsConfigOutput> {
-  const cache = new CacheEngine(500, join(homedir(), ".hypercontext", "cache"));
+  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"));
   const tokenCounter = new TokenCounter();
   const projectRoot = options.projectRoot ?? process.cwd();
   const tool = getSmartTsConfig(cache, tokenCounter, projectRoot);

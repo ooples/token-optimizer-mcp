@@ -589,7 +589,7 @@ export async function runSmartLint(
   options: SmartLintOptions = {},
 ): Promise<string> {
   const cacheDir = join(homedir(), ".hypercontext", "cache");
-  const cache = new CacheEngine(100, cacheDir);
+  const cache = new CacheEngine(cacheDir, 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartLint = new SmartLint(
