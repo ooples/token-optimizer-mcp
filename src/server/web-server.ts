@@ -10,7 +10,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -227,10 +227,10 @@ app.get('/api/session-summary', (req, res) => {
       },
     };
 
-    res.json(summary);
+    return res.json(summary);
   } catch (error) {
     console.error('Error in /api/session-summary:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -281,7 +281,7 @@ app.get('/api/session-events', (req, res) => {
     // Apply pagination
     const paginatedEvents = events.slice(offset, offset + limit);
 
-    res.json({
+    return res.json({
       success: true,
       sessionId,
       total: events.length,
@@ -291,7 +291,7 @@ app.get('/api/session-events', (req, res) => {
     });
   } catch (error) {
     console.error('Error in /api/session-events:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -323,6 +323,6 @@ export function startWebServer() {
 }
 
 // Start server if this file is run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   startWebServer();
 }

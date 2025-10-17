@@ -29,6 +29,8 @@
   "homepage": "https://github.com/ooples/token-optimizer-mcp#readme",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.7.2",
     "@types/tar-stream": "^3.1.4",
@@ -38,8 +40,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.3",
     "better-sqlite3": "^12.4.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",

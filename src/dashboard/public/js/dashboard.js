@@ -398,12 +398,76 @@ function setLoadingState(isLoading) {
 }
 
 /**
- * Show error message
+ * Show error message with non-blocking UI
  */
 function showError(message) {
     console.error('Dashboard Error:', message);
-    // You can implement a toast notification here
-    alert(`Error: ${message}`);
+
+    // Create or get error container
+    let errorContainer = document.getElementById('error-container');
+    if (!errorContainer) {
+        errorContainer = document.createElement('div');
+        errorContainer.id = 'error-container';
+        errorContainer.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-width: 400px;
+            z-index: 9999;
+        `;
+        document.body.appendChild(errorContainer);
+    }
+
+    // Create error notification
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-notification';
+    errorDiv.style.cssText = `
+        background-color: #ef4444;
+        color: white;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        animation: slideIn 0.3s ease-out;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    `;
+
+    errorDiv.innerHTML = `
+        <div style="flex: 1;">
+            <strong>Error</strong><br/>
+            <span style="font-size: 14px;">${escapeHtml(message)}</span>
+        </div>
+        <button onclick="this.parentElement.remove()" style="
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        ">&times;</button>
+    `;
+
+    errorContainer.appendChild(errorDiv);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (errorDiv.parentElement) {
+            errorDiv.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => errorDiv.remove(), 300);
+        }
+    }, 5000);
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 /**
