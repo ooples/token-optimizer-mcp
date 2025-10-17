@@ -169,14 +169,18 @@ function Initialize-Session {
     Write-VerboseLog "Initializing session: $($global:SessionState.SessionId)"
 
     # Validate log directory path to prevent path traversal attacks
-    if ($LogDir -match '\.\./|\.\.\\') {
-        throw "Invalid log directory path: path traversal detected. Path cannot contain '../' or '..\'."
+    # Use GetFullPath to resolve the path and check if it's within the expected base directory
+    $BaseLogDir = [System.IO.Path]::GetFullPath((Join-Path $env:USERPROFILE "token-optimizer-logs"))
+    $ResolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
+
+    if (-not ($ResolvedLogDir.ToLower().StartsWith($BaseLogDir.ToLower() + [System.IO.Path]::DirectorySeparatorChar)) -and ($ResolvedLogDir.ToLower() -ne $BaseLogDir.ToLower())) {
+        throw "Invalid log directory path: path traversal detected. LogDir must be within $BaseLogDir."
     }
 
     # Create log directory if it doesn't exist
-    if (-not (Test-Path $LogDir -PathType Container)) {
-        Write-VerboseLog "Creating log directory: $LogDir"
-        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    if (-not (Test-Path $ResolvedLogDir -PathType Container)) {
+        Write-VerboseLog "Creating log directory: $ResolvedLogDir"
+        New-Item -ItemType Directory -Path $ResolvedLogDir -Force | Out-Null
     }
 
     # Create session-log.jsonl if it doesn't exist
@@ -363,15 +367,16 @@ function Invoke-ClaudeCodeWrapper {
         Write-VerboseLog "Wrapper ready - real-time stream processing active"
 
         # Real-time processing loop - reads from stdin
-        # DESIGN NOTE: ReadLine() uses blocking I/O by design. This is intentional for MCP wrapper context
-        # where stdin is guaranteed to be managed by the MCP host (Claude Code). The stream will
-        # properly close when the host terminates, preventing indefinite hangs. Timeout mechanisms
-        # are not required as the wrapper lifecycle is controlled by the host process.
-        #
-        # For production use in other contexts (non-MCP environments), consider adding:
-        # 1. Timeout mechanisms using System.Threading.Tasks with cancellation tokens
-        # 2. Async I/O with proper stream disposal
-        # 3. Heartbeat detection to identify stalled streams
+        # DESIGN NOTE: ReadLine() uses blocking I/O by design. This is intentional for MCP wrapper context,
+        # where stdin is managed by the MCP host (Claude Code). The stream closes when the host terminates,
+        # preventing indefinite hangs. Timeout mechanisms are not required as the wrapper lifecycle is controlled
+        # by the host process.
+        # For production recommendations in other contexts, see CLI_INTEGRATION.md.
+
+        # Configure console encoding for proper Unicode handling
+        [Console]::InputEncoding = [System.Text.Encoding]::UTF8
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
         $input = [Console]::In
         while ($true) {
             $line = $input.ReadLine()

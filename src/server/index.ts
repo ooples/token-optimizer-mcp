@@ -798,7 +798,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
           }
 
-          // Return compressed data (caller will decompress if needed)
+          // Return cached data (already stored in compressed format by cache.set)
+          // The 'cached' value is the base64-encoded Brotli-compressed data stored by previous operations
+          // Caller is responsible for decompressing using CompressionEngine.decompressFromBase64() if needed
           return {
             content: [
               {
