@@ -1,7 +1,7 @@
 # Enhanced Token Tracking Wrapper for Claude Code
 # Purpose: Real-time session logging with turn-level tracking and MCP server attribution
 # Implements Priority 1: Session-level token tracking with JSONL event log
-#
+# Version: 1.0.0
 # Features:
 # - Parses system warnings to extract token deltas
 # - Tracks turn-level events (turn_start, tool_call, turn_end)
