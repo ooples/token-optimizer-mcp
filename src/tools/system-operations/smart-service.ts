@@ -245,7 +245,7 @@ export class SmartService {
   private async getServiceStatus(
     options: SmartServiceOptions,
   ): Promise<SmartServiceResult> {
-    const cacheKey = `cache-${crypto.createHash("md5").update("service-status", `${options.serviceType}:${options.serviceName}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${options.serviceType}:${options.serviceName}`).digest("hex")}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -473,7 +473,7 @@ export class SmartService {
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
       // Invalidate cache
-      const cacheKey = `cache-${crypto.createHash("md5").update("service-status", `${serviceType}:${serviceName}`).digest("hex")}`;
+      const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${serviceType}:${serviceName}`).digest("hex")}`;
       await this.cache.delete(cacheKey);
 
       return {
@@ -523,7 +523,7 @@ export class SmartService {
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
       // Invalidate cache
-      const cacheKey = `cache-${crypto.createHash("md5").update("service-status", `${serviceType}:${serviceName}`).digest("hex")}`;
+      const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${serviceType}:${serviceName}`).digest("hex")}`;
       await this.cache.delete(cacheKey);
 
       return {
@@ -576,7 +576,7 @@ export class SmartService {
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
       // Invalidate cache
-      const cacheKey = `cache-${crypto.createHash("md5").update("service-status", `${serviceType}:${serviceName}`).digest("hex")}`;
+      const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${serviceType}:${serviceName}`).digest("hex")}`;
       await this.cache.delete(cacheKey);
 
       return {
@@ -786,7 +786,7 @@ export class SmartService {
   private async listDependencies(
     options: SmartServiceOptions,
   ): Promise<SmartServiceResult> {
-    const cacheKey = `cache-${crypto.createHash("md5").update("service-deps", `${options.serviceType}:${options.serviceName}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash("md5").update(`service-deps:${options.serviceType}:${options.serviceName}`).digest("hex")}`;
     const useCache = options.useCache !== false;
 
     // Check cache

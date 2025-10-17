@@ -285,7 +285,7 @@ export class SmartCron {
   private async listJobs(options: SmartCronOptions): Promise<SmartCronResult> {
     const cacheKey = `cache-${crypto
       .createHash("md5")
-      .update("cron-list", options.schedulerType || "auto")
+      .update(`cron-list:${options.schedulerType || "auto"}`)
       .digest("hex")}`;
     const useCache = options.useCache !== false;
 
@@ -322,7 +322,7 @@ export class SmartCron {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, options.ttl || 60, "utf-8");
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
@@ -567,7 +567,7 @@ export class SmartCron {
     // Invalidate cache
     const cacheKey = `cache-${crypto
       .createHash("md5")
-      .update("cron-list", options.schedulerType || "auto")
+      .update(`cron-list:${options.schedulerType || "auto"}`)
       .digest("hex")}`;
     await this.cache.delete(cacheKey);
 
@@ -712,7 +712,7 @@ export class SmartCron {
     // Invalidate cache
     const cacheKey = `cache-${crypto
       .createHash("md5")
-      .update("cron-list", options.schedulerType || "auto")
+      .update(`cron-list:${options.schedulerType || "auto"}`)
       .digest("hex")}`;
     await this.cache.delete(cacheKey);
 
@@ -841,7 +841,7 @@ export class SmartCron {
     // Invalidate cache
     const cacheKey = `cache-${crypto
       .createHash("md5")
-      .update("cron-list", options.schedulerType || "auto")
+      .update(`cron-list:${options.schedulerType || "auto"}`)
       .digest("hex")}`;
     await this.cache.delete(cacheKey);
 
@@ -916,7 +916,7 @@ export class SmartCron {
       throw new Error("taskName is required for history operation");
     }
 
-    const cacheKey = `cache-${crypto.createHash("md5").update("cron-history", `${options.schedulerType}:${options.taskName}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash("md5").update(`cron-history:${options.schedulerType}:${options.taskName}`).digest("hex")}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -952,7 +952,7 @@ export class SmartCron {
 
     // Cache the result (short TTL as history changes frequently)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, options.ttl || 30, "utf-8");
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
@@ -1071,10 +1071,8 @@ export class SmartCron {
       );
     }
 
-    const cacheKey = generateCacheKey(
-      "cron-predict",
-      options.taskName || options.schedule!,
-    );
+    const keyInput = options.taskName || options.schedule!;
+    const cacheKey = generateCacheKey("cron-predict", keyInput);
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -1129,7 +1127,7 @@ export class SmartCron {
 
     // Cache the result (longer TTL as schedule doesn't change often)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, options.ttl || 300, "utf-8");
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
