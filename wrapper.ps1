@@ -168,6 +168,11 @@ function Parse-SystemWarning {
 function Initialize-Session {
     Write-VerboseLog "Initializing session: $($global:SessionState.SessionId)"
 
+    # Validate log directory path to prevent path traversal attacks
+    if ($LogDir -match '\.\./|\.\.\\') {
+        throw "Invalid log directory path: path traversal detected. Path cannot contain '../' or '..\'."
+    }
+
     # Create log directory if it doesn't exist
     if (-not (Test-Path $LogDir -PathType Container)) {
         Write-VerboseLog "Creating log directory: $LogDir"
@@ -352,6 +357,7 @@ function Invoke-ClaudeCodeWrapper {
     $lineBuffer = [System.Collections.ArrayList]::new()
     $pendingToolCall = $null
     $lastTokenCount = 0
+    $tokenIncreaseDetected = $false  # State tracking to optimize tool call detection
 
     try {
         Write-VerboseLog "Wrapper ready - real-time stream processing active"
@@ -387,7 +393,8 @@ function Invoke-ClaudeCodeWrapper {
 
                 # Check if this is a tool call transition (tokens increased)
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
-                    # Detect tool call from context
+                    $tokenIncreaseDetected = $true
+                    # Detect tool call from context (ONLY when tokens increased)
                     $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
 
                     if ($toolName) {
@@ -427,13 +434,7 @@ function Invoke-ClaudeCodeWrapper {
 
                 $global:SessionState.LastTokens = $tokenInfo.Used
                 $global:SessionState.TotalTokens = $tokenInfo.Total
-            }
-
-            # Detect tool invocation (for pending tool call tracking)
-            $toolMatch = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines @($line)
-            if ($toolMatch) {
-                $pendingToolCall = $toolMatch
-                Write-VerboseLog "Pending tool call: $pendingToolCall"
+                $tokenIncreaseDetected = $false  # Reset flag after processing
             }
 
             # Check for turn boundaries (user input pattern)
