@@ -181,6 +181,11 @@ case 'get_session_summary': {
       ? analyzeTokenUsage(turnDataForAnalysis, { topN: TOP_N_DEFAULT, anomalyThreshold: ANOMALY_THRESHOLD_DEFAULT })
       : null;
 
+    // Helper function to calculate percentage with 2 decimal precision
+    const calculatePercentage = (value: number, total: number): number => {
+      return total > 0 ? Math.round(value / total * 10000) / 100 : 0;
+    };
+
     // Build response
     const summary = {
       success: true,
@@ -193,19 +198,19 @@ case 'get_session_summary': {
       tokensByCategory: {
         tools: {
           tokens: tokensByCategory.tools,
-          percent: totalTokens > 0 ? Math.round(tokensByCategory.tools / totalTokens * 10000) / 100 : 0,
+          percent: calculatePercentage(tokensByCategory.tools, totalTokens),
         },
         hooks: {
           tokens: tokensByCategory.hooks,
-          percent: totalTokens > 0 ? Math.round(tokensByCategory.hooks / totalTokens * 10000) / 100 : 0,
+          percent: calculatePercentage(tokensByCategory.hooks, totalTokens),
         },
         responses: {
           tokens: tokensByCategory.responses,
-          percent: totalTokens > 0 ? Math.round(tokensByCategory.responses / totalTokens * 10000) / 100 : 0,
+          percent: calculatePercentage(tokensByCategory.responses, totalTokens),
         },
         system_reminders: {
           tokens: tokensByCategory.system_reminders,
-          percent: totalTokens > 0 ? Math.round(tokensByCategory.system_reminders / totalTokens * 10000) / 100 : 0,
+          percent: calculatePercentage(tokensByCategory.system_reminders, totalTokens),
         },
       },
       tokensByServer,
