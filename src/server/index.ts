@@ -778,6 +778,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'lookup_cache': {
+        /**
+         * lookup_cache: Look up a cached value by key.
+         *
+         * Returns the cached value if found (in compressed format).
+         * The returned 'cached' value is base64-encoded Brotli-compressed data
+         * as stored by previous cache.set operations. Caller is responsible for
+         * decompressing using CompressionEngine.decompressFromBase64() if needed.
+         *
+         * @param {string} key - Cache key to look up
+         * @returns {Object} Response with success, found flags, and compressed data if found
+         */
         const { key } = args as { key: string };
 
         try {
@@ -798,9 +809,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
           }
 
-          // Return cached data (already stored in compressed format by cache.set)
-          // The 'cached' value is the base64-encoded Brotli-compressed data stored by previous operations
-          // Caller is responsible for decompressing using CompressionEngine.decompressFromBase64() if needed
           return {
             content: [
               {

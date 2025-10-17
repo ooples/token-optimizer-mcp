@@ -13,7 +13,7 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$SessionId = "",
-    # Default: %USERPROFILE%\token-optimizer-logs (e.g., C:\Users\YourName\token-optimizer-logs)
+    # Default: $env:USERPROFILE\token-optimizer-logs (e.g., C:\Users\YourName\token-optimizer-logs)
     [Parameter(Mandatory = $false)]
     [string]$LogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs"),
     [Parameter(Mandatory = $false)]
@@ -165,6 +165,34 @@ function Parse-SystemWarning {
     return $null
 }
 
+# Checks if the provided log directory is within the allowed base directory.
+# Prevents path traversal attacks by ensuring $LogDir is either the same as $BaseLogDir
+# or a subdirectory of it. Both paths are resolved to their absolute forms.
+function Test-LogDirIsSafe {
+    param(
+        [string]$LogDir,
+        [string]$BaseLogDir
+    )
+
+    # Normalize paths to lower case for case-insensitive comparison (Windows)
+    $logDirNorm = $LogDir.ToLower()
+    $baseLogDirNorm = $BaseLogDir.ToLower()
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+
+    # Allow if $LogDir is exactly $BaseLogDir
+    if ($logDirNorm -eq $baseLogDirNorm) {
+        return $true
+    }
+
+    # Allow if $LogDir is a subdirectory of $BaseLogDir
+    if ($logDirNorm.StartsWith($baseLogDirNorm + $sep)) {
+        return $true
+    }
+
+    # Otherwise, path traversal detected
+    return $false
+}
+
 function Initialize-Session {
     Write-VerboseLog "Initializing session: $($global:SessionState.SessionId)"
 
@@ -173,7 +201,7 @@ function Initialize-Session {
     $BaseLogDir = [System.IO.Path]::GetFullPath((Join-Path $env:USERPROFILE "token-optimizer-logs"))
     $ResolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
 
-    if (-not ($ResolvedLogDir.ToLower().StartsWith($BaseLogDir.ToLower() + [System.IO.Path]::DirectorySeparatorChar)) -and ($ResolvedLogDir.ToLower() -ne $BaseLogDir.ToLower())) {
+    if (-not (Test-LogDirIsSafe -LogDir $ResolvedLogDir -BaseLogDir $BaseLogDir)) {
         throw "Invalid log directory path: path traversal detected. LogDir must be within $BaseLogDir."
     }
 
@@ -347,6 +375,22 @@ function Inject-CachedResponse {
 # Main Wrapper Logic
 # ============================================================================
 
+<#
+.SYNOPSIS
+Real-time CLI wrapper for Claude Code that tracks token usage and logs events.
+
+.DESCRIPTION
+Processes stdin in real-time, parses system warnings to extract token deltas,
+tracks turn-level events, and writes to session-log.jsonl.
+
+DESIGN NOTE - Blocking I/O:
+ReadLine() uses blocking I/O by design. This is intentional for the wrapper context,
+where stdin is managed by a parent process such as Claude Code (a CLI tool that may
+use MCP servers). The stream closes when the parent process terminates, preventing
+indefinite hangs. Timeout mechanisms are not required as the wrapper lifecycle is
+controlled by the parent process.
+For production recommendations in other contexts, see CLI_INTEGRATION.md.
+#>
 function Invoke-ClaudeCodeWrapper {
     Write-Host "Token Optimizer MCP - Enhanced Session Wrapper (Real-Time Mode)" -ForegroundColor Green
     Write-Host "Session ID: $($global:SessionState.SessionId)" -ForegroundColor Yellow
@@ -361,17 +405,9 @@ function Invoke-ClaudeCodeWrapper {
     $lineBuffer = [System.Collections.ArrayList]::new()
     $pendingToolCall = $null
     $lastTokenCount = 0
-    $tokenIncreaseDetected = $false  # State tracking to optimize tool call detection
 
     try {
         Write-VerboseLog "Wrapper ready - real-time stream processing active"
-
-        # Real-time processing loop - reads from stdin
-        # DESIGN NOTE: ReadLine() uses blocking I/O by design. This is intentional for MCP wrapper context,
-        # where stdin is managed by the MCP host (Claude Code). The stream closes when the host terminates,
-        # preventing indefinite hangs. Timeout mechanisms are not required as the wrapper lifecycle is controlled
-        # by the host process.
-        # For production recommendations in other contexts, see CLI_INTEGRATION.md.
 
         # Configure console encoding for proper Unicode handling
         [Console]::InputEncoding = [System.Text.Encoding]::UTF8
@@ -403,7 +439,6 @@ function Invoke-ClaudeCodeWrapper {
 
                 # Check if this is a tool call transition (tokens increased)
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
-                    $tokenIncreaseDetected = $true
                     # Detect tool call from context (ONLY when tokens increased)
                     $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
 
@@ -444,12 +479,12 @@ function Invoke-ClaudeCodeWrapper {
 
                 $global:SessionState.LastTokens = $tokenInfo.Used
                 $global:SessionState.TotalTokens = $tokenInfo.Total
-                $tokenIncreaseDetected = $false  # Reset flag after processing
             }
 
             # Check for turn boundaries (user input pattern)
             # Pattern: Look for conversation turn markers
-            if ($line -match '^\s*User:' -or $line -match '^Human:') {
+            $userMessagePattern = '^\s*(User|Human):'
+            if ($line -match $userMessagePattern) {
                 if ($inTurn) {
                     End-Turn
                     $inTurn = $false
