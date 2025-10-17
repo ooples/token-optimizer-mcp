@@ -492,6 +492,7 @@ export class MonitoringIntegration {
     return hash.digest("hex").substring(0, 16);
   }
 
+  // NOTE: Cache key format changed - existing cache entries will be invalidated after deployment
   private getCacheKey(prefix: string, suffix: string): string {
     const hash = createHash("md5");
     hash.update(`monitoring-integration:${prefix}:${suffix}`);
@@ -554,13 +555,13 @@ export class MonitoringIntegration {
   private async persistConnections(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "connections");
     const data = JSON.stringify(Array.from(this.connections.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistMappings(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "mappings");
     const data = JSON.stringify(Array.from(this.fieldMappings.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {

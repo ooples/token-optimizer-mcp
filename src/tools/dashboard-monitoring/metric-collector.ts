@@ -820,6 +820,7 @@ export class MetricCollector {
     return hash.digest("hex").substring(0, 16);
   }
 
+  // NOTE: Cache key format changed - existing cache entries will be invalidated after deployment
   private getCacheKey(prefix: string, suffix: string): string {
     const hash = createHash("md5");
     hash.update(`metric-collector:${prefix}:${suffix}`);
@@ -1200,13 +1201,13 @@ export class MetricCollector {
   private async persistSources(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "sources");
     const data = JSON.stringify(Array.from(this.sources.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistData(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "compressed");
     const data = JSON.stringify(Array.from(this.compressedSeries.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {
