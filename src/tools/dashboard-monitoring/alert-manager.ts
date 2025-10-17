@@ -358,21 +358,20 @@ export class AlertManager {
     // Store alert
     this.alerts.set(alertId, alert);
 
-    // Cache alert metadata (92% reduction, 6-hour TTL)
+    // Cache alert metadata (92% reduction)
     const cacheKey = `cache-${createHash("md5").update(`alert-manager:alert:${alertId}`).digest("hex")}`;
     const alertMetadata = this.compressAlertMetadata(alert);
     const cachedData = JSON.stringify(alertMetadata);
 
     const tokensUsed = this.tokenCounter.count(JSON.stringify(alert)).tokens;
-    const tokensSaved =
-      tokensUsed -
-      this.tokenCounter.count(JSON.stringify(alertMetadata)).tokens;
+    const compressedTokens = this.tokenCounter.count(cachedData).tokens;
+    const tokensSaved = tokensUsed - compressedTokens;
 
     await this.cache.set(
       cacheKey,
       cachedData,
       tokensUsed,
-      this.tokenCounter.count(cachedData).tokens,
+      compressedTokens,
     );
 
     // Persist to storage
@@ -431,15 +430,14 @@ export class AlertManager {
     const cachedData = JSON.stringify(alertMetadata);
 
     const tokensUsed = this.tokenCounter.count(JSON.stringify(alert)).tokens;
-    const tokensSaved =
-      tokensUsed -
-      this.tokenCounter.count(JSON.stringify(alertMetadata)).tokens;
+    const compressedTokens = this.tokenCounter.count(cachedData).tokens;
+    const tokensSaved = tokensUsed - compressedTokens;
 
     await this.cache.set(
       cacheKey,
       cachedData,
       tokensUsed,
-      this.tokenCounter.count(cachedData).tokens,
+      compressedTokens,
     );
 
     // Persist to storage

@@ -1194,7 +1194,7 @@ export class HealthMonitor {
 
     const graph = dependencyAnalyzer.buildDependencyGraph();
 
-    // Cache dependency graph (10-minute TTL for 88% reduction)
+    // Cache dependency graph (token-based metrics)
     const cacheKey = `cache-${createHash("md5").update("health-dependencies:graph").digest("hex")}`;
     const graphData = JSON.stringify(graph);
     const tokensUsed = this.tokenCounter.count(graphData).tokens;
