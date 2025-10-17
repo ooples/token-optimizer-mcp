@@ -1054,7 +1054,7 @@ export class HealthMonitor {
     // Generate cache key
     const cacheKey = generateCacheKey(
       "health-status",
-      { service, includeDetails: options.includeDetails, includeDependencies: options.includeDependencies },
+      `${service}:${options.includeDetails}:${options.includeDependencies}`,
     );
 
     // Check cache (30-second TTL as specified)
@@ -1117,7 +1117,7 @@ export class HealthMonitor {
     // Generate cache key
     const cacheKey = generateCacheKey(
       "health-history",
-      { checkId, timeRange: options.timeRange, limit: options.limit },
+      `${checkId}:${JSON.stringify(options.timeRange)}:${options.limit}`,
     );
 
     // Check cache (1-minute TTL for history aggregation, 85% reduction)
@@ -1232,7 +1232,7 @@ export class HealthMonitor {
     // Generate cache key
     const cacheKey = generateCacheKey(
       "health-impact",
-      { service: options.service, scenario },
+      `${options.service}:${scenario}`,
     );
 
     // Check cache (10-minute TTL)
