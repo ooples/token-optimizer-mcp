@@ -196,6 +196,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      {
+        name: 'lookup_cache',
+        description:
+          'Look up a cached value by key. Returns the cached value if found, or null if not found. Used by the wrapper for real-time cache injection.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            key: {
+              type: 'string',
+              description: 'Cache key to look up (e.g., file path for cached file contents)',
+            },
+          },
+          required: ['key'],
+        },
+      },
     ],
   };
 });
@@ -743,6 +758,57 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   null,
                   2
                 ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'lookup_cache': {
+        const { key } = args as { key: string };
+
+        try {
+          const cached = cache.get(key);
+
+          if (!cached) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: false,
+                    found: false,
+                    key,
+                  }),
+                },
+              ],
+            };
+          }
+
+          // Return compressed data (caller will decompress if needed)
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  found: true,
+                  key,
+                  compressed: cached,
+                }),
               },
             ],
           };

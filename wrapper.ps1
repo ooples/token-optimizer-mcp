@@ -13,12 +13,16 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$SessionId = "",
+    # Default: %USERPROFILE%\token-optimizer-logs (e.g., C:\Users\YourName\token-optimizer-logs)
     [Parameter(Mandatory = $false)]
-    [string]$LogDir = "C:\Users\yolan\source\repos",
+    [string]$LogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs"),
     [Parameter(Mandatory = $false)]
     [switch]$VerboseLogging,
     [Parameter(Mandatory = $false)]
-    [switch]$Test
+    [switch]$Test,
+    # Performance threshold in milliseconds for logging warnings (default: 10ms)
+    [Parameter(Mandatory = $false)]
+    [int]$PerformanceThresholdMs = 10
 )
 
 # ============================================================================
@@ -164,6 +168,12 @@ function Parse-SystemWarning {
 function Initialize-Session {
     Write-VerboseLog "Initializing session: $($global:SessionState.SessionId)"
 
+    # Create log directory if it doesn't exist
+    if (-not (Test-Path $LogDir -PathType Container)) {
+        Write-VerboseLog "Creating log directory: $LogDir"
+        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    }
+
     # Create session-log.jsonl if it doesn't exist
     if (-not (Test-Path $JSONL_FILE)) {
         New-Item -ItemType File -Path $JSONL_FILE -Force | Out-Null
@@ -257,11 +267,79 @@ function End-Turn {
 }
 
 # ============================================================================
+# Real-Time Stream Processing
+# ============================================================================
+
+function Parse-ToolCallFromContext {
+    param(
+        [string]$CurrentLine,
+        [string[]]$PreviousLines,
+        [int]$LookbackLimit = 20
+    )
+
+    # Pattern 1: Tool call in antml:function_calls block
+    # <invoke name="ToolName">
+    $toolCallPattern = '<invoke name="([^"]+)">'
+    if ($CurrentLine -match $toolCallPattern) {
+        return $matches[1]
+    }
+
+    # Pattern 2: Search previous lines for recent tool invocation
+    $lookback = [Math]::Min($LookbackLimit, $PreviousLines.Count)
+    for ($i = $PreviousLines.Count - 1; $i -ge [Math]::Max(0, $PreviousLines.Count - $lookback); $i--) {
+        if ($PreviousLines[$i] -match $toolCallPattern) {
+            return $matches[1]
+        }
+    }
+
+    # Pattern 3: Function call result block
+    # <result><name>ToolName</name>
+    if ($CurrentLine -match '<name>([^<]+)</name>') {
+        return $matches[1]
+    }
+
+    return $null
+}
+
+function Get-CachedToolResponse {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolParams
+    )
+
+    # Check if cache lookup tool is available
+    # For now, return null (cache injection will be implemented in phase 2)
+    return $null
+}
+
+function Inject-CachedResponse {
+    param(
+        [string]$CachedResponse,
+        [string]$ToolName
+    )
+
+    # Inject cached response into stream
+    # Format as tool result
+    Write-VerboseLog "Injecting cached response for: $ToolName"
+
+    $injectedOutput = @"
+<function_results>
+<result>
+<name>$ToolName</name>
+<output>$CachedResponse</output>
+</result>
+</function_results>
+"@
+
+    Write-Output $injectedOutput
+}
+
+# ============================================================================
 # Main Wrapper Logic
 # ============================================================================
 
 function Invoke-ClaudeCodeWrapper {
-    Write-Host "Token Optimizer MCP - Enhanced Session Wrapper" -ForegroundColor Green
+    Write-Host "Token Optimizer MCP - Enhanced Session Wrapper (Real-Time Mode)" -ForegroundColor Green
     Write-Host "Session ID: $($global:SessionState.SessionId)" -ForegroundColor Yellow
     Write-Host "Log Directory: $LogDir" -ForegroundColor Yellow
     Write-Host ""
@@ -271,24 +349,36 @@ function Invoke-ClaudeCodeWrapper {
     # Track if we're in a turn
     $inTurn = $false
     $lastUserMessage = ""
-
-    # Start reading from stdin (piped from claude-code)
-    # In practice, this would wrap the actual claude-code CLI process
-    # For now, we'll demonstrate the structure
+    $lineBuffer = [System.Collections.ArrayList]::new()
+    $pendingToolCall = $null
+    $lastTokenCount = 0
 
     try {
-        Write-VerboseLog "Wrapper ready - monitoring for system warnings and tool calls"
+        Write-VerboseLog "Wrapper ready - real-time stream processing active"
 
-        # Simulated processing loop (in real usage, this would pipe claude-code stdout/stderr)
-        # For testing purposes, we'll show the structure
-
+        # Real-time processing loop - reads from stdin
+        # NOTE: ReadLine() uses blocking I/O by design. This is intentional for MCP wrapper context
+        # where stdin is guaranteed to be managed by the MCP host (Claude Code). The stream will
+        # properly close when the host terminates, preventing indefinite hangs. Timeout mechanisms
+        # are not required as the wrapper lifecycle is controlled by the host process.
+        $input = [Console]::In
         while ($true) {
-            # Read line from stdin (in real wrapper, this comes from claude-code)
-            $line = Read-Host -Prompt "Input"
+            $line = $input.ReadLine()
 
-            if ($line -eq "exit" -or $line -eq "quit") {
+            # Check for end of stream
+            if ($null -eq $line) {
+                Write-VerboseLog "End of stream detected"
                 break
             }
+
+            # Add to line buffer (for context lookback)
+            [void]$lineBuffer.Add($line)
+            if ($lineBuffer.Count -gt 100) {
+                $lineBuffer.RemoveAt(0)  # Keep buffer size manageable
+            }
+
+            # Performance tracking
+            $parseStartTime = Get-Date
 
             # Parse system warnings
             $tokenInfo = Parse-SystemWarning -Line $line
@@ -297,33 +387,76 @@ function Invoke-ClaudeCodeWrapper {
 
                 # Check if this is a tool call transition (tokens increased)
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
-                    # Detect tool call (in real wrapper, we'd parse the tool name from surrounding context)
-                    # For now, we'll prompt for demo purposes
-                    $toolName = Read-Host -Prompt "Tool name"
+                    # Detect tool call from context
+                    $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
 
-                    if (-not $inTurn) {
-                        Start-Turn -UserMessagePreview $lastUserMessage
-                        $inTurn = $true
+                    if ($toolName) {
+                        Write-VerboseLog "Detected tool call: $toolName"
+
+                        # Start turn if not already in one
+                        if (-not $inTurn) {
+                            Start-Turn -UserMessagePreview $lastUserMessage
+                            $inTurn = $true
+                        }
+
+                        # Check for cached response (optional)
+                        $cachedResponse = Get-CachedToolResponse -ToolName $toolName -ToolParams @{}
+
+                        if ($cachedResponse) {
+                            # Inject cached response and skip tool execution
+                            Inject-CachedResponse -CachedResponse $cachedResponse -ToolName $toolName
+                            Write-VerboseLog "Cache hit! Injected response for: $toolName"
+
+                            # Record cache hit in JSONL
+                            Write-JsonlEvent -Event @{
+                                type = "cache_hit"
+                                turn = $global:SessionState.CurrentTurn
+                                tool = $toolName
+                                tokens_saved = ($tokenInfo.Used - $global:SessionState.LastTokens)
+                            }
+                        }
+                        else {
+                            # Record tool call with actual token delta
+                            Record-ToolCall -ToolName $toolName -TokensBefore $global:SessionState.LastTokens -TokensAfter $tokenInfo.Used
+                        }
                     }
-
-                    Record-ToolCall -ToolName $toolName -TokensBefore $global:SessionState.LastTokens -TokensAfter $tokenInfo.Used
+                    else {
+                        Write-VerboseLog "Token increase detected but no tool call identified (delta: $($tokenInfo.Used - $global:SessionState.LastTokens))"
+                    }
                 }
 
                 $global:SessionState.LastTokens = $tokenInfo.Used
                 $global:SessionState.TotalTokens = $tokenInfo.Total
             }
 
-            # Check for turn boundaries (user input)
-            if ($line -like "User:*") {
+            # Detect tool invocation (for pending tool call tracking)
+            $toolMatch = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines @($line)
+            if ($toolMatch) {
+                $pendingToolCall = $toolMatch
+                Write-VerboseLog "Pending tool call: $pendingToolCall"
+            }
+
+            # Check for turn boundaries (user input pattern)
+            # Pattern: Look for conversation turn markers
+            if ($line -match '^\s*User:' -or $line -match '^Human:') {
                 if ($inTurn) {
                     End-Turn
                     $inTurn = $false
                 }
 
-                $lastUserMessage = $line -replace '^User:\s*', ''
+                $lastUserMessage = $line -replace '^\s*(User|Human):\s*', ''
+                Write-VerboseLog "New user message detected: $($lastUserMessage.Substring(0, [Math]::Min(50, $lastUserMessage.Length)))..."
             }
 
-            # Pass through the line (in real wrapper, this would go to stdout)
+            # Performance tracking
+            $parseEndTime = Get-Date
+            $parseTime = ($parseEndTime - $parseStartTime).TotalMilliseconds
+
+            if ($parseTime -gt $PerformanceThresholdMs) {
+                Write-Warning "Parse time exceeded $($PerformanceThresholdMs)ms threshold: $([Math]::Round($parseTime, 2))ms"
+            }
+
+            # Pass through the line to stdout (preserve original output)
             Write-Output $line
         }
 
@@ -332,12 +465,21 @@ function Invoke-ClaudeCodeWrapper {
             End-Turn
         }
 
+        Write-JsonlEvent -Event @{
+            type = "session_end"
+            sessionId = $global:SessionState.SessionId
+            total_tokens = $global:SessionState.LastTokens
+        }
+
     }
     catch {
         Write-Error "Wrapper error: $_"
+        Write-VerboseLog "Error details: $($_.Exception.Message)"
+        Write-VerboseLog "Stack trace: $($_.ScriptStackTrace)"
     }
     finally {
         Write-VerboseLog "Session ended: $($global:SessionState.SessionId)"
+        Write-VerboseLog "Total tokens used: $($global:SessionState.LastTokens)"
     }
 }
 
@@ -408,30 +550,7 @@ if ($Test) {
     Test-WrapperParsing
 }
 else {
-    # Real wrapper mode (would wrap claude-code CLI)
-    # Invoke-ClaudeCodeWrapper
-
-    Write-Host @"
-Token Optimizer MCP - Enhanced Session Wrapper
-
-USAGE:
-  To test parsing:
-    .\wrapper.ps1 -Test -VerboseLogging
-
-  To wrap Claude Code (not yet implemented - requires CLI integration):
-    claude-code | .\wrapper.ps1 -SessionId "my-session" -VerboseLogging
-
-FEATURES:
-  - Real-time token tracking from system warnings
-  - Turn-level event logging to session-log.jsonl
-  - MCP server attribution for all tool calls
-  - Backward compatible CSV logging with mcp_server column
-
-FILES:
-  - Session log (JSONL): $JSONL_FILE
-  - Operations log (CSV): $CSV_FILE
-  - Current session ID: $SESSION_FILE
-
-Run with -Test flag to see parsing examples.
-"@
+    # Real wrapper mode - process stdin in real-time
+    Write-VerboseLog "Starting real-time CLI wrapper mode"
+    Invoke-ClaudeCodeWrapper
 }
