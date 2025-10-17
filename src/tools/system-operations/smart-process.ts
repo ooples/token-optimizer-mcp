@@ -429,7 +429,7 @@ export class SmartProcess {
       ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
       : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
 
-    await execAsync(query);
+    const { stdout } = await execAsync(query);
 
     // Parse CSV output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
@@ -465,7 +465,7 @@ export class SmartProcess {
       ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
       : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
 
-    await execAsync(query);
+    const { stdout } = await execAsync(query);
 
     // Parse ps output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
@@ -510,7 +510,7 @@ export class SmartProcess {
 
   private async buildProcessTreeWindows(rootPid?: number): Promise<ProcessTreeNode> {
     // Use WMIC to get parent-child relationships
-    await execAsync('wmic process get ProcessId,ParentProcessId,Name /format:csv');
+    const { stdout } = await execAsync('wmic process get ProcessId,ParentProcessId,Name /format:csv');
 
     const lines = stdout.trim().split('\n').slice(1);
     const processMap = new Map<number, { name: string; children: number[] }>();
@@ -588,7 +588,7 @@ export async function runSmartProcess(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cacheInstance = cache || new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
+  const cacheInstance = cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
