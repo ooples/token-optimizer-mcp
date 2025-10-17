@@ -32,6 +32,15 @@ param(
     [string]$BaseLogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs")
 )
 
+# Validate that $env:USERPROFILE exists and is accessible
+if (-not $env:USERPROFILE) {
+    throw "Environment variable USERPROFILE is not set. Cannot determine user profile directory."
+}
+
+if (-not (Test-Path $env:USERPROFILE -PathType Container)) {
+    throw "User profile directory does not exist or is not accessible: $env:USERPROFILE"
+}
+
 # ============================================================================
 # Configuration
 # ============================================================================
@@ -350,10 +359,21 @@ The algorithm uses configurable lookback to balance accuracy vs performance.
 The current line from the input stream to analyze.
 
 .PARAMETER PreviousLines
-Queue or array of previous lines to search for tool call context.
+Queue or array of previous lines to search for tool call context. Supports both [System.Collections.Generic.Queue[string]] and array types.
 
 .PARAMETER LookbackLimit
-Maximum number of previous lines to search (default: 20).
+Maximum number of previous lines to search (default: 20). Controls the trade-off between detection accuracy and performance.
+
+.OUTPUTS
+[string] Returns the detected tool name (e.g., "Read", "mcp__git__git_status") if found, or $null if no tool call is detected.
+
+.EXAMPLE
+$toolName = Parse-ToolCallFromContext -CurrentLine '<invoke name="Read">' -PreviousLines $lineBuffer
+# Returns: "Read"
+
+.EXAMPLE
+$toolName = Parse-ToolCallFromContext -CurrentLine '<system_warning>...' -PreviousLines $lineBuffer -LookbackLimit 10
+# Searches up to 10 previous lines for tool invocation patterns
 #>
 function Parse-ToolCallFromContext {
     param(
@@ -411,7 +431,17 @@ For implementation details, see the MCP integration plan and project roadmap.
 The name of the tool to look up (e.g., "Read", "mcp__git__git_status").
 
 .PARAMETER ToolParams
-Hashtable of tool parameters used to generate the cache key.
+Hashtable of tool parameters used to generate the cache key. Used to create unique cache keys for different parameter combinations.
+
+.OUTPUTS
+[string] Returns the cached tool response content if found, or $null if not cached. Currently always returns $null as cache injection is not implemented.
+
+.EXAMPLE
+$cached = Get-CachedToolResponse -ToolName "Read" -ToolParams @{ file_path = "C:\example.txt" }
+# Returns: $null (stub implementation)
+
+.NOTES
+TODO: Implement cache injection for MCP integration. See project roadmap or issue tracker for implementation timeline.
 #>
 function Get-CachedToolResponse {
     param(
@@ -422,6 +452,7 @@ function Get-CachedToolResponse {
     # STUB: Cache injection is NOT implemented.
     # This function is a placeholder for future MCP integration.
     # It currently always returns $null.
+    # TODO: Implement cache injection for MCP integration. See project roadmap or issue tracker.
     return $null
 }
 
@@ -438,10 +469,20 @@ parent process consumes the cached response as if it came from the actual tool.
 Used in conjunction with Get-CachedToolResponse to implement cache-based token optimization.
 
 .PARAMETER CachedResponse
-The cached tool response content to inject.
+The cached tool response content to inject. Should be the raw response data from the cache.
 
 .PARAMETER ToolName
-The name of the tool being cached (used for logging and formatting).
+The name of the tool being cached (used for logging and formatting). E.g., "Read", "mcp__git__git_status".
+
+.OUTPUTS
+[void] Writes formatted tool result to stdout using Write-Output.
+
+.EXAMPLE
+Inject-CachedResponse -CachedResponse "File contents here..." -ToolName "Read"
+# Outputs formatted <function_results> block to stdout
+
+.NOTES
+This function is designed to work with the cache injection mechanism. The output format matches the standard tool result format expected by Claude Code CLI.
 #>
 function Inject-CachedResponse {
     param(
@@ -508,6 +549,9 @@ function Invoke-ClaudeCodeWrapper {
         # IMPORTANT: Setting InputEncoding and OutputEncoding to UTF8 prevents encoding mismatches
         # between the console and piped data, ensuring Unicode characters are handled correctly.
         # This addresses the concern that [Console]::In.ReadLine() could have encoding issues.
+        # Store original encodings to restore in finally block
+        $originalInputEncoding = [Console]::InputEncoding
+        $originalOutputEncoding = [Console]::OutputEncoding
         [Console]::InputEncoding = [System.Text.Encoding]::UTF8
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -516,12 +560,14 @@ function Invoke-ClaudeCodeWrapper {
             # DESIGN NOTE - Blocking I/O is intentional:
             # This wrapper is designed to run as a piped subprocess where stdin is managed by the
             # parent process (e.g., Claude Code CLI). The stream closes automatically when the parent
-            # terminates, preventing indefinite hangs. The explicit null check (line 434) ensures we
+            # terminates, preventing indefinite hangs. The explicit null check below ensures we
             # detect EOF and exit gracefully. Timeout mechanisms are not required as the wrapper
             # lifecycle is controlled by the parent process. For alternative contexts, consider:
             # - Using async I/O with CancellationToken for timeout support
             # - Implementing heartbeat detection for stalled streams
             # - Using StreamReader with timeout for non-console scenarios
+            # The console encoding is set to UTF8 (lines 511-512) to prevent encoding mismatches
+            # between the console and piped data, ensuring Unicode characters are handled correctly.
             $line = $input.ReadLine()
 
             # Check for end of stream
@@ -533,6 +579,7 @@ function Invoke-ClaudeCodeWrapper {
             # Add to line buffer (for context lookback)
             # Note: LineBufferSize is configurable via parameter (default: 100)
             # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
+            # Optimization: Check count before enqueue to avoid unnecessary dequeue when buffer isn't full
             if ($lineBuffer.Count -ge $LineBufferSize) {
                 $lineBuffer.Dequeue()  # Remove oldest line efficiently
             }
@@ -635,6 +682,14 @@ function Invoke-ClaudeCodeWrapper {
         Write-VerboseLog "Stack trace: $($_.ScriptStackTrace)"
     }
     finally {
+        # Restore original console encodings to avoid affecting subsequent operations
+        if ($originalInputEncoding) {
+            [Console]::InputEncoding = $originalInputEncoding
+        }
+        if ($originalOutputEncoding) {
+            [Console]::OutputEncoding = $originalOutputEncoding
+        }
+
         Write-VerboseLog "Session ended: $($global:SessionState.SessionId)"
         Write-VerboseLog "Total tokens used: $($global:SessionState.LastTokens)"
     }

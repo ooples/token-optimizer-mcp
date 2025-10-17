@@ -199,7 +199,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'lookup_cache',
         description:
-          'Look up a cached value by key. Returns the cached value if found, or null if not found. Used by the wrapper for real-time cache injection.',
+          'Look up a cached value by key. Returns a JSON object with a "found" flag and the cached value if found; otherwise, "found" is false and "compressed" is omitted. Used by the wrapper for real-time cache injection.',
         inputSchema: {
           type: 'object',
           properties: {
