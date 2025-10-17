@@ -116,7 +116,7 @@ case 'get_session_summary': {
           turnDataForAnalysis.push({
             timestamp: event.timestamp,
             toolName: event.toolName,
-            tokens: tokens,
+            tokens,
             metadata: event.metadata || '',
           });
         }
@@ -224,7 +224,7 @@ case 'get_session_summary': {
         thinkingTurns: analysis.summary.thinkingTurns,
         planningTurns: analysis.summary.planningTurns,
         normalTurns: analysis.summary.normalTurns,
-        thinkingModePercent: parseFloat(analysis.efficiency.thinkingModePercent.toFixed(2)),
+        thinkingModePercent: Math.round(analysis.efficiency.thinkingModePercent * 100) / 100,
       } : null,
       anomalies: analysis?.anomalies || [],
       recommendations: analysis?.recommendations || [],
