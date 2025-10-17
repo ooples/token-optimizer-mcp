@@ -8,6 +8,20 @@ import { ProjectAnalysisResult } from './project-analyzer.js';
 
 export type ReportFormat = 'html' | 'markdown' | 'json';
 
+/**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
 export interface ReportOptions {
   includeCharts?: boolean;
   includeTimeline?: boolean;
@@ -15,9 +29,14 @@ export interface ReportOptions {
   sessionStartTime: string;
 }
 
+/**
+ * Options for project report generation
+ * Note: includeCharts and includeTimeline are currently not implemented
+ * and are reserved for future functionality
+ */
 export interface ProjectReportOptions {
-  includeCharts?: boolean;
-  includeTimeline?: boolean;
+  includeCharts?: boolean; // Reserved for future use
+  includeTimeline?: boolean; // Reserved for future use
 }
 
 /**
@@ -748,11 +767,11 @@ function generateProjectMarkdownReport(analysis: ProjectAnalysisResult): string 
 function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
   const pieChartData = analysis.topTools
     .slice(0, 8)
-    .map((tool) => `['${tool.toolName}', ${tool.totalTokens}]`)
+    .map((tool) => `['${escapeHtml(tool.toolName)}', ${tool.totalTokens}]`)
     .join(',');
 
   const serverChartData = analysis.serverBreakdown
-    .map((server) => `['${server.serverName}', ${server.totalTokens}]`)
+    .map((server) => `['${escapeHtml(server.serverName)}', ${server.totalTokens}]`)
     .join(',');
 
   return `<!DOCTYPE html>
@@ -947,9 +966,9 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
         <div class="header">
             <h1>Project Token Analysis Report</h1>
             <div class="meta">
-                <p><strong>Project:</strong> ${analysis.projectPath}</p>
-                <p><strong>Analysis Date:</strong> ${new Date(analysis.analysisTimestamp).toLocaleString()}</p>
-                <p><strong>Date Range:</strong> ${new Date(analysis.dateRange.start).toLocaleDateString()} - ${new Date(analysis.dateRange.end).toLocaleDateString()}</p>
+                <p><strong>Project:</strong> ${escapeHtml(analysis.projectPath)}</p>
+                <p><strong>Analysis Date:</strong> ${escapeHtml(new Date(analysis.analysisTimestamp).toLocaleString())}</p>
+                <p><strong>Date Range:</strong> ${escapeHtml(new Date(analysis.dateRange.start).toLocaleDateString())} - ${escapeHtml(new Date(analysis.dateRange.end).toLocaleDateString())}</p>
             </div>
         </div>
 
@@ -1013,11 +1032,11 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                     <tbody>
                         ${analysis.topContributingSessions.map(session => `
                         <tr>
-                            <td><strong>${session.sessionId}</strong></td>
+                            <td><strong>${escapeHtml(session.sessionId)}</strong></td>
                             <td>${session.totalTokens.toLocaleString()}</td>
                             <td>${session.totalOperations}</td>
-                            <td>${session.duration}</td>
-                            <td>${session.topTools[0]?.toolName || 'N/A'}</td>
+                            <td>${escapeHtml(session.duration)}</td>
+                            <td>${escapeHtml(session.topTools[0]?.toolName || 'N/A')}</td>
                         </tr>
                         `).join('')}
                     </tbody>
@@ -1039,7 +1058,7 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                     <tbody>
                         ${analysis.topTools.map(tool => `
                         <tr>
-                            <td><strong>${tool.toolName}</strong></td>
+                            <td><strong>${escapeHtml(tool.toolName)}</strong></td>
                             <td>${tool.totalTokens.toLocaleString()}</td>
                             <td>${tool.operationCount}</td>
                             <td>${tool.sessionCount}</td>
@@ -1055,7 +1074,7 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                 <div class="recommendations">
                     <h3>Recommendations</h3>
                     <ul>
-                        ${analysis.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        ${analysis.recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
                     </ul>
                 </div>
             </section>
@@ -1069,9 +1088,15 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
         </div>
     </div>
 
+    <script type="application/json" id="analysis-data">
+${JSON.stringify(analysis)}
+    </script>
+
     <script type="text/javascript">
         google.charts.load('current', {'packages':['corechart']});
         google.charts.setOnLoadCallback(drawCharts);
+
+        const analysisData = JSON.parse(document.getElementById('analysis-data').textContent);
 
         function drawCharts() {
             var pieData = google.visualization.arrayToDataTable([
@@ -1108,7 +1133,7 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
         }
 
         function exportAsMarkdown() {
-            const analysis = ${JSON.stringify(analysis)};
+            const analysis = analysisData;
             const md = generateMarkdownReport(analysis);
             const blob = new Blob([md], {type: 'text/markdown'});
             const url = URL.createObjectURL(blob);
@@ -1119,7 +1144,7 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
         }
 
         function exportAsJSON() {
-            const data = ${JSON.stringify(analysis)};
+            const data = analysisData;
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');

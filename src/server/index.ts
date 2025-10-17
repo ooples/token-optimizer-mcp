@@ -801,7 +801,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Use provided path or default to global hooks directory
           const targetPath = projectPath || path.join(os.homedir());
 
-          const result = analyzeProjectTokens({
+          const result = await analyzeProjectTokens({
             projectPath: targetPath,
             startDate,
             endDate,

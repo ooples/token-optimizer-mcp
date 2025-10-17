@@ -3,8 +3,9 @@
  * Analyzes token usage across multiple sessions within a project
  */
 
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { TurnData } from '../utils/thinking-mode.js';
 
 export interface ProjectAnalysisOptions {
@@ -69,12 +70,14 @@ const DEFAULT_COST_PER_MILLION = 30; // GPT-4 Turbo pricing (USD)
 /**
  * Discover all session operation CSV files in the hooks data directory
  */
-function discoverSessionFiles(hooksDataPath: string): string[] {
-  if (!fs.existsSync(hooksDataPath)) {
+async function discoverSessionFiles(hooksDataPath: string): Promise<string[]> {
+  try {
+    await fs.access(hooksDataPath);
+  } catch {
     return [];
   }
 
-  const files = fs.readdirSync(hooksDataPath);
+  const files = await fs.readdir(hooksDataPath);
   return files
     .filter((file) => file.startsWith('operations-') && file.endsWith('.csv'))
     .map((file) => path.join(hooksDataPath, file))
@@ -84,8 +87,8 @@ function discoverSessionFiles(hooksDataPath: string): string[] {
 /**
  * Parse a CSV operations file
  */
-function parseOperationsFile(filePath: string): TurnData[] {
-  const content = fs.readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, ''); // Strip BOM
+async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
+  const content = (await fs.readFile(filePath, 'utf-8')).replace(/^\uFEFF/, ''); // Strip BOM
   const lines = content.trim().split('\n');
   const operations: TurnData[] = [];
 
@@ -141,10 +144,9 @@ function calculateDuration(startTime: string, endTime: string): string {
 }
 
 /**
- * Analyze a single session file
+ * Analyze a single session file using pre-parsed operations
  */
-function analyzeSession(filePath: string): SessionSummary {
-  const operations = parseOperationsFile(filePath);
+function analyzeSession(filePath: string, operations: TurnData[]): SessionSummary {
   const sessionId = extractSessionId(filePath);
 
   if (operations.length === 0) {
@@ -188,9 +190,9 @@ function analyzeSession(filePath: string): SessionSummary {
 }
 
 /**
- * Analyze all operations across sessions
+ * Analyze all operations across sessions using pre-parsed data
  */
-function aggregateToolUsage(sessionFiles: string[]): {
+function aggregateToolUsage(parsedSessions: Map<string, TurnData[]>): {
   toolName: string;
   totalTokens: number;
   operationCount: number;
@@ -202,10 +204,7 @@ function aggregateToolUsage(sessionFiles: string[]): {
     { totalTokens: number; operationCount: number; sessions: Set<string> }
   >();
 
-  for (const filePath of sessionFiles) {
-    const operations = parseOperationsFile(filePath);
-    const sessionId = extractSessionId(filePath);
-
+  for (const [sessionId, operations] of parsedSessions.entries()) {
     for (const op of operations) {
       if (!toolMap.has(op.toolName)) {
         toolMap.set(op.toolName, {
@@ -233,10 +232,10 @@ function aggregateToolUsage(sessionFiles: string[]): {
 }
 
 /**
- * Analyze server attribution (MCP servers)
+ * Analyze server attribution (MCP servers) using pre-parsed data
  */
 function analyzeServerAttribution(
-  sessionFiles: string[],
+  parsedSessions: Map<string, TurnData[]>,
   totalTokens: number
 ): {
   serverName: string;
@@ -246,9 +245,7 @@ function analyzeServerAttribution(
 }[] {
   const serverMap = new Map<string, { totalTokens: number; operationCount: number }>();
 
-  for (const filePath of sessionFiles) {
-    const operations = parseOperationsFile(filePath);
-
+  for (const operations of parsedSessions.values()) {
     for (const op of operations) {
       let serverName = 'core';
       if (op.toolName.startsWith('mcp__')) {
@@ -333,24 +330,24 @@ function generateProjectRecommendations(
 /**
  * Main project analysis function
  */
-export function analyzeProjectTokens(
+export async function analyzeProjectTokens(
   options: ProjectAnalysisOptions
-): ProjectAnalysisResult {
+): Promise<ProjectAnalysisResult> {
   const { projectPath, startDate, endDate, costPerMillionTokens = DEFAULT_COST_PER_MILLION } = options;
 
   // Discover all session files
   const hooksDataPath = path.join(projectPath, '.claude-global', 'hooks', 'data');
-  let sessionFiles = discoverSessionFiles(hooksDataPath);
+  let sessionFiles = await discoverSessionFiles(hooksDataPath);
 
   if (sessionFiles.length === 0) {
     // Try global hooks directory if project-specific not found
     const globalHooksPath = path.join(
-      process.env.USERPROFILE || process.env.HOME || '',
+      os.homedir(),
       '.claude-global',
       'hooks',
       'data'
     );
-    sessionFiles = discoverSessionFiles(globalHooksPath);
+    sessionFiles = await discoverSessionFiles(globalHooksPath);
   }
 
   if (sessionFiles.length === 0) {
@@ -372,25 +369,39 @@ export function analyzeProjectTokens(
     });
   }
 
-  // Analyze each session
-  const sessions = sessionFiles.map(analyzeSession);
+  // Parse all files once and cache the results
+  const parsedSessions = new Map<string, TurnData[]>();
+  await Promise.all(
+    sessionFiles.map(async (filePath) => {
+      const sessionId = extractSessionId(filePath);
+      const operations = await parseOperationsFile(filePath);
+      parsedSessions.set(sessionId, operations);
+    })
+  );
+
+  // Analyze each session using pre-parsed data
+  const sessions = sessionFiles.map((filePath) => {
+    const sessionId = extractSessionId(filePath);
+    const operations = parsedSessions.get(sessionId)!;
+    return analyzeSession(filePath, operations);
+  });
 
   // Calculate summary statistics
   const totalOperations = sessions.reduce((sum, s) => sum + s.totalOperations, 0);
   const totalTokens = sessions.reduce((sum, s) => sum + s.totalTokens, 0);
   const averageTokensPerSession = totalTokens / sessions.length;
-  const averageTokensPerOperation = totalTokens / totalOperations;
+  const averageTokensPerOperation = totalOperations === 0 ? 0 : totalTokens / totalOperations;
 
   // Get top contributing sessions
   const topContributingSessions = [...sessions]
     .sort((a, b) => b.totalTokens - a.totalTokens)
     .slice(0, 10);
 
-  // Aggregate tool usage
-  const topTools = aggregateToolUsage(sessionFiles).slice(0, 20);
+  // Aggregate tool usage using cached parsed data
+  const topTools = aggregateToolUsage(parsedSessions).slice(0, 20);
 
-  // Analyze server attribution
-  const serverBreakdown = analyzeServerAttribution(sessionFiles, totalTokens);
+  // Analyze server attribution using cached parsed data
+  const serverBreakdown = analyzeServerAttribution(parsedSessions, totalTokens);
 
   // Calculate cost estimation
   const totalCost = (totalTokens / 1000000) * costPerMillionTokens;
