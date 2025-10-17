@@ -825,18 +825,18 @@ async function main() {
 
   // Cleanup on exit
   process.on('SIGINT', () => {
-    cache.close();
-    tokenCounter.free();
-    predictiveCache.dispose();
-    cacheWarmup.dispose();
+    try { cache.close(); } catch (err) { console.error('Error closing cache:', err); }
+    try { tokenCounter.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
+    try { predictiveCache.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
+    try { cacheWarmup.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
-    cache.close();
-    tokenCounter.free();
-    predictiveCache.dispose();
-    cacheWarmup.dispose();
+    try { cache.close(); } catch (err) { console.error('Error closing cache:', err); }
+    try { tokenCounter.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
+    try { predictiveCache.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
+    try { cacheWarmup.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
     process.exit(0);
   });
 }

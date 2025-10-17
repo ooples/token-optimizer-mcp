@@ -55,6 +55,7 @@ $global:AutoCacheConfig = @{
     TokenThreshold = 500  # Minimum tokens to cache
     HighTokenTools = @('Read', 'Grep', 'SmartTypeScript', 'WebFetch', 'WebSearch')
     CacheKeyPrefix = "auto-cache:"
+    MCPTimeoutMs = 5000  # MCP server response timeout in milliseconds
 }
 
 # MCP Server Process (initialized on first tool call)
@@ -171,7 +172,7 @@ function Generate-CacheKey {
     $hasher = [System.Security.Cryptography.SHA256]::Create()
     try {
         $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))
-        $hash = [BitConverter]::ToString($hashBytes).Replace("-", "").Substring(0, 32)
+        $hash = [BitConverter]::ToString($hashBytes).Replace("-", "")
         return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
     }
     finally {
@@ -410,7 +411,7 @@ function Invoke-MCPTool {
         $global:MCPServerProcess.StandardInput.Flush()
 
         # Read response from MCP server stdout (with timeout)
-        $timeout = 5000  # 5 seconds
+        $timeout = $global:AutoCacheConfig.MCPTimeoutMs
         $readTask = $global:MCPServerProcess.StandardOutput.ReadLineAsync()
 
         if (-not $readTask.Wait($timeout)) {
@@ -553,7 +554,7 @@ function Record-ToolCall {
     Write-CsvOperation -ToolName $ToolName -TokenEstimate $tokensDelta -McpServer $mcpServer
 
     # Automatic caching logic
-    if (-not $CacheHit -and $ToolResult -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
+    if (-not $CacheHit -and $ToolResult -ne $null -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
         Set-AutoCache -ToolName $ToolName -ToolArgs $ToolArgs -Result $ToolResult -TokenCount $tokensDelta
     }
 
@@ -675,8 +676,22 @@ function Invoke-ClaudeCodeWrapper {
 
         # Cleanup MCP server process if running
         if ($null -ne $global:MCPServerProcess -and -not $global:MCPServerProcess.HasExited) {
-            $global:MCPServerProcess.Kill()
-            Write-VerboseLog "MCP server process terminated"
+            # Attempt graceful shutdown first
+            if ($global:MCPServerProcess.CloseMainWindow()) {
+                # Wait up to 5 seconds for process to exit
+                if (-not $global:MCPServerProcess.WaitForExit(5000)) {
+                    $global:MCPServerProcess.Kill()
+                    Write-VerboseLog "MCP server process forcefully terminated after timeout"
+                }
+                else {
+                    Write-VerboseLog "MCP server process exited gracefully"
+                }
+            }
+            else {
+                # No main window or unable to close gracefully
+                $global:MCPServerProcess.Kill()
+                Write-VerboseLog "MCP server process forcefully terminated (no main window)"
+            }
         }
     }
 }
