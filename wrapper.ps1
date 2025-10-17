@@ -363,10 +363,15 @@ function Invoke-ClaudeCodeWrapper {
         Write-VerboseLog "Wrapper ready - real-time stream processing active"
 
         # Real-time processing loop - reads from stdin
-        # NOTE: ReadLine() uses blocking I/O by design. This is intentional for MCP wrapper context
+        # DESIGN NOTE: ReadLine() uses blocking I/O by design. This is intentional for MCP wrapper context
         # where stdin is guaranteed to be managed by the MCP host (Claude Code). The stream will
         # properly close when the host terminates, preventing indefinite hangs. Timeout mechanisms
         # are not required as the wrapper lifecycle is controlled by the host process.
+        #
+        # For production use in other contexts (non-MCP environments), consider adding:
+        # 1. Timeout mechanisms using System.Threading.Tasks with cancellation tokens
+        # 2. Async I/O with proper stream disposal
+        # 3. Heartbeat detection to identify stalled streams
         $input = [Console]::In
         while ($true) {
             $line = $input.ReadLine()
