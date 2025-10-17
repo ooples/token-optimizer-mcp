@@ -818,26 +818,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Shared cleanup function to avoid duplication between signal handlers
+function cleanup() {
+  try { cache.close(); } catch (err) { console.error('Error closing cache:', err); }
+  try { tokenCounter.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
+  try { predictiveCache.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
+  try { cacheWarmup.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
+}
+
 // Start server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Cleanup on exit - Note: the signal handlers already have try-catch blocks
-  // These were added in response to Copilot review to ensure cleanup continues even if disposal fails
+  // Cleanup on exit - Note: the signal handlers use try-catch blocks
+  // to ensure cleanup continues even if disposal fails
   process.on('SIGINT', () => {
-    try { cache.close(); } catch (err) { console.error('Error closing cache:', err); }
-    try { tokenCounter.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
-    try { predictiveCache.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
-    try { cacheWarmup.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
+    cleanup();
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
-    try { cache.close(); } catch (err) { console.error('Error closing cache:', err); }
-    try { tokenCounter.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
-    try { predictiveCache.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
-    try { cacheWarmup.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
+    cleanup();
     process.exit(0);
   });
 }

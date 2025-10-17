@@ -555,8 +555,8 @@ function Record-ToolCall {
     Write-CsvOperation -ToolName $ToolName -TokenEstimate $tokensDelta -McpServer $mcpServer
 
     # Automatic caching logic
-    # Check for null and empty strings explicitly to handle all edge cases
-    if (-not $CacheHit -and $ToolResult -ne $null -and $ToolResult -ne '' -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
+    # Check for non-null and non-empty ToolResult using idiomatic PowerShell
+    if (-not $CacheHit -and -not [string]::IsNullOrEmpty($ToolResult) -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
         Set-AutoCache -ToolName $ToolName -ToolArgs $ToolArgs -Result $ToolResult -TokenCount $tokensDelta
     }
 
@@ -678,21 +678,22 @@ function Invoke-ClaudeCodeWrapper {
 
         # Cleanup MCP server process if running
         if ($null -ne $global:MCPServerProcess -and -not $global:MCPServerProcess.HasExited) {
-            # Attempt graceful shutdown first
-            if ($global:MCPServerProcess.CloseMainWindow()) {
-                # Wait up to 5 seconds for process to exit
-                if (-not $global:MCPServerProcess.WaitForExit(5000)) {
-                    $global:MCPServerProcess.Kill()
-                    Write-VerboseLog "MCP server process forcefully terminated after timeout"
+            # Attempt graceful shutdown for console process
+            try {
+                if ($global:MCPServerProcess.StandardInput) {
+                    $global:MCPServerProcess.StandardInput.Close()
+                    Write-VerboseLog "Sent EOF to MCP server process via StandardInput.Close()"
                 }
-                else {
-                    Write-VerboseLog "MCP server process exited gracefully"
-                }
+            } catch {
+                Write-VerboseLog "Could not close StandardInput: $_"
+            }
+            # Wait up to 5 seconds for process to exit
+            if (-not $global:MCPServerProcess.WaitForExit(5000)) {
+                $global:MCPServerProcess.Kill()
+                Write-VerboseLog "MCP server process forcefully terminated after timeout"
             }
             else {
-                # No main window or unable to close gracefully
-                $global:MCPServerProcess.Kill()
-                Write-VerboseLog "MCP server process forcefully terminated (no main window)"
+                Write-VerboseLog "MCP server process exited gracefully"
             }
         }
     }
