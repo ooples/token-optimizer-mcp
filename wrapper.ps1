@@ -13,7 +13,7 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$SessionId = "",
-    # Default: $env:USERPROFILE\token-optimizer-logs (e.g., C:\Users\YourName\token-optimizer-logs)
+    # Default: $env:USERPROFILE\token-optimizer-logs (e.g., C:\Users\<YourUsername>\token-optimizer-logs)
     [Parameter(Mandatory = $false)]
     [string]$LogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs"),
     [Parameter(Mandatory = $false)]
@@ -22,7 +22,10 @@ param(
     [switch]$Test,
     # Performance threshold in milliseconds for logging warnings (default: 10ms)
     [Parameter(Mandatory = $false)]
-    [int]$PerformanceThresholdMs = 10
+    [int]$PerformanceThresholdMs = 10,
+    # Line buffer size for context lookback (default: 100 lines)
+    [Parameter(Mandatory = $false)]
+    [int]$LineBufferSize = 100
 )
 
 # ============================================================================
@@ -174,23 +177,15 @@ function Test-LogDirIsSafe {
         [string]$BaseLogDir
     )
 
-    # Normalize paths to lower case for case-insensitive comparison (Windows)
-    $logDirNorm = $LogDir.ToLower()
-    $baseLogDirNorm = $BaseLogDir.ToLower()
-    $sep = [System.IO.Path]::DirectorySeparatorChar
+    # Use GetRelativePath to robustly check if LogDir is within BaseLogDir
+    $relativePath = [System.IO.Path]::GetRelativePath($BaseLogDir, $LogDir)
 
-    # Allow if $LogDir is exactly $BaseLogDir
-    if ($logDirNorm -eq $baseLogDirNorm) {
-        return $true
+    # If the relative path starts with ".." or is "..", it's outside the base directory
+    if ($relativePath -eq ".." -or $relativePath.StartsWith(".." + [System.IO.Path]::DirectorySeparatorChar)) {
+        return $false
     }
 
-    # Allow if $LogDir is a subdirectory of $BaseLogDir
-    if ($logDirNorm.StartsWith($baseLogDirNorm + $sep)) {
-        return $true
-    }
-
-    # Otherwise, path traversal detected
-    return $false
+    return $true
 }
 
 function Initialize-Session {
@@ -345,7 +340,8 @@ function Get-CachedToolResponse {
     )
 
     # Check if cache lookup tool is available
-    # For now, return null (cache injection will be implemented in phase 2)
+    # For now, return null. Cache injection will be implemented once the cache backend integration is complete.
+    # See project roadmap or related issues for implementation timeline.
     return $null
 }
 
@@ -425,7 +421,7 @@ function Invoke-ClaudeCodeWrapper {
 
             # Add to line buffer (for context lookback)
             [void]$lineBuffer.Add($line)
-            if ($lineBuffer.Count -gt 100) {
+            if ($lineBuffer.Count -gt $LineBufferSize) {
                 $lineBuffer.RemoveAt(0)  # Keep buffer size manageable
             }
 
@@ -483,14 +479,14 @@ function Invoke-ClaudeCodeWrapper {
 
             # Check for turn boundaries (user input pattern)
             # Pattern: Look for conversation turn markers
-            $userMessagePattern = '^\s*(User|Human):'
+            $userMessagePattern = '^\s*(User|Human):\s*'
             if ($line -match $userMessagePattern) {
                 if ($inTurn) {
                     End-Turn
                     $inTurn = $false
                 }
 
-                $lastUserMessage = $line -replace '^\s*(User|Human):\s*', ''
+                $lastUserMessage = $line -replace $userMessagePattern, ''
                 Write-VerboseLog "New user message detected: $($lastUserMessage.Substring(0, [Math]::Min(50, $lastUserMessage.Length)))..."
             }
 
