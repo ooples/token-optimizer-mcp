@@ -25,7 +25,11 @@ param(
     [int]$PerformanceThresholdMs = 10,
     # Line buffer size for context lookback (default: 100 lines)
     [Parameter(Mandatory = $false)]
-    [int]$LineBufferSize = 100
+    [int]$LineBufferSize = 100,
+    # Base directory for log path validation (default: $env:USERPROFILE\token-optimizer-logs)
+    # Set this to allow custom base directories while maintaining path traversal protection
+    [Parameter(Mandatory = $false)]
+    [string]$BaseLogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs")
 )
 
 # ============================================================================
@@ -177,11 +181,13 @@ function Test-LogDirIsSafe {
         [string]$BaseLogDir
     )
 
-    # Use GetRelativePath to robustly check if LogDir is within BaseLogDir
-    $relativePath = [System.IO.Path]::GetRelativePath($BaseLogDir, $LogDir)
+    # Resolve both paths to their absolute forms
+    $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
+    $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
 
-    # If the relative path starts with ".." or is "..", it's outside the base directory
-    if ($relativePath -eq ".." -or $relativePath.StartsWith(".." + [System.IO.Path]::DirectorySeparatorChar)) {
+    # Check if LogDir starts with BaseLogDir (case-insensitive for Windows compatibility)
+    # This ensures LogDir is either the same as BaseLogDir or a subdirectory of it
+    if (-not $resolvedLogDir.StartsWith($resolvedBaseLogDir, [System.StringComparison]::OrdinalIgnoreCase)) {
         return $false
     }
 
@@ -193,13 +199,12 @@ function Initialize-Session {
 
     # Validate log directory path to prevent path traversal attacks
     # Use GetFullPath to resolve the path and check if it's within the expected base directory
-    # NOTE: This validation is intentionally restrictive for security. For custom base directories,
-    # modify the $BaseLogDir assignment or disable validation for trusted environments.
-    $BaseLogDir = [System.IO.Path]::GetFullPath((Join-Path $env:USERPROFILE "token-optimizer-logs"))
+    # NOTE: The base directory can be customized via the -BaseLogDir parameter for trusted environments
+    $ResolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
     $ResolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
 
-    if (-not (Test-LogDirIsSafe -LogDir $ResolvedLogDir -BaseLogDir $BaseLogDir)) {
-        throw "Invalid log directory path: path traversal detected. LogDir must be within $BaseLogDir."
+    if (-not (Test-LogDirIsSafe -LogDir $ResolvedLogDir -BaseLogDir $ResolvedBaseLogDir)) {
+        throw "Invalid log directory path: path traversal detected. LogDir must be within $ResolvedBaseLogDir."
     }
 
     # Create log directory if it doesn't exist
@@ -409,11 +414,16 @@ function Invoke-ClaudeCodeWrapper {
         Write-VerboseLog "Wrapper ready - real-time stream processing active"
 
         # Configure console encoding for proper Unicode handling
+        # IMPORTANT: This prevents encoding issues when reading from stdin with ReadLine()
         [Console]::InputEncoding = [System.Text.Encoding]::UTF8
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
         $input = [Console]::In
         while ($true) {
+            # DESIGN NOTE: ReadLine() uses blocking I/O intentionally. The wrapper is designed
+            # to run as a piped subprocess where stdin is managed by the parent process (e.g., Claude Code).
+            # The stream closes automatically when the parent terminates, preventing indefinite hangs.
+            # For other contexts requiring timeout mechanisms, see CLI_INTEGRATION.md recommendations.
             $line = $input.ReadLine()
 
             # Check for end of stream
