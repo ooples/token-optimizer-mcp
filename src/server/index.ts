@@ -200,7 +200,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'analyze_project_tokens',
         description:
-          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log CSV files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all operations-*.csv files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -799,7 +799,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // Use provided path or default to global hooks directory
-          const targetPath = projectPath || path.join(os.homedir());
+          const targetPath = projectPath ?? os.homedir();
 
           const result = await analyzeProjectTokens({
             projectPath: targetPath,

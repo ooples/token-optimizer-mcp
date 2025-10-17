@@ -101,7 +101,7 @@ async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
     const timestamp = parts[0];
     const toolName = parts[1];
     const tokens = parseInt(parts[2], 10) || 0;
-    const metadata = parts[3] ? parts[3].trim().replace(/^"(.*)"$/, '$1') : '';
+    const metadata = parts.length > 3 ? parts.slice(3).join(',').trim().replace(/^"(.*)"$/, '$1') : '';
 
     operations.push({
       timestamp,
@@ -267,7 +267,7 @@ function analyzeServerAttribution(
       serverName,
       totalTokens: stats.totalTokens,
       operationCount: stats.operationCount,
-      percentOfTotal: (stats.totalTokens / totalTokens) * 100,
+      percentOfTotal: totalTokens === 0 ? 0 : (stats.totalTokens / totalTokens) * 100,
     }))
     .sort((a, b) => b.totalTokens - a.totalTokens);
 }
