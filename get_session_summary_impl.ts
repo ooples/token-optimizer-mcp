@@ -235,7 +235,7 @@ case 'get_session_summary': {
         thinkingTurns: analysis.summary.thinkingTurns,
         planningTurns: analysis.summary.planningTurns,
         normalTurns: analysis.summary.normalTurns,
-        thinkingModePercent: calculatePercentage(analysis.efficiency.thinkingModePercent, 1),
+        thinkingModePercent: Math.round(analysis.efficiency.thinkingModePercent * 100) / 100,
       } : null,
       anomalies: analysis?.anomalies || [],
       recommendations: analysis?.recommendations || [],
