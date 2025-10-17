@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Optimizer Dashboard</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Token Optimizer Dashboard</h1>
+            <div class="header-info">
+                <span id="session-id" class="badge">Session: Loading...</span>
+                <span id="last-updated" class="badge">Last Updated: Never</span>
+                <button id="refresh-btn" class="btn btn-primary">Refresh</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Summary Stats Section -->
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">&#128200;</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Tokens</div>
+                        <div class="stat-value" id="total-tokens">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128221;</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Total Turns</div>
+                        <div class="stat-value" id="total-turns">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#128295;</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Tool Calls</div>
+                        <div class="stat-value" id="total-tools">0</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">&#9201;</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Duration</div>
+                        <div class="stat-value" id="session-duration">0m 0s</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <div class="chart-container">
+                    <h2>Token Distribution by Category</h2>
+                    <canvas id="token-category-chart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h2>Token Attribution by MCP Server</h2>
+                    <canvas id="server-attribution-chart"></canvas>
+                </div>
+            </section>
+
+            <!-- Tool Timeline Section -->
+            <section class="timeline-section">
+                <h2>Tool Call Timeline</h2>
+                <div id="timeline-container" class="timeline">
+                    <div class="timeline-placeholder">No events to display</div>
+                </div>
+            </section>
+
+            <!-- Tool Breakdown Section -->
+            <section class="breakdown-section">
+                <h2>Tool Breakdown</h2>
+                <div id="tool-breakdown" class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Tool Name</th>
+                                <th>Count</th>
+                                <th>Tokens</th>
+                                <th>Avg Duration (ms)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tool-breakdown-body">
+                            <tr>
+                                <td colspan="4" class="no-data">No data available</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Performance Metrics Section -->
+            <section class="performance-section">
+                <h2>Performance Metrics</h2>
+                <div class="performance-grid">
+                    <div class="performance-card">
+                        <div class="performance-label">Avg Tool Duration</div>
+                        <div class="performance-value" id="avg-tool-duration">0 ms</div>
+                    </div>
+                    <div class="performance-card">
+                        <div class="performance-label">Tools with Duration</div>
+                        <div class="performance-value" id="tools-with-duration">0</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Token Optimizer MCP - Real-time Session Monitoring</p>
+        </footer>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
