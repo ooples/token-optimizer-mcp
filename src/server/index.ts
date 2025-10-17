@@ -210,10 +210,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             startDate: {
               type: 'string',
+              format: 'date',
               description: 'Optional start date filter (YYYY-MM-DD format).',
             },
             endDate: {
               type: 'string',
+              format: 'date',
               description: 'Optional end date filter (YYYY-MM-DD format).',
             },
             costPerMillionTokens: {

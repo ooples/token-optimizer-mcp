@@ -411,11 +411,14 @@ export async function analyzeProjectTokens(
   const recommendations = generateProjectRecommendations(sessions, topTools, totalTokens);
 
   // Determine date range
-  const allDates = sessions
+  const allStartDates = sessions
     .filter((s) => s.startTime)
     .map((s) => new Date(s.startTime).getTime());
-  const startTimestamp = allDates.length > 0 ? Math.min(...allDates) : Date.now();
-  const endTimestamp = allDates.length > 0 ? Math.max(...allDates) : Date.now();
+  const allEndDates = sessions
+    .filter((s) => s.endTime)
+    .map((s) => new Date(s.endTime).getTime());
+  const startTimestamp = allStartDates.length > 0 ? Math.min(...allStartDates) : Date.now();
+  const endTimestamp = allEndDates.length > 0 ? Math.max(...allEndDates) : Date.now();
 
   return {
     projectPath,

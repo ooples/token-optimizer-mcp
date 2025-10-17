@@ -28,11 +28,11 @@ function escapeHtml(text: string): string {
  */
 function escapeJsonForScript(json: string): string {
   return json
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026')
-    .replace(/\\u2028/g, '\\u2028')
-    .replace(/\\u2029/g, '\\u2029');
+    .replace(/</g, '\u003c')
+    .replace(/>/g, '\u003e')
+    .replace(/&/g, '\u0026')
+    .replace(/\u2028/g, '\u2028')
+    .replace(/\u2029/g, '\u2029');
 }
 
 export interface ReportOptions {
@@ -534,9 +534,10 @@ function generateHTMLReport(
 
         function drawCharts() {
             // Pie Chart
+            const pieRows = analysisData.topTools.slice(0, 8).map(t => [t.toolName, t.totalTokens]);
             var pieData = google.visualization.arrayToDataTable([
                 ['Tool', 'Tokens'],
-                ${pieChartData}
+                ...pieRows
             ]);
 
             var pieOptions = {
@@ -778,15 +779,6 @@ function generateProjectMarkdownReport(analysis: ProjectAnalysisResult): string 
 }
 
 function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
-  const pieChartData = analysis.topTools
-    .slice(0, 8)
-    .map((tool) => `['${escapeHtml(tool.toolName)}', ${tool.totalTokens}]`)
-    .join(',');
-
-  const serverChartData = analysis.serverBreakdown
-    .map((server) => `['${escapeHtml(server.serverName)}', ${server.totalTokens}]`)
-    .join(',');
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1112,9 +1104,10 @@ ${escapeJsonForScript(JSON.stringify(analysis))}
         const analysisData = JSON.parse(document.getElementById('analysis-data').textContent);
 
         function drawCharts() {
+            const pieRows = analysisData.topTools.slice(0, 8).map(t => [t.toolName, t.totalTokens]);
             var pieData = google.visualization.arrayToDataTable([
                 ['Tool', 'Tokens'],
-                ${pieChartData}
+                ...pieRows
             ]);
 
             var pieOptions = {
@@ -1128,9 +1121,10 @@ ${escapeJsonForScript(JSON.stringify(analysis))}
             var pieChart = new google.visualization.PieChart(document.getElementById('pie_chart'));
             pieChart.draw(pieData, pieOptions);
 
+            const serverRows = analysisData.serverBreakdown.map(s => [s.serverName, s.totalTokens]);
             var barData = google.visualization.arrayToDataTable([
                 ['Server', 'Tokens'],
-                ${serverChartData}
+                ...serverRows
             ]);
 
             var barOptions = {
