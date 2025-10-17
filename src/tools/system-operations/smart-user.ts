@@ -524,8 +524,7 @@ export class SmartUser {
 
     // Cache permission info (shorter TTL as permissions can change)
     if (useCache) {
-      const dataSize = Buffer.byteLength(dataStr, 'utf8');
-      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
@@ -581,8 +580,7 @@ export class SmartUser {
 
     // Cache ACL info
     if (useCache) {
-      const dataSize = Buffer.byteLength(dataStr, 'utf8');
-      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
@@ -635,8 +633,7 @@ export class SmartUser {
 
     // Cache sudo status
     if (useCache) {
-      const dataSize = Buffer.byteLength(dataStr, 'utf8');
-      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
@@ -690,8 +687,7 @@ export class SmartUser {
 
     // Cache audit report (short TTL as security state should be monitored frequently)
     if (useCache) {
-      const dataSize = Buffer.byteLength(dataStr, 'utf8');
-      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {

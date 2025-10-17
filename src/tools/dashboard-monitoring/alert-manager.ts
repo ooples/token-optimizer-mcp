@@ -864,7 +864,7 @@ export class AlertManager {
 
     // Cache channel configuration (95% reduction, 24-hour TTL)
     const cachedData = JSON.stringify(compressedChannels);
-    await this.cache.set(cacheKey, cachedData, cachedData.length, cachedData.length);
+    await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
 
     // Persist channels
     await this.persistChannels();
