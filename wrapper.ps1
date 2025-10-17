@@ -172,9 +172,21 @@ function Parse-SystemWarning {
     return $null
 }
 
-# Checks if the provided log directory is within the allowed base directory.
-# Prevents path traversal attacks by ensuring $LogDir is either the same as $BaseLogDir
-# or a subdirectory of it. Both paths are resolved to their absolute forms.
+<#
+.SYNOPSIS
+Checks if the provided log directory is within the allowed base directory.
+
+.DESCRIPTION
+Prevents path traversal attacks by ensuring $LogDir is either the same as $BaseLogDir
+or a subdirectory of it. Both paths are resolved to their absolute forms for comparison.
+Returns $true if safe, $false otherwise.
+
+.PARAMETER LogDir
+The log directory to validate.
+
+.PARAMETER BaseLogDir
+The base directory against which to validate the log directory.
+#>
 function Test-LogDirIsSafe {
     param(
         [string]$LogDir,
@@ -309,6 +321,27 @@ function End-Turn {
 # Real-Time Stream Processing
 # ============================================================================
 
+<#
+.SYNOPSIS
+Detects tool calls from the current line and previous context using pattern matching.
+
+.DESCRIPTION
+Implements a multi-pattern tool detection algorithm that searches for tool invocations in:
+1. Current line using <invoke name="ToolName"> pattern
+2. Previous lines (lookback buffer) for recent tool invocations
+3. Function result blocks using <name>ToolName</name> pattern
+
+The algorithm uses configurable lookback to balance accuracy vs performance.
+
+.PARAMETER CurrentLine
+The current line from the input stream to analyze.
+
+.PARAMETER PreviousLines
+Array of previous lines to search for tool call context.
+
+.PARAMETER LookbackLimit
+Maximum number of previous lines to search (default: 20).
+#>
 function Parse-ToolCallFromContext {
     param(
         [string]$CurrentLine,
@@ -340,22 +373,56 @@ function Parse-ToolCallFromContext {
     return $null
 }
 
+<#
+.SYNOPSIS
+Looks up cached tool responses to enable pre-execution cache injection.
+
+.DESCRIPTION
+STUB FUNCTION: Cache injection is NOT implemented.
+This function is a placeholder for future MCP integration that will enable:
+- Pre-execution cache lookups for high-token operations
+- Transparent response injection to skip redundant tool calls
+- Token savings tracking via cache hit events
+
+Currently always returns $null to disable cache injection.
+For implementation details, see the MCP integration plan and project roadmap.
+
+.PARAMETER ToolName
+The name of the tool to look up (e.g., "Read", "mcp__git__git_status").
+
+.PARAMETER ToolParams
+Hashtable of tool parameters used to generate the cache key.
+#>
 function Get-CachedToolResponse {
     param(
         [string]$ToolName,
         [hashtable]$ToolParams
     )
 
-    # ----------------------------------------------------------------------------
-    # Get-CachedToolResponse
     # STUB: Cache injection is NOT implemented.
     # This function is a placeholder for future MCP integration.
     # It currently always returns $null.
-    # For details, see the MCP integration plan and project roadmap.
-    # ----------------------------------------------------------------------------
     return $null
 }
 
+<#
+.SYNOPSIS
+Injects a cached response directly into the output stream as a formatted tool result.
+
+.DESCRIPTION
+Formats and injects cached tool responses into the stdout stream, bypassing actual tool execution.
+The response is formatted as a standard <function_results> block to maintain compatibility with
+the parent process (e.g., Claude Code CLI). This enables transparent cache injection where the
+parent process consumes the cached response as if it came from the actual tool.
+
+Used in conjunction with Get-CachedToolResponse to implement cache-based token optimization.
+
+.PARAMETER CachedResponse
+The cached tool response content to inject.
+
+.PARAMETER ToolName
+The name of the tool being cached (used for logging and formatting).
+#>
 function Inject-CachedResponse {
     param(
         [string]$CachedResponse,
