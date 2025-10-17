@@ -193,6 +193,8 @@ function Initialize-Session {
 
     # Validate log directory path to prevent path traversal attacks
     # Use GetFullPath to resolve the path and check if it's within the expected base directory
+    # NOTE: This validation is intentionally restrictive for security. For custom base directories,
+    # modify the $BaseLogDir assignment or disable validation for trusted environments.
     $BaseLogDir = [System.IO.Path]::GetFullPath((Join-Path $env:USERPROFILE "token-optimizer-logs"))
     $ResolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
 
@@ -398,7 +400,8 @@ function Invoke-ClaudeCodeWrapper {
     # Track if we're in a turn
     $inTurn = $false
     $lastUserMessage = ""
-    $lineBuffer = [System.Collections.ArrayList]::new()
+    # Use Queue for efficient FIFO operations (better than ArrayList.RemoveAt(0))
+    $lineBuffer = [System.Collections.Generic.Queue[string]]::new($LineBufferSize)
     $pendingToolCall = $null
     $lastTokenCount = 0
 
@@ -421,9 +424,10 @@ function Invoke-ClaudeCodeWrapper {
 
             # Add to line buffer (for context lookback)
             # Note: LineBufferSize is configurable via parameter (default: 100)
-            [void]$lineBuffer.Add($line)
+            # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
+            $lineBuffer.Enqueue($line)
             if ($lineBuffer.Count -gt $LineBufferSize) {
-                $lineBuffer.RemoveAt(0)  # Keep buffer size manageable
+                [void]$lineBuffer.Dequeue()  # Remove oldest line efficiently
             }
 
             # Performance tracking
@@ -438,7 +442,8 @@ function Invoke-ClaudeCodeWrapper {
                 # Performance optimization: Only call Parse-ToolCallFromContext when token count increases
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
                     # Detect tool call from context (ONLY when tokens increased)
-                    $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
+                    # Convert Queue to array for pattern matching
+                    $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines @($lineBuffer.ToArray())
 
                     if ($toolName) {
                         Write-VerboseLog "Detected tool call: $toolName"
