@@ -10,6 +10,9 @@ import {
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
+import { MetricsCollector } from '../core/metrics.js';
+import { getPredictiveCacheTool, PREDICTIVE_CACHE_TOOL_DEFINITION } from '../tools/advanced-caching/predictive-cache.js';
+import { getCacheWarmupTool, CACHE_WARMUP_TOOL_DEFINITION } from '../tools/advanced-caching/cache-warmup.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -18,6 +21,11 @@ import os from 'os';
 const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
+const metrics = new MetricsCollector();
+
+// Initialize advanced caching tools
+const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
+const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
@@ -196,6 +204,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      PREDICTIVE_CACHE_TOOL_DEFINITION,
+      CACHE_WARMUP_TOOL_DEFINITION,
     ],
   };
 });
@@ -762,6 +772,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      case 'predictive_cache': {
+        const options = args as any;
+        const result = await predictiveCache.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_warmup': {
+        const options = args as any;
+        const result = await cacheWarmup.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -789,12 +827,16 @@ async function main() {
   process.on('SIGINT', () => {
     cache.close();
     tokenCounter.free();
+    predictiveCache.dispose();
+    cacheWarmup.dispose();
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
     cache.close();
     tokenCounter.free();
+    predictiveCache.dispose();
+    cacheWarmup.dispose();
     process.exit(0);
   });
 }

@@ -44,6 +44,17 @@ $global:SessionState = @{
     Model = "claude-sonnet-4-5-20250929"  # Default model
     ToolCalls = @()
     TurnStartTokens = 0
+    CacheHits = 0
+    CacheMisses = 0
+    AutoCachedOps = 0
+}
+
+# Automatic caching configuration
+$global:AutoCacheConfig = @{
+    Enabled = $true
+    TokenThreshold = 500  # Minimum tokens to cache
+    HighTokenTools = @('Read', 'Grep', 'SmartTypeScript', 'WebFetch', 'WebSearch')
+    CacheKeyPrefix = "auto-cache:"
 }
 
 # ============================================================================
@@ -141,6 +152,128 @@ function Get-TokenEstimate {
     return 500
 }
 
+function Generate-CacheKey {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs
+    )
+
+    # Generate deterministic cache key from tool name and arguments
+    $argsJson = $ToolArgs | ConvertTo-Json -Compress -Depth 10
+    $hashInput = "$ToolName|$argsJson"
+
+    # Use SHA256 for deterministic hash
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))
+    $hash = [BitConverter]::ToString($hashBytes).Replace("-", "").Substring(0, 32)
+
+    return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
+}
+
+function Check-AutoCache {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs
+    )
+
+    if (-not $global:AutoCacheConfig.Enabled) {
+        return $null
+    }
+
+    if ($global:AutoCacheConfig.HighTokenTools -notcontains $ToolName) {
+        return $null
+    }
+
+    $cacheKey = Generate-CacheKey -ToolName $ToolName -ToolArgs $ToolArgs
+
+    # Call MCP tool to get cached value
+    try {
+        $result = Invoke-MCPTool -ToolName "get_cached" -Args @{ key = $cacheKey }
+
+        if ($result.success) {
+            $global:SessionState.CacheHits++
+            Write-VerboseLog "Cache HIT for $ToolName (key: $cacheKey)"
+            return $result.text
+        }
+    }
+    catch {
+        Write-VerboseLog "Cache check failed: $_"
+    }
+
+    $global:SessionState.CacheMisses++
+    Write-VerboseLog "Cache MISS for $ToolName (key: $cacheKey)"
+    return $null
+}
+
+function Set-AutoCache {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs,
+        [string]$Result,
+        [int]$TokenCount
+    )
+
+    if (-not $global:AutoCacheConfig.Enabled) {
+        return
+    }
+
+    if ($global:AutoCacheConfig.HighTokenTools -notcontains $ToolName) {
+        return
+    }
+
+    if ($TokenCount -lt $global:AutoCacheConfig.TokenThreshold) {
+        Write-VerboseLog "Skipping cache (below threshold: $TokenCount < $($global:AutoCacheConfig.TokenThreshold))"
+        return
+    }
+
+    $cacheKey = Generate-CacheKey -ToolName $ToolName -ToolArgs $ToolArgs
+
+    # Call MCP tool to optimize and cache
+    try {
+        $optimizeResult = Invoke-MCPTool -ToolName "optimize_text" -Args @{
+            text = $Result
+            key = $cacheKey
+        }
+
+        if ($optimizeResult.success) {
+            $global:SessionState.AutoCachedOps++
+            Write-VerboseLog "Auto-cached $ToolName (key: $cacheKey, tokens saved: $($optimizeResult.tokensSaved))"
+
+            # Record access pattern for predictive caching
+            Invoke-MCPTool -ToolName "predictive_cache" -Args @{
+                operation = "record-access"
+                key = $cacheKey
+                metadata = @{
+                    tool = $ToolName
+                    tokens = $TokenCount
+                }
+            } | Out-Null
+        }
+    }
+    catch {
+        Write-VerboseLog "Auto-cache set failed: $_"
+    }
+}
+
+function Invoke-MCPTool {
+    param(
+        [string]$ToolName,
+        [hashtable]$Args
+    )
+
+    # Placeholder for actual MCP tool invocation
+    # In real implementation, this would call the MCP server
+    # For now, we simulate the response structure
+
+    Write-VerboseLog "MCP Tool Call: $ToolName with args: $($Args | ConvertTo-Json -Compress)"
+
+    # Return simulated response
+    return @{
+        success = $false
+        message = "MCP integration pending"
+    }
+}
+
 function Parse-SystemWarning {
     param([string]$Line)
 
@@ -209,13 +342,16 @@ function Record-ToolCall {
     param(
         [string]$ToolName,
         [int]$TokensBefore,
-        [int]$TokensAfter
+        [int]$TokensAfter,
+        [hashtable]$ToolArgs = @{},
+        [string]$ToolResult = "",
+        [bool]$CacheHit = $false
     )
 
     $tokensDelta = $TokensAfter - $TokensBefore
     $mcpServer = Get-McpServer -ToolName $ToolName
 
-    Write-VerboseLog "Tool call: $ToolName (server: $mcpServer, delta: $tokensDelta)"
+    Write-VerboseLog "Tool call: $ToolName (server: $mcpServer, delta: $tokensDelta, cache: $CacheHit)"
 
     # Write JSONL event
     Write-JsonlEvent -Event @{
@@ -226,16 +362,24 @@ function Record-ToolCall {
         tokens_before = $TokensBefore
         tokens_after = $TokensAfter
         tokens_delta = $tokensDelta
+        cache_hit = $CacheHit
+        auto_cached = ($global:AutoCacheConfig.HighTokenTools -contains $ToolName)
     }
 
     # Write CSV operation (with MCP server)
     Write-CsvOperation -ToolName $ToolName -TokenEstimate $tokensDelta -McpServer $mcpServer
+
+    # Automatic caching logic
+    if (-not $CacheHit -and $ToolResult -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
+        Set-AutoCache -ToolName $ToolName -ToolArgs $ToolArgs -Result $ToolResult -TokenCount $tokensDelta
+    }
 
     # Track for turn summary
     $global:SessionState.ToolCalls += @{
         Tool = $ToolName
         Server = $mcpServer
         Delta = $tokensDelta
+        CacheHit = $CacheHit
     }
 
     # Update last tokens
@@ -244,8 +388,13 @@ function Record-ToolCall {
 
 function End-Turn {
     $turnTokens = $global:SessionState.LastTokens - $global:SessionState.TurnStartTokens
+    $cacheHitRate = 0
 
-    Write-VerboseLog "Ending turn $($global:SessionState.CurrentTurn) (turn tokens: $turnTokens)"
+    if (($global:SessionState.CacheHits + $global:SessionState.CacheMisses) -gt 0) {
+        $cacheHitRate = [math]::Round(($global:SessionState.CacheHits / ($global:SessionState.CacheHits + $global:SessionState.CacheMisses)) * 100, 2)
+    }
+
+    Write-VerboseLog "Ending turn $($global:SessionState.CurrentTurn) (turn tokens: $turnTokens, cache hit rate: $cacheHitRate%)"
 
     Write-JsonlEvent -Event @{
         type = "turn_end"
@@ -253,6 +402,12 @@ function End-Turn {
         total_tokens = $global:SessionState.LastTokens
         turn_tokens = $turnTokens
         tool_calls = $global:SessionState.ToolCalls.Count
+        cache_stats = @{
+            hits = $global:SessionState.CacheHits
+            misses = $global:SessionState.CacheMisses
+            hit_rate = $cacheHitRate
+            auto_cached = $global:SessionState.AutoCachedOps
+        }
     }
 }
 
