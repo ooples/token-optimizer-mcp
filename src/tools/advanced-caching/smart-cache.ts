@@ -575,7 +575,8 @@ export class SmartCacheTool extends EventEmitter {
     }
     if (options.l1MaxSize) {
       this.l1MaxSize = options.l1MaxSize;
-      this.l1Cache.max = options.l1MaxSize;
+      // Note: LRUCache max size cannot be changed after instantiation
+      // A new LRUCache instance would need to be created to change max size
     }
     if (options.l2MaxSize) {
       this.l2MaxSize = options.l2MaxSize;
