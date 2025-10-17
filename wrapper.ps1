@@ -1,7 +1,7 @@
 # Enhanced Token Tracking Wrapper for Claude Code
 # Purpose: Real-time session logging with turn-level tracking and MCP server attribution
 # Implements Priority 1: Session-level token tracking with JSONL event log
-# Version: 1.0.0
+# Version: 2.0.0
 # Features:
 # - Parses system warnings to extract token deltas
 # - Tracks turn-level events (turn_start, tool_call, turn_end)
@@ -346,9 +346,13 @@ function Get-CachedToolResponse {
         [hashtable]$ToolParams
     )
 
-    # Check if cache lookup tool is available
-    # For now, return null. Cache injection will be implemented once the cache backend integration is complete.
-    # See project roadmap or related issues for implementation timeline.
+    # ----------------------------------------------------------------------------
+    # Get-CachedToolResponse
+    # STUB: Cache injection is NOT implemented.
+    # This function is a placeholder for future MCP integration.
+    # It currently always returns $null.
+    # For details, see the MCP integration plan and project roadmap.
+    # ----------------------------------------------------------------------------
     return $null
 }
 
@@ -437,7 +441,7 @@ function Invoke-ClaudeCodeWrapper {
             # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
             $lineBuffer.Enqueue($line)
             if ($lineBuffer.Count -gt $LineBufferSize) {
-                [void]$lineBuffer.Dequeue()  # Remove oldest line efficiently
+                $lineBuffer.Dequeue()  # Remove oldest line efficiently
             }
 
             # Performance tracking
