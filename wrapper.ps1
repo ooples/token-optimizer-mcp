@@ -420,6 +420,7 @@ function Invoke-ClaudeCodeWrapper {
             }
 
             # Add to line buffer (for context lookback)
+            # Note: LineBufferSize is configurable via parameter (default: 100)
             [void]$lineBuffer.Add($line)
             if ($lineBuffer.Count -gt $LineBufferSize) {
                 $lineBuffer.RemoveAt(0)  # Keep buffer size manageable
@@ -434,6 +435,7 @@ function Invoke-ClaudeCodeWrapper {
                 Write-VerboseLog "Parsed token info: Used=$($tokenInfo.Used), Remaining=$($tokenInfo.Remaining)"
 
                 # Check if this is a tool call transition (tokens increased)
+                # Performance optimization: Only call Parse-ToolCallFromContext when token count increases
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
                     # Detect tool call from context (ONLY when tokens increased)
                     $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
