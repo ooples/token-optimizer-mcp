@@ -22,6 +22,19 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m]);
 }
 
+/**
+ * Escape JSON for safe embedding in script tags
+ * Prevents XSS by escaping characters that could break out of script context
+ */
+function escapeJsonForScript(json: string): string {
+  return json
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\\u2028/g, '\\u2028')
+    .replace(/\\u2029/g, '\\u2029');
+}
+
 export interface ReportOptions {
   includeCharts?: boolean;
   includeTimeline?: boolean;
@@ -1089,7 +1102,7 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
     </div>
 
     <script type="application/json" id="analysis-data">
-${JSON.stringify(analysis)}
+${escapeJsonForScript(JSON.stringify(analysis))}
     </script>
 
     <script type="text/javascript">
