@@ -552,7 +552,7 @@ export class SmartProcess {
   private async buildProcessTreeUnix(rootPid?: number): Promise<ProcessTreeNode> {
     // Use pstree on Unix
     const pid = rootPid || process.pid;
-    const { stdout } = await execAsync(`pstree -p ${pid}`);
+    const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
 
     // Parse pstree output (simplified)
     return {
@@ -588,7 +588,7 @@ export async function runSmartProcess(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cacheInstance = cache || new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
+  const cacheInstance = cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 

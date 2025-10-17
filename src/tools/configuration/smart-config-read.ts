@@ -135,7 +135,6 @@ export class SmartConfigReadTool {
       validateSchema = true,
       inferSchema = true,
       diffMode = true,
-      includeMetadata = true,
       includeSuggestions = true,
       validateOnly = false,
       schema = undefined,

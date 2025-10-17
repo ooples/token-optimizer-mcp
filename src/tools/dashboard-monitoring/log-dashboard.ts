@@ -22,7 +22,6 @@ import { TokenCounter } from "../../core/token-counter";
 import { MetricsCollector } from "../../core/metrics";
 import { createHash } from "crypto";
 import * as fs from "fs";
-import * as path from "path";
 import { EventEmitter } from "events";
 
 // ============================================================================
@@ -999,7 +998,6 @@ export class LogDashboard {
     if (method === "statistical") {
       // Detect anomalies based on log frequency
       const timeWindow = 300000; // 5 minutes
-      const windowCounts: number[] = [];
 
       // Calculate baseline
       const now = Date.now();
