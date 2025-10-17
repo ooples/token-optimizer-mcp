@@ -554,13 +554,13 @@ export class MonitoringIntegration {
   private async persistConnections(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "connections");
     const data = JSON.stringify(Array.from(this.connections.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistMappings(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "mappings");
     const data = JSON.stringify(Array.from(this.fieldMappings.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {

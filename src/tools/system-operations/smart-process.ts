@@ -287,8 +287,7 @@ export class SmartProcess {
 
     // Cache the result
     if (useCache) {
-      const dataSize = Buffer.byteLength(dataStr, 'utf8');
-      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
@@ -385,8 +384,7 @@ export class SmartProcess {
 
     // Cache the result
     if (useCache) {
-      const dataSize = Buffer.byteLength(dataStr, 'utf8');
-      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
@@ -590,7 +588,7 @@ export async function runSmartProcess(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cacheInstance = cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cacheInstance = cache || new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 

@@ -358,22 +358,20 @@ export class AlertManager {
     // Store alert
     this.alerts.set(alertId, alert);
 
-    // Cache alert metadata (92% reduction, 6-hour TTL)
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:alert", alertId).digest("hex")}`;
+    // Cache alert metadata (92% reduction)
+    const cacheKey = `cache-${createHash("md5").update(`alert-manager:alert:${alertId}`).digest("hex")}`;
     const alertMetadata = this.compressAlertMetadata(alert);
     const cachedData = JSON.stringify(alertMetadata);
 
     const tokensUsed = this.tokenCounter.count(JSON.stringify(alert)).tokens;
-    const tokensSaved =
-      tokensUsed -
-      this.tokenCounter.count(JSON.stringify(alertMetadata)).tokens;
+    const compressedTokens = this.tokenCounter.count(cachedData).tokens;
+    const tokensSaved = tokensUsed - compressedTokens;
 
     await this.cache.set(
       cacheKey,
       cachedData,
       tokensUsed,
-      this.tokenCounter.count(JSON.stringify(alertMetadata.toString()))
-        .tokens,
+      compressedTokens,
     );
 
     // Persist to storage
@@ -427,21 +425,19 @@ export class AlertManager {
     alert.updatedAt = Date.now();
 
     // Update cache
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:alert", alertId).digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update(`alert-manager:alert:${alertId}`).digest("hex")}`;
     const alertMetadata = this.compressAlertMetadata(alert);
     const cachedData = JSON.stringify(alertMetadata);
 
     const tokensUsed = this.tokenCounter.count(JSON.stringify(alert)).tokens;
-    const tokensSaved =
-      tokensUsed -
-      this.tokenCounter.count(JSON.stringify(alertMetadata)).tokens;
+    const compressedTokens = this.tokenCounter.count(cachedData).tokens;
+    const tokensSaved = tokensUsed - compressedTokens;
 
     await this.cache.set(
       cacheKey,
       cachedData,
       tokensUsed,
-      this.tokenCounter.count(JSON.stringify(alertMetadata.toString()))
-        .tokens,
+      compressedTokens,
     );
 
     // Persist to storage
@@ -489,7 +485,7 @@ export class AlertManager {
     this.alerts.delete(alertId);
 
     // Delete from cache
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:alert", alertId).digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update(`alert-manager:alert:${alertId}`).digest("hex")}`;
     this.cache.delete(cacheKey);
 
     // Delete associated silence rules
@@ -521,7 +517,7 @@ export class AlertManager {
     options: AlertManagerOptions,
   ): Promise<AlertManagerResult> {
     // Generate cache key
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:list-alerts", "all").digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update("alert-manager:list-alerts:all").digest("hex")}`;
 
     // Check cache
     if (options.useCache !== false) {
@@ -570,9 +566,9 @@ export class AlertManager {
     const cachedData = JSON.stringify(compressedAlerts);
     await this.cache.set(
       cacheKey,
-      cachedData.toString(),
-      tokensSaved,
-      options.cacheTTL || 21600,
+      cachedData,
+      fullTokens,
+      compressedTokens,
     );
 
     return {
@@ -682,7 +678,7 @@ export class AlertManager {
     const timeRangeKey = options.timeRange
       ? `${options.timeRange.start}-${options.timeRange.end}`
       : "all";
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:history", timeRangeKey).digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update(`alert-manager:history:${timeRangeKey}`).digest("hex")}`;
 
     // Check cache
     if (options.useCache !== false) {
@@ -733,9 +729,9 @@ export class AlertManager {
     const cachedData = JSON.stringify(aggregatedHistory);
     await this.cache.set(
       cacheKey,
-      cachedData.toString(),
-      tokensSaved,
-      options.cacheTTL || 300,
+      cachedData,
+      fullTokens,
+      aggregatedTokens,
     );
 
     return {
@@ -763,7 +759,7 @@ export class AlertManager {
     }
 
     // Generate cache key
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:channels", "all").digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update("alert-manager:channels:all").digest("hex")}`;
 
     // Create or update notification channels
     const channels: NotificationChannel[] = [];
@@ -868,7 +864,7 @@ export class AlertManager {
 
     // Cache channel configuration (95% reduction, 24-hour TTL)
     const cachedData = JSON.stringify(compressedChannels);
-    await this.cache.set(cacheKey, cachedData, cachedData.length, cachedData.length);
+    await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
 
     // Persist channels
     await this.persistChannels();
@@ -937,9 +933,9 @@ export class AlertManager {
     const tokensSaved = fullTokens - compressedTokens;
 
     // Cache silence state (90% reduction, based on duration)
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:silence", silenceId).digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update(`alert-manager:silence:${silenceId}`).digest("hex")}`;
     const cachedData = JSON.stringify(compressedSilence);
-    await this.cache.set(cacheKey, cachedData, cachedData.length, cachedData.length);
+    await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
 
     // Persist changes
     await this.persistSilences();
@@ -1129,36 +1125,36 @@ export class AlertManager {
   private async persistAlerts(): Promise<void> {
     // In production, persist to database
     // For now, use cache as simple persistence
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence", "alerts").digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:alerts").digest("hex")}`;
     const data = JSON.stringify(Array.from(this.alerts.entries()));
-    await this.cache.set(cacheKey, data.toString(), 0, 86400 * 365); // 1 year TTL
+    const dataSize = this.tokenCounter.count(data).tokens;
+    await this.cache.set(cacheKey, data, dataSize, dataSize);
   }
 
   private async persistEvents(): Promise<void> {
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence", "events").digest("hex")}`;
+    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:events").digest("hex")}`;
     const data = JSON.stringify(this.alertEvents);
-    await this.cache.set(cacheKey, data.toString(), 0, 86400 * 30); // 30 days TTL
+    const dataSize = this.tokenCounter.count(data).tokens;
+    await this.cache.set(cacheKey, data, dataSize, dataSize);
   }
 
   private async persistChannels(): Promise<void> {
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence", "channels").digest("hex")}`;
-    const data = Buffer.from(
-      JSON.stringify(Array.from(this.notificationChannels.entries())),
-    );
-    await this.cache.set(cacheKey, data.toString(), 0, 86400 * 365); // 1 year TTL
+    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:channels").digest("hex")}`;
+    const data = JSON.stringify(Array.from(this.notificationChannels.entries()));
+    const dataSize = this.tokenCounter.count(data).tokens;
+    await this.cache.set(cacheKey, data, dataSize, dataSize);
   }
 
   private async persistSilences(): Promise<void> {
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence", "silences").digest("hex")}`;
-    const data = Buffer.from(
-      JSON.stringify(Array.from(this.silenceRules.entries())),
-    );
-    await this.cache.set(cacheKey, data.toString(), 0, 86400 * 30); // 30 days TTL
+    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:silences").digest("hex")}`;
+    const data = JSON.stringify(Array.from(this.silenceRules.entries()));
+    const dataSize = this.tokenCounter.count(data).tokens;
+    await this.cache.set(cacheKey, data, dataSize, dataSize);
   }
 
   private loadPersistedData(): void {
     // Load alerts
-    const alertsKey = `cache-${createHash("md5").update("alert-manager:persistence", "alerts").digest("hex")}`;
+    const alertsKey = `cache-${createHash("md5").update("alert-manager:persistence:alerts").digest("hex")}`;
     const alertsData = this.cache.get(alertsKey);
     if (alertsData) {
       try {
@@ -1170,7 +1166,7 @@ export class AlertManager {
     }
 
     // Load events
-    const eventsKey = `cache-${createHash("md5").update("alert-manager:persistence", "events").digest("hex")}`;
+    const eventsKey = `cache-${createHash("md5").update("alert-manager:persistence:events").digest("hex")}`;
     const eventsData = this.cache.get(eventsKey);
     if (eventsData) {
       try {
@@ -1181,7 +1177,7 @@ export class AlertManager {
     }
 
     // Load channels
-    const channelsKey = `cache-${createHash("md5").update("alert-manager:persistence", "channels").digest("hex")}`;
+    const channelsKey = `cache-${createHash("md5").update("alert-manager:persistence:channels").digest("hex")}`;
     const channelsData = this.cache.get(channelsKey);
     if (channelsData) {
       try {
@@ -1196,7 +1192,7 @@ export class AlertManager {
     }
 
     // Load silences
-    const silencesKey = `cache-${createHash("md5").update("alert-manager:persistence", "silences").digest("hex")}`;
+    const silencesKey = `cache-${createHash("md5").update("alert-manager:persistence:silences").digest("hex")}`;
     const silencesData = this.cache.get(silencesKey);
     if (silencesData) {
       try {

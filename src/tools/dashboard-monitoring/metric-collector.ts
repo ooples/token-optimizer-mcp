@@ -1200,13 +1200,13 @@ export class MetricCollector {
   private async persistSources(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "sources");
     const data = JSON.stringify(Array.from(this.sources.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistData(): Promise<void> {
     const cacheKey = this.getCacheKey("persistence", "compressed");
     const data = JSON.stringify(Array.from(this.compressedSeries.entries()));
-    this.cache.set(cacheKey, data, data.length, data.length);
+    await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {
