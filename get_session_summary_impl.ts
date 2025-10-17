@@ -1,6 +1,9 @@
 // Implementation for get_session_summary tool
 // To be integrated into src/server/index.ts
 
+import { analyzeTokenUsage } from './analysis/session-analyzer.js';
+import { TurnData } from './utils/thinking-mode.js';
+
 case 'get_session_summary': {
   const { sessionId } = args as { sessionId?: string };
 
@@ -61,6 +64,7 @@ case 'get_session_summary': {
     const toolDurations: number[] = [];
     const toolBreakdown: Record<string, { count: number; tokens: number; totalDuration: number }> = {};
     const hookBreakdown: Record<string, { count: number; tokens: number }> = {};
+    const turnDataForAnalysis: TurnData[] = [];
 
     // Parse each JSONL event
     for (const line of lines) {
@@ -101,6 +105,14 @@ case 'get_session_summary': {
             const serverName = event.toolName.split('__')[1] || 'unknown';
             tokensByServer[serverName] = (tokensByServer[serverName] || 0) + tokens;
           }
+
+          // Collect data for advanced analysis
+          turnDataForAnalysis.push({
+            timestamp: event.timestamp,
+            toolName: event.toolName,
+            tokens: tokens,
+            metadata: event.metadata || '',
+          });
         }
 
         // Process tool results (duration tracking)
@@ -158,6 +170,11 @@ case 'get_session_summary': {
       ? Math.round(toolDurations.reduce((sum, d) => sum + d, 0) / toolDurations.length)
       : 0;
 
+    // Run advanced analysis
+    const analysis = turnDataForAnalysis.length > 0
+      ? analyzeTokenUsage(turnDataForAnalysis, { topN: 10, anomalyThreshold: 3 })
+      : null;
+
     // Build response
     const summary = {
       success: true,
@@ -193,6 +210,22 @@ case 'get_session_summary': {
         totalToolCalls: totalTools,
         toolsWithDuration: toolDurations.length,
       },
+      // Enhanced analytics
+      hourlyTrends: analysis?.hourlyTrend || [],
+      toolCallPatterns: analysis?.topConsumers || [],
+      serverEfficiency: analysis?.byServer || [],
+      thinkingModeAnalysis: analysis ? {
+        thinkingTurns: analysis.summary.thinkingTurns,
+        planningTurns: analysis.summary.planningTurns,
+        normalTurns: analysis.summary.normalTurns,
+        thinkingModePercent: analysis.efficiency.thinkingModePercent.toFixed(2),
+      } : null,
+      anomalies: analysis?.anomalies || [],
+      recommendations: analysis?.recommendations || [],
+      efficiency: analysis ? {
+        tokensPerTool: Math.round(analysis.efficiency.tokensPerTool),
+        cacheHitPotential: analysis.efficiency.cacheHitPotential,
+      } : null,
     };
 
     return {
