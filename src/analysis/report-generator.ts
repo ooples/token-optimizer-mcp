@@ -28,11 +28,11 @@ function escapeHtml(text: string): string {
  */
 function escapeJsonForScript(json: string): string {
   return json
-    .replace(/</g, '\u003c')
-    .replace(/>/g, '\u003e')
-    .replace(/&/g, '\u0026')
-    .replace(/\u2028/g, '\u2028')
-    .replace(/\u2029/g, '\u2029');
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 export interface ReportOptions {
@@ -86,32 +86,12 @@ function generateHTMLReport(
 ): string {
   const { sessionId, sessionStartTime } = options;
 
-  // Generate pie chart data for token breakdown
-  const pieChartData = analysis.topConsumers
-    .slice(0, 5)
-    .map(
-      (tool) => `['${tool.toolName}', ${tool.totalTokens}]`
-    )
-    .join(',');
-
-  // Generate bar chart data for server usage
-  const barChartData = analysis.byServer
-    .map(
-      (server) => `['${server.serverName}', ${server.totalTokens}]`
-    )
-    .join(',');
-
-  // Generate timeline data
-  const timelineData = analysis.hourlyTrend
-    .map((hour) => `['${hour.hour}', ${hour.totalTokens}]`)
-    .join(',');
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Session Report - ${sessionId}</title>
+    <title>Session Report - ${escapeHtml(sessionId)}</title>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <style>
         * {
@@ -335,9 +315,9 @@ function generateHTMLReport(
         <div class="header">
             <h1>🚀 Token Optimizer Session Report</h1>
             <div class="meta">
-                <p><strong>Session ID:</strong> ${sessionId}</p>
-                <p><strong>Start Time:</strong> ${sessionStartTime}</p>
-                <p><strong>Duration:</strong> ${analysis.summary.sessionDuration}</p>
+                <p><strong>Session ID:</strong> ${escapeHtml(sessionId)}</p>
+                <p><strong>Start Time:</strong> ${escapeHtml(sessionStartTime)}</p>
+                <p><strong>Duration:</strong> ${escapeHtml(analysis.summary.sessionDuration)}</p>
             </div>
         </div>
 
@@ -416,7 +396,7 @@ function generateHTMLReport(
                               .map(
                                 (tool) => `
                             <tr>
-                                <td><strong>${tool.toolName}</strong></td>
+                                <td><strong>${escapeHtml(tool.toolName)}</strong></td>
                                 <td>${tool.count}</td>
                                 <td>${tool.totalTokens.toLocaleString()}</td>
                                 <td>${Math.round(tool.averageTokens).toLocaleString()}</td>
@@ -453,10 +433,10 @@ function generateHTMLReport(
                                 (anomaly) => `
                             <tr>
                                 <td><span class="anomaly-badge">#${anomaly.turnNumber}</span></td>
-                                <td>${anomaly.timestamp}</td>
+                                <td>${escapeHtml(anomaly.timestamp)}</td>
                                 <td><strong>${anomaly.totalTokens.toLocaleString()}</strong></td>
-                                <td><span class="mode-badge mode-${anomaly.mode}">${anomaly.mode}</span></td>
-                                <td>${anomaly.reason}</td>
+                                <td><span class="mode-badge mode-${escapeHtml(anomaly.mode)}">${escapeHtml(anomaly.mode)}</span></td>
+                                <td>${escapeHtml(anomaly.reason)}</td>
                             </tr>
                             `
                               )
@@ -477,7 +457,7 @@ function generateHTMLReport(
                 <h2 class="section-title">💡 Recommendations</h2>
                 <div class="recommendations">
                     <ul>
-                        ${analysis.recommendations.map((rec) => `<li>${rec}</li>`).join('')}
+                        ${analysis.recommendations.map((rec) => `<li>${escapeHtml(rec)}</li>`).join('')}
                     </ul>
                 </div>
             </section>
@@ -504,7 +484,7 @@ function generateHTMLReport(
                               .map(
                                 (server) => `
                             <tr>
-                                <td><strong>${server.serverName}</strong></td>
+                                <td><strong>${escapeHtml(server.serverName)}</strong></td>
                                 <td>${server.count}</td>
                                 <td>${server.totalTokens.toLocaleString()}</td>
                                 <td>${Math.round(server.averageTokens).toLocaleString()}</td>
@@ -527,14 +507,23 @@ function generateHTMLReport(
         </div>
     </div>
 
+    <script type="application/json" id="session-data">
+${escapeJsonForScript(JSON.stringify({ sessionId, sessionStartTime, analysis }))}
+    </script>
+
     <script type="text/javascript">
         // Load Google Charts
         google.charts.load('current', {'packages':['corechart', 'line']});
         google.charts.setOnLoadCallback(drawCharts);
 
+        const sessionData = JSON.parse(document.getElementById('session-data').textContent);
+        const analysis = sessionData.analysis;
+        const sessionId = sessionData.sessionId;
+        const sessionStartTime = sessionData.sessionStartTime;
+
         function drawCharts() {
             // Pie Chart
-            const pieRows = analysisData.topTools.slice(0, 8).map(t => [t.toolName, t.totalTokens]);
+            const pieRows = analysis.topConsumers.slice(0, 8).map(t => [t.toolName, t.totalTokens]);
             var pieData = google.visualization.arrayToDataTable([
                 ['Tool', 'Tokens'],
                 ...pieRows
@@ -551,9 +540,10 @@ function generateHTMLReport(
             pieChart.draw(pieData, pieOptions);
 
             // Bar Chart
+            const barRows = analysis.byServer.map(s => [s.serverName, s.totalTokens]);
             var barData = google.visualization.arrayToDataTable([
                 ['Server', 'Tokens'],
-                ${barChartData}
+                ...barRows
             ]);
 
             var barOptions = {
@@ -567,9 +557,10 @@ function generateHTMLReport(
             barChart.draw(barData, barOptions);
 
             // Timeline Chart
+            const timelineRows = analysis.hourlyTrend.map(h => [h.hour, h.totalTokens]);
             var timelineData = google.visualization.arrayToDataTable([
                 ['Hour', 'Tokens'],
-                ${timelineData}
+                ...timelineRows
             ]);
 
             var timelineOptions = {
@@ -591,36 +582,36 @@ function generateHTMLReport(
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'session-report-${sessionId}.md';
+            a.download = 'session-report-' + sessionId + '.md';
             a.click();
         }
 
         function exportAsJSON() {
-            const data = ${JSON.stringify({ sessionId, sessionStartTime, analysis })};
+            const data = sessionData;
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'session-report-${sessionId}.json';
+            a.download = 'session-report-' + sessionId + '.json';
             a.click();
         }
 
         function generateMarkdown() {
-            var md = '# Session Report: ${sessionId}\\n\\n';
-            md += '**Start Time:** ${sessionStartTime}\\n';
-            md += '**Duration:** ${analysis.summary.sessionDuration}\\n\\n';
+            var md = '# Session Report: ' + sessionId + '\\n\\n';
+            md += '**Start Time:** ' + sessionStartTime + '\\n';
+            md += '**Duration:** ' + analysis.summary.sessionDuration + '\\n\\n';
             md += '## Summary\\n';
-            md += '- Total Tokens: ' + ${analysis.summary.totalTokens}.toLocaleString() + '\\n';
-            md += '- Total Operations: ${analysis.summary.totalOperations}\\n';
-            md += '- Average Turn Tokens: ' + ${Math.round(analysis.summary.averageTurnTokens)}.toLocaleString() + '\\n';
-            md += '- Thinking Turns: ${analysis.summary.thinkingTurns}\\n';
-            md += '- Tokens per Tool: ' + ${Math.round(analysis.efficiency.tokensPerTool)}.toLocaleString() + '\\n\\n';
+            md += '- Total Tokens: ' + analysis.summary.totalTokens.toLocaleString() + '\\n';
+            md += '- Total Operations: ' + analysis.summary.totalOperations + '\\n';
+            md += '- Average Turn Tokens: ' + Math.round(analysis.summary.averageTurnTokens).toLocaleString() + '\\n';
+            md += '- Thinking Turns: ' + analysis.summary.thinkingTurns + '\\n';
+            md += '- Tokens per Tool: ' + Math.round(analysis.efficiency.tokensPerTool).toLocaleString() + '\\n\\n';
             md += '## Top Token Consumers\\n\\n';
-            ${JSON.stringify(analysis.topConsumers)}.slice(0, 10).forEach(function(t, i) {
+            analysis.topConsumers.slice(0, 10).forEach(function(t, i) {
                 md += (i + 1) + '. **' + t.toolName + '**: ' + t.totalTokens.toLocaleString() + ' tokens (' + t.percentOfTotal.toFixed(2) + '%)\\n';
             });
             md += '\\n## Recommendations\\n\\n';
-            ${JSON.stringify(analysis.recommendations)}.forEach(function(r, i) {
+            analysis.recommendations.forEach(function(r, i) {
                 md += (i + 1) + '. ' + r + '\\n';
             });
             return md;
