@@ -492,7 +492,6 @@ export class MonitoringIntegration {
     return hash.digest("hex").substring(0, 16);
   }
 
-  // NOTE: Cache key format changed - existing cache entries will be invalidated after deployment
   private getCacheKey(prefix: string, suffix: string): string {
     const hash = createHash("md5");
     hash.update(`monitoring-integration:${prefix}:${suffix}`);
