@@ -172,6 +172,7 @@ function Generate-CacheKey {
     $hasher = [System.Security.Cryptography.SHA256]::Create()
     try {
         $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))
+        # Use full hash (no truncation) to maintain collision resistance
         $hash = [BitConverter]::ToString($hashBytes).Replace("-", "")
         return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
     }
@@ -554,7 +555,8 @@ function Record-ToolCall {
     Write-CsvOperation -ToolName $ToolName -TokenEstimate $tokensDelta -McpServer $mcpServer
 
     # Automatic caching logic
-    if (-not $CacheHit -and $ToolResult -ne $null -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
+    # Check for null and empty strings explicitly to handle all edge cases
+    if (-not $CacheHit -and $ToolResult -ne $null -and $ToolResult -ne '' -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
         Set-AutoCache -ToolName $ToolName -ToolArgs $ToolArgs -Result $ToolResult -TokenCount $tokensDelta
     }
 

@@ -823,7 +823,8 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Cleanup on exit
+  // Cleanup on exit - Note: the signal handlers already have try-catch blocks
+  // These were added in response to Copilot review to ensure cleanup continues even if disposal fails
   process.on('SIGINT', () => {
     try { cache.close(); } catch (err) { console.error('Error closing cache:', err); }
     try { tokenCounter.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
