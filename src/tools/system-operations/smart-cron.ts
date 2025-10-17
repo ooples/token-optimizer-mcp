@@ -322,7 +322,8 @@ export class SmartCron {
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, Buffer.byteLength(dataStr, 'utf8'), Buffer.byteLength(dataStr, 'utf8'));
+      const dataSize = Buffer.byteLength(dataStr, 'utf8');
+      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
     }
 
     return {
@@ -952,7 +953,8 @@ export class SmartCron {
 
     // Cache the result (short TTL as history changes frequently)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, Buffer.byteLength(dataStr, 'utf8'), Buffer.byteLength(dataStr, 'utf8'));
+      const dataSize = Buffer.byteLength(dataStr, 'utf8');
+      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
     }
 
     return {
@@ -1127,7 +1129,8 @@ export class SmartCron {
 
     // Cache the result (longer TTL as schedule doesn't change often)
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, Buffer.byteLength(dataStr, 'utf8'), Buffer.byteLength(dataStr, 'utf8'));
+      const dataSize = Buffer.byteLength(dataStr, 'utf8');
+      await this.cache.set(cacheKey, dataStr, dataSize, dataSize);
     }
 
     return {
