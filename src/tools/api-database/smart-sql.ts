@@ -571,6 +571,84 @@ export class SmartSql {
     };
   }
 
+  /**
+   * Format output based on the type of result and cache status
+   */
+  formatOutput(result: SmartSqlOutput): string {
+    // If from cache, use cached output format
+    if (result.metrics.cacheHit) {
+      return this.formatCachedOutput(result);
+    }
+
+    // Otherwise, format based on what data is present
+    if (result.executionPlan) {
+      return this.formatPlanOutput(result);
+    }
+
+    if (result.validation) {
+      return this.formatValidationOutput(result);
+    }
+
+    if (result.optimization) {
+      return this.formatOptimizationOutput(result);
+    }
+
+    if (result.history) {
+      return this.formatHistoryOutput(result);
+    }
+
+    // Default to analysis output
+    return this.formatAnalysisOutput(result);
+  }
+
+  private formatCachedOutput(result: SmartSqlOutput): string {
+    return `# Cached (95%)\n\nQuery: ${result.analysis?.queryType || "N/A"}\nCost: ${result.analysis?.estimatedCost || "N/A"}\n\n*Use force=true for fresh data*`;
+  }
+
+  private formatPlanOutput(result: SmartSqlOutput): string {
+    const { executionPlan } = result;
+    if (!executionPlan) return "# Execution Plan\n\nN/A";
+
+    const topSteps = executionPlan.steps.slice(0, 3).map(s => `  - ${s.operation} on ${s.table} (Cost: ${s.cost})`).join("\n");
+
+    return `# Execution Plan (80%)\n\nTotal Cost: ${executionPlan.totalCost}\nTop Steps:\n${topSteps}`;
+  }
+
+  private formatOptimizationOutput(result: SmartSqlOutput): string {
+    const { optimization } = result;
+    if (!optimization) return "# Optimization\n\nN/A";
+
+    const topSuggestions = optimization.suggestions.slice(0, 3).map(s => `  - [${s.severity}] ${s.message}`).join("\n");
+
+    return `# Optimization (86%)\n\nPotential Speedup: ${optimization.potentialSpeedup}\nTop Suggestions:\n${topSuggestions}`;
+  }
+
+  private formatValidationOutput(result: SmartSqlOutput): string {
+    const { validation } = result;
+    if (!validation) return "# Validation\n\nN/A";
+
+    const errors = validation.errors.map(e => `  - ${e}`).join("\n");
+    const warnings = validation.warnings.map(w => `  - ${w}`).join("\n");
+
+    return `# Validation (80%)\n\nValid: ${validation.isValid ? "✓" : "✗"}\nErrors:\n${errors || "  (none)"}\nWarnings:\n${warnings || "  (none)"}`;
+  }
+
+  private formatHistoryOutput(result: SmartSqlOutput): string {
+    const { history } = result;
+    if (!history) return "# History\n\nN/A";
+
+    const recent = history.slice(0, 5).map(h => `  - ${h.query.slice(0, 50)}... (${h.executionTime}ms)`).join("\n");
+
+    return `# History (80%)\n\nTotal Entries: ${history.length}\nRecent Queries:\n${recent}`;
+  }
+
+  private formatAnalysisOutput(result: SmartSqlOutput): string {
+    const { analysis } = result;
+    if (!analysis) return "# Analysis\n\nN/A";
+
+    return `# Analysis (86%)\n\nQuery Type: ${analysis.queryType}\nComplexity: ${analysis.complexity}\nTables: ${analysis.tables.join(", ")}\nEstimated Cost: ${analysis.estimatedCost}`;
+  }
+
   private generateCacheKey(options: SmartSqlOptions): string {
     const keyData = {
       query: options.query,
