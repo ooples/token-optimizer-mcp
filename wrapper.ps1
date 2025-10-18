@@ -46,7 +46,12 @@ function Test-UserProfileAccessible {
 }
 
 # Validate that $env:USERPROFILE exists and is accessible
-Test-UserProfileAccessible
+try {
+    Test-UserProfileAccessible
+} catch {
+    Write-Error "User profile validation failed: $_"
+    exit 1
+}
 
 # ============================================================================
 # Configuration
@@ -582,12 +587,9 @@ function Invoke-ClaudeCodeWrapper {
                 $completed = $readTask.Wait($readTimeout)
 
                 if (-not $completed) {
-                    Write-VerboseLog "ReadLine timeout after ${readTimeout}ms - checking if parent process is alive"
-                    # Check if we should continue or exit
-                    if ($null -eq (Get-Process -Id $PID -ErrorAction SilentlyContinue)) {
-                        Write-VerboseLog "Parent process terminated - exiting wrapper"
-                        break
-                    }
+                    Write-VerboseLog "ReadLine timeout after ${readTimeout}ms - stdin may be stalled"
+                    # Continue waiting - the parent process controls the wrapper lifecycle
+                    # If stdin is truly dead, the next ReadLineAsync will detect EOF
                     continue
                 }
 
@@ -611,7 +613,7 @@ function Invoke-ClaudeCodeWrapper {
             # Add to line buffer (for context lookback)
             # Note: LineBufferSize is configurable via parameter (default: 100)
             # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
-            # Maintain fixed buffer size: dequeue oldest line before enqueuing new one when buffer is full
+            # Maintain fixed buffer size by dequeueing oldest line when buffer is full
             if ($lineBuffer.Count -ge $LineBufferSize) {
                 $lineBuffer.Dequeue()  # Remove oldest line efficiently
             }
