@@ -794,6 +794,23 @@ export class AnomalyExplainer {
   // Helper Methods
   // ============================================================================
 
+  /**
+   * Calculates an anomaly score using statistical methods (Z-score and IQR).
+   *
+   * This method evaluates how anomalous a value is compared to historical data
+   * by combining two statistical approaches:
+   * 1. Z-score: Measures how many standard deviations away from the mean
+   * 2. IQR (Interquartile Range): Detects outliers using quartile-based method
+   *
+   * @param anomaly - The anomaly object containing value and deviation
+   * @param historicalData - Array of historical data points for comparison
+   * @returns A normalized anomaly score between 0 and 1 (higher = more anomalous)
+   *
+   * @remarks
+   * - Returns absolute deviation if no historical data available
+   * - Combines Z-score and IQR for robust anomaly detection
+   * - Handles edge cases (zero std dev, empty IQR)
+   */
   private calculateAnomalyScore(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
     historicalData: Array<{ timestamp: number; value: number }>
