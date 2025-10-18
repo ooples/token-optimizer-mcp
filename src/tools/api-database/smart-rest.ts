@@ -700,10 +700,14 @@ export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
   const { homedir } = await import("os");
   const { join } = await import("path");
   const { CacheEngine: CacheEngineClass } = await import("../../core/cache-engine");
-  const { globalTokenCounter, globalMetricsCollector } = await import("../../core/globals");
+  const { TokenCounter } = await import("../../core/token-counter");
+  const { MetricsCollector } = await import("../../core/metrics");
 
   const cache = new CacheEngineClass(join(homedir(), ".hypercontext", "cache"), 100);
-  const rest = getSmartRest(cache, globalTokenCounter, globalMetricsCollector);
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
+
+  const rest = getSmartRest(cache, tokenCounter, metrics);
   const result = await rest.run(options);
 
   return JSON.stringify(result, null, 2);

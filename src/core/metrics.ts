@@ -182,6 +182,3 @@ export class MetricsCollector extends EventEmitter {
     return JSON.stringify(this.getOperations(since), null, 2);
   }
 }
-
-// Singleton instance
-export const globalMetricsCollector = new MetricsCollector();
