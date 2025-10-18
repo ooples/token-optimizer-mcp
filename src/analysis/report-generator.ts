@@ -4,14 +4,54 @@
  */
 
 import { AnalysisResult } from './session-analyzer.js';
+import { ProjectAnalysisResult } from './project-analyzer.js';
 
 export type ReportFormat = 'html' | 'markdown' | 'json';
+
+/**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
+/**
+ * Escape JSON for safe embedding in script tags
+ * Prevents XSS by escaping characters that could break out of script context
+ * Specifically escapes </script> sequences and other special characters
+ */
+function escapeJsonForScript(json: string): string {
+  return json
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/<!--/g, '\\u003c!--')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
 
 export interface ReportOptions {
   includeCharts?: boolean;
   includeTimeline?: boolean;
   sessionId: string;
   sessionStartTime: string;
+}
+
+/**
+ * Options for project report generation
+ * Note: includeCharts and includeTimeline are currently not implemented
+ * and are reserved for future functionality
+ */
+export interface ProjectReportOptions {
+  includeCharts?: boolean; // Reserved for future use
+  includeTimeline?: boolean; // Reserved for future use
 }
 
 /**
@@ -48,32 +88,12 @@ function generateHTMLReport(
 ): string {
   const { sessionId, sessionStartTime } = options;
 
-  // Generate pie chart data for token breakdown
-  const pieChartData = analysis.topConsumers
-    .slice(0, 5)
-    .map(
-      (tool) => `['${tool.toolName}', ${tool.totalTokens}]`
-    )
-    .join(',');
-
-  // Generate bar chart data for server usage
-  const barChartData = analysis.byServer
-    .map(
-      (server) => `['${server.serverName}', ${server.totalTokens}]`
-    )
-    .join(',');
-
-  // Generate timeline data
-  const timelineData = analysis.hourlyTrend
-    .map((hour) => `['${hour.hour}', ${hour.totalTokens}]`)
-    .join(',');
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Session Report - ${sessionId}</title>
+    <title>Session Report - ${escapeHtml(sessionId)}</title>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <style>
         * {
@@ -297,9 +317,9 @@ function generateHTMLReport(
         <div class="header">
             <h1>🚀 Token Optimizer Session Report</h1>
             <div class="meta">
-                <p><strong>Session ID:</strong> ${sessionId}</p>
-                <p><strong>Start Time:</strong> ${sessionStartTime}</p>
-                <p><strong>Duration:</strong> ${analysis.summary.sessionDuration}</p>
+                <p><strong>Session ID:</strong> ${escapeHtml(sessionId)}</p>
+                <p><strong>Start Time:</strong> ${escapeHtml(sessionStartTime)}</p>
+                <p><strong>Duration:</strong> ${escapeHtml(analysis.summary.sessionDuration)}</p>
             </div>
         </div>
 
@@ -378,7 +398,7 @@ function generateHTMLReport(
                               .map(
                                 (tool) => `
                             <tr>
-                                <td><strong>${tool.toolName}</strong></td>
+                                <td><strong>${escapeHtml(tool.toolName)}</strong></td>
                                 <td>${tool.count}</td>
                                 <td>${tool.totalTokens.toLocaleString()}</td>
                                 <td>${Math.round(tool.averageTokens).toLocaleString()}</td>
@@ -415,10 +435,10 @@ function generateHTMLReport(
                                 (anomaly) => `
                             <tr>
                                 <td><span class="anomaly-badge">#${anomaly.turnNumber}</span></td>
-                                <td>${anomaly.timestamp}</td>
+                                <td>${escapeHtml(anomaly.timestamp)}</td>
                                 <td><strong>${anomaly.totalTokens.toLocaleString()}</strong></td>
-                                <td><span class="mode-badge mode-${anomaly.mode}">${anomaly.mode}</span></td>
-                                <td>${anomaly.reason}</td>
+                                <td><span class="mode-badge mode-${anomaly.mode.replace(/[^a-z0-9-]/gi, '-')}">${escapeHtml(anomaly.mode)}</span></td>
+                                <td>${escapeHtml(anomaly.reason)}</td>
                             </tr>
                             `
                               )
@@ -439,7 +459,7 @@ function generateHTMLReport(
                 <h2 class="section-title">💡 Recommendations</h2>
                 <div class="recommendations">
                     <ul>
-                        ${analysis.recommendations.map((rec) => `<li>${rec}</li>`).join('')}
+                        ${analysis.recommendations.map((rec) => `<li>${escapeHtml(rec)}</li>`).join('')}
                     </ul>
                 </div>
             </section>
@@ -466,7 +486,7 @@ function generateHTMLReport(
                               .map(
                                 (server) => `
                             <tr>
-                                <td><strong>${server.serverName}</strong></td>
+                                <td><strong>${escapeHtml(server.serverName)}</strong></td>
                                 <td>${server.count}</td>
                                 <td>${server.totalTokens.toLocaleString()}</td>
                                 <td>${Math.round(server.averageTokens).toLocaleString()}</td>
@@ -489,16 +509,26 @@ function generateHTMLReport(
         </div>
     </div>
 
+    <script type="application/json" id="session-data">
+${escapeJsonForScript(JSON.stringify({ sessionId, sessionStartTime, analysis }))}
+    </script>
+
     <script type="text/javascript">
         // Load Google Charts
         google.charts.load('current', {'packages':['corechart', 'line']});
         google.charts.setOnLoadCallback(drawCharts);
 
+        const sessionData = JSON.parse(document.getElementById('session-data').textContent);
+        const analysis = sessionData.analysis;
+        const sessionId = sessionData.sessionId;
+        const sessionStartTime = sessionData.sessionStartTime;
+
         function drawCharts() {
             // Pie Chart
+            const pieRows = analysis.topConsumers.slice(0, 8).map(t => [t.toolName, t.totalTokens]);
             var pieData = google.visualization.arrayToDataTable([
                 ['Tool', 'Tokens'],
-                ${pieChartData}
+                ...pieRows
             ]);
 
             var pieOptions = {
@@ -512,9 +542,10 @@ function generateHTMLReport(
             pieChart.draw(pieData, pieOptions);
 
             // Bar Chart
+            const barRows = analysis.byServer.map(s => [s.serverName, s.totalTokens]);
             var barData = google.visualization.arrayToDataTable([
                 ['Server', 'Tokens'],
-                ${barChartData}
+                ...barRows
             ]);
 
             var barOptions = {
@@ -528,9 +559,10 @@ function generateHTMLReport(
             barChart.draw(barData, barOptions);
 
             // Timeline Chart
+            const timelineRows = analysis.hourlyTrend.map(h => [h.hour, h.totalTokens]);
             var timelineData = google.visualization.arrayToDataTable([
                 ['Hour', 'Tokens'],
-                ${timelineData}
+                ...timelineRows
             ]);
 
             var timelineOptions = {
@@ -552,36 +584,36 @@ function generateHTMLReport(
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'session-report-${sessionId}.md';
+            a.download = 'session-report-' + sessionId.replace(/[^\w.-]/g, '_') + '.md';
             a.click();
         }
 
         function exportAsJSON() {
-            const data = ${JSON.stringify({ sessionId, sessionStartTime, analysis })};
+            const data = sessionData;
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'session-report-${sessionId}.json';
+            a.download = 'session-report-' + sessionId.replace(/[^\w.-]/g, '_') + '.json';
             a.click();
         }
 
         function generateMarkdown() {
-            var md = '# Session Report: ${sessionId}\\n\\n';
-            md += '**Start Time:** ${sessionStartTime}\\n';
-            md += '**Duration:** ${analysis.summary.sessionDuration}\\n\\n';
+            var md = '# Session Report: ' + sessionId + '\\n\\n';
+            md += '**Start Time:** ' + sessionStartTime + '\\n';
+            md += '**Duration:** ' + analysis.summary.sessionDuration + '\\n\\n';
             md += '## Summary\\n';
-            md += '- Total Tokens: ' + ${analysis.summary.totalTokens}.toLocaleString() + '\\n';
-            md += '- Total Operations: ${analysis.summary.totalOperations}\\n';
-            md += '- Average Turn Tokens: ' + ${Math.round(analysis.summary.averageTurnTokens)}.toLocaleString() + '\\n';
-            md += '- Thinking Turns: ${analysis.summary.thinkingTurns}\\n';
-            md += '- Tokens per Tool: ' + ${Math.round(analysis.efficiency.tokensPerTool)}.toLocaleString() + '\\n\\n';
+            md += '- Total Tokens: ' + analysis.summary.totalTokens.toLocaleString() + '\\n';
+            md += '- Total Operations: ' + analysis.summary.totalOperations + '\\n';
+            md += '- Average Turn Tokens: ' + Math.round(analysis.summary.averageTurnTokens).toLocaleString() + '\\n';
+            md += '- Thinking Turns: ' + analysis.summary.thinkingTurns + '\\n';
+            md += '- Tokens per Tool: ' + Math.round(analysis.efficiency.tokensPerTool).toLocaleString() + '\\n\\n';
             md += '## Top Token Consumers\\n\\n';
-            ${JSON.stringify(analysis.topConsumers)}.slice(0, 10).forEach(function(t, i) {
+            analysis.topConsumers.slice(0, 10).forEach(function(t, i) {
                 md += (i + 1) + '. **' + t.toolName + '**: ' + t.totalTokens.toLocaleString() + ' tokens (' + t.percentOfTotal.toFixed(2) + '%)\\n';
             });
             md += '\\n## Recommendations\\n\\n';
-            ${JSON.stringify(analysis.recommendations)}.forEach(function(r, i) {
+            analysis.recommendations.forEach(function(r, i) {
                 md += (i + 1) + '. ' + r + '\\n';
             });
             return md;
@@ -660,4 +692,487 @@ function generateMarkdownReport(
   md += `*Generated by Token Optimizer MCP at ${new Date().toISOString()}*\n`;
 
   return md;
+}
+
+/**
+ * Generate project-level report
+ */
+export function generateProjectReport(
+  analysis: ProjectAnalysisResult,
+  format: ReportFormat,
+  _options: ProjectReportOptions = {}
+): string {
+  switch (format) {
+    case 'markdown':
+      return generateProjectMarkdownReport(analysis);
+    case 'json':
+      return JSON.stringify(analysis, null, 2);
+    case 'html':
+      return generateProjectHTMLReport(analysis);
+    default:
+      throw new Error(`Unknown format: ${format}`);
+  }
+}
+
+function generateProjectMarkdownReport(analysis: ProjectAnalysisResult): string {
+  let md = `# Project Token Analysis Report\n\n`;
+  md += `**Project Path:** ${analysis.projectPath}\n`;
+  md += `**Analysis Date:** ${analysis.analysisTimestamp}\n`;
+  md += `**Date Range:** ${analysis.dateRange.start} to ${analysis.dateRange.end}\n\n`;
+
+  md += `## Summary\n\n`;
+  md += `- **Total Sessions:** ${analysis.summary.totalSessions}\n`;
+  md += `- **Total Operations:** ${analysis.summary.totalOperations.toLocaleString()}\n`;
+  md += `- **Total Tokens:** ${analysis.summary.totalTokens.toLocaleString()}\n`;
+  md += `- **Average Tokens/Session:** ${analysis.summary.averageTokensPerSession.toLocaleString()}\n`;
+  md += `- **Average Tokens/Operation:** ${analysis.summary.averageTokensPerOperation.toLocaleString()}\n\n`;
+
+  md += `## Cost Estimation\n\n`;
+  md += `- **Total Cost:** $${analysis.costEstimation.totalCost.toFixed(2)} ${analysis.costEstimation.currency}\n`;
+  md += `- **Average Cost/Session:** $${analysis.costEstimation.averageCostPerSession.toFixed(2)}\n`;
+  md += `- **Pricing Model:** ${analysis.costEstimation.model} ($${analysis.costEstimation.costPerMillionTokens}/M tokens)\n\n`;
+
+  md += `## Top Contributing Sessions\n\n`;
+  md += `| Session ID | Total Tokens | Duration | Top Tool |\n`;
+  md += `|------------|--------------|----------|----------|\n`;
+  for (const session of analysis.topContributingSessions) {
+    const topTool = session.topTools[0]?.toolName || 'N/A';
+    md += `| ${session.sessionId} | ${session.totalTokens.toLocaleString()} | ${session.duration} | ${topTool} |\n`;
+  }
+  md += `\n`;
+
+  md += `## Top Tools Across All Sessions\n\n`;
+  md += `| Tool Name | Total Tokens | Operations | Sessions | Avg Tokens |\n`;
+  md += `|-----------|--------------|------------|----------|------------|\n`;
+  for (const tool of analysis.topTools) {
+    md += `| ${tool.toolName} | ${tool.totalTokens.toLocaleString()} | ${tool.operationCount} | ${tool.sessionCount} | ${Math.round(tool.averageTokens).toLocaleString()} |\n`;
+  }
+  md += `\n`;
+
+  md += `## Server Breakdown\n\n`;
+  md += `| Server | Total Tokens | Operations | % of Total |\n`;
+  md += `|--------|--------------|------------|------------|\n`;
+  for (const server of analysis.serverBreakdown) {
+    md += `| ${server.serverName} | ${server.totalTokens.toLocaleString()} | ${server.operationCount} | ${server.percentOfTotal.toFixed(2)}% |\n`;
+  }
+  md += `\n`;
+
+  if (analysis.recommendations.length > 0) {
+    md += `## Recommendations\n\n`;
+    for (let i = 0; i < analysis.recommendations.length; i++) {
+      md += `${i + 1}. ${analysis.recommendations[i]}\n`;
+    }
+    md += `\n`;
+  }
+
+  md += `---\n`;
+  md += `*Generated by Token Optimizer MCP at ${new Date().toISOString()}*\n`;
+
+  return md;
+}
+
+function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Token Analysis Report</title>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 15px;
+        }
+
+        .header .meta {
+            opacity: 0.95;
+            font-size: 1rem;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            color: #667eea;
+            margin-bottom: 25px;
+            padding-bottom: 12px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 25px;
+            margin-bottom: 35px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+
+        .stat-value {
+            font-size: 2.2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 0.95rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .cost-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .cost-card .stat-value {
+            color: white;
+        }
+
+        .cost-card .stat-label {
+            color: rgba(255,255,255,0.9);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .chart-container {
+            margin: 35px 0;
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .recommendations {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 25px 0;
+        }
+
+        .recommendations h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .recommendations li {
+            margin: 12px 0;
+            padding-left: 10px;
+            color: #856404;
+        }
+
+        .export-buttons {
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .export-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 35px;
+            border-radius: 8px;
+            font-size: 1.05rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px;
+        }
+
+        .export-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Project Token Analysis Report</h1>
+            <div class="meta">
+                <p><strong>Project:</strong> ${escapeHtml(analysis.projectPath)}</p>
+                <p><strong>Analysis Date:</strong> ${escapeHtml(new Date(analysis.analysisTimestamp).toLocaleString())}</p>
+                <p><strong>Date Range:</strong> ${escapeHtml(new Date(analysis.dateRange.start).toLocaleDateString())} - ${escapeHtml(new Date(analysis.dateRange.end).toLocaleDateString())}</p>
+            </div>
+        </div>
+
+        <div class="content">
+            <section class="section">
+                <h2 class="section-title">Project Summary</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${analysis.summary.totalSessions}</div>
+                        <div class="stat-label">Total Sessions</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${analysis.summary.totalOperations.toLocaleString()}</div>
+                        <div class="stat-label">Total Operations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${analysis.summary.totalTokens.toLocaleString()}</div>
+                        <div class="stat-label">Total Tokens</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${analysis.summary.averageTokensPerSession.toLocaleString()}</div>
+                        <div class="stat-label">Avg Tokens/Session</div>
+                    </div>
+                    <div class="stat-card cost-card">
+                        <div class="stat-value">$${analysis.costEstimation.totalCost.toFixed(2)}</div>
+                        <div class="stat-label">Total Cost (${analysis.costEstimation.model})</div>
+                    </div>
+                    <div class="stat-card cost-card">
+                        <div class="stat-value">$${analysis.costEstimation.averageCostPerSession.toFixed(2)}</div>
+                        <div class="stat-label">Avg Cost/Session</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">Token Distribution by Tool</h2>
+                <div class="chart-container">
+                    <div id="pie_chart" role="img" aria-label="Token distribution by tool" style="width: 100%; height: 450px;"></div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">MCP Server Usage</h2>
+                <div class="chart-container">
+                    <div id="bar_chart" role="img" aria-label="Token usage by MCP server" style="width: 100%; height: 450px;"></div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">Top Contributing Sessions</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Session ID</th>
+                            <th>Total Tokens</th>
+                            <th>Operations</th>
+                            <th>Duration</th>
+                            <th>Top Tool</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${analysis.topContributingSessions.map(session => `
+                        <tr>
+                            <td><strong>${escapeHtml(session.sessionId)}</strong></td>
+                            <td>${session.totalTokens.toLocaleString()}</td>
+                            <td>${session.totalOperations}</td>
+                            <td>${escapeHtml(session.duration)}</td>
+                            <td>${escapeHtml(session.topTools[0]?.toolName || 'N/A')}</td>
+                        </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="section">
+                <h2 class="section-title">Top Tools Across All Sessions</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tool Name</th>
+                            <th>Total Tokens</th>
+                            <th>Operations</th>
+                            <th>Sessions</th>
+                            <th>Avg Tokens</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${analysis.topTools.map(tool => `
+                        <tr>
+                            <td><strong>${escapeHtml(tool.toolName)}</strong></td>
+                            <td>${tool.totalTokens.toLocaleString()}</td>
+                            <td>${tool.operationCount}</td>
+                            <td>${tool.sessionCount}</td>
+                            <td>${Math.round(tool.averageTokens).toLocaleString()}</td>
+                        </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </section>
+
+            ${analysis.recommendations.length > 0 ? `
+            <section class="section">
+                <div class="recommendations">
+                    <h3>Recommendations</h3>
+                    <ul>
+                        ${analysis.recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
+                    </ul>
+                </div>
+            </section>
+            ` : ''}
+
+            <div class="export-buttons">
+                <button class="export-button" onclick="exportAsMarkdown()">Export as Markdown</button>
+                <button class="export-button" onclick="exportAsJSON()">Export as JSON</button>
+                <button class="export-button" onclick="window.print()">Print Report</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="application/json" id="analysis-data">
+${escapeJsonForScript(JSON.stringify(analysis))}
+    </script>
+
+    <script type="text/javascript">
+        google.charts.load('current', {'packages':['corechart']});
+        google.charts.setOnLoadCallback(drawCharts);
+
+        const analysisData = JSON.parse(document.getElementById('analysis-data').textContent);
+
+        function drawCharts() {
+            const pieRows = analysisData.topTools.slice(0, 8).map(t => [t.toolName, t.totalTokens]);
+            var pieData = google.visualization.arrayToDataTable([
+                ['Tool', 'Tokens'],
+                ...pieRows
+            ]);
+
+            var pieOptions = {
+                title: 'Token Distribution by Tool',
+                pieHole: 0.4,
+                colors: ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#30cfd0'],
+                chartArea: {width: '90%', height: '80%'},
+                fontSize: 13
+            };
+
+            var pieChart = new google.visualization.PieChart(document.getElementById('pie_chart'));
+            pieChart.draw(pieData, pieOptions);
+
+            const serverRows = analysisData.serverBreakdown.map(s => [s.serverName, s.totalTokens]);
+            var barData = google.visualization.arrayToDataTable([
+                ['Server', 'Tokens'],
+                ...serverRows
+            ]);
+
+            var barOptions = {
+                title: 'Token Usage by MCP Server',
+                colors: ['#667eea'],
+                chartArea: {width: '70%', height: '75%'},
+                hAxis: {title: 'Total Tokens'},
+                fontSize: 13
+            };
+
+            var barChart = new google.visualization.BarChart(document.getElementById('bar_chart'));
+            barChart.draw(barData, barOptions);
+        }
+
+        function exportAsMarkdown() {
+            const analysis = analysisData;
+            const md = generateMarkdownReport(analysis);
+            const blob = new Blob([md], {type: 'text/markdown'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'project-token-analysis.md';
+            a.click();
+        }
+
+        function exportAsJSON() {
+            const data = analysisData;
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'project-token-analysis.json';
+            a.click();
+        }
+
+        // NOTE: Client-side Markdown generation provides export functionality for the HTML report
+        // While this duplicates server-side logic, it enables standalone HTML files with export capabilities
+        // Future: Consider embedding pre-rendered Markdown in the page to reduce duplication
+        function generateMarkdownReport(analysis) {
+            let md = '# Project Token Analysis Report\\n\\n';
+            md += 'Project: ' + analysis.projectPath + '\\n';
+            md += 'Analysis Date: ' + analysis.analysisTimestamp + '\\n\\n';
+            md += '## Summary\\n';
+            md += '- Total Sessions: ' + analysis.summary.totalSessions + '\\n';
+            md += '- Total Tokens: ' + analysis.summary.totalTokens.toLocaleString() + '\\n';
+            md += '- Total Cost: $' + analysis.costEstimation.totalCost.toFixed(2) + '\\n\\n';
+            md += '## Top Tools\\n\\n';
+            analysis.topTools.forEach(function(t, i) {
+                md += (i + 1) + '. **' + t.toolName + '**: ' + t.totalTokens.toLocaleString() + ' tokens\\n';
+            });
+            return md;
+        }
+
+        window.addEventListener('resize', drawCharts);
+    </script>
+</body>
+</html>`;
 }
