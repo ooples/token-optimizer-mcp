@@ -32,14 +32,21 @@ param(
     [string]$BaseLogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs")
 )
 
-# Validate that $env:USERPROFILE exists and is accessible
-if (-not $env:USERPROFILE) {
-    throw "Environment variable USERPROFILE is not set. Cannot determine user profile directory."
+# ============================================================================
+# Validation Functions
+# ============================================================================
+
+function Test-UserProfileAccessible {
+    if (-not $env:USERPROFILE) {
+        throw "Environment variable USERPROFILE is not set. Cannot determine user profile directory."
+    }
+    if (-not (Test-Path $env:USERPROFILE -PathType Container)) {
+        throw "User profile directory does not exist or is not accessible: $env:USERPROFILE"
+    }
 }
 
-if (-not (Test-Path $env:USERPROFILE -PathType Container)) {
-    throw "User profile directory does not exist or is not accessible: $env:USERPROFILE"
-}
+# Validate that $env:USERPROFILE exists and is accessible
+Test-UserProfileAccessible
 
 # ============================================================================
 # Configuration
@@ -205,9 +212,14 @@ function Test-LogDirIsSafe {
         [string]$BaseLogDir
     )
 
-    # Resolve both paths to their absolute forms
-    $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
-    $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
+    # Resolve both paths to their absolute forms with error handling
+    try {
+        $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
+        $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
+    } catch {
+        Write-Warning "Invalid log directory path detected: $($_.Exception.Message)"
+        return $false
+    }
 
     # Normalize paths to lowercase for case-insensitive comparison (Windows)
     $logDirNorm = $resolvedLogDir.ToLower()
@@ -579,7 +591,7 @@ function Invoke-ClaudeCodeWrapper {
             # Add to line buffer (for context lookback)
             # Note: LineBufferSize is configurable via parameter (default: 100)
             # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
-            # Optimization: Check count before enqueue to avoid unnecessary dequeue when buffer isn't full
+            # Maintain fixed buffer size: dequeue oldest line before enqueuing new one when buffer is full
             if ($lineBuffer.Count -ge $LineBufferSize) {
                 $lineBuffer.Dequeue()  # Remove oldest line efficiently
             }
@@ -657,7 +669,7 @@ function Invoke-ClaudeCodeWrapper {
             $parseTime = ($parseEndTime - $parseStartTime).TotalMilliseconds
 
             if ($parseTime -gt $PerformanceThresholdMs) {
-                Write-Warning "Parse time exceeded $($PerformanceThresholdMs)ms threshold: $([Math]::Round($parseTime, 2))ms"
+                Write-VerboseLog "Parse time exceeded $($PerformanceThresholdMs)ms threshold: $([Math]::Round($parseTime, 2))ms"
             }
 
             # Pass through the line to stdout (preserve original output)
