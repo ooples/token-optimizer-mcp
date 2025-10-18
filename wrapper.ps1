@@ -573,18 +573,34 @@ function Invoke-ClaudeCodeWrapper {
         }
 
         $input = [Console]::In
+        $readTimeout = 30000  # 30 second timeout in milliseconds
         while ($true) {
-            # DESIGN NOTE - Blocking I/O is intentional:
-            # This wrapper is designed to run as a piped subprocess where stdin is managed by the
-            # parent process (e.g., Claude Code CLI). The stream closes automatically when the parent
-            # terminates, preventing indefinite hangs. The explicit null check below ensures we
-            # detect EOF and exit gracefully. Timeout mechanisms are not required as the wrapper
-            # lifecycle is controlled by the parent process. For alternative contexts, consider:
-            # - Using async I/O with CancellationToken for timeout support
-            # - Implementing heartbeat detection for stalled streams
-            # - Using StreamReader with timeout for non-console scenarios
-            # The console encoding is set to UTF8 (lines 567-568) to prevent encoding mismatches.
-            $line = $input.ReadLine()
+            # Use async I/O with timeout to prevent indefinite hangs
+            # This addresses the concern that blocking ReadLine() could hang if stdin is not properly closed
+            try {
+                $readTask = $input.ReadLineAsync()
+                $completed = $readTask.Wait($readTimeout)
+
+                if (-not $completed) {
+                    Write-VerboseLog "ReadLine timeout after ${readTimeout}ms - checking if parent process is alive"
+                    # Check if we should continue or exit
+                    if ($null -eq (Get-Process -Id $PID -ErrorAction SilentlyContinue)) {
+                        Write-VerboseLog "Parent process terminated - exiting wrapper"
+                        break
+                    }
+                    continue
+                }
+
+                $line = $readTask.Result
+            }
+            catch [System.IO.IOException] {
+                Write-VerboseLog "I/O error reading from stdin: $($_.Exception.Message)"
+                break
+            }
+            catch {
+                Write-VerboseLog "Unexpected error reading from stdin: $($_.Exception.Message)"
+                break
+            }
 
             # Check for end of stream
             if ($null -eq $line) {
