@@ -107,7 +107,7 @@ export interface RootCause {
 export interface Evidence {
   type: 'statistical' | 'temporal' | 'causal' | 'contextual';
   description: string;
-  strength: number;
+  strength?: number;
   data?: any;
 }
 
@@ -362,6 +362,9 @@ export class AnomalyExplainer {
     // Calculate overall confidence
     const confidence = this.calculateExplanationConfidence(rootCauses, contributingFactors);
 
+    // Calculate anomaly score
+    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
+
     // Generate summary
     const summary = this.generateExplanationSummary(anomaly, rootCauses, anomalyScore);
 
@@ -405,6 +408,9 @@ export class AnomalyExplainer {
 
     const contributingFactors = this.identifyContributingFactors(anomaly, historicalData);
     const confidence = this.calculateExplanationConfidence(enrichedCauses, contributingFactors);
+
+    // Calculate anomaly score
+    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
 
     return {
       summary: this.generateRootCauseSummary(enrichedCauses),
@@ -548,7 +554,7 @@ export class AnomalyExplainer {
 
     // Determine result
     const avgStrength = evidence.length > 0
-      ? evidence.reduce((sum, e) => sum + e.strength, 0) / evidence.length
+      ? evidence.reduce((sum, e) => sum + (e.strength ?? 0), 0) / evidence.length
       : 0;
 
     let result: 'confirmed' | 'rejected' | 'inconclusive';
@@ -787,6 +793,51 @@ export class AnomalyExplainer {
   // ============================================================================
   // Helper Methods
   // ============================================================================
+
+  /**
+   * Calculates an anomaly score using statistical methods (Z-score and IQR).
+   *
+   * This method evaluates how anomalous a value is compared to historical data
+   * by combining two statistical approaches:
+   * 1. Z-score: Measures how many standard deviations away from the mean
+   * 2. IQR (Interquartile Range): Detects outliers using quartile-based method
+   *
+   * @param anomaly - The anomaly object containing value and deviation
+   * @param historicalData - Array of historical data points for comparison
+   * @returns A normalized anomaly score between 0 and 1 (higher = more anomalous)
+   *
+   * @remarks
+   * - Returns absolute deviation if no historical data available
+   * - Combines Z-score and IQR for robust anomaly detection
+   * - Handles edge cases (zero std dev, empty IQR)
+   */
+  private calculateAnomalyScore(
+    anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
+    historicalData: Array<{ timestamp: number; value: number }>
+  ): number {
+    if (historicalData.length === 0) {
+      return Math.abs(anomaly.deviation);
+    }
+
+    const values = historicalData.map(d => d.value);
+    const meanVal = mean(values);
+    const stdDevVal = stdev(values);
+
+    // Z-score
+    const zScore = stdDevVal > 0 ? Math.abs(anomaly.value - meanVal) / stdDevVal : 0;
+
+    // IQR method
+    const q1 = percentile(values, 0.25);
+    const q3 = percentile(values, 0.75);
+    const iqr = q3 - q1;
+    const lowerBound = q1 - 1.5 * iqr;
+    const upperBound = q3 + 1.5 * iqr;
+    const iqrScore = anomaly.value < lowerBound || anomaly.value > upperBound ?
+                     Math.abs(anomaly.value - meanVal) / iqr : 0;
+
+    // Combined score
+    return Math.max(zScore, iqrScore);
+  }
 
   private async identifyRootCauses(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
