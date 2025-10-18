@@ -800,6 +800,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
 
         try {
+          // Validate costPerMillionTokens input
+          const validatedCost =
+            costPerMillionTokens != null &&
+            isFinite(costPerMillionTokens) &&
+            costPerMillionTokens > 0
+              ? costPerMillionTokens
+              : undefined;
+
           // Use provided path or default to global hooks directory
           const targetPath = projectPath ?? os.homedir();
 
@@ -807,7 +815,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             projectPath: targetPath,
             startDate,
             endDate,
-            costPerMillionTokens,
+            costPerMillionTokens: validatedCost,
           });
 
           // Generate token-optimized summary
@@ -837,7 +845,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(summary, null, 2),
+                text: JSON.stringify(summary),
               },
             ],
           };

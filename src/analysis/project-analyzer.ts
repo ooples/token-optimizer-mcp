@@ -95,6 +95,9 @@ async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
   for (const line of lines) {
     if (!line.trim()) continue;
 
+    // NOTE: This is a simplified CSV parser that handles basic cases.
+    // For production use with complex quoted fields, consider using a CSV parsing library.
+    // Current implementation handles: timestamp,toolname,tokens,metadata
     const parts = line.split(',');
     if (parts.length < 3) continue;
 
@@ -351,7 +354,9 @@ export async function analyzeProjectTokens(
   }
 
   if (sessionFiles.length === 0) {
-    throw new Error('No session files found. Ensure PowerShell hooks are configured.');
+    throw new Error(
+      `No session files found. Ensure PowerShell hooks are configured.\nSearched directories:\n- ${hooksDataPath}\n- ${path.join(os.homedir(), '.claude-global', 'hooks', 'data')}`
+    );
   }
 
   // Filter by date range if specified
@@ -369,15 +374,20 @@ export async function analyzeProjectTokens(
     });
   }
 
-  // Parse all files once and cache the results
+  // Parse all files with concurrency limit to avoid resource exhaustion
+  // Process in batches of 10 to limit concurrent file operations
   const parsedSessions = new Map<string, TurnData[]>();
-  await Promise.all(
-    sessionFiles.map(async (filePath) => {
-      const sessionId = extractSessionId(filePath);
-      const operations = await parseOperationsFile(filePath);
-      parsedSessions.set(sessionId, operations);
-    })
-  );
+  const batchSize = 10;
+  for (let i = 0; i < sessionFiles.length; i += batchSize) {
+    const batch = sessionFiles.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map(async (filePath) => {
+        const sessionId = extractSessionId(filePath);
+        const operations = await parseOperationsFile(filePath);
+        parsedSessions.set(sessionId, operations);
+      })
+    );
+  }
 
   // Analyze each session using pre-parsed data
   const sessions = sessionFiles.map((filePath) => {
