@@ -95,8 +95,11 @@ async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
   for (const line of lines) {
     if (!line.trim()) continue;
 
-    // NOTE: This is a simplified CSV parser that handles basic cases.
-    // For production use with complex quoted fields, consider using a CSV parsing library.
+    // WARNING: This is a simplified CSV parser that handles basic cases only.
+    // LIMITATION: Manual splitting is brittle for quoted fields (e.g., commas or quotes inside metadata)
+    // and can misparse lines, leading to incorrect tokens/tool attribution.
+    // RECOMMENDATION: For production use with complex quoted fields, use a robust CSV parsing library
+    // (e.g., csv-parse) that properly handles quotes, escapes, and headers.
     // Current implementation handles: timestamp,toolname,tokens,metadata
     const parts = line.split(',');
     if (parts.length < 3) continue;
