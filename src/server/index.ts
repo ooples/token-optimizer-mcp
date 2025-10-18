@@ -11,6 +11,9 @@ import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
+import { MetricsCollector } from '../core/metrics.js';
+import { getPredictiveCacheTool, PREDICTIVE_CACHE_TOOL_DEFINITION } from '../tools/advanced-caching/predictive-cache.js';
+import { getCacheWarmupTool, CACHE_WARMUP_TOOL_DEFINITION } from '../tools/advanced-caching/cache-warmup.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -19,6 +22,11 @@ import os from 'os';
 const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
+const metrics = new MetricsCollector();
+
+// Initialize advanced caching tools
+const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
+const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
@@ -227,6 +235,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      PREDICTIVE_CACHE_TOOL_DEFINITION,
+      CACHE_WARMUP_TOOL_DEFINITION,
     ],
   };
 });
@@ -867,6 +877,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
+      case 'predictive_cache': {
+        const options = args as any;
+        const result = await predictiveCache.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_warmup': {
+        const options = args as any;
+        const result = await cacheWarmup.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -885,21 +923,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Helper to run cleanup operations with error handling
+function runCleanupOperations(operations: { fn: () => void; name: string }[]) {
+  for (const op of operations) {
+    try {
+      op.fn();
+    } catch (err) {
+      console.error(`Error during cleanup (${op.name}):`, err);
+    }
+  }
+}
+
+// Shared cleanup function to avoid duplication between signal handlers
+function cleanup() {
+  runCleanupOperations([
+    { fn: () => cache?.close(), name: 'closing cache' },
+    { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
+    // Note: predictiveCache and cacheWarmup do not implement dispose() methods
+    // Removed dispose() calls to prevent runtime errors during cleanup
+  ]);
+}
+
 // Start server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Cleanup on exit
+  // Cleanup on exit - Note: the signal handlers use try-catch blocks
+  // to ensure cleanup continues even if disposal fails
   process.on('SIGINT', () => {
-    cache.close();
-    tokenCounter.free();
+    cleanup();
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
-    cache.close();
-    tokenCounter.free();
+    cleanup();
     process.exit(0);
   });
 }
