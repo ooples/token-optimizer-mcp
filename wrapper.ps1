@@ -594,14 +594,21 @@ function Record-ToolCall {
     }
 
     # Update last tokens
-    $global:SessionState.LastTokens = $TokensAfter
+function Get-CacheHitRate {
+    param(
+        [int]$Hits,
+        [int]$Misses
+    )
+    if (($Hits + $Misses) -gt 0) {
+        return [math]::Round(($Hits / ($Hits + $Misses)) * 100, 2)
+    } else {
+        return 0
+    }
 }
 
 function End-Turn {
     $turnTokens = $global:SessionState.LastTokens - $global:SessionState.TurnStartTokens
-    # Calculate cache hit rate using helper function to avoid code duplication
     $cacheHitRate = Get-CacheHitRate -Hits $global:SessionState.CacheHits -Misses $global:SessionState.CacheMisses
-
     Write-VerboseLog "Ending turn $($global:SessionState.CurrentTurn) (turn tokens: $turnTokens, cache hit rate: $cacheHitRate%)"
 
     Write-JsonlEvent -Event @{
