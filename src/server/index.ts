@@ -822,7 +822,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const validatedCost =
             costPerMillionTokens != null &&
             Number.isFinite(costPerMillionTokens) &&
-            costPerMillionTokens > 0
+            costPerMillionTokens >= 0
               ? costPerMillionTokens
               : undefined;
 
