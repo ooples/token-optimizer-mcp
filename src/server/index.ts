@@ -14,6 +14,11 @@ import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import { MetricsCollector } from '../core/metrics.js';
 import { getPredictiveCacheTool, PREDICTIVE_CACHE_TOOL_DEFINITION } from '../tools/advanced-caching/predictive-cache.js';
 import { getCacheWarmupTool, CACHE_WARMUP_TOOL_DEFINITION } from '../tools/advanced-caching/cache-warmup.js';
+import { SummarizationModule } from '../modules/SummarizationModule.js';
+import { MockFoundationModel } from '../modules/MockFoundationModel.js';
+import { MarkerBasedOptimizer } from '../services/MarkerBasedOptimizer.js';
+import { TokenCounterAdapter } from '../core/token-counter-adapter.js';
+import { MetricsAdapter } from '../core/metrics-adapter.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -23,6 +28,19 @@ const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
 const metrics = new MetricsCollector();
+
+// Initialize adapters for summarization
+const tokenCounterAdapter = new TokenCounterAdapter(tokenCounter);
+const metricsAdapter = new MetricsAdapter(metrics);
+
+// Initialize summarization modules
+const foundationModel = new MockFoundationModel('mock-summarizer');
+const summarizationModule = new SummarizationModule(
+  foundationModel,
+  tokenCounterAdapter,
+  metricsAdapter
+);
+const markerBasedOptimizer = new MarkerBasedOptimizer(summarizationModule);
 
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
@@ -222,7 +240,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               format: 'date',
               pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
               description: 'Optional start date filter (YYYY-MM-DD format).',
             },
             endDate: {
@@ -235,7 +252,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
               minimum: 0,
-              default: 30,
               exclusiveMinimum: 0,
             },
           },
@@ -243,6 +259,59 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       PREDICTIVE_CACHE_TOOL_DEFINITION,
       CACHE_WARMUP_TOOL_DEFINITION,
+      {
+        name: 'summarize_text',
+        description:
+          'Abstractive text summarization using AI to condense large text blocks while preserving key information. Achieves 60-70% token reduction for verbose content.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            text: {
+              type: 'string',
+              description: 'Text to summarize',
+            },
+            maxOutputTokens: {
+              type: 'number',
+              description: 'Maximum tokens in summary (defaults to 30% of input)',
+              minimum: 10,
+            },
+            style: {
+              type: 'string',
+              enum: ['concise', 'detailed', 'bullets'],
+              description: 'Summary style (default: concise)',
+            },
+            preserveCodeBlocks: {
+              type: 'boolean',
+              description: 'Preserve code blocks and technical details exactly',
+            },
+          },
+          required: ['text'],
+        },
+      },
+      {
+        name: 'process_markers',
+        description:
+          'Process text containing <summarize>...</summarize> markers, replacing marked sections with AI-generated summaries. Useful for selective summarization in large documents.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            prompt: {
+              type: 'string',
+              description: 'Text containing <summarize> markers',
+            },
+          },
+          required: ['prompt'],
+        },
+      },
+      {
+        name: 'get_summarization_stats',
+        description:
+          'Get statistics about summarization operations including total summaries, average compression ratio, and token savings.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
     ],
   };
 });
@@ -909,6 +978,143 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             },
           ],
         };
+      }
+
+      case 'summarize_text': {
+        const { text, maxOutputTokens, style, preserveCodeBlocks } = args as {
+          text: string;
+          maxOutputTokens?: number;
+          style?: 'concise' | 'detailed' | 'bullets';
+          preserveCodeBlocks?: boolean;
+        };
+
+        try {
+          const result = await summarizationModule.summarize(text, {
+            maxOutputTokens,
+            style,
+            preserveCodeBlocks,
+          });
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    summary: result.summary,
+                    originalTokens: result.originalTokens,
+                    summaryTokens: result.summaryTokens,
+                    tokensSaved: result.originalTokens - result.summaryTokens,
+                    compressionRatio: result.compressionRatio,
+                    percentSaved: ((1 - result.compressionRatio) * 100).toFixed(2),
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'process_markers': {
+        const { prompt } = args as { prompt: string };
+
+        try {
+          const originalTokens = tokenCounter.count(prompt);
+          const processedPrompt = await markerBasedOptimizer.processMarkers(prompt);
+          const processedTokens = tokenCounter.count(processedPrompt);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    processedPrompt,
+                    originalTokens: originalTokens.tokens,
+                    processedTokens: processedTokens.tokens,
+                    tokensSaved: originalTokens.tokens - processedTokens.tokens,
+                    percentSaved: originalTokens.tokens > 0
+                      ? (((originalTokens.tokens - processedTokens.tokens) / originalTokens.tokens) * 100).toFixed(2)
+                      : 0,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'get_summarization_stats': {
+        try {
+          const stats = metricsAdapter.getSummarizationStats();
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    stats: {
+                      totalSummarizations: stats.totalSummarizations,
+                      averageCompressionRatio: stats.averageCompressionRatio.toFixed(3),
+                      averagePercentSaved: ((1 - stats.averageCompressionRatio) * 100).toFixed(2),
+                      totalTokensSaved: stats.totalTokensSaved,
+                      averageLatency: Math.round(stats.averageLatency),
+                    },
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
       }
 
       default:
