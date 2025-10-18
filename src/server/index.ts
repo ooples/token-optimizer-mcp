@@ -819,6 +819,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // Shared cleanup function to avoid duplication between signal handlers
+// Note: All objects have their respective disposal methods defined:
+// - cache.close() - closes the cache connection
+// - tokenCounter.free() - frees tokenCounter resources
+// - predictiveCache.dispose() - see src/tools/advanced-caching/predictive-cache.ts:1086
+// - cacheWarmup.dispose() - see src/tools/advanced-caching/cache-warmup.ts:1406
+// Optional chaining (?.) provides additional safety if objects are undefined
 function cleanup() {
   try { cache?.close(); } catch (err) { console.error('Error closing cache:', err); }
   try { tokenCounter?.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
