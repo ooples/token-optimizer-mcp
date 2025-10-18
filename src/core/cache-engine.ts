@@ -37,9 +37,7 @@ export class CacheEngine {
     maxMemoryItems: number = 1000
   ) {
     // Use user-provided path, environment variable, or default to ~/.token-optimizer-cache
-    const defaultCacheDir = process.env.TOKEN_OPTIMIZER_CACHE_DIR
-      ? process.env.TOKEN_OPTIMIZER_CACHE_DIR
-      : path.join(os.homedir(), '.token-optimizer-cache');
+    const defaultCacheDir = process.env.TOKEN_OPTIMIZER_CACHE_DIR || path.join(os.homedir(), '.token-optimizer-cache');
     const cacheDir = dbPath ? path.dirname(dbPath) : defaultCacheDir;
 
     // Ensure cache directory exists
