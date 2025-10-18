@@ -498,17 +498,17 @@ export class MonitoringIntegration {
     return `cache-${hash.digest("hex")}`;
   }
 
-  private async testConnection(config: any): Promise<void> {
+  private async testConnection(_config: any): Promise<void> {
     // Simulate connection test
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
-  private async healthCheck(connection: PlatformConnection): Promise<void> {
+  private async healthCheck(_connection: PlatformConnection): Promise<void> {
     // Simulate health check
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
-  private async fetchMetricsFromPlatform(connection: PlatformConnection, options: any = {}): Promise<SyncedMetric[]> {
+  private async fetchMetricsFromPlatform(connection: PlatformConnection, _options: any = {}): Promise<SyncedMetric[]> {
     // Simulate fetching metrics from external platform
     const metrics: SyncedMetric[] = [];
     for (let i = 0; i < 10; i++) {
@@ -525,7 +525,7 @@ export class MonitoringIntegration {
     return metrics;
   }
 
-  private async fetchAlertsFromPlatform(connection: PlatformConnection, options: any = {}): Promise<SyncedAlert[]> {
+  private async fetchAlertsFromPlatform(_connection: PlatformConnection, _options: any = {}): Promise<SyncedAlert[]> {
     // Simulate fetching alerts
     return [];
   }
