@@ -999,7 +999,7 @@ export class AnomalyExplainer {
         evidence: [{
           type: 'temporal',
           description: `Regular pattern repeats every ${seasonality.period ?? 0}ms`,
-          strength: seasonality.strength ?? 0
+          ...(seasonality.strength !== undefined ? { strength: seasonality.strength } : {})
         }],
         relatedMetrics: [anomaly.metric],
         timeRange: { start: anomaly.timestamp - (seasonality.period ?? 0), end: anomaly.timestamp }
