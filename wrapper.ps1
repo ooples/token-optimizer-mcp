@@ -2,6 +2,7 @@
 # Version: 2.0.0
 # Purpose: Real-time session logging with turn-level tracking and MCP server attribution
 # Implements Priority 1: Session-level token tracking with JSONL event log
+# Version: 1.0.0
 #
 # Features:
 # - Parses system warnings to extract token deltas
