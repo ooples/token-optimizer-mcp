@@ -196,6 +196,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      {
+        name: 'lookup_cache',
+        description:
+          'Look up a cached value by key. Returns a JSON object with a "found" flag and the cached value if found; otherwise, "found" is false and "compressed" is omitted. Used by the wrapper for real-time cache injection.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            key: {
+              type: 'string',
+              description: 'Cache key to look up (e.g., file path for cached file contents)',
+            },
+          },
+          required: ['key'],
+        },
+      },
     ],
   };
 });
@@ -743,6 +758,67 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   null,
                   2
                 ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'lookup_cache': {
+        /**
+         * lookup_cache: Look up a cached value by key.
+         *
+         * Returns the cached value if found (in compressed format).
+         * The returned 'cached' value is base64-encoded Brotli-compressed data
+         * as stored by previous cache.set operations. Caller is responsible for
+         * decompressing using CompressionEngine.decompressFromBase64() if needed.
+         *
+         * @param {string} key - Cache key to look up
+         * @returns {Object} Response with success, found flags, and compressed data if found
+         */
+        const { key } = args as { key: string };
+
+        try {
+          const cached = cache.get(key);
+
+          if (!cached) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: false,
+                    found: false,
+                    key,
+                  }),
+                },
+              ],
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  found: true,
+                  key,
+                  compressed: cached,
+                }),
               },
             ],
           };

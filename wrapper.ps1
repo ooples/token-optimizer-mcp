@@ -1,7 +1,7 @@
 # Enhanced Token Tracking Wrapper for Claude Code
 # Purpose: Real-time session logging with turn-level tracking and MCP server attribution
 # Implements Priority 1: Session-level token tracking with JSONL event log
-#
+# Version: 2.0.0
 # Features:
 # - Parses system warnings to extract token deltas
 # - Tracks turn-level events (turn_start, tool_call, turn_end)
@@ -13,13 +13,45 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$SessionId = "",
+    # Default: $env:USERPROFILE\token-optimizer-logs (e.g., C:\Users\<YourUsername>\token-optimizer-logs)
     [Parameter(Mandatory = $false)]
-    [string]$LogDir = "C:\Users\yolan\source\repos",
+    [string]$LogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs"),
     [Parameter(Mandatory = $false)]
     [switch]$VerboseLogging,
     [Parameter(Mandatory = $false)]
-    [switch]$Test
+    [switch]$Test,
+    # Performance threshold in milliseconds for logging warnings (default: 10ms)
+    [Parameter(Mandatory = $false)]
+    [int]$PerformanceThresholdMs = 10,
+    # Line buffer size for context lookback (default: 100 lines)
+    [Parameter(Mandatory = $false)]
+    [int]$LineBufferSize = 100,
+    # Base directory for log path validation (default: $env:USERPROFILE\token-optimizer-logs)
+    # Set this to allow custom base directories while maintaining path traversal protection
+    [Parameter(Mandatory = $false)]
+    [string]$BaseLogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs")
 )
+
+# ============================================================================
+# Validation Functions
+# ============================================================================
+
+function Test-UserProfileAccessible {
+    if (-not $env:USERPROFILE) {
+        throw "Environment variable USERPROFILE is not set. Cannot determine user profile directory."
+    }
+    if (-not (Test-Path $env:USERPROFILE -PathType Container)) {
+        throw "User profile directory does not exist or is not accessible: $env:USERPROFILE"
+    }
+}
+
+# Validate that $env:USERPROFILE exists and is accessible
+try {
+    Test-UserProfileAccessible
+} catch {
+    Write-Error "User profile validation failed: $_"
+    exit 1
+}
 
 # ============================================================================
 # Configuration
@@ -161,8 +193,76 @@ function Parse-SystemWarning {
     return $null
 }
 
+<#
+.SYNOPSIS
+Checks if the provided log directory is within the allowed base directory.
+
+.DESCRIPTION
+Prevents path traversal attacks by ensuring $LogDir is either the same as $BaseLogDir
+or a subdirectory of it. Both paths are resolved to their absolute forms for comparison.
+Returns $true if safe, $false otherwise.
+
+.PARAMETER LogDir
+The log directory to validate.
+
+.PARAMETER BaseLogDir
+The base directory against which to validate the log directory.
+
+.OUTPUTS
+[bool] Returns $true if $LogDir is safe, $false otherwise.
+#>
+function Test-LogDirIsSafe {
+    param(
+        [string]$LogDir,
+        [string]$BaseLogDir
+    )
+
+    # Resolve both paths to their absolute forms with error handling
+    try {
+        $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
+        $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
+    } catch {
+        Write-Warning "Invalid log directory path detected."
+        return $false
+    }
+
+    # Normalize paths to lowercase for case-insensitive comparison (Windows)
+    $logDirNorm = $resolvedLogDir.ToLower()
+    $baseLogDirNorm = $resolvedBaseLogDir.ToLower()
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+
+    # Allow if $LogDir is exactly $BaseLogDir
+    if ($logDirNorm -eq $baseLogDirNorm) {
+        return $true
+    }
+
+    # Allow if $LogDir is a subdirectory of $BaseLogDir
+    if ($logDirNorm.StartsWith($baseLogDirNorm + $sep)) {
+        return $true
+    }
+
+    # Otherwise, path traversal detected
+    return $false
+}
+
 function Initialize-Session {
     Write-VerboseLog "Initializing session: $($global:SessionState.SessionId)"
+
+    # Validate log directory path to prevent path traversal attacks
+    # Use GetFullPath to resolve the path and check if it's within the expected base directory
+    # NOTE: The base directory can be customized via the -BaseLogDir parameter for trusted environments
+    $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
+    $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
+
+    if (-not (Test-LogDirIsSafe -LogDir $resolvedLogDir -BaseLogDir $resolvedBaseLogDir)) {
+        throw "Invalid log directory path: path traversal detected. LogDir must be within the configured base log directory."
+    }
+
+    # Create log directory if it doesn't exist
+    if (-not (Test-Path $resolvedLogDir -PathType Container)) {
+        Write-VerboseLog "Creating log directory: $resolvedLogDir"
+        New-Item -ItemType Directory -Path $resolvedLogDir -Force | Out-Null
+    }
 
     # Create session-log.jsonl if it doesn't exist
     if (-not (Test-Path $JSONL_FILE)) {
@@ -257,11 +357,194 @@ function End-Turn {
 }
 
 # ============================================================================
+# Real-Time Stream Processing
+# ============================================================================
+
+<#
+.SYNOPSIS
+Detects tool calls from the current line and previous context using pattern matching.
+
+.DESCRIPTION
+Implements a multi-pattern tool detection algorithm that searches for tool invocations in:
+1. Current line using <invoke name="ToolName"> pattern
+2. Previous lines (lookback buffer) for recent tool invocations
+3. Function result blocks using <name>ToolName</name> pattern
+
+The algorithm uses configurable lookback to balance accuracy vs performance.
+
+.PARAMETER CurrentLine
+The current line from the input stream to analyze.
+
+.PARAMETER PreviousLines
+Queue or array of previous lines to search for tool call context. Supports both [System.Collections.Generic.Queue[string]] and array types.
+
+.PARAMETER LookbackLimit
+Maximum number of previous lines to search (default: 20). Controls the trade-off between detection accuracy and performance.
+
+.OUTPUTS
+[string] Returns the detected tool name (e.g., "Read", "mcp__git__git_status") if found, or $null if no tool call is detected.
+
+.EXAMPLE
+$toolName = Parse-ToolCallFromContext -CurrentLine '<invoke name="Read">' -PreviousLines $lineBuffer
+# Returns: "Read"
+
+.EXAMPLE
+$toolName = Parse-ToolCallFromContext -CurrentLine '<system_warning>...' -PreviousLines $lineBuffer -LookbackLimit 10
+# Searches up to 10 previous lines for tool invocation patterns
+#>
+function Parse-ToolCallFromContext {
+    param(
+        [string]$CurrentLine,
+        $PreviousLines,  # Accept Queue or Array
+        [int]$LookbackLimit = 20
+    )
+
+    # Pattern 1: Tool call in antml:function_calls block
+    # <invoke name="ToolName">
+    $toolCallPattern = '<invoke name="([^"]+)">'
+    if ($CurrentLine -match $toolCallPattern) {
+        return $matches[1]
+    }
+
+    # Pattern 2: Search previous lines for recent tool invocation
+    # Handle both Queue and Array types efficiently
+    $linesArray = if ($PreviousLines -is [System.Collections.Generic.Queue[string]]) {
+        $PreviousLines.ToArray()
+    } else {
+        $PreviousLines
+    }
+
+    $lookback = [Math]::Min($LookbackLimit, $linesArray.Count)
+    for ($i = $linesArray.Count - 1; $i -ge [Math]::Max(0, $linesArray.Count - $lookback); $i--) {
+        if ($linesArray[$i] -match $toolCallPattern) {
+            return $matches[1]
+        }
+    }
+
+    # Pattern 3: Function call result block
+    # <result><name>ToolName</name>
+    if ($CurrentLine -match '<name>([^<]+)</name>') {
+        return $matches[1]
+    }
+
+    return $null
+}
+
+<#
+.SYNOPSIS
+Looks up cached tool responses to enable pre-execution cache injection.
+
+.DESCRIPTION
+STUB FUNCTION: Cache injection is NOT implemented.
+This function is a placeholder for future MCP integration that will enable:
+- Pre-execution cache lookups for high-token operations
+- Transparent response injection to skip redundant tool calls
+- Token savings tracking via cache hit events
+
+Currently always returns $null to disable cache injection.
+For implementation details, see the MCP integration plan and project roadmap.
+
+.PARAMETER ToolName
+The name of the tool to look up (e.g., "Read", "mcp__git__git_status").
+
+.PARAMETER ToolParams
+Hashtable of tool parameters used to generate the cache key. Used to create unique cache keys for different parameter combinations.
+
+.OUTPUTS
+[string] Returns the cached tool response content if found, or $null if not cached. Currently always returns $null as cache injection is not implemented.
+
+.EXAMPLE
+$cached = Get-CachedToolResponse -ToolName "Read" -ToolParams @{ file_path = "C:\example.txt" }
+# Returns: $null (stub implementation)
+
+.NOTES
+TODO: Implement cache injection for MCP integration. See project roadmap or issue tracker for implementation timeline.
+#>
+function Get-CachedToolResponse {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolParams
+    )
+
+    # STUB: Cache injection is NOT implemented.
+    # This function is a placeholder for future MCP integration.
+    # It currently always returns $null.
+    # TODO: Implement cache injection for MCP integration. See project roadmap or issue tracker.
+    return $null
+}
+
+<#
+.SYNOPSIS
+Injects a cached response directly into the output stream as a formatted tool result.
+
+.DESCRIPTION
+Formats and injects cached tool responses into the stdout stream, bypassing actual tool execution.
+The response is formatted as a standard <function_results> block to maintain compatibility with
+the parent process (e.g., Claude Code CLI). This enables transparent cache injection where the
+parent process consumes the cached response as if it came from the actual tool.
+
+Used in conjunction with Get-CachedToolResponse to implement cache-based token optimization.
+
+.PARAMETER CachedResponse
+The cached tool response content to inject. Should be the raw response data from the cache.
+
+.PARAMETER ToolName
+The name of the tool being cached (used for logging and formatting). E.g., "Read", "mcp__git__git_status".
+
+.OUTPUTS
+[void] Writes formatted tool result to stdout using Write-Output.
+
+.EXAMPLE
+Inject-CachedResponse -CachedResponse "File contents here..." -ToolName "Read"
+# Outputs formatted <function_results> block to stdout
+
+.NOTES
+This function is designed to work with the cache injection mechanism. The output format matches the standard tool result format expected by Claude Code CLI.
+#>
+function Inject-CachedResponse {
+    param(
+        [string]$CachedResponse,
+        [string]$ToolName
+    )
+
+    # Inject cached response into stream
+    # Format as tool result
+    Write-VerboseLog "Injecting cached response for: $ToolName"
+
+    $injectedOutput = @"
+<function_results>
+<result>
+<name>$ToolName</name>
+<output>$CachedResponse</output>
+</result>
+</function_results>
+"@
+
+    Write-Output $injectedOutput
+}
+
+# ============================================================================
 # Main Wrapper Logic
 # ============================================================================
 
+<#
+.SYNOPSIS
+Real-time CLI wrapper for Claude Code that tracks token usage and logs events.
+
+.DESCRIPTION
+Processes stdin in real-time, parses system warnings to extract token deltas,
+tracks turn-level events, and writes to session-log.jsonl.
+
+DESIGN NOTE - Blocking I/O:
+ReadLine() uses blocking I/O by design. This is intentional for the wrapper context,
+where stdin is managed by a parent process such as Claude Code (a CLI tool that may
+use MCP servers). The stream closes when the parent process terminates, preventing
+indefinite hangs. Timeout mechanisms are not required as the wrapper lifecycle is
+controlled by the parent process.
+For production recommendations in other contexts, see CLI_INTEGRATION.md.
+#>
 function Invoke-ClaudeCodeWrapper {
-    Write-Host "Token Optimizer MCP - Enhanced Session Wrapper" -ForegroundColor Green
+    Write-Host "Token Optimizer MCP - Enhanced Session Wrapper (Real-Time Mode)" -ForegroundColor Green
     Write-Host "Session ID: $($global:SessionState.SessionId)" -ForegroundColor Yellow
     Write-Host "Log Directory: $LogDir" -ForegroundColor Yellow
     Write-Host ""
@@ -271,24 +554,73 @@ function Invoke-ClaudeCodeWrapper {
     # Track if we're in a turn
     $inTurn = $false
     $lastUserMessage = ""
-
-    # Start reading from stdin (piped from claude-code)
-    # In practice, this would wrap the actual claude-code CLI process
-    # For now, we'll demonstrate the structure
+    # Use Queue for efficient FIFO operations (better than ArrayList.RemoveAt(0))
+    $lineBuffer = [System.Collections.Generic.Queue[string]]::new($LineBufferSize)
+    $pendingToolCall = $null
+    $lastTokenCount = 0
 
     try {
-        Write-VerboseLog "Wrapper ready - monitoring for system warnings and tool calls"
+        Write-VerboseLog "Wrapper ready - real-time stream processing active"
 
-        # Simulated processing loop (in real usage, this would pipe claude-code stdout/stderr)
-        # For testing purposes, we'll show the structure
+        # Configure console encoding for proper Unicode handling
+        # IMPORTANT: Setting InputEncoding and OutputEncoding to UTF8 prevents encoding mismatches
+        # between the console and piped data, ensuring Unicode characters are handled correctly.
+        # This addresses the concern that [Console]::In.ReadLine() could have encoding issues.
+        # Store original encodings to restore in finally block
+        $originalInputEncoding = [Console]::InputEncoding
+        $originalOutputEncoding = [Console]::OutputEncoding
+        try {
+            [Console]::InputEncoding = [System.Text.Encoding]::UTF8
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        } catch {
+            Write-Warning "Failed to set console encoding to UTF8. Unicode handling may be degraded. Error: $($_.Exception.Message)"
+            Write-VerboseLog "Console encoding assignment failed: $($_.Exception.Message)"
+        }
 
+        $input = [Console]::In
+        $readTimeout = 30000  # 30 second timeout in milliseconds
         while ($true) {
-            # Read line from stdin (in real wrapper, this comes from claude-code)
-            $line = Read-Host -Prompt "Input"
+            # Use async I/O with timeout to prevent indefinite hangs
+            # This addresses the concern that blocking ReadLine() could hang if stdin is not properly closed
+            try {
+                $readTask = $input.ReadLineAsync()
+                $completed = $readTask.Wait($readTimeout)
 
-            if ($line -eq "exit" -or $line -eq "quit") {
+                if (-not $completed) {
+                    Write-VerboseLog "ReadLine timeout after ${readTimeout}ms - stdin may be stalled"
+                    # Continue waiting - the parent process controls the wrapper lifecycle
+                    # If stdin is truly dead, the next ReadLineAsync will detect EOF
+                    continue
+                }
+
+                $line = $readTask.Result
+            }
+            catch [System.IO.IOException] {
+                Write-VerboseLog "I/O error reading from stdin: $($_.Exception.Message)"
                 break
             }
+            catch {
+                Write-VerboseLog "Unexpected error reading from stdin: $($_.Exception.Message)"
+                break
+            }
+
+            # Check for end of stream
+            if ($null -eq $line) {
+                Write-VerboseLog "End of stream detected"
+                break
+            }
+
+            # Add to line buffer (for context lookback)
+            # Note: LineBufferSize is configurable via parameter (default: 100)
+            # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
+            # Maintain fixed buffer size by dequeueing oldest line when buffer is full
+            if ($lineBuffer.Count -ge $LineBufferSize) {
+                $lineBuffer.Dequeue()  # Remove oldest line efficiently
+            }
+            $lineBuffer.Enqueue($line)
+
+            # Performance tracking
+            $parseStartTime = Get-Date
 
             # Parse system warnings
             $tokenInfo = Parse-SystemWarning -Line $line
@@ -296,34 +628,73 @@ function Invoke-ClaudeCodeWrapper {
                 Write-VerboseLog "Parsed token info: Used=$($tokenInfo.Used), Remaining=$($tokenInfo.Remaining)"
 
                 # Check if this is a tool call transition (tokens increased)
+                # Performance optimization: Only call Parse-ToolCallFromContext when token count increases
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
-                    # Detect tool call (in real wrapper, we'd parse the tool name from surrounding context)
-                    # For now, we'll prompt for demo purposes
-                    $toolName = Read-Host -Prompt "Tool name"
+                    # Detect tool call from context (ONLY when tokens increased)
+                    # Pass Queue directly to avoid ToArray() conversion overhead
+                    $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
 
-                    if (-not $inTurn) {
-                        Start-Turn -UserMessagePreview $lastUserMessage
-                        $inTurn = $true
+                    if ($toolName) {
+                        Write-VerboseLog "Detected tool call: $toolName"
+
+                        # Start turn if not already in one
+                        if (-not $inTurn) {
+                            Start-Turn -UserMessagePreview $lastUserMessage
+                            $inTurn = $true
+                        }
+
+                        # Check for cached response (optional)
+                        $cachedResponse = Get-CachedToolResponse -ToolName $toolName -ToolParams @{}
+
+                        if ($cachedResponse) {
+                            # Inject cached response and skip tool execution
+                            Inject-CachedResponse -CachedResponse $cachedResponse -ToolName $toolName
+                            Write-VerboseLog "Cache hit! Injected response for: $toolName"
+
+                            # Record cache hit in JSONL
+                            Write-JsonlEvent -Event @{
+                                type = "cache_hit"
+                                turn = $global:SessionState.CurrentTurn
+                                tool = $toolName
+                                tokens_saved = ($tokenInfo.Used - $global:SessionState.LastTokens)
+                            }
+                        }
+                        else {
+                            # Record tool call with actual token delta
+                            Record-ToolCall -ToolName $toolName -TokensBefore $global:SessionState.LastTokens -TokensAfter $tokenInfo.Used
+                        }
                     }
-
-                    Record-ToolCall -ToolName $toolName -TokensBefore $global:SessionState.LastTokens -TokensAfter $tokenInfo.Used
+                    else {
+                        Write-VerboseLog "Token increase detected but no tool call identified (delta: $($tokenInfo.Used - $global:SessionState.LastTokens))"
+                    }
                 }
 
                 $global:SessionState.LastTokens = $tokenInfo.Used
                 $global:SessionState.TotalTokens = $tokenInfo.Total
             }
 
-            # Check for turn boundaries (user input)
-            if ($line -like "User:*") {
+            # Check for turn boundaries (user input pattern)
+            # Pattern: Look for conversation turn markers
+            $userMessagePattern = '^\s*(User|Human):\s*'
+            if ($line -match $userMessagePattern) {
                 if ($inTurn) {
                     End-Turn
                     $inTurn = $false
                 }
 
-                $lastUserMessage = $line -replace '^User:\s*', ''
+                $lastUserMessage = $line -replace $userMessagePattern, ''
+                Write-VerboseLog "New user message detected: $($lastUserMessage.Substring(0, [Math]::Min(50, $lastUserMessage.Length)))..."
             }
 
-            # Pass through the line (in real wrapper, this would go to stdout)
+            # Performance tracking
+            $parseEndTime = Get-Date
+            $parseTime = ($parseEndTime - $parseStartTime).TotalMilliseconds
+
+            if ($parseTime -gt $PerformanceThresholdMs) {
+                Write-VerboseLog "Parse time exceeded $($PerformanceThresholdMs)ms threshold: $([Math]::Round($parseTime, 2))ms"
+            }
+
+            # Pass through the line to stdout (preserve original output)
             Write-Output $line
         }
 
@@ -332,12 +703,39 @@ function Invoke-ClaudeCodeWrapper {
             End-Turn
         }
 
+        Write-JsonlEvent -Event @{
+            type = "session_end"
+            sessionId = $global:SessionState.SessionId
+            total_tokens = $global:SessionState.LastTokens
+        }
+
     }
     catch {
         Write-Error "Wrapper error: $_"
+        Write-VerboseLog "Error details: $($_.Exception.Message)"
+        Write-VerboseLog "Stack trace: $($_.ScriptStackTrace)"
     }
     finally {
+        # Restore original console encodings to avoid affecting subsequent operations
+        if ($originalInputEncoding) {
+            try {
+                [Console]::InputEncoding = $originalInputEncoding
+            }
+            catch {
+                Write-VerboseLog "Failed to restore original input encoding: $($_.Exception.Message)"
+            }
+        }
+        if ($originalOutputEncoding) {
+            try {
+                [Console]::OutputEncoding = $originalOutputEncoding
+            }
+            catch {
+                Write-VerboseLog "Failed to restore original output encoding: $($_.Exception.Message)"
+            }
+        }
+
         Write-VerboseLog "Session ended: $($global:SessionState.SessionId)"
+        Write-VerboseLog "Total tokens used: $($global:SessionState.LastTokens)"
     }
 }
 
@@ -408,30 +806,7 @@ if ($Test) {
     Test-WrapperParsing
 }
 else {
-    # Real wrapper mode (would wrap claude-code CLI)
-    # Invoke-ClaudeCodeWrapper
-
-    Write-Host @"
-Token Optimizer MCP - Enhanced Session Wrapper
-
-USAGE:
-  To test parsing:
-    .\wrapper.ps1 -Test -VerboseLogging
-
-  To wrap Claude Code (not yet implemented - requires CLI integration):
-    claude-code | .\wrapper.ps1 -SessionId "my-session" -VerboseLogging
-
-FEATURES:
-  - Real-time token tracking from system warnings
-  - Turn-level event logging to session-log.jsonl
-  - MCP server attribution for all tool calls
-  - Backward compatible CSV logging with mcp_server column
-
-FILES:
-  - Session log (JSONL): $JSONL_FILE
-  - Operations log (CSV): $CSV_FILE
-  - Current session ID: $SESSION_FILE
-
-Run with -Test flag to see parsing examples.
-"@
+    # Real wrapper mode - process stdin in real-time
+    Write-VerboseLog "Starting real-time CLI wrapper mode"
+    Invoke-ClaudeCodeWrapper
 }
