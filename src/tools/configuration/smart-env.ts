@@ -691,13 +691,16 @@ export function getSmartEnv(
 export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
-  const { globalTokenCounter, globalMetricsCollector } = await import('../../core/globals.js');
+  const { TokenCounter } = await import('../../core/token-counter.js');
+  const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngine(
     join(homedir(), '.token-optimizer-cache', 'cache.db')
   );
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
 
-  const tool = getSmartEnv(cache, globalTokenCounter, globalMetricsCollector);
+  const tool = getSmartEnv(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
   return JSON.stringify(result, null, 2);

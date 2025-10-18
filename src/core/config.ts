@@ -93,5 +93,3 @@ export class ConfigManager {
     return this.config.monitoring.enabled;
   }
 }
-
-export const defaultConfigManager = new ConfigManager();

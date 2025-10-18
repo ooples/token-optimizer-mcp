@@ -658,20 +658,20 @@ export function getSmartApiFetch(
 export async function runSmartApiFetch(
   options: SmartApiFetchOptions,
 ): Promise<string> {
-  // Use global instances
-  const { globalTokenCounter, globalMetricsCollector } = await import(
-    "../../core/globals"
-  );
   const { CacheEngine } = await import("../../core/cache-engine");
+  const { TokenCounter } = await import("../../core/token-counter");
+  const { MetricsCollector } = await import("../../core/metrics");
   const { homedir } = await import("os");
   const { join } = await import("path");
 
   const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
 
   const smartFetch = getSmartApiFetch(
     cache,
-    globalTokenCounter,
-    globalMetricsCollector,
+    tokenCounter,
+    metrics,
   );
 
   const output = await smartFetch.run(options);
