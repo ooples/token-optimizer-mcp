@@ -104,10 +104,12 @@ async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
     const parts = line.split(',');
     if (parts.length < 3) continue;
 
-    const timestamp = parts[0];
-    const toolName = parts[1];
-    const tokens = parseInt(parts[2], 10) || 0;
-    const metadata = parts.length > 3 ? parts.slice(3).join(',').trim().replace(/^"(.*)"$/, '$1') : '';
+    const timestamp = parts[0].trim();
+    const toolName = parts[1].trim();
+    const tokens = parseInt(parts[2].trim(), 10) || 0;
+    const metadata = parts.length > 3
+      ? parts.slice(3).join(',').trim().replace(/^"(.*)"$/, '$1').replace(/\r$/, '')
+      : '';
 
     operations.push({
       timestamp,
@@ -363,20 +365,45 @@ export async function analyzeProjectTokens(
   }
 
   // Filter by date range if specified
-  // NOTE: UUID-based session IDs are currently included regardless of date filter
-  // Future enhancement: Use file mtime or first/last operation timestamp for UUID sessions
   if (startDate || endDate) {
-    sessionFiles = sessionFiles.filter((file) => {
-      const sessionId = extractSessionId(file);
-      // Extract date from session ID (format: YYYYMMDD-HHMMSS-XXXX or UUID)
-      const dateMatch = sessionId.match(/^(\d{8})/);
-      if (!dateMatch) return true; // Include UUID-based sessions (limitation)
+    const startDateStr = startDate ? startDate.replace(/-/g, '') : null;
+    const endDateStr = endDate ? endDate.replace(/-/g, '') : null;
 
-      const fileDate = dateMatch[1];
-      if (startDate && fileDate < startDate.replace(/-/g, '')) return false;
-      if (endDate && fileDate > endDate.replace(/-/g, '')) return false;
-      return true;
-    });
+    // Filter with async file stat for UUID-based sessions
+    sessionFiles = (
+      await Promise.all(
+        sessionFiles.map(async (file) => {
+          const sessionId = extractSessionId(file);
+          // Extract date from session ID (format: YYYYMMDD-HHMMSS-XXXX or UUID)
+          const dateMatch = sessionId.match(/^(\d{8})/);
+          let fileDate: string | null = null;
+
+          if (dateMatch) {
+            fileDate = dateMatch[1];
+          } else {
+            // Try to get file mtime as date for UUID-based sessions
+            try {
+              const stat = await fs.stat(file);
+              const mtime = stat.mtime;
+              // Format mtime as YYYYMMDD
+              const mtimeStr = [
+                mtime.getFullYear().toString().padStart(4, '0'),
+                (mtime.getMonth() + 1).toString().padStart(2, '0'),
+                mtime.getDate().toString().padStart(2, '0')
+              ].join('');
+              fileDate = mtimeStr;
+            } catch (e) {
+              // If we can't get mtime, exclude the file when date filter is active
+              return null;
+            }
+          }
+
+          if (startDateStr && fileDate && fileDate < startDateStr) return null;
+          if (endDateStr && fileDate && fileDate > endDateStr) return null;
+          return file;
+        })
+      )
+    ).filter((f): f is string => f !== null);
   }
 
   // Parse all files with concurrency limit to avoid resource exhaustion
@@ -400,11 +427,13 @@ export async function analyzeProjectTokens(
   }
 
   // Analyze each session using pre-parsed data
-  const sessions = sessionFiles.map((filePath) => {
-    const sessionId = extractSessionId(filePath);
-    const operations = parsedSessions.get(sessionId)!;
-    return analyzeSession(filePath, operations);
-  });
+  const sessions = sessionFiles
+    .map((filePath) => {
+      const sessionId = extractSessionId(filePath);
+      const operations = parsedSessions.get(sessionId);
+      return operations ? analyzeSession(filePath, operations) : null;
+    })
+    .filter((s): s is SessionSummary => s !== null);
 
   // Calculate summary statistics
   const totalOperations = sessions.reduce((sum, s) => sum + s.totalOperations, 0);
