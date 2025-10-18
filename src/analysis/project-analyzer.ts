@@ -438,7 +438,7 @@ export async function analyzeProjectTokens(
   // Calculate summary statistics
   const totalOperations = sessions.reduce((sum, s) => sum + s.totalOperations, 0);
   const totalTokens = sessions.reduce((sum, s) => sum + s.totalTokens, 0);
-  const averageTokensPerSession = totalTokens / sessions.length;
+  const averageTokensPerSession = sessions.length === 0 ? 0 : totalTokens / sessions.length;
   const averageTokensPerOperation = totalOperations === 0 ? 0 : totalTokens / totalOperations;
 
   // Get top contributing sessions

@@ -234,7 +234,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'number',
               description: 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
-              minimum: 0,
+              exclusiveMinimum: 0,
             },
           },
         },
