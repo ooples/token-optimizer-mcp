@@ -222,7 +222,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               format: 'date',
               pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
               description: 'Optional start date filter (YYYY-MM-DD format).',
             },
             endDate: {
@@ -235,7 +234,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
               minimum: 0,
-              default: 30,
               exclusiveMinimum: 0,
             },
           },
