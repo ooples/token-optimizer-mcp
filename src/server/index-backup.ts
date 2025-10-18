@@ -530,30 +530,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           const targetSessionId = sessionId || sessionData.sessionId;
 
-          // Read operations CSV
-          const csvFilePath = path.join(
+          // Read JSONL log
+          const jsonlFilePath = path.join(
             hooksDataPath,
-            `operations-${targetSessionId}.csv`
+            `session-log-${targetSessionId}.jsonl`
           );
 
-          if (!fs.existsSync(csvFilePath)) {
+          if (!fs.existsSync(jsonlFilePath)) {
             return {
               content: [
                 {
                   type: 'text',
                   text: JSON.stringify({
                     success: false,
-                    error: `Operations file not found for session ${targetSessionId}`,
-                    csvFilePath,
+                    error: `JSONL log not found for session ${targetSessionId}`,
+                    jsonlFilePath,
                   }),
                 },
               ],
             };
           }
 
-          // Parse CSV
-          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
-          const lines = csvContent.trim().split('\n');
+          // Parse JSONL
+          // TODO: Refactor to use async fs.promises or streaming (readline/createReadStream)
+          // to avoid blocking event loop on large session logs
+          const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
+          const lines = jsonlContent.trim().split('\n');
 
           interface Operation {
             timestamp: string;
@@ -569,25 +571,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           for (const line of lines) {
             if (!line.trim()) continue;
 
-            const parts = line.split(',');
-            if (parts.length < 3) continue;
+            try {
+              const event = JSON.parse(line);
 
-            const timestamp = parts[0];
-            const toolName = parts[1];
-            const tokens = parseInt(parts[2], 10) || 0;
-            const metadata = parts[3] || '';
+              // Process tool calls
+              if (event.type === 'tool_call') {
+                const tokens = event.estimatedTokens || 0;
+                operations.push({
+                  timestamp: event.timestamp,
+                  toolName: event.toolName,
+                  tokens,
+                  metadata: typeof event.metadata === 'string'
+                    ? event.metadata
+                    : event.metadata !== undefined
+                      ? JSON.stringify(event.metadata)
+                      : '',
+                });
+                toolTokens += tokens;
+              }
 
-            operations.push({
-              timestamp,
-              toolName,
-              tokens,
-              metadata,
-            });
-
-            if (toolName === 'SYSTEM_REMINDERS') {
-              systemReminderTokens = tokens;
-            } else {
-              toolTokens += tokens;
+              // Process system reminders
+              if (event.type === 'system_reminder') {
+                const tokens = event.tokens || 0;
+                systemReminderTokens = tokens;
+              }
+            } catch (parseError) {
+              // Skip malformed JSONL lines
+              continue;
             }
           }
 
@@ -1062,21 +1072,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Read session-log.jsonl
           const jsonlFilePath = path.join(hooksDataPath, `session-log-${targetSessionId}.jsonl`);
 
+          // Error handling: Throwing errors here is consistent with MCP protocol
+          // which wraps tool errors in structured error responses automatically
           if (!fs.existsSync(jsonlFilePath)) {
-            // Fallback: Use CSV format for backward compatibility
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: false,
-                    error: `JSONL log not found for session ${targetSessionId}. This session may not have JSONL logging enabled yet.`,
-                    jsonlFilePath,
-                    note: 'Use get_session_stats for CSV-based sessions',
-                  }),
-                },
-              ],
-            };
+            throw new Error(`JSONL log not found for session ${targetSessionId}`);
           }
 
           // Parse JSONL file
