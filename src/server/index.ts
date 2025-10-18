@@ -820,10 +820,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Shared cleanup function to avoid duplication between signal handlers
 function cleanup() {
-  try { cache.close(); } catch (err) { console.error('Error closing cache:', err); }
-  try { tokenCounter.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
-  try { predictiveCache.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
-  try { cacheWarmup.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
+  try { cache?.close(); } catch (err) { console.error('Error closing cache:', err); }
+  try { tokenCounter?.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
+  try { predictiveCache?.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
+  try { cacheWarmup?.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
 }
 
 // Start server

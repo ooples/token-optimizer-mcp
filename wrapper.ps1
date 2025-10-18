@@ -558,8 +558,8 @@ function Record-ToolCall {
     Write-CsvOperation -ToolName $ToolName -TokenEstimate $tokensDelta -McpServer $mcpServer
 
     # Automatic caching logic
-    # Check for non-null and non-empty ToolResult using idiomatic PowerShell
-    if (-not $CacheHit -and -not [string]::IsNullOrEmpty($ToolResult) -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
+    # Use idiomatic PowerShell null/empty check (truthy evaluation)
+    if (-not $CacheHit -and $ToolResult -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
         Set-AutoCache -ToolName $ToolName -ToolArgs $ToolArgs -Result $ToolResult -TokenCount $tokensDelta
     }
 
