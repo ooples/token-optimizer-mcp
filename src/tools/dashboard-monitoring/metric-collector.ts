@@ -1019,7 +1019,7 @@ export class MetricCollector {
     }
 
     // Calculate aggregation for each group
-    for (const [key, points] of groups.entries()) {
+    for (const [, points] of groups.entries()) {
       const values = points.map((p) => p.v || p.value);
       let aggValue: number;
 

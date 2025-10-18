@@ -155,7 +155,6 @@ interface SmartTypeScriptOutput {
 export class SmartTypeScript {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private tokenCounter: TokenCounter;
   private cacheNamespace = 'smart_typescript';
   private projectRoot: string;
   private program?: ts.Program;
@@ -165,12 +164,11 @@ export class SmartTypeScript {
 
   constructor(
     cache: CacheEngine,
-    tokenCounter: TokenCounter,
+    _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }

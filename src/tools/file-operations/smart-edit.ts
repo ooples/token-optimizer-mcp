@@ -17,7 +17,7 @@ import { join } from 'path';
 import { CacheEngine } from '../../core/cache-engine';
 import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
-import { hashContent, generateCacheKey } from '../shared/hash-utils';
+import { generateCacheKey } from '../shared/hash-utils';
 import { generateUnifiedDiff } from '../shared/diff-utils';
 
 export interface EditOperation {
@@ -220,7 +220,6 @@ export class SmartEditTool {
 
       // Update cache
       if (opts.updateCache) {
-        const fileHash = hashContent(editedContent);
         const cacheKey = generateCacheKey('file-edit', { path: filePath });
         const tokensSaved = originalTokens - diffTokens;
         this.cache.set(cacheKey, editedContent as any, opts.ttl, tokensSaved);

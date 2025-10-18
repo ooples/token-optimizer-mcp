@@ -14,7 +14,7 @@ import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine';
 import { MetricsCollector } from '../../core/metrics';
 import { TokenCounter } from '../../core/token-counter';
-import { SmartComplexityTool, getSmartComplexityTool, type ComplexityMetrics } from './smart-complexity';
+import { SmartComplexityTool, getSmartComplexityTool } from './smart-complexity';
 
 export interface SmartRefactorOptions {
   filePath?: string;

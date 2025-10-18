@@ -19,7 +19,7 @@ import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine';
 import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
-import { hashContent, generateCacheKey } from '../shared/hash-utils';
+import { generateCacheKey } from '../shared/hash-utils';
 import { detectFileType } from '../shared/syntax-utils';
 
 export interface GrepMatch {
