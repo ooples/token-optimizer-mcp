@@ -17,10 +17,10 @@
  * Token Reduction Target: 87%+
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { createHash } from 'crypto';
 
 // ============================================================================
 // Interfaces
@@ -28,20 +28,26 @@ import { createHash } from "crypto";
 
 export interface MonitoringIntegrationOptions {
   operation:
-    | "connect"
-    | "disconnect"
-    | "list-connections"
-    | "sync-metrics"
-    | "sync-alerts"
-    | "push-data"
-    | "get-status"
-    | "configure-mapping";
+    | 'connect'
+    | 'disconnect'
+    | 'list-connections'
+    | 'sync-metrics'
+    | 'sync-alerts'
+    | 'push-data'
+    | 'get-status'
+    | 'configure-mapping';
 
   connectionId?: string;
   connectionName?: string;
 
   connection?: {
-    platform: "prometheus" | "grafana" | "datadog" | "newrelic" | "splunk" | "elastic";
+    platform:
+      | 'prometheus'
+      | 'grafana'
+      | 'datadog'
+      | 'newrelic'
+      | 'splunk'
+      | 'elastic';
     url: string;
     apiKey?: string;
     username?: string;
@@ -77,7 +83,7 @@ export interface PlatformConnection {
   name: string;
   platform: string;
   url: string;
-  status: "connected" | "disconnected" | "error";
+  status: 'connected' | 'disconnected' | 'error';
   lastSync?: number;
   errorMessage?: string;
   metrics?: {
@@ -109,7 +115,7 @@ export interface SyncedAlert {
 
 export interface IntegrationHealth {
   connectionId: string;
-  status: "healthy" | "degraded" | "down";
+  status: 'healthy' | 'degraded' | 'down';
   latency: number;
   successRate: number;
   lastCheck: number;
@@ -158,35 +164,37 @@ export class MonitoringIntegration {
     this.loadPersistedData();
   }
 
-  async run(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  async run(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     const startTime = Date.now();
 
     try {
       let result: MonitoringIntegrationResult;
 
       switch (options.operation) {
-        case "connect":
+        case 'connect':
           result = await this.connect(options);
           break;
-        case "disconnect":
+        case 'disconnect':
           result = await this.disconnect(options);
           break;
-        case "list-connections":
+        case 'list-connections':
           result = await this.listConnections(options);
           break;
-        case "sync-metrics":
+        case 'sync-metrics':
           result = await this.syncMetrics(options);
           break;
-        case "sync-alerts":
+        case 'sync-alerts':
           result = await this.syncAlerts(options);
           break;
-        case "push-data":
+        case 'push-data':
           result = await this.pushData(options);
           break;
-        case "get-status":
+        case 'get-status':
           result = await this.getStatus(options);
           break;
-        case "configure-mapping":
+        case 'configure-mapping':
           result = await this.configureMapping(options);
           break;
         default:
@@ -210,9 +218,11 @@ export class MonitoringIntegration {
     }
   }
 
-  private async connect(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  private async connect(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     if (!options.connection) {
-      throw new Error("connection config is required");
+      throw new Error('connection config is required');
     }
 
     const connectionId = this.generateConnectionId(options.connection.url);
@@ -222,17 +232,18 @@ export class MonitoringIntegration {
       name: options.connectionName || options.connection.platform,
       platform: options.connection.platform,
       url: options.connection.url,
-      status: "connected",
+      status: 'connected',
       metrics: { syncCount: 0, lastSyncDuration: 0, dataPointsSynced: 0 },
     };
 
     // Test connection
     try {
       await this.testConnection(options.connection);
-      connection.status = "connected";
+      connection.status = 'connected';
     } catch (error) {
-      connection.status = "error";
-      connection.errorMessage = error instanceof Error ? error.message : String(error);
+      connection.status = 'error';
+      connection.errorMessage =
+        error instanceof Error ? error.message : String(error);
     }
 
     this.connections.set(connectionId, connection);
@@ -245,9 +256,11 @@ export class MonitoringIntegration {
     };
   }
 
-  private async disconnect(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  private async disconnect(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     if (!options.connectionId) {
-      throw new Error("connectionId is required");
+      throw new Error('connectionId is required');
     }
 
     const connection = this.connections.get(options.connectionId);
@@ -255,7 +268,7 @@ export class MonitoringIntegration {
       throw new Error(`Connection not found: ${options.connectionId}`);
     }
 
-    connection.status = "disconnected";
+    connection.status = 'disconnected';
     this.connections.set(options.connectionId, connection);
     await this.persistConnections();
 
@@ -266,8 +279,10 @@ export class MonitoringIntegration {
     };
   }
 
-  private async listConnections(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
-    const cacheKey = this.getCacheKey("connections", "list");
+  private async listConnections(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
+    const cacheKey = this.getCacheKey('connections', 'list');
 
     if (options.useCache !== false) {
       const cached = this.cache.get(cacheKey);
@@ -295,8 +310,12 @@ export class MonitoringIntegration {
       syncCount: c.metrics?.syncCount || 0,
     }));
 
-    const fullTokens = this.tokenCounter.count(JSON.stringify(connections)).tokens;
-    const compressedTokens = this.tokenCounter.count(JSON.stringify(compressed)).tokens;
+    const fullTokens = this.tokenCounter.count(
+      JSON.stringify(connections)
+    ).tokens;
+    const compressedTokens = this.tokenCounter.count(
+      JSON.stringify(compressed)
+    ).tokens;
     const tokensSaved = fullTokens - compressedTokens;
 
     const cacheData = JSON.stringify(compressed);
@@ -309,9 +328,11 @@ export class MonitoringIntegration {
     };
   }
 
-  private async syncMetrics(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  private async syncMetrics(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     if (!options.connectionId) {
-      throw new Error("connectionId is required");
+      throw new Error('connectionId is required');
     }
 
     const connection = this.connections.get(options.connectionId);
@@ -319,7 +340,7 @@ export class MonitoringIntegration {
       throw new Error(`Connection not found: ${options.connectionId}`);
     }
 
-    const cacheKey = this.getCacheKey("sync-metrics", options.connectionId);
+    const cacheKey = this.getCacheKey('sync-metrics', options.connectionId);
 
     if (options.useCache !== false) {
       const cached = this.cache.get(cacheKey);
@@ -339,7 +360,10 @@ export class MonitoringIntegration {
     }
 
     const startTime = Date.now();
-    const syncedMetrics = await this.fetchMetricsFromPlatform(connection, options.syncOptions);
+    const syncedMetrics = await this.fetchMetricsFromPlatform(
+      connection,
+      options.syncOptions
+    );
 
     connection.lastSync = Date.now();
     connection.metrics!.syncCount++;
@@ -347,8 +371,12 @@ export class MonitoringIntegration {
     connection.metrics!.dataPointsSynced += syncedMetrics.length;
 
     const compressed = this.compressMetrics(syncedMetrics);
-    const fullTokens = this.tokenCounter.count(JSON.stringify(syncedMetrics)).tokens;
-    const compressedTokens = this.tokenCounter.count(JSON.stringify(compressed)).tokens;
+    const fullTokens = this.tokenCounter.count(
+      JSON.stringify(syncedMetrics)
+    ).tokens;
+    const compressedTokens = this.tokenCounter.count(
+      JSON.stringify(compressed)
+    ).tokens;
     const tokensSaved = fullTokens - compressedTokens;
 
     const cacheData = JSON.stringify(compressed);
@@ -366,9 +394,11 @@ export class MonitoringIntegration {
     };
   }
 
-  private async syncAlerts(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  private async syncAlerts(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     if (!options.connectionId) {
-      throw new Error("connectionId is required");
+      throw new Error('connectionId is required');
     }
 
     const connection = this.connections.get(options.connectionId);
@@ -376,7 +406,10 @@ export class MonitoringIntegration {
       throw new Error(`Connection not found: ${options.connectionId}`);
     }
 
-    const syncedAlerts = await this.fetchAlertsFromPlatform(connection, options.syncOptions);
+    const syncedAlerts = await this.fetchAlertsFromPlatform(
+      connection,
+      options.syncOptions
+    );
 
     const compressed = syncedAlerts.map((a) => ({
       id: a.externalId,
@@ -386,8 +419,12 @@ export class MonitoringIntegration {
       ts: a.triggeredAt,
     }));
 
-    const fullTokens = this.tokenCounter.count(JSON.stringify(syncedAlerts)).tokens;
-    const compressedTokens = this.tokenCounter.count(JSON.stringify(compressed)).tokens;
+    const fullTokens = this.tokenCounter.count(
+      JSON.stringify(syncedAlerts)
+    ).tokens;
+    const compressedTokens = this.tokenCounter.count(
+      JSON.stringify(compressed)
+    ).tokens;
     const tokensSaved = fullTokens - compressedTokens;
 
     return {
@@ -402,9 +439,11 @@ export class MonitoringIntegration {
     };
   }
 
-  private async pushData(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  private async pushData(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     if (!options.connectionId || !options.pushData) {
-      throw new Error("connectionId and pushData are required");
+      throw new Error('connectionId and pushData are required');
     }
 
     const connection = this.connections.get(options.connectionId);
@@ -426,14 +465,16 @@ export class MonitoringIntegration {
 
     return {
       success: true,
-      data: { pushed: { count: totalCount, type: "mixed" } },
+      data: { pushed: { count: totalCount, type: 'mixed' } },
       metadata: { cacheHit: false, syncCount: totalCount },
     };
   }
 
-  private async getStatus(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  private async getStatus(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     if (!options.connectionId) {
-      throw new Error("connectionId is required");
+      throw new Error('connectionId is required');
     }
 
     const connection = this.connections.get(options.connectionId);
@@ -442,15 +483,15 @@ export class MonitoringIntegration {
     }
 
     const startTime = Date.now();
-    let status: "healthy" | "degraded" | "down" = "healthy";
+    let status: 'healthy' | 'degraded' | 'down' = 'healthy';
     const errors: string[] = [];
 
     try {
       await this.healthCheck(connection);
       const latency = Date.now() - startTime;
-      if (latency > 5000) status = "degraded";
+      if (latency > 5000) status = 'degraded';
     } catch (error) {
-      status = "down";
+      status = 'down';
       errors.push(error instanceof Error ? error.message : String(error));
     }
 
@@ -458,7 +499,9 @@ export class MonitoringIntegration {
       connectionId: connection.id,
       status,
       latency: Date.now() - startTime,
-      successRate: connection.metrics ? connection.metrics.syncCount / (connection.metrics.syncCount + 1) : 0,
+      successRate: connection.metrics
+        ? connection.metrics.syncCount / (connection.metrics.syncCount + 1)
+        : 0,
       lastCheck: Date.now(),
       errors,
     };
@@ -470,9 +513,11 @@ export class MonitoringIntegration {
     };
   }
 
-  private async configureMapping(options: MonitoringIntegrationOptions): Promise<MonitoringIntegrationResult> {
+  private async configureMapping(
+    options: MonitoringIntegrationOptions
+  ): Promise<MonitoringIntegrationResult> {
     if (!options.connectionId || !options.mapping) {
-      throw new Error("connectionId and mapping are required");
+      throw new Error('connectionId and mapping are required');
     }
 
     this.fieldMappings.set(options.connectionId, options.mapping);
@@ -487,15 +532,15 @@ export class MonitoringIntegration {
 
   // Helper methods
   private generateConnectionId(url: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(url + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private getCacheKey(prefix: string, suffix: string): string {
-    const hash = createHash("md5");
+    const hash = createHash('md5');
     hash.update(`monitoring-integration:${prefix}:${suffix}`);
-    return `cache-${hash.digest("hex")}`;
+    return `cache-${hash.digest('hex')}`;
   }
 
   private async testConnection(_config: any): Promise<void> {
@@ -508,7 +553,10 @@ export class MonitoringIntegration {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
-  private async fetchMetricsFromPlatform(connection: PlatformConnection, _options: any = {}): Promise<SyncedMetric[]> {
+  private async fetchMetricsFromPlatform(
+    connection: PlatformConnection,
+    _options: any = {}
+  ): Promise<SyncedMetric[]> {
     // Simulate fetching metrics from external platform
     const metrics: SyncedMetric[] = [];
     for (let i = 0; i < 10; i++) {
@@ -525,14 +573,22 @@ export class MonitoringIntegration {
     return metrics;
   }
 
-  private async fetchAlertsFromPlatform(_connection: PlatformConnection, _options: any = {}): Promise<SyncedAlert[]> {
+  private async fetchAlertsFromPlatform(
+    _connection: PlatformConnection,
+    _options: any = {}
+  ): Promise<SyncedAlert[]> {
     // Simulate fetching alerts
     return [];
   }
 
-  private async pushMetricsToPlatform(connection: PlatformConnection, metrics: any[]): Promise<void> {
+  private async pushMetricsToPlatform(
+    connection: PlatformConnection,
+    metrics: any[]
+  ): Promise<void> {
     // Simulate pushing metrics
-    console.log(`[MonitoringIntegration] Pushed ${metrics.length} metrics to ${connection.platform}`);
+    console.log(
+      `[MonitoringIntegration] Pushed ${metrics.length} metrics to ${connection.platform}`
+    );
   }
 
   private compressMetrics(metrics: SyncedMetric[]): any[] {
@@ -552,25 +608,28 @@ export class MonitoringIntegration {
   }
 
   private async persistConnections(): Promise<void> {
-    const cacheKey = this.getCacheKey("persistence", "connections");
+    const cacheKey = this.getCacheKey('persistence', 'connections');
     const data = JSON.stringify(Array.from(this.connections.entries()));
     await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistMappings(): Promise<void> {
-    const cacheKey = this.getCacheKey("persistence", "mappings");
+    const cacheKey = this.getCacheKey('persistence', 'mappings');
     const data = JSON.stringify(Array.from(this.fieldMappings.entries()));
     await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {
-    const connectionsKey = this.getCacheKey("persistence", "connections");
+    const connectionsKey = this.getCacheKey('persistence', 'connections');
     const connectionsData = this.cache.get(connectionsKey);
     if (connectionsData) {
       try {
         this.connections = new Map(JSON.parse(connectionsData));
       } catch (error) {
-        console.error("[MonitoringIntegration] Error loading connections:", error);
+        console.error(
+          '[MonitoringIntegration] Error loading connections:',
+          error
+        );
       }
     }
   }
@@ -585,39 +644,59 @@ export function getMonitoringIntegration(
   metricsCollector: MetricsCollector
 ): MonitoringIntegration {
   if (!monitoringIntegrationInstance) {
-    monitoringIntegrationInstance = new MonitoringIntegration(cache, tokenCounter, metricsCollector);
+    monitoringIntegrationInstance = new MonitoringIntegration(
+      cache,
+      tokenCounter,
+      metricsCollector
+    );
   }
   return monitoringIntegrationInstance;
 }
 
 export const MONITORING_INTEGRATION_TOOL_DEFINITION = {
-  name: "monitoring_integration",
+  name: 'monitoring_integration',
   description:
-    "External monitoring platform integration with 87% token reduction through data compression and intelligent caching",
+    'External monitoring platform integration with 87% token reduction through data compression and intelligent caching',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
-        enum: ["connect", "disconnect", "list-connections", "sync-metrics", "sync-alerts", "push-data", "get-status", "configure-mapping"],
-        description: "The monitoring integration operation to perform",
+        type: 'string',
+        enum: [
+          'connect',
+          'disconnect',
+          'list-connections',
+          'sync-metrics',
+          'sync-alerts',
+          'push-data',
+          'get-status',
+          'configure-mapping',
+        ],
+        description: 'The monitoring integration operation to perform',
       },
-      connectionId: { type: "string", description: "Connection identifier" },
-      connectionName: { type: "string", description: "Connection name" },
+      connectionId: { type: 'string', description: 'Connection identifier' },
+      connectionName: { type: 'string', description: 'Connection name' },
       connection: {
-        type: "object",
-        description: "Connection configuration",
+        type: 'object',
+        description: 'Connection configuration',
         properties: {
           platform: {
-            type: "string",
-            enum: ["prometheus", "grafana", "datadog", "newrelic", "splunk", "elastic"],
+            type: 'string',
+            enum: [
+              'prometheus',
+              'grafana',
+              'datadog',
+              'newrelic',
+              'splunk',
+              'elastic',
+            ],
           },
-          url: { type: "string" },
-          apiKey: { type: "string" },
+          url: { type: 'string' },
+          apiKey: { type: 'string' },
         },
       },
-      useCache: { type: "boolean", default: true },
+      useCache: { type: 'boolean', default: true },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

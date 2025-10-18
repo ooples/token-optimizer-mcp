@@ -22,7 +22,11 @@ import { homedir } from 'os';
 interface PackageMetadata {
   name: string;
   version: string;
-  type: 'dependency' | 'devDependency' | 'peerDependency' | 'optionalDependency';
+  type:
+    | 'dependency'
+    | 'devDependency'
+    | 'peerDependency'
+    | 'optionalDependency';
   latest?: string;
   outdated?: boolean;
   vulnerabilities?: number;
@@ -236,7 +240,9 @@ export class SmartPackageJson {
   /**
    * Parse package.json with intelligent analysis
    */
-  async run(options: SmartPackageJsonOptions = {}): Promise<SmartPackageJsonOutput> {
+  async run(
+    options: SmartPackageJsonOptions = {}
+  ): Promise<SmartPackageJsonOutput> {
     const startTime = Date.now();
     const {
       force = false,
@@ -244,7 +250,7 @@ export class SmartPackageJson {
       checkSecurity = true,
       includeDependencyTree = false,
       maxCacheAge = 86400, // 24 hours
-      maxTreeDepth = 3
+      maxTreeDepth = 3,
     } = options;
 
     const packageJsonPath = join(this.projectRoot, 'package.json');
@@ -259,7 +265,12 @@ export class SmartPackageJson {
     const fileHash = this.generateFileHash(fileContent);
 
     // Generate cache key
-    const cacheKey = this.generateCacheKey(fileHash, checkOutdated, checkSecurity, includeDependencyTree);
+    const cacheKey = this.generateCacheKey(
+      fileHash,
+      checkOutdated,
+      checkSecurity,
+      includeDependencyTree
+    );
 
     // Check cache (unless force mode)
     if (!force) {
@@ -279,15 +290,17 @@ export class SmartPackageJson {
         name: packageData.name || 'unnamed-package',
         version: packageData.version || '0.0.0',
         description: packageData.description || '',
-        packageManager: this.detectPackageManager()
+        packageManager: this.detectPackageManager(),
       },
       packages: this.parsePackages(packageData),
-      dependencyTree: includeDependencyTree ? await this.buildDependencyTree(maxTreeDepth) : [],
+      dependencyTree: includeDependencyTree
+        ? await this.buildDependencyTree(maxTreeDepth)
+        : [],
       conflicts: this.detectVersionConflicts(packageData),
       securityIssues: checkSecurity ? await this.scanSecurityIssues() : [],
       stats: this.calculateStats(packageData),
       fileHash,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     // Check for outdated packages
@@ -333,46 +346,52 @@ export class SmartPackageJson {
           version,
           type: 'dependency',
           outdated: false,
-          vulnerabilities: 0
+          vulnerabilities: 0,
         });
       }
     }
 
     // Dev dependencies
     if (packageData.devDependencies) {
-      for (const [name, version] of Object.entries(packageData.devDependencies)) {
+      for (const [name, version] of Object.entries(
+        packageData.devDependencies
+      )) {
         packages.push({
           name,
           version,
           type: 'devDependency',
           outdated: false,
-          vulnerabilities: 0
+          vulnerabilities: 0,
         });
       }
     }
 
     // Peer dependencies
     if (packageData.peerDependencies) {
-      for (const [name, version] of Object.entries(packageData.peerDependencies)) {
+      for (const [name, version] of Object.entries(
+        packageData.peerDependencies
+      )) {
         packages.push({
           name,
           version,
           type: 'peerDependency',
           outdated: false,
-          vulnerabilities: 0
+          vulnerabilities: 0,
         });
       }
     }
 
     // Optional dependencies
     if (packageData.optionalDependencies) {
-      for (const [name, version] of Object.entries(packageData.optionalDependencies)) {
+      for (const [name, version] of Object.entries(
+        packageData.optionalDependencies
+      )) {
         packages.push({
           name,
           version,
           type: 'optionalDependency',
           outdated: false,
-          vulnerabilities: 0
+          vulnerabilities: 0,
         });
       }
     }
@@ -383,7 +402,9 @@ export class SmartPackageJson {
   /**
    * Build dependency tree with depth limit
    */
-  private async buildDependencyTree(maxDepth: number): Promise<DependencyNode[]> {
+  private async buildDependencyTree(
+    maxDepth: number
+  ): Promise<DependencyNode[]> {
     try {
       const packageManager = this.detectPackageManager();
 
@@ -401,7 +422,7 @@ export class SmartPackageJson {
         cwd: this.projectRoot,
         encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        timeout: 30000 // 30 second timeout
+        timeout: 30000, // 30 second timeout
       });
 
       return this.parseDependencyTreeOutput(output, packageManager);
@@ -414,14 +435,17 @@ export class SmartPackageJson {
   /**
    * Parse dependency tree output from package manager
    */
-  private parseDependencyTreeOutput(output: string, packageManager: string): DependencyNode[] {
+  private parseDependencyTreeOutput(
+    output: string,
+    packageManager: string
+  ): DependencyNode[] {
     try {
       if (packageManager === 'npm') {
         const data = JSON.parse(output);
         return this.convertNpmTreeToNodes(data.dependencies || {}, 1);
       } else if (packageManager === 'yarn') {
         // Yarn uses different format
-        const lines = output.split('\n').filter(l => l.trim());
+        const lines = output.split('\n').filter((l) => l.trim());
         return this.parseYarnTree(lines);
       } else {
         // pnpm
@@ -436,7 +460,10 @@ export class SmartPackageJson {
   /**
    * Convert npm tree format to DependencyNode array
    */
-  private convertNpmTreeToNodes(deps: Record<string, any>, depth: number): DependencyNode[] {
+  private convertNpmTreeToNodes(
+    deps: Record<string, any>,
+    depth: number
+  ): DependencyNode[] {
     const nodes: DependencyNode[] = [];
 
     for (const [name, info] of Object.entries(deps)) {
@@ -444,7 +471,7 @@ export class SmartPackageJson {
         name,
         version: info.version || 'unknown',
         depth,
-        dependencies: info.dependencies || {}
+        dependencies: info.dependencies || {},
       };
       nodes.push(node);
     }
@@ -468,7 +495,7 @@ export class SmartPackageJson {
               nodes.push({
                 name: match[1],
                 version: match[2],
-                depth: tree.depth || 1
+                depth: tree.depth || 1,
               });
             }
           }
@@ -494,7 +521,7 @@ export class SmartPackageJson {
             nodes.push({
               name,
               version: (info as any).version || 'unknown',
-              depth: 1
+              depth: 1,
             });
           }
         }
@@ -507,7 +534,9 @@ export class SmartPackageJson {
   /**
    * Detect version conflicts in dependencies
    */
-  private detectVersionConflicts(packageData: PackageJsonData): VersionConflict[] {
+  private detectVersionConflicts(
+    packageData: PackageJsonData
+  ): VersionConflict[] {
     const conflicts: VersionConflict[] = [];
     const versionMap = new Map<string, Set<string>>();
     const requiredByMap = new Map<string, Set<string>>();
@@ -516,7 +545,7 @@ export class SmartPackageJson {
     const allDeps = {
       ...packageData.dependencies,
       ...packageData.devDependencies,
-      ...packageData.peerDependencies
+      ...packageData.peerDependencies,
     };
 
     for (const [pkg, version] of Object.entries(allDeps)) {
@@ -539,7 +568,7 @@ export class SmartPackageJson {
           versions: versionArray,
           requiredBy,
           severity: this.isBreakingConflict(versionArray) ? 'error' : 'warning',
-          resolution: this.suggestConflictResolution(pkg, versionArray)
+          resolution: this.suggestConflictResolution(pkg, versionArray),
         });
       }
     }
@@ -552,7 +581,7 @@ export class SmartPackageJson {
    */
   private isBreakingConflict(versions: string[]): boolean {
     // Check if major versions differ
-    const majors = versions.map(v => {
+    const majors = versions.map((v) => {
       const match = v.match(/^[\^~]?(\d+)/);
       return match ? parseInt(match[1], 10) : 0;
     });
@@ -589,14 +618,17 @@ export class SmartPackageJson {
         cwd: this.projectRoot,
         encoding: 'utf-8',
         timeout: 30000,
-        maxBuffer: 10 * 1024 * 1024
+        maxBuffer: 10 * 1024 * 1024,
       });
 
       return this.parseSecurityOutput(output, packageManager);
     } catch (error: any) {
       // Audit command may return non-zero exit code if vulnerabilities found
       if (error.stdout) {
-        return this.parseSecurityOutput(error.stdout, this.detectPackageManager());
+        return this.parseSecurityOutput(
+          error.stdout,
+          this.detectPackageManager()
+        );
       }
       return [];
     }
@@ -605,7 +637,10 @@ export class SmartPackageJson {
   /**
    * Parse security audit output
    */
-  private parseSecurityOutput(output: string, packageManager: string): SecurityIssue[] {
+  private parseSecurityOutput(
+    output: string,
+    packageManager: string
+  ): SecurityIssue[] {
     const issues: SecurityIssue[] = [];
 
     try {
@@ -623,7 +658,7 @@ export class SmartPackageJson {
               fixedIn: vulnData.fixAvailable?.version,
               recommendation: vulnData.fixAvailable
                 ? `Update to ${vulnData.fixAvailable.version}`
-                : 'No fix available yet'
+                : 'No fix available yet',
             });
           }
         }
@@ -637,7 +672,7 @@ export class SmartPackageJson {
               severity: this.normalizeSeverity(adv.severity),
               vulnerabilities: 1,
               fixedIn: adv.patched_versions,
-              recommendation: adv.recommendation
+              recommendation: adv.recommendation,
             });
           }
         }
@@ -652,7 +687,7 @@ export class SmartPackageJson {
               severity: this.normalizeSeverity(adv.severity),
               vulnerabilities: 1,
               fixedIn: adv.patched_versions,
-              recommendation: adv.recommendation
+              recommendation: adv.recommendation,
             });
           }
         }
@@ -667,7 +702,9 @@ export class SmartPackageJson {
   /**
    * Normalize severity levels
    */
-  private normalizeSeverity(severity: string): 'critical' | 'high' | 'moderate' | 'low' {
+  private normalizeSeverity(
+    severity: string
+  ): 'critical' | 'high' | 'moderate' | 'low' {
     const s = severity.toLowerCase();
     if (s === 'critical') return 'critical';
     if (s === 'high') return 'high';
@@ -678,7 +715,9 @@ export class SmartPackageJson {
   /**
    * Check for outdated packages
    */
-  private async checkOutdatedPackages(result: ParsedPackageJson): Promise<void> {
+  private async checkOutdatedPackages(
+    result: ParsedPackageJson
+  ): Promise<void> {
     try {
       const packageManager = this.detectPackageManager();
       let cmd: string;
@@ -695,7 +734,7 @@ export class SmartPackageJson {
         cwd: this.projectRoot,
         encoding: 'utf-8',
         timeout: 30000,
-        maxBuffer: 10 * 1024 * 1024
+        maxBuffer: 10 * 1024 * 1024,
       });
 
       const outdatedData = JSON.parse(output);
@@ -705,7 +744,11 @@ export class SmartPackageJson {
       if (error.stdout) {
         try {
           const outdatedData = JSON.parse(error.stdout);
-          this.markOutdatedPackages(result.packages, outdatedData, this.detectPackageManager());
+          this.markOutdatedPackages(
+            result.packages,
+            outdatedData,
+            this.detectPackageManager()
+          );
         } catch (e) {
           // Ignore parsing errors
         }
@@ -723,7 +766,7 @@ export class SmartPackageJson {
   ): void {
     if (packageManager === 'npm') {
       for (const [name, info] of Object.entries(outdatedData)) {
-        const pkg = packages.find(p => p.name === name);
+        const pkg = packages.find((p) => p.name === name);
         if (pkg) {
           pkg.outdated = true;
           pkg.latest = (info as any).latest;
@@ -733,7 +776,7 @@ export class SmartPackageJson {
       if (outdatedData.data?.body) {
         for (const row of outdatedData.data.body) {
           const [name, , , latest] = row;
-          const pkg = packages.find(p => p.name === name);
+          const pkg = packages.find((p) => p.name === name);
           if (pkg) {
             pkg.outdated = true;
             pkg.latest = latest;
@@ -743,7 +786,7 @@ export class SmartPackageJson {
     } else {
       // pnpm format
       for (const [name, info] of Object.entries(outdatedData)) {
-        const pkg = packages.find(p => p.name === name);
+        const pkg = packages.find((p) => p.name === name);
         if (pkg) {
           pkg.outdated = true;
           pkg.latest = (info as any).latest;
@@ -755,7 +798,9 @@ export class SmartPackageJson {
   /**
    * Calculate package statistics
    */
-  private calculateStats(packageData: PackageJsonData): ParsedPackageJson['stats'] {
+  private calculateStats(
+    packageData: PackageJsonData
+  ): ParsedPackageJson['stats'] {
     const deps = Object.keys(packageData.dependencies || {}).length;
     const devDeps = Object.keys(packageData.devDependencies || {}).length;
     const peerDeps = Object.keys(packageData.peerDependencies || {}).length;
@@ -765,7 +810,7 @@ export class SmartPackageJson {
       totalDevDependencies: devDeps,
       totalPeerDependencies: peerDeps,
       outdatedPackages: 0, // Updated later by checkOutdatedPackages
-      vulnerabilities: 0 // Updated later by scanSecurityIssues
+      vulnerabilities: 0, // Updated later by scanSecurityIssues
     };
   }
 
@@ -825,11 +870,15 @@ export class SmartPackageJson {
   /**
    * Cache result with file hash
    */
-  private cacheResult(key: string, result: ParsedPackageJson, fileHash: string): void {
+  private cacheResult(
+    key: string,
+    result: ParsedPackageJson,
+    fileHash: string
+  ): void {
     const cacheData = {
       ...result,
       fileHash,
-      cachedAt: Date.now()
+      cachedAt: Date.now(),
     };
 
     const tokensSaved = this.estimateTokensSaved(result);
@@ -855,9 +904,7 @@ export class SmartPackageJson {
   /**
    * Generate update suggestions
    */
-  private generateSuggestions(
-    result: ParsedPackageJson
-  ): Array<{
+  private generateSuggestions(result: ParsedPackageJson): Array<{
     type: 'security' | 'maintenance' | 'optimization';
     message: string;
     impact: 'high' | 'medium' | 'low';
@@ -867,38 +914,44 @@ export class SmartPackageJson {
 
     // Security vulnerabilities
     if (result.securityIssues.length > 0) {
-      const critical = result.securityIssues.filter(i => i.severity === 'critical').length;
-      const high = result.securityIssues.filter(i => i.severity === 'high').length;
+      const critical = result.securityIssues.filter(
+        (i) => i.severity === 'critical'
+      ).length;
+      const high = result.securityIssues.filter(
+        (i) => i.severity === 'high'
+      ).length;
 
       if (critical > 0 || high > 0) {
         suggestions.push({
           type: 'security' as const,
           message: `Found ${critical} critical and ${high} high severity vulnerabilities`,
           impact: 'high' as const,
-          command: `${result.metadata.packageManager} audit fix`
+          command: `${result.metadata.packageManager} audit fix`,
         });
       }
     }
 
     // Outdated packages
-    const outdatedCount = result.packages.filter(p => p.outdated).length;
+    const outdatedCount = result.packages.filter((p) => p.outdated).length;
     if (outdatedCount > 0) {
       suggestions.push({
         type: 'maintenance' as const,
         message: `${outdatedCount} packages are outdated`,
         impact: 'medium' as const,
-        command: `${result.metadata.packageManager} ${result.metadata.packageManager === 'yarn' ? 'upgrade' : 'update'}`
+        command: `${result.metadata.packageManager} ${result.metadata.packageManager === 'yarn' ? 'upgrade' : 'update'}`,
       });
     }
 
     // Version conflicts
     if (result.conflicts.length > 0) {
-      const errors = result.conflicts.filter(c => c.severity === 'error').length;
+      const errors = result.conflicts.filter(
+        (c) => c.severity === 'error'
+      ).length;
       suggestions.push({
         type: 'optimization' as const,
         message: `${result.conflicts.length} version conflicts found (${errors} breaking)`,
-        impact: errors > 0 ? 'high' as const : 'medium' as const,
-        command: 'Review and align dependency versions'
+        impact: errors > 0 ? ('high' as const) : ('medium' as const),
+        command: 'Review and align dependency versions',
       });
     }
 
@@ -907,7 +960,7 @@ export class SmartPackageJson {
       suggestions.push({
         type: 'optimization' as const,
         message: `Large number of dependencies (${result.stats.totalDependencies}). Consider dependency audit.`,
-        impact: 'low' as const
+        impact: 'low' as const,
       });
     }
 
@@ -928,49 +981,54 @@ export class SmartPackageJson {
     fromCache: boolean
   ): SmartPackageJsonOutput {
     // Update stats with actual counts
-    result.stats.outdatedPackages = result.packages.filter(p => p.outdated).length;
+    result.stats.outdatedPackages = result.packages.filter(
+      (p) => p.outdated
+    ).length;
     result.stats.vulnerabilities = result.securityIssues.reduce(
       (sum, issue) => sum + issue.vulnerabilities,
       0
     );
 
     // Format conflicts
-    const conflicts = result.conflicts.map(c => ({
+    const conflicts = result.conflicts.map((c) => ({
       package: c.package,
       versions: c.versions,
       requiredBy: c.requiredBy,
       severity: c.severity,
-      resolution: c.resolution
+      resolution: c.resolution,
     }));
 
     // Format security issues
-    const security = result.securityIssues.map(issue => ({
+    const security = result.securityIssues.map((issue) => ({
       package: issue.package,
       currentVersion: issue.currentVersion,
       severity: issue.severity,
       vulnerabilities: issue.vulnerabilities,
       fixedIn: issue.fixedIn,
-      recommendation: issue.recommendation
+      recommendation: issue.recommendation,
     }));
 
     // Format outdated packages (limit to 20)
     const outdated = result.packages
-      .filter(p => p.outdated)
+      .filter((p) => p.outdated)
       .slice(0, 20)
-      .map(p => ({
+      .map((p) => ({
         package: p.name,
         current: p.version,
         latest: p.latest || 'unknown',
         type: p.type,
-        updateRecommendation: this.getUpdateRecommendation(p.version, p.latest || '')
+        updateRecommendation: this.getUpdateRecommendation(
+          p.version,
+          p.latest || ''
+        ),
       }));
 
     // Format dependency tree (flatten and limit)
-    const dependencyTree = result.dependencyTree.slice(0, 20).map(node => ({
+    const dependencyTree = result.dependencyTree.slice(0, 20).map((node) => ({
       name: node.name,
       version: node.version,
       depth: node.depth,
-      children: node.dependencies ? Object.keys(node.dependencies).length : 0
+      children: node.dependencies ? Object.keys(node.dependencies).length : 0,
     }));
 
     // Calculate token metrics
@@ -988,24 +1046,27 @@ export class SmartPackageJson {
         outdated: result.stats.outdatedPackages,
         vulnerabilities: result.stats.vulnerabilities,
         conflicts: result.conflicts.length,
-        fromCache
+        fromCache,
       },
       stats: {
         dependencies: result.stats.totalDependencies,
         devDependencies: result.stats.totalDevDependencies,
         peerDependencies: result.stats.totalPeerDependencies,
-        outdatedPackages: result.stats.outdatedPackages
+        outdatedPackages: result.stats.outdatedPackages,
       },
       conflicts,
       security,
       outdated,
-      dependencyTree: result.dependencyTree.length > 0 ? dependencyTree : undefined,
+      dependencyTree:
+        result.dependencyTree.length > 0 ? dependencyTree : undefined,
       suggestions,
       metrics: {
         originalTokens,
         compactedTokens,
-        reductionPercentage: Math.round(((originalTokens - compactedTokens) / originalTokens) * 100)
-      }
+        reductionPercentage: Math.round(
+          ((originalTokens - compactedTokens) / originalTokens) * 100
+        ),
+      },
     };
   }
 
@@ -1040,9 +1101,11 @@ export class SmartPackageJson {
     const packageJsonSize = 1000;
     const dependencyTreeSize = result.dependencyTree.length * 200;
     const auditSize = result.securityIssues.length * 500;
-    const outdatedSize = result.packages.filter(p => p.outdated).length * 200;
+    const outdatedSize = result.packages.filter((p) => p.outdated).length * 200;
 
-    return packageJsonSize + dependencyTreeSize + auditSize + outdatedSize + 5000;
+    return (
+      packageJsonSize + dependencyTreeSize + auditSize + outdatedSize + 5000
+    );
   }
 
   /**
@@ -1054,11 +1117,11 @@ export class SmartPackageJson {
         name: result.metadata.name,
         totalPackages: result.packages.length,
         outdated: result.stats.outdatedPackages,
-        vulnerabilities: result.stats.vulnerabilities
+        vulnerabilities: result.stats.vulnerabilities,
       },
       conflicts: result.conflicts.slice(0, 10),
       security: result.securityIssues.slice(0, 10),
-      outdated: result.packages.filter(p => p.outdated).slice(0, 10)
+      outdated: result.packages.filter((p) => p.outdated).slice(0, 10),
     };
 
     return JSON.stringify(output).length;
@@ -1073,7 +1136,7 @@ export class SmartPackageJson {
       duration,
       success: true,
       savedTokens: 0,
-      cacheHit: operation === 'cache_hit'
+      cacheHit: operation === 'cache_hit',
     });
   }
 
@@ -1106,7 +1169,12 @@ export async function runSmartPackageJson(
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const smartPkg = getSmartPackageJson(cache, tokenCounter, metrics, options.projectRoot);
+  const smartPkg = getSmartPackageJson(
+    cache,
+    tokenCounter,
+    metrics,
+    options.projectRoot
+  );
 
   try {
     const result = await smartPkg.run(options);
@@ -1134,9 +1202,14 @@ export async function runSmartPackageJson(
     if (result.security.length > 0) {
       output += `Security Issues:\n`;
       for (const issue of result.security.slice(0, 10)) {
-        const icon = issue.severity === 'critical' ? '🔴' :
-                     issue.severity === 'high' ? '🟠' :
-                     issue.severity === 'moderate' ? '🟡' : '🟢';
+        const icon =
+          issue.severity === 'critical'
+            ? '🔴'
+            : issue.severity === 'high'
+              ? '🟠'
+              : issue.severity === 'moderate'
+                ? '🟡'
+                : '🟢';
         output += `  ${icon} ${issue.package}@${issue.currentVersion}\n`;
         output += `      Severity: ${issue.severity} (${issue.vulnerabilities} vulnerabilities)\n`;
         output += `      Recommendation: ${issue.recommendation}\n`;
@@ -1193,8 +1266,12 @@ export async function runSmartPackageJson(
     if (result.suggestions.length > 0) {
       output += `Suggestions:\n`;
       for (const suggestion of result.suggestions) {
-        const icon = suggestion.impact === 'high' ? '🔴' :
-                     suggestion.impact === 'medium' ? '🟡' : '🟢';
+        const icon =
+          suggestion.impact === 'high'
+            ? '🔴'
+            : suggestion.impact === 'medium'
+              ? '🟡'
+              : '🟢';
         output += `  ${icon} [${suggestion.type}] ${suggestion.message}\n`;
         if (suggestion.command) {
           output += `      Command: ${suggestion.command}\n`;
@@ -1220,44 +1297,46 @@ export async function runSmartPackageJson(
  */
 export const SMART_PACKAGE_JSON_TOOL_DEFINITION = {
   name: 'smart_package_json',
-  description: 'Analyze package.json with dependency resolution, version conflict detection, and security scanning. Provides 83% token reduction through intelligent caching.',
+  description:
+    'Analyze package.json with dependency resolution, version conflict detection, and security scanning. Provides 83% token reduction through intelligent caching.',
   inputSchema: {
     type: 'object',
     properties: {
       projectRoot: {
         type: 'string',
-        description: 'Project root directory (defaults to current working directory)'
+        description:
+          'Project root directory (defaults to current working directory)',
       },
       force: {
         type: 'boolean',
         description: 'Force refresh (ignore cache)',
-        default: false
+        default: false,
       },
       checkOutdated: {
         type: 'boolean',
         description: 'Check for outdated packages',
-        default: true
+        default: true,
       },
       checkSecurity: {
         type: 'boolean',
         description: 'Scan for security vulnerabilities',
-        default: true
+        default: true,
       },
       includeDependencyTree: {
         type: 'boolean',
         description: 'Include dependency tree visualization',
-        default: false
+        default: false,
       },
       maxCacheAge: {
         type: 'number',
         description: 'Maximum cache age in seconds (default: 86400 = 24 hours)',
-        default: 86400
+        default: 86400,
       },
       maxTreeDepth: {
         type: 'number',
         description: 'Maximum dependency tree depth to display',
-        default: 3
-      }
-    }
-  }
+        default: 3,
+      },
+    },
+  },
 };

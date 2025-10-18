@@ -12,8 +12,14 @@ import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import { MetricsCollector } from '../core/metrics.js';
-import { getPredictiveCacheTool, PREDICTIVE_CACHE_TOOL_DEFINITION } from '../tools/advanced-caching/predictive-cache.js';
-import { getCacheWarmupTool, CACHE_WARMUP_TOOL_DEFINITION } from '../tools/advanced-caching/cache-warmup.js';
+import {
+  getPredictiveCacheTool,
+  PREDICTIVE_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/predictive-cache.js';
+import {
+  getCacheWarmupTool,
+  CACHE_WARMUP_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-warmup.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -182,7 +188,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to query. If not provided, uses current session.',
+              description:
+                'Optional session ID to query. If not provided, uses current session.',
             },
           },
         },
@@ -196,11 +203,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to optimize. If not provided, uses the current active session.',
+              description:
+                'Optional session ID to optimize. If not provided, uses the current active session.',
             },
             min_token_threshold: {
               type: 'number',
-              description: 'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+              description:
+                'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
             },
           },
         },
@@ -216,7 +225,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             projectPath: {
               type: 'string',
-              description: 'Path to the project directory. If not provided, uses the hooks data directory.',
+              description:
+                'Path to the project directory. If not provided, uses the hooks data directory.',
             },
             startDate: {
               type: 'string',
@@ -232,7 +242,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             costPerMillionTokens: {
               type: 'number',
-              description: 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
+              description:
+                'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
               minimum: 0,
               default: 30,
@@ -264,7 +275,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const originalCount = tokenCounter.count(text);
 
         // Compress text
-        const compressionResult = compression.compressToBase64(text, { quality });
+        const compressionResult = compression.compressToBase64(text, {
+          quality,
+        });
 
         // Cache the compressed text
         cache.set(
@@ -275,7 +288,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
 
         // Count compressed tokens
-        const compressedCount = tokenCounter.count(compressionResult.compressed);
+        const compressedCount = tokenCounter.count(
+          compressionResult.compressed
+        );
 
         return {
           content: [
@@ -450,7 +465,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     afterCompression: compressedTokens.tokens,
                     saved: tokenResult.tokens - compressedTokens.tokens,
                     percentSaved:
-                      ((tokenResult.tokens - compressedTokens.tokens) / tokenResult.tokens) *
+                      ((tokenResult.tokens - compressedTokens.tokens) /
+                        tokenResult.tokens) *
                       100,
                   },
                   size: {
@@ -487,7 +503,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           );
 
           // Read current session file
-          const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+          const sessionFilePath = path.join(
+            hooksDataPath,
+            'current-session.txt'
+          );
 
           if (!fs.existsSync(sessionFilePath)) {
             return {
@@ -505,7 +524,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Strip BOM and parse JSON
-          const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+          const sessionContent = fs
+            .readFileSync(sessionFilePath, 'utf-8')
+            .replace(/^\uFEFF/, '');
           const sessionData = JSON.parse(sessionContent);
 
           const targetSessionId = sessionId || sessionData.sessionId;
@@ -573,15 +594,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
-          const systemReminderPercent = totalTokens > 0
-            ? (systemReminderTokens / totalTokens) * 100
-            : 0;
-          const toolPercent = totalTokens > 0
-            ? (toolTokens / totalTokens) * 100
-            : 0;
+          const systemReminderPercent =
+            totalTokens > 0 ? (systemReminderTokens / totalTokens) * 100 : 0;
+          const toolPercent =
+            totalTokens > 0 ? (toolTokens / totalTokens) * 100 : 0;
 
           // Group operations by tool
-          const toolBreakdown: Record<string, { count: number; tokens: number }> = {};
+          const toolBreakdown: Record<
+            string,
+            { count: number; tokens: number }
+          > = {};
           for (const op of operations) {
             if (op.toolName === 'SYSTEM_REMINDERS') continue;
 
@@ -659,24 +681,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // --- 1. Identify Target Session ---
-          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
           let targetSessionId = sessionId;
 
           if (!targetSessionId) {
-            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            const sessionFilePath = path.join(
+              hooksDataPath,
+              'current-session.txt'
+            );
             if (!fs.existsSync(sessionFilePath)) {
               throw new Error('No active session found to optimize.');
             }
             // Strip BOM and parse JSON
-            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
           }
 
           // --- 2. Read Operations CSV ---
-          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
+          const csvFilePath = path.join(
+            hooksDataPath,
+            `operations-${targetSessionId}.csv`
+          );
           if (!fs.existsSync(csvFilePath)) {
-            throw new Error(`Operations file not found for session ${targetSessionId}`);
+            throw new Error(
+              `Operations file not found for session ${targetSessionId}`
+            );
           }
 
           const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
@@ -712,7 +749,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             // Strip surrounding quotes from file path
             metadata = metadata.trim().replace(/^"(.*)"$/, '$1');
 
-            if (fileToolNames.includes(toolName) && tokens > min_token_threshold && metadata) {
+            if (
+              fileToolNames.includes(toolName) &&
+              tokens > min_token_threshold &&
+              metadata
+            ) {
               // SECURITY FIX: Validate file path to prevent path traversal
               // Resolve the file path to absolute path
               const resolvedFilePath = path.resolve(metadata);
@@ -720,9 +761,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               // Check if the resolved path is within the secure base directory
               if (!resolvedFilePath.startsWith(secureBaseDir)) {
                 // Log security event for rejected access attempt
-                console.error(`[SECURITY] Path traversal attempt detected and blocked: ${metadata}`);
+                console.error(
+                  `[SECURITY] Path traversal attempt detected and blocked: ${metadata}`
+                );
                 console.error(`[SECURITY] Resolved path: ${resolvedFilePath}`);
-                console.error(`[SECURITY] Secure base directory: ${secureBaseDir}`);
+                console.error(
+                  `[SECURITY] Secure base directory: ${secureBaseDir}`
+                );
                 debugInfo.securityRejected++;
                 continue;
               }
@@ -736,7 +781,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             // Additional security check before file access
             const resolvedPath = path.resolve(filePath);
             if (!resolvedPath.startsWith(secureBaseDir)) {
-              console.error(`[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`);
+              console.error(
+                `[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`
+              );
               debugInfo.securityRejected++;
               continue;
             }
@@ -757,14 +804,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               compressionResult.originalSize
             );
 
-            const compressedCount = tokenCounter.count(compressionResult.compressed);
+            const compressedCount = tokenCounter.count(
+              compressionResult.compressed
+            );
             compressedTokens += compressedCount.tokens;
             operationsCompressed++;
           }
 
           // --- 5. Return Summary with Debug Info ---
           const tokensSaved = originalTokens - compressedTokens;
-          const percentSaved = originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
+          const percentSaved =
+            originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
 
           return {
             content: [
@@ -810,12 +860,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'analyze_project_tokens': {
-        const { projectPath, startDate, endDate, costPerMillionTokens } = args as {
-          projectPath?: string;
-          startDate?: string;
-          endDate?: string;
-          costPerMillionTokens?: number;
-        };
+        const { projectPath, startDate, endDate, costPerMillionTokens } =
+          args as {
+            projectPath?: string;
+            startDate?: string;
+            endDate?: string;
+            costPerMillionTokens?: number;
+          };
 
         try {
           // Validate costPerMillionTokens input
@@ -843,12 +894,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             analysisTimestamp: result.analysisTimestamp,
             dateRange: result.dateRange,
             summary: result.summary,
-            topContributingSessions: result.topContributingSessions.slice(0, 5).map((s) => ({
-              sessionId: s.sessionId,
-              totalTokens: s.totalTokens,
-              duration: s.duration,
-              topTool: s.topTools[0]?.toolName || 'N/A',
-            })),
+            topContributingSessions: result.topContributingSessions
+              .slice(0, 5)
+              .map((s) => ({
+                sessionId: s.sessionId,
+                totalTokens: s.totalTokens,
+                duration: s.duration,
+                topTool: s.topTools[0]?.toolName || 'N/A',
+              })),
             topTools: result.topTools.slice(0, 10).map((t) => ({
               toolName: t.toolName,
               totalTokens: t.totalTokens,

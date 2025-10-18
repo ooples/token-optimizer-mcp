@@ -32,10 +32,7 @@ export class CacheEngine {
     misses: 0,
   };
 
-  constructor(
-    dbPath?: string,
-    maxMemoryItems: number = 1000
-  ) {
+  constructor(dbPath?: string, maxMemoryItems: number = 1000) {
     // Use user-provided path or default to ~/.token-optimizer-cache
     const cacheDir = dbPath
       ? path.dirname(dbPath)
@@ -91,7 +88,9 @@ export class CacheEngine {
     const stmt = this.db.prepare(`
       SELECT value, hit_count FROM cache WHERE key = ?
     `);
-    const row = stmt.get(key) as { value: string; hit_count: number } | undefined;
+    const row = stmt.get(key) as
+      | { value: string; hit_count: number }
+      | undefined;
 
     if (row) {
       this.stats.hits++;
@@ -109,7 +108,12 @@ export class CacheEngine {
   /**
    * Set a value in cache
    */
-  set(key: string, value: string, originalSize: number, compressedSize: number): void {
+  set(
+    key: string,
+    value: string,
+    originalSize: number,
+    compressedSize: number
+  ): void {
     const now = Date.now();
 
     const stmt = this.db.prepare(`

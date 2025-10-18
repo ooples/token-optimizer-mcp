@@ -12,20 +12,26 @@
  * Target: 1,550 lines, 91% token reduction
  */
 
-import { CacheEngine } from "../../core/cache-engine.js";
-import { TokenCounter } from "../../core/token-counter.js";
-import { MetricsCollector } from "../../core/metrics.js";
-import { generateCacheKey } from "../shared/hash-utils.js";
-import { mean, stdev, percentile } from "stats-lite";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
+import { mean, stdev, percentile } from 'stats-lite';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 export interface AnomalyExplainerOptions {
-  operation: 'explain' | 'analyze-root-cause' | 'generate-hypotheses' |
-             'test-hypothesis' | 'get-baseline' | 'correlate-events' |
-             'impact-assessment' | 'suggest-remediation';
+  operation:
+    | 'explain'
+    | 'analyze-root-cause'
+    | 'generate-hypotheses'
+    | 'test-hypothesis'
+    | 'get-baseline'
+    | 'correlate-events'
+    | 'impact-assessment'
+    | 'suggest-remediation';
 
   // Anomaly data
   anomaly?: {
@@ -140,7 +146,13 @@ export interface Baseline {
   normalRange: { min: number; max: number };
   mean: number;
   stdDev: number;
-  percentiles: { p25: number; p50: number; p75: number; p95: number; p99: number };
+  percentiles: {
+    p25: number;
+    p50: number;
+    p75: number;
+    p95: number;
+    p99: number;
+  };
   seasonality?: {
     detected: boolean;
     period?: number;
@@ -157,7 +169,11 @@ export interface Correlation {
   event2: string;
   correlation: number;
   lag: number;
-  causalDirection?: 'event1->event2' | 'event2->event1' | 'bidirectional' | 'none';
+  causalDirection?:
+    | 'event1->event2'
+    | 'event2->event1'
+    | 'bidirectional'
+    | 'none';
   confidence: number;
 }
 
@@ -218,7 +234,7 @@ export class AnomalyExplainer {
       op: options.operation,
       metric: options.anomaly?.metric,
       timestamp: options.anomaly?.timestamp,
-      hypothesis: options.hypothesis
+      hypothesis: options.hypothesis,
     });
 
     // Check cache if enabled
@@ -227,7 +243,9 @@ export class AnomalyExplainer {
       if (cached) {
         try {
           const data = JSON.parse(cached.toString());
-          const tokensSaved = this.tokenCounter.count(JSON.stringify(data)).tokens;
+          const tokensSaved = this.tokenCounter.count(
+            JSON.stringify(data)
+          ).tokens;
 
           return {
             success: true,
@@ -238,8 +256,11 @@ export class AnomalyExplainer {
               tokensSaved,
               cacheHit: true,
               processingTime: Date.now() - startTime,
-              confidence: data.explanation?.confidence || data.testResults?.confidence || 0.8
-            }
+              confidence:
+                data.explanation?.confidence ||
+                data.testResults?.confidence ||
+                0.8,
+            },
           };
         } catch (error) {
           // Cache parse error, continue with fresh execution
@@ -306,14 +327,15 @@ export class AnomalyExplainer {
           tokensSaved: 0,
           cacheHit: false,
           processingTime: Date.now() - startTime,
-          confidence: 0
-        }
+          confidence: 0,
+        },
       };
     }
 
     // Calculate tokens and cache result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
-    const cacheTTL = options.cacheTTL || this.getCacheTTLForOperation(options.operation);
+    const cacheTTL =
+      options.cacheTTL || this.getCacheTTLForOperation(options.operation);
     const dataStr = JSON.stringify(data);
     this.cache.set(cacheKey, dataStr, dataStr.length, cacheTTL);
 
@@ -322,7 +344,7 @@ export class AnomalyExplainer {
       operation: `anomaly-explainer:${options.operation}`,
       duration: Date.now() - startTime,
       success: true,
-      cacheHit: false
+      cacheHit: false,
     });
 
     return {
@@ -334,8 +356,8 @@ export class AnomalyExplainer {
         tokensSaved: 0,
         cacheHit: false,
         processingTime: Date.now() - startTime,
-        confidence
-      }
+        confidence,
+      },
     };
   }
 
@@ -343,7 +365,9 @@ export class AnomalyExplainer {
   // Operation: Explain Anomaly
   // ============================================================================
 
-  private async explainAnomaly(options: AnomalyExplainerOptions): Promise<AnomalyExplainerResult['data']['explanation']> {
+  private async explainAnomaly(
+    options: AnomalyExplainerOptions
+  ): Promise<AnomalyExplainerResult['data']['explanation']> {
     if (!options.anomaly) {
       throw new Error('Anomaly data required for explanation');
     }
@@ -354,23 +378,37 @@ export class AnomalyExplainer {
     // Calculate anomaly score
 
     // Identify root causes
-    const rootCauses = await this.identifyRootCauses(anomaly, historicalData, options.events);
+    const rootCauses = await this.identifyRootCauses(
+      anomaly,
+      historicalData,
+      options.events
+    );
 
     // Identify contributing factors
-    const contributingFactors = this.identifyContributingFactors(anomaly, historicalData);
+    const contributingFactors = this.identifyContributingFactors(
+      anomaly,
+      historicalData
+    );
 
     // Calculate overall confidence
-    const confidence = this.calculateExplanationConfidence(rootCauses, contributingFactors);
+    const confidence = this.calculateExplanationConfidence(
+      rootCauses,
+      contributingFactors
+    );
 
     // Generate summary
-    const summary = this.generateExplanationSummary(anomaly, rootCauses, anomalyScore);
+    const summary = this.generateExplanationSummary(
+      anomaly,
+      rootCauses,
+      anomalyScore
+    );
 
     return {
       summary,
       rootCauses,
       contributingFactors,
       confidence,
-      anomalyScore
+      anomalyScore,
     };
   }
 
@@ -378,7 +416,9 @@ export class AnomalyExplainer {
   // Operation: Analyze Root Cause
   // ============================================================================
 
-  private async analyzeRootCause(options: AnomalyExplainerOptions): Promise<AnomalyExplainerResult['data']['explanation']> {
+  private async analyzeRootCause(
+    options: AnomalyExplainerOptions
+  ): Promise<AnomalyExplainerResult['data']['explanation']> {
     if (!options.anomaly) {
       throw new Error('Anomaly data required for root cause analysis');
     }
@@ -387,7 +427,10 @@ export class AnomalyExplainer {
     const historicalData = options.historicalData || [];
 
     // Deep root cause analysis using multiple techniques
-    const statisticalCauses = this.findStatisticalCauses(anomaly, historicalData);
+    const statisticalCauses = this.findStatisticalCauses(
+      anomaly,
+      historicalData
+    );
     const temporalCauses = this.findTemporalCauses(anomaly, historicalData);
     const contextualCauses = this.findContextualCauses(anomaly, options.events);
 
@@ -395,23 +438,29 @@ export class AnomalyExplainer {
     const rootCauses = this.mergeAndRankRootCauses([
       ...statisticalCauses,
       ...temporalCauses,
-      ...contextualCauses
+      ...contextualCauses,
     ]);
 
     // Build evidence for top causes
-    const enrichedCauses = rootCauses.map(cause =>
+    const enrichedCauses = rootCauses.map((cause) =>
       this.enrichRootCauseWithEvidence(cause, anomaly, historicalData)
     );
 
-    const contributingFactors = this.identifyContributingFactors(anomaly, historicalData);
-    const confidence = this.calculateExplanationConfidence(enrichedCauses, contributingFactors);
+    const contributingFactors = this.identifyContributingFactors(
+      anomaly,
+      historicalData
+    );
+    const confidence = this.calculateExplanationConfidence(
+      enrichedCauses,
+      contributingFactors
+    );
 
     return {
       summary: this.generateRootCauseSummary(enrichedCauses),
       rootCauses: enrichedCauses,
       contributingFactors,
       confidence,
-      anomalyScore
+      anomalyScore,
     };
   }
 
@@ -419,7 +468,9 @@ export class AnomalyExplainer {
   // Operation: Generate Hypotheses
   // ============================================================================
 
-  private async generateHypotheses(options: AnomalyExplainerOptions): Promise<Hypothesis[]> {
+  private async generateHypotheses(
+    options: AnomalyExplainerOptions
+  ): Promise<Hypothesis[]> {
     if (!options.anomaly) {
       throw new Error('Anomaly data required for hypothesis generation');
     }
@@ -438,7 +489,7 @@ export class AnomalyExplainer {
         probability: Math.min(0.9, anomaly.deviation / 5),
         testable: true,
         requiredData: ['load_metrics', 'request_rate'],
-        expectedOutcome: 'Correlation between load increase and metric spike'
+        expectedOutcome: 'Correlation between load increase and metric spike',
       });
     }
 
@@ -451,7 +502,7 @@ export class AnomalyExplainer {
         probability: 0.7,
         testable: true,
         requiredData: ['scheduled_jobs', 'cron_logs'],
-        expectedOutcome: 'Scheduled job execution coincides with anomaly'
+        expectedOutcome: 'Scheduled job execution coincides with anomaly',
       });
     }
 
@@ -463,7 +514,7 @@ export class AnomalyExplainer {
         probability: 0.75,
         testable: true,
         requiredData: ['capacity_metrics', 'utilization_data'],
-        expectedOutcome: 'Capacity utilization > 80% at time of anomaly'
+        expectedOutcome: 'Capacity utilization > 80% at time of anomaly',
       });
     }
 
@@ -475,7 +526,7 @@ export class AnomalyExplainer {
         probability: 0.65,
         testable: true,
         requiredData: ['event_logs', 'dependency_graph'],
-        expectedOutcome: 'Time correlation between external event and anomaly'
+        expectedOutcome: 'Time correlation between external event and anomaly',
       });
     }
 
@@ -486,7 +537,7 @@ export class AnomalyExplainer {
       probability: 0.6,
       testable: true,
       requiredData: ['deployment_history', 'code_changes'],
-      expectedOutcome: 'Deployment timestamp precedes anomaly by < 1 hour'
+      expectedOutcome: 'Deployment timestamp precedes anomaly by < 1 hour',
     });
 
     // 6. Data quality hypotheses
@@ -497,7 +548,7 @@ export class AnomalyExplainer {
         probability: 0.4,
         testable: true,
         requiredData: ['data_pipeline_logs', 'validation_results'],
-        expectedOutcome: 'Gaps or errors in data collection at anomaly time'
+        expectedOutcome: 'Gaps or errors in data collection at anomaly time',
       });
     }
 
@@ -510,7 +561,9 @@ export class AnomalyExplainer {
   // Operation: Test Hypothesis
   // ============================================================================
 
-  private async testHypothesis(options: AnomalyExplainerOptions): Promise<HypothesisTestResult> {
+  private async testHypothesis(
+    options: AnomalyExplainerOptions
+  ): Promise<HypothesisTestResult> {
     if (!options.hypothesis) {
       throw new Error('Hypothesis required for testing');
     }
@@ -527,7 +580,7 @@ export class AnomalyExplainer {
           type: 'statistical',
           description: `Significant correlation found (r=${correlationTest.coefficient.toFixed(2)})`,
           strength: Math.abs(correlationTest.coefficient),
-          data: correlationTest
+          data: correlationTest,
         });
       }
 
@@ -537,19 +590,23 @@ export class AnomalyExplainer {
           type: 'temporal',
           description: `Temporal pattern matches hypothesis`,
           strength: temporalTest.confidence,
-          data: temporalTest
+          data: temporalTest,
         });
       }
     }
 
     // Analyze hypothesis keywords for contextual evidence
-    const contextualEvidence = this.analyzeHypothesisContext(hypothesis, options);
+    const contextualEvidence = this.analyzeHypothesisContext(
+      hypothesis,
+      options
+    );
     evidence.push(...contextualEvidence);
 
     // Determine result
-    const avgStrength = evidence.length > 0
-      ? evidence.reduce((sum, e) => sum + e.strength, 0) / evidence.length
-      : 0;
+    const avgStrength =
+      evidence.length > 0
+        ? evidence.reduce((sum, e) => sum + e.strength, 0) / evidence.length
+        : 0;
 
     let result: 'confirmed' | 'rejected' | 'inconclusive';
     if (avgStrength >= 0.7) result = 'confirmed';
@@ -557,16 +614,17 @@ export class AnomalyExplainer {
     else result = 'inconclusive';
 
     // Generate alternative explanations if hypothesis rejected
-    const alternativeExplanations = result === 'rejected'
-      ? await this.generateAlternativeExplanations(options)
-      : undefined;
+    const alternativeExplanations =
+      result === 'rejected'
+        ? await this.generateAlternativeExplanations(options)
+        : undefined;
 
     return {
       hypothesis,
       result,
       confidence: avgStrength,
       evidence,
-      alternativeExplanations
+      alternativeExplanations,
     };
   }
 
@@ -574,7 +632,9 @@ export class AnomalyExplainer {
   // Operation: Get Baseline
   // ============================================================================
 
-  private async getBaseline(options: AnomalyExplainerOptions): Promise<Baseline> {
+  private async getBaseline(
+    options: AnomalyExplainerOptions
+  ): Promise<Baseline> {
     if (!options.anomaly) {
       throw new Error('Anomaly data required to determine metric baseline');
     }
@@ -584,12 +644,16 @@ export class AnomalyExplainer {
 
     // Check if baseline exists in cache
     const cachedBaseline = this.baselines.get(metric);
-    if (cachedBaseline && Date.now() - cachedBaseline.percentiles.p50 < 21600000) { // 6 hours
+    if (
+      cachedBaseline &&
+      Date.now() - cachedBaseline.percentiles.p50 < 21600000
+    ) {
+      // 6 hours
       return cachedBaseline;
     }
 
     // Calculate baseline statistics
-    const values = historicalData.map(d => d.value);
+    const values = historicalData.map((d) => d.value);
 
     if (values.length === 0) {
       throw new Error('Historical data required to calculate baseline');
@@ -602,19 +666,19 @@ export class AnomalyExplainer {
       metric,
       normalRange: {
         min: baselineMean - 2 * baselineStdDev,
-        max: baselineMean + 2 * baselineStdDev
+        max: baselineMean + 2 * baselineStdDev,
       },
       mean: baselineMean,
       stdDev: baselineStdDev,
       percentiles: {
         p25: percentile(values, 0.25),
-        p50: percentile(values, 0.50),
+        p50: percentile(values, 0.5),
         p75: percentile(values, 0.75),
         p95: percentile(values, 0.95),
-        p99: percentile(values, 0.99)
+        p99: percentile(values, 0.99),
       },
       seasonality: this.detectSeasonality(historicalData),
-      trend: this.detectTrend(historicalData)
+      trend: this.detectTrend(historicalData),
     };
 
     // Cache baseline
@@ -627,9 +691,10 @@ export class AnomalyExplainer {
   // Operation: Correlate Events
   // ============================================================================
 
-  private async correlateEvents(options: AnomalyExplainerOptions): Promise<Correlation[]> {
+  private async correlateEvents(
+    options: AnomalyExplainerOptions
+  ): Promise<Correlation[]> {
     const events = options.events || [];
-    
 
     if (events.length === 0) {
       return [];
@@ -641,7 +706,7 @@ export class AnomalyExplainer {
     const eventTimeSeries = this.createEventTimeSeries(events);
 
     // Calculate pairwise correlations
-    const eventTypes = Array.from(new Set(events.map(e => e.type)));
+    const eventTypes = Array.from(new Set(events.map((e) => e.type)));
 
     for (let i = 0; i < eventTypes.length; i++) {
       for (let j = i + 1; j < eventTypes.length; j++) {
@@ -661,14 +726,16 @@ export class AnomalyExplainer {
             correlation: crossCorr.correlation,
             lag: crossCorr.lag,
             causalDirection: this.determineCausalDirection(crossCorr),
-            confidence: Math.abs(crossCorr.correlation)
+            confidence: Math.abs(crossCorr.correlation),
           });
         }
       }
     }
 
     // Sort by correlation strength
-    correlations.sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
+    correlations.sort(
+      (a, b) => Math.abs(b.correlation) - Math.abs(a.correlation)
+    );
 
     return correlations;
   }
@@ -677,7 +744,9 @@ export class AnomalyExplainer {
   // Operation: Impact Assessment
   // ============================================================================
 
-  private async assessImpact(options: AnomalyExplainerOptions): Promise<ImpactAssessment> {
+  private async assessImpact(
+    options: AnomalyExplainerOptions
+  ): Promise<ImpactAssessment> {
     if (!options.anomaly) {
       throw new Error('Anomaly data required for impact assessment');
     }
@@ -689,21 +758,32 @@ export class AnomalyExplainer {
     let severity: ImpactAssessment['severity'];
     if (anomaly.severity === 'critical' || deviation > 5) severity = 'critical';
     else if (anomaly.severity === 'high' || deviation > 3) severity = 'high';
-    else if (anomaly.severity === 'medium' || deviation > 2) severity = 'medium';
+    else if (anomaly.severity === 'medium' || deviation > 2)
+      severity = 'medium';
     else severity = 'low';
 
     // Identify affected systems based on metric
     const affectedSystems = this.identifyAffectedSystems(anomaly.metric);
 
     // Estimate affected users (simplified)
-    const affectedUsers = severity === 'critical' ? 10000 :
-                         severity === 'high' ? 1000 :
-                         severity === 'medium' ? 100 : 10;
+    const affectedUsers =
+      severity === 'critical'
+        ? 10000
+        : severity === 'high'
+          ? 1000
+          : severity === 'medium'
+            ? 100
+            : 10;
 
     // Estimate downtime
-    const estimatedDowntime = severity === 'critical' ? 60 :
-                             severity === 'high' ? 30 :
-                             severity === 'medium' ? 15 : 5;
+    const estimatedDowntime =
+      severity === 'critical'
+        ? 60
+        : severity === 'high'
+          ? 30
+          : severity === 'medium'
+            ? 15
+            : 5;
 
     return {
       severity,
@@ -711,7 +791,7 @@ export class AnomalyExplainer {
       affectedUsers,
       estimatedDowntime,
       businessImpact: this.generateBusinessImpact(severity, anomaly),
-      technicalImpact: this.generateTechnicalImpact(severity, anomaly)
+      technicalImpact: this.generateTechnicalImpact(severity, anomaly),
     };
   }
 
@@ -719,7 +799,9 @@ export class AnomalyExplainer {
   // Operation: Suggest Remediation
   // ============================================================================
 
-  private async suggestRemediation(options: AnomalyExplainerOptions): Promise<RemediationSuggestion[]> {
+  private async suggestRemediation(
+    options: AnomalyExplainerOptions
+  ): Promise<RemediationSuggestion[]> {
     if (!options.anomaly) {
       throw new Error('Anomaly data required for remediation suggestions');
     }
@@ -741,12 +823,15 @@ export class AnomalyExplainer {
           'Review current resource utilization',
           'Increase instance count or size',
           'Monitor performance metrics',
-          'Verify anomaly resolution'
-        ]
+          'Verify anomaly resolution',
+        ],
       });
     }
 
-    if (anomaly.metric.includes('error') || anomaly.metric.includes('failure')) {
+    if (
+      anomaly.metric.includes('error') ||
+      anomaly.metric.includes('failure')
+    ) {
       suggestions.push({
         id: 'rem-2',
         action: 'Investigate and fix underlying error condition',
@@ -760,8 +845,8 @@ export class AnomalyExplainer {
           'Identify error pattern and root cause',
           'Develop and test fix',
           'Deploy fix to production',
-          'Monitor error rate'
-        ]
+          'Monitor error rate',
+        ],
       });
     }
 
@@ -777,8 +862,8 @@ export class AnomalyExplainer {
         'Identify affected service instances',
         'Initiate rolling restart',
         'Verify service health',
-        'Monitor metrics for resolution'
-      ]
+        'Monitor metrics for resolution',
+      ],
     });
 
     return suggestions.sort((a, b) => b.estimatedImpact - a.estimatedImpact);
@@ -796,11 +881,12 @@ export class AnomalyExplainer {
       return Math.abs(anomaly.deviation);
     }
 
-    const values = historicalData.map(d => d.value);
+    const values = historicalData.map((d) => d.value);
     const stdDevVal = stdev(values);
 
     // Z-score
-    const zScore = stdDevVal > 0 ? Math.abs(anomaly.value - meanVal) / stdDevVal : 0;
+    const zScore =
+      stdDevVal > 0 ? Math.abs(anomaly.value - meanVal) / stdDevVal : 0;
 
     // IQR method
     const q1 = percentile(values, 0.25);
@@ -808,8 +894,10 @@ export class AnomalyExplainer {
     const iqr = q3 - q1;
     const lowerBound = q1 - 1.5 * iqr;
     const upperBound = q3 + 1.5 * iqr;
-    const iqrScore = anomaly.value < lowerBound || anomaly.value > upperBound ?
-                     Math.abs(anomaly.value - meanVal) / iqr : 0;
+    const iqrScore =
+      anomaly.value < lowerBound || anomaly.value > upperBound
+        ? Math.abs(anomaly.value - meanVal) / iqr
+        : 0;
 
     // Combined score
     return Math.max(zScore, iqrScore);
@@ -826,15 +914,21 @@ export class AnomalyExplainer {
     if (Math.abs(anomaly.deviation) > 3) {
       causes.push({
         id: 'rc-stat-1',
-        description: 'Sudden spike in metric value exceeding 3 standard deviations',
+        description:
+          'Sudden spike in metric value exceeding 3 standard deviations',
         probability: 0.85,
-        evidence: [{
-          type: 'statistical',
-          description: `Deviation: ${anomaly.deviation.toFixed(2)}σ from mean`,
-          strength: 0.9
-        }],
+        evidence: [
+          {
+            type: 'statistical',
+            description: `Deviation: ${anomaly.deviation.toFixed(2)}σ from mean`,
+            strength: 0.9,
+          },
+        ],
         relatedMetrics: [anomaly.metric],
-        timeRange: { start: anomaly.timestamp - 3600000, end: anomaly.timestamp }
+        timeRange: {
+          start: anomaly.timestamp - 3600000,
+          end: anomaly.timestamp,
+        },
       });
     }
 
@@ -845,20 +939,25 @@ export class AnomalyExplainer {
         id: 'rc-temp-1',
         description: 'Anomaly during off-peak hours suggests automated process',
         probability: 0.65,
-        evidence: [{
-          type: 'temporal',
-          description: `Occurred at ${hour}:00, typical maintenance window`,
-          strength: 0.7
-        }],
+        evidence: [
+          {
+            type: 'temporal',
+            description: `Occurred at ${hour}:00, typical maintenance window`,
+            strength: 0.7,
+          },
+        ],
         relatedMetrics: [anomaly.metric],
-        timeRange: { start: anomaly.timestamp - 1800000, end: anomaly.timestamp }
+        timeRange: {
+          start: anomaly.timestamp - 1800000,
+          end: anomaly.timestamp,
+        },
       });
     }
 
     // Event correlation
     if (events && events.length > 0) {
-      const nearbyEvents = events.filter(e =>
-        Math.abs(e.timestamp - anomaly.timestamp) < 600000 // Within 10 minutes
+      const nearbyEvents = events.filter(
+        (e) => Math.abs(e.timestamp - anomaly.timestamp) < 600000 // Within 10 minutes
       );
 
       if (nearbyEvents.length > 0) {
@@ -866,13 +965,16 @@ export class AnomalyExplainer {
           id: 'rc-event-1',
           description: `Correlated with ${nearbyEvents.length} system event(s)`,
           probability: 0.75,
-          evidence: nearbyEvents.map(e => ({
+          evidence: nearbyEvents.map((e) => ({
             type: 'causal' as const,
             description: `${e.type}: ${e.description}`,
-            strength: 0.8
+            strength: 0.8,
           })),
           relatedMetrics: [anomaly.metric],
-          timeRange: { start: anomaly.timestamp - 600000, end: anomaly.timestamp }
+          timeRange: {
+            start: anomaly.timestamp - 600000,
+            end: anomaly.timestamp,
+          },
         });
       }
     }
@@ -882,7 +984,11 @@ export class AnomalyExplainer {
 
   private identifyContributingFactors(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
-    historicalData: Array<{ timestamp: number; value: number; metadata?: Record<string, any> }>
+    historicalData: Array<{
+      timestamp: number;
+      value: number;
+      metadata?: Record<string, any>;
+    }>
   ): Factor[] {
     const factors: Factor[] = [];
 
@@ -893,7 +999,7 @@ export class AnomalyExplainer {
         name: 'Peak business hours',
         contribution: 0.3,
         direction: 'increase',
-        confidence: 0.8
+        confidence: 0.8,
       });
     }
 
@@ -907,7 +1013,7 @@ export class AnomalyExplainer {
           name: 'Recent trend acceleration',
           contribution: Math.min(0.5, Math.abs(trend)),
           direction: trend > 0 ? 'increase' : 'decrease',
-          confidence: 0.75
+          confidence: 0.75,
         });
       }
     }
@@ -916,14 +1022,18 @@ export class AnomalyExplainer {
     factors.push({
       name: 'Anomaly severity',
       contribution: Math.min(1.0, Math.abs(anomaly.deviation) / 5),
-      direction: anomaly.value > anomaly.expectedValue ? 'increase' : 'decrease',
-      confidence: 0.9
+      direction:
+        anomaly.value > anomaly.expectedValue ? 'increase' : 'decrease',
+      confidence: 0.9,
     });
 
     return factors.sort((a, b) => b.contribution - a.contribution);
   }
 
-  private calculateExplanationConfidence(rootCauses: RootCause[], _factors: Factor[]): number {
+  private calculateExplanationConfidence(
+    rootCauses: RootCause[],
+    _factors: Factor[]
+  ): number {
     if (rootCauses.length === 0) return 0.5;
 
     // Confidence based on top root cause probability and number of causes
@@ -938,7 +1048,8 @@ export class AnomalyExplainer {
     rootCauses: RootCause[],
     anomalyScore: number
   ): string {
-    const direction = anomaly.value > anomaly.expectedValue ? 'increase' : 'decrease';
+    const direction =
+      anomaly.value > anomaly.expectedValue ? 'increase' : 'decrease';
     const magnitude = Math.abs(anomaly.deviation).toFixed(1);
 
     if (rootCauses.length === 0) {
@@ -957,7 +1068,7 @@ export class AnomalyExplainer {
 
     if (historicalData.length < 10) return causes;
 
-    const values = historicalData.map(d => d.value);
+    const values = historicalData.map((d) => d.value);
     const recentValues = values.slice(-10);
 
     // Check for variance change
@@ -969,13 +1080,18 @@ export class AnomalyExplainer {
         id: 'rc-variance',
         description: 'Increased variance in metric indicating instability',
         probability: 0.7,
-        evidence: [{
-          type: 'statistical',
-          description: `Variance increased by ${((recentStdDev / overallStdDev - 1) * 100).toFixed(0)}%`,
-          strength: 0.75
-        }],
+        evidence: [
+          {
+            type: 'statistical',
+            description: `Variance increased by ${((recentStdDev / overallStdDev - 1) * 100).toFixed(0)}%`,
+            strength: 0.75,
+          },
+        ],
         relatedMetrics: [anomaly.metric],
-        timeRange: { start: historicalData[historicalData.length - 10].timestamp, end: anomaly.timestamp }
+        timeRange: {
+          start: historicalData[historicalData.length - 10].timestamp,
+          end: anomaly.timestamp,
+        },
       });
     }
 
@@ -996,13 +1112,20 @@ export class AnomalyExplainer {
         id: 'rc-seasonal',
         description: `Seasonality pattern detected with ${seasonality.period ?? 0}ms period`,
         probability: seasonality.strength ?? 0.5,
-        evidence: [{
-          type: 'temporal',
-          description: `Regular pattern repeats every ${seasonality.period ?? 0}ms`,
-          ...(seasonality.strength !== undefined ? { strength: seasonality.strength } : {})
-        }],
+        evidence: [
+          {
+            type: 'temporal',
+            description: `Regular pattern repeats every ${seasonality.period ?? 0}ms`,
+            ...(seasonality.strength !== undefined
+              ? { strength: seasonality.strength }
+              : {}),
+          },
+        ],
         relatedMetrics: [anomaly.metric],
-        timeRange: { start: anomaly.timestamp - (seasonality.period ?? 0), end: anomaly.timestamp }
+        timeRange: {
+          start: anomaly.timestamp - (seasonality.period ?? 0),
+          end: anomaly.timestamp,
+        },
       });
     }
 
@@ -1011,32 +1134,42 @@ export class AnomalyExplainer {
 
   private findContextualCauses(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
-    events?: Array<{ timestamp: number; type: string; description: string; severity?: string }>
+    events?: Array<{
+      timestamp: number;
+      type: string;
+      description: string;
+      severity?: string;
+    }>
   ): RootCause[] {
     const causes: RootCause[] = [];
 
     if (!events || events.length === 0) return causes;
 
     // Find events near anomaly time
-    const nearbyEvents = events.filter(e =>
-      Math.abs(e.timestamp - anomaly.timestamp) < 1800000 // Within 30 minutes
+    const nearbyEvents = events.filter(
+      (e) => Math.abs(e.timestamp - anomaly.timestamp) < 1800000 // Within 30 minutes
     );
 
     if (nearbyEvents.length > 0) {
-      const criticalEvents = nearbyEvents.filter(e => e.severity === 'critical' || e.severity === 'high');
+      const criticalEvents = nearbyEvents.filter(
+        (e) => e.severity === 'critical' || e.severity === 'high'
+      );
 
       if (criticalEvents.length > 0) {
         causes.push({
           id: 'rc-critical-event',
           description: `${criticalEvents.length} critical event(s) occurred near anomaly time`,
           probability: 0.85,
-          evidence: criticalEvents.map(e => ({
+          evidence: criticalEvents.map((e) => ({
             type: 'contextual' as const,
             description: `${e.type}: ${e.description}`,
-            strength: e.severity === 'critical' ? 0.9 : 0.75
+            strength: e.severity === 'critical' ? 0.9 : 0.75,
           })),
           relatedMetrics: [anomaly.metric],
-          timeRange: { start: anomaly.timestamp - 1800000, end: anomaly.timestamp }
+          timeRange: {
+            start: anomaly.timestamp - 1800000,
+            end: anomaly.timestamp,
+          },
         });
       }
     }
@@ -1071,7 +1204,7 @@ export class AnomalyExplainer {
       cause.evidence.push({
         type: 'statistical',
         description: `Anomaly magnitude: ${Math.abs(anomaly.deviation).toFixed(2)}σ`,
-        strength: Math.min(1.0, Math.abs(anomaly.deviation) / 5)
+        strength: Math.min(1.0, Math.abs(anomaly.deviation) / 5),
       });
     }
 
@@ -1095,13 +1228,15 @@ export class AnomalyExplainer {
     return summary;
   }
 
-  private detectSeasonality(data: Array<{ timestamp: number; value: number }>): Baseline['seasonality'] {
+  private detectSeasonality(
+    data: Array<{ timestamp: number; value: number }>
+  ): Baseline['seasonality'] {
     if (data.length < 20) {
       return { detected: false };
     }
 
     // Simple autocorrelation-based seasonality detection
-    const values = data.map(d => d.value);
+    const values = data.map((d) => d.value);
 
     // Check common periods: hourly, daily, weekly
     const periods = [3600000, 86400000, 604800000]; // 1h, 24h, 7d in ms
@@ -1119,7 +1254,7 @@ export class AnomalyExplainer {
     return {
       detected: Math.abs(maxCorrelation) > 0.5,
       period: detectedPeriod,
-      strength: Math.abs(maxCorrelation)
+      strength: Math.abs(maxCorrelation),
     };
   }
 
@@ -1131,7 +1266,9 @@ export class AnomalyExplainer {
     // Simplified autocorrelation
     if (data.length < 2) return 0;
 
-    const lagCount = Math.floor(lagPeriod / (data[1].timestamp - data[0].timestamp));
+    const lagCount = Math.floor(
+      lagPeriod / (data[1].timestamp - data[0].timestamp)
+    );
     if (lagCount >= values.length) return 0;
 
     let sum = 0;
@@ -1145,7 +1282,9 @@ export class AnomalyExplainer {
     return count > 0 ? sum / count : 0;
   }
 
-  private detectTrend(data: Array<{ timestamp: number; value: number }>): Baseline['trend'] {
+  private detectTrend(
+    data: Array<{ timestamp: number; value: number }>
+  ): Baseline['trend'] {
     if (data.length < 3) {
       return { direction: 'stable', slope: 0 };
     }
@@ -1160,13 +1299,15 @@ export class AnomalyExplainer {
     return { direction, slope };
   }
 
-  private calculateTrendSlope(data: Array<{ timestamp: number; value: number }>): number {
+  private calculateTrendSlope(
+    data: Array<{ timestamp: number; value: number }>
+  ): number {
     if (data.length < 2) return 0;
 
     // Linear regression
     const n = data.length;
     const x = data.map((_, i) => i);
-    const y = data.map(d => d.value);
+    const y = data.map((d) => d.value);
 
     const sumX = x.reduce((a, b) => a + b, 0);
     const sumY = y.reduce((a, b) => a + b, 0);
@@ -1177,7 +1318,9 @@ export class AnomalyExplainer {
     return slope;
   }
 
-  private createEventTimeSeries(events: Array<{ timestamp: number; type: string }>): Map<string, number[]> {
+  private createEventTimeSeries(
+    events: Array<{ timestamp: number; type: string }>
+  ): Map<string, number[]> {
     const timeSeries = new Map<string, number[]>();
 
     // Group events by type
@@ -1197,7 +1340,9 @@ export class AnomalyExplainer {
       const maxTime = Math.max(...timestamps);
 
       for (let t = minTime; t <= maxTime; t += bucketSize) {
-        const count = timestamps.filter(ts => ts >= t && ts < t + bucketSize).length;
+        const count = timestamps.filter(
+          (ts) => ts >= t && ts < t + bucketSize
+        ).length;
         series.push(count);
       }
 
@@ -1207,7 +1352,10 @@ export class AnomalyExplainer {
     return timeSeries;
   }
 
-  private calculateCrossCorrelation(series1: number[], series2: number[]): {
+  private calculateCrossCorrelation(
+    series1: number[],
+    series2: number[]
+  ): {
     correlation: number;
     lag: number;
   } {
@@ -1226,7 +1374,11 @@ export class AnomalyExplainer {
     return { correlation: maxCorr, lag: maxLag };
   }
 
-  private correlationAtLag(series1: number[], series2: number[], lag: number): number {
+  private correlationAtLag(
+    series1: number[],
+    series2: number[],
+    lag: number
+  ): number {
     const len = Math.min(series1.length, series2.length);
     if (len < 2) return 0;
 
@@ -1244,7 +1396,10 @@ export class AnomalyExplainer {
     return count > 0 ? sum / count : 0;
   }
 
-  private determineCausalDirection(crossCorr: { correlation: number; lag: number }): Correlation['causalDirection'] {
+  private determineCausalDirection(crossCorr: {
+    correlation: number;
+    lag: number;
+  }): Correlation['causalDirection'] {
     if (Math.abs(crossCorr.correlation) < 0.5) return 'none';
     if (crossCorr.lag > 0) return 'event1->event2';
     if (crossCorr.lag < 0) return 'event2->event1';
@@ -1254,16 +1409,22 @@ export class AnomalyExplainer {
   private identifyAffectedSystems(metric: string): string[] {
     const systems: string[] = [];
 
-    if (metric.includes('api') || metric.includes('http')) systems.push('API Gateway');
-    if (metric.includes('database') || metric.includes('db')) systems.push('Database');
+    if (metric.includes('api') || metric.includes('http'))
+      systems.push('API Gateway');
+    if (metric.includes('database') || metric.includes('db'))
+      systems.push('Database');
     if (metric.includes('cache')) systems.push('Cache Layer');
     if (metric.includes('queue')) systems.push('Message Queue');
-    if (metric.includes('cpu') || metric.includes('memory')) systems.push('Compute Resources');
+    if (metric.includes('cpu') || metric.includes('memory'))
+      systems.push('Compute Resources');
 
     return systems.length > 0 ? systems : ['Unknown System'];
   }
 
-  private generateBusinessImpact(severity: string, _anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>): string {
+  private generateBusinessImpact(
+    severity: string,
+    _anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>
+  ): string {
     switch (severity) {
       case 'critical':
         return 'Service outage affecting all users, potential revenue loss and SLA breach';
@@ -1276,7 +1437,10 @@ export class AnomalyExplainer {
     }
   }
 
-  private generateTechnicalImpact(severity: string, anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>): string {
+  private generateTechnicalImpact(
+    severity: string,
+    anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>
+  ): string {
     const metric = anomaly.metric;
 
     if (metric.includes('error')) {
@@ -1292,7 +1456,9 @@ export class AnomalyExplainer {
     return `${metric} anomaly detected with ${severity} severity`;
   }
 
-  private performCorrelationTest(testData: Array<{ timestamp: number; values: Record<string, number> }>): {
+  private performCorrelationTest(
+    testData: Array<{ timestamp: number; values: Record<string, number> }>
+  ): {
     significant: boolean;
     coefficient: number;
   } {
@@ -1306,8 +1472,8 @@ export class AnomalyExplainer {
       return { significant: false, coefficient: 0 };
     }
 
-    const x = testData.map(d => d.values[keys[0]]);
-    const y = testData.map(d => d.values[keys[1]]);
+    const x = testData.map((d) => d.values[keys[0]]);
+    const y = testData.map((d) => d.values[keys[1]]);
 
     const coefficient = this.pearsonCorrelation(x, y);
     const significant = Math.abs(coefficient) > 0.5;
@@ -1338,7 +1504,9 @@ export class AnomalyExplainer {
     return denominator > 0 ? numerator / denominator : 0;
   }
 
-  private performTemporalTest(testData: Array<{ timestamp: number; values: Record<string, number> }>): {
+  private performTemporalTest(
+    testData: Array<{ timestamp: number; values: Record<string, number> }>
+  ): {
     significant: boolean;
     confidence: number;
   } {
@@ -1348,7 +1516,7 @@ export class AnomalyExplainer {
     }
 
     // Check if values show temporal clustering
-    const timestamps = testData.map(d => d.timestamp);
+    const timestamps = testData.map((d) => d.timestamp);
     const gaps = [];
     for (let i = 1; i < timestamps.length; i++) {
       gaps.push(timestamps[i] - timestamps[i - 1]);
@@ -1365,30 +1533,42 @@ export class AnomalyExplainer {
     return { significant, confidence };
   }
 
-  private analyzeHypothesisContext(hypothesis: string, options: AnomalyExplainerOptions): Evidence[] {
+  private analyzeHypothesisContext(
+    hypothesis: string,
+    options: AnomalyExplainerOptions
+  ): Evidence[] {
     const evidence: Evidence[] = [];
 
     // Check for keyword matches
-    if (hypothesis.toLowerCase().includes('load') && options.anomaly?.metric.includes('cpu')) {
+    if (
+      hypothesis.toLowerCase().includes('load') &&
+      options.anomaly?.metric.includes('cpu')
+    ) {
       evidence.push({
         type: 'contextual',
         description: 'Hypothesis mentions load and CPU metric is affected',
-        strength: 0.7
+        strength: 0.7,
       });
     }
 
-    if (hypothesis.toLowerCase().includes('deployment') || hypothesis.toLowerCase().includes('code')) {
+    if (
+      hypothesis.toLowerCase().includes('deployment') ||
+      hypothesis.toLowerCase().includes('code')
+    ) {
       evidence.push({
         type: 'contextual',
-        description: 'Deployment-related hypothesis is plausible for sudden changes',
-        strength: 0.6
+        description:
+          'Deployment-related hypothesis is plausible for sudden changes',
+        strength: 0.6,
       });
     }
 
     return evidence;
   }
 
-  private async generateAlternativeExplanations(options: AnomalyExplainerOptions): Promise<string[]> {
+  private async generateAlternativeExplanations(
+    options: AnomalyExplainerOptions
+  ): Promise<string[]> {
     const alternatives: string[] = [];
 
     if (options.anomaly) {
@@ -1406,14 +1586,14 @@ export class AnomalyExplainer {
 
   private getCacheTTLForOperation(operation: string): number {
     const ttls: Record<string, number> = {
-      'explain': 1800,              // 30 minutes
-      'analyze-root-cause': 3600,   // 1 hour
+      explain: 1800, // 30 minutes
+      'analyze-root-cause': 3600, // 1 hour
       'generate-hypotheses': 86400, // 24 hours
-      'test-hypothesis': 1800,      // 30 minutes
-      'get-baseline': 21600,        // 6 hours
-      'correlate-events': 3600,     // 1 hour
-      'impact-assessment': 1800,    // 30 minutes
-      'suggest-remediation': 3600   // 1 hour
+      'test-hypothesis': 1800, // 30 minutes
+      'get-baseline': 21600, // 6 hours
+      'correlate-events': 3600, // 1 hour
+      'impact-assessment': 1800, // 30 minutes
+      'suggest-remediation': 3600, // 1 hour
     };
     return ttls[operation] || 1800;
   }
@@ -1425,7 +1605,8 @@ export class AnomalyExplainer {
 
 export const ANOMALYEXPLAINERTOOL = {
   name: 'anomalyexplainer',
-  description: 'Explain anomalies with root cause analysis, hypothesis generation, and remediation suggestions',
+  description:
+    'Explain anomalies with root cause analysis, hypothesis generation, and remediation suggestions',
   inputSchema: {
     type: 'object',
     properties: {
@@ -1439,9 +1620,9 @@ export const ANOMALYEXPLAINERTOOL = {
           'get-baseline',
           'correlate-events',
           'impact-assessment',
-          'suggest-remediation'
+          'suggest-remediation',
         ],
-        description: 'Anomaly explanation operation to perform'
+        description: 'Anomaly explanation operation to perform',
       },
       anomaly: {
         type: 'object',
@@ -1451,42 +1632,47 @@ export const ANOMALYEXPLAINERTOOL = {
           expectedValue: { type: 'number' },
           deviation: { type: 'number' },
           timestamp: { type: 'number' },
-          severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
-          context: { type: 'object' }
+          severity: {
+            type: 'string',
+            enum: ['low', 'medium', 'high', 'critical'],
+          },
+          context: { type: 'object' },
         },
-        description: 'Anomaly data to explain'
+        description: 'Anomaly data to explain',
       },
       historicalData: {
         type: 'array',
-        description: 'Historical metric data for baseline analysis'
+        description: 'Historical metric data for baseline analysis',
       },
       hypothesis: {
         type: 'string',
-        description: 'Hypothesis to test'
+        description: 'Hypothesis to test',
       },
       events: {
         type: 'array',
-        description: 'Related system events'
+        description: 'Related system events',
       },
       useCache: {
         type: 'boolean',
         description: 'Enable caching',
-        default: true
+        default: true,
       },
       cacheTTL: {
         type: 'number',
-        description: 'Cache TTL in seconds'
-      }
+        description: 'Cache TTL in seconds',
+      },
     },
-    required: ['operation']
-  }
+    required: ['operation'],
+  },
 } as const;
 
 // ============================================================================
 // MCP Tool Runner
 // ============================================================================
 
-export async function runAnomalyExplainer(options: AnomalyExplainerOptions): Promise<AnomalyExplainerResult> {
+export async function runAnomalyExplainer(
+  options: AnomalyExplainerOptions
+): Promise<AnomalyExplainerResult> {
   const cache = new CacheEngine();
   const tokenCounter = new TokenCounter();
   const metricsCollector = new MetricsCollector();

@@ -13,7 +13,11 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "dashboard": "node dist/server/web-server.js",
     "dashboard:dev": "tsc -p tsconfig.dashboard.json && node dist/server/web-server.js",
-    "dashboard:build": "tsc -p tsconfig.dashboard.json"
+    "dashboard:build": "tsc -p tsconfig.dashboard.json",
+    "lint": "eslint src --ext .ts,.js",
+    "lint:fix": "eslint src --ext .ts,.js --fix",
+    "format": "prettier --write 'src/**/*.{ts,js,json}'",
+    "format:check": "prettier --check 'src/**/*.{ts,js,json}'"
   },
   "repository": {
     "type": "git",
@@ -34,7 +38,12 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^24.7.2",
     "@types/tar-stream": "^3.1.4",
+    "@typescript-eslint/eslint-plugin": "^8.46.1",
+    "@typescript-eslint/parser": "^8.46.1",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^10.1.8",
     "jest": "^30.2.0",
+    "prettier": "^3.6.2",
     "ts-jest": "^29.4.5",
     "typescript": "^5.9.3"
   },

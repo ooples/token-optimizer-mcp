@@ -16,13 +16,13 @@
  * - Compressed schedule analysis (87% reduction)
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { generateCacheKey } from "../shared/hash-utils";
-import * as crypto from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { generateCacheKey } from '../shared/hash-utils';
+import * as crypto from 'crypto';
 
 const execAsync = promisify(exec);
 
@@ -31,22 +31,22 @@ const execAsync = promisify(exec);
 // ===========================
 
 export type CronOperation =
-  | "list"
-  | "add"
-  | "remove"
-  | "enable"
-  | "disable"
-  | "history"
-  | "predict-next"
-  | "validate";
-export type SchedulerType = "cron" | "windows-task" | "auto";
+  | 'list'
+  | 'add'
+  | 'remove'
+  | 'enable'
+  | 'disable'
+  | 'history'
+  | 'predict-next'
+  | 'validate';
+export type SchedulerType = 'cron' | 'windows-task' | 'auto';
 export type TaskStatus =
-  | "enabled"
-  | "disabled"
-  | "running"
-  | "failed"
-  | "completed";
-export type TriggerType = "daily" | "weekly" | "monthly" | "once" | "custom";
+  | 'enabled'
+  | 'disabled'
+  | 'running'
+  | 'failed'
+  | 'completed';
+export type TriggerType = 'daily' | 'weekly' | 'monthly' | 'once' | 'custom';
 
 export interface SmartCronOptions {
   operation: CronOperation;
@@ -179,7 +179,7 @@ export class SmartCron {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metricsCollector: MetricsCollector,
+    private metricsCollector: MetricsCollector
   ) {
     this.platform = process.platform;
   }
@@ -192,7 +192,7 @@ export class SmartCron {
     const operation = options.operation;
 
     // Auto-detect scheduler type if not specified
-    if (options.schedulerType === "auto" || !options.schedulerType) {
+    if (options.schedulerType === 'auto' || !options.schedulerType) {
       options.schedulerType = this.detectSchedulerType();
     }
 
@@ -200,28 +200,28 @@ export class SmartCron {
 
     try {
       switch (operation) {
-        case "list":
+        case 'list':
           result = await this.listJobs(options);
           break;
-        case "add":
+        case 'add':
           result = await this.addJob(options);
           break;
-        case "remove":
+        case 'remove':
           result = await this.removeJob(options);
           break;
-        case "enable":
+        case 'enable':
           result = await this.enableJob(options);
           break;
-        case "disable":
+        case 'disable':
           result = await this.disableJob(options);
           break;
-        case "history":
+        case 'history':
           result = await this.getHistory(options);
           break;
-        case "predict-next":
+        case 'predict-next':
           result = await this.predictNextRuns(options);
           break;
-        case "validate":
+        case 'validate':
           result = await this.validateSchedule(options);
           break;
         default:
@@ -276,7 +276,7 @@ export class SmartCron {
    * Detect which scheduler type to use based on platform
    */
   private detectSchedulerType(): SchedulerType {
-    return this.platform === "win32" ? "windows-task" : "cron";
+    return this.platform === 'win32' ? 'windows-task' : 'cron';
   }
 
   /**
@@ -284,9 +284,9 @@ export class SmartCron {
    */
   private async listJobs(options: SmartCronOptions): Promise<SmartCronResult> {
     const cacheKey = `cache-${crypto
-      .createHash("md5")
-      .update(`cron-list:${options.schedulerType || "auto"}`)
-      .digest("hex")}`;
+      .createHash('md5')
+      .update(`cron-list:${options.schedulerType || 'auto'}`)
+      .digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -299,7 +299,7 @@ export class SmartCron {
 
         return {
           success: true,
-          operation: "list",
+          operation: 'list',
           data: JSON.parse(dataStr),
           metadata: {
             tokensUsed,
@@ -313,7 +313,7 @@ export class SmartCron {
 
     // Fresh job listing
     const jobs =
-      options.schedulerType === "cron"
+      options.schedulerType === 'cron'
         ? await this.listCronJobs()
         : await this.listWindowsTasks();
 
@@ -327,7 +327,7 @@ export class SmartCron {
 
     return {
       success: true,
-      operation: "list",
+      operation: 'list',
       data: { jobs },
       metadata: {
         tokensUsed,
@@ -343,11 +343,11 @@ export class SmartCron {
    */
   private async listCronJobs(): Promise<CronJob[]> {
     try {
-      const { stdout } = await execAsync("crontab -l");
+      const { stdout } = await execAsync('crontab -l');
       const jobs: CronJob[] = [];
       const lines = stdout
-        .split("\n")
-        .filter((line) => line.trim() && !line.startsWith("#"));
+        .split('\n')
+        .filter((line) => line.trim() && !line.startsWith('#'));
 
       for (const line of lines) {
         const job = this.parseCronLine(line);
@@ -370,8 +370,8 @@ export class SmartCron {
     const parts = line.trim().split(/\s+/);
     if (parts.length < 6) return null;
 
-    const schedule = parts.slice(0, 5).join(" ");
-    const command = parts.slice(5).join(" ");
+    const schedule = parts.slice(0, 5).join(' ');
+    const command = parts.slice(5).join(' ');
 
     // Generate a hash-based name if not explicitly named
     const name = this.generateJobName(schedule, command);
@@ -381,7 +381,7 @@ export class SmartCron {
       schedule,
       command,
       enabled: true,
-      status: "enabled",
+      status: 'enabled',
     };
 
     // Calculate next run time
@@ -400,9 +400,9 @@ export class SmartCron {
    */
   private generateJobName(schedule: string, command: string): string {
     const hash = crypto
-      .createHash("md5")
+      .createHash('md5')
       .update(`${schedule}:${command}`)
-      .digest("hex");
+      .digest('hex');
     return `cron-job-${hash.substring(0, 8)}`;
   }
 
@@ -411,9 +411,9 @@ export class SmartCron {
    */
   private async listWindowsTasks(): Promise<CronJob[]> {
     try {
-      const { stdout } = await execAsync("schtasks /query /fo CSV /v");
+      const { stdout } = await execAsync('schtasks /query /fo CSV /v');
       const jobs: CronJob[] = [];
-      const lines = stdout.split("\n").slice(1); // Skip header
+      const lines = stdout.split('\n').slice(1); // Skip header
 
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -427,7 +427,7 @@ export class SmartCron {
       return jobs;
     } catch (error) {
       throw new Error(
-        `Failed to list Windows tasks: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to list Windows tasks: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -441,31 +441,31 @@ export class SmartCron {
 
     if (fields.length < 10) return null;
 
-    const taskName = fields[0]?.replace(/^"(.*)"$/, "$1") || "";
-    const nextRunTime = fields[1]?.replace(/^"(.*)"$/, "$1") || "";
-    const status = fields[2]?.replace(/^"(.*)"$/, "$1") || "";
-    const lastRunTime = fields[3]?.replace(/^"(.*)"$/, "$1") || "";
-    const lastResult = fields[4]?.replace(/^"(.*)"$/, "$1") || "";
-    const author = fields[5]?.replace(/^"(.*)"$/, "$1") || "";
-    const taskToRun = fields[6]?.replace(/^"(.*)"$/, "$1") || "";
+    const taskName = fields[0]?.replace(/^"(.*)"$/, '$1') || '';
+    const nextRunTime = fields[1]?.replace(/^"(.*)"$/, '$1') || '';
+    const status = fields[2]?.replace(/^"(.*)"$/, '$1') || '';
+    const lastRunTime = fields[3]?.replace(/^"(.*)"$/, '$1') || '';
+    const lastResult = fields[4]?.replace(/^"(.*)"$/, '$1') || '';
+    const author = fields[5]?.replace(/^"(.*)"$/, '$1') || '';
+    const taskToRun = fields[6]?.replace(/^"(.*)"$/, '$1') || '';
 
-    if (!taskName || taskName.startsWith("\\Microsoft")) {
+    if (!taskName || taskName.startsWith('\\Microsoft')) {
       return null; // Skip system tasks
     }
 
     const job: CronJob = {
       name: taskName,
-      schedule: "", // Windows doesn't show schedule in this format
+      schedule: '', // Windows doesn't show schedule in this format
       command: taskToRun,
       user: author,
       enabled:
-        status.toLowerCase() === "ready" || status.toLowerCase() === "running",
+        status.toLowerCase() === 'ready' || status.toLowerCase() === 'running',
       status: this.mapWindowsStatus(status),
       taskPath: taskName,
     };
 
     // Parse next run time
-    if (nextRunTime && nextRunTime !== "N/A") {
+    if (nextRunTime && nextRunTime !== 'N/A') {
       try {
         job.nextRun = Date.parse(nextRunTime);
       } catch {
@@ -474,7 +474,7 @@ export class SmartCron {
     }
 
     // Parse last run time
-    if (lastRunTime && lastRunTime !== "N/A") {
+    if (lastRunTime && lastRunTime !== 'N/A') {
       try {
         job.lastRun = Date.parse(lastRunTime);
       } catch {
@@ -495,7 +495,7 @@ export class SmartCron {
    */
   private parseCSVLine(line: string): string[] {
     const result: string[] = [];
-    let current = "";
+    let current = '';
     let inQuotes = false;
 
     for (let i = 0; i < line.length; i++) {
@@ -504,9 +504,9 @@ export class SmartCron {
       if (char === '"') {
         inQuotes = !inQuotes;
         current += char;
-      } else if (char === "," && !inQuotes) {
+      } else if (char === ',' && !inQuotes) {
         result.push(current);
-        current = "";
+        current = '';
       } else {
         current += char;
       }
@@ -525,12 +525,12 @@ export class SmartCron {
   private mapWindowsStatus(status: string): TaskStatus {
     const lower = status.toLowerCase();
 
-    if (lower === "ready") return "enabled";
-    if (lower === "running") return "running";
-    if (lower === "disabled") return "disabled";
-    if (lower.includes("failed")) return "failed";
+    if (lower === 'ready') return 'enabled';
+    if (lower === 'running') return 'running';
+    if (lower === 'disabled') return 'disabled';
+    if (lower.includes('failed')) return 'failed';
 
-    return "enabled";
+    return 'enabled';
   }
 
   /**
@@ -539,26 +539,26 @@ export class SmartCron {
   private async addJob(options: SmartCronOptions): Promise<SmartCronResult> {
     if (!options.taskName || !options.schedule || !options.command) {
       throw new Error(
-        "taskName, schedule, and command are required for add operation",
+        'taskName, schedule, and command are required for add operation'
       );
     }
 
     // Validate schedule first
     const validation = await this.validateSchedule({
-      operation: "validate",
+      operation: 'validate',
       schedule: options.schedule,
       schedulerType: options.schedulerType,
     });
 
     if (!validation.data.validation?.valid) {
       throw new Error(
-        `Invalid schedule: ${validation.data.validation?.errors?.join(", ")}`,
+        `Invalid schedule: ${validation.data.validation?.errors?.join(', ')}`
       );
     }
 
     let output: string;
 
-    if (options.schedulerType === "cron") {
+    if (options.schedulerType === 'cron') {
       output = await this.addCronJob(options);
     } else {
       output = await this.addWindowsTask(options);
@@ -566,16 +566,16 @@ export class SmartCron {
 
     // Invalidate cache
     const cacheKey = `cache-${crypto
-      .createHash("md5")
-      .update(`cron-list:${options.schedulerType || "auto"}`)
-      .digest("hex")}`;
+      .createHash('md5')
+      .update(`cron-list:${options.schedulerType || 'auto'}`)
+      .digest('hex')}`;
     await this.cache.delete(cacheKey);
 
     const tokensUsed = this.tokenCounter.count(output).tokens;
 
     return {
       success: true,
-      operation: "add",
+      operation: 'add',
       data: { output },
       metadata: {
         tokensUsed,
@@ -593,9 +593,9 @@ export class SmartCron {
     const { schedule, command, taskName } = options;
 
     // Get current crontab
-    let currentCrontab = "";
+    let currentCrontab = '';
     try {
-      const { stdout } = await execAsync("crontab -l");
+      const { stdout } = await execAsync('crontab -l');
       currentCrontab = stdout;
     } catch {
       // No crontab exists yet
@@ -646,7 +646,7 @@ export class SmartCron {
       cmd += ` /tn "${description}"`;
     }
 
-    cmd += " /f"; // Force create, overwrite existing
+    cmd += ' /f'; // Force create, overwrite existing
 
     const { stdout } = await execAsync(cmd);
     return stdout;
@@ -670,27 +670,27 @@ export class SmartCron {
     const [minute, hour, dayOfMonth, , dayOfWeek] = parts;
 
     // Detect schedule type
-    if (minute === "*" && hour === "*") {
-      return { type: "MINUTE", modifier: "1" };
+    if (minute === '*' && hour === '*') {
+      return { type: 'MINUTE', modifier: '1' };
     }
 
-    if (hour === "*" || (minute !== "*" && hour !== "*")) {
-      const time = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+    if (hour === '*' || (minute !== '*' && hour !== '*')) {
+      const time = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
 
-      if (dayOfMonth === "*" && dayOfWeek === "*") {
-        return { type: "DAILY", startTime: time };
+      if (dayOfMonth === '*' && dayOfWeek === '*') {
+        return { type: 'DAILY', startTime: time };
       }
 
-      if (dayOfWeek !== "*") {
-        return { type: "WEEKLY", startTime: time };
+      if (dayOfWeek !== '*') {
+        return { type: 'WEEKLY', startTime: time };
       }
 
-      if (dayOfMonth !== "*") {
-        return { type: "MONTHLY", startTime: time, modifier: dayOfMonth };
+      if (dayOfMonth !== '*') {
+        return { type: 'MONTHLY', startTime: time, modifier: dayOfMonth };
       }
     }
 
-    return { type: "DAILY" };
+    return { type: 'DAILY' };
   }
 
   /**
@@ -698,12 +698,12 @@ export class SmartCron {
    */
   private async removeJob(options: SmartCronOptions): Promise<SmartCronResult> {
     if (!options.taskName) {
-      throw new Error("taskName is required for remove operation");
+      throw new Error('taskName is required for remove operation');
     }
 
     let output: string;
 
-    if (options.schedulerType === "cron") {
+    if (options.schedulerType === 'cron') {
       output = await this.removeCronJob(options.taskName);
     } else {
       output = await this.removeWindowsTask(options.taskName);
@@ -711,16 +711,16 @@ export class SmartCron {
 
     // Invalidate cache
     const cacheKey = `cache-${crypto
-      .createHash("md5")
-      .update(`cron-list:${options.schedulerType || "auto"}`)
-      .digest("hex")}`;
+      .createHash('md5')
+      .update(`cron-list:${options.schedulerType || 'auto'}`)
+      .digest('hex')}`;
     await this.cache.delete(cacheKey);
 
     const tokensUsed = this.tokenCounter.count(output).tokens;
 
     return {
       success: true,
-      operation: "remove",
+      operation: 'remove',
       data: { output },
       metadata: {
         tokensUsed,
@@ -736,8 +736,8 @@ export class SmartCron {
    */
   private async removeCronJob(taskName: string): Promise<string> {
     // Get current crontab
-    const { stdout } = await execAsync("crontab -l");
-    const lines = stdout.split("\n");
+    const { stdout } = await execAsync('crontab -l');
+    const lines = stdout.split('\n');
 
     // Filter out the job and its comment
     const filteredLines: string[] = [];
@@ -757,13 +757,13 @@ export class SmartCron {
       filteredLines.push(line);
     }
 
-    const newCrontab = filteredLines.join("\n");
+    const newCrontab = filteredLines.join('\n');
 
     // Write new crontab
     if (newCrontab.trim()) {
       await execAsync(`echo "${newCrontab.replace(/"/g, '\\"')}" | crontab -`);
     } else {
-      await execAsync("crontab -r"); // Remove empty crontab
+      await execAsync('crontab -r'); // Remove empty crontab
     }
 
     return `Removed cron job: ${taskName}`;
@@ -782,12 +782,12 @@ export class SmartCron {
    */
   private async enableJob(options: SmartCronOptions): Promise<SmartCronResult> {
     if (!options.taskName) {
-      throw new Error("taskName is required for enable operation");
+      throw new Error('taskName is required for enable operation');
     }
 
     let output: string;
 
-    if (options.schedulerType === "cron") {
+    if (options.schedulerType === 'cron') {
       // Cron jobs are always enabled; this is a no-op
       output = `Cron jobs are always enabled. Job: ${options.taskName}`;
     } else {
@@ -798,7 +798,7 @@ export class SmartCron {
 
     return {
       success: true,
-      operation: "enable",
+      operation: 'enable',
       data: { output },
       metadata: {
         tokensUsed,
@@ -814,7 +814,7 @@ export class SmartCron {
    */
   private async enableWindowsTask(taskName: string): Promise<string> {
     const { stdout } = await execAsync(
-      `schtasks /change /tn "${taskName}" /enable`,
+      `schtasks /change /tn "${taskName}" /enable`
     );
     return stdout;
   }
@@ -823,15 +823,15 @@ export class SmartCron {
    * Disable a scheduled job
    */
   private async disableJob(
-    options: SmartCronOptions,
+    options: SmartCronOptions
   ): Promise<SmartCronResult> {
     if (!options.taskName) {
-      throw new Error("taskName is required for disable operation");
+      throw new Error('taskName is required for disable operation');
     }
 
     let output: string;
 
-    if (options.schedulerType === "cron") {
+    if (options.schedulerType === 'cron') {
       // For cron, we need to comment out the job
       output = await this.disableCronJob(options.taskName);
     } else {
@@ -840,16 +840,16 @@ export class SmartCron {
 
     // Invalidate cache
     const cacheKey = `cache-${crypto
-      .createHash("md5")
-      .update(`cron-list:${options.schedulerType || "auto"}`)
-      .digest("hex")}`;
+      .createHash('md5')
+      .update(`cron-list:${options.schedulerType || 'auto'}`)
+      .digest('hex')}`;
     await this.cache.delete(cacheKey);
 
     const tokensUsed = this.tokenCounter.count(output).tokens;
 
     return {
       success: true,
-      operation: "disable",
+      operation: 'disable',
       data: { output },
       metadata: {
         tokensUsed,
@@ -865,8 +865,8 @@ export class SmartCron {
    */
   private async disableCronJob(taskName: string): Promise<string> {
     // Get current crontab
-    const { stdout } = await execAsync("crontab -l");
-    const lines = stdout.split("\n");
+    const { stdout } = await execAsync('crontab -l');
+    const lines = stdout.split('\n');
 
     // Comment out the job
     const modifiedLines: string[] = [];
@@ -879,7 +879,7 @@ export class SmartCron {
         continue;
       }
 
-      if (commentNext && !line.startsWith("#")) {
+      if (commentNext && !line.startsWith('#')) {
         modifiedLines.push(`# DISABLED: ${line}`);
         commentNext = false;
         continue;
@@ -888,7 +888,7 @@ export class SmartCron {
       modifiedLines.push(line);
     }
 
-    const newCrontab = modifiedLines.join("\n");
+    const newCrontab = modifiedLines.join('\n');
 
     // Write new crontab
     await execAsync(`echo "${newCrontab.replace(/"/g, '\\"')}" | crontab -`);
@@ -901,7 +901,7 @@ export class SmartCron {
    */
   private async disableWindowsTask(taskName: string): Promise<string> {
     const { stdout } = await execAsync(
-      `schtasks /change /tn "${taskName}" /disable`,
+      `schtasks /change /tn "${taskName}" /disable`
     );
     return stdout;
   }
@@ -910,13 +910,13 @@ export class SmartCron {
    * Get execution history for a job with incremental caching
    */
   private async getHistory(
-    options: SmartCronOptions,
+    options: SmartCronOptions
   ): Promise<SmartCronResult> {
     if (!options.taskName) {
-      throw new Error("taskName is required for history operation");
+      throw new Error('taskName is required for history operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash("md5").update(`cron-history:${options.schedulerType}:${options.taskName}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`cron-history:${options.schedulerType}:${options.taskName}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -929,7 +929,7 @@ export class SmartCron {
 
         return {
           success: true,
-          operation: "history",
+          operation: 'history',
           data: JSON.parse(dataStr),
           metadata: {
             tokensUsed,
@@ -945,7 +945,7 @@ export class SmartCron {
     const history = await this.fetchExecutionHistory(
       options.taskName,
       options.schedulerType!,
-      options.historyLimit,
+      options.historyLimit
     );
     const dataStr = JSON.stringify({ history });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
@@ -957,7 +957,7 @@ export class SmartCron {
 
     return {
       success: true,
-      operation: "history",
+      operation: 'history',
       data: { history },
       metadata: {
         tokensUsed,
@@ -974,7 +974,7 @@ export class SmartCron {
   private async fetchExecutionHistory(
     taskName: string,
     schedulerType: SchedulerType,
-    limit = 50,
+    limit = 50
   ): Promise<ExecutionHistory> {
     const history: ExecutionHistory = {
       taskName,
@@ -984,20 +984,20 @@ export class SmartCron {
       averageRuntime: 0,
     };
 
-    if (schedulerType === "cron") {
+    if (schedulerType === 'cron') {
       // Try to read from syslog/journalctl for cron execution logs
       try {
         const { stdout } = await execAsync(
-          `journalctl -u cron -n ${limit} --no-pager | grep CRON`,
+          `journalctl -u cron -n ${limit} --no-pager | grep CRON`
         );
         const lines = stdout
-          .split("\n")
+          .split('\n')
           .filter((line) => line.includes(taskName));
 
         // Parse execution records (simplified)
         for (const line of lines) {
           const timestampMatch = line.match(
-            /(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})/,
+            /(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})/
           );
           const timestamp = timestampMatch
             ? Date.parse(timestampMatch[1])
@@ -1017,7 +1017,7 @@ export class SmartCron {
       // Windows Task Scheduler history
       try {
         const { stdout } = await execAsync(
-          `schtasks /query /tn "${taskName}" /fo LIST /v`,
+          `schtasks /query /tn "${taskName}" /fo LIST /v`
         );
 
         // Parse task history from verbose output
@@ -1049,7 +1049,7 @@ export class SmartCron {
 
       const totalDuration = history.executions.reduce(
         (sum, e) => sum + e.duration,
-        0,
+        0
       );
       history.averageRuntime = totalDuration / history.totalRuns;
 
@@ -1063,16 +1063,16 @@ export class SmartCron {
    * Predict next run times for a job with compressed analysis
    */
   private async predictNextRuns(
-    options: SmartCronOptions,
+    options: SmartCronOptions
   ): Promise<SmartCronResult> {
     if (!options.taskName && !options.schedule) {
       throw new Error(
-        "Either taskName or schedule is required for predict-next operation",
+        'Either taskName or schedule is required for predict-next operation'
       );
     }
 
     const keyInput = options.taskName || options.schedule!;
-    const cacheKey = generateCacheKey("cron-predict", keyInput);
+    const cacheKey = generateCacheKey('cron-predict', keyInput);
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -1085,7 +1085,7 @@ export class SmartCron {
 
         return {
           success: true,
-          operation: "predict-next",
+          operation: 'predict-next',
           data: JSON.parse(dataStr),
           metadata: {
             tokensUsed,
@@ -1102,7 +1102,7 @@ export class SmartCron {
     // If taskName provided, fetch its schedule
     if (options.taskName && !schedule) {
       const jobs =
-        options.schedulerType === "cron"
+        options.schedulerType === 'cron'
           ? await this.listCronJobs()
           : await this.listWindowsTasks();
 
@@ -1114,13 +1114,13 @@ export class SmartCron {
     }
 
     if (!schedule) {
-      throw new Error("Could not determine schedule");
+      throw new Error('Could not determine schedule');
     }
 
     // Calculate predictions
     const predictions = this.calculateNextRuns(
       schedule,
-      options.predictCount || 5,
+      options.predictCount || 5
     );
     const dataStr = JSON.stringify({ predictions });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
@@ -1132,7 +1132,7 @@ export class SmartCron {
 
     return {
       success: true,
-      operation: "predict-next",
+      operation: 'predict-next',
       data: { predictions },
       metadata: {
         tokensUsed,
@@ -1148,7 +1148,7 @@ export class SmartCron {
    */
   private calculateNextRuns(
     schedule: string,
-    count: number,
+    count: number
   ): NextRunPrediction {
     const nextRuns: number[] = [];
     const humanReadable: string[] = [];
@@ -1168,12 +1168,12 @@ export class SmartCron {
       }
     } catch (error) {
       throw new Error(
-        `Failed to calculate next runs: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to calculate next runs: ${error instanceof Error ? error.message : String(error)}`
       );
     }
 
     return {
-      taskName: "",
+      taskName: '',
       schedule,
       nextRuns,
       humanReadable,
@@ -1188,7 +1188,7 @@ export class SmartCron {
     const parts = schedule.split(/\s+/);
     if (parts.length !== 5) {
       throw new Error(
-        "Invalid cron expression. Expected 5 fields (minute hour day month weekday)",
+        'Invalid cron expression. Expected 5 fields (minute hour day month weekday)'
       );
     }
 
@@ -1224,7 +1224,7 @@ export class SmartCron {
     }
 
     throw new Error(
-      "Could not calculate next run time within reasonable iterations",
+      'Could not calculate next run time within reasonable iterations'
     );
   }
 
@@ -1235,26 +1235,26 @@ export class SmartCron {
     value: number,
     field: string,
     min: number,
-    max: number,
+    max: number
   ): boolean {
     // * matches everything
-    if (field === "*") return true;
+    if (field === '*') return true;
 
     // Handle step values (*/5, */10, etc.)
-    if (field.includes("*/")) {
-      const step = parseInt(field.split("/")[1]);
+    if (field.includes('*/')) {
+      const step = parseInt(field.split('/')[1]);
       return value % step === 0;
     }
 
     // Handle ranges (1-5)
-    if (field.includes("-")) {
-      const [start, end] = field.split("-").map(Number);
+    if (field.includes('-')) {
+      const [start, end] = field.split('-').map(Number);
       return value >= start && value <= end;
     }
 
     // Handle lists (1,3,5)
-    if (field.includes(",")) {
-      const values = field.split(",").map(Number);
+    if (field.includes(',')) {
+      const values = field.split(',').map(Number);
       return values.includes(value);
     }
 
@@ -1273,10 +1273,10 @@ export class SmartCron {
    * Validate a cron schedule expression
    */
   private async validateSchedule(
-    options: SmartCronOptions,
+    options: SmartCronOptions
   ): Promise<SmartCronResult> {
     if (!options.schedule) {
-      throw new Error("schedule is required for validate operation");
+      throw new Error('schedule is required for validate operation');
     }
 
     const validation: ScheduleValidation = {
@@ -1292,7 +1292,7 @@ export class SmartCron {
 
       if (parts.length !== 5) {
         validation.errors!.push(
-          "Invalid cron expression format. Expected 5 fields (minute hour day month weekday)",
+          'Invalid cron expression format. Expected 5 fields (minute hour day month weekday)'
         );
       } else {
         validation.valid = true;
@@ -1313,7 +1313,7 @@ export class SmartCron {
         try {
           validation.nextRun = this.calculateNextRun(options.schedule);
         } catch {
-          validation.warnings!.push("Could not calculate next run time");
+          validation.warnings!.push('Could not calculate next run time');
         }
 
         // Determine frequency
@@ -1321,7 +1321,7 @@ export class SmartCron {
       }
     } catch (error) {
       validation.errors!.push(
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? error.message : String(error)
       );
     }
 
@@ -1330,7 +1330,7 @@ export class SmartCron {
 
     return {
       success: true,
-      operation: "validate",
+      operation: 'validate',
       data: { validation },
       metadata: {
         tokensUsed,
@@ -1348,27 +1348,27 @@ export class SmartCron {
     const parts = schedule.split(/\s+/);
     const [minute, hour, day, month, weekday] = parts;
 
-    if (minute === "*" && hour === "*") {
-      return "Every minute";
+    if (minute === '*' && hour === '*') {
+      return 'Every minute';
     }
 
-    if (hour === "*") {
+    if (hour === '*') {
       return `Every hour at minute ${minute}`;
     }
 
-    if (day === "*" && month === "*" && weekday === "*") {
+    if (day === '*' && month === '*' && weekday === '*') {
       return `Daily at ${hour}:${minute}`;
     }
 
-    if (weekday !== "*") {
+    if (weekday !== '*') {
       return `Weekly on specific days at ${hour}:${minute}`;
     }
 
-    if (day !== "*") {
+    if (day !== '*') {
       return `Monthly on day ${day} at ${hour}:${minute}`;
     }
 
-    return "Custom schedule";
+    return 'Custom schedule';
   }
 }
 
@@ -1379,7 +1379,7 @@ export class SmartCron {
 export function getSmartCron(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metricsCollector: MetricsCollector,
+  metricsCollector: MetricsCollector
 ): SmartCron {
   return new SmartCron(cache, tokenCounter, metricsCollector);
 }
@@ -1392,20 +1392,20 @@ export async function runSmartCron(
   options: SmartCronOptions,
   cache?: CacheEngine,
   tokenCounter?: TokenCounter,
-  metricsCollector?: MetricsCollector,
+  metricsCollector?: MetricsCollector
 ): Promise<SmartCronResult> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
   const tool = getSmartCron(
     cacheInstance,
     tokenCounterInstance,
-    metricsInstance,
+    metricsInstance
   );
   return await tool.run(options);
 }
@@ -1415,79 +1415,79 @@ export async function runSmartCron(
 // ===========================
 
 export const SMART_CRON_TOOL_DEFINITION = {
-  name: "smart_cron",
+  name: 'smart_cron',
   description:
-    "Intelligent scheduled task management with smart caching (85%+ token reduction). Manage cron jobs (Linux/macOS) and Windows Task Scheduler with validation, history tracking, and next run predictions.",
+    'Intelligent scheduled task management with smart caching (85%+ token reduction). Manage cron jobs (Linux/macOS) and Windows Task Scheduler with validation, history tracking, and next run predictions.',
   inputSchema: {
-    type: "object" as const,
+    type: 'object' as const,
     properties: {
       operation: {
-        type: "string" as const,
+        type: 'string' as const,
         enum: [
-          "list",
-          "add",
-          "remove",
-          "enable",
-          "disable",
-          "history",
-          "predict-next",
-          "validate",
+          'list',
+          'add',
+          'remove',
+          'enable',
+          'disable',
+          'history',
+          'predict-next',
+          'validate',
         ],
-        description: "Cron operation to perform",
+        description: 'Cron operation to perform',
       },
       schedulerType: {
-        type: "string" as const,
-        enum: ["cron", "windows-task", "auto"],
-        description: "Scheduler type (auto-detected if not specified)",
+        type: 'string' as const,
+        enum: ['cron', 'windows-task', 'auto'],
+        description: 'Scheduler type (auto-detected if not specified)',
       },
       taskName: {
-        type: "string" as const,
-        description: "Name of the scheduled task",
+        type: 'string' as const,
+        description: 'Name of the scheduled task',
       },
       schedule: {
-        type: "string" as const,
+        type: 'string' as const,
         description:
           'Cron expression (e.g., "0 2 * * *" for daily at 2am) or Windows schedule',
       },
       command: {
-        type: "string" as const,
-        description: "Command to execute",
+        type: 'string' as const,
+        description: 'Command to execute',
       },
       user: {
-        type: "string" as const,
-        description: "User to run the task as",
+        type: 'string' as const,
+        description: 'User to run the task as',
       },
       workingDirectory: {
-        type: "string" as const,
-        description: "Working directory for the command",
+        type: 'string' as const,
+        description: 'Working directory for the command',
       },
       description: {
-        type: "string" as const,
-        description: "Task description",
+        type: 'string' as const,
+        description: 'Task description',
       },
       enabled: {
-        type: "boolean" as const,
-        description: "Whether the task is enabled",
+        type: 'boolean' as const,
+        description: 'Whether the task is enabled',
       },
       historyLimit: {
-        type: "number" as const,
-        description: "Number of history entries to retrieve (default: 50)",
+        type: 'number' as const,
+        description: 'Number of history entries to retrieve (default: 50)',
       },
       predictCount: {
-        type: "number" as const,
-        description: "Number of future runs to predict (default: 5)",
+        type: 'number' as const,
+        description: 'Number of future runs to predict (default: 5)',
       },
       useCache: {
-        type: "boolean" as const,
-        description: "Use cached results when available (default: true)",
+        type: 'boolean' as const,
+        description: 'Use cached results when available (default: true)',
         default: true,
       },
       ttl: {
-        type: "number" as const,
+        type: 'number' as const,
         description:
-          "Cache TTL in seconds (default: 60 for list, 30 for history, 300 for predictions)",
+          'Cache TTL in seconds (default: 60 for list, 30 for history, 300 for predictions)',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

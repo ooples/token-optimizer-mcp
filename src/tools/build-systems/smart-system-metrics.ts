@@ -8,12 +8,12 @@
  * - Token-optimized output
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { createHash } from "crypto";
-import { homedir } from "os";
-import { join } from "path";
-import * as os from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine';
+import { createHash } from 'crypto';
+import { homedir } from 'os';
+import { join } from 'path';
+import * as os from 'os';
 
 interface CpuMetrics {
   usage: number;
@@ -51,8 +51,8 @@ interface MetricsResult {
   current: SystemMetrics;
   previous?: SystemMetrics;
   anomalies: Array<{
-    type: "cpu" | "memory" | "disk";
-    severity: "critical" | "warning" | "info";
+    type: 'cpu' | 'memory' | 'disk';
+    severity: 'critical' | 'warning' | 'info';
     message: string;
   }>;
   duration: number;
@@ -111,7 +111,7 @@ interface SmartSystemMetricsOutput {
     cores: number;
     model: string;
     speed: number;
-    status: "normal" | "high" | "critical";
+    status: 'normal' | 'high' | 'critical';
   };
 
   /**
@@ -122,7 +122,7 @@ interface SmartSystemMetricsOutput {
     used: string;
     free: string;
     usagePercent: number;
-    status: "normal" | "high" | "critical";
+    status: 'normal' | 'high' | 'critical';
   };
 
   /**
@@ -134,7 +134,7 @@ interface SmartSystemMetricsOutput {
     used: string;
     free: string;
     usagePercent: number;
-    status: "normal" | "high" | "critical";
+    status: 'normal' | 'high' | 'critical';
   }>;
 
   /**
@@ -150,9 +150,9 @@ interface SmartSystemMetricsOutput {
    * Performance recommendations
    */
   recommendations: Array<{
-    type: "cpu" | "memory" | "disk" | "general";
+    type: 'cpu' | 'memory' | 'disk' | 'general';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }>;
 
   /**
@@ -167,7 +167,7 @@ interface SmartSystemMetricsOutput {
 
 export class SmartSystemMetrics {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_system_metrics";
+  private cacheNamespace = 'smart_system_metrics';
 
   constructor(cache: CacheEngine, _projectRoot?: string) {
     this.cache = cache;
@@ -177,12 +177,12 @@ export class SmartSystemMetrics {
    * Collect and analyze system metrics
    */
   async run(
-    options: SmartSystemMetricsOptions = {},
+    options: SmartSystemMetricsOptions = {}
   ): Promise<SmartSystemMetricsOutput> {
     const {
       force = false,
       includeDisk = true,
-      diskPaths = ["/"],
+      diskPaths = ['/'],
       detectAnomalies = true,
       maxCacheAge = 60, // Short cache for metrics
     } = options;
@@ -305,7 +305,7 @@ export class SmartSystemMetrics {
         cpu.times.sys +
         cpu.times.idle +
         cpu.times.irq,
-      0,
+      0
     );
 
     // Wait 100ms
@@ -321,7 +321,7 @@ export class SmartSystemMetrics {
         cpu.times.sys +
         cpu.times.idle +
         cpu.times.irq,
-      0,
+      0
     );
 
     const idleDiff = idle2 - idle1;
@@ -369,34 +369,34 @@ export class SmartSystemMetrics {
    */
   private async getDiskInfo(path: string): Promise<DiskMetrics | null> {
     return new Promise((resolve) => {
-      let output = "";
+      let output = '';
 
       // Platform-specific disk info commands
       let command: string;
       let args: string[];
 
-      if (process.platform === "win32") {
+      if (process.platform === 'win32') {
         // Windows: use wmic
-        command = "wmic";
-        args = ["logicaldisk", "get", "size,freespace,caption"];
+        command = 'wmic';
+        args = ['logicaldisk', 'get', 'size,freespace,caption'];
       } else {
         // Unix: use df
-        command = "df";
-        args = ["-k", path];
+        command = 'df';
+        args = ['-k', path];
       }
 
       const child = spawn(command, args, { shell: true });
 
-      child.stdout.on("data", (data) => {
+      child.stdout.on('data', (data) => {
         output += data.toString();
       });
 
-      child.on("close", () => {
+      child.on('close', () => {
         const parsed = this.parseDiskOutput(output, path);
         resolve(parsed);
       });
 
-      child.on("error", () => {
+      child.on('error', () => {
         resolve(null);
       });
     });
@@ -406,11 +406,11 @@ export class SmartSystemMetrics {
    * Parse disk output
    */
   private parseDiskOutput(output: string, path: string): DiskMetrics | null {
-    if (process.platform === "win32") {
+    if (process.platform === 'win32') {
       // Parse Windows wmic output
-      const lines = output.split("\n").filter((l) => l.trim());
+      const lines = output.split('\n').filter((l) => l.trim());
       // Format: Caption  FreeSpace  Size
-      const dataLine = lines.find((l) => l.includes("C:"));
+      const dataLine = lines.find((l) => l.includes('C:'));
       if (dataLine) {
         const parts = dataLine.trim().split(/\s+/);
         if (parts.length >= 3) {
@@ -430,7 +430,7 @@ export class SmartSystemMetrics {
       }
     } else {
       // Parse Unix df output
-      const lines = output.split("\n").filter((l) => l.trim());
+      const lines = output.split('\n').filter((l) => l.trim());
       const dataLine = lines[1]; // First line is header
       if (dataLine) {
         const parts = dataLine.trim().split(/\s+/);
@@ -438,7 +438,7 @@ export class SmartSystemMetrics {
           const total = parseInt(parts[1], 10) * 1024; // Convert KB to bytes
           const used = parseInt(parts[2], 10) * 1024;
           const free = parseInt(parts[3], 10) * 1024;
-          const usagePercent = parseFloat(parts[4].replace("%", ""));
+          const usagePercent = parseFloat(parts[4].replace('%', ''));
 
           return {
             path,
@@ -459,15 +459,15 @@ export class SmartSystemMetrics {
    */
   private detectAnomalies(
     current: SystemMetrics,
-    previous: SystemMetrics,
+    previous: SystemMetrics
   ): Array<{
-    type: "cpu" | "memory" | "disk";
-    severity: "critical" | "warning" | "info";
+    type: 'cpu' | 'memory' | 'disk';
+    severity: 'critical' | 'warning' | 'info';
     message: string;
   }> {
     const anomalies: Array<{
-      type: "cpu" | "memory" | "disk";
-      severity: "critical" | "warning" | "info";
+      type: 'cpu' | 'memory' | 'disk';
+      severity: 'critical' | 'warning' | 'info';
       message: string;
     }> = [];
 
@@ -475,8 +475,8 @@ export class SmartSystemMetrics {
     const cpuDiff = current.cpu.usage - previous.cpu.usage;
     if (cpuDiff > 30) {
       anomalies.push({
-        type: "cpu",
-        severity: cpuDiff > 50 ? "critical" : "warning",
+        type: 'cpu',
+        severity: cpuDiff > 50 ? 'critical' : 'warning',
         message: `CPU usage spike: increased by ${cpuDiff.toFixed(1)}% (now at ${current.cpu.usage.toFixed(1)}%)`,
       });
     }
@@ -485,8 +485,8 @@ export class SmartSystemMetrics {
     const memDiff = current.memory.usagePercent - previous.memory.usagePercent;
     if (memDiff > 20) {
       anomalies.push({
-        type: "memory",
-        severity: memDiff > 40 ? "critical" : "warning",
+        type: 'memory',
+        severity: memDiff > 40 ? 'critical' : 'warning',
         message: `Memory usage spike: increased by ${memDiff.toFixed(1)}% (now at ${current.memory.usagePercent.toFixed(1)}%)`,
       });
     }
@@ -494,14 +494,14 @@ export class SmartSystemMetrics {
     // Disk usage growth
     for (const currentDisk of current.disk) {
       const previousDisk = previous.disk.find(
-        (d) => d.path === currentDisk.path,
+        (d) => d.path === currentDisk.path
       );
       if (previousDisk) {
         const diskDiff = currentDisk.usagePercent - previousDisk.usagePercent;
         if (diskDiff > 5) {
           anomalies.push({
-            type: "disk",
-            severity: diskDiff > 10 ? "warning" : "info",
+            type: 'disk',
+            severity: diskDiff > 10 ? 'warning' : 'info',
             message: `Disk ${currentDisk.path} usage increased by ${diskDiff.toFixed(1)}% (now at ${currentDisk.usagePercent.toFixed(1)}%)`,
           });
         }
@@ -515,27 +515,27 @@ export class SmartSystemMetrics {
    * Generate performance recommendations
    */
   private generateRecommendations(result: MetricsResult): Array<{
-    type: "cpu" | "memory" | "disk" | "general";
+    type: 'cpu' | 'memory' | 'disk' | 'general';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }> {
     const recommendations = [];
 
     // CPU recommendations
     if (result.current.cpu.usage > 80) {
       recommendations.push({
-        type: "cpu" as const,
+        type: 'cpu' as const,
         message: `High CPU usage (${result.current.cpu.usage.toFixed(1)}%). Consider profiling to find bottlenecks.`,
-        impact: "high" as const,
+        impact: 'high' as const,
       });
     }
 
     // Memory recommendations
     if (result.current.memory.usagePercent > 85) {
       recommendations.push({
-        type: "memory" as const,
+        type: 'memory' as const,
         message: `High memory usage (${result.current.memory.usagePercent.toFixed(1)}%). Check for memory leaks.`,
-        impact: "high" as const,
+        impact: 'high' as const,
       });
     }
 
@@ -543,15 +543,15 @@ export class SmartSystemMetrics {
     for (const disk of result.current.disk) {
       if (disk.usagePercent > 90) {
         recommendations.push({
-          type: "disk" as const,
+          type: 'disk' as const,
           message: `Disk ${disk.path} is ${disk.usagePercent.toFixed(1)}% full. Clean up old files or expand storage.`,
-          impact: "high" as const,
+          impact: 'high' as const,
         });
       } else if (disk.usagePercent > 80) {
         recommendations.push({
-          type: "disk" as const,
+          type: 'disk' as const,
           message: `Disk ${disk.path} is ${disk.usagePercent.toFixed(1)}% full. Monitor space usage.`,
-          impact: "medium" as const,
+          impact: 'medium' as const,
         });
       }
     }
@@ -562,9 +562,9 @@ export class SmartSystemMetrics {
       const cores = result.current.cpu.cores;
       if (load1 > cores * 1.5) {
         recommendations.push({
-          type: "general" as const,
+          type: 'general' as const,
           message: `High system load (${load1.toFixed(2)} on ${cores} cores). System may be overloaded.`,
-          impact: "high" as const,
+          impact: 'high' as const,
         });
       }
     }
@@ -576,15 +576,15 @@ export class SmartSystemMetrics {
    * Generate cache key
    */
   private generateCacheKey(includeDisk: boolean, diskPaths: string[]): string {
-    const keyParts = [includeDisk.toString(), diskPaths.join(",")];
-    return createHash("md5").update(keyParts.join(":")).digest("hex");
+    const keyParts = [includeDisk.toString(), diskPaths.join(',')];
+    return createHash('md5').update(keyParts.join(':')).digest('hex');
   }
 
   /**
    * Get cached result
    */
   private getCachedResult(key: string, maxAge: number): MetricsResult | null {
-    const cached = this.cache.get(this.cacheNamespace + ":" + key);
+    const cached = this.cache.get(this.cacheNamespace + ':' + key);
     if (!cached) return null;
 
     try {
@@ -609,10 +609,10 @@ export class SmartSystemMetrics {
     const dataToCache = JSON.stringify(cacheData);
     const dataSize = dataToCache.length;
     this.cache.set(
-      this.cacheNamespace + ":" + key,
+      this.cacheNamespace + ':' + key,
       dataToCache,
       dataSize,
-      dataSize,
+      dataSize
     );
   }
 
@@ -622,21 +622,21 @@ export class SmartSystemMetrics {
   private transformOutput(
     result: MetricsResult,
     recommendations: Array<{
-      type: "cpu" | "memory" | "disk" | "general";
+      type: 'cpu' | 'memory' | 'disk' | 'general';
       message: string;
-      impact: "high" | "medium" | "low";
+      impact: 'high' | 'medium' | 'low';
     }>,
-    fromCache = false,
+    fromCache = false
   ): SmartSystemMetricsOutput {
     const formatBytes = (bytes: number): string => {
       const gb = bytes / 1024 ** 3;
       return `${gb.toFixed(2)} GB`;
     };
 
-    const getStatus = (percent: number): "normal" | "high" | "critical" => {
-      if (percent > 90) return "critical";
-      if (percent > 80) return "high";
-      return "normal";
+    const getStatus = (percent: number): 'normal' | 'high' | 'critical' => {
+      if (percent > 90) return 'critical';
+      if (percent > 80) return 'high';
+      return 'normal';
     };
 
     const cpu = {
@@ -689,7 +689,7 @@ export class SmartSystemMetrics {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -727,7 +727,7 @@ export class SmartSystemMetrics {
  */
 export function getSmartSystemMetrics(
   cache: CacheEngine,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartSystemMetrics {
   return new SmartSystemMetrics(cache, projectRoot);
 }
@@ -736,17 +736,17 @@ export function getSmartSystemMetrics(
  * CLI-friendly function for running smart system metrics
  */
 export async function runSmartSystemMetrics(
-  options: SmartSystemMetricsOptions = {},
+  options: SmartSystemMetricsOptions = {}
 ): Promise<string> {
   const cache = new CacheEngine(
-    join(homedir(), ".token-optimizer-cache", "cache.db"),
+    join(homedir(), '.token-optimizer-cache', 'cache.db')
   );
   const smartMetrics = getSmartSystemMetrics(cache, options.projectRoot);
   try {
     const result = await smartMetrics.run(options);
 
-    let output = `\n📊 Smart System Metrics ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\n📊 Smart System Metrics ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
@@ -756,11 +756,11 @@ export async function runSmartSystemMetrics(
 
     // CPU
     const cpuIcon =
-      result.cpu.status === "critical"
-        ? "🔴"
-        : result.cpu.status === "high"
-          ? "⚠️"
-          : "✓";
+      result.cpu.status === 'critical'
+        ? '🔴'
+        : result.cpu.status === 'high'
+          ? '⚠️'
+          : '✓';
     output += `CPU:\n`;
     output += `  ${cpuIcon} Usage: ${result.cpu.usage}%\n`;
     output += `  Cores: ${result.cpu.cores}\n`;
@@ -769,11 +769,11 @@ export async function runSmartSystemMetrics(
 
     // Memory
     const memIcon =
-      result.memory.status === "critical"
-        ? "🔴"
-        : result.memory.status === "high"
-          ? "⚠️"
-          : "✓";
+      result.memory.status === 'critical'
+        ? '🔴'
+        : result.memory.status === 'high'
+          ? '⚠️'
+          : '✓';
     output += `Memory:\n`;
     output += `  ${memIcon} Usage: ${result.memory.usagePercent}%\n`;
     output += `  Total: ${result.memory.total}\n`;
@@ -785,15 +785,15 @@ export async function runSmartSystemMetrics(
       output += `Disk:\n`;
       for (const disk of result.disk) {
         const diskIcon =
-          disk.status === "critical"
-            ? "🔴"
-            : disk.status === "high"
-              ? "⚠️"
-              : "✓";
+          disk.status === 'critical'
+            ? '🔴'
+            : disk.status === 'high'
+              ? '⚠️'
+              : '✓';
         output += `  ${diskIcon} ${disk.path}: ${disk.usagePercent}% used\n`;
         output += `     Total: ${disk.total}, Used: ${disk.used}, Free: ${disk.free}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Anomalies
@@ -801,14 +801,14 @@ export async function runSmartSystemMetrics(
       output += `Anomalies Detected:\n`;
       for (const anomaly of result.anomalies) {
         const icon =
-          anomaly.severity === "critical"
-            ? "🔴"
-            : anomaly.severity === "warning"
-              ? "⚠️"
-              : "ℹ️";
+          anomaly.severity === 'critical'
+            ? '🔴'
+            : anomaly.severity === 'warning'
+              ? '⚠️'
+              : 'ℹ️';
         output += `  ${icon} [${anomaly.type}] ${anomaly.message}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Recommendations
@@ -816,10 +816,10 @@ export async function runSmartSystemMetrics(
       output += `Recommendations:\n`;
       for (const rec of result.recommendations) {
         const icon =
-          rec.impact === "high" ? "🔴" : rec.impact === "medium" ? "🟡" : "🟢";
+          rec.impact === 'high' ? '🔴' : rec.impact === 'medium' ? '🟡' : '🟢';
         output += `  ${icon} [${rec.type}] ${rec.message}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Metrics
