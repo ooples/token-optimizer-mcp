@@ -217,7 +217,7 @@ function Test-LogDirIsSafe {
         $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
         $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
     } catch {
-        Write-Warning "Invalid log directory path detected: $($_.Exception.Message)"
+        Write-Warning "Invalid log directory path detected."
         return $false
     }
 
@@ -246,17 +246,17 @@ function Initialize-Session {
     # Validate log directory path to prevent path traversal attacks
     # Use GetFullPath to resolve the path and check if it's within the expected base directory
     # NOTE: The base directory can be customized via the -BaseLogDir parameter for trusted environments
-    $ResolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
-    $ResolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
+    $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
+    $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
 
-    if (-not (Test-LogDirIsSafe -LogDir $ResolvedLogDir -BaseLogDir $ResolvedBaseLogDir)) {
-        throw "Invalid log directory path: path traversal detected. LogDir must be within $ResolvedBaseLogDir."
+    if (-not (Test-LogDirIsSafe -LogDir $resolvedLogDir -BaseLogDir $resolvedBaseLogDir)) {
+        throw "Invalid log directory path: path traversal detected. LogDir must be within the configured base log directory."
     }
 
     # Create log directory if it doesn't exist
-    if (-not (Test-Path $ResolvedLogDir -PathType Container)) {
-        Write-VerboseLog "Creating log directory: $ResolvedLogDir"
-        New-Item -ItemType Directory -Path $ResolvedLogDir -Force | Out-Null
+    if (-not (Test-Path $resolvedLogDir -PathType Container)) {
+        Write-VerboseLog "Creating log directory: $resolvedLogDir"
+        New-Item -ItemType Directory -Path $resolvedLogDir -Force | Out-Null
     }
 
     # Create session-log.jsonl if it doesn't exist
@@ -564,8 +564,13 @@ function Invoke-ClaudeCodeWrapper {
         # Store original encodings to restore in finally block
         $originalInputEncoding = [Console]::InputEncoding
         $originalOutputEncoding = [Console]::OutputEncoding
-        [Console]::InputEncoding = [System.Text.Encoding]::UTF8
-        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        try {
+            [Console]::InputEncoding = [System.Text.Encoding]::UTF8
+            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        } catch {
+            Write-Warning "Failed to set console encoding to UTF8. Unicode handling may be degraded. Error: $($_.Exception.Message)"
+            Write-VerboseLog "Console encoding assignment failed: $($_.Exception.Message)"
+        }
 
         $input = [Console]::In
         while ($true) {
@@ -695,10 +700,20 @@ function Invoke-ClaudeCodeWrapper {
     finally {
         # Restore original console encodings to avoid affecting subsequent operations
         if ($originalInputEncoding) {
-            [Console]::InputEncoding = $originalInputEncoding
+            try {
+                [Console]::InputEncoding = $originalInputEncoding
+            }
+            catch {
+                Write-VerboseLog "Failed to restore original input encoding: $($_.Exception.Message)"
+            }
         }
         if ($originalOutputEncoding) {
-            [Console]::OutputEncoding = $originalOutputEncoding
+            try {
+                [Console]::OutputEncoding = $originalOutputEncoding
+            }
+            catch {
+                Write-VerboseLog "Failed to restore original output encoding: $($_.Exception.Message)"
+            }
         }
 
         Write-VerboseLog "Session ended: $($global:SessionState.SessionId)"

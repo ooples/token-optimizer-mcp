@@ -63,7 +63,7 @@ claude-code | .\wrapper.ps1 -LogDir "C:\logs\token-tracking" -VerboseLogging
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `-SessionId` | String | No | Auto-generated | Custom session identifier |
-| `-LogDir` | String | No | `$env:USERPROFILE\token-optimizer-logs` | Directory for log files (user-specific, e.g., C:\Users\<YourUsername>\token-optimizer-logs) |
+| `-LogDir` | String | No | `$env:USERPROFILE\token-optimizer-logs` | Directory for log files (user-specific path using USERPROFILE environment variable) |
 | `-VerboseLogging` | Switch | No | `$false` | Enable detailed console output |
 | `-Test` | Switch | No | `$false` | Run in test mode (no CLI wrapping) |
 | `-PerformanceThresholdMs` | Int | No | `10` | Performance warning threshold in milliseconds |
