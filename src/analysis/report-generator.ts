@@ -437,7 +437,7 @@ function generateHTMLReport(
                                 <td><span class="anomaly-badge">#${anomaly.turnNumber}</span></td>
                                 <td>${escapeHtml(anomaly.timestamp)}</td>
                                 <td><strong>${anomaly.totalTokens.toLocaleString()}</strong></td>
-                                <td><span class="mode-badge mode-${anomaly.mode}">${escapeHtml(anomaly.mode)}</span></td>
+                                <td><span class="mode-badge mode-${anomaly.mode.replace(/[^a-z0-9-]/gi, '-')}">${escapeHtml(anomaly.mode)}</span></td>
                                 <td>${escapeHtml(anomaly.reason)}</td>
                             </tr>
                             `

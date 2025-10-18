@@ -197,6 +197,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
+      // This tool (analyze_project_tokens) is a new addition to the MCP server
       {
         name: 'analyze_project_tokens',
         description:
