@@ -1072,7 +1072,7 @@ export class SmartCron {
     }
 
     const keyInput = options.taskName || options.schedule!;
-    const cacheKey = generateCacheKey("cron-predict", keyInput);
+    const cacheKey = generateCacheKey("cron-predict", { key: keyInput });
     const useCache = options.useCache !== false;
 
     // Check cache

@@ -507,7 +507,7 @@ export class SmartPretty {
     const codeHash = hashContent(code);
     const cacheKey = generateCacheKey(
       "pretty-highlight",
-      `${codeHash}:${language}:${outputMode}:${theme}`,
+      { key: `${codeHash}:${language}:${outputMode}:${theme}` },
     );
 
     // Check cache
@@ -789,7 +789,7 @@ export class SmartPretty {
     );
     const cacheKey = generateCacheKey(
       "pretty-format",
-      `${codeHash}:${language}:${configHash}`,
+      { key: `${codeHash}:${language}:${configHash}` },
     );
 
     // Check cache (88% reduction for incremental format)
