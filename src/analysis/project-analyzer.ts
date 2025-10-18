@@ -360,12 +360,14 @@ export async function analyzeProjectTokens(
   }
 
   // Filter by date range if specified
+  // NOTE: UUID-based session IDs are currently included regardless of date filter
+  // Future enhancement: Use file mtime or first/last operation timestamp for UUID sessions
   if (startDate || endDate) {
     sessionFiles = sessionFiles.filter((file) => {
       const sessionId = extractSessionId(file);
       // Extract date from session ID (format: YYYYMMDD-HHMMSS-XXXX or UUID)
       const dateMatch = sessionId.match(/^(\d{8})/);
-      if (!dateMatch) return true; // Include UUID-based sessions
+      if (!dateMatch) return true; // Include UUID-based sessions (limitation)
 
       const fileDate = dateMatch[1];
       if (startDate && fileDate < startDate.replace(/-/g, '')) return false;

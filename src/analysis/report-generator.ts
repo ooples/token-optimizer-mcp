@@ -25,12 +25,14 @@ function escapeHtml(text: string): string {
 /**
  * Escape JSON for safe embedding in script tags
  * Prevents XSS by escaping characters that could break out of script context
+ * Specifically escapes </script> sequences and other special characters
  */
 function escapeJsonForScript(json: string): string {
   return json
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026')
+    .replace(/<!--/g, '\\u003c!--')
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
 }
@@ -1002,14 +1004,14 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
             <section class="section">
                 <h2 class="section-title">Token Distribution by Tool</h2>
                 <div class="chart-container">
-                    <div id="pie_chart" style="width: 100%; height: 450px;"></div>
+                    <div id="pie_chart" role="img" aria-label="Token distribution by tool" style="width: 100%; height: 450px;"></div>
                 </div>
             </section>
 
             <section class="section">
                 <h2 class="section-title">MCP Server Usage</h2>
                 <div class="chart-container">
-                    <div id="bar_chart" style="width: 100%; height: 450px;"></div>
+                    <div id="bar_chart" role="img" aria-label="Token usage by MCP server" style="width: 100%; height: 450px;"></div>
                 </div>
             </section>
 
@@ -1151,6 +1153,9 @@ ${escapeJsonForScript(JSON.stringify(analysis))}
             a.click();
         }
 
+        // NOTE: Client-side Markdown generation provides export functionality for the HTML report
+        // While this duplicates server-side logic, it enables standalone HTML files with export capabilities
+        // Future: Consider embedding pre-rendered Markdown in the page to reduce duplication
         function generateMarkdownReport(analysis) {
             let md = '# Project Token Analysis Report\\n\\n';
             md += 'Project: ' + analysis.projectPath + '\\n';
