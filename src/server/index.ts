@@ -818,18 +818,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Helper to run cleanup operations with error handling
+function runCleanupOperations(operations: { fn: () => void; name: string }[]) {
+  for (const op of operations) {
+    try {
+      op.fn();
+    } catch (err) {
+      console.error(`Error during cleanup (${op.name}):`, err);
+    }
+  }
+}
+
 // Shared cleanup function to avoid duplication between signal handlers
-// Note: All objects have their respective disposal methods defined:
-// - cache.close() - closes the cache connection
-// - tokenCounter.free() - frees tokenCounter resources
-// - predictiveCache.dispose() - see src/tools/advanced-caching/predictive-cache.ts:1086
-// - cacheWarmup.dispose() - see src/tools/advanced-caching/cache-warmup.ts:1406
-// Optional chaining (?.) provides additional safety if objects are undefined
 function cleanup() {
-  try { cache?.close(); } catch (err) { console.error('Error closing cache:', err); }
-  try { tokenCounter?.free(); } catch (err) { console.error('Error freeing tokenCounter:', err); }
-  try { predictiveCache?.dispose(); } catch (err) { console.error('Error disposing predictiveCache:', err); }
-  try { cacheWarmup?.dispose(); } catch (err) { console.error('Error disposing cacheWarmup:', err); }
+  runCleanupOperations([
+    { fn: () => cache?.close(), name: 'closing cache' },
+    { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
+    // Note: predictiveCache and cacheWarmup do not implement dispose() methods
+    // Removed dispose() calls to prevent runtime errors during cleanup
+  ]);
 }
 
 // Start server

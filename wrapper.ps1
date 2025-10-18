@@ -56,6 +56,7 @@ $global:AutoCacheConfig = @{
     HighTokenTools = @('Read', 'Grep', 'SmartTypeScript', 'WebFetch', 'WebSearch')
     CacheKeyPrefix = "auto-cache:"
     MCPTimeoutMs = 5000  # MCP server response timeout in milliseconds
+    MCPShutdownTimeoutMs = 5000  # MCP server shutdown timeout in milliseconds
 }
 
 # MCP Server Process (initialized on first tool call)
@@ -172,8 +173,8 @@ function Generate-CacheKey {
     $hasher = [System.Security.Cryptography.SHA256]::Create()
     try {
         $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))
-        # Use full hash (no truncation) to maintain collision resistance
-        $hash = [BitConverter]::ToString($hashBytes).Replace("-", "")
+        # Truncate hash to first 32 hex characters (16 bytes) for cache key efficiency
+        $hash = ([BitConverter]::ToString($hashBytes).Replace("-", "")).Substring(0,32)
         return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
     }
     finally {
@@ -195,6 +196,17 @@ function Get-CacheHitRate {
     else {
         return 0
     }
+}
+
+# Helper function to determine if a tool result should be cached
+# Encapsulates caching criteria logic for better maintainability
+function Should-CacheResult {
+    param(
+        [bool]$CacheHit,
+        [string]$ToolResult,
+        [int]$TokenDelta
+    )
+    return (-not $CacheHit -and -not [string]::IsNullOrWhiteSpace($ToolResult) -and $TokenDelta -ge $global:AutoCacheConfig.TokenThreshold)
 }
 
 function Check-AutoCache {
@@ -558,8 +570,8 @@ function Record-ToolCall {
     Write-CsvOperation -ToolName $ToolName -TokenEstimate $tokensDelta -McpServer $mcpServer
 
     # Automatic caching logic
-    # Explicit null/whitespace check to ensure meaningful content before caching
-    if (-not $CacheHit -and -not [string]::IsNullOrWhiteSpace($ToolResult) -and $tokensDelta -ge $global:AutoCacheConfig.TokenThreshold) {
+    # Use helper function to encapsulate caching criteria logic
+    if (Should-CacheResult -CacheHit $CacheHit -ToolResult $ToolResult -TokenDelta $tokensDelta) {
         Set-AutoCache -ToolName $ToolName -ToolArgs $ToolArgs -Result $ToolResult -TokenCount $tokensDelta
     }
 
@@ -691,8 +703,8 @@ function Invoke-ClaudeCodeWrapper {
             } catch {
                 Write-VerboseLog "Could not close StandardInput: $_"
             }
-            # Wait up to 5 seconds for process to exit
-            if (-not $global:MCPServerProcess.WaitForExit(5000)) {
+            # Wait up to configured timeout for process to exit
+            if (-not $global:MCPServerProcess.WaitForExit($global:AutoCacheConfig.MCPShutdownTimeoutMs)) {
                 $global:MCPServerProcess.Kill()
                 Write-VerboseLog "MCP server process forcefully terminated after timeout"
             }
