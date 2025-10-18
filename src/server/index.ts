@@ -530,6 +530,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Parse JSONL
+          // TODO: Refactor to use async fs.promises or streaming (readline/createReadStream)
+          // to avoid blocking event loop on large session logs
+          // TODO: Extract shared utility parseSessionLog(jsonlFilePath) that returns
+          // { operations, toolTokens, systemReminderTokens } to avoid duplication
+          // with index-backup.ts and maintain consistency
           const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
           const lines = jsonlContent.trim().split('\n');
 
@@ -557,7 +562,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   timestamp: event.timestamp,
                   toolName: event.toolName,
                   tokens,
-                  metadata: event.metadata || '',
+                  metadata: typeof event.metadata === 'string'
+                    ? event.metadata
+                    : event.metadata
+                      ? JSON.stringify(event.metadata)
+                      : '',
                 });
                 toolTokens += tokens;
               }

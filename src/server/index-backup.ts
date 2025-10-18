@@ -552,6 +552,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Parse JSONL
+          // TODO: Refactor to use async fs.promises or streaming (readline/createReadStream)
+          // to avoid blocking event loop on large session logs
           const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
           const lines = jsonlContent.trim().split('\n');
 
@@ -579,7 +581,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   timestamp: event.timestamp,
                   toolName: event.toolName,
                   tokens,
-                  metadata: event.metadata || '',
+                  metadata: typeof event.metadata === 'string'
+                    ? event.metadata
+                    : event.metadata !== undefined
+                      ? JSON.stringify(event.metadata)
+                      : '',
                 });
                 toolTokens += tokens;
               }
@@ -1066,6 +1072,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Read session-log.jsonl
           const jsonlFilePath = path.join(hooksDataPath, `session-log-${targetSessionId}.jsonl`);
 
+          // Error handling: Throwing errors here is consistent with MCP protocol
+          // which wraps tool errors in structured error responses automatically
           if (!fs.existsSync(jsonlFilePath)) {
             throw new Error(`JSONL log not found for session ${targetSessionId}`);
           }

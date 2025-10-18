@@ -31,6 +31,8 @@ case 'get_session_summary': {
     // Read session-log.jsonl
     const jsonlFilePath = path.join(hooksDataPath, `session-log-${targetSessionId}.jsonl`);
 
+    // Error handling: Throwing errors is consistent with MCP tool protocol
+    // which automatically wraps exceptions in structured error responses
     if (!fs.existsSync(jsonlFilePath)) {
       throw new Error(`JSONL log not found for session ${targetSessionId}`);
     }
