@@ -32,20 +32,7 @@ case 'get_session_summary': {
     const jsonlFilePath = path.join(hooksDataPath, `session-log-${targetSessionId}.jsonl`);
 
     if (!fs.existsSync(jsonlFilePath)) {
-      // Fallback: Use CSV format for backward compatibility
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: `JSONL log not found for session ${targetSessionId}. This session may not have JSONL logging enabled yet.`,
-              jsonlFilePath,
-              note: 'Use get_session_stats for CSV-based sessions',
-            }),
-          },
-        ],
-      };
+      throw new Error(`JSONL log not found for session ${targetSessionId}`);
     }
 
     // Parse JSONL file

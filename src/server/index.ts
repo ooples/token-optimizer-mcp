@@ -222,7 +222,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               format: 'date',
               pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
               description: 'Optional start date filter (YYYY-MM-DD format).',
             },
             endDate: {
@@ -235,7 +234,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
               minimum: 0,
-              default: 30,
               exclusiveMinimum: 0,
             },
           },
@@ -510,30 +508,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           const targetSessionId = sessionId || sessionData.sessionId;
 
-          // Read operations CSV
-          const csvFilePath = path.join(
+          // Read JSONL log
+          const jsonlFilePath = path.join(
             hooksDataPath,
-            `operations-${targetSessionId}.csv`
+            `session-log-${targetSessionId}.jsonl`
           );
 
-          if (!fs.existsSync(csvFilePath)) {
+          if (!fs.existsSync(jsonlFilePath)) {
             return {
               content: [
                 {
                   type: 'text',
                   text: JSON.stringify({
                     success: false,
-                    error: `Operations file not found for session ${targetSessionId}`,
-                    csvFilePath,
+                    error: `JSONL log not found for session ${targetSessionId}`,
+                    jsonlFilePath,
                   }),
                 },
               ],
             };
           }
 
-          // Parse CSV
-          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
-          const lines = csvContent.trim().split('\n');
+          // Parse JSONL
+          const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
+          const lines = jsonlContent.trim().split('\n');
 
           interface Operation {
             timestamp: string;
@@ -549,25 +547,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           for (const line of lines) {
             if (!line.trim()) continue;
 
-            const parts = line.split(',');
-            if (parts.length < 3) continue;
+            try {
+              const event = JSON.parse(line);
 
-            const timestamp = parts[0];
-            const toolName = parts[1];
-            const tokens = parseInt(parts[2], 10) || 0;
-            const metadata = parts[3] || '';
+              // Process tool calls
+              if (event.type === 'tool_call') {
+                const tokens = event.estimatedTokens || 0;
+                operations.push({
+                  timestamp: event.timestamp,
+                  toolName: event.toolName,
+                  tokens,
+                  metadata: event.metadata || '',
+                });
+                toolTokens += tokens;
+              }
 
-            operations.push({
-              timestamp,
-              toolName,
-              tokens,
-              metadata,
-            });
-
-            if (toolName === 'SYSTEM_REMINDERS') {
-              systemReminderTokens = tokens;
-            } else {
-              toolTokens += tokens;
+              // Process system reminders
+              if (event.type === 'system_reminder') {
+                const tokens = event.tokens || 0;
+                systemReminderTokens = tokens;
+              }
+            } catch (parseError) {
+              // Skip malformed JSONL lines
+              continue;
             }
           }
 
