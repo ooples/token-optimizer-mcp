@@ -14,7 +14,7 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$SessionId = "",
     [Parameter(Mandatory = $false)]
-    [string]$LogDir = "C:\Users\yolan\source\repos",
+    [string]$LogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs"),
     [Parameter(Mandatory = $false)]
     [switch]$VerboseLogging,
     [Parameter(Mandatory = $false)]
@@ -57,6 +57,7 @@ $global:AutoCacheConfig = @{
     CacheKeyPrefix = "auto-cache:"
     MCPTimeoutMs = 5000  # MCP server response timeout in milliseconds
     MCPShutdownTimeoutMs = 5000  # MCP server shutdown timeout in milliseconds
+    JsonConversionDepth = 10  # Depth for JSON conversion in cache key generation
 }
 
 # MCP Server Process (initialized on first tool call)
@@ -166,9 +167,9 @@ function Generate-CacheKey {
     )
 
     # Generate deterministic cache key from tool name and arguments
-    # Depth 10 handles most argument structures; configurable via AutoCacheConfig if needed
-    # Increase for deeply nested arguments to prevent truncation and cache key inconsistencies
-    $argsJson = $ToolArgs | ConvertTo-Json -Compress -Depth 10
+    # Uses JsonConversionDepth from AutoCacheConfig to handle nested argument structures
+    # Increase JsonConversionDepth for deeply nested arguments to prevent truncation and cache key inconsistencies
+    $argsJson = $ToolArgs | ConvertTo-Json -Compress -Depth $global:AutoCacheConfig.JsonConversionDepth
     $hashInput = "$ToolName|$argsJson"
 
     # Use SHA256 for deterministic hash with proper disposal
@@ -299,9 +300,9 @@ function Set-AutoCache {
 }
 
 function Initialize-MCPServer {
-    # NOTE: Full MCP server integration via stdio transport (JSON-RPC 2.0) is planned for future release
+    # TODO: Implement full MCP server integration via stdio transport (JSON-RPC 2.0)
     # Current implementation uses fallback simulation when MCP server is unavailable
-    # Future: Will spawn MCP server process (node dist/server/index.js) and establish stdio-based JSON-RPC communication
+    # Planned: Spawn MCP server process (node dist/server/index.js) and establish stdio-based JSON-RPC communication
 
     if ($null -ne $global:MCPServerProcess -and -not $global:MCPServerProcess.HasExited) {
         return $true
@@ -637,14 +638,15 @@ function Invoke-ClaudeCodeWrapper {
     try {
         Write-VerboseLog "Wrapper ready - monitoring for system warnings and tool calls"
 
-        # Simulated processing loop (in real usage, this would pipe claude-code stdout/stderr)
-        # For testing purposes, we'll show the structure
+        # Process stdin from claude-code (or test input via pipeline)
+        # Note: This loop processes input from stdin without interactive prompts
+        # to ensure wrapper can operate automatically in production
 
+        $input = [Console]::In
         while ($true) {
-            # Read line from stdin (in real wrapper, this comes from claude-code)
-            $line = Read-Host -Prompt "Input"
+            $line = $input.ReadLine()
 
-            if ($line -eq "exit" -or $line -eq "quit") {
+            if ($null -eq $line -or $line -eq "exit" -or $line -eq "quit") {
                 break
             }
 
@@ -655,9 +657,10 @@ function Invoke-ClaudeCodeWrapper {
 
                 # Check if this is a tool call transition (tokens increased)
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
-                    # Detect tool call (in real wrapper, we'd parse the tool name from surrounding context)
-                    # For now, we'll prompt for demo purposes
-                    $toolName = Read-Host -Prompt "Tool name"
+                    # Detect tool call from context
+                    # In production, tool name is parsed from claude-code output
+                    # For now, use a generic tool name when context is unavailable
+                    $toolName = "UnknownTool"
 
                     if (-not $inTurn) {
                         Start-Turn -UserMessagePreview $lastUserMessage
