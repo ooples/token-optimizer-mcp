@@ -166,6 +166,7 @@ function Generate-CacheKey {
     )
 
     # Generate deterministic cache key from tool name and arguments
+    # Depth 10 handles most argument structures; increase if needed for deeper nesting
     $argsJson = $ToolArgs | ConvertTo-Json -Compress -Depth 10
     $hashInput = "$ToolName|$argsJson"
 
@@ -174,6 +175,8 @@ function Generate-CacheKey {
     try {
         $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))
         # Truncate hash to first 32 hex characters (16 bytes) for cache key efficiency
+        # Trade-off: Reduces key length while maintaining reasonable collision resistance
+        # for typical cache sizes (collision probability ~1 in 2^128 for unique inputs)
         $hash = ([BitConverter]::ToString($hashBytes).Replace("-", "")).Substring(0,32)
         return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
     }
@@ -295,9 +298,9 @@ function Set-AutoCache {
 }
 
 function Initialize-MCPServer {
-    # TODO: Integrate with real MCP server via stdio transport (JSON-RPC 2.0)
-    # This function will spawn the MCP server process (node dist/server/index.js)
-    # and establish stdio-based communication using JSON-RPC protocol
+    # NOTE: Full MCP server integration via stdio transport (JSON-RPC 2.0) is planned for future release
+    # Current implementation uses fallback simulation when MCP server is unavailable
+    # Future: Will spawn MCP server process (node dist/server/index.js) and establish stdio-based JSON-RPC communication
 
     if ($null -ne $global:MCPServerProcess -and -not $global:MCPServerProcess.HasExited) {
         return $true
@@ -357,15 +360,16 @@ function Invoke-MCPTool {
         [hashtable]$Args
     )
 
-    # TODO: Integrate with real MCP server.
-    # This function will use JSON-RPC 2.0 over stdio to communicate with the MCP server
-    # The implementation should:
+    # NOTE: Full MCP JSON-RPC 2.0 stdio integration planned for future release
+    # Current implementation provides fallback simulation for testing/development
+    # Fallback provides realistic cache behavior without requiring running MCP server
+    # Future implementation will:
     # 1. Call Initialize-MCPServer to ensure the server is running
-    # 2. Build a JSON-RPC request: { "jsonrpc": "2.0", "id": N, "method": "tools/call", "params": {...} }
-    # 3. Write the request to the MCP server's stdin
-    # 4. Read the response from the MCP server's stdout
-    # 5. Parse the JSON-RPC response and extract the result
-    # 6. Handle errors appropriately
+    # 2. Build JSON-RPC request: { "jsonrpc": "2.0", "id": N, "method": "tools/call", "params": {...} }
+    # 3. Write request to MCP server's stdin
+    # 4. Read response from MCP server's stdout
+    # 5. Parse JSON-RPC response and extract result
+    # 6. Handle errors with appropriate fallback
 
     Write-VerboseLog "MCP Tool Call: $ToolName with args: $($Args | ConvertTo-Json -Compress)"
 
