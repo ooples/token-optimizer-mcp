@@ -181,6 +181,9 @@ function Generate-CacheKey {
     }
 }
 
+# Helper function to calculate cache hit rate percentage
+# Extracted to avoid code duplication across turn end and other reporting functions
+# Returns percentage rounded to 2 decimal places, or 0 if no cache operations
 function Get-CacheHitRate {
     param(
         [int]$Hits,
