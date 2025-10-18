@@ -107,7 +107,7 @@ export interface RootCause {
 export interface Evidence {
   type: 'statistical' | 'temporal' | 'causal' | 'contextual';
   description: string;
-  strength: number;
+  strength?: number;
   data?: any;
 }
 
@@ -362,6 +362,9 @@ export class AnomalyExplainer {
     // Calculate overall confidence
     const confidence = this.calculateExplanationConfidence(rootCauses, contributingFactors);
 
+    // Calculate anomaly score
+    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
+
     // Generate summary
     const summary = this.generateExplanationSummary(anomaly, rootCauses, anomalyScore);
 
@@ -405,6 +408,9 @@ export class AnomalyExplainer {
 
     const contributingFactors = this.identifyContributingFactors(anomaly, historicalData);
     const confidence = this.calculateExplanationConfidence(enrichedCauses, contributingFactors);
+
+    // Calculate anomaly score
+    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
 
     return {
       summary: this.generateRootCauseSummary(enrichedCauses),
@@ -548,7 +554,7 @@ export class AnomalyExplainer {
 
     // Determine result
     const avgStrength = evidence.length > 0
-      ? evidence.reduce((sum, e) => sum + e.strength, 0) / evidence.length
+      ? evidence.reduce((sum, e) => sum + (e.strength ?? 0), 0) / evidence.length
       : 0;
 
     let result: 'confirmed' | 'rejected' | 'inconclusive';
@@ -797,6 +803,7 @@ export class AnomalyExplainer {
     }
 
     const values = historicalData.map(d => d.value);
+    const meanVal = mean(values);
     const stdDevVal = stdev(values);
 
     // Z-score
@@ -936,7 +943,7 @@ export class AnomalyExplainer {
   private generateExplanationSummary(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
     rootCauses: RootCause[],
-    anomalyScore: number
+    _anomalyScore: number
   ): string {
     const direction = anomaly.value > anomaly.expectedValue ? 'increase' : 'decrease';
     const magnitude = Math.abs(anomaly.deviation).toFixed(1);
