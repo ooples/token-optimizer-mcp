@@ -788,33 +788,6 @@ export class AnomalyExplainer {
   // Helper Methods
   // ============================================================================
 
-  private calculateAnomalyScore(
-    anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
-    historicalData: Array<{ timestamp: number; value: number }>
-  ): number {
-    if (historicalData.length === 0) {
-      return Math.abs(anomaly.deviation);
-    }
-
-    const values = historicalData.map(d => d.value);
-    const stdDevVal = stdev(values);
-
-    // Z-score
-    const zScore = stdDevVal > 0 ? Math.abs(anomaly.value - meanVal) / stdDevVal : 0;
-
-    // IQR method
-    const q1 = percentile(values, 0.25);
-    const q3 = percentile(values, 0.75);
-    const iqr = q3 - q1;
-    const lowerBound = q1 - 1.5 * iqr;
-    const upperBound = q3 + 1.5 * iqr;
-    const iqrScore = anomaly.value < lowerBound || anomaly.value > upperBound ?
-                     Math.abs(anomaly.value - meanVal) / iqr : 0;
-
-    // Combined score
-    return Math.max(zScore, iqrScore);
-  }
-
   private async identifyRootCauses(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
     _historicalData: Array<{ timestamp: number; value: number }>,
@@ -936,7 +909,7 @@ export class AnomalyExplainer {
   private generateExplanationSummary(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
     rootCauses: RootCause[],
-    anomalyScore: number
+    _anomalyScore: number
   ): string {
     const direction = anomaly.value > anomaly.expectedValue ? 'increase' : 'decrease';
     const magnitude = Math.abs(anomaly.deviation).toFixed(1);
