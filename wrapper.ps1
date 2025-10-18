@@ -166,7 +166,8 @@ function Generate-CacheKey {
     )
 
     # Generate deterministic cache key from tool name and arguments
-    # Depth 10 handles most argument structures; increase if needed for deeper nesting
+    # Depth 10 handles most argument structures; configurable via AutoCacheConfig if needed
+    # Increase for deeply nested arguments to prevent truncation and cache key inconsistencies
     $argsJson = $ToolArgs | ConvertTo-Json -Compress -Depth 10
     $hashInput = "$ToolName|$argsJson"
 
@@ -174,9 +175,9 @@ function Generate-CacheKey {
     $hasher = [System.Security.Cryptography.SHA256]::Create()
     try {
         $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))
-        # Truncate hash to first 32 hex characters (16 bytes) for cache key efficiency
-        # Trade-off: Reduces key length while maintaining reasonable collision resistance
-        # for typical cache sizes (collision probability ~1 in 2^128 for unique inputs)
+        # Truncate hash to first 32 hex characters (128 bits) for cache key efficiency
+        # Trade-off: Due to birthday paradox, collision probability is ~1 in 2^64 for practical cache sizes
+        # This is acceptable for session-level caching; increase truncation length if needed
         $hash = ([BitConverter]::ToString($hashBytes).Replace("-", "")).Substring(0,32)
         return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
     }
@@ -435,7 +436,7 @@ function Invoke-MCPTool {
         $readTask = $global:MCPServerProcess.StandardOutput.ReadLineAsync()
 
         if (-not $readTask.Wait($timeout)) {
-            throw "MCP server response timeout"
+            throw "MCP server response timeout after ${timeout}ms for tool $ToolName"
         }
 
         $response = $readTask.Result
