@@ -10,6 +10,9 @@ import {
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
+import { MetricsCollector } from '../core/metrics.js';
+import { getPredictiveCacheTool, PREDICTIVE_CACHE_TOOL_DEFINITION } from '../tools/advanced-caching/predictive-cache.js';
+import { getCacheWarmupTool, CACHE_WARMUP_TOOL_DEFINITION } from '../tools/advanced-caching/cache-warmup.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -18,6 +21,11 @@ import os from 'os';
 const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
+const metrics = new MetricsCollector();
+
+// Initialize advanced caching tools
+const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
+const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
@@ -196,21 +204,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
-      {
-        name: 'lookup_cache',
-        description:
-          'Look up a cached value by key. Returns a JSON object with a "found" flag and the cached value if found; otherwise, "found" is false and "compressed" is omitted. Used by the wrapper for real-time cache injection.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            key: {
-              type: 'string',
-              description: 'Cache key to look up (e.g., file path for cached file contents)',
-            },
-          },
-          required: ['key'],
-        },
-      },
+      PREDICTIVE_CACHE_TOOL_DEFINITION,
+      CACHE_WARMUP_TOOL_DEFINITION,
     ],
   };
 });
@@ -777,65 +772,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      case 'lookup_cache': {
-        /**
-         * lookup_cache: Look up a cached value by key.
-         *
-         * Returns the cached value if found (in compressed format).
-         * The returned 'cached' value is base64-encoded Brotli-compressed data
-         * as stored by previous cache.set operations. Caller is responsible for
-         * decompressing using CompressionEngine.decompressFromBase64() if needed.
-         *
-         * @param {string} key - Cache key to look up
-         * @returns {Object} Response with success, found flags, and compressed data if found
-         */
-        const { key } = args as { key: string };
+      case 'predictive_cache': {
+        const options = args as any;
+        const result = await predictiveCache.run(options);
 
-        try {
-          const cached = cache.get(key);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
 
-          if (!cached) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: false,
-                    found: false,
-                    key,
-                  }),
-                },
-              ],
-            };
-          }
+      case 'cache_warmup': {
+        const options = args as any;
+        const result = await cacheWarmup.run(options);
 
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  success: true,
-                  found: true,
-                  key,
-                  compressed: cached,
-                }),
-              },
-            ],
-          };
-        } catch (error) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  success: false,
-                  error: error instanceof Error ? error.message : String(error),
-                }),
-              },
-            ],
-            isError: true,
-          };
-        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
       }
 
       default:
@@ -856,21 +818,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// Helper to run cleanup operations with error handling
+function runCleanupOperations(operations: { fn: () => void; name: string }[]) {
+  for (const op of operations) {
+    try {
+      op.fn();
+    } catch (err) {
+      console.error(`Error during cleanup (${op.name}):`, err);
+    }
+  }
+}
+
+// Shared cleanup function to avoid duplication between signal handlers
+function cleanup() {
+  runCleanupOperations([
+    { fn: () => cache?.close(), name: 'closing cache' },
+    { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
+    // Note: predictiveCache and cacheWarmup do not implement dispose() methods
+    // Removed dispose() calls to prevent runtime errors during cleanup
+  ]);
+}
+
 // Start server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Cleanup on exit
+  // Cleanup on exit - Note: the signal handlers use try-catch blocks
+  // to ensure cleanup continues even if disposal fails
   process.on('SIGINT', () => {
-    cache.close();
-    tokenCounter.free();
+    cleanup();
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
-    cache.close();
-    tokenCounter.free();
+    cleanup();
     process.exit(0);
   });
 }

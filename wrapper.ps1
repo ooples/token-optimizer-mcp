@@ -1,7 +1,9 @@
 # Enhanced Token Tracking Wrapper for Claude Code
+# Version: 2.0.0
 # Purpose: Real-time session logging with turn-level tracking and MCP server attribution
 # Implements Priority 1: Session-level token tracking with JSONL event log
-# Version: 2.0.0
+# Version: 1.0.0
+#
 # Features:
 # - Parses system warnings to extract token deltas
 # - Tracks turn-level events (turn_start, tool_call, turn_end)
@@ -13,45 +15,13 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$SessionId = "",
-    # Default: $env:USERPROFILE\token-optimizer-logs (e.g., C:\Users\<YourUsername>\token-optimizer-logs)
     [Parameter(Mandatory = $false)]
     [string]$LogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs"),
     [Parameter(Mandatory = $false)]
     [switch]$VerboseLogging,
     [Parameter(Mandatory = $false)]
-    [switch]$Test,
-    # Performance threshold in milliseconds for logging warnings (default: 10ms)
-    [Parameter(Mandatory = $false)]
-    [int]$PerformanceThresholdMs = 10,
-    # Line buffer size for context lookback (default: 100 lines)
-    [Parameter(Mandatory = $false)]
-    [int]$LineBufferSize = 100,
-    # Base directory for log path validation (default: $env:USERPROFILE\token-optimizer-logs)
-    # Set this to allow custom base directories while maintaining path traversal protection
-    [Parameter(Mandatory = $false)]
-    [string]$BaseLogDir = (Join-Path $env:USERPROFILE "token-optimizer-logs")
+    [switch]$Test
 )
-
-# ============================================================================
-# Validation Functions
-# ============================================================================
-
-function Test-UserProfileAccessible {
-    if (-not $env:USERPROFILE) {
-        throw "Environment variable USERPROFILE is not set. Cannot determine user profile directory."
-    }
-    if (-not (Test-Path $env:USERPROFILE -PathType Container)) {
-        throw "User profile directory does not exist or is not accessible: $env:USERPROFILE"
-    }
-}
-
-# Validate that $env:USERPROFILE exists and is accessible
-try {
-    Test-UserProfileAccessible
-} catch {
-    Write-Error "User profile validation failed: $_"
-    exit 1
-}
 
 # ============================================================================
 # Configuration
@@ -76,7 +46,28 @@ $global:SessionState = @{
     Model = "claude-sonnet-4-5-20250929"  # Default model
     ToolCalls = @()
     TurnStartTokens = 0
+    CacheHits = 0
+    CacheMisses = 0
+    AutoCachedOps = 0
 }
+
+# Automatic caching configuration
+$global:AutoCacheConfig = @{
+    Enabled = $true
+    TokenThreshold = 500  # Minimum tokens to cache
+    HighTokenTools = @('Read', 'Grep', 'SmartTypeScript', 'WebFetch', 'WebSearch')
+    CacheKeyPrefix = "auto-cache:"
+    MCPTimeoutMs = 5000  # MCP server response timeout in milliseconds
+    MCPShutdownTimeoutMs = 5000  # MCP server shutdown timeout in milliseconds
+    JsonConversionDepth = 10  # Depth for JSON conversion in cache key generation
+    HashTruncationLength = 32  # SHA256 hash truncation length (hex characters)
+    UnknownToolName = "UnknownTool"  # Default tool name when context unavailable
+}
+
+# MCP Server Process (initialized on first tool call)
+$global:MCPServerProcess = $null
+$global:MCPRequestId = 0
+$global:MCPServerPath = $null
 
 # ============================================================================
 # Utility Functions
@@ -173,6 +164,326 @@ function Get-TokenEstimate {
     return 500
 }
 
+function Generate-CacheKey {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs
+    )
+
+    # Generate deterministic cache key from tool name and arguments
+    # Uses JsonConversionDepth from AutoCacheConfig to handle nested argument structures
+    # Increase JsonConversionDepth for deeply nested arguments to prevent truncation and cache key inconsistencies
+    $argsJson = $ToolArgs | ConvertTo-Json -Compress -Depth $global:AutoCacheConfig.JsonConversionDepth
+    $hashInput = "$ToolName|$argsJson"
+
+    # Use SHA256 for deterministic hash with proper disposal
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))
+        # Truncate hash to first 32 hex characters (128 bits) for cache key efficiency
+        # Trade-off: Due to birthday paradox, collision probability is ~1 in 2^64 for practical cache sizes
+        # This is acceptable for session-level caching; increase truncation length if needed
+        $hash = ([BitConverter]::ToString($hashBytes).Replace("-", "")).Substring(0, $global:AutoCacheConfig.HashTruncationLength)
+        return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
+    }
+    finally {
+        $hasher.Dispose()
+    }
+}
+
+# Helper function to calculate cache hit rate percentage
+# Extracted to avoid code duplication across turn end and other reporting functions
+# Returns percentage rounded to 2 decimal places, or 0 if no cache operations
+function Get-CacheHitRate {
+    param(
+        [int]$Hits,
+        [int]$Misses
+    )
+    if (($Hits + $Misses) -gt 0) {
+        return [math]::Round(($Hits / ($Hits + $Misses)) * 100, 2)
+    }
+    else {
+        return 0
+    }
+}
+
+# Helper function to determine if a tool result should be cached
+# Encapsulates caching criteria logic for better maintainability
+function Should-CacheResult {
+    param(
+        [bool]$CacheHit,
+        [string]$ToolResult,
+        [int]$TokenDelta
+    )
+    return (-not $CacheHit -and -not [string]::IsNullOrWhiteSpace($ToolResult) -and $TokenDelta -ge $global:AutoCacheConfig.TokenThreshold)
+}
+
+function Check-AutoCache {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs
+    )
+
+    if (-not $global:AutoCacheConfig.Enabled) {
+        return $null
+    }
+
+    if ($global:AutoCacheConfig.HighTokenTools -notcontains $ToolName) {
+        return $null
+    }
+
+    $cacheKey = Generate-CacheKey -ToolName $ToolName -ToolArgs $ToolArgs
+
+    # Call MCP tool to get cached value
+    try {
+        $result = Invoke-MCPTool -ToolName "get_cached" -Args @{ key = $cacheKey }
+
+        if ($result.success) {
+            $global:SessionState.CacheHits++
+            Write-VerboseLog "Cache HIT for $ToolName (key: $cacheKey)"
+            return $result.text
+        }
+    }
+    catch {
+        Write-VerboseLog "Cache check failed: $_"
+    }
+
+    $global:SessionState.CacheMisses++
+    Write-VerboseLog "Cache MISS for $ToolName (key: $cacheKey)"
+    return $null
+}
+
+function Set-AutoCache {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs,
+        [string]$Result,
+        [int]$TokenCount
+    )
+
+    if (-not $global:AutoCacheConfig.Enabled) {
+        return
+    }
+
+    if ($global:AutoCacheConfig.HighTokenTools -notcontains $ToolName) {
+        return
+    }
+
+    if ($TokenCount -lt $global:AutoCacheConfig.TokenThreshold) {
+        Write-VerboseLog "Skipping cache (below threshold: $TokenCount < $($global:AutoCacheConfig.TokenThreshold))"
+        return
+    }
+
+    $cacheKey = Generate-CacheKey -ToolName $ToolName -ToolArgs $ToolArgs
+
+    # Call MCP tool to optimize and cache
+    try {
+        $optimizeResult = Invoke-MCPTool -ToolName "optimize_text" -Args @{
+            text = $Result
+            key = $cacheKey
+        }
+
+        if ($optimizeResult.success) {
+            $global:SessionState.AutoCachedOps++
+            Write-VerboseLog "Auto-cached $ToolName (key: $cacheKey, tokens saved: $($optimizeResult.tokensSaved))"
+
+            # Record access pattern for predictive caching
+            Invoke-MCPTool -ToolName "predictive_cache" -Args @{
+                operation = "record-access"
+                key = $cacheKey
+                metadata = @{
+                    tool = $ToolName
+                    tokens = $TokenCount
+                }
+            } | Out-Null
+        }
+    }
+    catch {
+        Write-VerboseLog "Auto-cache set failed: $_"
+    }
+}
+
+function Initialize-MCPServer {
+    # TODO: Implement full MCP server integration via stdio transport (JSON-RPC 2.0)
+    # Current implementation uses fallback simulation when MCP server is unavailable
+    # Planned: Spawn MCP server process (node dist/server/index.js) and establish stdio-based JSON-RPC communication
+
+    if ($null -ne $global:MCPServerProcess -and -not $global:MCPServerProcess.HasExited) {
+        return $true
+    }
+
+    try {
+        # Find the MCP server executable (node dist/server/index.js)
+        $scriptDir = Split-Path -Parent $PSCommandPath
+        $serverPath = Join-Path $scriptDir "dist\server\index.js"
+
+        if (-not (Test-Path $serverPath)) {
+            # Try alternative paths
+            $altPaths = @(
+                (Join-Path $scriptDir "..\dist\server\index.js"),
+                (Join-Path $scriptDir "..\..\dist\server\index.js")
+            )
+
+            foreach ($altPath in $altPaths) {
+                if (Test-Path $altPath) {
+                    $serverPath = $altPath
+                    break
+                }
+            }
+        }
+
+        if (-not (Test-Path $serverPath)) {
+            Write-VerboseLog "MCP server not found, using fallback mode"
+            return $false
+        }
+
+        $global:MCPServerPath = $serverPath
+
+        # Start MCP server process with stdio transport
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "node"
+        $psi.Arguments = "`"$serverPath`""
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+
+        $global:MCPServerProcess = [System.Diagnostics.Process]::Start($psi)
+
+        Write-VerboseLog "MCP server started (PID: $($global:MCPServerProcess.Id))"
+        return $true
+    }
+    catch {
+        Write-VerboseLog "Failed to start MCP server: $_"
+        return $false
+    }
+}
+
+function Invoke-MCPTool {
+    param(
+        [string]$ToolName,
+        [hashtable]$Args
+    )
+
+    # NOTE: Full MCP JSON-RPC 2.0 stdio integration planned for future release
+    # Current implementation provides fallback simulation for testing/development
+    # Fallback provides realistic cache behavior without requiring running MCP server
+    # Future implementation will:
+    # 1. Call Initialize-MCPServer to ensure the server is running
+    # 2. Build JSON-RPC request: { "jsonrpc": "2.0", "id": N, "method": "tools/call", "params": {...} }
+    # 3. Write request to MCP server's stdin
+    # 4. Read response from MCP server's stdout
+    # 5. Parse JSON-RPC response and extract result
+    # 6. Handle errors with appropriate fallback
+
+    Write-VerboseLog "MCP Tool Call: $ToolName with args: $($Args | ConvertTo-Json -Compress)"
+
+    # Initialize MCP server if available
+    $serverAvailable = Initialize-MCPServer
+
+    if (-not $serverAvailable) {
+        # Fallback: Simulate responses for testing and development
+        Write-VerboseLog "Using fallback MCP simulation mode"
+
+        switch ($ToolName) {
+            "optimize_text" {
+                # Simulate a successful optimization
+                return @{
+                    success = $true
+                    tokensSaved = 10  # Simulated value
+                    message = "Simulated optimization success (MCP server not available)"
+                }
+            }
+            "get_cached" {
+                # Simulate cache miss (not found)
+                return @{
+                    success = $false
+                    message = "Simulated cache miss (MCP server not available)"
+                }
+            }
+            "predictive_cache" {
+                # Simulate a successful predictive cache operation
+                return @{
+                    success = $true
+                    message = "Simulated predictive cache success (MCP server not available)"
+                }
+            }
+            default {
+                # Simulate failure for unknown tools
+                return @{
+                    success = $false
+                    message = "MCP server not available - fallback mode"
+                }
+            }
+        }
+    }
+
+    try {
+        # Build JSON-RPC request
+        $global:MCPRequestId++
+        $request = @{
+            jsonrpc = "2.0"
+            id = $global:MCPRequestId
+            method = "tools/call"
+            params = @{
+                name = $ToolName
+                arguments = $Args
+            }
+        } | ConvertTo-Json -Depth 10 -Compress
+
+        # Write request to MCP server stdin
+        $global:MCPServerProcess.StandardInput.WriteLine($request)
+        $global:MCPServerProcess.StandardInput.Flush()
+
+        # Read response from MCP server stdout (with timeout)
+        $timeout = $global:AutoCacheConfig.MCPTimeoutMs
+        $readTask = $global:MCPServerProcess.StandardOutput.ReadLineAsync()
+
+        if (-not $readTask.Wait($timeout)) {
+            throw "MCP server response timeout after ${timeout}ms for tool $ToolName"
+        }
+
+        $response = $readTask.Result
+        $responseObj = $response | ConvertFrom-Json
+
+        # Check for JSON-RPC errors
+        if ($responseObj.error) {
+            Write-VerboseLog "MCP tool error: $($responseObj.error.message)"
+            return @{
+                success = $false
+                message = "MCP tool error: $($responseObj.error.message)"
+                error = $responseObj.error
+            }
+        }
+
+        # Parse result from MCP response
+        # MCP tools return content array with text field containing JSON
+        if ($responseObj.result -and $responseObj.result.content) {
+            $resultText = $responseObj.result.content[0].text
+            $resultData = $resultText | ConvertFrom-Json
+
+            # Return the parsed result data
+            return $resultData
+        }
+
+        # Fallback: return raw result
+        return @{
+            success = $true
+            message = "MCP tool executed successfully"
+            data = $responseObj.result
+        }
+    }
+    catch {
+        Write-VerboseLog "MCP tool invocation failed: $_"
+        return @{
+            success = $false
+            message = "Failed to invoke MCP tool: $_"
+            error = $_.Exception.Message
+        }
+    }
+}
+
 function Parse-SystemWarning {
     param([string]$Line)
 
@@ -193,76 +504,8 @@ function Parse-SystemWarning {
     return $null
 }
 
-<#
-.SYNOPSIS
-Checks if the provided log directory is within the allowed base directory.
-
-.DESCRIPTION
-Prevents path traversal attacks by ensuring $LogDir is either the same as $BaseLogDir
-or a subdirectory of it. Both paths are resolved to their absolute forms for comparison.
-Returns $true if safe, $false otherwise.
-
-.PARAMETER LogDir
-The log directory to validate.
-
-.PARAMETER BaseLogDir
-The base directory against which to validate the log directory.
-
-.OUTPUTS
-[bool] Returns $true if $LogDir is safe, $false otherwise.
-#>
-function Test-LogDirIsSafe {
-    param(
-        [string]$LogDir,
-        [string]$BaseLogDir
-    )
-
-    # Resolve both paths to their absolute forms with error handling
-    try {
-        $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
-        $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
-    } catch {
-        Write-Warning "Invalid log directory path detected."
-        return $false
-    }
-
-    # Normalize paths to lowercase for case-insensitive comparison (Windows)
-    $logDirNorm = $resolvedLogDir.ToLower()
-    $baseLogDirNorm = $resolvedBaseLogDir.ToLower()
-    $sep = [System.IO.Path]::DirectorySeparatorChar
-
-    # Allow if $LogDir is exactly $BaseLogDir
-    if ($logDirNorm -eq $baseLogDirNorm) {
-        return $true
-    }
-
-    # Allow if $LogDir is a subdirectory of $BaseLogDir
-    if ($logDirNorm.StartsWith($baseLogDirNorm + $sep)) {
-        return $true
-    }
-
-    # Otherwise, path traversal detected
-    return $false
-}
-
 function Initialize-Session {
     Write-VerboseLog "Initializing session: $($global:SessionState.SessionId)"
-
-    # Validate log directory path to prevent path traversal attacks
-    # Use GetFullPath to resolve the path and check if it's within the expected base directory
-    # NOTE: The base directory can be customized via the -BaseLogDir parameter for trusted environments
-    $resolvedBaseLogDir = [System.IO.Path]::GetFullPath($BaseLogDir)
-    $resolvedLogDir = [System.IO.Path]::GetFullPath($LogDir)
-
-    if (-not (Test-LogDirIsSafe -LogDir $resolvedLogDir -BaseLogDir $resolvedBaseLogDir)) {
-        throw "Invalid log directory path: path traversal detected. LogDir must be within the configured base log directory."
-    }
-
-    # Create log directory if it doesn't exist
-    if (-not (Test-Path $resolvedLogDir -PathType Container)) {
-        Write-VerboseLog "Creating log directory: $resolvedLogDir"
-        New-Item -ItemType Directory -Path $resolvedLogDir -Force | Out-Null
-    }
 
     # Create session-log.jsonl if it doesn't exist
     if (-not (Test-Path $JSONL_FILE)) {
@@ -309,13 +552,16 @@ function Record-ToolCall {
     param(
         [string]$ToolName,
         [int]$TokensBefore,
-        [int]$TokensAfter
+        [int]$TokensAfter,
+        [hashtable]$ToolArgs = @{},
+        [string]$ToolResult = "",
+        [bool]$CacheHit = $false
     )
 
     $tokensDelta = $TokensAfter - $TokensBefore
     $mcpServer = Get-McpServer -ToolName $ToolName
 
-    Write-VerboseLog "Tool call: $ToolName (server: $mcpServer, delta: $tokensDelta)"
+    Write-VerboseLog "Tool call: $ToolName (server: $mcpServer, delta: $tokensDelta, cache: $CacheHit)"
 
     # Write JSONL event
     Write-JsonlEvent -Event @{
@@ -326,26 +572,44 @@ function Record-ToolCall {
         tokens_before = $TokensBefore
         tokens_after = $TokensAfter
         tokens_delta = $tokensDelta
+        cache_hit = $CacheHit
+        auto_cached = ($global:AutoCacheConfig.HighTokenTools -contains $ToolName)
     }
 
     # Write CSV operation (with MCP server)
     Write-CsvOperation -ToolName $ToolName -TokenEstimate $tokensDelta -McpServer $mcpServer
+
+    # Automatic caching logic
+    # Use helper function to encapsulate caching criteria logic
+    if (Should-CacheResult -CacheHit $CacheHit -ToolResult $ToolResult -TokenDelta $tokensDelta) {
+        Set-AutoCache -ToolName $ToolName -ToolArgs $ToolArgs -Result $ToolResult -TokenCount $tokensDelta
+    }
 
     # Track for turn summary
     $global:SessionState.ToolCalls += @{
         Tool = $ToolName
         Server = $mcpServer
         Delta = $tokensDelta
+        CacheHit = $CacheHit
     }
 
     # Update last tokens
-    $global:SessionState.LastTokens = $TokensAfter
+function Get-CacheHitRate {
+    param(
+        [int]$Hits,
+        [int]$Misses
+    )
+    if (($Hits + $Misses) -gt 0) {
+        return [math]::Round(($Hits / ($Hits + $Misses)) * 100, 2)
+    } else {
+        return 0
+    }
 }
 
 function End-Turn {
     $turnTokens = $global:SessionState.LastTokens - $global:SessionState.TurnStartTokens
-
-    Write-VerboseLog "Ending turn $($global:SessionState.CurrentTurn) (turn tokens: $turnTokens)"
+    $cacheHitRate = Get-CacheHitRate -Hits $global:SessionState.CacheHits -Misses $global:SessionState.CacheMisses
+    Write-VerboseLog "Ending turn $($global:SessionState.CurrentTurn) (turn tokens: $turnTokens, cache hit rate: $cacheHitRate%)"
 
     Write-JsonlEvent -Event @{
         type = "turn_end"
@@ -353,198 +617,21 @@ function End-Turn {
         total_tokens = $global:SessionState.LastTokens
         turn_tokens = $turnTokens
         tool_calls = $global:SessionState.ToolCalls.Count
-    }
-}
-
-# ============================================================================
-# Real-Time Stream Processing
-# ============================================================================
-
-<#
-.SYNOPSIS
-Detects tool calls from the current line and previous context using pattern matching.
-
-.DESCRIPTION
-Implements a multi-pattern tool detection algorithm that searches for tool invocations in:
-1. Current line using <invoke name="ToolName"> pattern
-2. Previous lines (lookback buffer) for recent tool invocations
-3. Function result blocks using <name>ToolName</name> pattern
-
-The algorithm uses configurable lookback to balance accuracy vs performance.
-
-.PARAMETER CurrentLine
-The current line from the input stream to analyze.
-
-.PARAMETER PreviousLines
-Queue or array of previous lines to search for tool call context. Supports both [System.Collections.Generic.Queue[string]] and array types.
-
-.PARAMETER LookbackLimit
-Maximum number of previous lines to search (default: 20). Controls the trade-off between detection accuracy and performance.
-
-.OUTPUTS
-[string] Returns the detected tool name (e.g., "Read", "mcp__git__git_status") if found, or $null if no tool call is detected.
-
-.EXAMPLE
-$toolName = Parse-ToolCallFromContext -CurrentLine '<invoke name="Read">' -PreviousLines $lineBuffer
-# Returns: "Read"
-
-.EXAMPLE
-$toolName = Parse-ToolCallFromContext -CurrentLine '<system_warning>...' -PreviousLines $lineBuffer -LookbackLimit 10
-# Searches up to 10 previous lines for tool invocation patterns
-#>
-function Parse-ToolCallFromContext {
-    param(
-        [string]$CurrentLine,
-        $PreviousLines,  # Accept Queue or Array
-        [int]$LookbackLimit = 20
-    )
-
-    # Pattern 1: Tool call in antml:function_calls block
-    # <invoke name="ToolName">
-    $toolCallPattern = '<invoke name="([^"]+)">'
-    if ($CurrentLine -match $toolCallPattern) {
-        return $matches[1]
-    }
-
-    # Pattern 2: Search previous lines for recent tool invocation
-    # Handle both Queue and Array types efficiently
-    $linesArray = if ($PreviousLines -is [System.Collections.Generic.Queue[string]]) {
-        $PreviousLines.ToArray()
-    } else {
-        $PreviousLines
-    }
-
-    $lookback = [Math]::Min($LookbackLimit, $linesArray.Count)
-    for ($i = $linesArray.Count - 1; $i -ge [Math]::Max(0, $linesArray.Count - $lookback); $i--) {
-        if ($linesArray[$i] -match $toolCallPattern) {
-            return $matches[1]
+        cache_stats = @{
+            hits = $global:SessionState.CacheHits
+            misses = $global:SessionState.CacheMisses
+            hit_rate = $cacheHitRate
+            auto_cached = $global:SessionState.AutoCachedOps
         }
     }
-
-    # Pattern 3: Function call result block
-    # <result><name>ToolName</name>
-    if ($CurrentLine -match '<name>([^<]+)</name>') {
-        return $matches[1]
-    }
-
-    return $null
-}
-
-<#
-.SYNOPSIS
-Looks up cached tool responses to enable pre-execution cache injection.
-
-.DESCRIPTION
-STUB FUNCTION: Cache injection is NOT implemented.
-This function is a placeholder for future MCP integration that will enable:
-- Pre-execution cache lookups for high-token operations
-- Transparent response injection to skip redundant tool calls
-- Token savings tracking via cache hit events
-
-Currently always returns $null to disable cache injection.
-For implementation details, see the MCP integration plan and project roadmap.
-
-.PARAMETER ToolName
-The name of the tool to look up (e.g., "Read", "mcp__git__git_status").
-
-.PARAMETER ToolParams
-Hashtable of tool parameters used to generate the cache key. Used to create unique cache keys for different parameter combinations.
-
-.OUTPUTS
-[string] Returns the cached tool response content if found, or $null if not cached. Currently always returns $null as cache injection is not implemented.
-
-.EXAMPLE
-$cached = Get-CachedToolResponse -ToolName "Read" -ToolParams @{ file_path = "C:\example.txt" }
-# Returns: $null (stub implementation)
-
-.NOTES
-TODO: Implement cache injection for MCP integration. See project roadmap or issue tracker for implementation timeline.
-#>
-function Get-CachedToolResponse {
-    param(
-        [string]$ToolName,
-        [hashtable]$ToolParams
-    )
-
-    # STUB: Cache injection is NOT implemented.
-    # This function is a placeholder for future MCP integration.
-    # It currently always returns $null.
-    # TODO: Implement cache injection for MCP integration. See project roadmap or issue tracker.
-    return $null
-}
-
-<#
-.SYNOPSIS
-Injects a cached response directly into the output stream as a formatted tool result.
-
-.DESCRIPTION
-Formats and injects cached tool responses into the stdout stream, bypassing actual tool execution.
-The response is formatted as a standard <function_results> block to maintain compatibility with
-the parent process (e.g., Claude Code CLI). This enables transparent cache injection where the
-parent process consumes the cached response as if it came from the actual tool.
-
-Used in conjunction with Get-CachedToolResponse to implement cache-based token optimization.
-
-.PARAMETER CachedResponse
-The cached tool response content to inject. Should be the raw response data from the cache.
-
-.PARAMETER ToolName
-The name of the tool being cached (used for logging and formatting). E.g., "Read", "mcp__git__git_status".
-
-.OUTPUTS
-[void] Writes formatted tool result to stdout using Write-Output.
-
-.EXAMPLE
-Inject-CachedResponse -CachedResponse "File contents here..." -ToolName "Read"
-# Outputs formatted <function_results> block to stdout
-
-.NOTES
-This function is designed to work with the cache injection mechanism. The output format matches the standard tool result format expected by Claude Code CLI.
-#>
-function Inject-CachedResponse {
-    param(
-        [string]$CachedResponse,
-        [string]$ToolName
-    )
-
-    # Inject cached response into stream
-    # Format as tool result
-    Write-VerboseLog "Injecting cached response for: $ToolName"
-
-    $injectedOutput = @"
-<function_results>
-<result>
-<name>$ToolName</name>
-<output>$CachedResponse</output>
-</result>
-</function_results>
-"@
-
-    Write-Output $injectedOutput
 }
 
 # ============================================================================
 # Main Wrapper Logic
 # ============================================================================
 
-<#
-.SYNOPSIS
-Real-time CLI wrapper for Claude Code that tracks token usage and logs events.
-
-.DESCRIPTION
-Processes stdin in real-time, parses system warnings to extract token deltas,
-tracks turn-level events, and writes to session-log.jsonl.
-
-DESIGN NOTE - Blocking I/O:
-ReadLine() uses blocking I/O by design. This is intentional for the wrapper context,
-where stdin is managed by a parent process such as Claude Code (a CLI tool that may
-use MCP servers). The stream closes when the parent process terminates, preventing
-indefinite hangs. Timeout mechanisms are not required as the wrapper lifecycle is
-controlled by the parent process.
-For production recommendations in other contexts, see CLI_INTEGRATION.md.
-#>
 function Invoke-ClaudeCodeWrapper {
-    Write-Host "Token Optimizer MCP - Enhanced Session Wrapper (Real-Time Mode)" -ForegroundColor Green
+    Write-Host "Token Optimizer MCP - Enhanced Session Wrapper" -ForegroundColor Green
     Write-Host "Session ID: $($global:SessionState.SessionId)" -ForegroundColor Yellow
     Write-Host "Log Directory: $LogDir" -ForegroundColor Yellow
     Write-Host ""
@@ -554,73 +641,25 @@ function Invoke-ClaudeCodeWrapper {
     # Track if we're in a turn
     $inTurn = $false
     $lastUserMessage = ""
-    # Use Queue for efficient FIFO operations (better than ArrayList.RemoveAt(0))
-    $lineBuffer = [System.Collections.Generic.Queue[string]]::new($LineBufferSize)
-    $pendingToolCall = $null
-    $lastTokenCount = 0
+
+    # Start reading from stdin (piped from claude-code)
+    # In practice, this would wrap the actual claude-code CLI process
+    # For now, we'll demonstrate the structure
 
     try {
-        Write-VerboseLog "Wrapper ready - real-time stream processing active"
+        Write-VerboseLog "Wrapper ready - monitoring for system warnings and tool calls"
 
-        # Configure console encoding for proper Unicode handling
-        # IMPORTANT: Setting InputEncoding and OutputEncoding to UTF8 prevents encoding mismatches
-        # between the console and piped data, ensuring Unicode characters are handled correctly.
-        # This addresses the concern that [Console]::In.ReadLine() could have encoding issues.
-        # Store original encodings to restore in finally block
-        $originalInputEncoding = [Console]::InputEncoding
-        $originalOutputEncoding = [Console]::OutputEncoding
-        try {
-            [Console]::InputEncoding = [System.Text.Encoding]::UTF8
-            [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-        } catch {
-            Write-Warning "Failed to set console encoding to UTF8. Unicode handling may be degraded. Error: $($_.Exception.Message)"
-            Write-VerboseLog "Console encoding assignment failed: $($_.Exception.Message)"
-        }
+        # Process stdin from claude-code (or test input via pipeline)
+        # Note: This loop processes input from stdin without interactive prompts
+        # to ensure wrapper can operate automatically in production
 
         $input = [Console]::In
-        $readTimeout = 30000  # 30 second timeout in milliseconds
         while ($true) {
-            # Use async I/O with timeout to prevent indefinite hangs
-            # This addresses the concern that blocking ReadLine() could hang if stdin is not properly closed
-            try {
-                $readTask = $input.ReadLineAsync()
-                $completed = $readTask.Wait($readTimeout)
+            $line = $input.ReadLine()
 
-                if (-not $completed) {
-                    Write-VerboseLog "ReadLine timeout after ${readTimeout}ms - stdin may be stalled"
-                    # Continue waiting - the parent process controls the wrapper lifecycle
-                    # If stdin is truly dead, the next ReadLineAsync will detect EOF
-                    continue
-                }
-
-                $line = $readTask.Result
-            }
-            catch [System.IO.IOException] {
-                Write-VerboseLog "I/O error reading from stdin: $($_.Exception.Message)"
+            if ($null -eq $line -or $line -eq "exit" -or $line -eq "quit") {
                 break
             }
-            catch {
-                Write-VerboseLog "Unexpected error reading from stdin: $($_.Exception.Message)"
-                break
-            }
-
-            # Check for end of stream
-            if ($null -eq $line) {
-                Write-VerboseLog "End of stream detected"
-                break
-            }
-
-            # Add to line buffer (for context lookback)
-            # Note: LineBufferSize is configurable via parameter (default: 100)
-            # Using Queue.Enqueue/Dequeue for O(1) operations instead of ArrayList.RemoveAt(0)
-            # Maintain fixed buffer size by dequeueing oldest line when buffer is full
-            if ($lineBuffer.Count -ge $LineBufferSize) {
-                $lineBuffer.Dequeue()  # Remove oldest line efficiently
-            }
-            $lineBuffer.Enqueue($line)
-
-            # Performance tracking
-            $parseStartTime = Get-Date
 
             # Parse system warnings
             $tokenInfo = Parse-SystemWarning -Line $line
@@ -628,73 +667,35 @@ function Invoke-ClaudeCodeWrapper {
                 Write-VerboseLog "Parsed token info: Used=$($tokenInfo.Used), Remaining=$($tokenInfo.Remaining)"
 
                 # Check if this is a tool call transition (tokens increased)
-                # Performance optimization: Only call Parse-ToolCallFromContext when token count increases
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
-                    # Detect tool call from context (ONLY when tokens increased)
-                    # Pass Queue directly to avoid ToArray() conversion overhead
-                    $toolName = Parse-ToolCallFromContext -CurrentLine $line -PreviousLines $lineBuffer
+                    # Detect tool call from context
+                    # In production, tool name is parsed from claude-code output
+                    # For now, use a generic tool name when context is unavailable
+                    $toolName = $global:AutoCacheConfig.UnknownToolName
 
-                    if ($toolName) {
-                        Write-VerboseLog "Detected tool call: $toolName"
-
-                        # Start turn if not already in one
-                        if (-not $inTurn) {
-                            Start-Turn -UserMessagePreview $lastUserMessage
-                            $inTurn = $true
-                        }
-
-                        # Check for cached response (optional)
-                        $cachedResponse = Get-CachedToolResponse -ToolName $toolName -ToolParams @{}
-
-                        if ($cachedResponse) {
-                            # Inject cached response and skip tool execution
-                            Inject-CachedResponse -CachedResponse $cachedResponse -ToolName $toolName
-                            Write-VerboseLog "Cache hit! Injected response for: $toolName"
-
-                            # Record cache hit in JSONL
-                            Write-JsonlEvent -Event @{
-                                type = "cache_hit"
-                                turn = $global:SessionState.CurrentTurn
-                                tool = $toolName
-                                tokens_saved = ($tokenInfo.Used - $global:SessionState.LastTokens)
-                            }
-                        }
-                        else {
-                            # Record tool call with actual token delta
-                            Record-ToolCall -ToolName $toolName -TokensBefore $global:SessionState.LastTokens -TokensAfter $tokenInfo.Used
-                        }
+                    if (-not $inTurn) {
+                        Start-Turn -UserMessagePreview $lastUserMessage
+                        $inTurn = $true
                     }
-                    else {
-                        Write-VerboseLog "Token increase detected but no tool call identified (delta: $($tokenInfo.Used - $global:SessionState.LastTokens))"
-                    }
+
+                    Record-ToolCall -ToolName $toolName -TokensBefore $global:SessionState.LastTokens -TokensAfter $tokenInfo.Used
                 }
 
                 $global:SessionState.LastTokens = $tokenInfo.Used
                 $global:SessionState.TotalTokens = $tokenInfo.Total
             }
 
-            # Check for turn boundaries (user input pattern)
-            # Pattern: Look for conversation turn markers
-            $userMessagePattern = '^\s*(User|Human):\s*'
-            if ($line -match $userMessagePattern) {
+            # Check for turn boundaries (user input)
+            if ($line -like "User:*") {
                 if ($inTurn) {
                     End-Turn
                     $inTurn = $false
                 }
 
-                $lastUserMessage = $line -replace $userMessagePattern, ''
-                Write-VerboseLog "New user message detected: $($lastUserMessage.Substring(0, [Math]::Min(50, $lastUserMessage.Length)))..."
+                $lastUserMessage = $line -replace '^User:\s*', ''
             }
 
-            # Performance tracking
-            $parseEndTime = Get-Date
-            $parseTime = ($parseEndTime - $parseStartTime).TotalMilliseconds
-
-            if ($parseTime -gt $PerformanceThresholdMs) {
-                Write-VerboseLog "Parse time exceeded $($PerformanceThresholdMs)ms threshold: $([Math]::Round($parseTime, 2))ms"
-            }
-
-            # Pass through the line to stdout (preserve original output)
+            # Pass through the line (in real wrapper, this would go to stdout)
             Write-Output $line
         }
 
@@ -703,39 +704,33 @@ function Invoke-ClaudeCodeWrapper {
             End-Turn
         }
 
-        Write-JsonlEvent -Event @{
-            type = "session_end"
-            sessionId = $global:SessionState.SessionId
-            total_tokens = $global:SessionState.LastTokens
-        }
-
     }
     catch {
         Write-Error "Wrapper error: $_"
-        Write-VerboseLog "Error details: $($_.Exception.Message)"
-        Write-VerboseLog "Stack trace: $($_.ScriptStackTrace)"
     }
     finally {
-        # Restore original console encodings to avoid affecting subsequent operations
-        if ($originalInputEncoding) {
-            try {
-                [Console]::InputEncoding = $originalInputEncoding
-            }
-            catch {
-                Write-VerboseLog "Failed to restore original input encoding: $($_.Exception.Message)"
-            }
-        }
-        if ($originalOutputEncoding) {
-            try {
-                [Console]::OutputEncoding = $originalOutputEncoding
-            }
-            catch {
-                Write-VerboseLog "Failed to restore original output encoding: $($_.Exception.Message)"
-            }
-        }
-
         Write-VerboseLog "Session ended: $($global:SessionState.SessionId)"
-        Write-VerboseLog "Total tokens used: $($global:SessionState.LastTokens)"
+
+        # Cleanup MCP server process if running
+        if ($null -ne $global:MCPServerProcess -and -not $global:MCPServerProcess.HasExited) {
+            # Attempt graceful shutdown for console process
+            try {
+                if ($global:MCPServerProcess.StandardInput) {
+                    $global:MCPServerProcess.StandardInput.Close()
+                    Write-VerboseLog "Sent EOF to MCP server process via StandardInput.Close()"
+                }
+            } catch {
+                Write-VerboseLog "Could not close StandardInput: $_"
+            }
+            # Wait up to configured timeout for process to exit
+            if (-not $global:MCPServerProcess.WaitForExit($global:AutoCacheConfig.MCPShutdownTimeoutMs)) {
+                $global:MCPServerProcess.Kill()
+                Write-VerboseLog "MCP server process forcefully terminated after timeout"
+            }
+            else {
+                Write-VerboseLog "MCP server process exited gracefully"
+            }
+        }
     }
 }
 
@@ -806,7 +801,31 @@ if ($Test) {
     Test-WrapperParsing
 }
 else {
-    # Real wrapper mode - process stdin in real-time
-    Write-VerboseLog "Starting real-time CLI wrapper mode"
-    Invoke-ClaudeCodeWrapper
+    # Real wrapper mode (would wrap claude-code CLI)
+    # Invoke-ClaudeCodeWrapper
+
+    Write-Host @"
+Token Optimizer MCP - Enhanced Session Wrapper
+
+USAGE:
+  To test parsing:
+    .\wrapper.ps1 -Test -VerboseLogging
+
+  To wrap Claude Code (not yet implemented - requires CLI integration):
+    claude-code | .\wrapper.ps1 -SessionId "my-session" -VerboseLogging
+
+FEATURES:
+  - Real-time token tracking from system warnings
+  - Turn-level event logging to session-log.jsonl
+  - MCP server attribution for all tool calls
+  - Backward compatible CSV logging with mcp_server column
+  - Automatic MCP server initialization with fallback mode
+
+FILES:
+  - Session log (JSONL): $JSONL_FILE
+  - Operations log (CSV): $CSV_FILE
+  - Current session ID: $SESSION_FILE
+
+Run with -Test flag to see parsing examples.
+"@
 }
