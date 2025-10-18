@@ -578,8 +578,7 @@ function Invoke-ClaudeCodeWrapper {
             # - Using async I/O with CancellationToken for timeout support
             # - Implementing heartbeat detection for stalled streams
             # - Using StreamReader with timeout for non-console scenarios
-            # The console encoding is set to UTF8 (lines 511-512) to prevent encoding mismatches
-            # between the console and piped data, ensuring Unicode characters are handled correctly.
+            # The console encoding is set to UTF8 (lines 567-568) to prevent encoding mismatches.
             $line = $input.ReadLine()
 
             # Check for end of stream
