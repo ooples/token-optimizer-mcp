@@ -7,9 +7,9 @@ import {
   gunzipSync,
   brotliCompressSync,
   brotliDecompressSync,
-} from "zlib";
+} from 'zlib';
 
-export type CompressionType = "none" | "gzip" | "brotli";
+export type CompressionType = 'none' | 'gzip' | 'brotli';
 
 export interface CompressionResult {
   compressed: Buffer;
@@ -24,21 +24,21 @@ export interface CompressionResult {
  */
 export function compress(
   content: string | Buffer,
-  type: CompressionType = "gzip",
+  type: CompressionType = 'gzip'
 ): CompressionResult {
-  const buffer = typeof content === "string" ? Buffer.from(content) : content;
+  const buffer = typeof content === 'string' ? Buffer.from(content) : content;
   const originalSize = buffer.length;
 
   let compressed: Buffer;
 
   switch (type) {
-    case "gzip":
+    case 'gzip':
       compressed = gzipSync(buffer);
       break;
-    case "brotli":
+    case 'brotli':
       compressed = brotliCompressSync(buffer);
       break;
-    case "none":
+    case 'none':
       compressed = buffer;
       break;
     default:
@@ -62,14 +62,14 @@ export function compress(
  */
 export function decompress(
   compressed: Buffer,
-  type: CompressionType = "gzip",
+  type: CompressionType = 'gzip'
 ): Buffer {
   switch (type) {
-    case "gzip":
+    case 'gzip':
       return gunzipSync(compressed);
-    case "brotli":
+    case 'brotli':
       return brotliDecompressSync(compressed);
-    case "none":
+    case 'none':
       return compressed;
     default:
       throw new Error(`Unknown compression type: ${type}`);
@@ -80,11 +80,11 @@ export function decompress(
  * Automatically select the best compression based on content
  */
 export function compressAuto(content: string | Buffer): CompressionResult {
-  const buffer = typeof content === "string" ? Buffer.from(content) : content;
+  const buffer = typeof content === 'string' ? Buffer.from(content) : content;
 
   // Try both and pick the better one
-  const gzipResult = compress(buffer, "gzip");
-  const brotliResult = compress(buffer, "brotli");
+  const gzipResult = compress(buffer, 'gzip');
+  const brotliResult = compress(buffer, 'brotli');
 
   // Return the one with better compression
   return gzipResult.ratio < brotliResult.ratio ? gzipResult : brotliResult;
@@ -95,7 +95,7 @@ export function compressAuto(content: string | Buffer): CompressionResult {
  */
 export function compressIfWorthwhile(
   content: string | Buffer,
-  threshold: number = 0.9, // Only compress if we get at least 10% reduction
+  threshold: number = 0.9 // Only compress if we get at least 10% reduction
 ): CompressionResult {
   const result = compressAuto(content);
 
@@ -104,12 +104,12 @@ export function compressIfWorthwhile(
   }
 
   // Not worth compressing, return as-is
-  const buffer = typeof content === "string" ? Buffer.from(content) : content;
+  const buffer = typeof content === 'string' ? Buffer.from(content) : content;
   return {
     compressed: buffer,
     originalSize: buffer.length,
     compressedSize: buffer.length,
     ratio: 1,
-    type: "none",
+    type: 'none',
   };
 }

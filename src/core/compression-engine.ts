@@ -34,7 +34,10 @@ export class CompressionEngine {
     const originalSize = buffer.length;
     const compressedSize = compressed.length;
     const ratio = originalSize > 0 ? compressedSize / originalSize : 0;
-    const percentSaved = originalSize > 0 ? ((originalSize - compressedSize) / originalSize) * 100 : 0;
+    const percentSaved =
+      originalSize > 0
+        ? ((originalSize - compressedSize) / originalSize) * 100
+        : 0;
 
     return {
       compressed,
@@ -56,7 +59,10 @@ export class CompressionEngine {
   /**
    * Compress to base64 string (for easier storage)
    */
-  compressToBase64(text: string, options?: CompressionOptions): {
+  compressToBase64(
+    text: string,
+    options?: CompressionOptions
+  ): {
     compressed: string;
     originalSize: number;
     compressedSize: number;

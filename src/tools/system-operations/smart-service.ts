@@ -16,12 +16,12 @@
  * - Compressed dependency graphs (88% reduction)
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { exec } from "child_process";
-import { promisify } from "util";
-import * as crypto from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as crypto from 'crypto';
 
 const execAsync = promisify(exec);
 
@@ -29,26 +29,26 @@ const execAsync = promisify(exec);
 // Types & Interfaces
 // ===========================
 
-export type ServiceType = "systemd" | "windows" | "docker";
+export type ServiceType = 'systemd' | 'windows' | 'docker';
 export type ServiceStatus =
-  | "active"
-  | "inactive"
-  | "failed"
-  | "running"
-  | "stopped"
-  | "exited"
-  | "restarting";
+  | 'active'
+  | 'inactive'
+  | 'failed'
+  | 'running'
+  | 'stopped'
+  | 'exited'
+  | 'restarting';
 
 export interface SmartServiceOptions {
   operation:
-    | "start"
-    | "stop"
-    | "restart"
-    | "status"
-    | "enable"
-    | "disable"
-    | "health-check"
-    | "list-dependencies";
+    | 'start'
+    | 'stop'
+    | 'restart'
+    | 'status'
+    | 'enable'
+    | 'disable'
+    | 'health-check'
+    | 'list-dependencies';
   serviceType?: ServiceType;
   serviceName: string;
   autoDetect?: boolean;
@@ -70,14 +70,14 @@ export interface ServiceInfo {
   dependencies?: string[];
   ports?: number[];
   health?: {
-    status: "healthy" | "unhealthy" | "unknown";
+    status: 'healthy' | 'unhealthy' | 'unknown';
     checks: HealthCheck[];
   };
 }
 
 export interface HealthCheck {
   name: string;
-  status: "pass" | "fail" | "warn";
+  status: 'pass' | 'fail' | 'warn';
   message?: string;
   timestamp: number;
 }
@@ -117,7 +117,7 @@ export class SmartService {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metricsCollector: MetricsCollector,
+    private metricsCollector: MetricsCollector
   ) {}
 
   /**
@@ -136,28 +136,28 @@ export class SmartService {
 
     try {
       switch (operation) {
-        case "start":
+        case 'start':
           result = await this.startService(options);
           break;
-        case "stop":
+        case 'stop':
           result = await this.stopService(options);
           break;
-        case "restart":
+        case 'restart':
           result = await this.restartService(options);
           break;
-        case "status":
+        case 'status':
           result = await this.getServiceStatus(options);
           break;
-        case "enable":
+        case 'enable':
           result = await this.enableService(options);
           break;
-        case "disable":
+        case 'disable':
           result = await this.disableService(options);
           break;
-        case "health-check":
+        case 'health-check':
           result = await this.performHealthCheck(options);
           break;
-        case "list-dependencies":
+        case 'list-dependencies':
           result = await this.listDependencies(options);
           break;
         default:
@@ -215,8 +215,8 @@ export class SmartService {
     const platform = process.platform;
 
     // Docker detection (works on all platforms)
-    if (serviceName.includes("/") || serviceName.includes(":")) {
-      return "docker";
+    if (serviceName.includes('/') || serviceName.includes(':')) {
+      return 'docker';
     }
 
     try {
@@ -224,18 +224,18 @@ export class SmartService {
         timeout: 5000,
       });
       if (stdout.includes(serviceName)) {
-        return "docker";
+        return 'docker';
       }
     } catch {
       // Docker not available or service not found
     }
 
     // Platform-specific detection
-    if (platform === "win32") {
-      return "windows";
+    if (platform === 'win32') {
+      return 'windows';
     } else {
       // Default to systemd on Unix-like systems
-      return "systemd";
+      return 'systemd';
     }
   }
 
@@ -243,9 +243,9 @@ export class SmartService {
    * Get service status with smart caching
    */
   private async getServiceStatus(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
-    const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${options.serviceType}:${options.serviceName}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`service-status:${options.serviceType}:${options.serviceName}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -257,7 +257,7 @@ export class SmartService {
 
         return {
           success: true,
-          operation: "status",
+          operation: 'status',
           data: JSON.parse(cached),
           metadata: {
             tokensUsed,
@@ -272,7 +272,7 @@ export class SmartService {
     // Fresh status check
     const service = await this.getServiceInfo(
       options.serviceName,
-      options.serviceType!,
+      options.serviceType!
     );
     const dataStr = JSON.stringify({ service });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
@@ -285,7 +285,7 @@ export class SmartService {
 
     return {
       success: true,
-      operation: "status",
+      operation: 'status',
       data: { service },
       metadata: {
         tokensUsed,
@@ -301,14 +301,14 @@ export class SmartService {
    */
   private async getServiceInfo(
     serviceName: string,
-    serviceType: ServiceType,
+    serviceType: ServiceType
   ): Promise<ServiceInfo> {
     switch (serviceType) {
-      case "systemd":
+      case 'systemd':
         return await this.getSystemdServiceInfo(serviceName);
-      case "windows":
+      case 'windows':
         return await this.getWindowsServiceInfo(serviceName);
-      case "docker":
+      case 'docker':
         return await this.getDockerServiceInfo(serviceName);
       default:
         throw new Error(`Unsupported service type: ${serviceType}`);
@@ -319,32 +319,32 @@ export class SmartService {
    * Get systemd service information
    */
   private async getSystemdServiceInfo(
-    serviceName: string,
+    serviceName: string
   ): Promise<ServiceInfo> {
     const { stdout } = await execAsync(
-      `systemctl show ${serviceName} --no-pager`,
+      `systemctl show ${serviceName} --no-pager`
     );
 
     const properties: Record<string, string> = {};
-    stdout.split("\n").forEach((line) => {
-      const [key, value] = line.split("=");
+    stdout.split('\n').forEach((line) => {
+      const [key, value] = line.split('=');
       if (key && value) {
         properties[key] = value;
       }
     });
 
     const status: ServiceStatus =
-      properties.ActiveState === "active"
-        ? "active"
-        : properties.ActiveState === "inactive"
-          ? "inactive"
-          : "failed";
+      properties.ActiveState === 'active'
+        ? 'active'
+        : properties.ActiveState === 'inactive'
+          ? 'inactive'
+          : 'failed';
 
     const info: ServiceInfo = {
       name: serviceName,
-      type: "systemd",
+      type: 'systemd',
       status,
-      enabled: properties.UnitFileState === "enabled",
+      enabled: properties.UnitFileState === 'enabled',
       pid: properties.MainPID ? parseInt(properties.MainPID) : undefined,
       lastStartTime: properties.ExecMainStartTimestamp
         ? Date.parse(properties.ExecMainStartTimestamp)
@@ -354,12 +354,12 @@ export class SmartService {
     // Get dependencies
     try {
       const { stdout: depsOut } = await execAsync(
-        `systemctl list-dependencies ${serviceName} --plain --no-pager`,
+        `systemctl list-dependencies ${serviceName} --plain --no-pager`
       );
       info.dependencies = depsOut
-        .split("\n")
-        .filter((line) => line.trim() && !line.includes("●"))
-        .map((line) => line.trim().replace(/^[├└─\s]+/, ""));
+        .split('\n')
+        .filter((line) => line.trim() && !line.includes('●'))
+        .map((line) => line.trim().replace(/^[├└─\s]+/, ''));
     } catch {
       info.dependencies = [];
     }
@@ -371,31 +371,31 @@ export class SmartService {
    * Get Windows service information
    */
   private async getWindowsServiceInfo(
-    serviceName: string,
+    serviceName: string
   ): Promise<ServiceInfo> {
     const { stdout } = await execAsync(`sc query "${serviceName}"`);
 
-    const lines = stdout.split("\n");
-    const statusLine = lines.find((line) => line.includes("STATE"));
-    const pidLine = lines.find((line) => line.includes("PID"));
+    const lines = stdout.split('\n');
+    const statusLine = lines.find((line) => line.includes('STATE'));
+    const pidLine = lines.find((line) => line.includes('PID'));
 
-    let status: ServiceStatus = "inactive";
+    let status: ServiceStatus = 'inactive';
     if (statusLine) {
-      if (statusLine.includes("RUNNING")) status = "running";
-      else if (statusLine.includes("STOPPED")) status = "stopped";
+      if (statusLine.includes('RUNNING')) status = 'running';
+      else if (statusLine.includes('STOPPED')) status = 'stopped';
     }
 
     const info: ServiceInfo = {
       name: serviceName,
-      type: "windows",
+      type: 'windows',
       status,
-      pid: pidLine ? parseInt(pidLine.split(":")[1]?.trim() || "0") : undefined,
+      pid: pidLine ? parseInt(pidLine.split(':')[1]?.trim() || '0') : undefined,
     };
 
     // Check if service is set to auto-start
     try {
       const { stdout: configOut } = await execAsync(`sc qc "${serviceName}"`);
-      info.enabled = configOut.includes("AUTO_START");
+      info.enabled = configOut.includes('AUTO_START');
     } catch {
       info.enabled = false;
     }
@@ -407,7 +407,7 @@ export class SmartService {
    * Get Docker container information
    */
   private async getDockerServiceInfo(
-    serviceName: string,
+    serviceName: string
   ): Promise<ServiceInfo> {
     const { stdout } = await execAsync(`docker inspect ${serviceName}`);
     const containers = JSON.parse(stdout);
@@ -419,15 +419,15 @@ export class SmartService {
     const container = containers[0];
     const state = container.State;
 
-    let status: ServiceStatus = "stopped";
-    if (state.Running) status = "running";
-    else if (state.Restarting) status = "restarting";
-    else if (state.ExitCode !== 0) status = "failed";
-    else status = "exited";
+    let status: ServiceStatus = 'stopped';
+    if (state.Running) status = 'running';
+    else if (state.Restarting) status = 'restarting';
+    else if (state.ExitCode !== 0) status = 'failed';
+    else status = 'exited';
 
     const info: ServiceInfo = {
       name: serviceName,
-      type: "docker",
+      type: 'docker',
       status,
       pid: state.Pid,
       restartCount: state.RestartCount,
@@ -437,7 +437,7 @@ export class SmartService {
     // Get port bindings
     if (container.NetworkSettings?.Ports) {
       info.ports = Object.keys(container.NetworkSettings.Ports)
-        .map((port) => parseInt(port.split("/")[0]))
+        .map((port) => parseInt(port.split('/')[0]))
         .filter((port) => !isNaN(port));
     }
 
@@ -448,19 +448,19 @@ export class SmartService {
    * Start a service
    */
   private async startService(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
     let command: string;
 
     switch (serviceType) {
-      case "systemd":
+      case 'systemd':
         command = `sudo systemctl start ${serviceName}`;
         break;
-      case "windows":
+      case 'windows':
         command = `sc start "${serviceName}"`;
         break;
-      case "docker":
+      case 'docker':
         command = `docker start ${serviceName}`;
         break;
       default:
@@ -473,12 +473,12 @@ export class SmartService {
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
       // Invalidate cache
-      const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${serviceType}:${serviceName}`).digest("hex")}`;
+      const cacheKey = `cache-${crypto.createHash('md5').update(`service-status:${serviceType}:${serviceName}`).digest('hex')}`;
       await this.cache.delete(cacheKey);
 
       return {
         success: true,
-        operation: "start",
+        operation: 'start',
         data: { output },
         metadata: {
           tokensUsed,
@@ -489,7 +489,7 @@ export class SmartService {
       };
     } catch (error) {
       throw new Error(
-        `Failed to start service: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to start service: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -498,19 +498,19 @@ export class SmartService {
    * Stop a service
    */
   private async stopService(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
     let command: string;
 
     switch (serviceType) {
-      case "systemd":
+      case 'systemd':
         command = `sudo systemctl stop ${serviceName}`;
         break;
-      case "windows":
+      case 'windows':
         command = `sc stop "${serviceName}"`;
         break;
-      case "docker":
+      case 'docker':
         command = `docker stop ${serviceName}`;
         break;
       default:
@@ -523,12 +523,12 @@ export class SmartService {
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
       // Invalidate cache
-      const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${serviceType}:${serviceName}`).digest("hex")}`;
+      const cacheKey = `cache-${crypto.createHash('md5').update(`service-status:${serviceType}:${serviceName}`).digest('hex')}`;
       await this.cache.delete(cacheKey);
 
       return {
         success: true,
-        operation: "stop",
+        operation: 'stop',
         data: { output },
         metadata: {
           tokensUsed,
@@ -539,7 +539,7 @@ export class SmartService {
       };
     } catch (error) {
       throw new Error(
-        `Failed to stop service: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to stop service: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -548,22 +548,22 @@ export class SmartService {
    * Restart a service
    */
   private async restartService(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
     let command: string;
 
     switch (serviceType) {
-      case "systemd":
+      case 'systemd':
         command = `sudo systemctl restart ${serviceName}`;
         break;
-      case "windows":
+      case 'windows':
         // Windows requires stop then start
         await execAsync(`sc stop "${serviceName}"`);
         await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
         command = `sc start "${serviceName}"`;
         break;
-      case "docker":
+      case 'docker':
         command = `docker restart ${serviceName}`;
         break;
       default:
@@ -576,12 +576,12 @@ export class SmartService {
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
       // Invalidate cache
-      const cacheKey = `cache-${crypto.createHash("md5").update(`service-status:${serviceType}:${serviceName}`).digest("hex")}`;
+      const cacheKey = `cache-${crypto.createHash('md5').update(`service-status:${serviceType}:${serviceName}`).digest('hex')}`;
       await this.cache.delete(cacheKey);
 
       return {
         success: true,
-        operation: "restart",
+        operation: 'restart',
         data: { output },
         metadata: {
           tokensUsed,
@@ -592,7 +592,7 @@ export class SmartService {
       };
     } catch (error) {
       throw new Error(
-        `Failed to restart service: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to restart service: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -601,19 +601,19 @@ export class SmartService {
    * Enable a service (auto-start on boot)
    */
   private async enableService(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
     let command: string;
 
     switch (serviceType) {
-      case "systemd":
+      case 'systemd':
         command = `sudo systemctl enable ${serviceName}`;
         break;
-      case "windows":
+      case 'windows':
         command = `sc config "${serviceName}" start= auto`;
         break;
-      case "docker":
+      case 'docker':
         command = `docker update --restart=always ${serviceName}`;
         break;
       default:
@@ -627,7 +627,7 @@ export class SmartService {
 
       return {
         success: true,
-        operation: "enable",
+        operation: 'enable',
         data: { output },
         metadata: {
           tokensUsed,
@@ -638,7 +638,7 @@ export class SmartService {
       };
     } catch (error) {
       throw new Error(
-        `Failed to enable service: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to enable service: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -647,19 +647,19 @@ export class SmartService {
    * Disable a service (prevent auto-start on boot)
    */
   private async disableService(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
     let command: string;
 
     switch (serviceType) {
-      case "systemd":
+      case 'systemd':
         command = `sudo systemctl disable ${serviceName}`;
         break;
-      case "windows":
+      case 'windows':
         command = `sc config "${serviceName}" start= demand`;
         break;
-      case "docker":
+      case 'docker':
         command = `docker update --restart=no ${serviceName}`;
         break;
       default:
@@ -673,7 +673,7 @@ export class SmartService {
 
       return {
         success: true,
-        operation: "disable",
+        operation: 'disable',
         data: { output },
         metadata: {
           tokensUsed,
@@ -684,7 +684,7 @@ export class SmartService {
       };
     } catch (error) {
       throw new Error(
-        `Failed to disable service: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to disable service: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -693,21 +693,21 @@ export class SmartService {
    * Perform health check on a service
    */
   private async performHealthCheck(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const service = await this.getServiceInfo(
       options.serviceName,
-      options.serviceType!,
+      options.serviceType!
     );
     const checks: HealthCheck[] = [];
 
     // Basic status check
     checks.push({
-      name: "Service Running",
+      name: 'Service Running',
       status:
-        service.status === "active" || service.status === "running"
-          ? "pass"
-          : "fail",
+        service.status === 'active' || service.status === 'running'
+          ? 'pass'
+          : 'fail',
       message: `Service status: ${service.status}`,
       timestamp: Date.now(),
     });
@@ -715,36 +715,36 @@ export class SmartService {
     // PID check
     if (service.pid) {
       checks.push({
-        name: "Process Alive",
-        status: "pass",
+        name: 'Process Alive',
+        status: 'pass',
         message: `Process ID: ${service.pid}`,
         timestamp: Date.now(),
       });
     } else {
       checks.push({
-        name: "Process Alive",
-        status: "fail",
-        message: "No process ID found",
+        name: 'Process Alive',
+        status: 'fail',
+        message: 'No process ID found',
         timestamp: Date.now(),
       });
     }
 
     // Docker-specific health checks
-    if (options.serviceType === "docker") {
+    if (options.serviceType === 'docker') {
       try {
         const { stdout } = await execAsync(
-          `docker inspect --format='{{.State.Health.Status}}' ${options.serviceName}`,
+          `docker inspect --format='{{.State.Health.Status}}' ${options.serviceName}`
         );
         const healthStatus = stdout.trim();
 
         checks.push({
-          name: "Docker Health",
+          name: 'Docker Health',
           status:
-            healthStatus === "healthy"
-              ? "pass"
-              : healthStatus === "unhealthy"
-                ? "fail"
-                : "warn",
+            healthStatus === 'healthy'
+              ? 'pass'
+              : healthStatus === 'unhealthy'
+                ? 'fail'
+                : 'warn',
           message: `Health status: ${healthStatus}`,
           timestamp: Date.now(),
         });
@@ -753,11 +753,11 @@ export class SmartService {
       }
     }
 
-    const overallHealth = checks.every((c) => c.status === "pass")
-      ? "healthy"
-      : checks.some((c) => c.status === "fail")
-        ? "unhealthy"
-        : "unknown";
+    const overallHealth = checks.every((c) => c.status === 'pass')
+      ? 'healthy'
+      : checks.some((c) => c.status === 'fail')
+        ? 'unhealthy'
+        : 'unknown';
 
     service.health = {
       status: overallHealth,
@@ -769,7 +769,7 @@ export class SmartService {
 
     return {
       success: true,
-      operation: "health-check",
+      operation: 'health-check',
       data: { service, health: checks },
       metadata: {
         tokensUsed,
@@ -784,9 +784,9 @@ export class SmartService {
    * List service dependencies with caching
    */
   private async listDependencies(
-    options: SmartServiceOptions,
+    options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
-    const cacheKey = `cache-${crypto.createHash("md5").update(`service-deps:${options.serviceType}:${options.serviceName}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`service-deps:${options.serviceType}:${options.serviceName}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -798,7 +798,7 @@ export class SmartService {
 
         return {
           success: true,
-          operation: "list-dependencies",
+          operation: 'list-dependencies',
           data: JSON.parse(cached),
           metadata: {
             tokensUsed,
@@ -813,7 +813,7 @@ export class SmartService {
     // Build dependency graph
     const dependencies = await this.buildDependencyGraph(
       options.serviceName,
-      options.serviceType!,
+      options.serviceType!
     );
     const dataStr = JSON.stringify({ dependencies });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
@@ -826,7 +826,7 @@ export class SmartService {
 
     return {
       success: true,
-      operation: "list-dependencies",
+      operation: 'list-dependencies',
       data: { dependencies },
       metadata: {
         tokensUsed,
@@ -842,7 +842,7 @@ export class SmartService {
    */
   private async buildDependencyGraph(
     serviceName: string,
-    serviceType: ServiceType,
+    serviceType: ServiceType
   ): Promise<DependencyGraph> {
     const graph: DependencyGraph = {
       service: serviceName,
@@ -851,16 +851,16 @@ export class SmartService {
       depth: 0,
     };
 
-    if (serviceType === "systemd") {
+    if (serviceType === 'systemd') {
       // Get dependencies (services this service requires)
       try {
         const { stdout: depsOut } = await execAsync(
-          `systemctl list-dependencies ${serviceName} --plain --no-pager`,
+          `systemctl list-dependencies ${serviceName} --plain --no-pager`
         );
         graph.dependencies = depsOut
-          .split("\n")
-          .filter((line) => line.trim() && !line.includes("●"))
-          .map((line) => line.trim().replace(/^[├└─\s]+/, ""));
+          .split('\n')
+          .filter((line) => line.trim() && !line.includes('●'))
+          .map((line) => line.trim().replace(/^[├└─\s]+/, ''));
       } catch {
         graph.dependencies = [];
       }
@@ -868,16 +868,16 @@ export class SmartService {
       // Get dependents (services that require this service)
       try {
         const { stdout: revDepsOut } = await execAsync(
-          `systemctl list-dependencies ${serviceName} --reverse --plain --no-pager`,
+          `systemctl list-dependencies ${serviceName} --reverse --plain --no-pager`
         );
         graph.dependents = revDepsOut
-          .split("\n")
-          .filter((line) => line.trim() && !line.includes("●"))
-          .map((line) => line.trim().replace(/^[├└─\s]+/, ""));
+          .split('\n')
+          .filter((line) => line.trim() && !line.includes('●'))
+          .map((line) => line.trim().replace(/^[├└─\s]+/, ''));
       } catch {
         graph.dependents = [];
       }
-    } else if (serviceType === "docker") {
+    } else if (serviceType === 'docker') {
       // Docker dependencies are determined by links and networks
       try {
         const { stdout } = await execAsync(`docker inspect ${serviceName}`);
@@ -890,9 +890,9 @@ export class SmartService {
           if (container.HostConfig?.Links) {
             graph.dependencies = container.HostConfig.Links.map(
               (link: string) => {
-                const parts = link.split(":");
-                return parts[0].replace(/^\//, "");
-              },
+                const parts = link.split(':');
+                return parts[0].replace(/^\//, '');
+              }
             );
           }
         }
@@ -912,7 +912,7 @@ export class SmartService {
 export function getSmartService(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metricsCollector: MetricsCollector,
+  metricsCollector: MetricsCollector
 ): SmartService {
   return new SmartService(cache, tokenCounter, metricsCollector);
 }
@@ -925,20 +925,20 @@ export async function runSmartService(
   options: SmartServiceOptions,
   cache?: CacheEngine,
   tokenCounter?: TokenCounter,
-  metricsCollector?: MetricsCollector,
+  metricsCollector?: MetricsCollector
 ): Promise<SmartServiceResult> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
   const tool = getSmartService(
     cacheInstance,
     tokenCounterInstance,
-    metricsInstance,
+    metricsInstance
   );
   return await tool.run(options);
 }
@@ -948,51 +948,51 @@ export async function runSmartService(
 // ===========================
 
 export const SMART_SERVICE_TOOL_DEFINITION = {
-  name: "smart_service",
+  name: 'smart_service',
   description:
-    "Intelligent service management with smart caching (86%+ token reduction). Manage systemd, Windows Services, and Docker containers with health monitoring and dependency tracking.",
+    'Intelligent service management with smart caching (86%+ token reduction). Manage systemd, Windows Services, and Docker containers with health monitoring and dependency tracking.',
   inputSchema: {
-    type: "object" as const,
+    type: 'object' as const,
     properties: {
       operation: {
-        type: "string" as const,
+        type: 'string' as const,
         enum: [
-          "start",
-          "stop",
-          "restart",
-          "status",
-          "enable",
-          "disable",
-          "health-check",
-          "list-dependencies",
+          'start',
+          'stop',
+          'restart',
+          'status',
+          'enable',
+          'disable',
+          'health-check',
+          'list-dependencies',
         ],
-        description: "Service operation to perform",
+        description: 'Service operation to perform',
       },
       serviceType: {
-        type: "string" as const,
-        enum: ["systemd", "windows", "docker"],
-        description: "Type of service (auto-detected if not specified)",
+        type: 'string' as const,
+        enum: ['systemd', 'windows', 'docker'],
+        description: 'Type of service (auto-detected if not specified)',
       },
       serviceName: {
-        type: "string" as const,
-        description: "Name of the service or container",
+        type: 'string' as const,
+        description: 'Name of the service or container',
       },
       autoDetect: {
-        type: "boolean" as const,
-        description: "Automatically detect service type (default: true)",
+        type: 'boolean' as const,
+        description: 'Automatically detect service type (default: true)',
         default: true,
       },
       useCache: {
-        type: "boolean" as const,
-        description: "Use cached results when available (default: true)",
+        type: 'boolean' as const,
+        description: 'Use cached results when available (default: true)',
         default: true,
       },
       ttl: {
-        type: "number" as const,
+        type: 'number' as const,
         description:
-          "Cache TTL in seconds (default: 30 for status, 300 for dependencies)",
+          'Cache TTL in seconds (default: 30 for status, 300 for dependencies)',
       },
     },
-    required: ["operation", "serviceName"],
+    required: ['operation', 'serviceName'],
   },
 };

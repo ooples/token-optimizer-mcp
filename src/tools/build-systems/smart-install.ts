@@ -8,29 +8,29 @@
  * - Token-optimized output
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface PackageInfo {
   name: string;
   version: string;
-  type: "dependency" | "devDependency" | "peerDependency";
+  type: 'dependency' | 'devDependency' | 'peerDependency';
 }
 
 interface DependencyConflict {
   package: string;
   requested: string;
   installed: string;
-  severity: "error" | "warning";
+  severity: 'error' | 'warning';
 }
 
 interface InstallResult {
   success: boolean;
-  packageManager: "npm" | "yarn" | "pnpm";
+  packageManager: 'npm' | 'yarn' | 'pnpm';
   packagesInstalled: PackageInfo[];
   conflicts: DependencyConflict[];
   duration: number;
@@ -51,7 +51,7 @@ interface SmartInstallOptions {
   /**
    * Package manager to use (auto-detect if not specified)
    */
-  packageManager?: "npm" | "yarn" | "pnpm";
+  packageManager?: 'npm' | 'yarn' | 'pnpm';
 
   /**
    * Packages to install (if empty, installs all from package.json)
@@ -106,9 +106,9 @@ interface SmartInstallOutput {
    * Installation recommendations
    */
   recommendations: Array<{
-    type: "security" | "performance" | "compatibility";
+    type: 'security' | 'performance' | 'compatibility';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }>;
 
   /**
@@ -123,7 +123,7 @@ interface SmartInstallOutput {
 
 export class SmartInstall {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_install";
+  private cacheNamespace = 'smart_install';
   private projectRoot: string;
 
   constructor(cache: CacheEngine, projectRoot?: string) {
@@ -150,13 +150,13 @@ export class SmartInstall {
 
     // Check if lockfile exists BEFORE running install (for recommendations)
     const lockFile =
-      detectedPm === "npm"
-        ? "package-lock.json"
-        : detectedPm === "yarn"
-          ? "yarn.lock"
-          : "pnpm-lock.yaml";
+      detectedPm === 'npm'
+        ? 'package-lock.json'
+        : detectedPm === 'yarn'
+          ? 'yarn.lock'
+          : 'pnpm-lock.yaml';
     const hadLockfileBeforeInstall = existsSync(
-      join(this.projectRoot, lockFile),
+      join(this.projectRoot, lockFile)
     );
 
     // Generate cache key
@@ -196,29 +196,29 @@ export class SmartInstall {
   /**
    * Detect which package manager is in use
    */
-  private detectPackageManager(): "npm" | "yarn" | "pnpm" {
+  private detectPackageManager(): 'npm' | 'yarn' | 'pnpm' {
     const projectRoot = this.projectRoot;
 
     // Check for lock files
-    if (existsSync(join(projectRoot, "pnpm-lock.yaml"))) {
-      return "pnpm";
+    if (existsSync(join(projectRoot, 'pnpm-lock.yaml'))) {
+      return 'pnpm';
     }
-    if (existsSync(join(projectRoot, "yarn.lock"))) {
-      return "yarn";
+    if (existsSync(join(projectRoot, 'yarn.lock'))) {
+      return 'yarn';
     }
-    if (existsSync(join(projectRoot, "package-lock.json"))) {
-      return "npm";
+    if (existsSync(join(projectRoot, 'package-lock.json'))) {
+      return 'npm';
     }
 
     // Default to npm
-    return "npm";
+    return 'npm';
   }
 
   /**
    * Run package installation
    */
   private async runInstall(options: {
-    packageManager: "npm" | "yarn" | "pnpm";
+    packageManager: 'npm' | 'yarn' | 'pnpm';
     packages: string[];
     dev: boolean;
   }): Promise<InstallResult> {
@@ -229,39 +229,39 @@ export class SmartInstall {
     // Build command args based on package manager
     if (packages.length === 0) {
       // Install all dependencies
-      args = packageManager === "yarn" ? [] : ["install"];
+      args = packageManager === 'yarn' ? [] : ['install'];
     } else {
       // Install specific packages
-      if (packageManager === "npm") {
-        args = ["install", ...packages];
-        if (dev) args.push("--save-dev");
-      } else if (packageManager === "yarn") {
-        args = ["add", ...packages];
-        if (dev) args.push("--dev");
-      } else if (packageManager === "pnpm") {
-        args = ["add", ...packages];
-        if (dev) args.push("--save-dev");
+      if (packageManager === 'npm') {
+        args = ['install', ...packages];
+        if (dev) args.push('--save-dev');
+      } else if (packageManager === 'yarn') {
+        args = ['add', ...packages];
+        if (dev) args.push('--dev');
+      } else if (packageManager === 'pnpm') {
+        args = ['add', ...packages];
+        if (dev) args.push('--save-dev');
       }
     }
 
     return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
+      let stdout = '';
+      let stderr = '';
 
       const child = spawn(packageManager, args, {
         cwd: this.projectRoot,
         shell: true,
       });
 
-      child.stdout.on("data", (data) => {
+      child.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      child.stderr.on("data", (data) => {
+      child.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      child.on("close", (code) => {
+      child.on('close', (code) => {
         const output = stdout + stderr;
         const installedPackages = this.parseInstalledPackages(output, packages);
         const conflicts = this.detectConflicts(output);
@@ -276,7 +276,7 @@ export class SmartInstall {
         });
       });
 
-      child.on("error", (err) => {
+      child.on('error', (err) => {
         reject(err);
       });
     });
@@ -287,48 +287,48 @@ export class SmartInstall {
    */
   private parseInstalledPackages(
     _output: string,
-    requestedPackages: string[],
+    requestedPackages: string[]
   ): PackageInfo[] {
     const packages: PackageInfo[] = [];
 
     // Parse package.json to get actual versions
-    const packageJsonPath = join(this.projectRoot, "package.json");
+    const packageJsonPath = join(this.projectRoot, 'package.json');
     if (existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 
       // If specific packages requested, use those
       if (requestedPackages.length > 0) {
         for (const pkg of requestedPackages) {
-          const [name, version] = pkg.split("@");
+          const [name, version] = pkg.split('@');
           const actualVersion =
             packageJson.dependencies?.[name] ||
             packageJson.devDependencies?.[name] ||
             version ||
-            "latest";
+            'latest';
           const type = packageJson.devDependencies?.[name]
-            ? "devDependency"
-            : "dependency";
+            ? 'devDependency'
+            : 'dependency';
 
           packages.push({ name, version: actualVersion, type });
         }
       } else {
         // All dependencies
         for (const [name, version] of Object.entries(
-          packageJson.dependencies || {},
+          packageJson.dependencies || {}
         )) {
           packages.push({
             name,
             version: version as string,
-            type: "dependency",
+            type: 'dependency',
           });
         }
         for (const [name, version] of Object.entries(
-          packageJson.devDependencies || {},
+          packageJson.devDependencies || {}
         )) {
           packages.push({
             name,
             version: version as string,
-            type: "devDependency",
+            type: 'devDependency',
           });
         }
       }
@@ -342,32 +342,32 @@ export class SmartInstall {
    */
   private detectConflicts(output: string): DependencyConflict[] {
     const conflicts: DependencyConflict[] = [];
-    const lines = output.split("\n");
+    const lines = output.split('\n');
 
     for (const line of lines) {
       // npm: WARN ... requires ... but will install ...
       const npmMatch = line.match(
-        /WARN.*?(\S+).*?requires.*?(\S+).*?will install.*?(\S+)/,
+        /WARN.*?(\S+).*?requires.*?(\S+).*?will install.*?(\S+)/
       );
       if (npmMatch) {
         conflicts.push({
           package: npmMatch[1],
           requested: npmMatch[2],
           installed: npmMatch[3],
-          severity: "warning",
+          severity: 'warning',
         });
       }
 
       // yarn/pnpm: warning ... has unmet peer dependency ...
       const peerMatch = line.match(
-        /warning.*?(\S+).*?unmet peer dependency.*?(\S+)@(\S+)/,
+        /warning.*?(\S+).*?unmet peer dependency.*?(\S+)@(\S+)/
       );
       if (peerMatch) {
         conflicts.push({
           package: peerMatch[1],
           requested: peerMatch[3],
-          installed: "not installed",
-          severity: "warning",
+          installed: 'not installed',
+          severity: 'warning',
         });
       }
     }
@@ -379,49 +379,49 @@ export class SmartInstall {
    * Generate installation recommendations
    */
   private generateRecommendations(result: InstallResult): Array<{
-    type: "security" | "performance" | "compatibility";
+    type: 'security' | 'performance' | 'compatibility';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }> {
     const recommendations = [];
 
     // Check for conflicts
     if (result.conflicts.length > 0) {
       recommendations.push({
-        type: "compatibility" as const,
+        type: 'compatibility' as const,
         message: `Found ${result.conflicts.length} dependency conflicts. Run 'npm ls' to investigate.`,
-        impact: "high" as const,
+        impact: 'high' as const,
       });
     }
 
     // Check for lockfile (use pre-install state to avoid false positives)
     const lockFile =
-      result.packageManager === "npm"
-        ? "package-lock.json"
-        : result.packageManager === "yarn"
-          ? "yarn.lock"
-          : "pnpm-lock.yaml";
+      result.packageManager === 'npm'
+        ? 'package-lock.json'
+        : result.packageManager === 'yarn'
+          ? 'yarn.lock'
+          : 'pnpm-lock.yaml';
     const hadLockfile = (result as any).hadLockfileBeforeInstall;
     if (
       hadLockfile === false ||
       (!hadLockfile && !existsSync(join(this.projectRoot, lockFile)))
     ) {
       recommendations.push({
-        type: "security" as const,
+        type: 'security' as const,
         message: `Missing ${lockFile}. Commit it for reproducible builds.`,
-        impact: "high" as const,
+        impact: 'high' as const,
       });
     }
 
     // Performance: suggest pnpm for large projects
     if (
       result.packagesInstalled.length > 100 &&
-      result.packageManager !== "pnpm"
+      result.packageManager !== 'pnpm'
     ) {
       recommendations.push({
-        type: "performance" as const,
-        message: "Consider using pnpm for faster installs on large projects.",
-        impact: "medium" as const,
+        type: 'performance' as const,
+        message: 'Consider using pnpm for faster installs on large projects.',
+        impact: 'medium' as const,
       });
     }
 
@@ -434,22 +434,22 @@ export class SmartInstall {
   private generateCacheKey(
     packageManager: string,
     packages: string[],
-    dev: boolean,
+    dev: boolean
   ): string {
-    const packageJsonPath = join(this.projectRoot, "package.json");
+    const packageJsonPath = join(this.projectRoot, 'package.json');
     const packageJsonHash = existsSync(packageJsonPath)
-      ? createHash("md5").update(readFileSync(packageJsonPath)).digest("hex")
-      : "no-package-json";
+      ? createHash('md5').update(readFileSync(packageJsonPath)).digest('hex')
+      : 'no-package-json';
 
-    const key = `${packageManager}:${packages.join(",")}:${dev}:${packageJsonHash}`;
-    return createHash("md5").update(key).digest("hex");
+    const key = `${packageManager}:${packages.join(',')}:${dev}:${packageJsonHash}`;
+    return createHash('md5').update(key).digest('hex');
   }
 
   /**
    * Get cached result
    */
   private getCachedResult(key: string, maxAge: number): InstallResult | null {
-    const cached = this.cache.get(this.cacheNamespace + ":" + key);
+    const cached = this.cache.get(this.cacheNamespace + ':' + key);
     if (!cached) return null;
 
     try {
@@ -474,10 +474,10 @@ export class SmartInstall {
     const dataToCache = JSON.stringify(cacheData);
     const dataSize = dataToCache.length;
     this.cache.set(
-      this.cacheNamespace + ":" + key,
+      this.cacheNamespace + ':' + key,
       dataToCache,
       dataSize,
-      dataSize,
+      dataSize
     );
   }
 
@@ -487,11 +487,11 @@ export class SmartInstall {
   private transformOutput(
     result: InstallResult,
     recommendations: Array<{
-      type: "security" | "performance" | "compatibility";
+      type: 'security' | 'performance' | 'compatibility';
       message: string;
-      impact: "high" | "medium" | "low";
+      impact: 'high' | 'medium' | 'low';
     }>,
-    fromCache = false,
+    fromCache = false
   ): SmartInstallOutput {
     const conflicts = result.conflicts.map((c) => ({
       package: c.package,
@@ -499,9 +499,9 @@ export class SmartInstall {
       installed: c.installed,
       severity: c.severity,
       resolution:
-        c.severity === "error"
-          ? "Must resolve before installation"
-          : "Consider upgrading or adding peer dependency",
+        c.severity === 'error'
+          ? 'Must resolve before installation'
+          : 'Consider upgrading or adding peer dependency',
     }));
 
     const packages = result.packagesInstalled.map((p) => ({
@@ -529,7 +529,7 @@ export class SmartInstall {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -582,7 +582,7 @@ export class SmartInstall {
  */
 export function getSmartInstall(
   cache: CacheEngine,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartInstall {
   return new SmartInstall(cache, projectRoot);
 }
@@ -591,19 +591,19 @@ export function getSmartInstall(
  * CLI-friendly function for running smart install
  */
 export async function runSmartInstall(
-  options: SmartInstallOptions = {},
+  options: SmartInstallOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const smartInstall = getSmartInstall(cache, options.projectRoot);
   try {
     const result = await smartInstall.run(options);
 
-    let output = `\n📦 Smart Install Results ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\n📦 Smart Install Results ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
-    output += `  Status: ${result.summary.success ? "✓ Success" : "✗ Failed"}\n`;
+    output += `  Status: ${result.summary.success ? '✓ Success' : '✗ Failed'}\n`;
     output += `  Package Manager: ${result.summary.packageManager}\n`;
     output += `  Packages Installed: ${result.summary.packagesInstalled}\n`;
     output += `  Conflicts: ${result.summary.conflictsFound}\n`;
@@ -618,20 +618,20 @@ export async function runSmartInstall(
       if (result.packages.length > 20) {
         output += `  ... and ${result.packages.length - 20} more\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Conflicts
     if (result.conflicts.length > 0) {
       output += `Dependency Conflicts:\n`;
       for (const conflict of result.conflicts) {
-        const icon = conflict.severity === "error" ? "🔴" : "⚠️";
+        const icon = conflict.severity === 'error' ? '🔴' : '⚠️';
         output += `  ${icon} ${conflict.package}\n`;
         output += `      Requested: ${conflict.requested}\n`;
         output += `      Installed: ${conflict.installed}\n`;
         output += `      Resolution: ${conflict.resolution}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Recommendations
@@ -639,10 +639,10 @@ export async function runSmartInstall(
       output += `Recommendations:\n`;
       for (const rec of result.recommendations) {
         const icon =
-          rec.impact === "high" ? "🔴" : rec.impact === "medium" ? "🟡" : "🟢";
+          rec.impact === 'high' ? '🔴' : rec.impact === 'medium' ? '🟡' : '🟢';
         output += `  ${icon} [${rec.type}] ${rec.message}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Metrics

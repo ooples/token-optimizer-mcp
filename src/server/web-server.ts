@@ -35,11 +35,16 @@ function getHooksDataPath(): string {
 // Helper function to get current session ID
 function getCurrentSessionId(): string | null {
   try {
-    const sessionFilePath = path.join(getHooksDataPath(), 'current-session.txt');
+    const sessionFilePath = path.join(
+      getHooksDataPath(),
+      'current-session.txt'
+    );
     if (!fs.existsSync(sessionFilePath)) {
       return null;
     }
-    const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(BOM_REGEX, '');
+    const sessionContent = fs
+      .readFileSync(sessionFilePath, 'utf-8')
+      .replace(BOM_REGEX, '');
     const sessionData = JSON.parse(sessionContent);
     return sessionData.sessionId;
   } catch (error) {
@@ -56,7 +61,7 @@ function getCurrentSessionId(): string | null {
  */
 app.get('/api/session-summary', (req, res) => {
   try {
-    const sessionId = req.query.sessionId as string || getCurrentSessionId();
+    const sessionId = (req.query.sessionId as string) || getCurrentSessionId();
 
     if (!sessionId) {
       return res.status(404).json({
@@ -66,7 +71,10 @@ app.get('/api/session-summary', (req, res) => {
     }
 
     const hooksDataPath = getHooksDataPath();
-    const jsonlFilePath = path.join(hooksDataPath, `session-log-${sessionId}.jsonl`);
+    const jsonlFilePath = path.join(
+      hooksDataPath,
+      `session-log-${sessionId}.jsonl`
+    );
 
     if (!fs.existsSync(jsonlFilePath)) {
       return res.status(404).json({
@@ -96,7 +104,10 @@ app.get('/api/session-summary', (req, res) => {
 
     const tokensByServer: Record<string, number> = {};
     const toolDurations: number[] = [];
-    const toolBreakdown: Record<string, { count: number; tokens: number; totalDuration: number }> = {};
+    const toolBreakdown: Record<
+      string,
+      { count: number; tokens: number; totalDuration: number }
+    > = {};
     const hookBreakdown: Record<string, { count: number; tokens: number }> = {};
 
     // Parse each JSONL event
@@ -128,7 +139,11 @@ app.get('/api/session-summary', (req, res) => {
 
           // Track by tool name
           if (!toolBreakdown[event.toolName]) {
-            toolBreakdown[event.toolName] = { count: 0, tokens: 0, totalDuration: 0 };
+            toolBreakdown[event.toolName] = {
+              count: 0,
+              tokens: 0,
+              totalDuration: 0,
+            };
           }
           toolBreakdown[event.toolName].count++;
           toolBreakdown[event.toolName].tokens += tokens;
@@ -136,7 +151,8 @@ app.get('/api/session-summary', (req, res) => {
           // Track by MCP server
           if (event.toolName.startsWith('mcp__')) {
             const serverName = event.toolName.split('__')[1] || 'unknown';
-            tokensByServer[serverName] = (tokensByServer[serverName] || 0) + tokens;
+            tokensByServer[serverName] =
+              (tokensByServer[serverName] || 0) + tokens;
           }
         }
 
@@ -173,7 +189,10 @@ app.get('/api/session-summary', (req, res) => {
     }
 
     // Calculate totals
-    const totalTokens = Object.values(tokensByCategory).reduce((sum, val) => sum + val, 0);
+    const totalTokens = Object.values(tokensByCategory).reduce(
+      (sum, val) => sum + val,
+      0
+    );
 
     // Calculate duration
     let duration = 'Unknown';
@@ -188,9 +207,12 @@ app.get('/api/session-summary', (req, res) => {
     }
 
     // Calculate average tool duration
-    const avgToolDuration = toolDurations.length > 0
-      ? Math.round(toolDurations.reduce((sum, d) => sum + d, 0) / toolDurations.length)
-      : 0;
+    const avgToolDuration =
+      toolDurations.length > 0
+        ? Math.round(
+            toolDurations.reduce((sum, d) => sum + d, 0) / toolDurations.length
+          )
+        : 0;
 
     const summary = {
       success: true,
@@ -205,19 +227,34 @@ app.get('/api/session-summary', (req, res) => {
       tokensByCategory: {
         tools: {
           tokens: tokensByCategory.tools,
-          percent: totalTokens > 0 ? (tokensByCategory.tools / totalTokens * 100).toFixed(2) : '0.00',
+          percent:
+            totalTokens > 0
+              ? ((tokensByCategory.tools / totalTokens) * 100).toFixed(2)
+              : '0.00',
         },
         hooks: {
           tokens: tokensByCategory.hooks,
-          percent: totalTokens > 0 ? (tokensByCategory.hooks / totalTokens * 100).toFixed(2) : '0.00',
+          percent:
+            totalTokens > 0
+              ? ((tokensByCategory.hooks / totalTokens) * 100).toFixed(2)
+              : '0.00',
         },
         responses: {
           tokens: tokensByCategory.responses,
-          percent: totalTokens > 0 ? (tokensByCategory.responses / totalTokens * 100).toFixed(2) : '0.00',
+          percent:
+            totalTokens > 0
+              ? ((tokensByCategory.responses / totalTokens) * 100).toFixed(2)
+              : '0.00',
         },
         system_reminders: {
           tokens: tokensByCategory.system_reminders,
-          percent: totalTokens > 0 ? (tokensByCategory.system_reminders / totalTokens * 100).toFixed(2) : '0.00',
+          percent:
+            totalTokens > 0
+              ? (
+                  (tokensByCategory.system_reminders / totalTokens) *
+                  100
+                ).toFixed(2)
+              : '0.00',
         },
       },
       tokensByServer,
@@ -246,7 +283,7 @@ app.get('/api/session-summary', (req, res) => {
  */
 app.get('/api/session-events', (req, res) => {
   try {
-    const sessionId = req.query.sessionId as string || getCurrentSessionId();
+    const sessionId = (req.query.sessionId as string) || getCurrentSessionId();
     const limit = parseInt(req.query.limit as string) || 100;
     const offset = parseInt(req.query.offset as string) || 0;
 
@@ -258,7 +295,10 @@ app.get('/api/session-events', (req, res) => {
     }
 
     const hooksDataPath = getHooksDataPath();
-    const jsonlFilePath = path.join(hooksDataPath, `session-log-${sessionId}.jsonl`);
+    const jsonlFilePath = path.join(
+      hooksDataPath,
+      `session-log-${sessionId}.jsonl`
+    );
 
     if (!fs.existsSync(jsonlFilePath)) {
       return res.status(404).json({
@@ -321,7 +361,9 @@ app.get('/', (_req, res) => {
 // Start server
 export function startWebServer() {
   app.listen(PORT, () => {
-    console.log(`Token Optimizer Dashboard running on http://localhost:${PORT}`);
+    console.log(
+      `Token Optimizer Dashboard running on http://localhost:${PORT}`
+    );
   });
 }
 

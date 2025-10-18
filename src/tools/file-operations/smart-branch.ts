@@ -11,13 +11,13 @@
  * Target: 60% reduction vs full git branch output with details
  */
 
-import { execSync } from "child_process";
-import { join } from "path";
-import { homedir } from "os";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
+import { execSync } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { generateCacheKey } from '../shared/hash-utils';
 
 export interface BranchInfo {
   name: string; // Branch name
@@ -57,8 +57,8 @@ export interface SmartBranchOptions {
   includeTracking?: boolean; // Include ahead/behind tracking (default: false)
 
   // Sorting
-  sortBy?: "name" | "date" | "author"; // Sort field (default: name)
-  sortOrder?: "asc" | "desc"; // Sort direction (default: asc)
+  sortBy?: 'name' | 'date' | 'author'; // Sort field (default: name)
+  sortOrder?: 'asc' | 'desc'; // Sort direction (default: asc)
 
   // Pagination
   limit?: number; // Maximum branches to return
@@ -92,7 +92,7 @@ export class SmartBranchTool {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   /**
@@ -107,15 +107,15 @@ export class SmartBranchTool {
       local: options.local ?? true,
       remote: options.remote ?? false,
       all: options.all ?? false,
-      pattern: options.pattern ?? "",
+      pattern: options.pattern ?? '',
       merged: options.merged ?? false,
       unmerged: options.unmerged ?? false,
-      mergedInto: options.mergedInto ?? "",
+      mergedInto: options.mergedInto ?? '',
       namesOnly: options.namesOnly ?? false,
       includeCommit: options.includeCommit ?? false,
       includeTracking: options.includeTracking ?? false,
-      sortBy: options.sortBy ?? "name",
-      sortOrder: options.sortOrder ?? "asc",
+      sortBy: options.sortBy ?? 'name',
+      sortOrder: options.sortOrder ?? 'asc',
       limit: options.limit ?? Infinity,
       offset: options.offset ?? 0,
       useCache: options.useCache ?? true,
@@ -149,7 +149,7 @@ export class SmartBranchTool {
 
           const duration = Date.now() - startTime;
           this.metrics.record({
-            operation: "smart_branch",
+            operation: 'smart_branch',
             duration,
             inputTokens: result.metadata.tokenCount,
             outputTokens: 0,
@@ -168,7 +168,7 @@ export class SmartBranchTool {
 
       // Apply pattern filter
       if (opts.pattern) {
-        const regex = new RegExp(opts.pattern.replace(/\*/g, ".*"));
+        const regex = new RegExp(opts.pattern.replace(/\*/g, '.*'));
         branches = branches.filter((b) => regex.test(b.name));
       }
 
@@ -207,7 +207,7 @@ export class SmartBranchTool {
       const totalBranches = branches.length;
       const paginatedBranches = branches.slice(
         opts.offset,
-        opts.offset + opts.limit,
+        opts.offset + opts.limit
       );
       const truncated = totalBranches > paginatedBranches.length + opts.offset;
 
@@ -218,7 +218,7 @@ export class SmartBranchTool {
 
       // Calculate tokens
       const resultTokenCount = this.tokenCounter.count(
-        JSON.stringify(resultBranches),
+        JSON.stringify(resultBranches)
       ).tokens;
 
       // Estimate original tokens (if we had returned full git branch -vv output)
@@ -262,7 +262,7 @@ export class SmartBranchTool {
           cacheKey,
           JSON.stringify(result) as any,
           originalTokens,
-          resultTokenCount,
+          resultTokenCount
         );
       }
 
@@ -271,7 +271,7 @@ export class SmartBranchTool {
       result.metadata.duration = duration;
 
       this.metrics.record({
-        operation: "smart_branch",
+        operation: 'smart_branch',
         duration,
         inputTokens: resultTokenCount,
         outputTokens: 0,
@@ -286,7 +286,7 @@ export class SmartBranchTool {
       const duration = Date.now() - startTime;
 
       this.metrics.record({
-        operation: "smart_branch",
+        operation: 'smart_branch',
         duration,
         inputTokens: 0,
         outputTokens: 0,
@@ -302,7 +302,7 @@ export class SmartBranchTool {
           totalBranches: 0,
           returnedCount: 0,
           truncated: false,
-          currentBranch: "",
+          currentBranch: '',
           repository: opts.cwd,
           tokensSaved: 0,
           tokenCount: 0,
@@ -321,7 +321,7 @@ export class SmartBranchTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync("git rev-parse --git-dir", { cwd, stdio: "pipe" });
+      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
       return true;
     } catch {
       return false;
@@ -333,12 +333,12 @@ export class SmartBranchTool {
    */
   private getCurrentBranch(cwd: string): string {
     try {
-      return execSync("git branch --show-current", {
+      return execSync('git branch --show-current', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
     } catch {
-      return "HEAD";
+      return 'HEAD';
     }
   }
 
@@ -347,9 +347,9 @@ export class SmartBranchTool {
    */
   private getLatestCommitHash(cwd: string): string {
     try {
-      return execSync("git rev-parse HEAD", { cwd, encoding: "utf-8" }).trim();
+      return execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
     } catch {
-      return "unknown";
+      return 'unknown';
     }
   }
 
@@ -359,7 +359,7 @@ export class SmartBranchTool {
   private buildCacheKey(opts: Required<SmartBranchOptions>): string {
     const latestHash = this.getLatestCommitHash(opts.cwd);
 
-    return generateCacheKey("git-branch", {
+    return generateCacheKey('git-branch', {
       latest: latestHash,
       local: opts.local,
       remote: opts.remote,
@@ -385,40 +385,40 @@ export class SmartBranchTool {
         'git branch --format="%(refname:short)%00%(upstream:short)%00%(HEAD)"';
 
       if (opts.remote && !opts.local) {
-        command += " -r";
+        command += ' -r';
       } else if (opts.all) {
-        command += " -a";
+        command += ' -a';
       }
 
       const output = execSync(command, {
         cwd: opts.cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024, // 10MB
       });
 
-      const lines = output.split("\n").filter((line) => line.trim());
+      const lines = output.split('\n').filter((line) => line.trim());
 
       for (const line of lines) {
-        const parts = line.split("\x00");
+        const parts = line.split('\x00');
         if (parts.length < 3) continue;
 
         const [name, upstream, currentMarker] = parts;
-        const isCurrent = currentMarker === "*";
+        const isCurrent = currentMarker === '*';
 
         // Parse remote info
         let remote: string | null = null;
-        if (name.startsWith("remotes/")) {
-          const remoteParts = name.substring(8).split("/");
+        if (name.startsWith('remotes/')) {
+          const remoteParts = name.substring(8).split('/');
           remote = remoteParts[0];
         } else if (upstream) {
-          const upstreamParts = upstream.split("/");
+          const upstreamParts = upstream.split('/');
           if (upstreamParts.length > 1) {
             remote = upstreamParts[0];
           }
         }
 
         branches.push({
-          name: name.startsWith("remotes/") ? name.substring(8) : name,
+          name: name.startsWith('remotes/') ? name.substring(8) : name,
           current: isCurrent,
           remote,
           upstream: upstream || null,
@@ -439,7 +439,7 @@ export class SmartBranchTool {
     try {
       const output = execSync(`git branch --merged ${target}`, {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
 
       return output.includes(branch);
@@ -451,15 +451,15 @@ export class SmartBranchTool {
   /**
    * Get last commit info for a branch
    */
-  private getLastCommit(branch: string, cwd: string): BranchInfo["lastCommit"] {
+  private getLastCommit(branch: string, cwd: string): BranchInfo['lastCommit'] {
     try {
-      const format = "%H%x00%h%x00%an%x00%aI%x00%s";
+      const format = '%H%x00%h%x00%an%x00%aI%x00%s';
       const output = execSync(`git log -1 --format="${format}" ${branch}`, {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
 
-      const parts = output.trim().split("\x00");
+      const parts = output.trim().split('\x00');
       if (parts.length < 5) return undefined;
 
       const [hash, shortHash, author, dateStr, message] = parts;
@@ -481,18 +481,18 @@ export class SmartBranchTool {
    */
   private getTrackingInfo(
     branch: string,
-    cwd: string,
+    cwd: string
   ): { ahead: number; behind: number } {
     try {
       const output = execSync(
         `git rev-list --left-right --count ${branch}...@{u}`,
         {
           cwd,
-          encoding: "utf-8",
-        },
+          encoding: 'utf-8',
+        }
       );
 
-      const parts = output.trim().split("\t");
+      const parts = output.trim().split('\t');
       if (parts.length < 2) return { ahead: 0, behind: 0 };
 
       return {
@@ -510,29 +510,29 @@ export class SmartBranchTool {
   private sortBranches(
     branches: BranchInfo[],
     sortBy: string,
-    sortOrder: "asc" | "desc",
+    sortOrder: 'asc' | 'desc'
   ): void {
     branches.sort((a, b) => {
       let comparison = 0;
 
       switch (sortBy) {
-        case "name":
+        case 'name':
           comparison = a.name.localeCompare(b.name);
           break;
-        case "date":
+        case 'date':
           if (a.lastCommit && b.lastCommit) {
             comparison =
               a.lastCommit.date.getTime() - b.lastCommit.date.getTime();
           }
           break;
-        case "author":
+        case 'author':
           if (a.lastCommit && b.lastCommit) {
             comparison = a.lastCommit.author.localeCompare(b.lastCommit.author);
           }
           break;
       }
 
-      return sortOrder === "desc" ? -comparison : comparison;
+      return sortOrder === 'desc' ? -comparison : comparison;
     });
   }
 
@@ -545,17 +545,17 @@ export class SmartBranchTool {
     totalTokensSaved: number;
     averageReduction: number;
   } {
-    const branchMetrics = this.metrics.getOperations(0, "smart_branch");
+    const branchMetrics = this.metrics.getOperations(0, 'smart_branch');
 
     const totalQueries = branchMetrics.length;
     const cacheHits = branchMetrics.filter((m) => m.cacheHit).length;
     const totalTokensSaved = branchMetrics.reduce(
       (sum, m) => sum + (m.savedTokens || 0),
-      0,
+      0
     );
     const totalInputTokens = branchMetrics.reduce(
       (sum, m) => sum + (m.inputTokens || 0),
-      0,
+      0
     );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
@@ -579,7 +579,7 @@ export class SmartBranchTool {
 export function getSmartBranchTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartBranchTool {
   return new SmartBranchTool(cache, tokenCounter, metrics);
 }
@@ -588,9 +588,9 @@ export function getSmartBranchTool(
  * CLI function - Creates resources and uses factory
  */
 export async function runSmartBranch(
-  options: SmartBranchOptions = {},
+  options: SmartBranchOptions = {}
 ): Promise<SmartBranchResult> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -602,64 +602,64 @@ export async function runSmartBranch(
  * MCP Tool Definition
  */
 export const SMART_BRANCH_TOOL_DEFINITION = {
-  name: "smart_branch",
+  name: 'smart_branch',
   description:
-    "List and manage git branches with 60% token reduction through structured JSON output and smart filtering",
+    'List and manage git branches with 60% token reduction through structured JSON output and smart filtering',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       cwd: {
-        type: "string",
-        description: "Working directory for git operations",
+        type: 'string',
+        description: 'Working directory for git operations',
       },
       all: {
-        type: "boolean",
-        description: "Include both local and remote branches",
+        type: 'boolean',
+        description: 'Include both local and remote branches',
         default: false,
       },
       remote: {
-        type: "boolean",
-        description: "Include remote branches",
+        type: 'boolean',
+        description: 'Include remote branches',
         default: false,
       },
       pattern: {
-        type: "string",
+        type: 'string',
         description: 'Filter branches by pattern (e.g., "feature/*")',
       },
       merged: {
-        type: "boolean",
-        description: "Only show merged branches",
+        type: 'boolean',
+        description: 'Only show merged branches',
         default: false,
       },
       unmerged: {
-        type: "boolean",
-        description: "Only show unmerged branches",
+        type: 'boolean',
+        description: 'Only show unmerged branches',
         default: false,
       },
       namesOnly: {
-        type: "boolean",
-        description: "Only return branch names without metadata",
+        type: 'boolean',
+        description: 'Only return branch names without metadata',
         default: false,
       },
       includeCommit: {
-        type: "boolean",
-        description: "Include last commit information",
+        type: 'boolean',
+        description: 'Include last commit information',
         default: false,
       },
       includeTracking: {
-        type: "boolean",
-        description: "Include ahead/behind tracking information",
+        type: 'boolean',
+        description: 'Include ahead/behind tracking information',
         default: false,
       },
       limit: {
-        type: "number",
-        description: "Maximum branches to return",
+        type: 'number',
+        description: 'Maximum branches to return',
       },
       sortBy: {
-        type: "string",
-        enum: ["name", "date", "author"],
-        description: "Field to sort by",
-        default: "name",
+        type: 'string',
+        enum: ['name', 'date', 'author'],
+        description: 'Field to sort by',
+        default: 'name',
       },
     },
   },

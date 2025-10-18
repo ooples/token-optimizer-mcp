@@ -23,10 +23,10 @@
  * 8. purge - Remove old metrics data
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector as CoreMetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector as CoreMetricsCollector } from '../../core/metrics';
+import { createHash } from 'crypto';
 
 // ============================================================================
 // Interfaces
@@ -34,14 +34,14 @@ import { createHash } from "crypto";
 
 export interface MetricCollectorOptions {
   operation:
-    | "collect"
-    | "query"
-    | "aggregate"
-    | "export"
-    | "list-sources"
-    | "configure-source"
-    | "get-stats"
-    | "purge";
+    | 'collect'
+    | 'query'
+    | 'aggregate'
+    | 'export'
+    | 'list-sources'
+    | 'configure-source'
+    | 'get-stats'
+    | 'purge';
 
   // Source identification
   sourceId?: string;
@@ -65,14 +65,14 @@ export interface MetricCollectorOptions {
 
   // Aggregation options
   aggregation?: {
-    function: "avg" | "sum" | "min" | "max" | "count" | "rate" | "percentile";
+    function: 'avg' | 'sum' | 'min' | 'max' | 'count' | 'rate' | 'percentile';
     percentile?: number; // For percentile aggregation
     window?: number; // Time window in seconds
     groupBy?: string[]; // Tag keys to group by
   };
 
   // Export options
-  format?: "json" | "csv" | "prometheus" | "influxdb" | "graphite";
+  format?: 'json' | 'csv' | 'prometheus' | 'influxdb' | 'graphite';
   destination?: string; // URL or file path
   compress?: boolean;
 
@@ -87,7 +87,13 @@ export interface MetricCollectorOptions {
 export interface MetricSource {
   id: string;
   name: string;
-  type: "prometheus" | "graphite" | "influxdb" | "cloudwatch" | "datadog" | "custom";
+  type:
+    | 'prometheus'
+    | 'graphite'
+    | 'influxdb'
+    | 'cloudwatch'
+    | 'datadog'
+    | 'custom';
   enabled: boolean;
   config: {
     url?: string;
@@ -101,7 +107,7 @@ export interface MetricSource {
     tags?: Record<string, string>; // Default tags
   };
   lastCollected?: number;
-  status: "active" | "error" | "disabled";
+  status: 'active' | 'error' | 'disabled';
   errorMessage?: string;
 }
 
@@ -213,28 +219,28 @@ export class MetricCollector {
       let result: MetricCollectorResult;
 
       switch (options.operation) {
-        case "collect":
+        case 'collect':
           result = await this.collectMetrics(options);
           break;
-        case "query":
+        case 'query':
           result = await this.queryMetrics(options);
           break;
-        case "aggregate":
+        case 'aggregate':
           result = await this.aggregateMetrics(options);
           break;
-        case "export":
+        case 'export':
           result = await this.exportMetrics(options);
           break;
-        case "list-sources":
+        case 'list-sources':
           result = await this.listSources(options);
           break;
-        case "configure-source":
+        case 'configure-source':
           result = await this.configureSource(options);
           break;
-        case "get-stats":
+        case 'get-stats':
           result = await this.getStats(options);
           break;
-        case "purge":
+        case 'purge':
           result = await this.purgeOldData(options);
           break;
         default:
@@ -296,7 +302,7 @@ export class MetricCollector {
     } else {
       // Collect from all enabled sources
       for (const source of this.sources.values()) {
-        if (source.enabled && source.status === "active") {
+        if (source.enabled && source.status === 'active') {
           sourcesToCollect.push(source);
         }
       }
@@ -311,10 +317,10 @@ export class MetricCollector {
 
         // Update source status
         source.lastCollected = Date.now();
-        source.status = "active";
+        source.status = 'active';
         source.errorMessage = undefined;
       } catch (error) {
-        source.status = "error";
+        source.status = 'error';
         source.errorMessage =
           error instanceof Error ? error.message : String(error);
         console.error(`Error collecting from source ${source.name}:`, error);
@@ -361,7 +367,7 @@ export class MetricCollector {
     options: MetricCollectorOptions
   ): Promise<MetricCollectorResult> {
     const query = options.query || {};
-    const cacheKey = this.getCacheKey("query", JSON.stringify(query));
+    const cacheKey = this.getCacheKey('query', JSON.stringify(query));
 
     // Check cache
     if (options.useCache !== false) {
@@ -451,11 +457,11 @@ export class MetricCollector {
     options: MetricCollectorOptions
   ): Promise<MetricCollectorResult> {
     if (!options.aggregation) {
-      throw new Error("aggregation configuration is required");
+      throw new Error('aggregation configuration is required');
     }
 
     const agg = options.aggregation;
-    const cacheKey = this.getCacheKey("aggregate", JSON.stringify(options));
+    const cacheKey = this.getCacheKey('aggregate', JSON.stringify(options));
 
     // Check cache
     if (options.useCache !== false) {
@@ -480,7 +486,7 @@ export class MetricCollector {
     if (options.query) {
       const queryResult = await this.queryMetrics({
         ...options,
-        operation: "query",
+        operation: 'query',
       });
       dataPoints = queryResult.data?.dataPoints || [];
     }
@@ -489,10 +495,12 @@ export class MetricCollector {
     const aggregations = this.performAggregation(dataPoints, agg);
 
     // Calculate token savings
-    const fullTokens = this.tokenCounter.count(JSON.stringify(dataPoints))
-      .tokens;
-    const aggTokens = this.tokenCounter.count(JSON.stringify(aggregations))
-      .tokens;
+    const fullTokens = this.tokenCounter.count(
+      JSON.stringify(dataPoints)
+    ).tokens;
+    const aggTokens = this.tokenCounter.count(
+      JSON.stringify(aggregations)
+    ).tokens;
     const tokensSaved = fullTokens - aggTokens;
 
     // Cache results
@@ -521,7 +529,7 @@ export class MetricCollector {
     // Query data to export
     const queryResult = await this.queryMetrics({
       ...options,
-      operation: "query",
+      operation: 'query',
     });
 
     if (!queryResult.success || !queryResult.data?.dataPoints) {
@@ -529,25 +537,26 @@ export class MetricCollector {
     }
 
     const dataPoints = queryResult.data.dataPoints;
-    const format = options.format || "json";
-    const destination = options.destination || `metrics-export-${Date.now()}.${format}`;
+    const format = options.format || 'json';
+    const destination =
+      options.destination || `metrics-export-${Date.now()}.${format}`;
 
     let content: string;
 
     switch (format) {
-      case "json":
+      case 'json':
         content = JSON.stringify(dataPoints, null, 2);
         break;
-      case "csv":
+      case 'csv':
         content = this.toCSV(dataPoints);
         break;
-      case "prometheus":
+      case 'prometheus':
         content = this.toPrometheusFormat(dataPoints);
         break;
-      case "influxdb":
+      case 'influxdb':
         content = this.toInfluxDBFormat(dataPoints);
         break;
-      case "graphite":
+      case 'graphite':
         content = this.toGraphiteFormat(dataPoints);
         break;
       default:
@@ -560,13 +569,16 @@ export class MetricCollector {
     }
 
     // Write to destination (simplified - could be file or HTTP endpoint)
-    if (destination.startsWith("http://") || destination.startsWith("https://")) {
+    if (
+      destination.startsWith('http://') ||
+      destination.startsWith('https://')
+    ) {
       // Would make HTTP request in real implementation
       console.log(`[MetricCollector] Would export to ${destination}`);
     } else {
       // Write to file
-      const fs = await import("fs");
-      await fs.promises.writeFile(destination, content, "utf-8");
+      const fs = await import('fs');
+      await fs.promises.writeFile(destination, content, 'utf-8');
     }
 
     return {
@@ -594,7 +606,7 @@ export class MetricCollector {
   private async listSources(
     options: MetricCollectorOptions
   ): Promise<MetricCollectorResult> {
-    const cacheKey = this.getCacheKey("sources", "list");
+    const cacheKey = this.getCacheKey('sources', 'list');
 
     // Check cache
     if (options.useCache !== false) {
@@ -656,15 +668,16 @@ export class MetricCollector {
     options: MetricCollectorOptions
   ): Promise<MetricCollectorResult> {
     if (!options.source) {
-      throw new Error("source configuration is required");
+      throw new Error('source configuration is required');
     }
 
-    const sourceId = options.sourceId || this.generateSourceId(options.source.name);
+    const sourceId =
+      options.sourceId || this.generateSourceId(options.source.name);
 
     const source: MetricSource = {
       ...options.source,
       id: sourceId,
-      status: options.source.status || "active",
+      status: options.source.status || 'active',
     };
 
     this.sources.set(sourceId, source);
@@ -689,7 +702,7 @@ export class MetricCollector {
   private async getStats(
     options: MetricCollectorOptions
   ): Promise<MetricCollectorResult> {
-    const cacheKey = this.getCacheKey("stats", "current");
+    const cacheKey = this.getCacheKey('stats', 'current');
 
     // Check cache (short TTL for stats)
     if (options.useCache !== false) {
@@ -712,10 +725,10 @@ export class MetricCollector {
     const uniqueMetrics = new Set(this.dataPoints.map((dp) => dp.metric)).size;
 
     const activeSources = Array.from(this.sources.values()).filter(
-      (s) => s.status === "active"
+      (s) => s.status === 'active'
     ).length;
     const errorSources = Array.from(this.sources.values()).filter(
-      (s) => s.status === "error"
+      (s) => s.status === 'error'
     ).length;
 
     const rawSize = JSON.stringify(this.dataPoints).length;
@@ -815,15 +828,15 @@ export class MetricCollector {
   // ============================================================================
 
   private generateSourceId(name: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(name + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private getCacheKey(prefix: string, suffix: string): string {
-    const hash = createHash("md5");
+    const hash = createHash('md5');
     hash.update(`metric-collector:${prefix}:${suffix}`);
-    return `cache-${hash.digest("hex")}`;
+    return `cache-${hash.digest('hex')}`;
   }
 
   /**
@@ -943,11 +956,11 @@ export class MetricCollector {
    */
   private abbreviateTagKey(key: string): string {
     const abbreviations: Record<string, string> = {
-      source: "src",
-      instance: "inst",
-      environment: "env",
-      region: "reg",
-      service: "svc",
+      source: 'src',
+      instance: 'inst',
+      environment: 'env',
+      region: 'reg',
+      service: 'svc',
     };
     return abbreviations[key] || key;
   }
@@ -966,7 +979,8 @@ export class MetricCollector {
 
     // Group into time buckets
     for (const dp of dataPoints) {
-      const bucketTime = Math.floor(dp.timestamp / (interval * 1000)) * interval * 1000;
+      const bucketTime =
+        Math.floor(dp.timestamp / (interval * 1000)) * interval * 1000;
       if (!buckets.has(bucketTime)) {
         buckets.set(bucketTime, []);
       }
@@ -975,7 +989,8 @@ export class MetricCollector {
 
     // Average each bucket
     for (const [bucketTime, points] of buckets.entries()) {
-      const avgValue = points.reduce((sum, p) => sum + p.value, 0) / points.length;
+      const avgValue =
+        points.reduce((sum, p) => sum + p.value, 0) / points.length;
 
       downsampled.push({
         metric: points[0].metric,
@@ -1008,7 +1023,7 @@ export class MetricCollector {
       let key = dp.m || dp.metric;
 
       if (agg.groupBy && dp.tg) {
-        const groupKeys = agg.groupBy.map((k) => dp.tg[k] || "").join(":");
+        const groupKeys = agg.groupBy.map((k) => dp.tg[k] || '').join(':');
         key = `${key}:${groupKeys}`;
       }
 
@@ -1024,26 +1039,27 @@ export class MetricCollector {
       let aggValue: number;
 
       switch (agg.function) {
-        case "avg":
+        case 'avg':
           aggValue = values.reduce((a, b) => a + b, 0) / values.length;
           break;
-        case "sum":
+        case 'sum':
           aggValue = values.reduce((a, b) => a + b, 0);
           break;
-        case "min":
+        case 'min':
           aggValue = Math.min(...values);
           break;
-        case "max":
+        case 'max':
           aggValue = Math.max(...values);
           break;
-        case "count":
+        case 'count':
           aggValue = values.length;
           break;
-        case "percentile":
+        case 'percentile':
           aggValue = this.calculatePercentile(values, agg.percentile || 95);
           break;
-        case "rate":
-          const timeRange = Math.max(...points.map((p) => p.t || p.timestamp)) -
+        case 'rate':
+          const timeRange =
+            Math.max(...points.map((p) => p.t || p.timestamp)) -
             Math.min(...points.map((p) => p.t || p.timestamp));
           aggValue = timeRange > 0 ? values.length / (timeRange / 1000) : 0;
           break;
@@ -1085,16 +1101,16 @@ export class MetricCollector {
     const tagPairs = Object.entries(tags)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`);
-    return `${metric}{${tagPairs.join(",")}}`;
+    return `${metric}{${tagPairs.join(',')}}`;
   }
 
   /**
    * Convert to CSV format
    */
   private toCSV(dataPoints: any[]): string {
-    if (dataPoints.length === 0) return "";
+    if (dataPoints.length === 0) return '';
 
-    const headers = ["metric", "value", "timestamp", "tags"];
+    const headers = ['metric', 'value', 'timestamp', 'tags'];
     const rows = dataPoints.map((dp) => [
       dp.m || dp.metric,
       dp.v || dp.value,
@@ -1103,9 +1119,9 @@ export class MetricCollector {
     ]);
 
     return [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
-    ].join("\n");
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+    ].join('\n');
   }
 
   /**
@@ -1121,11 +1137,11 @@ export class MetricCollector {
 
         const tagStr = Object.entries(tags)
           .map(([k, v]) => `${k}="${v}"`)
-          .join(",");
+          .join(',');
 
         return `${metric}{${tagStr}} ${value} ${timestamp}`;
       })
-      .join("\n");
+      .join('\n');
   }
 
   /**
@@ -1141,11 +1157,11 @@ export class MetricCollector {
 
         const tagStr = Object.entries(tags)
           .map(([k, v]) => `${k}=${v}`)
-          .join(",");
+          .join(',');
 
         return `${metric},${tagStr} value=${value} ${timestamp}000000`;
       })
-      .join("\n");
+      .join('\n');
   }
 
   /**
@@ -1160,7 +1176,7 @@ export class MetricCollector {
 
         return `${metric} ${value} ${timestamp}`;
       })
-      .join("\n");
+      .join('\n');
   }
 
   /**
@@ -1198,39 +1214,42 @@ export class MetricCollector {
   // ============================================================================
 
   private async persistSources(): Promise<void> {
-    const cacheKey = this.getCacheKey("persistence", "sources");
+    const cacheKey = this.getCacheKey('persistence', 'sources');
     const data = JSON.stringify(Array.from(this.sources.entries()));
     await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistData(): Promise<void> {
-    const cacheKey = this.getCacheKey("persistence", "compressed");
+    const cacheKey = this.getCacheKey('persistence', 'compressed');
     const data = JSON.stringify(Array.from(this.compressedSeries.entries()));
     await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {
     // Load sources
-    const sourcesKey = this.getCacheKey("persistence", "sources");
+    const sourcesKey = this.getCacheKey('persistence', 'sources');
     const sourcesData = this.cache.get(sourcesKey);
     if (sourcesData) {
       try {
         const entries = JSON.parse(sourcesData);
         this.sources = new Map(entries);
       } catch (error) {
-        console.error("[MetricCollector] Error loading sources:", error);
+        console.error('[MetricCollector] Error loading sources:', error);
       }
     }
 
     // Load compressed series
-    const seriesKey = this.getCacheKey("persistence", "compressed");
+    const seriesKey = this.getCacheKey('persistence', 'compressed');
     const seriesData = this.cache.get(seriesKey);
     if (seriesData) {
       try {
         const entries = JSON.parse(seriesData);
         this.compressedSeries = new Map(entries);
       } catch (error) {
-        console.error("[MetricCollector] Error loading compressed series:", error);
+        console.error(
+          '[MetricCollector] Error loading compressed series:',
+          error
+        );
       }
     }
   }
@@ -1262,103 +1281,103 @@ export function getMetricCollector(
 // ============================================================================
 
 export const METRIC_COLLECTOR_TOOL_DEFINITION = {
-  name: "metric_collector",
+  name: 'metric_collector',
   description:
-    "Comprehensive metrics collection and aggregation with multi-source support, time-series compression, and 88% token reduction through delta encoding and intelligent caching",
+    'Comprehensive metrics collection and aggregation with multi-source support, time-series compression, and 88% token reduction through delta encoding and intelligent caching',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "collect",
-          "query",
-          "aggregate",
-          "export",
-          "list-sources",
-          "configure-source",
-          "get-stats",
-          "purge",
+          'collect',
+          'query',
+          'aggregate',
+          'export',
+          'list-sources',
+          'configure-source',
+          'get-stats',
+          'purge',
         ],
-        description: "The metric collector operation to perform",
+        description: 'The metric collector operation to perform',
       },
       sourceId: {
-        type: "string",
-        description: "Source identifier",
+        type: 'string',
+        description: 'Source identifier',
       },
       sourceName: {
-        type: "string",
-        description: "Source name",
+        type: 'string',
+        description: 'Source name',
       },
       source: {
-        type: "object",
-        description: "Source configuration for configure-source operation",
+        type: 'object',
+        description: 'Source configuration for configure-source operation',
       },
       metrics: {
-        type: "array",
-        items: { type: "string" },
-        description: "Specific metrics to collect",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Specific metrics to collect',
       },
       tags: {
-        type: "object",
-        description: "Tag filters",
+        type: 'object',
+        description: 'Tag filters',
       },
       query: {
-        type: "object",
-        description: "Query configuration",
+        type: 'object',
+        description: 'Query configuration',
         properties: {
-          metric: { type: "string" },
-          tags: { type: "object" },
+          metric: { type: 'string' },
+          tags: { type: 'object' },
           timeRange: {
-            type: "object",
+            type: 'object',
             properties: {
-              start: { type: "number" },
-              end: { type: "number" },
+              start: { type: 'number' },
+              end: { type: 'number' },
             },
           },
-          limit: { type: "number" },
-          downsample: { type: "number" },
+          limit: { type: 'number' },
+          downsample: { type: 'number' },
         },
       },
       aggregation: {
-        type: "object",
-        description: "Aggregation configuration",
+        type: 'object',
+        description: 'Aggregation configuration',
         properties: {
           function: {
-            type: "string",
-            enum: ["avg", "sum", "min", "max", "count", "rate", "percentile"],
+            type: 'string',
+            enum: ['avg', 'sum', 'min', 'max', 'count', 'rate', 'percentile'],
           },
-          percentile: { type: "number" },
-          window: { type: "number" },
+          percentile: { type: 'number' },
+          window: { type: 'number' },
           groupBy: {
-            type: "array",
-            items: { type: "string" },
+            type: 'array',
+            items: { type: 'string' },
           },
         },
       },
       format: {
-        type: "string",
-        enum: ["json", "csv", "prometheus", "influxdb", "graphite"],
-        description: "Export format",
+        type: 'string',
+        enum: ['json', 'csv', 'prometheus', 'influxdb', 'graphite'],
+        description: 'Export format',
       },
       destination: {
-        type: "string",
-        description: "Export destination (URL or file path)",
+        type: 'string',
+        description: 'Export destination (URL or file path)',
       },
       compress: {
-        type: "boolean",
-        description: "Compress exported data",
+        type: 'boolean',
+        description: 'Compress exported data',
       },
       retentionPeriod: {
-        type: "number",
-        description: "Data retention period in seconds",
+        type: 'number',
+        description: 'Data retention period in seconds',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching (default: true)",
+        type: 'boolean',
+        description: 'Enable caching (default: true)',
         default: true,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

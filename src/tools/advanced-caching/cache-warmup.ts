@@ -21,27 +21,37 @@
  * 6. status - Get warming status
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { EventEmitter } from "events";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { EventEmitter } from 'events';
 
-export type WarmupStrategy = "immediate" | "progressive" | "dependency" | "pattern";
-export type WarmupPriority = "high" | "normal" | "low";
-export type WarmupStatus = "idle" | "warming" | "paused" | "completed" | "failed" | "cancelled";
+export type WarmupStrategy =
+  | 'immediate'
+  | 'progressive'
+  | 'dependency'
+  | 'pattern';
+export type WarmupPriority = 'high' | 'normal' | 'low';
+export type WarmupStatus =
+  | 'idle'
+  | 'warming'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export interface CacheWarmupOptions {
   operation:
-    | "schedule"
-    | "immediate"
-    | "pattern-based"
-    | "dependency-based"
-    | "selective"
-    | "status"
-    | "cancel"
-    | "pause"
-    | "resume"
-    | "configure";
+    | 'schedule'
+    | 'immediate'
+    | 'pattern-based'
+    | 'dependency-based'
+    | 'selective'
+    | 'status'
+    | 'cancel'
+    | 'pause'
+    | 'resume'
+    | 'configure';
 
   // Warming configuration
   keys?: string[];
@@ -97,7 +107,7 @@ export interface CacheWarmupOptions {
 }
 
 export interface WarmupDataSource {
-  type: "database" | "api" | "file" | "cache" | "custom";
+  type: 'database' | 'api' | 'file' | 'cache' | 'custom';
   connectionString?: string;
   endpoint?: string;
   filePath?: string;
@@ -119,7 +129,7 @@ export interface DependencyNode {
 export interface DependencyEdge {
   from: string; // Dependent key
   to: string; // Dependency key
-  type: "required" | "optional";
+  type: 'required' | 'optional';
 }
 
 export interface AccessHistoryEntry {
@@ -137,7 +147,7 @@ export interface WarmupSchedule {
   enabled: boolean;
   nextRun: number;
   lastRun?: number;
-  status: "active" | "paused" | "completed" | "failed";
+  status: 'active' | 'paused' | 'completed' | 'failed';
 }
 
 export interface WarmupProgress {
@@ -219,11 +229,11 @@ interface WarmupJob {
 }
 
 interface CronSchedule {
-  minute: number | "*";
-  hour: number | "*";
-  dayOfMonth: number | "*";
-  month: number | "*";
-  dayOfWeek: number | "*";
+  minute: number | '*';
+  hour: number | '*';
+  dayOfMonth: number | '*';
+  month: number | '*';
+  dayOfWeek: number | '*';
 }
 
 /**
@@ -318,38 +328,38 @@ export class CacheWarmupTool extends EventEmitter {
     }
 
     // Execute operation
-    let data: WarmupResult["data"];
+    let data: WarmupResult['data'];
 
     try {
       switch (operation) {
-        case "immediate":
+        case 'immediate':
           data = await this.immediateWarmup(options);
           break;
-        case "schedule":
+        case 'schedule':
           data = await this.scheduleWarmup(options);
           break;
-        case "pattern-based":
+        case 'pattern-based':
           data = await this.patternBasedWarmup(options);
           break;
-        case "dependency-based":
+        case 'dependency-based':
           data = await this.dependencyBasedWarmup(options);
           break;
-        case "selective":
+        case 'selective':
           data = await this.selectiveWarmup(options);
           break;
-        case "status":
+        case 'status':
           data = await this.getStatus(options);
           break;
-        case "cancel":
+        case 'cancel':
           data = await this.cancelWarmup(options);
           break;
-        case "pause":
+        case 'pause':
           data = await this.pauseWarmup(options);
           break;
-        case "resume":
+        case 'resume':
           data = await this.resumeWarmup(options);
           break;
-        case "configure":
+        case 'configure':
           data = await this.configure(options);
           break;
         default:
@@ -411,11 +421,13 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Immediate cache warmup
    */
-  private async immediateWarmup(options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async immediateWarmup(
+    options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     const {
       keys = [],
-      strategy = "progressive",
-      priority = "normal",
+      strategy = 'progressive',
+      priority = 'normal',
       dryRun = false,
       maxConcurrency = this.config.maxConcurrency,
       batchSize = this.config.batchSize,
@@ -423,7 +435,7 @@ export class CacheWarmupTool extends EventEmitter {
     } = options;
 
     if (keys.length === 0) {
-      throw new Error("No keys provided for immediate warmup");
+      throw new Error('No keys provided for immediate warmup');
     }
 
     // Create warmup job
@@ -433,10 +445,10 @@ export class CacheWarmupTool extends EventEmitter {
       keys,
       priority,
       strategy,
-      status: "warming",
+      status: 'warming',
       options,
       progress: {
-        status: "warming",
+        status: 'warming',
         totalKeys: keys.length,
         warmedKeys: 0,
         failedKeys: 0,
@@ -458,30 +470,34 @@ export class CacheWarmupTool extends EventEmitter {
     }
 
     this.activeJobs.set(jobId, job);
-    this.emit("warmup-started", { jobId, keys: keys.length, strategy });
+    this.emit('warmup-started', { jobId, keys: keys.length, strategy });
 
     try {
       // Execute warmup based on strategy
       let warmedKeys: string[];
 
-      if (strategy === "progressive") {
-        warmedKeys = await this.progressiveWarmup(job, maxConcurrency, batchSize);
-      } else if (strategy === "dependency") {
+      if (strategy === 'progressive') {
+        warmedKeys = await this.progressiveWarmup(
+          job,
+          maxConcurrency,
+          batchSize
+        );
+      } else if (strategy === 'dependency') {
         warmedKeys = await this.warmupWithDependencies(job, options);
-      } else if (strategy === "pattern") {
+      } else if (strategy === 'pattern') {
         warmedKeys = await this.warmupByPattern(job, options);
       } else {
         warmedKeys = await this.parallelWarmup(job, maxConcurrency, batchSize);
       }
 
-      job.progress.status = "completed";
-      job.status = "completed";
+      job.progress.status = 'completed';
+      job.status = 'completed';
 
       this.stats.totalWarmed += warmedKeys.length;
       this.stats.totalFailed += job.progress.failedKeys;
       this.stats.lastWarmupTime = Date.now();
 
-      this.emit("warmup-completed", {
+      this.emit('warmup-completed', {
         jobId,
         warmedKeys: warmedKeys.length,
         failed: job.progress.failedKeys,
@@ -490,18 +506,18 @@ export class CacheWarmupTool extends EventEmitter {
       return {
         progress: job.progress,
         warmedKeys,
-        failedKeys: job.progress.errors.map(e => e.key),
+        failedKeys: job.progress.errors.map((e) => e.key),
       };
     } catch (error) {
-      job.progress.status = "failed";
-      job.status = "failed";
+      job.progress.status = 'failed';
+      job.status = 'failed';
 
       // Rollback if enabled
       if (enableRollback && job.rollbackData) {
         await this.rollback(job);
       }
 
-      this.emit("warmup-failed", { jobId, error: String(error) });
+      this.emit('warmup-failed', { jobId, error: String(error) });
       throw error;
     } finally {
       this.activeJobs.delete(jobId);
@@ -511,11 +527,13 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Schedule cache warmup with cron expression
    */
-  private async scheduleWarmup(options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async scheduleWarmup(
+    options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     const { schedule: cronExpression, scheduleId } = options;
 
     if (!cronExpression) {
-      throw new Error("Schedule expression is required");
+      throw new Error('Schedule expression is required');
     }
 
     const id = scheduleId || this.generateScheduleId();
@@ -528,13 +546,13 @@ export class CacheWarmupTool extends EventEmitter {
       options,
       enabled: true,
       nextRun,
-      status: "active",
+      status: 'active',
     };
 
     this.schedules.set(id, schedule);
     this.scheduleNextRun(schedule);
 
-    this.emit("schedule-created", { id, nextRun });
+    this.emit('schedule-created', { id, nextRun });
 
     return {
       schedule,
@@ -545,7 +563,9 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Pattern-based warmup from access history
    */
-  private async patternBasedWarmup(options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async patternBasedWarmup(
+    options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     const {
       accessHistory,
       minAccessCount = 5,
@@ -567,7 +587,7 @@ export class CacheWarmupTool extends EventEmitter {
     let keysToWarm = Array.from(hotKeys);
     if (pattern) {
       const regex = new RegExp(pattern);
-      keysToWarm = keysToWarm.filter(key => regex.test(key));
+      keysToWarm = keysToWarm.filter((key) => regex.test(key));
     }
 
     // Limit by warmup percentage
@@ -577,20 +597,24 @@ export class CacheWarmupTool extends EventEmitter {
     // Execute warmup
     return this.immediateWarmup({
       ...options,
-      operation: "immediate",
+      operation: 'immediate',
       keys: keysToWarm,
-      strategy: "progressive",
+      strategy: 'progressive',
     });
   }
 
   /**
    * Dependency-based warmup with graph resolution
    */
-  private async dependencyBasedWarmup(options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async dependencyBasedWarmup(
+    options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     const { dependencies, keys = [] } = options;
 
     if (!dependencies) {
-      throw new Error("Dependency graph is required for dependency-based warmup");
+      throw new Error(
+        'Dependency graph is required for dependency-based warmup'
+      );
     }
 
     this.dependencyGraph = dependencies;
@@ -599,7 +623,7 @@ export class CacheWarmupTool extends EventEmitter {
     const resolvedKeys = this.resolveDependencies(keys);
     this.resolvedOrder = resolvedKeys;
 
-    this.emit("dependencies-resolved", {
+    this.emit('dependencies-resolved', {
       requestedKeys: keys.length,
       resolvedKeys: resolvedKeys.length,
     });
@@ -607,16 +631,18 @@ export class CacheWarmupTool extends EventEmitter {
     // Execute warmup in dependency order
     return this.immediateWarmup({
       ...options,
-      operation: "immediate",
+      operation: 'immediate',
       keys: resolvedKeys,
-      strategy: "dependency",
+      strategy: 'dependency',
     });
   }
 
   /**
    * Selective warmup for specific keys/categories
    */
-  private async selectiveWarmup(options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async selectiveWarmup(
+    options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     const { keys = [], categories = [] } = options;
 
     let keysToWarm = [...keys];
@@ -624,8 +650,8 @@ export class CacheWarmupTool extends EventEmitter {
     // Add keys from categories
     if (categories.length > 0) {
       for (const [key, entries] of this.accessHistory.entries()) {
-        const hasCategory = entries.some(entry =>
-          entry.category && categories.includes(entry.category)
+        const hasCategory = entries.some(
+          (entry) => entry.category && categories.includes(entry.category)
         );
         if (hasCategory && !keysToWarm.includes(key)) {
           keysToWarm.push(key);
@@ -634,12 +660,12 @@ export class CacheWarmupTool extends EventEmitter {
     }
 
     if (keysToWarm.length === 0) {
-      throw new Error("No keys to warm up");
+      throw new Error('No keys to warm up');
     }
 
     return this.immediateWarmup({
       ...options,
-      operation: "immediate",
+      operation: 'immediate',
       keys: keysToWarm,
     });
   }
@@ -647,13 +673,14 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Get warmup status
    */
-  private async getStatus(_options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async getStatus(
+    _options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     const activeJobs = Array.from(this.activeJobs.values());
     const schedules = Array.from(this.schedules.values());
 
-    const progress: WarmupProgress | undefined = activeJobs.length > 0
-      ? activeJobs[0].progress
-      : undefined;
+    const progress: WarmupProgress | undefined =
+      activeJobs.length > 0 ? activeJobs[0].progress : undefined;
 
     return {
       progress,
@@ -664,7 +691,9 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Cancel warmup job
    */
-  private async cancelWarmup(options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async cancelWarmup(
+    options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     const { scheduleId } = options;
 
     if (scheduleId) {
@@ -672,15 +701,15 @@ export class CacheWarmupTool extends EventEmitter {
       const schedule = this.schedules.get(scheduleId);
       if (schedule) {
         this.cancelSchedule(scheduleId);
-        return { schedule: { ...schedule, status: "completed" as const } };
+        return { schedule: { ...schedule, status: 'completed' as const } };
       }
     }
 
     // Cancel active jobs
     for (const job of this.activeJobs.values()) {
       job.abortController?.abort();
-      job.status = "cancelled";
-      job.progress.status = "cancelled";
+      job.status = 'cancelled';
+      job.progress.status = 'cancelled';
 
       if (job.rollbackData) {
         await this.rollback(job);
@@ -695,13 +724,15 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Pause warmup job
    */
-  private async pauseWarmup(_options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async pauseWarmup(
+    _options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     for (const job of this.activeJobs.values()) {
-      job.status = "paused";
-      job.progress.status = "paused";
+      job.status = 'paused';
+      job.progress.status = 'paused';
     }
 
-    this.emit("warmup-paused", { jobs: this.activeJobs.size });
+    this.emit('warmup-paused', { jobs: this.activeJobs.size });
 
     return { progress: Array.from(this.activeJobs.values())[0]?.progress };
   }
@@ -709,15 +740,17 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Resume warmup job
    */
-  private async resumeWarmup(_options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async resumeWarmup(
+    _options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     for (const job of this.activeJobs.values()) {
-      if (job.status === "paused") {
-        job.status = "warming";
-        job.progress.status = "warming";
+      if (job.status === 'paused') {
+        job.status = 'warming';
+        job.progress.status = 'warming';
       }
     }
 
-    this.emit("warmup-resumed", { jobs: this.activeJobs.size });
+    this.emit('warmup-resumed', { jobs: this.activeJobs.size });
 
     return { progress: Array.from(this.activeJobs.values())[0]?.progress };
   }
@@ -725,7 +758,9 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Configure warmup settings
    */
-  private async configure(options: CacheWarmupOptions): Promise<WarmupResult["data"]> {
+  private async configure(
+    options: CacheWarmupOptions
+  ): Promise<WarmupResult['data']> {
     if (options.maxConcurrency !== undefined) {
       this.config.maxConcurrency = options.maxConcurrency;
     }
@@ -745,7 +780,7 @@ export class CacheWarmupTool extends EventEmitter {
       this.config.progressReporting = options.reportProgress;
     }
 
-    this.emit("configuration-updated", this.config);
+    this.emit('configuration-updated', this.config);
 
     return { configuration: { ...this.config } };
   }
@@ -766,7 +801,7 @@ export class CacheWarmupTool extends EventEmitter {
 
     // Warm in batches with concurrency control
     for (let i = 0; i < sortedKeys.length; i += batchSize) {
-      if (job.abortController?.signal.aborted || job.status === "paused") {
+      if (job.abortController?.signal.aborted || job.status === 'paused') {
         break;
       }
 
@@ -778,13 +813,17 @@ export class CacheWarmupTool extends EventEmitter {
       );
 
       warmedKeys.push(...batchResults.warmed);
-      this.updateProgress(job, batchResults.warmed.length, batchResults.failed.length);
+      this.updateProgress(
+        job,
+        batchResults.warmed.length,
+        batchResults.failed.length
+      );
 
       if (job.options.delayBetweenBatches) {
         await this.sleep(job.options.delayBetweenBatches);
       }
 
-      this.emit("batch-completed", {
+      this.emit('batch-completed', {
         jobId: job.id,
         batch: i / batchSize + 1,
         warmed: batchResults.warmed.length,
@@ -802,15 +841,14 @@ export class CacheWarmupTool extends EventEmitter {
     job: WarmupJob,
     options: CacheWarmupOptions
   ): Promise<string[]> {
-    const keysToWarm = this.resolvedOrder.length > 0
-      ? this.resolvedOrder
-      : job.keys;
+    const keysToWarm =
+      this.resolvedOrder.length > 0 ? this.resolvedOrder : job.keys;
 
     const warmedKeys: string[] = [];
 
     // Warm keys in dependency order
     for (const key of keysToWarm) {
-      if (job.abortController?.signal.aborted || job.status === "paused") {
+      if (job.abortController?.signal.aborted || job.status === 'paused') {
         break;
       }
 
@@ -839,7 +877,7 @@ export class CacheWarmupTool extends EventEmitter {
 
     if (pattern) {
       const regex = new RegExp(pattern);
-      keysToWarm = keysToWarm.filter(key => regex.test(key));
+      keysToWarm = keysToWarm.filter((key) => regex.test(key));
     }
 
     return this.parallelWarmup(
@@ -861,7 +899,7 @@ export class CacheWarmupTool extends EventEmitter {
     const { keys } = job;
 
     for (let i = 0; i < keys.length; i += batchSize) {
-      if (job.abortController?.signal.aborted || job.status === "paused") {
+      if (job.abortController?.signal.aborted || job.status === 'paused') {
         break;
       }
 
@@ -873,7 +911,11 @@ export class CacheWarmupTool extends EventEmitter {
       );
 
       warmedKeys.push(...batchResults.warmed);
-      this.updateProgress(job, batchResults.warmed.length, batchResults.failed.length);
+      this.updateProgress(
+        job,
+        batchResults.warmed.length,
+        batchResults.failed.length
+      );
     }
 
     return warmedKeys;
@@ -897,15 +939,15 @@ export class CacheWarmupTool extends EventEmitter {
     }
 
     for (const chunk of chunks) {
-      if (job.abortController?.signal.aborted || job.status === "paused") {
+      if (job.abortController?.signal.aborted || job.status === 'paused') {
         break;
       }
 
-      const promises = chunk.map(key => this.warmKey(key, job, job.options));
+      const promises = chunk.map((key) => this.warmKey(key, job, job.options));
       const results = await Promise.allSettled(promises);
 
       results.forEach((result, index) => {
-        if (result.status === "fulfilled" && result.value.success) {
+        if (result.status === 'fulfilled' && result.value.success) {
           warmed.push(chunk[index]);
         } else {
           failed.push(chunk[index]);
@@ -924,7 +966,11 @@ export class CacheWarmupTool extends EventEmitter {
     job: WarmupJob,
     options: CacheWarmupOptions
   ): Promise<{ success: boolean; data?: string }> {
-    const { dataFetcher, dataSource, timeout = this.config.defaultTimeout } = options;
+    const {
+      dataFetcher,
+      dataSource,
+      timeout = this.config.defaultTimeout,
+    } = options;
     let retries = 0;
     const maxRetries = options.maxRetries || this.config.maxRetries;
 
@@ -939,7 +985,12 @@ export class CacheWarmupTool extends EventEmitter {
         }
 
         // Fetch data
-        const data = await this.fetchData(key, dataFetcher, dataSource, timeout);
+        const data = await this.fetchData(
+          key,
+          dataFetcher,
+          dataSource,
+          timeout
+        );
 
         // Warm cache
         const originalSize = data.length;
@@ -987,7 +1038,7 @@ export class CacheWarmupTool extends EventEmitter {
       return this.withTimeout(dataSource.customFetcher(key), timeout);
     }
 
-    if (dataSource?.type === "cache") {
+    if (dataSource?.type === 'cache') {
       const existing = this.cache.get(key);
       if (existing) return existing;
     }
@@ -1027,10 +1078,10 @@ export class CacheWarmupTool extends EventEmitter {
 
     const warnings: string[] = [];
     if (keys.length > 10000) {
-      warnings.push("Large number of keys may cause performance issues");
+      warnings.push('Large number of keys may cause performance issues');
     }
     if (estimatedSize > 100 * 1024 * 1024) {
-      warnings.push("Estimated cache size exceeds 100MB");
+      warnings.push('Estimated cache size exceeds 100MB');
     }
 
     return {
@@ -1050,17 +1101,25 @@ export class CacheWarmupTool extends EventEmitter {
   private async rollback(job: WarmupJob): Promise<void> {
     if (!job.rollbackData) return;
 
-    this.emit("rollback-started", { jobId: job.id, keys: job.rollbackData.size });
+    this.emit('rollback-started', {
+      jobId: job.id,
+      keys: job.rollbackData.size,
+    });
 
     for (const [key, originalValue] of job.rollbackData.entries()) {
       if (originalValue === null) {
         this.cache.delete(key);
       } else {
-        this.cache.set(key, originalValue, originalValue.length, originalValue.length);
+        this.cache.set(
+          key,
+          originalValue,
+          originalValue.length,
+          originalValue.length
+        );
       }
     }
 
-    this.emit("rollback-completed", { jobId: job.id });
+    this.emit('rollback-completed', { jobId: job.id });
   }
 
   /**
@@ -1121,7 +1180,11 @@ export class CacheWarmupTool extends EventEmitter {
 
     let maxDepth = 0;
 
-    const getDepth = (key: string, depth: number, visited: Set<string>): number => {
+    const getDepth = (
+      key: string,
+      depth: number,
+      visited: Set<string>
+    ): number => {
       if (visited.has(key)) return depth;
       visited.add(key);
 
@@ -1147,14 +1210,11 @@ export class CacheWarmupTool extends EventEmitter {
   /**
    * Identify hot keys from access history
    */
-  private identifyHotKeys(
-    since: number,
-    minAccessCount: number
-  ): Set<string> {
+  private identifyHotKeys(since: number, minAccessCount: number): Set<string> {
     const hotKeys = new Set<string>();
 
     for (const [key, entries] of this.accessHistory.entries()) {
-      const recentAccesses = entries.filter(e => e.timestamp >= since);
+      const recentAccesses = entries.filter((e) => e.timestamp >= since);
       const totalAccesses = recentAccesses.reduce(
         (sum, e) => sum + e.accessCount,
         0
@@ -1230,7 +1290,7 @@ export class CacheWarmupTool extends EventEmitter {
     }
 
     if (this.config.progressReporting) {
-      this.emit("progress-updated", job.progress);
+      this.emit('progress-updated', job.progress);
     }
   }
 
@@ -1241,15 +1301,17 @@ export class CacheWarmupTool extends EventEmitter {
     const parts = expression.trim().split(/\s+/);
 
     if (parts.length !== 5) {
-      throw new Error("Invalid cron expression. Expected: minute hour day month weekday");
+      throw new Error(
+        'Invalid cron expression. Expected: minute hour day month weekday'
+      );
     }
 
     return {
-      minute: parts[0] === "*" ? "*" : parseInt(parts[0]),
-      hour: parts[1] === "*" ? "*" : parseInt(parts[1]),
-      dayOfMonth: parts[2] === "*" ? "*" : parseInt(parts[2]),
-      month: parts[3] === "*" ? "*" : parseInt(parts[3]),
-      dayOfWeek: parts[4] === "*" ? "*" : parseInt(parts[4]),
+      minute: parts[0] === '*' ? '*' : parseInt(parts[0]),
+      hour: parts[1] === '*' ? '*' : parseInt(parts[1]),
+      dayOfMonth: parts[2] === '*' ? '*' : parseInt(parts[2]),
+      month: parts[3] === '*' ? '*' : parseInt(parts[3]),
+      dayOfWeek: parts[4] === '*' ? '*' : parseInt(parts[4]),
     };
   }
 
@@ -1267,11 +1329,11 @@ export class CacheWarmupTool extends EventEmitter {
 
     while (true) {
       if (
-        (cron.minute === "*" || next.getMinutes() === cron.minute) &&
-        (cron.hour === "*" || next.getHours() === cron.hour) &&
-        (cron.dayOfMonth === "*" || next.getDate() === cron.dayOfMonth) &&
-        (cron.month === "*" || next.getMonth() + 1 === cron.month) &&
-        (cron.dayOfWeek === "*" || next.getDay() === cron.dayOfWeek)
+        (cron.minute === '*' || next.getMinutes() === cron.minute) &&
+        (cron.hour === '*' || next.getHours() === cron.hour) &&
+        (cron.dayOfMonth === '*' || next.getDate() === cron.dayOfMonth) &&
+        (cron.month === '*' || next.getMonth() + 1 === cron.month) &&
+        (cron.dayOfWeek === '*' || next.getDay() === cron.dayOfWeek)
       ) {
         return next.getTime();
       }
@@ -1280,7 +1342,7 @@ export class CacheWarmupTool extends EventEmitter {
 
       // Prevent infinite loop
       if (next.getTime() - now.getTime() > 365 * 24 * 60 * 60 * 1000) {
-        throw new Error("Could not find next run time within 1 year");
+        throw new Error('Could not find next run time within 1 year');
       }
     }
   }
@@ -1319,8 +1381,8 @@ export class CacheWarmupTool extends EventEmitter {
       // Schedule next run
       this.scheduleNextRun(schedule);
     } catch (error) {
-      schedule.status = "failed";
-      this.emit("schedule-failed", {
+      schedule.status = 'failed';
+      this.emit('schedule-failed', {
         id: schedule.id,
         error: String(error),
       });
@@ -1338,7 +1400,7 @@ export class CacheWarmupTool extends EventEmitter {
     }
 
     this.schedules.delete(scheduleId);
-    this.emit("schedule-cancelled", { id: scheduleId });
+    this.emit('schedule-cancelled', { id: scheduleId });
   }
 
   /**
@@ -1359,7 +1421,7 @@ export class CacheWarmupTool extends EventEmitter {
    * Sleep for specified duration
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -1374,7 +1436,7 @@ export class CacheWarmupTool extends EventEmitter {
     return Promise.race([
       promise,
       new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error("Operation timed out")), timeout)
+        setTimeout(() => reject(new Error('Operation timed out')), timeout)
       ),
     ]);
   }
@@ -1383,17 +1445,19 @@ export class CacheWarmupTool extends EventEmitter {
    * Check if operation is cacheable
    */
   private isCacheableOperation(operation: string): boolean {
-    return ["status"].includes(operation);
+    return ['status'].includes(operation);
   }
 
   /**
    * Get cache key parameters
    */
-  private getCacheKeyParams(options: CacheWarmupOptions): Record<string, unknown> {
+  private getCacheKeyParams(
+    options: CacheWarmupOptions
+  ): Record<string, unknown> {
     const { operation } = options;
 
     switch (operation) {
-      case "status":
+      case 'status':
         return {};
       default:
         return {};
@@ -1437,136 +1501,138 @@ export function getCacheWarmupTool(
 
 // MCP Tool Definition
 export const CACHE_WARMUP_TOOL_DEFINITION = {
-  name: "cache_warmup",
+  name: 'cache_warmup',
   description:
-    "Intelligent cache pre-warming with 87%+ token reduction, featuring schedule-based warming, pattern analysis, dependency resolution, and progressive warming strategies",
+    'Intelligent cache pre-warming with 87%+ token reduction, featuring schedule-based warming, pattern analysis, dependency resolution, and progressive warming strategies',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "schedule",
-          "immediate",
-          "pattern-based",
-          "dependency-based",
-          "selective",
-          "status",
-          "cancel",
-          "pause",
-          "resume",
-          "configure",
+          'schedule',
+          'immediate',
+          'pattern-based',
+          'dependency-based',
+          'selective',
+          'status',
+          'cancel',
+          'pause',
+          'resume',
+          'configure',
         ],
-        description: "The warmup operation to perform",
+        description: 'The warmup operation to perform',
       },
       keys: {
-        type: "array",
-        items: { type: "string" },
-        description: "Keys to warm (for immediate/selective operations)",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Keys to warm (for immediate/selective operations)',
       },
       categories: {
-        type: "array",
-        items: { type: "string" },
-        description: "Categories to warm (for selective operation)",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Categories to warm (for selective operation)',
       },
       pattern: {
-        type: "string",
-        description: "Regex pattern for key matching",
+        type: 'string',
+        description: 'Regex pattern for key matching',
       },
       priority: {
-        type: "string",
-        enum: ["high", "normal", "low"],
-        description: "Warmup priority (default: normal)",
+        type: 'string',
+        enum: ['high', 'normal', 'low'],
+        description: 'Warmup priority (default: normal)',
       },
       strategy: {
-        type: "string",
-        enum: ["immediate", "progressive", "dependency", "pattern"],
-        description: "Warmup strategy (default: progressive)",
+        type: 'string',
+        enum: ['immediate', 'progressive', 'dependency', 'pattern'],
+        description: 'Warmup strategy (default: progressive)',
       },
       schedule: {
-        type: "string",
-        description: "Cron expression for scheduled warmup (e.g., '0 * * * *' for hourly)",
+        type: 'string',
+        description:
+          "Cron expression for scheduled warmup (e.g., '0 * * * *' for hourly)",
       },
       scheduleId: {
-        type: "string",
-        description: "Schedule ID for cancel operation",
+        type: 'string',
+        description: 'Schedule ID for cancel operation',
       },
       dependencies: {
-        type: "object",
-        description: "Dependency graph for dependency-based warmup",
+        type: 'object',
+        description: 'Dependency graph for dependency-based warmup',
       },
       accessHistory: {
-        type: "array",
-        description: "Access history for pattern-based warmup",
+        type: 'array',
+        description: 'Access history for pattern-based warmup',
       },
       minAccessCount: {
-        type: "number",
-        description: "Minimum access count for hot keys (default: 5)",
+        type: 'number',
+        description: 'Minimum access count for hot keys (default: 5)',
       },
       timeWindow: {
-        type: "number",
-        description: "Time window for pattern analysis in ms (default: 3600000)",
+        type: 'number',
+        description:
+          'Time window for pattern analysis in ms (default: 3600000)',
       },
       maxConcurrency: {
-        type: "number",
-        description: "Max concurrent warmup operations (default: 10)",
+        type: 'number',
+        description: 'Max concurrent warmup operations (default: 10)',
       },
       batchSize: {
-        type: "number",
-        description: "Batch size for warmup (default: 50)",
+        type: 'number',
+        description: 'Batch size for warmup (default: 50)',
       },
       delayBetweenBatches: {
-        type: "number",
-        description: "Delay between batches in ms",
+        type: 'number',
+        description: 'Delay between batches in ms',
       },
       hotKeyThreshold: {
-        type: "number",
-        description: "Minimum access count for hot keys",
+        type: 'number',
+        description: 'Minimum access count for hot keys',
       },
       warmupPercentage: {
-        type: "number",
-        description: "Percentage of cache to warm (default: 80)",
+        type: 'number',
+        description: 'Percentage of cache to warm (default: 80)',
       },
       dryRun: {
-        type: "boolean",
-        description: "Simulate warmup without executing (default: false)",
+        type: 'boolean',
+        description: 'Simulate warmup without executing (default: false)',
       },
       enableRollback: {
-        type: "boolean",
-        description: "Enable rollback on failures (default: true)",
+        type: 'boolean',
+        description: 'Enable rollback on failures (default: true)',
       },
       timeout: {
-        type: "number",
-        description: "Timeout for warmup operations in ms (default: 30000)",
+        type: 'number',
+        description: 'Timeout for warmup operations in ms (default: 30000)',
       },
       maxRetries: {
-        type: "number",
-        description: "Maximum retry attempts (default: 3)",
+        type: 'number',
+        description: 'Maximum retry attempts (default: 3)',
       },
       retryDelay: {
-        type: "number",
-        description: "Delay between retries in ms",
+        type: 'number',
+        description: 'Delay between retries in ms',
       },
       reportProgress: {
-        type: "boolean",
-        description: "Enable progress reporting (default: true)",
+        type: 'boolean',
+        description: 'Enable progress reporting (default: true)',
       },
       progressInterval: {
-        type: "number",
-        description: "Progress report interval in ms",
+        type: 'number',
+        description: 'Progress report interval in ms',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable result caching (default: true)",
+        type: 'boolean',
+        description: 'Enable result caching (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 

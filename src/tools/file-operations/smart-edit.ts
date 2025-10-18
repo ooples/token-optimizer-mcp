@@ -22,34 +22,34 @@ import { generateUnifiedDiff } from '../shared/diff-utils';
 
 export interface EditOperation {
   type: 'replace' | 'insert' | 'delete';
-  startLine: number;           // 1-based line number
-  endLine?: number;             // For replace/delete (inclusive)
-  content?: string;             // For replace/insert
-  pattern?: string | RegExp;   // For pattern-based replace
-  replacement?: string;         // For pattern-based replace
+  startLine: number; // 1-based line number
+  endLine?: number; // For replace/delete (inclusive)
+  content?: string; // For replace/insert
+  pattern?: string | RegExp; // For pattern-based replace
+  replacement?: string; // For pattern-based replace
 }
 
 export interface SmartEditOptions {
   // Edit verification
-  verifyBeforeApply?: boolean;  // Show diff before applying (default: true)
-  dryRun?: boolean;             // Preview changes without applying (default: false)
+  verifyBeforeApply?: boolean; // Show diff before applying (default: true)
+  dryRun?: boolean; // Preview changes without applying (default: false)
 
   // Backup options
-  createBackup?: boolean;       // Create .bak file before editing (default: true)
+  createBackup?: boolean; // Create .bak file before editing (default: true)
 
   // Multi-edit options
-  batchEdits?: boolean;         // Apply all edits atomically (default: true)
+  batchEdits?: boolean; // Apply all edits atomically (default: true)
 
   // Output options
-  returnDiff?: boolean;         // Return only diff, not full content (default: true)
-  contextLines?: number;        // Lines of context in diff (default: 3)
+  returnDiff?: boolean; // Return only diff, not full content (default: true)
+  contextLines?: number; // Lines of context in diff (default: 3)
 
   // Cache options
-  updateCache?: boolean;        // Update cache after edit (default: true)
-  ttl?: number;                 // Cache TTL in seconds (default: 3600)
+  updateCache?: boolean; // Update cache after edit (default: true)
+  ttl?: number; // Cache TTL in seconds (default: 3600)
 
   // File options
-  encoding?: BufferEncoding;    // File encoding (default: utf-8)
+  encoding?: BufferEncoding; // File encoding (default: utf-8)
 }
 
 export interface SmartEditResult {
@@ -75,7 +75,7 @@ export interface SmartEditResult {
     unchanged: number;
     unifiedDiff: string;
   };
-  preview?: string;  // Full preview content for dry runs
+  preview?: string; // Full preview content for dry runs
   error?: string;
 }
 
@@ -106,7 +106,7 @@ export class SmartEditTool {
       contextLines: options.contextLines ?? 3,
       updateCache: options.updateCache ?? true,
       ttl: options.ttl ?? 3600,
-      encoding: options.encoding ?? 'utf-8'
+      encoding: options.encoding ?? 'utf-8',
     };
 
     try {
@@ -160,13 +160,18 @@ export class SmartEditTool {
             compressionRatio: 50 / originalTokens,
             duration,
             verified: opts.verifyBeforeApply,
-            wasBackedUp: false
-          }
+            wasBackedUp: false,
+          },
         };
       }
 
       // Calculate diff
-      const diff = this.calculateDiff(originalContent, editedContent, filePath, opts.contextLines);
+      const diff = this.calculateDiff(
+        originalContent,
+        editedContent,
+        filePath,
+        opts.contextLines
+      );
       const diffTokens = opts.returnDiff
         ? this.tokenCounter.count(diff.unifiedDiff).tokens
         : this.tokenCounter.count(editedContent).tokens;
@@ -174,7 +179,10 @@ export class SmartEditTool {
       // If dry run, return preview without applying
       if (opts.dryRun) {
         const duration = Date.now() - startTime;
-        const tokensSaved = originalTokens + this.tokenCounter.count(editedContent).tokens - diffTokens;
+        const tokensSaved =
+          originalTokens +
+          this.tokenCounter.count(editedContent).tokens -
+          diffTokens;
 
         this.metrics.record({
           operation: 'smart_edit',
@@ -202,10 +210,10 @@ export class SmartEditTool {
             compressionRatio: diffTokens / originalTokens,
             duration,
             verified: opts.verifyBeforeApply,
-            wasBackedUp: false
+            wasBackedUp: false,
           },
           diff: opts.returnDiff ? diff : undefined,
-          preview: editedContent
+          preview: editedContent,
         };
       }
 
@@ -255,11 +263,10 @@ export class SmartEditTool {
           compressionRatio: diffTokens / originalTokens,
           duration,
           verified: opts.verifyBeforeApply,
-          wasBackedUp: opts.createBackup
+          wasBackedUp: opts.createBackup,
         },
-        diff: opts.returnDiff ? diff : undefined
+        diff: opts.returnDiff ? diff : undefined,
       };
-
     } catch (error) {
       const duration = Date.now() - startTime;
 
@@ -289,9 +296,9 @@ export class SmartEditTool {
           compressionRatio: 0,
           duration,
           verified: opts.verifyBeforeApply,
-          wasBackedUp: false
+          wasBackedUp: false,
         },
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -299,18 +306,27 @@ export class SmartEditTool {
   /**
    * Validate edit operations
    */
-  private validateOperations(operations: EditOperation[], totalLines: number): void {
+  private validateOperations(
+    operations: EditOperation[],
+    totalLines: number
+  ): void {
     for (const op of operations) {
       if (op.startLine < 1 || op.startLine > totalLines + 1) {
-        throw new Error(`Invalid startLine: ${op.startLine} (file has ${totalLines} lines)`);
+        throw new Error(
+          `Invalid startLine: ${op.startLine} (file has ${totalLines} lines)`
+        );
       }
 
       if (op.endLine !== undefined) {
         if (op.endLine < op.startLine) {
-          throw new Error(`endLine ${op.endLine} cannot be before startLine ${op.startLine}`);
+          throw new Error(
+            `endLine ${op.endLine} cannot be before startLine ${op.startLine}`
+          );
         }
         if (op.endLine > totalLines) {
-          throw new Error(`Invalid endLine: ${op.endLine} (file has ${totalLines} lines)`);
+          throw new Error(
+            `Invalid endLine: ${op.endLine} (file has ${totalLines} lines)`
+          );
         }
       }
 
@@ -343,9 +359,10 @@ export class SmartEditTool {
         case 'replace':
           if (op.pattern && op.replacement !== undefined) {
             // Pattern-based replacement
-            const pattern = typeof op.pattern === 'string'
-              ? new RegExp(op.pattern, 'g')
-              : op.pattern;
+            const pattern =
+              typeof op.pattern === 'string'
+                ? new RegExp(op.pattern, 'g')
+                : op.pattern;
 
             for (let i = startIdx; i <= endIdx && i < result.length; i++) {
               result[i] = result[i].replace(pattern, op.replacement);
@@ -415,7 +432,7 @@ export class SmartEditTool {
       added,
       removed,
       unchanged,
-      unifiedDiff
+      unifiedDiff,
     };
   }
 
@@ -431,19 +448,26 @@ export class SmartEditTool {
     const editMetrics = this.metrics.getOperations(0, 'smart_edit');
 
     const totalEdits = editMetrics.length;
-    const totalTokensSaved = editMetrics.reduce((sum, m) => sum + (m.savedTokens || 0), 0);
-    const totalInputTokens = editMetrics.reduce((sum, m) => sum + (m.inputTokens || 0), 0);
+    const totalTokensSaved = editMetrics.reduce(
+      (sum, m) => sum + (m.savedTokens || 0),
+      0
+    );
+    const totalInputTokens = editMetrics.reduce(
+      (sum, m) => sum + (m.inputTokens || 0),
+      0
+    );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
-    const averageReduction = totalOriginalTokens > 0
-      ? (totalTokensSaved / totalOriginalTokens) * 100
-      : 0;
+    const averageReduction =
+      totalOriginalTokens > 0
+        ? (totalTokensSaved / totalOriginalTokens) * 100
+        : 0;
 
     return {
       totalEdits,
-      unchangedSkips: editMetrics.filter(m => m.inputTokens === 50).length,
+      unchangedSkips: editMetrics.filter((m) => m.inputTokens === 50).length,
       totalTokensSaved,
-      averageReduction
+      averageReduction,
     };
   }
 }
@@ -480,13 +504,14 @@ export async function runSmartEdit(
  */
 export const SMART_EDIT_TOOL_DEFINITION = {
   name: 'smart_edit',
-  description: 'Edit files with 90% token reduction through line-based operations and diff-only output',
+  description:
+    'Edit files with 90% token reduction through line-based operations and diff-only output',
   inputSchema: {
     type: 'object',
     properties: {
       path: {
         type: 'string',
-        description: 'Path to the file to edit'
+        description: 'Path to the file to edit',
       },
       operations: {
         oneOf: [
@@ -496,30 +521,31 @@ export const SMART_EDIT_TOOL_DEFINITION = {
               type: {
                 type: 'string',
                 enum: ['replace', 'insert', 'delete'],
-                description: 'Type of edit operation'
+                description: 'Type of edit operation',
               },
               startLine: {
                 type: 'number',
-                description: 'Starting line number (1-based)'
+                description: 'Starting line number (1-based)',
               },
               endLine: {
                 type: 'number',
-                description: 'Ending line number for replace/delete (inclusive)'
+                description:
+                  'Ending line number for replace/delete (inclusive)',
               },
               content: {
                 type: 'string',
-                description: 'Content for replace/insert operations'
+                description: 'Content for replace/insert operations',
               },
               pattern: {
                 type: 'string',
-                description: 'Regex pattern for pattern-based replacement'
+                description: 'Regex pattern for pattern-based replacement',
               },
               replacement: {
                 type: 'string',
-                description: 'Replacement text for pattern-based replacement'
-              }
+                description: 'Replacement text for pattern-based replacement',
+              },
             },
-            required: ['type', 'startLine']
+            required: ['type', 'startLine'],
           },
           {
             type: 'array',
@@ -528,36 +554,36 @@ export const SMART_EDIT_TOOL_DEFINITION = {
               properties: {
                 type: {
                   type: 'string',
-                  enum: ['replace', 'insert', 'delete']
+                  enum: ['replace', 'insert', 'delete'],
                 },
                 startLine: { type: 'number' },
                 endLine: { type: 'number' },
                 content: { type: 'string' },
                 pattern: { type: 'string' },
-                replacement: { type: 'string' }
+                replacement: { type: 'string' },
               },
-              required: ['type', 'startLine']
-            }
-          }
+              required: ['type', 'startLine'],
+            },
+          },
         ],
-        description: 'Edit operation(s) to apply'
+        description: 'Edit operation(s) to apply',
       },
       dryRun: {
         type: 'boolean',
         description: 'Preview changes without applying',
-        default: false
+        default: false,
       },
       returnDiff: {
         type: 'boolean',
         description: 'Return diff instead of full content',
-        default: true
+        default: true,
       },
       createBackup: {
         type: 'boolean',
         description: 'Create backup before editing',
-        default: true
-      }
+        default: true,
+      },
     },
-    required: ['path', 'operations']
-  }
+    required: ['path', 'operations'],
+  },
 };

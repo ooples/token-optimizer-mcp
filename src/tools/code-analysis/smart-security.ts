@@ -9,34 +9,34 @@
  * - <1 hour full scan requirement for daily TTL
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { MetricsCollector } from "../../core/metrics";
-import { TokenCounter } from "../../core/token-counter";
-import { createHash } from "crypto";
-import { readFileSync, existsSync, statSync, readdirSync } from "fs";
-import { join, relative, extname } from "path";
-import { homedir } from "os";
+import { CacheEngine } from '../../core/cache-engine';
+import { MetricsCollector } from '../../core/metrics';
+import { TokenCounter } from '../../core/token-counter';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
+import { join, relative, extname } from 'path';
+import { homedir } from 'os';
 
 /**
  * Vulnerability severity levels
  */
-type VulnerabilitySeverity = "critical" | "high" | "medium" | "low" | "info";
+type VulnerabilitySeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
  * Vulnerability categories
  */
 type VulnerabilityCategory =
-  | "injection"
-  | "xss"
-  | "secrets"
-  | "crypto"
-  | "auth"
-  | "dos"
-  | "path-traversal"
-  | "unsafe-eval"
-  | "regex"
-  | "dependency"
-  | "config";
+  | 'injection'
+  | 'xss'
+  | 'secrets'
+  | 'crypto'
+  | 'auth'
+  | 'dos'
+  | 'path-traversal'
+  | 'unsafe-eval'
+  | 'regex'
+  | 'dependency'
+  | 'config';
 
 /**
  * Individual vulnerability finding
@@ -210,348 +210,348 @@ export interface SmartSecurityOutput {
 const VULNERABILITY_PATTERNS: VulnerabilityPattern[] = [
   // SQL Injection
   {
-    id: "sql-injection",
-    name: "SQL Injection",
-    category: "injection",
-    severity: "critical",
+    id: 'sql-injection',
+    name: 'SQL Injection',
+    category: 'injection',
+    severity: 'critical',
     pattern:
       /(?:execute|query|exec)\s*\(\s*[`'"].*?\$\{|(?:execute|query|exec)\s*\(\s*.*?\+\s*.*?\)/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".php",
-      ".java",
-      ".cs",
-      ".go",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.php',
+      '.java',
+      '.cs',
+      '.go',
     ],
     message:
-      "Potential SQL injection vulnerability - string concatenation in query",
+      'Potential SQL injection vulnerability - string concatenation in query',
     remediation:
-      "Use parameterized queries or prepared statements instead of string concatenation",
-    cwe: "CWE-89",
+      'Use parameterized queries or prepared statements instead of string concatenation',
+    cwe: 'CWE-89',
   },
 
   // XSS - innerHTML
   {
-    id: "xss-innerhtml",
-    name: "XSS via innerHTML",
-    category: "xss",
-    severity: "high",
+    id: 'xss-innerhtml',
+    name: 'XSS via innerHTML',
+    category: 'xss',
+    severity: 'high',
     pattern: /\.innerHTML\s*=\s*(?!['"])/gi,
-    fileExtensions: [".js", ".ts", ".jsx", ".tsx", ".html"],
-    message: "Potential XSS vulnerability - direct assignment to innerHTML",
+    fileExtensions: ['.js', '.ts', '.jsx', '.tsx', '.html'],
+    message: 'Potential XSS vulnerability - direct assignment to innerHTML',
     remediation:
-      "Use textContent, or sanitize HTML with DOMPurify before assigning to innerHTML",
-    cwe: "CWE-79",
+      'Use textContent, or sanitize HTML with DOMPurify before assigning to innerHTML',
+    cwe: 'CWE-79',
   },
 
   // XSS - dangerouslySetInnerHTML
   {
-    id: "xss-dangerous-html",
-    name: "React dangerouslySetInnerHTML",
-    category: "xss",
-    severity: "high",
+    id: 'xss-dangerous-html',
+    name: 'React dangerouslySetInnerHTML',
+    category: 'xss',
+    severity: 'high',
     pattern: /dangerouslySetInnerHTML\s*=\s*\{\{/gi,
-    fileExtensions: [".jsx", ".tsx"],
-    message: "Potential XSS - dangerouslySetInnerHTML without sanitization",
+    fileExtensions: ['.jsx', '.tsx'],
+    message: 'Potential XSS - dangerouslySetInnerHTML without sanitization',
     remediation:
-      "Sanitize HTML with DOMPurify before using dangerouslySetInnerHTML",
-    cwe: "CWE-79",
+      'Sanitize HTML with DOMPurify before using dangerouslySetInnerHTML',
+    cwe: 'CWE-79',
   },
 
   // Hardcoded Secrets - API Keys
   {
-    id: "hardcoded-api-key",
-    name: "Hardcoded API Key",
-    category: "secrets",
-    severity: "critical",
+    id: 'hardcoded-api-key',
+    name: 'Hardcoded API Key',
+    category: 'secrets',
+    severity: 'critical',
     pattern: /(?:api[_-]?key|apikey)\s*[=:]\s*['"][a-zA-Z0-9]{16,}['"]/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".java",
-      ".cs",
-      ".go",
-      ".rb",
-      ".php",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.go',
+      '.rb',
+      '.php',
     ],
-    message: "Hardcoded API key detected",
+    message: 'Hardcoded API key detected',
     remediation:
-      "Move API keys to environment variables or secure credential management",
-    cwe: "CWE-798",
+      'Move API keys to environment variables or secure credential management',
+    cwe: 'CWE-798',
   },
 
   // Hardcoded Secrets - Passwords
   {
-    id: "hardcoded-password",
-    name: "Hardcoded Password",
-    category: "secrets",
-    severity: "critical",
+    id: 'hardcoded-password',
+    name: 'Hardcoded Password',
+    category: 'secrets',
+    severity: 'critical',
     pattern: /(?:password|passwd|pwd)\s*[=:]\s*['"][^'"]{4,}['"]/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".java",
-      ".cs",
-      ".go",
-      ".rb",
-      ".php",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.go',
+      '.rb',
+      '.php',
     ],
-    message: "Hardcoded password detected",
+    message: 'Hardcoded password detected',
     remediation:
-      "Use environment variables or secure secret management systems",
-    cwe: "CWE-798",
+      'Use environment variables or secure secret management systems',
+    cwe: 'CWE-798',
   },
 
   // Hardcoded Secrets - Tokens
   {
-    id: "hardcoded-token",
-    name: "Hardcoded Token",
-    category: "secrets",
-    severity: "critical",
+    id: 'hardcoded-token',
+    name: 'Hardcoded Token',
+    category: 'secrets',
+    severity: 'critical',
     pattern:
       /(?:token|secret|private[_-]?key)\s*[=:]\s*['"][a-zA-Z0-9+/=]{20,}['"]/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".java",
-      ".cs",
-      ".go",
-      ".rb",
-      ".php",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.go',
+      '.rb',
+      '.php',
     ],
-    message: "Hardcoded secret token detected",
-    remediation: "Use secure credential storage and environment variables",
-    cwe: "CWE-798",
+    message: 'Hardcoded secret token detected',
+    remediation: 'Use secure credential storage and environment variables',
+    cwe: 'CWE-798',
   },
 
   // Weak Cryptography - MD5/SHA1
   {
-    id: "weak-crypto-hash",
-    name: "Weak Cryptographic Hash",
-    category: "crypto",
-    severity: "high",
+    id: 'weak-crypto-hash',
+    name: 'Weak Cryptographic Hash',
+    category: 'crypto',
+    severity: 'high',
     pattern:
       /(?:createHash|hashlib\.(?:md5|sha1)|MessageDigest\.getInstance)\s*\(\s*['"](?:md5|sha1)['"]/gi,
-    fileExtensions: [".js", ".ts", ".py", ".java", ".cs", ".go", ".rb", ".php"],
-    message: "Weak cryptographic hash algorithm (MD5/SHA1)",
+    fileExtensions: ['.js', '.ts', '.py', '.java', '.cs', '.go', '.rb', '.php'],
+    message: 'Weak cryptographic hash algorithm (MD5/SHA1)',
     remediation:
-      "Use SHA-256, SHA-384, or SHA-512 for cryptographic operations",
-    cwe: "CWE-327",
+      'Use SHA-256, SHA-384, or SHA-512 for cryptographic operations',
+    cwe: 'CWE-327',
   },
 
   // eval() usage
   {
-    id: "unsafe-eval",
-    name: "Unsafe eval()",
-    category: "unsafe-eval",
-    severity: "critical",
+    id: 'unsafe-eval',
+    name: 'Unsafe eval()',
+    category: 'unsafe-eval',
+    severity: 'critical',
     pattern: /\beval\s*\(/gi,
-    fileExtensions: [".js", ".ts", ".jsx", ".tsx"],
-    message: "Use of eval() is extremely dangerous",
+    fileExtensions: ['.js', '.ts', '.jsx', '.tsx'],
+    message: 'Use of eval() is extremely dangerous',
     remediation:
-      "Refactor to avoid eval(). Use JSON.parse() for JSON, or Function constructor with caution",
-    cwe: "CWE-95",
+      'Refactor to avoid eval(). Use JSON.parse() for JSON, or Function constructor with caution',
+    cwe: 'CWE-95',
   },
 
   // new Function() usage
   {
-    id: "unsafe-function-constructor",
-    name: "Unsafe Function Constructor",
-    category: "unsafe-eval",
-    severity: "high",
+    id: 'unsafe-function-constructor',
+    name: 'Unsafe Function Constructor',
+    category: 'unsafe-eval',
+    severity: 'high',
     pattern: /new\s+Function\s*\(/gi,
-    fileExtensions: [".js", ".ts", ".jsx", ".tsx"],
-    message: "Function constructor with dynamic code is dangerous",
+    fileExtensions: ['.js', '.ts', '.jsx', '.tsx'],
+    message: 'Function constructor with dynamic code is dangerous',
     remediation:
-      "Refactor to use proper function definitions or safe alternatives",
-    cwe: "CWE-95",
+      'Refactor to use proper function definitions or safe alternatives',
+    cwe: 'CWE-95',
   },
 
   // Path Traversal
   {
-    id: "path-traversal",
-    name: "Path Traversal",
-    category: "path-traversal",
-    severity: "high",
+    id: 'path-traversal',
+    name: 'Path Traversal',
+    category: 'path-traversal',
+    severity: 'high',
     pattern:
       /(?:readFile|writeFile|unlink|rmdir|mkdir|access|open)\s*\([^)]*(?:\.\.|\/\.\.\/)/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".java",
-      ".cs",
-      ".go",
-      ".php",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.go',
+      '.php',
     ],
-    message: "Potential path traversal vulnerability",
+    message: 'Potential path traversal vulnerability',
     remediation:
-      "Validate and sanitize file paths, use path.resolve() and check if result is within allowed directory",
-    cwe: "CWE-22",
+      'Validate and sanitize file paths, use path.resolve() and check if result is within allowed directory',
+    cwe: 'CWE-22',
   },
 
   // ReDoS - Catastrophic Backtracking
   {
-    id: "redos-pattern",
-    name: "ReDoS Vulnerable Pattern",
-    category: "regex",
-    severity: "medium",
+    id: 'redos-pattern',
+    name: 'ReDoS Vulnerable Pattern',
+    category: 'regex',
+    severity: 'medium',
     pattern:
       /new\s+RegExp\s*\([^)]*(?:\(\.\*\)\+|\(\.\+\)\+|\(.*\)\*\(.*\)\*)/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".java",
-      ".cs",
-      ".go",
-      ".rb",
-      ".php",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.go',
+      '.rb',
+      '.php',
     ],
     message:
-      "Potential ReDoS (Regular Expression Denial of Service) vulnerability",
+      'Potential ReDoS (Regular Expression Denial of Service) vulnerability',
     remediation:
-      "Simplify regex patterns, avoid nested quantifiers, or use regex-dos library for validation",
-    cwe: "CWE-1333",
+      'Simplify regex patterns, avoid nested quantifiers, or use regex-dos library for validation',
+    cwe: 'CWE-1333',
   },
 
   // Unvalidated Redirect
   {
-    id: "unvalidated-redirect",
-    name: "Unvalidated Redirect",
-    category: "auth",
-    severity: "medium",
+    id: 'unvalidated-redirect',
+    name: 'Unvalidated Redirect',
+    category: 'auth',
+    severity: 'medium',
     pattern:
       /(?:redirect|location\.href|window\.location)\s*=\s*(?!['"]http)/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".php",
-      ".java",
-      ".cs",
-      ".py",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.php',
+      '.java',
+      '.cs',
+      '.py',
     ],
-    message: "Potential unvalidated redirect vulnerability",
-    remediation: "Validate redirect URLs against whitelist before redirecting",
-    cwe: "CWE-601",
+    message: 'Potential unvalidated redirect vulnerability',
+    remediation: 'Validate redirect URLs against whitelist before redirecting',
+    cwe: 'CWE-601',
   },
 
   // Insecure Random
   {
-    id: "insecure-random",
-    name: "Insecure Random Number Generation",
-    category: "crypto",
-    severity: "medium",
+    id: 'insecure-random',
+    name: 'Insecure Random Number Generation',
+    category: 'crypto',
+    severity: 'medium',
     pattern: /Math\.random\(\)/gi,
-    fileExtensions: [".js", ".ts", ".jsx", ".tsx"],
-    message: "Math.random() is not cryptographically secure",
+    fileExtensions: ['.js', '.ts', '.jsx', '.tsx'],
+    message: 'Math.random() is not cryptographically secure',
     remediation:
-      "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive operations",
-    cwe: "CWE-338",
+      'Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive operations',
+    cwe: 'CWE-338',
   },
 
   // CORS Misconfiguration
   {
-    id: "cors-wildcard",
-    name: "CORS Wildcard",
-    category: "config",
-    severity: "high",
+    id: 'cors-wildcard',
+    name: 'CORS Wildcard',
+    category: 'config',
+    severity: 'high',
     pattern: /Access-Control-Allow-Origin['"]?\s*:\s*['"]?\*/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".java",
-      ".cs",
-      ".go",
-      ".php",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.go',
+      '.php',
     ],
-    message: "CORS configured with wildcard (*) - allows any origin",
+    message: 'CORS configured with wildcard (*) - allows any origin',
     remediation:
-      "Specify explicit allowed origins or implement origin validation",
-    cwe: "CWE-346",
+      'Specify explicit allowed origins or implement origin validation',
+    cwe: 'CWE-346',
   },
 
   // Disabled TLS Verification
   {
-    id: "disabled-tls-verification",
-    name: "Disabled TLS Verification",
-    category: "crypto",
-    severity: "critical",
+    id: 'disabled-tls-verification',
+    name: 'Disabled TLS Verification',
+    category: 'crypto',
+    severity: 'critical',
     pattern:
       /(?:rejectUnauthorized|verify|SSL_VERIFY_NONE|CURLOPT_SSL_VERIFYPEER)\s*[=:]\s*(?:false|0|False)/gi,
     fileExtensions: [
-      ".js",
-      ".ts",
-      ".jsx",
-      ".tsx",
-      ".py",
-      ".java",
-      ".cs",
-      ".go",
-      ".php",
-      ".rb",
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.go',
+      '.php',
+      '.rb',
     ],
-    message: "TLS certificate verification is disabled",
-    remediation: "Enable TLS verification to prevent man-in-the-middle attacks",
-    cwe: "CWE-295",
+    message: 'TLS certificate verification is disabled',
+    remediation: 'Enable TLS verification to prevent man-in-the-middle attacks',
+    cwe: 'CWE-295',
   },
 
   // Command Injection
   {
-    id: "command-injection",
-    name: "Command Injection",
-    category: "injection",
-    severity: "critical",
+    id: 'command-injection',
+    name: 'Command Injection',
+    category: 'injection',
+    severity: 'critical',
     pattern: /(?:exec|spawn|system|shell_exec|popen)\s*\([^)]*(?:\$\{|`|\+)/gi,
-    fileExtensions: [".js", ".ts", ".jsx", ".tsx", ".py", ".php", ".rb", ".go"],
-    message: "Potential command injection via string concatenation",
+    fileExtensions: ['.js', '.ts', '.jsx', '.tsx', '.py', '.php', '.rb', '.go'],
+    message: 'Potential command injection via string concatenation',
     remediation:
-      "Use parameterized commands or validate/escape input thoroughly",
-    cwe: "CWE-78",
+      'Use parameterized commands or validate/escape input thoroughly',
+    cwe: 'CWE-78',
   },
 
   // XXE (XML External Entity)
   {
-    id: "xxe-vulnerability",
-    name: "XXE Vulnerability",
-    category: "injection",
-    severity: "high",
+    id: 'xxe-vulnerability',
+    name: 'XXE Vulnerability',
+    category: 'injection',
+    severity: 'high',
     pattern:
       /(?:parseFromString|parseXml|DOMParser|XMLReader)\s*\([^)]*(?:<!ENTITY|<!DOCTYPE)/gi,
-    fileExtensions: [".js", ".ts", ".jsx", ".tsx", ".java", ".cs", ".php"],
-    message: "Potential XXE (XML External Entity) vulnerability",
+    fileExtensions: ['.js', '.ts', '.jsx', '.tsx', '.java', '.cs', '.php'],
+    message: 'Potential XXE (XML External Entity) vulnerability',
     remediation:
-      "Disable external entity processing in XML parser configuration",
-    cwe: "CWE-611",
+      'Disable external entity processing in XML parser configuration',
+    cwe: 'CWE-611',
   },
 ];
 
 export class SmartSecurity {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private cacheNamespace = "smart_security";
+  private cacheNamespace = 'smart_security';
   private projectRoot: string;
   private fileHashes: Map<string, string> = new Map();
 
@@ -559,7 +559,7 @@ export class SmartSecurity {
     cache: CacheEngine,
     _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.metrics = metrics;
@@ -573,8 +573,8 @@ export class SmartSecurity {
     const {
       force = false,
       targets = [],
-      exclude = ["node_modules", ".git", "dist", "build", "coverage", ".next"],
-      minSeverity = "low",
+      exclude = ['node_modules', '.git', 'dist', 'build', 'coverage', '.next'],
+      minSeverity = 'low',
       maxCacheAge = 86400, // 24 hours
       includeLowSeverity = true,
     } = options;
@@ -592,7 +592,7 @@ export class SmartSecurity {
       const cached = this.getCachedResult(cacheKey, maxCacheAge);
       if (cached) {
         this.metrics.record({
-          operation: "smart_security",
+          operation: 'smart_security',
           duration: Date.now() - startTime,
           success: true,
           cacheHit: true,
@@ -615,16 +615,16 @@ export class SmartSecurity {
     scanResults.duration = duration;
 
     // Filter by severity if needed
-    if (minSeverity !== "low") {
+    if (minSeverity !== 'low') {
       scanResults.findings = this.filterBySeverity(
         scanResults.findings,
-        minSeverity,
+        minSeverity
       );
     }
 
     if (!includeLowSeverity) {
       scanResults.findings = scanResults.findings.filter(
-        (f) => f.severity !== "low",
+        (f) => f.severity !== 'low'
       );
     }
 
@@ -636,7 +636,7 @@ export class SmartSecurity {
 
     // Record metrics
     this.metrics.record({
-      operation: "smart_security",
+      operation: 'smart_security',
       duration,
       success: scanResults.success,
       cacheHit: false,
@@ -653,7 +653,7 @@ export class SmartSecurity {
    */
   private async discoverFiles(
     targets: string[],
-    exclude: string[],
+    exclude: string[]
   ): Promise<string[]> {
     const files: string[] = [];
 
@@ -678,17 +678,17 @@ export class SmartSecurity {
           // Only scan source code files
           if (
             [
-              ".js",
-              ".ts",
-              ".jsx",
-              ".tsx",
-              ".py",
-              ".java",
-              ".cs",
-              ".go",
-              ".rb",
-              ".php",
-              ".html",
+              '.js',
+              '.ts',
+              '.jsx',
+              '.tsx',
+              '.py',
+              '.java',
+              '.cs',
+              '.go',
+              '.rb',
+              '.php',
+              '.html',
             ].includes(ext)
           ) {
             files.push(fullPath);
@@ -769,8 +769,8 @@ export class SmartSecurity {
     if (!existsSync(filePath)) return null;
 
     try {
-      const content = readFileSync(filePath, "utf-8");
-      const lines = content.split("\n");
+      const content = readFileSync(filePath, 'utf-8');
+      const lines = content.split('\n');
       const ext = extname(filePath);
       const findings: VulnerabilityFinding[] = [];
 
@@ -822,7 +822,7 @@ export class SmartSecurity {
    */
   private buildScanResult(
     findings: VulnerabilityFinding[],
-    filesScanned: string[],
+    filesScanned: string[]
   ): SecurityScanResult {
     const findingsBySeverity: Record<VulnerabilitySeverity, number> = {
       critical: 0,
@@ -839,8 +839,8 @@ export class SmartSecurity {
       crypto: 0,
       auth: 0,
       dos: 0,
-      "path-traversal": 0,
-      "unsafe-eval": 0,
+      'path-traversal': 0,
+      'unsafe-eval': 0,
       regex: 0,
       dependency: 0,
       config: 0,
@@ -869,7 +869,7 @@ export class SmartSecurity {
    */
   private transformOutput(
     result: SecurityScanResult,
-    incrementalMode: boolean,
+    incrementalMode: boolean
   ): SmartSecurityOutput {
     // Group findings by severity
     const findingsBySeverity = this.groupBySeverity(result.findings);
@@ -879,7 +879,7 @@ export class SmartSecurity {
 
     // Generate remediation priorities
     const remediationPriorities = this.generateRemediationPriorities(
-      result.findings,
+      result.findings
     );
 
     // Calculate token metrics
@@ -907,7 +907,7 @@ export class SmartSecurity {
         originalTokens,
         compactedTokens,
         reductionPercentage: Math.round(
-          ((originalTokens - compactedTokens) / originalTokens) * 100,
+          ((originalTokens - compactedTokens) / originalTokens) * 100
         ),
       },
     };
@@ -940,11 +940,11 @@ export class SmartSecurity {
     }
 
     const severityOrder: VulnerabilitySeverity[] = [
-      "critical",
-      "high",
-      "medium",
-      "low",
-      "info",
+      'critical',
+      'high',
+      'medium',
+      'low',
+      'info',
     ];
 
     return severityOrder
@@ -984,9 +984,9 @@ export class SmartSecurity {
     return Array.from(groups.entries())
       .map(([category, items]) => {
         const criticalCount = items.filter(
-          (f) => f.severity === "critical",
+          (f) => f.severity === 'critical'
         ).length;
-        const highCount = items.filter((f) => f.severity === "high").length;
+        const highCount = items.filter((f) => f.severity === 'high').length;
 
         // Get unique files, sorted by finding count
         const fileMap = new Map<string, number>();
@@ -1023,7 +1023,7 @@ export class SmartSecurity {
    * Generate remediation priorities
    */
   private generateRemediationPriorities(
-    findings: VulnerabilityFinding[],
+    findings: VulnerabilityFinding[]
   ): Array<{
     priority: number;
     category: VulnerabilityCategory;
@@ -1057,11 +1057,11 @@ export class SmartSecurity {
 
     for (const [category, items] of categoryArray) {
       const criticalCount = items.filter(
-        (f) => f.severity === "critical",
+        (f) => f.severity === 'critical'
       ).length;
-      const highCount = items.filter((f) => f.severity === "high").length;
+      const highCount = items.filter((f) => f.severity === 'high').length;
       const highestSeverity =
-        criticalCount > 0 ? "critical" : highCount > 0 ? "high" : "medium";
+        criticalCount > 0 ? 'critical' : highCount > 0 ? 'high' : 'medium';
 
       const priority = criticalCount * 10 + highCount * 5 + items.length;
 
@@ -1084,7 +1084,7 @@ export class SmartSecurity {
   private getCategoryImpact(
     category: VulnerabilityCategory,
     critical: number,
-    high: number,
+    high: number
   ): string {
     const total = critical + high;
 
@@ -1095,8 +1095,8 @@ export class SmartSecurity {
       crypto: `${total} cryptographic weaknesses - can compromise data confidentiality`,
       auth: `${total} authentication issues - can allow unauthorized access`,
       dos: `${total} DoS vulnerabilities - can affect service availability`,
-      "path-traversal": `${total} path traversal issues - can expose sensitive files`,
-      "unsafe-eval": `${total} code injection risks - can execute arbitrary code`,
+      'path-traversal': `${total} path traversal issues - can expose sensitive files`,
+      'unsafe-eval': `${total} code injection risks - can execute arbitrary code`,
       regex: `${total} ReDoS vulnerabilities - can cause service degradation`,
       dependency: `${total} vulnerable dependencies - update required`,
       config: `${total} misconfigurations - can weaken security posture`,
@@ -1110,20 +1110,20 @@ export class SmartSecurity {
    */
   private getCategoryAction(category: VulnerabilityCategory): string {
     const actions: Record<VulnerabilityCategory, string> = {
-      injection: "Implement parameterized queries and input validation",
-      xss: "Sanitize all user inputs and use safe DOM APIs",
-      secrets: "Move all secrets to environment variables or secret management",
-      crypto: "Upgrade to secure algorithms (SHA-256+, proper TLS config)",
-      auth: "Review authentication logic and implement proper validation",
-      dos: "Add rate limiting and input validation",
-      "path-traversal": "Validate and sanitize all file paths",
-      "unsafe-eval": "Remove eval() usage and unsafe code execution",
-      regex: "Simplify regex patterns or use validated libraries",
-      dependency: "Update dependencies to patched versions",
-      config: "Review and harden security configurations",
+      injection: 'Implement parameterized queries and input validation',
+      xss: 'Sanitize all user inputs and use safe DOM APIs',
+      secrets: 'Move all secrets to environment variables or secret management',
+      crypto: 'Upgrade to secure algorithms (SHA-256+, proper TLS config)',
+      auth: 'Review authentication logic and implement proper validation',
+      dos: 'Add rate limiting and input validation',
+      'path-traversal': 'Validate and sanitize all file paths',
+      'unsafe-eval': 'Remove eval() usage and unsafe code execution',
+      regex: 'Simplify regex patterns or use validated libraries',
+      dependency: 'Update dependencies to patched versions',
+      config: 'Review and harden security configurations',
     };
 
-    return actions[category] || "Review and fix security issues";
+    return actions[category] || 'Review and fix security issues';
   }
 
   /**
@@ -1131,7 +1131,7 @@ export class SmartSecurity {
    */
   private filterBySeverity(
     findings: VulnerabilityFinding[],
-    minSeverity: VulnerabilitySeverity,
+    minSeverity: VulnerabilitySeverity
   ): VulnerabilityFinding[] {
     const severityRank: Record<VulnerabilitySeverity, number> = {
       critical: 4,
@@ -1149,7 +1149,7 @@ export class SmartSecurity {
    * Generate cache key based on file hashes
    */
   private async generateCacheKey(files: string[]): Promise<string> {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(this.cacheNamespace);
 
     // Sort files for consistent cache key
@@ -1160,19 +1160,19 @@ export class SmartSecurity {
       hash.update(fileHash);
     }
 
-    return `${this.cacheNamespace}:${hash.digest("hex")}`;
+    return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
   /**
    * Generate hash for a single file
    */
   private generateFileHash(filePath: string): string {
-    if (!existsSync(filePath)) return "";
+    if (!existsSync(filePath)) return '';
 
-    const content = readFileSync(filePath, "utf-8");
-    const hash = createHash("sha256");
+    const content = readFileSync(filePath, 'utf-8');
+    const hash = createHash('sha256');
     hash.update(content);
-    return hash.digest("hex");
+    return hash.digest('hex');
   }
 
   /**
@@ -1180,7 +1180,7 @@ export class SmartSecurity {
    */
   private getCachedResult(
     key: string,
-    maxAge: number,
+    maxAge: number
   ): SmartSecurityOutput | null {
     const cached = this.cache.get(key);
     if (!cached) {
@@ -1214,7 +1214,7 @@ export class SmartSecurity {
     };
 
     const json = JSON.stringify(toCache);
-    const originalSize = Buffer.byteLength(json, "utf-8");
+    const originalSize = Buffer.byteLength(json, 'utf-8');
     const compressedSize = Math.ceil(originalSize * 0.3);
 
     this.cache.set(key, json, originalSize, compressedSize);
@@ -1244,7 +1244,7 @@ export class SmartSecurity {
     let size = 200;
 
     // Top 5 findings per severity: ~150 chars each
-    const severities: VulnerabilitySeverity[] = ["critical", "high", "medium"];
+    const severities: VulnerabilitySeverity[] = ['critical', 'high', 'medium'];
     for (const severity of severities) {
       const count = result.findingsBySeverity[severity];
       size += Math.min(count, 5) * 150;
@@ -1275,7 +1275,7 @@ export function getSmartSecurityTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartSecurity {
   return new SmartSecurity(cache, tokenCounter, metrics, projectRoot);
 }
@@ -1284,26 +1284,26 @@ export function getSmartSecurityTool(
  * CLI-friendly function for running smart security scan
  */
 export async function runSmartSecurity(
-  options: SmartSecurityOptions = {},
+  options: SmartSecurityOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const smartSec = new SmartSecurity(
     cache,
     tokenCounter,
     metrics,
-    options.projectRoot,
+    options.projectRoot
   );
   try {
     const result = await smartSec.run(options);
 
-    let output = `\n🔒 Smart Security Scan ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(60)}\n\n`;
+    let output = `\n🔒 Smart Security Scan ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(60)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
-    output += `  Status: ${result.summary.success ? "✓ Secure (no critical/high issues)" : "✗ Vulnerabilities Found"}\n`;
+    output += `  Status: ${result.summary.success ? '✓ Secure (no critical/high issues)' : '✗ Vulnerabilities Found'}\n`;
     output += `  Files Scanned: ${result.summary.filesScanned}\n`;
     output += `  Total Findings: ${result.summary.totalFindings}\n`;
     output += `    Critical: ${result.summary.criticalCount}\n`;
@@ -1320,13 +1320,13 @@ export async function runSmartSecurity(
       output += `Findings by Severity:\n`;
       for (const group of result.findingsBySeverity) {
         const icon =
-          group.severity === "critical"
-            ? "🔴"
-            : group.severity === "high"
-              ? "🟠"
-              : group.severity === "medium"
-                ? "🟡"
-                : "🔵";
+          group.severity === 'critical'
+            ? '🔴'
+            : group.severity === 'high'
+              ? '🟠'
+              : group.severity === 'medium'
+                ? '🟡'
+                : '🔵';
 
         output += `\n  ${icon} ${group.severity.toUpperCase()} (${group.count})\n`;
 
@@ -1340,7 +1340,7 @@ export async function runSmartSecurity(
           output += `    ... and ${group.count - group.items.length} more\n`;
         }
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Findings by category
@@ -1353,19 +1353,19 @@ export async function runSmartSecurity(
           output += `      - ${file}\n`;
         }
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Remediation priorities
     if (result.remediationPriorities.length > 0) {
       output += `Remediation Priorities:\n`;
       for (const priority of result.remediationPriorities) {
-        const icon = priority.severity === "critical" ? "🔴" : "🟠";
+        const icon = priority.severity === 'critical' ? '🔴' : '🟠';
         output += `\n  ${icon} [Priority ${priority.priority}] ${priority.category}\n`;
         output += `    Impact: ${priority.impact}\n`;
         output += `    Action: ${priority.action}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Token metrics
@@ -1382,51 +1382,51 @@ export async function runSmartSecurity(
 
 // MCP Tool definition
 export const SMART_SECURITY_TOOL_DEFINITION = {
-  name: "smart_security",
+  name: 'smart_security',
   description:
-    "Security vulnerability scanner with pattern detection and intelligent caching (83% token reduction)",
+    'Security vulnerability scanner with pattern detection and intelligent caching (83% token reduction)',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       force: {
-        type: "boolean",
-        description: "Force full scan (ignore cache)",
+        type: 'boolean',
+        description: 'Force full scan (ignore cache)',
         default: false,
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       targets: {
-        type: "array",
+        type: 'array',
         description:
-          "Specific files or directories to scan (enables incremental mode)",
+          'Specific files or directories to scan (enables incremental mode)',
         items: {
-          type: "string",
+          type: 'string',
         },
       },
       exclude: {
-        type: "array",
-        description: "Patterns to exclude from scan",
+        type: 'array',
+        description: 'Patterns to exclude from scan',
         items: {
-          type: "string",
+          type: 'string',
         },
-        default: ["node_modules", ".git", "dist", "build", "coverage"],
+        default: ['node_modules', '.git', 'dist', 'build', 'coverage'],
       },
       minSeverity: {
-        type: "string",
-        description: "Minimum severity level to report",
-        enum: ["critical", "high", "medium", "low", "info"],
-        default: "low",
+        type: 'string',
+        description: 'Minimum severity level to report',
+        enum: ['critical', 'high', 'medium', 'low', 'info'],
+        default: 'low',
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 86400 = 24 hours)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 86400 = 24 hours)',
         default: 86400,
       },
       includeLowSeverity: {
-        type: "boolean",
-        description: "Include low-severity findings",
+        type: 'boolean',
+        description: 'Include low-severity findings',
         default: true,
       },
     },

@@ -3,7 +3,12 @@
  * Provides detailed analysis of session token usage patterns
  */
 
-import { TurnData, TurnSummary, analyzeTurns, detectAnomalies } from '../utils/thinking-mode.js';
+import {
+  TurnData,
+  TurnSummary,
+  analyzeTurns,
+  detectAnomalies,
+} from '../utils/thinking-mode.js';
 
 export interface SessionAnalysisOptions {
   groupBy?: 'turn' | 'tool' | 'server' | 'hour';
@@ -281,7 +286,9 @@ function calculateCacheHitPotential(operations: TurnData[]): string {
   // Analyze file operations for caching potential
   const fileOps = operations.filter(
     (op) =>
-      op.toolName === 'Read' || op.toolName === 'Write' || op.toolName === 'Edit'
+      op.toolName === 'Read' ||
+      op.toolName === 'Write' ||
+      op.toolName === 'Edit'
   );
 
   const filePathMap = new Map<string, number>();
@@ -291,8 +298,13 @@ function calculateCacheHitPotential(operations: TurnData[]): string {
     }
   }
 
-  const duplicates = Array.from(filePathMap.values()).filter((count) => count > 1);
-  const potentialSavings = duplicates.reduce((sum, count) => sum + count - 1, 0);
+  const duplicates = Array.from(filePathMap.values()).filter(
+    (count) => count > 1
+  );
+  const potentialSavings = duplicates.reduce(
+    (sum, count) => sum + count - 1,
+    0
+  );
 
   if (potentialSavings > fileOps.length * 0.2) {
     return 'High - Many files read multiple times';

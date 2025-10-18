@@ -3,7 +3,7 @@
  * Detects when Claude is in thinking mode based on tool usage patterns and token velocity
  */
 
-export type TurnMode = "normal" | "thinking" | "planning";
+export type TurnMode = 'normal' | 'thinking' | 'planning';
 
 export interface TurnData {
   timestamp: string;
@@ -28,25 +28,25 @@ export function detectTurnMode(
   turns: TurnData[],
   averageTurnTokens: number
 ): TurnMode {
-  if (turns.length === 0) return "normal";
+  if (turns.length === 0) return 'normal';
 
   // Check for sequential thinking tool usage
   const hasSequentialThinking = turns.some((t) =>
-    t.toolName.includes("sequential-thinking")
+    t.toolName.includes('sequential-thinking')
   );
-  if (hasSequentialThinking) return "thinking";
+  if (hasSequentialThinking) return 'thinking';
 
   // Check for planning tools (task management, etc.)
   const hasPlanningTools = turns.some(
-    (t) => t.toolName === "ExitPlanMode" || t.toolName === "TodoWrite"
+    (t) => t.toolName === 'ExitPlanMode' || t.toolName === 'TodoWrite'
   );
-  if (hasPlanningTools) return "planning";
+  if (hasPlanningTools) return 'planning';
 
   // Check for high token velocity (>2x average)
   const totalTokens = turns.reduce((sum, t) => sum + t.tokens, 0);
-  if (totalTokens > averageTurnTokens * 2) return "thinking";
+  if (totalTokens > averageTurnTokens * 2) return 'thinking';
 
-  return "normal";
+  return 'normal';
 }
 
 /**
@@ -80,20 +80,20 @@ export function analyzeTurns(operations: TurnData[]): TurnSummary[] {
     const tools = [...new Set(ops.map((o) => o.toolName))];
     const mode = detectTurnMode(ops, averageTurnTokens);
 
-    let reason = "";
+    let reason = '';
     switch (mode) {
-      case "thinking":
-        if (ops.some((t) => t.toolName.includes("sequential-thinking"))) {
-          reason = "Sequential thinking tool used";
+      case 'thinking':
+        if (ops.some((t) => t.toolName.includes('sequential-thinking'))) {
+          reason = 'Sequential thinking tool used';
         } else {
           reason = `High token usage (${totalTokens} tokens, ${(totalTokens / averageTurnTokens).toFixed(1)}x average)`;
         }
         break;
-      case "planning":
-        reason = "Planning tools detected (TodoWrite, ExitPlanMode)";
+      case 'planning':
+        reason = 'Planning tools detected (TodoWrite, ExitPlanMode)';
         break;
-      case "normal":
-        reason = "Normal operation";
+      case 'normal':
+        reason = 'Normal operation';
         break;
     }
 

@@ -21,10 +21,10 @@
  * - Emotion classifier caching (93% reduction, infinite TTL)
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { createHash } from 'crypto';
 
 // NLP libraries (to be installed: natural, compromise)
 // For now, we'll implement basic versions with the intent to integrate real NLP libraries
@@ -40,15 +40,15 @@ interface NaturalSentiment {
 // Interfaces matching Phase 3 specification
 export interface SentimentAnalysisOptions {
   operation:
-    | "analyze-sentiment"
-    | "detect-emotions"
-    | "extract-topics"
-    | "classify-feedback"
-    | "trend-analysis"
-    | "comparative-analysis"
-    | "batch-analyze"
-    | "train-model"
-    | "export-results";
+    | 'analyze-sentiment'
+    | 'detect-emotions'
+    | 'extract-topics'
+    | 'classify-feedback'
+    | 'trend-analysis'
+    | 'comparative-analysis'
+    | 'batch-analyze'
+    | 'train-model'
+    | 'export-results';
 
   // Input text
   text?: string;
@@ -56,14 +56,14 @@ export interface SentimentAnalysisOptions {
 
   // Analysis options
   language?: string;
-  domain?: "general" | "technical" | "support" | "product";
+  domain?: 'general' | 'technical' | 'support' | 'product';
 
   // Classification
   categories?: string[];
 
   // Trend analysis
   timeRange?: { start: number; end: number };
-  granularity?: "hourly" | "daily" | "weekly";
+  granularity?: 'hourly' | 'daily' | 'weekly';
   dataPoints?: Array<{ text: string; timestamp: number }>;
 
   // Comparison
@@ -84,7 +84,7 @@ export interface SentimentAnalysisOptions {
   }>;
 
   // Export options
-  format?: "json" | "csv" | "markdown";
+  format?: 'json' | 'csv' | 'markdown';
   outputPath?: string;
 
   // Alerting
@@ -103,7 +103,7 @@ export interface SentimentAnalysisResult {
   data: {
     sentiment?: {
       score: number; // -1 (negative) to 1 (positive)
-      label: "positive" | "neutral" | "negative";
+      label: 'positive' | 'neutral' | 'negative';
       confidence: number;
       details?: {
         comparative: number;
@@ -113,7 +113,7 @@ export interface SentimentAnalysisResult {
       };
     };
     emotions?: Array<{
-      emotion: "joy" | "anger" | "sadness" | "fear" | "neutral";
+      emotion: 'joy' | 'anger' | 'sadness' | 'fear' | 'neutral';
       score: number;
       confidence: number;
       triggers?: string[];
@@ -165,9 +165,9 @@ export interface SentimentAnalysisResult {
       size?: number;
     };
     insights?: Array<{
-      type: "sentiment_shift" | "emotion_spike" | "topic_emergence" | "anomaly";
+      type: 'sentiment_shift' | 'emotion_spike' | 'topic_emergence' | 'anomaly';
       message: string;
-      severity: "info" | "warning" | "critical";
+      severity: 'info' | 'warning' | 'critical';
       confidence: number;
       timestamp?: number;
     }>;
@@ -297,70 +297,70 @@ const SENTIMENT_LEXICON: Record<string, number> = {
 const EMOTION_PATTERNS = {
   joy: {
     keywords: [
-      "happy",
-      "joy",
-      "excited",
-      "delighted",
-      "pleased",
-      "cheerful",
-      "glad",
-      "thrilled",
-      "ecstatic",
-      "elated",
+      'happy',
+      'joy',
+      'excited',
+      'delighted',
+      'pleased',
+      'cheerful',
+      'glad',
+      'thrilled',
+      'ecstatic',
+      'elated',
     ],
     weight: 1.0,
   },
   anger: {
     keywords: [
-      "angry",
-      "furious",
-      "mad",
-      "irritated",
-      "annoyed",
-      "frustrated",
-      "enraged",
-      "outraged",
-      "hostile",
+      'angry',
+      'furious',
+      'mad',
+      'irritated',
+      'annoyed',
+      'frustrated',
+      'enraged',
+      'outraged',
+      'hostile',
     ],
     weight: 1.0,
   },
   sadness: {
     keywords: [
-      "sad",
-      "depressed",
-      "unhappy",
-      "miserable",
-      "disappointed",
-      "gloomy",
-      "sorrowful",
-      "melancholy",
+      'sad',
+      'depressed',
+      'unhappy',
+      'miserable',
+      'disappointed',
+      'gloomy',
+      'sorrowful',
+      'melancholy',
     ],
     weight: 1.0,
   },
   fear: {
     keywords: [
-      "afraid",
-      "scared",
-      "fearful",
-      "terrified",
-      "anxious",
-      "worried",
-      "nervous",
-      "frightened",
-      "panicked",
+      'afraid',
+      'scared',
+      'fearful',
+      'terrified',
+      'anxious',
+      'worried',
+      'nervous',
+      'frightened',
+      'panicked',
     ],
     weight: 1.0,
   },
   neutral: {
     keywords: [
-      "okay",
-      "fine",
-      "alright",
-      "acceptable",
-      "normal",
-      "standard",
-      "average",
-      "regular",
+      'okay',
+      'fine',
+      'alright',
+      'acceptable',
+      'normal',
+      'standard',
+      'average',
+      'regular',
     ],
     weight: 0.5,
   },
@@ -371,78 +371,78 @@ const EMOTION_PATTERNS = {
  */
 const TOPIC_PATTERNS: Record<string, string[]> = {
   Performance: [
-    "speed",
-    "fast",
-    "slow",
-    "performance",
-    "optimize",
-    "efficient",
-    "latency",
-    "throughput",
+    'speed',
+    'fast',
+    'slow',
+    'performance',
+    'optimize',
+    'efficient',
+    'latency',
+    'throughput',
   ],
   Security: [
-    "security",
-    "secure",
-    "vulnerability",
-    "exploit",
-    "authentication",
-    "authorization",
-    "encryption",
+    'security',
+    'secure',
+    'vulnerability',
+    'exploit',
+    'authentication',
+    'authorization',
+    'encryption',
   ],
   Usability: [
-    "usability",
-    "user-friendly",
-    "intuitive",
-    "confusing",
-    "easy",
-    "difficult",
-    "simple",
-    "complex",
+    'usability',
+    'user-friendly',
+    'intuitive',
+    'confusing',
+    'easy',
+    'difficult',
+    'simple',
+    'complex',
   ],
   Reliability: [
-    "reliable",
-    "stable",
-    "crash",
-    "bug",
-    "error",
-    "failure",
-    "downtime",
-    "uptime",
+    'reliable',
+    'stable',
+    'crash',
+    'bug',
+    'error',
+    'failure',
+    'downtime',
+    'uptime',
   ],
   Features: [
-    "feature",
-    "functionality",
-    "capability",
-    "option",
-    "setting",
-    "configuration",
+    'feature',
+    'functionality',
+    'capability',
+    'option',
+    'setting',
+    'configuration',
   ],
   Documentation: [
-    "documentation",
-    "docs",
-    "guide",
-    "tutorial",
-    "example",
-    "help",
-    "manual",
+    'documentation',
+    'docs',
+    'guide',
+    'tutorial',
+    'example',
+    'help',
+    'manual',
   ],
   Support: [
-    "support",
-    "help",
-    "assistance",
-    "service",
-    "response",
-    "resolution",
+    'support',
+    'help',
+    'assistance',
+    'service',
+    'response',
+    'resolution',
   ],
   Pricing: [
-    "price",
-    "cost",
-    "expensive",
-    "cheap",
-    "value",
-    "worth",
-    "subscription",
-    "payment",
+    'price',
+    'cost',
+    'expensive',
+    'cheap',
+    'value',
+    'worth',
+    'subscription',
+    'payment',
   ],
 };
 
@@ -455,7 +455,7 @@ export class SentimentAnalysisTool {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -466,7 +466,7 @@ export class SentimentAnalysisTool {
    * Main execution method following Phase 1 architecture
    */
   async run(
-    options: SentimentAnalysisOptions,
+    options: SentimentAnalysisOptions
   ): Promise<SentimentAnalysisResult> {
     const startTime = Date.now();
 
@@ -480,7 +480,7 @@ export class SentimentAnalysisTool {
         if (cached) {
           const cachedResult = JSON.parse(cached);
           const tokensSaved = this.tokenCounter.count(
-            JSON.stringify(cachedResult),
+            JSON.stringify(cachedResult)
           ).tokens;
 
           this.metrics.record({
@@ -513,12 +513,7 @@ export class SentimentAnalysisTool {
 
       if (options.useCache !== false) {
         const resultStr = JSON.stringify(result);
-        this.cache.set(
-          cacheKey,
-          resultStr,
-          tokensUsed,
-          tokensUsed
-        );
+        this.cache.set(cacheKey, resultStr, tokensUsed, tokensUsed);
       }
 
       // 5. Record metrics
@@ -547,7 +542,7 @@ export class SentimentAnalysisTool {
           processingTime: Date.now() - startTime,
           operation: options.operation,
           textCount: options.texts?.length || (options.text ? 1 : 0),
-          language: options.language || "en",
+          language: options.language || 'en',
         },
       };
     } catch (error) {
@@ -570,26 +565,26 @@ export class SentimentAnalysisTool {
    * Execute the requested operation
    */
   private async executeOperation(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     switch (options.operation) {
-      case "analyze-sentiment":
+      case 'analyze-sentiment':
         return this.analyzeSentiment(options);
-      case "detect-emotions":
+      case 'detect-emotions':
         return this.detectEmotions(options);
-      case "extract-topics":
+      case 'extract-topics':
         return this.extractTopics(options);
-      case "classify-feedback":
+      case 'classify-feedback':
         return this.classifyFeedback(options);
-      case "trend-analysis":
+      case 'trend-analysis':
         return this.analyzeTrends(options);
-      case "comparative-analysis":
+      case 'comparative-analysis':
         return this.compareGroups(options);
-      case "batch-analyze":
+      case 'batch-analyze':
         return this.batchAnalyze(options);
-      case "train-model":
+      case 'train-model':
         return this.trainModel(options);
-      case "export-results":
+      case 'export-results':
         return this.exportResults(options);
       default:
         throw new Error(`Unknown operation: ${options.operation}`);
@@ -600,10 +595,10 @@ export class SentimentAnalysisTool {
    * Operation 1: Analyze sentiment of text
    */
   private async analyzeSentiment(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.text) {
-      throw new Error("Text is required for sentiment analysis");
+      throw new Error('Text is required for sentiment analysis');
     }
 
     const analysis = this.computeSentiment(options.text);
@@ -627,16 +622,16 @@ export class SentimentAnalysisTool {
    * Operation 2: Detect emotions in text
    */
   private async detectEmotions(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.text) {
-      throw new Error("Text is required for emotion detection");
+      throw new Error('Text is required for emotion detection');
     }
 
     const text = options.text.toLowerCase();
     const words = this.tokenize(text);
     const emotions: Array<{
-      emotion: "joy" | "anger" | "sadness" | "fear" | "neutral";
+      emotion: 'joy' | 'anger' | 'sadness' | 'fear' | 'neutral';
       score: number;
       confidence: number;
       triggers?: string[];
@@ -659,11 +654,11 @@ export class SentimentAnalysisTool {
         const normalizedScore = Math.min((score / words.length) * 10, 1.0);
         emotions.push({
           emotion: emotionName as
-            | "joy"
-            | "anger"
-            | "sadness"
-            | "fear"
-            | "neutral",
+            | 'joy'
+            | 'anger'
+            | 'sadness'
+            | 'fear'
+            | 'neutral',
           score: normalizedScore,
           confidence: Math.min(triggers.length / pattern.keywords.length, 1.0),
           triggers: triggers.slice(0, 5), // Top 5 triggers
@@ -677,7 +672,7 @@ export class SentimentAnalysisTool {
     // If no emotions detected, mark as neutral
     if (emotions.length === 0) {
       emotions.push({
-        emotion: "neutral",
+        emotion: 'neutral',
         score: 0.5,
         confidence: 0.5,
         triggers: [],
@@ -691,10 +686,10 @@ export class SentimentAnalysisTool {
    * Operation 3: Extract topics from text
    */
   private async extractTopics(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.text) {
-      throw new Error("Text is required for topic extraction");
+      throw new Error('Text is required for topic extraction');
     }
 
     const text = options.text.toLowerCase();
@@ -740,60 +735,60 @@ export class SentimentAnalysisTool {
    * Operation 4: Classify feedback into categories
    */
   private async classifyFeedback(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.text) {
-      throw new Error("Text is required for feedback classification");
+      throw new Error('Text is required for feedback classification');
     }
 
     const categories = options.categories || [
-      "bug",
-      "feature-request",
-      "question",
-      "complaint",
-      "praise",
+      'bug',
+      'feature-request',
+      'question',
+      'complaint',
+      'praise',
     ];
     const text = options.text.toLowerCase();
 
     // Simple classification based on keywords
     const probabilities: Record<string, number> = {};
     const classificationPatterns: Record<string, string[]> = {
-      bug: ["bug", "error", "crash", "broken", "issue", "problem", "fail"],
-      "feature-request": [
-        "feature",
-        "add",
-        "want",
-        "need",
-        "request",
-        "suggestion",
-        "would be nice",
+      bug: ['bug', 'error', 'crash', 'broken', 'issue', 'problem', 'fail'],
+      'feature-request': [
+        'feature',
+        'add',
+        'want',
+        'need',
+        'request',
+        'suggestion',
+        'would be nice',
       ],
       question: [
-        "how",
-        "what",
-        "why",
-        "when",
-        "where",
-        "can i",
-        "question",
-        "help",
+        'how',
+        'what',
+        'why',
+        'when',
+        'where',
+        'can i',
+        'question',
+        'help',
       ],
       complaint: [
-        "terrible",
-        "awful",
-        "horrible",
-        "disappointing",
-        "frustrated",
-        "hate",
+        'terrible',
+        'awful',
+        'horrible',
+        'disappointing',
+        'frustrated',
+        'hate',
       ],
       praise: [
-        "great",
-        "excellent",
-        "amazing",
-        "love",
-        "thank",
-        "wonderful",
-        "fantastic",
+        'great',
+        'excellent',
+        'amazing',
+        'love',
+        'thank',
+        'wonderful',
+        'fantastic',
       ],
     };
 
@@ -838,18 +833,18 @@ export class SentimentAnalysisTool {
    * Operation 5: Analyze sentiment trends over time
    */
   private async analyzeTrends(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.dataPoints || options.dataPoints.length === 0) {
-      throw new Error("Data points are required for trend analysis");
+      throw new Error('Data points are required for trend analysis');
     }
 
-    const granularity = options.granularity || "daily";
+    const granularity = options.granularity || 'daily';
     const buckets = this.createTimeBuckets(options.dataPoints, granularity);
 
     const trend = buckets.map((bucket) => {
       const sentiments = bucket.texts.map(
-        (text) => this.computeSentiment(text).score,
+        (text) => this.computeSentiment(text).score
       );
       const avgSentiment =
         sentiments.reduce((sum, s) => sum + s, 0) / sentiments.length;
@@ -861,7 +856,7 @@ export class SentimentAnalysisTool {
         movingAverage: this.calculateMovingAverage(
           buckets,
           bucket.timestamp,
-          3,
+          3
         ),
         volatility: this.calculateVolatility(sentiments),
       };
@@ -877,15 +872,15 @@ export class SentimentAnalysisTool {
    * Operation 6: Compare sentiment across groups
    */
   private async compareGroups(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.groups || options.groups.length === 0) {
-      throw new Error("Groups are required for comparative analysis");
+      throw new Error('Groups are required for comparative analysis');
     }
 
     const comparison = options.groups.map((group) => {
       const sentiments = group.texts.map(
-        (text) => this.computeSentiment(text).score,
+        (text) => this.computeSentiment(text).score
       );
       const avgSentiment =
         sentiments.reduce((sum, s) => sum + s, 0) / sentiments.length;
@@ -921,10 +916,10 @@ export class SentimentAnalysisTool {
    * Operation 7: Batch analyze multiple texts
    */
   private async batchAnalyze(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.texts || options.texts.length === 0) {
-      throw new Error("Texts are required for batch analysis");
+      throw new Error('Texts are required for batch analysis');
     }
 
     const batchSize = options.batchSize || 100;
@@ -992,10 +987,10 @@ export class SentimentAnalysisTool {
    * Operation 8: Train custom sentiment model
    */
   private async trainModel(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.trainingData || options.trainingData.length === 0) {
-      throw new Error("Training data is required for model training");
+      throw new Error('Training data is required for model training');
     }
 
     const modelId = this.generateModelId();
@@ -1021,7 +1016,7 @@ export class SentimentAnalysisTool {
     for (const sample of options.trainingData) {
       const predicted = this.computeSentimentWithLexicon(
         sample.text,
-        customLexicon,
+        customLexicon
       );
       const predictedLabel = this.getSentimentLabel(predicted.score);
       const actualLabel = this.getSentimentLabel(sample.sentiment);
@@ -1054,13 +1049,13 @@ export class SentimentAnalysisTool {
    * Operation 9: Export analysis results
    */
   private async exportResults(
-    options: SentimentAnalysisOptions,
-  ): Promise<SentimentAnalysisResult["data"]> {
+    options: SentimentAnalysisOptions
+  ): Promise<SentimentAnalysisResult['data']> {
     if (!options.texts || options.texts.length === 0) {
-      throw new Error("Texts are required for export");
+      throw new Error('Texts are required for export');
     }
 
-    const format = options.format || "json";
+    const format = options.format || 'json';
     const results: Array<{
       text: string;
       sentiment: number;
@@ -1084,15 +1079,15 @@ export class SentimentAnalysisTool {
     let size: number;
 
     switch (format) {
-      case "csv":
+      case 'csv':
         exportData = this.convertToCSV(results);
         size = exportData.length;
         break;
-      case "markdown":
+      case 'markdown':
         exportData = this.convertToMarkdown(results);
         size = exportData.length;
         break;
-      case "json":
+      case 'json':
       default:
         exportData = JSON.stringify(results, null, 2);
         size = exportData.length;
@@ -1120,7 +1115,7 @@ export class SentimentAnalysisTool {
    */
   private computeSentimentWithLexicon(
     text: string,
-    lexicon: Record<string, number>,
+    lexicon: Record<string, number>
   ): NaturalSentiment {
     const words = this.tokenize(text.toLowerCase());
     const tokens = [...words];
@@ -1134,7 +1129,7 @@ export class SentimentAnalysisTool {
       const word = words[i];
 
       // Check for negation
-      if (["not", "no", "never", "neither", "nor", "none"].includes(word)) {
+      if (['not', 'no', 'never', 'neither', 'nor', 'none'].includes(word)) {
         negationWindow = 3; // Negation affects next 3 words
         continue;
       }
@@ -1150,9 +1145,9 @@ export class SentimentAnalysisTool {
         // Apply intensifiers
         if (i > 0) {
           const prevWord = words[i - 1];
-          if (["very", "extremely", "absolutely"].includes(prevWord)) {
+          if (['very', 'extremely', 'absolutely'].includes(prevWord)) {
             wordScore *= 1.5;
-          } else if (["somewhat", "quite"].includes(prevWord)) {
+          } else if (['somewhat', 'quite'].includes(prevWord)) {
             wordScore *= 1.2;
           }
         }
@@ -1187,7 +1182,7 @@ export class SentimentAnalysisTool {
    * Synchronous emotion detection (helper)
    */
   private detectEmotionsSync(
-    text: string,
+    text: string
   ): Array<{ emotion: string; score: number; confidence: number }> {
     const textLower = text.toLowerCase();
     const words = this.tokenize(textLower);
@@ -1226,11 +1221,11 @@ export class SentimentAnalysisTool {
    * Get sentiment label from score
    */
   private getSentimentLabel(
-    score: number,
-  ): "positive" | "neutral" | "negative" {
-    if (score > 0.1) return "positive";
-    if (score < -0.1) return "negative";
-    return "neutral";
+    score: number
+  ): 'positive' | 'neutral' | 'negative' {
+    if (score > 0.1) return 'positive';
+    if (score < -0.1) return 'negative';
+    return 'neutral';
   }
 
   /**
@@ -1239,7 +1234,7 @@ export class SentimentAnalysisTool {
   private tokenize(text: string): string[] {
     return text
       .toLowerCase()
-      .replace(/[^\w\s]/g, " ")
+      .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
       .filter((word) => word.length > 0);
   }
@@ -1249,7 +1244,7 @@ export class SentimentAnalysisTool {
    */
   private createTimeBuckets(
     dataPoints: Array<{ text: string; timestamp: number }>,
-    granularity: "hourly" | "daily" | "weekly",
+    granularity: 'hourly' | 'daily' | 'weekly'
   ): Array<{ timestamp: number; texts: string[] }> {
     const bucketSize = {
       hourly: 3600000, // 1 hour in ms
@@ -1279,10 +1274,10 @@ export class SentimentAnalysisTool {
   private calculateMovingAverage(
     buckets: Array<{ timestamp: number; texts: string[] }>,
     currentTimestamp: number,
-    window: number,
+    window: number
   ): number {
     const currentIndex = buckets.findIndex(
-      (b) => b.timestamp === currentTimestamp,
+      (b) => b.timestamp === currentTimestamp
     );
     if (currentIndex === -1) return 0;
 
@@ -1290,7 +1285,7 @@ export class SentimentAnalysisTool {
     const relevantBuckets = buckets.slice(startIndex, currentIndex + 1);
 
     const sentiments = relevantBuckets.flatMap((bucket) =>
-      bucket.texts.map((text) => this.computeSentiment(text).score),
+      bucket.texts.map((text) => this.computeSentiment(text).score)
     );
 
     return sentiments.reduce((sum, s) => sum + s, 0) / sentiments.length;
@@ -1312,18 +1307,18 @@ export class SentimentAnalysisTool {
    * Generate insights from trend data
    */
   private generateTrendInsights(
-    trend: Array<{ timestamp: number; sentiment: number; volume: number }>,
+    trend: Array<{ timestamp: number; sentiment: number; volume: number }>
   ): Array<{
-    type: "sentiment_shift" | "emotion_spike" | "topic_emergence" | "anomaly";
+    type: 'sentiment_shift' | 'emotion_spike' | 'topic_emergence' | 'anomaly';
     message: string;
-    severity: "info" | "warning" | "critical";
+    severity: 'info' | 'warning' | 'critical';
     confidence: number;
     timestamp?: number;
   }> {
     const insights: Array<{
-      type: "sentiment_shift" | "emotion_spike" | "topic_emergence" | "anomaly";
+      type: 'sentiment_shift' | 'emotion_spike' | 'topic_emergence' | 'anomaly';
       message: string;
-      severity: "info" | "warning" | "critical";
+      severity: 'info' | 'warning' | 'critical';
       confidence: number;
       timestamp?: number;
     }> = [];
@@ -1334,9 +1329,9 @@ export class SentimentAnalysisTool {
 
       if (Math.abs(change) > 0.3) {
         insights.push({
-          type: "sentiment_shift",
-          message: `Significant sentiment ${change > 0 ? "improvement" : "decline"} detected (${(change * 100).toFixed(1)}% change)`,
-          severity: Math.abs(change) > 0.5 ? "warning" : "info",
+          type: 'sentiment_shift',
+          message: `Significant sentiment ${change > 0 ? 'improvement' : 'decline'} detected (${(change * 100).toFixed(1)}% change)`,
+          severity: Math.abs(change) > 0.5 ? 'warning' : 'info',
           confidence: Math.min(Math.abs(change), 1.0),
           timestamp: trend[i].timestamp,
         });
@@ -1349,9 +1344,9 @@ export class SentimentAnalysisTool {
     for (const point of trend) {
       if (point.volume > avgVolume * 2) {
         insights.push({
-          type: "emotion_spike",
+          type: 'emotion_spike',
           message: `Unusual activity spike detected (${point.volume} items, ${((point.volume / avgVolume - 1) * 100).toFixed(0)}% above average)`,
-          severity: "info",
+          severity: 'info',
           confidence: 0.7,
           timestamp: point.timestamp,
         });
@@ -1377,17 +1372,17 @@ export class SentimentAnalysisTool {
       sentiment: number;
       label: string;
       emotions: string[];
-    }>,
+    }>
   ): string {
-    const headers = ["Text", "Sentiment Score", "Label", "Emotions"];
+    const headers = ['Text', 'Sentiment Score', 'Label', 'Emotions'];
     const rows = results.map((r) => [
       `"${r.text.replace(/"/g, '""')}"`,
       r.sentiment.toFixed(3),
       r.label,
-      `"${r.emotions.join(", ")}"`,
+      `"${r.emotions.join(', ')}"`,
     ]);
 
-    return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
   }
 
   /**
@@ -1399,38 +1394,38 @@ export class SentimentAnalysisTool {
       sentiment: number;
       label: string;
       emotions: string[];
-    }>,
+    }>
   ): string {
     const lines = [
-      "# Sentiment Analysis Results",
-      "",
+      '# Sentiment Analysis Results',
+      '',
       `Total Records: ${results.length}`,
-      "",
-      "| Text | Sentiment | Label | Emotions |",
-      "|------|-----------|-------|----------|",
+      '',
+      '| Text | Sentiment | Label | Emotions |',
+      '|------|-----------|-------|----------|',
     ];
 
     for (const result of results) {
       lines.push(
-        `| ${result.text} | ${result.sentiment.toFixed(3)} | ${result.label} | ${result.emotions.join(", ")} |`,
+        `| ${result.text} | ${result.sentiment.toFixed(3)} | ${result.label} | ${result.emotions.join(', ')} |`
       );
     }
 
-    return lines.join("\n");
+    return lines.join('\n');
   }
 
   /**
    * Generate cache key
    */
   private generateCacheKey(options: SentimentAnalysisOptions): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(options.operation);
 
     if (options.text) {
       hash.update(options.text);
     }
     if (options.texts) {
-      hash.update(options.texts.join(""));
+      hash.update(options.texts.join(''));
     }
     if (options.groups) {
       hash.update(JSON.stringify(options.groups));
@@ -1439,26 +1434,50 @@ export class SentimentAnalysisTool {
       hash.update(JSON.stringify(options.dataPoints));
     }
 
-    return `sentiment-analysis:${options.operation}:${hash.digest("hex")}`;
+    return `sentiment-analysis:${options.operation}:${hash.digest('hex')}`;
+  }
+
+  /**
+   * Get cache TTL based on operation
+   */
+  private getCacheTTL(options: SentimentAnalysisOptions): number {
+    if (options.cacheTTL) {
+      return options.cacheTTL;
+    }
+
+    // Operation-specific TTLs for optimal token reduction
+    const ttlMap: Record<string, number> = {
+      'analyze-sentiment': 3600, // 1 hour (92% reduction)
+      'detect-emotions': 3600, // 1 hour (93% reduction)
+      'extract-topics': 86400, // 24 hours (95% reduction)
+      'classify-feedback': 3600, // 1 hour
+      'trend-analysis': 900, // 15 minutes (91% reduction)
+      'comparative-analysis': 900, // 15 minutes
+      'batch-analyze': 1800, // 30 minutes
+      'train-model': Infinity, // Never expire (93% reduction)
+      'export-results': 300, // 5 minutes
+    };
+
+    return ttlMap[options.operation] || 3600;
   }
 
   /**
    * Calculate input tokens
    */
   private calculateInputTokens(options: SentimentAnalysisOptions): number {
-    let totalText = "";
+    let totalText = '';
 
     if (options.text) {
       totalText += options.text;
     }
     if (options.texts) {
-      totalText += options.texts.join(" ");
+      totalText += options.texts.join(' ');
     }
     if (options.groups) {
-      totalText += options.groups.map((g) => g.texts.join(" ")).join(" ");
+      totalText += options.groups.map((g) => g.texts.join(' ')).join(' ');
     }
     if (options.dataPoints) {
-      totalText += options.dataPoints.map((d) => d.text).join(" ");
+      totalText += options.dataPoints.map((d) => d.text).join(' ');
     }
 
     return this.tokenCounter.count(totalText).tokens;
@@ -1471,13 +1490,13 @@ let sentimentAnalysisInstance: SentimentAnalysisTool | null = null;
 export function getSentimentAnalysisTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SentimentAnalysisTool {
   if (!sentimentAnalysisInstance) {
     sentimentAnalysisInstance = new SentimentAnalysisTool(
       cache,
       tokenCounter,
-      metrics,
+      metrics
     );
   }
   return sentimentAnalysisInstance;
@@ -1485,109 +1504,109 @@ export function getSentimentAnalysisTool(
 
 // MCP Tool definition
 export const SENTIMENT_ANALYSIS_TOOL_DEFINITION = {
-  name: "sentiment_analysis",
+  name: 'sentiment_analysis',
   description:
-    "Analyze sentiment in logs, feedback, and communications with 90% token reduction through intelligent caching. Supports sentiment analysis, emotion detection, topic extraction, feedback classification, trend analysis, and comparative analysis.",
+    'Analyze sentiment in logs, feedback, and communications with 90% token reduction through intelligent caching. Supports sentiment analysis, emotion detection, topic extraction, feedback classification, trend analysis, and comparative analysis.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "analyze-sentiment",
-          "detect-emotions",
-          "extract-topics",
-          "classify-feedback",
-          "trend-analysis",
-          "comparative-analysis",
-          "batch-analyze",
-          "train-model",
-          "export-results",
+          'analyze-sentiment',
+          'detect-emotions',
+          'extract-topics',
+          'classify-feedback',
+          'trend-analysis',
+          'comparative-analysis',
+          'batch-analyze',
+          'train-model',
+          'export-results',
         ],
-        description: "Operation to perform",
+        description: 'Operation to perform',
       },
       text: {
-        type: "string",
+        type: 'string',
         description:
-          "Single text to analyze (for analyze-sentiment, detect-emotions, extract-topics, classify-feedback)",
+          'Single text to analyze (for analyze-sentiment, detect-emotions, extract-topics, classify-feedback)',
       },
       texts: {
-        type: "array",
-        items: { type: "string" },
+        type: 'array',
+        items: { type: 'string' },
         description:
-          "Multiple texts to analyze (for batch-analyze, export-results)",
+          'Multiple texts to analyze (for batch-analyze, export-results)',
       },
       language: {
-        type: "string",
-        description: "Language of the text (default: en)",
-        default: "en",
+        type: 'string',
+        description: 'Language of the text (default: en)',
+        default: 'en',
       },
       domain: {
-        type: "string",
-        enum: ["general", "technical", "support", "product"],
-        description: "Domain context for analysis",
-        default: "general",
+        type: 'string',
+        enum: ['general', 'technical', 'support', 'product'],
+        description: 'Domain context for analysis',
+        default: 'general',
       },
       categories: {
-        type: "array",
-        items: { type: "string" },
-        description: "Categories for feedback classification",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Categories for feedback classification',
       },
       timeRange: {
-        type: "object",
+        type: 'object',
         properties: {
-          start: { type: "number" },
-          end: { type: "number" },
+          start: { type: 'number' },
+          end: { type: 'number' },
         },
-        description: "Time range for trend analysis",
+        description: 'Time range for trend analysis',
       },
       granularity: {
-        type: "string",
-        enum: ["hourly", "daily", "weekly"],
-        description: "Time granularity for trend analysis",
-        default: "daily",
+        type: 'string',
+        enum: ['hourly', 'daily', 'weekly'],
+        description: 'Time granularity for trend analysis',
+        default: 'daily',
       },
       dataPoints: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "object",
+          type: 'object',
           properties: {
-            text: { type: "string" },
-            timestamp: { type: "number" },
+            text: { type: 'string' },
+            timestamp: { type: 'number' },
           },
         },
-        description: "Data points with timestamps for trend analysis",
+        description: 'Data points with timestamps for trend analysis',
       },
       groups: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "object",
+          type: 'object',
           properties: {
-            name: { type: "string" },
+            name: { type: 'string' },
             texts: {
-              type: "array",
-              items: { type: "string" },
+              type: 'array',
+              items: { type: 'string' },
             },
           },
         },
-        description: "Groups for comparative analysis",
+        description: 'Groups for comparative analysis',
       },
       format: {
-        type: "string",
-        enum: ["json", "csv", "markdown"],
-        description: "Export format",
-        default: "json",
+        type: 'string',
+        enum: ['json', 'csv', 'markdown'],
+        description: 'Export format',
+        default: 'json',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching for token reduction",
+        type: 'boolean',
+        description: 'Enable caching for token reduction',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (overrides default)",
+        type: 'number',
+        description: 'Cache TTL in seconds (overrides default)',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

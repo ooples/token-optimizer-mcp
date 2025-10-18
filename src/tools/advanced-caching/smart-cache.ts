@@ -1,29 +1,35 @@
 /** * SmartCache - Advanced Cache Management * * Track 2D - Tool #1: Comprehensive cache management (90%+ token reduction) * * Capabilities: * - Multi-tier caching (L1: Memory, L2: Disk, L3: Remote) * - 6 eviction strategies: LRU, LFU, FIFO, TTL, size-based, hybrid * - Cache stampede prevention with mutex locks * - Automatic tier promotion/demotion * - Write-through/write-back modes * - Batch operations with atomic guarantees * * Token Reduction Strategy: * - Cache metadata compression (95% reduction) * - Entry deduplication across tiers (92% reduction) * - Incremental state exports (delta-based, 94% reduction) * - Compressed statistics aggregation (93% reduction) */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { LRUCache } from "lru-cache";
-import { EventEmitter } from "events";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { LRUCache } from 'lru-cache';
+import { EventEmitter } from 'events';
 
-export type EvictionStrategy = "LRU" | "LFU" | "FIFO" | "TTL" | "SIZE" | "HYBRID";
-export type WriteMode = "write-through" | "write-back";
-export type CacheTier = "L1" | "L2" | "L3";
+export type EvictionStrategy =
+  | 'LRU'
+  | 'LFU'
+  | 'FIFO'
+  | 'TTL'
+  | 'SIZE'
+  | 'HYBRID';
+export type WriteMode = 'write-through' | 'write-back';
+export type CacheTier = 'L1' | 'L2' | 'L3';
 
 export interface SmartCacheOptions {
   operation:
-    | "get"
-    | "set"
-    | "delete"
-    | "clear"
-    | "stats"
-    | "configure"
-    | "promote"
-    | "demote"
-    | "batch-get"
-    | "batch-set"
-    | "export"
-    | "import";
+    | 'get'
+    | 'set'
+    | 'delete'
+    | 'clear'
+    | 'stats'
+    | 'configure'
+    | 'promote'
+    | 'demote'
+    | 'batch-get'
+    | 'batch-set'
+    | 'export'
+    | 'import';
 
   // Basic operations
   key?: string;
@@ -153,8 +159,8 @@ export class SmartCacheTool extends EventEmitter {
   private l3Cache: Map<string, CacheEntry>;
 
   // Configuration
-  private evictionStrategy: EvictionStrategy = "HYBRID";
-  private writeMode: WriteMode = "write-through";
+  private evictionStrategy: EvictionStrategy = 'HYBRID';
+  private writeMode: WriteMode = 'write-through';
   private l1MaxSize = 100;
   private l2MaxSize = 1000;
   private l3MaxSize = 10000;
@@ -175,7 +181,11 @@ export class SmartCacheTool extends EventEmitter {
   };
 
   // Write-back queue
-  private writeBackQueue: Array<{ key: string; value: string; tier: CacheTier }> = [];
+  private writeBackQueue: Array<{
+    key: string;
+    value: string;
+    tier: CacheTier;
+  }> = [];
   private writeBackTimer: NodeJS.Timeout | null = null;
 
   // Last export snapshot for delta calculation
@@ -202,15 +212,15 @@ export class SmartCacheTool extends EventEmitter {
     this.l3Cache = new Map();
 
     // Initialize eviction counts
-    this.evictionCounts.set("L1", 0);
-    this.evictionCounts.set("L2", 0);
-    this.evictionCounts.set("L3", 0);
-    this.promotionCounts.set("L1", 0);
-    this.promotionCounts.set("L2", 0);
-    this.promotionCounts.set("L3", 0);
-    this.demotionCounts.set("L1", 0);
-    this.demotionCounts.set("L2", 0);
-    this.demotionCounts.set("L3", 0);
+    this.evictionCounts.set('L1', 0);
+    this.evictionCounts.set('L2', 0);
+    this.evictionCounts.set('L3', 0);
+    this.promotionCounts.set('L1', 0);
+    this.promotionCounts.set('L2', 0);
+    this.promotionCounts.set('L3', 0);
+    this.demotionCounts.set('L1', 0);
+    this.demotionCounts.set('L2', 0);
+    this.demotionCounts.set('L3', 0);
   }
 
   /**
@@ -251,44 +261,44 @@ export class SmartCacheTool extends EventEmitter {
     }
 
     // Execute operation
-    let data: SmartCacheResult["data"];
+    let data: SmartCacheResult['data'];
 
     try {
       switch (operation) {
-        case "get":
+        case 'get':
           data = await this.get(options);
           break;
-        case "set":
+        case 'set':
           data = await this.set(options);
           break;
-        case "delete":
+        case 'delete':
           data = await this.delete(options);
           break;
-        case "clear":
+        case 'clear':
           data = await this.clear(options);
           break;
-        case "stats":
+        case 'stats':
           data = await this.getStats(options);
           break;
-        case "configure":
+        case 'configure':
           data = await this.configure(options);
           break;
-        case "promote":
+        case 'promote':
           data = await this.promote(options);
           break;
-        case "demote":
+        case 'demote':
           data = await this.demote(options);
           break;
-        case "batch-get":
+        case 'batch-get':
           data = await this.batchGet(options);
           break;
-        case "batch-set":
+        case 'batch-set':
           data = await this.batchSet(options);
           break;
-        case "export":
+        case 'export':
           data = await this.export(options);
           break;
-        case "import":
+        case 'import':
           data = await this.import(options);
           break;
         default:
@@ -350,9 +360,11 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Get value from cache with stampede prevention
    */
-  private async get(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async get(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { key } = options;
-    if (!key) throw new Error("key is required for get operation");
+    if (!key) throw new Error('key is required for get operation');
 
     // Acquire mutex lock to prevent cache stampede
     await this.acquireLock(key);
@@ -380,7 +392,7 @@ export class SmartCacheTool extends EventEmitter {
 
         // Promote to L1 if frequently accessed
         if (this.shouldPromote(entry)) {
-          await this.promoteEntry(key, entry, "L2", "L1");
+          await this.promoteEntry(key, entry, 'L2', 'L1');
         }
 
         const metadata = this.getEntryMetadata(entry);
@@ -397,7 +409,7 @@ export class SmartCacheTool extends EventEmitter {
 
         // Promote to L2 if frequently accessed
         if (this.shouldPromote(entry)) {
-          await this.promoteEntry(key, entry, "L3", "L2");
+          await this.promoteEntry(key, entry, 'L3', 'L2');
         }
 
         const metadata = this.getEntryMetadata(entry);
@@ -414,10 +426,12 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Set value in cache
    */
-  private async set(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
-    const { key, value, ttl, tier = "L1" } = options;
+  private async set(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
+    const { key, value, ttl, tier = 'L1' } = options;
     if (!key || value === undefined)
-      throw new Error("key and value are required for set operation");
+      throw new Error('key and value are required for set operation');
 
     const entry: CacheEntry = {
       value,
@@ -435,18 +449,18 @@ export class SmartCacheTool extends EventEmitter {
     };
 
     // Store in appropriate tier
-    if (tier === "L1") {
+    if (tier === 'L1') {
       this.l1Cache.set(key, entry);
-    } else if (tier === "L2") {
+    } else if (tier === 'L2') {
       this.l2Cache.set(key, entry);
-      this.enforceEviction("L2");
+      this.enforceEviction('L2');
     } else {
       this.l3Cache.set(key, entry);
-      this.enforceEviction("L3");
+      this.enforceEviction('L3');
     }
 
     // Handle write mode
-    if (this.writeMode === "write-through") {
+    if (this.writeMode === 'write-through') {
       // Write to underlying cache immediately
       this.cache.set(key, value, value.length, value.length);
     } else {
@@ -456,7 +470,7 @@ export class SmartCacheTool extends EventEmitter {
     }
 
     const metadata = this.getEntryMetadata(entry);
-    this.emit("entry-set", { key, tier, metadata });
+    this.emit('entry-set', { key, tier, metadata });
 
     return { metadata };
   }
@@ -464,9 +478,11 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Delete entry from cache
    */
-  private async delete(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async delete(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { key } = options;
-    if (!key) throw new Error("key is required for delete operation");
+    if (!key) throw new Error('key is required for delete operation');
 
     let found = false;
     let tier: CacheTier | null = null;
@@ -474,33 +490,48 @@ export class SmartCacheTool extends EventEmitter {
     if (this.l1Cache.has(key)) {
       this.l1Cache.delete(key);
       found = true;
-      tier = "L1";
+      tier = 'L1';
     }
 
     if (this.l2Cache.has(key)) {
       this.l2Cache.delete(key);
       found = true;
-      tier = "L2";
+      tier = 'L2';
     }
 
     if (this.l3Cache.has(key)) {
       this.l3Cache.delete(key);
       found = true;
-      tier = "L3";
+      tier = 'L3';
     }
 
     // Delete from underlying cache
     this.cache.delete(key);
 
-    this.emit("entry-deleted", { key, tier, found });
+    this.emit('entry-deleted', { key, tier, found });
 
-    return { metadata: { key, tier: tier || "L1", size: 0, hits: 0, misses: 0, createdAt: 0, lastAccessedAt: 0, expiresAt: null, promotions: 0, demotions: 0 } };
+    return {
+      metadata: {
+        key,
+        tier: tier || 'L1',
+        size: 0,
+        hits: 0,
+        misses: 0,
+        createdAt: 0,
+        lastAccessedAt: 0,
+        expiresAt: null,
+        promotions: 0,
+        demotions: 0,
+      },
+    };
   }
 
   /**
    * Clear all cache tiers
    */
-  private async clear(_options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async clear(
+    _options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const l1Count = this.l1Cache.size;
     const l2Count = this.l2Cache.size;
     const l3Count = this.l3Cache.size;
@@ -510,7 +541,7 @@ export class SmartCacheTool extends EventEmitter {
     this.l3Cache.clear();
     this.cache.clear();
 
-    this.emit("cache-cleared", { l1Count, l2Count, l3Count });
+    this.emit('cache-cleared', { l1Count, l2Count, l3Count });
 
     return {
       stats: {
@@ -532,18 +563,21 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Get cache statistics
    */
-  private async getStats(_options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
-    const l1Stats = this.getTierStats("L1");
-    const l2Stats = this.getTierStats("L2");
-    const l3Stats = this.getTierStats("L3");
+  private async getStats(
+    _options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
+    const l1Stats = this.getTierStats('L1');
+    const l2Stats = this.getTierStats('L2');
+    const l3Stats = this.getTierStats('L3');
 
-    const totalEntries = l1Stats.entryCount + l2Stats.entryCount + l3Stats.entryCount;
+    const totalEntries =
+      l1Stats.entryCount + l2Stats.entryCount + l3Stats.entryCount;
     const totalSize = l1Stats.totalSize + l2Stats.totalSize + l3Stats.totalSize;
 
     const totalHits =
-      (l1Stats.hitRate * l1Stats.entryCount) +
-      (l2Stats.hitRate * l2Stats.entryCount) +
-      (l3Stats.hitRate * l3Stats.entryCount);
+      l1Stats.hitRate * l1Stats.entryCount +
+      l2Stats.hitRate * l2Stats.entryCount +
+      l3Stats.hitRate * l3Stats.entryCount;
     const overallHitRate = totalEntries > 0 ? totalHits / totalEntries : 0;
 
     const stats: SmartCacheStats = {
@@ -566,7 +600,9 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Configure cache settings
    */
-  private async configure(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async configure(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     if (options.evictionStrategy) {
       this.evictionStrategy = options.evictionStrategy;
     }
@@ -580,13 +616,13 @@ export class SmartCacheTool extends EventEmitter {
     }
     if (options.l2MaxSize) {
       this.l2MaxSize = options.l2MaxSize;
-      this.enforceEviction("L2");
+      this.enforceEviction('L2');
     }
     if (options.defaultTTL) {
       this.defaultTTL = options.defaultTTL;
     }
 
-    this.emit("configuration-updated", {
+    this.emit('configuration-updated', {
       evictionStrategy: this.evictionStrategy,
       writeMode: this.writeMode,
       l1MaxSize: this.l1MaxSize,
@@ -607,9 +643,11 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Promote entry to higher tier
    */
-  private async promote(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async promote(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { key, targetTier } = options;
-    if (!key) throw new Error("key is required for promote operation");
+    if (!key) throw new Error('key is required for promote operation');
 
     let entry: CacheEntry | undefined;
     let sourceTier: CacheTier | null = null;
@@ -617,13 +655,13 @@ export class SmartCacheTool extends EventEmitter {
     // Find entry
     if (this.l3Cache.has(key)) {
       entry = this.l3Cache.get(key)!;
-      sourceTier = "L3";
+      sourceTier = 'L3';
     } else if (this.l2Cache.has(key)) {
       entry = this.l2Cache.get(key)!;
-      sourceTier = "L2";
+      sourceTier = 'L2';
     } else if (this.l1Cache.has(key)) {
       entry = this.l1Cache.get(key)!;
-      sourceTier = "L1";
+      sourceTier = 'L1';
     }
 
     if (!entry || !sourceTier) {
@@ -643,9 +681,11 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Demote entry to lower tier
    */
-  private async demote(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async demote(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { key, targetTier } = options;
-    if (!key) throw new Error("key is required for demote operation");
+    if (!key) throw new Error('key is required for demote operation');
 
     let entry: CacheEntry | undefined;
     let sourceTier: CacheTier | null = null;
@@ -653,13 +693,13 @@ export class SmartCacheTool extends EventEmitter {
     // Find entry
     if (this.l1Cache.has(key)) {
       entry = this.l1Cache.get(key)!;
-      sourceTier = "L1";
+      sourceTier = 'L1';
     } else if (this.l2Cache.has(key)) {
       entry = this.l2Cache.get(key)!;
-      sourceTier = "L2";
+      sourceTier = 'L2';
     } else if (this.l3Cache.has(key)) {
       entry = this.l3Cache.get(key)!;
-      sourceTier = "L3";
+      sourceTier = 'L3';
     }
 
     if (!entry || !sourceTier) {
@@ -679,15 +719,17 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Batch get operation
    */
-  private async batchGet(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async batchGet(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { keys } = options;
     if (!keys || keys.length === 0)
-      throw new Error("keys array is required for batch-get operation");
+      throw new Error('keys array is required for batch-get operation');
 
     const values: Array<{ key: string; value: string | null }> = [];
 
     for (const key of keys) {
-      const result = await this.get({ operation: "get", key });
+      const result = await this.get({ operation: 'get', key });
       values.push({ key, value: result.value || null });
     }
 
@@ -697,10 +739,12 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Batch set operation (atomic)
    */
-  private async batchSet(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async batchSet(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { values } = options;
     if (!values || values.length === 0)
-      throw new Error("values array is required for batch-set operation");
+      throw new Error('values array is required for batch-set operation');
 
     // Create snapshot for rollback
     const snapshot = new Map<string, CacheEntry | undefined>();
@@ -708,12 +752,30 @@ export class SmartCacheTool extends EventEmitter {
     try {
       for (const { key, value, ttl } of values) {
         // Store current state for rollback
-        snapshot.set(key, this.l1Cache.get(key) || this.l2Cache.get(key) || this.l3Cache.get(key));
+        snapshot.set(
+          key,
+          this.l1Cache.get(key) ||
+            this.l2Cache.get(key) ||
+            this.l3Cache.get(key)
+        );
 
-        await this.set({ operation: "set", key, value, ttl });
+        await this.set({ operation: 'set', key, value, ttl });
       }
 
-      return { metadata: { key: "batch", tier: "L1", size: values.length, hits: 0, misses: 0, createdAt: Date.now(), lastAccessedAt: Date.now(), expiresAt: null, promotions: 0, demotions: 0 } };
+      return {
+        metadata: {
+          key: 'batch',
+          tier: 'L1',
+          size: values.length,
+          hits: 0,
+          misses: 0,
+          createdAt: Date.now(),
+          lastAccessedAt: Date.now(),
+          expiresAt: null,
+          promotions: 0,
+          demotions: 0,
+        },
+      };
     } catch (error) {
       // Rollback on error
       for (const [key, entry] of snapshot.entries()) {
@@ -732,7 +794,9 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Export cache state
    */
-  private async export(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async export(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { exportDelta = false } = options;
 
     const allEntries = new Map<string, CacheEntry>();
@@ -794,9 +858,12 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Import cache state
    */
-  private async import(options: SmartCacheOptions): Promise<SmartCacheResult["data"]> {
+  private async import(
+    options: SmartCacheOptions
+  ): Promise<SmartCacheResult['data']> {
     const { importData } = options;
-    if (!importData) throw new Error("importData is required for import operation");
+    if (!importData)
+      throw new Error('importData is required for import operation');
 
     const data = JSON.parse(importData);
 
@@ -811,9 +878,9 @@ export class SmartCacheTool extends EventEmitter {
         } else {
           // New/updated entry
           const cacheEntry = entry as CacheEntry;
-          if (cacheEntry.tier === "L1") {
+          if (cacheEntry.tier === 'L1') {
             this.l1Cache.set(key, cacheEntry);
-          } else if (cacheEntry.tier === "L2") {
+          } else if (cacheEntry.tier === 'L2') {
             this.l2Cache.set(key, cacheEntry);
           } else {
             this.l3Cache.set(key, cacheEntry);
@@ -827,9 +894,9 @@ export class SmartCacheTool extends EventEmitter {
       this.l3Cache.clear();
 
       for (const [key, entry] of data.entries as Array<[string, CacheEntry]>) {
-        if (entry.tier === "L1") {
+        if (entry.tier === 'L1') {
           this.l1Cache.set(key, entry);
-        } else if (entry.tier === "L2") {
+        } else if (entry.tier === 'L2') {
           this.l2Cache.set(key, entry);
         } else {
           this.l3Cache.set(key, entry);
@@ -846,7 +913,7 @@ export class SmartCacheTool extends EventEmitter {
       }
     }
 
-    const stats = await this.getStats({ operation: "stats" });
+    const stats = await this.getStats({ operation: 'stats' });
     return { stats: stats.stats };
   }
 
@@ -856,8 +923,8 @@ export class SmartCacheTool extends EventEmitter {
   private getTierStats(tier: CacheTier): TierStats {
     let cache: Map<string, CacheEntry> | LRUCache<string, CacheEntry>;
 
-    if (tier === "L1") cache = this.l1Cache;
-    else if (tier === "L2") cache = this.l2Cache;
+    if (tier === 'L1') cache = this.l1Cache;
+    else if (tier === 'L2') cache = this.l2Cache;
     else cache = this.l3Cache;
 
     let entryCount = 0;
@@ -865,7 +932,8 @@ export class SmartCacheTool extends EventEmitter {
     let totalHits = 0;
     let totalAccesses = 0;
 
-    const entries = cache instanceof Map ? cache.values() : Array.from(cache.values());
+    const entries =
+      cache instanceof Map ? cache.values() : Array.from(cache.values());
 
     for (const entry of entries) {
       entryCount++;
@@ -892,7 +960,7 @@ export class SmartCacheTool extends EventEmitter {
    */
   private getEntryMetadata(entry: CacheEntry): CacheEntryMetadata {
     return {
-      key: "",
+      key: '',
       tier: entry.tier,
       size: entry.size,
       hits: entry.hits,
@@ -949,13 +1017,13 @@ export class SmartCacheTool extends EventEmitter {
    * Check if entry should be promoted
    */
   private shouldPromote(entry: CacheEntry): boolean {
-    if (this.evictionStrategy === "LFU") {
+    if (this.evictionStrategy === 'LFU') {
       return entry.frequency > 5;
     }
-    if (this.evictionStrategy === "LRU") {
+    if (this.evictionStrategy === 'LRU') {
       return Date.now() - entry.lastAccessedAt < 60000; // Last minute
     }
-    if (this.evictionStrategy === "HYBRID") {
+    if (this.evictionStrategy === 'HYBRID') {
       return entry.frequency > 3 && Date.now() - entry.lastAccessedAt < 120000;
     }
     return entry.hits > 10;
@@ -971,20 +1039,20 @@ export class SmartCacheTool extends EventEmitter {
     to: CacheTier
   ): Promise<void> {
     // Remove from source tier
-    if (from === "L1") this.l1Cache.delete(key);
-    else if (from === "L2") this.l2Cache.delete(key);
+    if (from === 'L1') this.l1Cache.delete(key);
+    else if (from === 'L2') this.l2Cache.delete(key);
     else this.l3Cache.delete(key);
 
     // Add to target tier
     entry.tier = to;
     entry.promotions++;
 
-    if (to === "L1") this.l1Cache.set(key, entry);
-    else if (to === "L2") this.l2Cache.set(key, entry);
+    if (to === 'L1') this.l1Cache.set(key, entry);
+    else if (to === 'L2') this.l2Cache.set(key, entry);
     else this.l3Cache.set(key, entry);
 
     this.promotionCounts.set(to, (this.promotionCounts.get(to) || 0) + 1);
-    this.emit("entry-promoted", { key, from, to });
+    this.emit('entry-promoted', { key, from, to });
   }
 
   /**
@@ -997,38 +1065,38 @@ export class SmartCacheTool extends EventEmitter {
     to: CacheTier
   ): Promise<void> {
     // Remove from source tier
-    if (from === "L1") this.l1Cache.delete(key);
-    else if (from === "L2") this.l2Cache.delete(key);
+    if (from === 'L1') this.l1Cache.delete(key);
+    else if (from === 'L2') this.l2Cache.delete(key);
     else this.l3Cache.delete(key);
 
     // Add to target tier
     entry.tier = to;
     entry.demotions++;
 
-    if (to === "L1") this.l1Cache.set(key, entry);
-    else if (to === "L2") this.l2Cache.set(key, entry);
+    if (to === 'L1') this.l1Cache.set(key, entry);
+    else if (to === 'L2') this.l2Cache.set(key, entry);
     else this.l3Cache.set(key, entry);
 
     this.demotionCounts.set(to, (this.demotionCounts.get(to) || 0) + 1);
-    this.emit("entry-demoted", { key, from, to });
+    this.emit('entry-demoted', { key, from, to });
   }
 
   /**
    * Get promotion target tier
    */
   private getPromotionTarget(from: CacheTier): CacheTier {
-    if (from === "L3") return "L2";
-    if (from === "L2") return "L1";
-    return "L1";
+    if (from === 'L3') return 'L2';
+    if (from === 'L2') return 'L1';
+    return 'L1';
   }
 
   /**
    * Get demotion target tier
    */
   private getDemotionTarget(from: CacheTier): CacheTier {
-    if (from === "L1") return "L2";
-    if (from === "L2") return "L3";
-    return "L3";
+    if (from === 'L1') return 'L2';
+    if (from === 'L2') return 'L3';
+    return 'L3';
   }
 
   /**
@@ -1036,17 +1104,17 @@ export class SmartCacheTool extends EventEmitter {
    */
   private handleL1Eviction(key: string, entry: CacheEntry): void {
     // Demote to L2
-    this.l2Cache.set(key, { ...entry, tier: "L2" });
-    this.evictionCounts.set("L1", (this.evictionCounts.get("L1") || 0) + 1);
-    this.enforceEviction("L2");
+    this.l2Cache.set(key, { ...entry, tier: 'L2' });
+    this.evictionCounts.set('L1', (this.evictionCounts.get('L1') || 0) + 1);
+    this.enforceEviction('L2');
   }
 
   /**
    * Enforce eviction policy on tier
    */
   private enforceEviction(tier: CacheTier): void {
-    const cache = tier === "L2" ? this.l2Cache : this.l3Cache;
-    const maxSize = tier === "L2" ? this.l2MaxSize : this.l3MaxSize;
+    const cache = tier === 'L2' ? this.l2Cache : this.l3Cache;
+    const maxSize = tier === 'L2' ? this.l2MaxSize : this.l3MaxSize;
 
     if (cache.size <= maxSize) return;
 
@@ -1062,11 +1130,11 @@ export class SmartCacheTool extends EventEmitter {
       cache.delete(key);
       this.evictionCounts.set(tier, (this.evictionCounts.get(tier) || 0) + 1);
 
-      if (tier === "L2") {
+      if (tier === 'L2') {
         // Demote to L3
         const entry = sorted[i][1];
-        this.l3Cache.set(key, { ...entry, tier: "L3" });
-        this.enforceEviction("L3");
+        this.l3Cache.set(key, { ...entry, tier: 'L3' });
+        this.enforceEviction('L3');
       }
     }
   }
@@ -1078,25 +1146,31 @@ export class SmartCacheTool extends EventEmitter {
     entries: Array<[string, CacheEntry]>
   ): Array<[string, CacheEntry]> {
     switch (this.evictionStrategy) {
-      case "LRU":
-        return entries.sort((a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt);
-      case "LFU":
+      case 'LRU':
+        return entries.sort(
+          (a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt
+        );
+      case 'LFU':
         return entries.sort((a, b) => a[1].frequency - b[1].frequency);
-      case "FIFO":
-        return entries.sort((a, b) => a[1].insertionOrder - b[1].insertionOrder);
-      case "TTL":
+      case 'FIFO':
+        return entries.sort(
+          (a, b) => a[1].insertionOrder - b[1].insertionOrder
+        );
+      case 'TTL':
         return entries.sort((a, b) => {
           const aExpiry = a[1].expiresAt || Infinity;
           const bExpiry = b[1].expiresAt || Infinity;
           return aExpiry - bExpiry;
         });
-      case "SIZE":
+      case 'SIZE':
         return entries.sort((a, b) => b[1].size - a[1].size);
-      case "HYBRID":
+      case 'HYBRID':
         // Hybrid: combination of LRU and LFU
         return entries.sort((a, b) => {
-          const aScore = a[1].frequency * 0.5 + (Date.now() - a[1].lastAccessedAt) * -0.5;
-          const bScore = b[1].frequency * 0.5 + (Date.now() - b[1].lastAccessedAt) * -0.5;
+          const aScore =
+            a[1].frequency * 0.5 + (Date.now() - a[1].lastAccessedAt) * -0.5;
+          const bScore =
+            b[1].frequency * 0.5 + (Date.now() - b[1].lastAccessedAt) * -0.5;
           return aScore - bScore;
         });
       default:
@@ -1143,21 +1217,23 @@ export class SmartCacheTool extends EventEmitter {
    * Determine if operation is cacheable
    */
   private isCacheableOperation(operation: string): boolean {
-    return ["stats", "get", "batch-get"].includes(operation);
+    return ['stats', 'get', 'batch-get'].includes(operation);
   }
 
   /**
    * Get cache key parameters for operation
    */
-  private getCacheKeyParams(options: SmartCacheOptions): Record<string, unknown> {
+  private getCacheKeyParams(
+    options: SmartCacheOptions
+  ): Record<string, unknown> {
     const { operation, key, keys } = options;
 
     switch (operation) {
-      case "get":
+      case 'get':
         return { key };
-      case "batch-get":
+      case 'batch-get':
         return { keys };
-      case "stats":
+      case 'stats':
         return {};
       default:
         return {};
@@ -1197,112 +1273,113 @@ export function getSmartCacheTool(
 
 // MCP Tool Definition
 export const SMART_CACHE_TOOL_DEFINITION = {
-  name: "smart_cache",
+  name: 'smart_cache',
   description:
-    "Advanced multi-tier cache with 90%+ token reduction, 6 eviction strategies, stampede prevention, and automatic tier management",
+    'Advanced multi-tier cache with 90%+ token reduction, 6 eviction strategies, stampede prevention, and automatic tier management',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "get",
-          "set",
-          "delete",
-          "clear",
-          "stats",
-          "configure",
-          "promote",
-          "demote",
-          "batch-get",
-          "batch-set",
-          "export",
-          "import",
+          'get',
+          'set',
+          'delete',
+          'clear',
+          'stats',
+          'configure',
+          'promote',
+          'demote',
+          'batch-get',
+          'batch-set',
+          'export',
+          'import',
         ],
-        description: "The cache operation to perform",
+        description: 'The cache operation to perform',
       },
       key: {
-        type: "string",
-        description: "Cache key (for get/set/delete/promote/demote operations)",
+        type: 'string',
+        description: 'Cache key (for get/set/delete/promote/demote operations)',
       },
       value: {
-        type: "string",
-        description: "Value to store (for set operation)",
+        type: 'string',
+        description: 'Value to store (for set operation)',
       },
       keys: {
-        type: "array",
-        items: { type: "string" },
-        description: "Array of keys (for batch-get operation)",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Array of keys (for batch-get operation)',
       },
       values: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "object",
+          type: 'object',
           properties: {
-            key: { type: "string" },
-            value: { type: "string" },
-            ttl: { type: "number" },
+            key: { type: 'string' },
+            value: { type: 'string' },
+            ttl: { type: 'number' },
           },
-          required: ["key", "value"],
+          required: ['key', 'value'],
         },
-        description: "Array of key-value pairs (for batch-set operation)",
+        description: 'Array of key-value pairs (for batch-set operation)',
       },
       evictionStrategy: {
-        type: "string",
-        enum: ["LRU", "LFU", "FIFO", "TTL", "SIZE", "HYBRID"],
-        description: "Eviction strategy (for configure operation)",
+        type: 'string',
+        enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'SIZE', 'HYBRID'],
+        description: 'Eviction strategy (for configure operation)',
       },
       writeMode: {
-        type: "string",
-        enum: ["write-through", "write-back"],
-        description: "Write mode (for configure operation)",
+        type: 'string',
+        enum: ['write-through', 'write-back'],
+        description: 'Write mode (for configure operation)',
       },
       tier: {
-        type: "string",
-        enum: ["L1", "L2", "L3"],
-        description: "Cache tier (for set operation, default: L1)",
+        type: 'string',
+        enum: ['L1', 'L2', 'L3'],
+        description: 'Cache tier (for set operation, default: L1)',
       },
       targetTier: {
-        type: "string",
-        enum: ["L1", "L2", "L3"],
-        description: "Target tier (for promote/demote operations)",
+        type: 'string',
+        enum: ['L1', 'L2', 'L3'],
+        description: 'Target tier (for promote/demote operations)',
       },
       ttl: {
-        type: "number",
-        description: "Time-to-live in milliseconds",
+        type: 'number',
+        description: 'Time-to-live in milliseconds',
       },
       l1MaxSize: {
-        type: "number",
-        description: "Maximum L1 cache size (for configure operation)",
+        type: 'number',
+        description: 'Maximum L1 cache size (for configure operation)',
       },
       l2MaxSize: {
-        type: "number",
-        description: "Maximum L2 cache size (for configure operation)",
+        type: 'number',
+        description: 'Maximum L2 cache size (for configure operation)',
       },
       defaultTTL: {
-        type: "number",
-        description: "Default TTL in milliseconds (for configure operation)",
+        type: 'number',
+        description: 'Default TTL in milliseconds (for configure operation)',
       },
       exportDelta: {
-        type: "boolean",
-        description: "Export only changes since last snapshot (for export operation)",
+        type: 'boolean',
+        description:
+          'Export only changes since last snapshot (for export operation)',
       },
       importData: {
-        type: "string",
-        description: "JSON data to import (for import operation)",
+        type: 'string',
+        description: 'JSON data to import (for import operation)',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable result caching (default: true)",
+        type: 'boolean',
+        description: 'Enable result caching (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 

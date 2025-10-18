@@ -17,11 +17,14 @@
  * - Average: 83% reduction
  */
 
-import { createHash } from "crypto";
-import { CacheEngine, CacheEngine as CacheEngineClass } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
+import { createHash } from 'crypto';
+import {
+  CacheEngine,
+  CacheEngine as CacheEngineClass,
+} from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { generateCacheKey } from '../shared/hash-utils';
 
 // ============================================================================
 // Type Definitions
@@ -29,7 +32,7 @@ import { generateCacheKey } from "../shared/hash-utils";
 
 export interface SmartSchemaOptions {
   connectionString: string;
-  mode?: "full" | "summary" | "analysis" | "diff";
+  mode?: 'full' | 'summary' | 'analysis' | 'diff';
   compareWith?: string; // Second connection string for diff mode
   forceRefresh?: boolean;
   includeData?: boolean; // Include row counts and table sizes
@@ -38,7 +41,7 @@ export interface SmartSchemaOptions {
 }
 
 export interface DatabaseSchema {
-  databaseType: "postgresql" | "mysql" | "sqlite";
+  databaseType: 'postgresql' | 'mysql' | 'sqlite';
   version: string;
   schemaVersion: string;
   tables: TableInfo[];
@@ -88,7 +91,7 @@ export interface ConstraintInfo {
   schema: string;
   table: string;
   name: string;
-  type: "primary_key" | "foreign_key" | "unique" | "check";
+  type: 'primary_key' | 'foreign_key' | 'unique' | 'check';
   columns: string[];
   referencedTable?: string;
   referencedColumns?: string[];
@@ -133,7 +136,7 @@ export interface SchemaAnalysis {
 }
 
 export interface SchemaIssue {
-  severity: "error" | "warning" | "info";
+  severity: 'error' | 'warning' | 'info';
   type: string;
   table?: string;
   column?: string;
@@ -145,7 +148,7 @@ export interface MissingIndex {
   table: string;
   columns: string[];
   reason: string;
-  estimatedImpact: "high" | "medium" | "low";
+  estimatedImpact: 'high' | 'medium' | 'low';
 }
 
 export interface SchemaDiff {
@@ -210,7 +213,7 @@ export class SmartSchema {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -219,7 +222,7 @@ export class SmartSchema {
 
   async run(options: SmartSchemaOptions): Promise<SmartSchemaOutput> {
     const startTime = Date.now();
-    const mode = options.mode || "full";
+    const mode = options.mode || 'full';
 
     try {
       // Detect database type
@@ -236,12 +239,12 @@ export class SmartSchema {
             cached,
             true,
             mode,
-            Date.now() - startTime,
+            Date.now() - startTime
           );
 
           // Record metrics
           this.metrics.record({
-            operation: "smart_schema",
+            operation: 'smart_schema',
             duration: Date.now() - startTime,
             success: true,
             cacheHit: true,
@@ -255,11 +258,11 @@ export class SmartSchema {
       }
 
       // Handle diff mode
-      if (mode === "diff" && options.compareWith) {
+      if (mode === 'diff' && options.compareWith) {
         const result = await this.performSchemaDiff(
           options.connectionString,
           options.compareWith,
-          dbType,
+          dbType
         );
 
         await this.cacheResult(cacheKey, result);
@@ -267,11 +270,11 @@ export class SmartSchema {
           result,
           false,
           mode,
-          Date.now() - startTime,
+          Date.now() - startTime
         );
 
         this.metrics.record({
-          operation: "smart_schema",
+          operation: 'smart_schema',
           duration: Date.now() - startTime,
           success: true,
           cacheHit: false,
@@ -287,7 +290,7 @@ export class SmartSchema {
       const schema = await this.introspectSchema(
         options.connectionString,
         dbType,
-        options,
+        options
       );
 
       // Analyze schema
@@ -307,12 +310,12 @@ export class SmartSchema {
         result,
         false,
         mode,
-        Date.now() - startTime,
+        Date.now() - startTime
       );
 
       // Record metrics
       this.metrics.record({
-        operation: "smart_schema",
+        operation: 'smart_schema',
         duration: Date.now() - startTime,
         success: true,
         cacheHit: false,
@@ -327,7 +330,7 @@ export class SmartSchema {
         error instanceof Error ? error.message : String(error);
 
       this.metrics.record({
-        operation: "smart_schema",
+        operation: 'smart_schema',
         duration: Date.now() - startTime,
         success: false,
         cacheHit: false,
@@ -345,28 +348,28 @@ export class SmartSchema {
   // ============================================================================
 
   private detectDatabaseType(
-    connectionString: string,
-  ): "postgresql" | "mysql" | "sqlite" {
+    connectionString: string
+  ): 'postgresql' | 'mysql' | 'sqlite' {
     const lowerConn = connectionString.toLowerCase();
 
     if (
-      lowerConn.startsWith("postgres://") ||
-      lowerConn.startsWith("postgresql://")
+      lowerConn.startsWith('postgres://') ||
+      lowerConn.startsWith('postgresql://')
     ) {
-      return "postgresql";
+      return 'postgresql';
     }
-    if (lowerConn.startsWith("mysql://") || lowerConn.includes("mysql")) {
-      return "mysql";
+    if (lowerConn.startsWith('mysql://') || lowerConn.includes('mysql')) {
+      return 'mysql';
     }
     if (
-      lowerConn.endsWith(".db") ||
-      lowerConn.endsWith(".sqlite") ||
-      lowerConn.includes("sqlite")
+      lowerConn.endsWith('.db') ||
+      lowerConn.endsWith('.sqlite') ||
+      lowerConn.includes('sqlite')
     ) {
-      return "sqlite";
+      return 'sqlite';
     }
 
-    throw new Error("Unable to detect database type from connection string");
+    throw new Error('Unable to detect database type from connection string');
   }
 
   // ============================================================================
@@ -375,18 +378,18 @@ export class SmartSchema {
 
   private async introspectSchema(
     connectionString: string,
-    dbType: "postgresql" | "mysql" | "sqlite",
-    options: SmartSchemaOptions,
+    dbType: 'postgresql' | 'mysql' | 'sqlite',
+    options: SmartSchemaOptions
   ): Promise<DatabaseSchema> {
     // This is a placeholder implementation
     // In production, this would use pg, mysql2, or better-sqlite3
 
     switch (dbType) {
-      case "postgresql":
+      case 'postgresql':
         return this.introspectPostgreSQL(connectionString, options);
-      case "mysql":
+      case 'mysql':
         return this.introspectMySQL(connectionString, options);
-      case "sqlite":
+      case 'sqlite':
         return this.introspectSQLite(connectionString, options);
       default:
         throw new Error(`Unsupported database type: ${dbType}`);
@@ -395,15 +398,15 @@ export class SmartSchema {
 
   private async introspectPostgreSQL(
     _connectionString: string,
-    _options: SmartSchemaOptions,
+    _options: SmartSchemaOptions
   ): Promise<DatabaseSchema> {
     // Placeholder: Would use pg client
     // Query information_schema and pg_catalog
 
     const mockSchema: DatabaseSchema = {
-      databaseType: "postgresql",
-      version: "15.0",
-      schemaVersion: this.generateSchemaVersionHash("mock-pg-schema"),
+      databaseType: 'postgresql',
+      version: '15.0',
+      schemaVersion: this.generateSchemaVersionHash('mock-pg-schema'),
       tables: [],
       views: [],
       indexes: [],
@@ -423,14 +426,14 @@ export class SmartSchema {
 
   private async introspectMySQL(
     _connectionString: string,
-    _options: SmartSchemaOptions,
+    _options: SmartSchemaOptions
   ): Promise<DatabaseSchema> {
     // Placeholder: Would use mysql2 client
 
     const mockSchema: DatabaseSchema = {
-      databaseType: "mysql",
-      version: "8.0",
-      schemaVersion: this.generateSchemaVersionHash("mock-mysql-schema"),
+      databaseType: 'mysql',
+      version: '8.0',
+      schemaVersion: this.generateSchemaVersionHash('mock-mysql-schema'),
       tables: [],
       views: [],
       indexes: [],
@@ -450,14 +453,14 @@ export class SmartSchema {
 
   private async introspectSQLite(
     _connectionString: string,
-    _options: SmartSchemaOptions,
+    _options: SmartSchemaOptions
   ): Promise<DatabaseSchema> {
     // Placeholder: Would use better-sqlite3
 
     const mockSchema: DatabaseSchema = {
-      databaseType: "sqlite",
-      version: "3.40.0",
-      schemaVersion: this.generateSchemaVersionHash("mock-sqlite-schema"),
+      databaseType: 'sqlite',
+      version: '3.40.0',
+      schemaVersion: this.generateSchemaVersionHash('mock-sqlite-schema'),
       tables: [],
       views: [],
       indexes: [],
@@ -480,7 +483,7 @@ export class SmartSchema {
 
   private async analyzeSchema(
     schema: DatabaseSchema,
-    options: SmartSchemaOptions,
+    options: SmartSchemaOptions
   ): Promise<SchemaAnalysis> {
     const issues: SchemaIssue[] = [];
     const recommendations: string[] = [];
@@ -494,10 +497,10 @@ export class SmartSchema {
 
     if (circularDependencies.length > 0) {
       issues.push({
-        severity: "warning",
-        type: "circular_dependency",
+        severity: 'warning',
+        type: 'circular_dependency',
         message: `Found ${circularDependencies.length} circular dependency chain(s)`,
-        recommendation: "Review foreign key relationships to break cycles",
+        recommendation: 'Review foreign key relationships to break cycles',
       });
     }
 
@@ -506,11 +509,11 @@ export class SmartSchema {
 
     if (missingIndexes.length > 0) {
       issues.push({
-        severity: "warning",
-        type: "missing_index",
+        severity: 'warning',
+        type: 'missing_index',
         message: `Found ${missingIndexes.length} foreign key(s) without indexes`,
         recommendation:
-          "Add indexes on foreign key columns for better join performance",
+          'Add indexes on foreign key columns for better join performance',
       });
     }
 
@@ -521,11 +524,11 @@ export class SmartSchema {
 
       if (unusedIndexes.length > 0) {
         issues.push({
-          severity: "info",
-          type: "unused_index",
+          severity: 'info',
+          type: 'unused_index',
           message: `Found ${unusedIndexes.length} potentially unused index(es)`,
           recommendation:
-            "Consider removing unused indexes to reduce storage and write overhead",
+            'Consider removing unused indexes to reduce storage and write overhead',
         });
       }
     }
@@ -533,13 +536,13 @@ export class SmartSchema {
     // Generate recommendations
     if (schema.tables.length > 100) {
       recommendations.push(
-        "Consider database partitioning for tables with high row counts",
+        'Consider database partitioning for tables with high row counts'
       );
     }
 
     if (relationshipGraph.edges.size > schema.tables.length * 2) {
       recommendations.push(
-        "Complex relationship graph detected. Consider denormalization for frequently joined tables",
+        'Complex relationship graph detected. Consider denormalization for frequently joined tables'
       );
     }
 
@@ -550,7 +553,7 @@ export class SmartSchema {
       relationshipCount: schema.relationships.length,
       totalSizeBytes: schema.tables.reduce(
         (sum, t) => sum + (t.sizeBytes || 0),
-        0,
+        0
       ),
     };
 
@@ -601,7 +604,7 @@ export class SmartSchema {
   // ============================================================================
 
   private detectCircularDependencies(
-    graph: RelationshipGraph,
+    graph: RelationshipGraph
   ): CircularDependency[] {
     const visited = new Set<string>();
     const recursionStack = new Set<string>();
@@ -654,21 +657,21 @@ export class SmartSchema {
 
     // Build set of indexed columns
     for (const index of schema.indexes) {
-      const key = `${index.schema}.${index.table}.${index.columns.join(",")}`;
+      const key = `${index.schema}.${index.table}.${index.columns.join(',')}`;
       existingIndexes.add(key);
     }
 
     // Check foreign keys
     for (const constraint of schema.constraints) {
-      if (constraint.type === "foreign_key") {
-        const key = `${constraint.schema}.${constraint.table}.${constraint.columns.join(",")}`;
+      if (constraint.type === 'foreign_key') {
+        const key = `${constraint.schema}.${constraint.table}.${constraint.columns.join(',')}`;
 
         if (!existingIndexes.has(key)) {
           missingIndexes.push({
             table: `${constraint.schema}.${constraint.table}`,
             columns: constraint.columns,
             reason: `Foreign key to ${constraint.referencedTable}`,
-            estimatedImpact: "high",
+            estimatedImpact: 'high',
           });
         }
       }
@@ -707,7 +710,7 @@ export class SmartSchema {
   private async performSchemaDiff(
     connectionString1: string,
     connectionString2: string,
-    dbType: "postgresql" | "mysql" | "sqlite",
+    dbType: 'postgresql' | 'mysql' | 'sqlite'
   ): Promise<SmartSchemaResult> {
     const schema1 = await this.introspectSchema(connectionString1, dbType, {
       connectionString: connectionString1,
@@ -731,7 +734,7 @@ export class SmartSchema {
 
   private diffSchemas(
     schema1: DatabaseSchema,
-    schema2: DatabaseSchema,
+    schema2: DatabaseSchema
   ): SchemaDiff {
     const diff: SchemaDiff = {
       added: {
@@ -780,7 +783,7 @@ export class SmartSchema {
       const fullName = `${table2.schema}.${table2.name}`;
       if (tables1.has(fullName)) {
         const table1 = schema1.tables.find(
-          (t) => `${t.schema}.${t.name}` === fullName,
+          (t) => `${t.schema}.${t.name}` === fullName
         );
         if (table1) {
           this.diffTableColumns(table1, table2, diff);
@@ -794,7 +797,7 @@ export class SmartSchema {
   private diffTableColumns(
     table1: TableInfo,
     table2: TableInfo,
-    diff: SchemaDiff,
+    diff: SchemaDiff
   ): void {
     const columns1 = new Map(table1.columns.map((c) => [c.name, c]));
     const columns2 = new Map(table2.columns.map((c) => [c.name, c]));
@@ -833,7 +836,7 @@ export class SmartSchema {
         }
         if (column1.defaultValue !== column2.defaultValue) {
           changes.push(
-            `default: ${column1.defaultValue} → ${column2.defaultValue}`,
+            `default: ${column1.defaultValue} → ${column2.defaultValue}`
           );
         }
 
@@ -855,24 +858,24 @@ export class SmartSchema {
   // ============================================================================
 
   private generateCacheKey(connectionString: string, dbType: string): string {
-    const hash = createHash("sha256")
+    const hash = createHash('sha256')
       .update(connectionString)
       .update(dbType)
-      .digest("hex")
+      .digest('hex')
       .substring(0, 16);
 
-    return generateCacheKey("smart-schema", { hash, dbType });
+    return generateCacheKey('smart-schema', { hash, dbType });
   }
 
   private generateSchemaVersionHash(schemaContent: string): string {
-    return createHash("sha256")
+    return createHash('sha256')
       .update(schemaContent)
-      .digest("hex")
+      .digest('hex')
       .substring(0, 16);
   }
 
   private async getCachedResult(
-    key: string,
+    key: string
   ): Promise<SmartSchemaResult | null> {
     try {
       const cached = this.cache.get(key);
@@ -893,19 +896,19 @@ export class SmartSchema {
 
   private async cacheResult(
     key: string,
-    result: SmartSchemaResult,
+    result: SmartSchemaResult
   ): Promise<void> {
     try {
       // Calculate size for cache
       const serialized = JSON.stringify(result);
-      const originalSize = Buffer.byteLength(serialized, "utf-8");
+      const originalSize = Buffer.byteLength(serialized, 'utf-8');
       const compressedSize = originalSize;
 
       // Cache for 24 hours
       this.cache.set(key, serialized, originalSize, compressedSize);
     } catch (error) {
       // Caching failure should not break the operation
-      console.error("Failed to cache schema result:", error);
+      console.error('Failed to cache schema result:', error);
     }
   }
 
@@ -916,27 +919,27 @@ export class SmartSchema {
   private transformOutput(
     result: SmartSchemaResult,
     fromCache: boolean,
-    mode: "full" | "summary" | "analysis" | "diff",
-    duration: number,
+    mode: 'full' | 'summary' | 'analysis' | 'diff',
+    duration: number
   ): SmartSchemaOutput {
     let output: string;
     let baselineTokens: number;
     let actualTokens: number;
 
     // Generate output based on mode
-    if (mode === "summary") {
+    if (mode === 'summary') {
       output = this.formatSummaryOutput(result);
       baselineTokens = result.schema
         ? this.tokenCounter.count(JSON.stringify(result.schema, null, 2)).tokens
         : 1000;
       actualTokens = this.tokenCounter.count(output).tokens;
-    } else if (mode === "analysis") {
+    } else if (mode === 'analysis') {
       output = this.formatAnalysisOutput(result);
       baselineTokens = result.schema
         ? this.tokenCounter.count(JSON.stringify(result.schema, null, 2)).tokens
         : 1000;
       actualTokens = this.tokenCounter.count(output).tokens;
-    } else if (mode === "diff" && result.diff) {
+    } else if (mode === 'diff' && result.diff) {
       output = this.formatDiffOutput(result);
       baselineTokens = result.schema
         ? this.tokenCounter.count(JSON.stringify(result.schema, null, 2)).tokens
@@ -953,7 +956,7 @@ export class SmartSchema {
     const reduction =
       baselineTokens > 0
         ? ((tokensSaved / baselineTokens) * 100).toFixed(1)
-        : "0.0";
+        : '0.0';
 
     return {
       result: output,
@@ -978,28 +981,28 @@ export class SmartSchema {
 - Views: ${analysis.summary.viewCount}
 - Indexes: ${analysis.summary.indexCount}
 - Relationships: ${analysis.summary.relationshipCount}
-${analysis.summary.totalSizeBytes ? `- Total Size: ${this.formatBytes(analysis.summary.totalSizeBytes)}` : ""}
+${analysis.summary.totalSizeBytes ? `- Total Size: ${this.formatBytes(analysis.summary.totalSizeBytes)}` : ''}
 
 ## Issues Found: ${analysis.issues.length}
-${analysis.issues.map((issue) => `- [${issue.severity.toUpperCase()}] ${issue.message}`).join("\n")}
+${analysis.issues.map((issue) => `- [${issue.severity.toUpperCase()}] ${issue.message}`).join('\n')}
 
 ## Circular Dependencies: ${analysis.circularDependencies.length}
 ${
   analysis.circularDependencies.length > 0
     ? analysis.circularDependencies
-        .map((dep) => `- ${dep.cycle.join(" → ")}`)
-        .join("\n")
-    : "(none)"
+        .map((dep) => `- ${dep.cycle.join(' → ')}`)
+        .join('\n')
+    : '(none)'
 }
 
 ## Missing Indexes: ${analysis.missingIndexes.length}
 ${analysis.missingIndexes
   .slice(0, 5)
-  .map((idx) => `- ${idx.table}: ${idx.columns.join(", ")} (${idx.reason})`)
-  .join("\n")}
-${analysis.missingIndexes.length > 5 ? `\n(+${analysis.missingIndexes.length - 5} more)` : ""}
+  .map((idx) => `- ${idx.table}: ${idx.columns.join(', ')} (${idx.reason})`)
+  .join('\n')}
+${analysis.missingIndexes.length > 5 ? `\n(+${analysis.missingIndexes.length - 5} more)` : ''}
 
-${result.cached ? `\n---\n*Cached result (age: ${this.formatDuration(result.cacheAge || 0)})*` : ""}`;
+${result.cached ? `\n---\n*Cached result (age: ${this.formatDuration(result.cacheAge || 0)})*` : ''}`;
   }
 
   private formatAnalysisOutput(result: SmartSchemaResult): string {
@@ -1012,35 +1015,35 @@ ${analysis.issues
   .map(
     (issue) =>
       `### ${issue.type} [${issue.severity}]
-${issue.table ? `Table: ${issue.table}` : ""}
-${issue.column ? `Column: ${issue.column}` : ""}
+${issue.table ? `Table: ${issue.table}` : ''}
+${issue.column ? `Column: ${issue.column}` : ''}
 ${issue.message}
-${issue.recommendation ? `**Recommendation:** ${issue.recommendation}` : ""}`,
+${issue.recommendation ? `**Recommendation:** ${issue.recommendation}` : ''}`
   )
-  .join("\n\n")}
+  .join('\n\n')}
 
 ## Recommendations
-${analysis.recommendations.map((rec, i) => `${i + 1}. ${rec}`).join("\n")}
+${analysis.recommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
 
 ## Circular Dependencies
 ${
   analysis.circularDependencies.length === 0
-    ? "None detected"
+    ? 'None detected'
     : analysis.circularDependencies
         .map(
           (dep) =>
-            `- **Cycle:** ${dep.cycle.join(" → ")}\n  **Affected Tables:** ${Array.from(dep.affectedTables).join(", ")}`,
+            `- **Cycle:** ${dep.cycle.join(' → ')}\n  **Affected Tables:** ${Array.from(dep.affectedTables).join(', ')}`
         )
-        .join("\n")
+        .join('\n')
 }
 
 ## Missing Indexes (${analysis.missingIndexes.length})
 ${analysis.missingIndexes
   .map(
     (idx) =>
-      `- **${idx.table}**\n  Columns: ${idx.columns.join(", ")}\n  Reason: ${idx.reason}\n  Impact: ${idx.estimatedImpact}`,
+      `- **${idx.table}**\n  Columns: ${idx.columns.join(', ')}\n  Reason: ${idx.reason}\n  Impact: ${idx.estimatedImpact}`
   )
-  .join("\n")}
+  .join('\n')}
 
 ${
   analysis.unusedIndexes.length > 0
@@ -1048,60 +1051,60 @@ ${
 ${analysis.unusedIndexes
   .map(
     (idx) =>
-      `- ${idx.schema}.${idx.table}.${idx.name} (${idx.columns.join(", ")})`,
+      `- ${idx.schema}.${idx.table}.${idx.name} (${idx.columns.join(', ')})`
   )
-  .join("\n")}`
-    : ""
+  .join('\n')}`
+    : ''
 }`;
   }
 
   private formatDiffOutput(result: SmartSchemaResult): string {
     const { diff } = result;
     if (!diff) {
-      return "# No diff available";
+      return '# No diff available';
     }
 
     return `# Schema Diff (90% Token Reduction)
 
 ## Added Tables (${diff.added.tables.length})
-${diff.added.tables.map((t) => `- ${t.schema}.${t.name} (${t.columns.length} columns)`).join("\n") || "(none)"}
+${diff.added.tables.map((t) => `- ${t.schema}.${t.name} (${t.columns.length} columns)`).join('\n') || '(none)'}
 
 ## Removed Tables (${diff.removed.tables.length})
-${diff.removed.tables.map((t) => `- ${t.schema}.${t.name}`).join("\n") || "(none)"}
+${diff.removed.tables.map((t) => `- ${t.schema}.${t.name}`).join('\n') || '(none)'}
 
 ## Added Columns (${diff.added.columns.length})
 ${
   diff.added.columns
     .slice(0, 10)
     .map((c) => `- ${c.table}.${c.column.name}: ${c.column.type}`)
-    .join("\n") || "(none)"
+    .join('\n') || '(none)'
 }
-${diff.added.columns.length > 10 ? `\n(+${diff.added.columns.length - 10} more)` : ""}
+${diff.added.columns.length > 10 ? `\n(+${diff.added.columns.length - 10} more)` : ''}
 
 ## Removed Columns (${diff.removed.columns.length})
 ${
   diff.removed.columns
     .slice(0, 10)
     .map((c) => `- ${c.table}.${c.column.name}`)
-    .join("\n") || "(none)"
+    .join('\n') || '(none)'
 }
-${diff.removed.columns.length > 10 ? `\n(+${diff.removed.columns.length - 10} more)` : ""}
+${diff.removed.columns.length > 10 ? `\n(+${diff.removed.columns.length - 10} more)` : ''}
 
 ## Modified Columns (${diff.modified.columns.length})
 ${
   diff.modified.columns
     .slice(0, 10)
-    .map((c) => `- ${c.table}.${c.column}\n  ${c.changes.join("\n  ")}`)
-    .join("\n") || "(none)"
+    .map((c) => `- ${c.table}.${c.column}\n  ${c.changes.join('\n  ')}`)
+    .join('\n') || '(none)'
 }
-${diff.modified.columns.length > 10 ? `\n(+${diff.modified.columns.length - 10} more)` : ""}
+${diff.modified.columns.length > 10 ? `\n(+${diff.modified.columns.length - 10} more)` : ''}
 
 ## Migration Suggestions
 ${diff.migrationSuggestions
   .slice(0, 5)
   .map((s, i) => `${i + 1}. ${s}`)
-  .join("\n")}
-${diff.migrationSuggestions.length > 5 ? `\n(+${diff.migrationSuggestions.length - 5} more)` : ""}`;
+  .join('\n')}
+${diff.migrationSuggestions.length > 5 ? `\n(+${diff.migrationSuggestions.length - 5} more)` : ''}`;
   }
 
   private formatFullOutput(result: SmartSchemaResult): string {
@@ -1109,7 +1112,7 @@ ${diff.migrationSuggestions.length > 5 ? `\n(+${diff.migrationSuggestions.length
   }
 
   private formatBytes(bytes: number): string {
-    const units = ["B", "KB", "MB", "GB", "TB"];
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     let size = bytes;
     let unitIndex = 0;
 
@@ -1145,7 +1148,7 @@ ${diff.migrationSuggestions.length > 5 ? `\n(+${diff.migrationSuggestions.length
 export function getSmartSchema(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartSchema {
   return new SmartSchema(cache, tokenCounter, metrics);
 }
@@ -1154,22 +1157,18 @@ export function getSmartSchema(
  * CLI Function - Create Resources and Use Factory
  */
 export async function runSmartSchema(
-  options: SmartSchemaOptions,
+  options: SmartSchemaOptions
 ): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
   const cacheInstance = new CacheEngineClass(
-    join(homedir(), ".hypercontext", "cache"),
-    100,
+    join(homedir(), '.hypercontext', 'cache'),
+    100
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const schema = getSmartSchema(
-    cacheInstance,
-    tokenCounter,
-    metrics,
-  );
+  const schema = getSmartSchema(cacheInstance, tokenCounter, metrics);
 
   const result = await schema.run(options);
 
@@ -1178,7 +1177,7 @@ export async function runSmartSchema(
 ---
 Tokens: ${result.tokens.actual} (saved ${result.tokens.saved}, ${result.tokens.reduction}% reduction)
 Analysis time: ${result.analysisTime}ms
-${result.cached ? `Cached (age: ${result.cached})` : "Fresh analysis"}`;
+${result.cached ? `Cached (age: ${result.cached})` : 'Fresh analysis'}`;
 }
 
 // ============================================================================
@@ -1186,51 +1185,51 @@ ${result.cached ? `Cached (age: ${result.cached})` : "Fresh analysis"}`;
 // ============================================================================
 
 export const SMART_SCHEMA_TOOL_DEFINITION = {
-  name: "smart_schema",
+  name: 'smart_schema',
   description:
-    "Database schema analyzer with intelligent caching and 83% token reduction. Supports PostgreSQL, MySQL, and SQLite. Provides schema introspection, relationship analysis, index recommendations, and schema diff.",
+    'Database schema analyzer with intelligent caching and 83% token reduction. Supports PostgreSQL, MySQL, and SQLite. Provides schema introspection, relationship analysis, index recommendations, and schema diff.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       connectionString: {
-        type: "string",
+        type: 'string',
         description:
-          "Database connection string (e.g., postgresql://user:pass@host:port/db, mysql://user:pass@host/db, /path/to/database.sqlite)",
+          'Database connection string (e.g., postgresql://user:pass@host:port/db, mysql://user:pass@host/db, /path/to/database.sqlite)',
       },
       mode: {
-        type: "string",
-        enum: ["full", "summary", "analysis", "diff"],
+        type: 'string',
+        enum: ['full', 'summary', 'analysis', 'diff'],
         description:
-          "Output mode: full (complete schema), summary (statistics only, 95% reduction), analysis (issues only, 85% reduction), diff (compare schemas, 90% reduction)",
-        default: "full",
+          'Output mode: full (complete schema), summary (statistics only, 95% reduction), analysis (issues only, 85% reduction), diff (compare schemas, 90% reduction)',
+        default: 'full',
       },
       compareWith: {
-        type: "string",
+        type: 'string',
         description:
-          "Second connection string for diff mode (compare two databases)",
+          'Second connection string for diff mode (compare two databases)',
       },
       forceRefresh: {
-        type: "boolean",
-        description: "Force refresh schema analysis, bypassing cache",
+        type: 'boolean',
+        description: 'Force refresh schema analysis, bypassing cache',
         default: false,
       },
       includeData: {
-        type: "boolean",
-        description: "Include row counts and table sizes in analysis",
+        type: 'boolean',
+        description: 'Include row counts and table sizes in analysis',
         default: false,
       },
       analyzeTables: {
-        type: "array",
-        items: { type: "string" },
-        description: "Specific tables to analyze (all if not specified)",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Specific tables to analyze (all if not specified)',
       },
       detectUnusedIndexes: {
-        type: "boolean",
+        type: 'boolean',
         description:
-          "Detect potentially unused indexes (requires database statistics)",
+          'Detect potentially unused indexes (requires database statistics)',
         default: false,
       },
     },
-    required: ["connectionString"],
+    required: ['connectionString'],
   },
 } as const;

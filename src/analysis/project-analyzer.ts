@@ -107,9 +107,15 @@ async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
     const timestamp = parts[0].trim();
     const toolName = parts[1].trim();
     const tokens = parseInt(parts[2].trim(), 10) || 0;
-    const metadata = parts.length > 3
-      ? parts.slice(3).join(',').trim().replace(/^"(.*)"$/, '$1').replace(/\r$/, '')
-      : '';
+    const metadata =
+      parts.length > 3
+        ? parts
+            .slice(3)
+            .join(',')
+            .trim()
+            .replace(/^"(.*)"$/, '$1')
+            .replace(/\r$/, '')
+        : '';
 
     operations.push({
       timestamp,
@@ -154,7 +160,10 @@ function calculateDuration(startTime: string, endTime: string): string {
 /**
  * Analyze a single session file using pre-parsed operations
  */
-function analyzeSession(filePath: string, operations: TurnData[]): SessionSummary {
+function analyzeSession(
+  filePath: string,
+  operations: TurnData[]
+): SessionSummary {
   const sessionId = extractSessionId(filePath);
 
   if (operations.length === 0) {
@@ -251,7 +260,10 @@ function analyzeServerAttribution(
   operationCount: number;
   percentOfTotal: number;
 }[] {
-  const serverMap = new Map<string, { totalTokens: number; operationCount: number }>();
+  const serverMap = new Map<
+    string,
+    { totalTokens: number; operationCount: number }
+  >();
 
   for (const operations of parsedSessions.values()) {
     for (const op of operations) {
@@ -275,7 +287,8 @@ function analyzeServerAttribution(
       serverName,
       totalTokens: stats.totalTokens,
       operationCount: stats.operationCount,
-      percentOfTotal: totalTokens === 0 ? 0 : (stats.totalTokens / totalTokens) * 100,
+      percentOfTotal:
+        totalTokens === 0 ? 0 : (stats.totalTokens / totalTokens) * 100,
     }))
     .sort((a, b) => b.totalTokens - a.totalTokens);
 }
@@ -297,7 +310,9 @@ function generateProjectRecommendations(
 
   // Check for high file operation usage
   const fileOpsTokens = topTools
-    .filter((t) => ['Read', 'Write', 'Edit', 'Grep', 'Glob'].includes(t.toolName))
+    .filter((t) =>
+      ['Read', 'Write', 'Edit', 'Grep', 'Glob'].includes(t.toolName)
+    )
     .reduce((sum, t) => sum + t.totalTokens, 0);
 
   if (fileOpsTokens > totalTokens * 0.4) {
@@ -314,7 +329,9 @@ function generateProjectRecommendations(
   }
 
   // Check for repeated tool usage across sessions
-  const repeatTools = topTools.filter((t) => t.sessionCount > sessions.length * 0.5);
+  const repeatTools = topTools.filter(
+    (t) => t.sessionCount > sessions.length * 0.5
+  );
   if (repeatTools.length > 0) {
     recommendations.push(
       `${repeatTools.length} tools used in >50% of sessions. Consider creating reusable templates or automation for: ${repeatTools
@@ -341,10 +358,20 @@ function generateProjectRecommendations(
 export async function analyzeProjectTokens(
   options: ProjectAnalysisOptions
 ): Promise<ProjectAnalysisResult> {
-  const { projectPath, startDate, endDate, costPerMillionTokens = DEFAULT_COST_PER_MILLION } = options;
+  const {
+    projectPath,
+    startDate,
+    endDate,
+    costPerMillionTokens = DEFAULT_COST_PER_MILLION,
+  } = options;
 
   // Discover all session files
-  const hooksDataPath = path.join(projectPath, '.claude-global', 'hooks', 'data');
+  const hooksDataPath = path.join(
+    projectPath,
+    '.claude-global',
+    'hooks',
+    'data'
+  );
   let sessionFiles = await discoverSessionFiles(hooksDataPath);
 
   if (sessionFiles.length === 0) {
@@ -389,7 +416,7 @@ export async function analyzeProjectTokens(
               const mtimeStr = [
                 mtime.getFullYear().toString().padStart(4, '0'),
                 (mtime.getMonth() + 1).toString().padStart(2, '0'),
-                mtime.getDate().toString().padStart(2, '0')
+                mtime.getDate().toString().padStart(2, '0'),
               ].join('');
               fileDate = mtimeStr;
             } catch (e) {
@@ -420,7 +447,10 @@ export async function analyzeProjectTokens(
           const operations = await parseOperationsFile(filePath);
           parsedSessions.set(sessionId, operations);
         } catch (error) {
-          console.warn(`Skipping corrupt/unreadable CSV file: ${filePath}`, error);
+          console.warn(
+            `Skipping corrupt/unreadable CSV file: ${filePath}`,
+            error
+          );
         }
       })
     );
@@ -436,10 +466,15 @@ export async function analyzeProjectTokens(
     .filter((s): s is SessionSummary => s !== null);
 
   // Calculate summary statistics
-  const totalOperations = sessions.reduce((sum, s) => sum + s.totalOperations, 0);
+  const totalOperations = sessions.reduce(
+    (sum, s) => sum + s.totalOperations,
+    0
+  );
   const totalTokens = sessions.reduce((sum, s) => sum + s.totalTokens, 0);
-  const averageTokensPerSession = sessions.length === 0 ? 0 : totalTokens / sessions.length;
-  const averageTokensPerOperation = totalOperations === 0 ? 0 : totalTokens / totalOperations;
+  const averageTokensPerSession =
+    sessions.length === 0 ? 0 : totalTokens / sessions.length;
+  const averageTokensPerOperation =
+    totalOperations === 0 ? 0 : totalTokens / totalOperations;
 
   // Get top contributing sessions
   const topContributingSessions = [...sessions]
@@ -454,10 +489,15 @@ export async function analyzeProjectTokens(
 
   // Calculate cost estimation
   const totalCost = (totalTokens / 1000000) * costPerMillionTokens;
-  const averageCostPerSession = sessions.length > 0 ? totalCost / sessions.length : 0;
+  const averageCostPerSession =
+    sessions.length > 0 ? totalCost / sessions.length : 0;
 
   // Generate recommendations
-  const recommendations = generateProjectRecommendations(sessions, topTools, totalTokens);
+  const recommendations = generateProjectRecommendations(
+    sessions,
+    topTools,
+    totalTokens
+  );
 
   // Determine date range
   const allStartDates = sessions
@@ -466,8 +506,10 @@ export async function analyzeProjectTokens(
   const allEndDates = sessions
     .filter((s) => s.endTime)
     .map((s) => new Date(s.endTime).getTime());
-  const startTimestamp = allStartDates.length > 0 ? Math.min(...allStartDates) : Date.now();
-  const endTimestamp = allEndDates.length > 0 ? Math.max(...allEndDates) : Date.now();
+  const startTimestamp =
+    allStartDates.length > 0 ? Math.min(...allStartDates) : Date.now();
+  const endTimestamp =
+    allEndDates.length > 0 ? Math.max(...allEndDates) : Date.now();
 
   return {
     projectPath,
@@ -480,8 +522,10 @@ export async function analyzeProjectTokens(
       totalSessions: sessions.length,
       totalOperations,
       totalTokens,
-      averageTokensPerSession: sessions.length === 0 ? 0 : Math.round(averageTokensPerSession),
-      averageTokensPerOperation: totalOperations === 0 ? 0 : Math.round(averageTokensPerOperation),
+      averageTokensPerSession:
+        sessions.length === 0 ? 0 : Math.round(averageTokensPerSession),
+      averageTokensPerOperation:
+        totalOperations === 0 ? 0 : Math.round(averageTokensPerOperation),
     },
     sessions,
     topContributingSessions,

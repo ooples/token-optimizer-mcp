@@ -3,7 +3,7 @@
  * Provides efficient diff generation with token optimization
  */
 
-import { diffLines, diffWords } from "diff";
+import { diffLines, diffWords } from 'diff';
 
 export interface DiffResult {
   added: string[];
@@ -26,7 +26,7 @@ export interface DiffOptions {
 export function generateDiff(
   oldContent: string,
   newContent: string,
-  options: DiffOptions = {},
+  options: DiffOptions = {}
 ): DiffResult {
   const {
     contextLines: _contextLines = 3,
@@ -55,8 +55,8 @@ export function generateDiff(
     }
   }
 
-  const totalLines = oldContent.split("\n").length;
-  const diffText = diffParts.join("\n");
+  const totalLines = oldContent.split('\n').length;
+  const diffText = diffParts.join('\n');
   const compressionRatio = diffText.length / newContent.length;
 
   return {
@@ -77,7 +77,7 @@ export function generateUnifiedDiff(
   newContent: string,
   oldPath: string,
   newPath: string,
-  _contextLines: number = 3,
+  _contextLines: number = 3
 ): string {
   const diffs = diffLines(oldContent, newContent);
 
@@ -90,8 +90,8 @@ export function generateUnifiedDiff(
   let hunkNewStart = 1;
 
   for (const part of diffs) {
-    const lines = part.value.split("\n");
-    if (lines[lines.length - 1] === "") lines.pop();
+    const lines = part.value.split('\n');
+    if (lines[lines.length - 1] === '') lines.pop();
 
     if (part.added) {
       for (const line of lines) {
@@ -118,7 +118,7 @@ export function generateUnifiedDiff(
     result.push(...hunkLines);
   }
 
-  return result.join("\n");
+  return result.join('\n');
 }
 
 /**
@@ -126,10 +126,10 @@ export function generateUnifiedDiff(
  */
 export function hasMeaningfulChanges(
   oldContent: string,
-  newContent: string,
+  newContent: string
 ): boolean {
-  const oldNormalized = oldContent.replace(/\s+/g, " ").trim();
-  const newNormalized = newContent.replace(/\s+/g, " ").trim();
+  const oldNormalized = oldContent.replace(/\s+/g, ' ').trim();
+  const newNormalized = newContent.replace(/\s+/g, ' ').trim();
   return oldNormalized !== newNormalized;
 }
 
@@ -137,15 +137,15 @@ export function hasMeaningfulChanges(
  * Apply a diff to reconstruct the new content
  */
 export function applyDiff(originalContent: string, diffText: string): string {
-  const lines = diffText.split("\n");
+  const lines = diffText.split('\n');
   const result: string[] = [];
-  const originalLines = originalContent.split("\n");
+  const originalLines = originalContent.split('\n');
   let originalIndex = 0;
 
   for (const line of lines) {
-    if (line.startsWith("+")) {
+    if (line.startsWith('+')) {
       result.push(line.substring(1).trim());
-    } else if (line.startsWith("-")) {
+    } else if (line.startsWith('-')) {
       originalIndex++;
     } else {
       if (originalIndex < originalLines.length) {
@@ -155,7 +155,7 @@ export function applyDiff(originalContent: string, diffText: string): string {
     }
   }
 
-  return result.join("\n");
+  return result.join('\n');
 }
 
 /**
@@ -196,7 +196,7 @@ function levenshteinDistance(str1: string, str2: string): number {
         matrix[i][j] = Math.min(
           matrix[i - 1][j - 1] + 1,
           matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1,
+          matrix[i - 1][j] + 1
         );
       }
     }

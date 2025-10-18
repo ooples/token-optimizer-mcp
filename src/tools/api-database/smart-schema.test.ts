@@ -19,7 +19,10 @@ describe('Smart Schema - Import Type Corrections', () => {
 
   beforeEach(() => {
     // Initialize dependencies - verifying that imports work as values
-    cacheEngine = new CacheEngine(join(tmpdir(), '.test-schema-cache', 'test.db'), 100);
+    cacheEngine = new CacheEngine(
+      join(tmpdir(), '.test-schema-cache', 'test.db'),
+      100
+    );
     tokenCounter = new TokenCounter();
     metricsCollector = new MetricsCollector();
     smartSchema = new SmartSchema(cacheEngine, tokenCounter, metricsCollector);
@@ -42,7 +45,11 @@ describe('Smart Schema - Import Type Corrections', () => {
 
   describe('Factory Function', () => {
     it('should create SmartSchema instance via factory function', () => {
-      const instance = getSmartSchema(cacheEngine, tokenCounter, metricsCollector);
+      const instance = getSmartSchema(
+        cacheEngine,
+        tokenCounter,
+        metricsCollector
+      );
       expect(instance).toBeInstanceOf(SmartSchema);
     });
   });
@@ -51,7 +58,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should introspect PostgreSQL schema', async () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://user:pass@localhost/testdb',
-        mode: 'summary'
+        mode: 'summary',
       });
 
       expect(result).toBeDefined();
@@ -63,7 +70,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should introspect MySQL schema', async () => {
       const result = await smartSchema.run({
         connectionString: 'mysql://user:pass@localhost/testdb',
-        mode: 'summary'
+        mode: 'summary',
       });
 
       expect(result).toBeDefined();
@@ -73,7 +80,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should introspect SQLite schema', async () => {
       const result = await smartSchema.run({
         connectionString: '/path/to/database.sqlite',
-        mode: 'summary'
+        mode: 'summary',
       });
 
       expect(result).toBeDefined();
@@ -85,7 +92,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should generate summary output with token reduction', async () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
-        mode: 'summary'
+        mode: 'summary',
       });
 
       expect(result.result).toContain('Schema Summary');
@@ -96,7 +103,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should generate analysis output', async () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
-        mode: 'analysis'
+        mode: 'analysis',
       });
 
       expect(result.result).toContain('Schema Analysis');
@@ -106,7 +113,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should generate full output', async () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
-        mode: 'full'
+        mode: 'full',
       });
 
       expect(result).toBeDefined();
@@ -119,13 +126,13 @@ describe('Smart Schema - Import Type Corrections', () => {
       const result1 = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
         mode: 'summary',
-        forceRefresh: false
+        forceRefresh: false,
       });
 
       const result2 = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
         mode: 'summary',
-        forceRefresh: false
+        forceRefresh: false,
       });
 
       expect(result1).toBeDefined();
@@ -136,7 +143,7 @@ describe('Smart Schema - Import Type Corrections', () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
         mode: 'summary',
-        forceRefresh: true
+        forceRefresh: true,
       });
 
       expect(result.cached).toBe(false);
@@ -148,7 +155,7 @@ describe('Smart Schema - Import Type Corrections', () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
         mode: 'analysis',
-        detectUnusedIndexes: true
+        detectUnusedIndexes: true,
       });
 
       expect(result).toBeDefined();
@@ -159,7 +166,7 @@ describe('Smart Schema - Import Type Corrections', () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
         mode: 'analysis',
-        analyzeTables: ['users', 'orders']
+        analyzeTables: ['users', 'orders'],
       });
 
       expect(result).toBeDefined();
@@ -169,7 +176,7 @@ describe('Smart Schema - Import Type Corrections', () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
         mode: 'summary',
-        includeData: true
+        includeData: true,
       });
 
       expect(result).toBeDefined();
@@ -180,7 +187,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should provide token reduction statistics', async () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
-        mode: 'summary'
+        mode: 'summary',
       });
 
       expect(result.tokens).toBeDefined();
@@ -193,7 +200,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should show high reduction in summary mode', async () => {
       const result = await smartSchema.run({
         connectionString: 'postgresql://localhost/testdb',
-        mode: 'summary'
+        mode: 'summary',
       });
 
       // Summary mode should achieve high token reduction
@@ -205,7 +212,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should throw error for invalid connection string', async () => {
       await expect(
         smartSchema.run({
-          connectionString: 'invalid://connection/string'
+          connectionString: 'invalid://connection/string',
         })
       ).rejects.toThrow();
     });
@@ -213,7 +220,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should handle missing connection string', async () => {
       await expect(
         smartSchema.run({
-          connectionString: '' as any
+          connectionString: '' as any,
         })
       ).rejects.toThrow();
     });
@@ -223,7 +230,7 @@ describe('Smart Schema - Import Type Corrections', () => {
     it('should run schema analysis via CLI function', async () => {
       const result = await runSmartSchema({
         connectionString: 'postgresql://localhost/testdb',
-        mode: 'summary'
+        mode: 'summary',
       });
 
       expect(result).toBeDefined();
@@ -253,12 +260,15 @@ describe('Import Type Verification - Smart Schema', () => {
       cacheHit: false,
       inputTokens: 20,
       outputTokens: 10,
-      savedTokens: 10
+      savedTokens: 10,
     });
   });
 
   it('should verify CacheEngine can be used as value in constructor', () => {
-    const cache = new CacheEngine(join(tmpdir(), '.test-schema-cache-verify', 'test.db'), 100);
+    const cache = new CacheEngine(
+      join(tmpdir(), '.test-schema-cache-verify', 'test.db'),
+      100
+    );
     expect(cache).toBeInstanceOf(CacheEngine);
 
     const tokenCounter = new TokenCounter();

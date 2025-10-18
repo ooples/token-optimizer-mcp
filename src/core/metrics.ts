@@ -15,7 +15,7 @@ export class MetricsCollector extends EventEmitter {
   record(metric: Omit<OperationMetrics, 'timestamp'>): void {
     const fullMetric: OperationMetrics = {
       ...metric,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     this.operations.push(fullMetric);
@@ -36,11 +36,11 @@ export class MetricsCollector extends EventEmitter {
     let filtered = this.operations;
 
     if (since) {
-      filtered = filtered.filter(op => op.timestamp >= since);
+      filtered = filtered.filter((op) => op.timestamp >= since);
     }
 
     if (operation) {
-      filtered = filtered.filter(op => op.operation === operation);
+      filtered = filtered.filter((op) => op.operation === operation);
     }
 
     return filtered;
@@ -66,13 +66,13 @@ export class MetricsCollector extends EventEmitter {
         cacheMisses: 0,
         cacheHitRate: 0,
         averageDuration: 0,
-        successRate: 0
+        successRate: 0,
       };
     }
 
-    const cacheHits = ops.filter(op => op.cacheHit).length;
+    const cacheHits = ops.filter((op) => op.cacheHit).length;
     const cacheMisses = ops.length - cacheHits;
-    const successCount = ops.filter(op => op.success).length;
+    const successCount = ops.filter((op) => op.success).length;
     const totalDuration = ops.reduce((sum, op) => sum + op.duration, 0);
 
     return {
@@ -81,26 +81,32 @@ export class MetricsCollector extends EventEmitter {
       cacheMisses,
       cacheHitRate: (cacheHits / ops.length) * 100,
       averageDuration: totalDuration / ops.length,
-      successRate: (successCount / ops.length) * 100
+      successRate: (successCount / ops.length) * 100,
     };
   }
 
   /**
    * Get operation breakdown by type
    */
-  getOperationBreakdown(since?: number): Record<string, {
-    count: number;
-    cacheHits: number;
-    averageDuration: number;
-    successRate: number;
-  }> {
-    const ops = this.getOperations(since);
-    const breakdown: Record<string, {
+  getOperationBreakdown(since?: number): Record<
+    string,
+    {
       count: number;
       cacheHits: number;
-      totalDuration: number;
-      successCount: number;
-    }> = {};
+      averageDuration: number;
+      successRate: number;
+    }
+  > {
+    const ops = this.getOperations(since);
+    const breakdown: Record<
+      string,
+      {
+        count: number;
+        cacheHits: number;
+        totalDuration: number;
+        successCount: number;
+      }
+    > = {};
 
     for (const op of ops) {
       if (!breakdown[op.operation]) {
@@ -108,7 +114,7 @@ export class MetricsCollector extends EventEmitter {
           count: 0,
           cacheHits: 0,
           totalDuration: 0,
-          successCount: 0
+          successCount: 0,
         };
       }
 
@@ -119,18 +125,21 @@ export class MetricsCollector extends EventEmitter {
     }
 
     // Convert to final format
-    const result: Record<string, {
-      count: number;
-      cacheHits: number;
-      averageDuration: number;
-      successRate: number;
-    }> = {};
+    const result: Record<
+      string,
+      {
+        count: number;
+        cacheHits: number;
+        averageDuration: number;
+        successRate: number;
+      }
+    > = {};
     for (const [operation, stats] of Object.entries(breakdown)) {
       result[operation] = {
         count: stats.count,
         cacheHits: stats.cacheHits,
         averageDuration: stats.totalDuration / stats.count,
-        successRate: (stats.successCount / stats.count) * 100
+        successRate: (stats.successCount / stats.count) * 100,
       };
     }
 
@@ -152,7 +161,7 @@ export class MetricsCollector extends EventEmitter {
       return { p50: 0, p90: 0, p95: 0, p99: 0 };
     }
 
-    const durations = ops.map(op => op.duration).sort((a, b) => a - b);
+    const durations = ops.map((op) => op.duration).sort((a, b) => a - b);
 
     const percentile = (p: number): number => {
       const index = Math.ceil((p / 100) * durations.length) - 1;
@@ -163,7 +172,7 @@ export class MetricsCollector extends EventEmitter {
       p50: percentile(50),
       p90: percentile(90),
       p95: percentile(95),
-      p99: percentile(99)
+      p99: percentile(99),
     };
   }
 
