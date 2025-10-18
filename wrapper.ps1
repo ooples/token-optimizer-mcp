@@ -1,4 +1,5 @@
 # Enhanced Token Tracking Wrapper for Claude Code
+# Version: 2.0.0
 # Purpose: Real-time session logging with turn-level tracking and MCP server attribution
 # Implements Priority 1: Session-level token tracking with JSONL event log
 #
@@ -58,6 +59,8 @@ $global:AutoCacheConfig = @{
     MCPTimeoutMs = 5000  # MCP server response timeout in milliseconds
     MCPShutdownTimeoutMs = 5000  # MCP server shutdown timeout in milliseconds
     JsonConversionDepth = 10  # Depth for JSON conversion in cache key generation
+    HashTruncationLength = 32  # SHA256 hash truncation length (hex characters)
+    UnknownToolName = "UnknownTool"  # Default tool name when context unavailable
 }
 
 # MCP Server Process (initialized on first tool call)
@@ -179,7 +182,7 @@ function Generate-CacheKey {
         # Truncate hash to first 32 hex characters (128 bits) for cache key efficiency
         # Trade-off: Due to birthday paradox, collision probability is ~1 in 2^64 for practical cache sizes
         # This is acceptable for session-level caching; increase truncation length if needed
-        $hash = ([BitConverter]::ToString($hashBytes).Replace("-", "")).Substring(0,32)
+        $hash = ([BitConverter]::ToString($hashBytes).Replace("-", "")).Substring(0, $global:AutoCacheConfig.HashTruncationLength)
         return "$($global:AutoCacheConfig.CacheKeyPrefix)$ToolName-$hash"
     }
     finally {
@@ -660,7 +663,7 @@ function Invoke-ClaudeCodeWrapper {
                     # Detect tool call from context
                     # In production, tool name is parsed from claude-code output
                     # For now, use a generic tool name when context is unavailable
-                    $toolName = "UnknownTool"
+                    $toolName = $global:AutoCacheConfig.UnknownToolName
 
                     if (-not $inTurn) {
                         Start-Turn -UserMessagePreview $lastUserMessage
