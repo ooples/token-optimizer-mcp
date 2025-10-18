@@ -584,7 +584,7 @@ ${escapeJsonForScript(JSON.stringify({ sessionId, sessionStartTime, analysis }))
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'session-report-' + sessionId + '.md';
+            a.download = 'session-report-' + sessionId.replace(/[^\w.-]/g, '_') + '.md';
             a.click();
         }
 
@@ -594,7 +594,7 @@ ${escapeJsonForScript(JSON.stringify({ sessionId, sessionStartTime, analysis }))
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'session-report-' + sessionId + '.json';
+            a.download = 'session-report-' + sessionId.replace(/[^\w.-]/g, '_') + '.json';
             a.click();
         }
 

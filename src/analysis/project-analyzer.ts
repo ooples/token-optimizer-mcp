@@ -381,15 +381,20 @@ export async function analyzeProjectTokens(
 
   // Parse all files with concurrency limit to avoid resource exhaustion
   // Process in batches of 10 to limit concurrent file operations
+  // Wrap per-file parsing in try-catch to skip corrupt/unreadable files
   const parsedSessions = new Map<string, TurnData[]>();
   const batchSize = 10;
   for (let i = 0; i < sessionFiles.length; i += batchSize) {
     const batch = sessionFiles.slice(i, i + batchSize);
     await Promise.all(
       batch.map(async (filePath) => {
-        const sessionId = extractSessionId(filePath);
-        const operations = await parseOperationsFile(filePath);
-        parsedSessions.set(sessionId, operations);
+        try {
+          const sessionId = extractSessionId(filePath);
+          const operations = await parseOperationsFile(filePath);
+          parsedSessions.set(sessionId, operations);
+        } catch (error) {
+          console.warn(`Skipping corrupt/unreadable CSV file: ${filePath}`, error);
+        }
       })
     );
   }
@@ -420,7 +425,7 @@ export async function analyzeProjectTokens(
 
   // Calculate cost estimation
   const totalCost = (totalTokens / 1000000) * costPerMillionTokens;
-  const averageCostPerSession = totalCost / sessions.length;
+  const averageCostPerSession = sessions.length > 0 ? totalCost / sessions.length : 0;
 
   // Generate recommendations
   const recommendations = generateProjectRecommendations(sessions, topTools, totalTokens);
