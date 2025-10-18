@@ -601,6 +601,11 @@ export class SmartSql {
     return this.formatAnalysisOutput(result);
   }
 
+  /**
+   * Formats output with token reduction percentages shown in headers.
+   * Percentages (e.g., 95%, 86%, 80%) represent token reduction compared
+   * to a verbose baseline format, optimizing for Claude's context window.
+   */
   private formatCachedOutput(result: SmartSqlOutput): string {
     return `# Cached (95%)\n\nQuery: ${result.analysis?.queryType || "N/A"}\nCost: ${result.analysis?.estimatedCost || "N/A"}\n\n*Use force=true for fresh data*`;
   }
@@ -627,17 +632,17 @@ export class SmartSql {
     const { validation } = result;
     if (!validation) return "# Validation\n\nN/A";
 
-    const errors = validation.errors.map(e => `  - ${e}`).join("\n");
-    const warnings = validation.warnings.map(w => `  - ${w}`).join("\n");
+    const errors = validation.errors.length ? validation.errors.map(e => `  - ${e}`).join("\n") : "  (none)";
+    const warnings = validation.warnings.length ? validation.warnings.map(w => `  - ${w}`).join("\n") : "  (none)";
 
-    return `# Validation (80%)\n\nValid: ${validation.isValid ? "✓" : "✗"}\nErrors:\n${errors || "  (none)"}\nWarnings:\n${warnings || "  (none)"}`;
+    return `# Validation (80%)\n\nValid: ${validation.isValid ? "✓" : "✗"}\nErrors:\n${errors}\nWarnings:\n${warnings}`;
   }
 
   private formatHistoryOutput(result: SmartSqlOutput): string {
     const { history } = result;
     if (!history) return "# History\n\nN/A";
 
-    const recent = history.slice(0, 5).map(h => `  - ${h.query.slice(0, 50)}... (${h.executionTime}ms)`).join("\n");
+    const recent = history.slice(0, 5).map(h => `  - ${h.query.length > 50 ? h.query.slice(0, 50) + '...' : h.query} (${h.executionTime}ms)`).join("\n");
 
     return `# History (80%)\n\nTotal Entries: ${history.length}\nRecent Queries:\n${recent}`;
   }
@@ -646,7 +651,7 @@ export class SmartSql {
     const { analysis } = result;
     if (!analysis) return "# Analysis\n\nN/A";
 
-    return `# Analysis (86%)\n\nQuery Type: ${analysis.queryType}\nComplexity: ${analysis.complexity}\nTables: ${analysis.tables.join(", ")}\nEstimated Cost: ${analysis.estimatedCost}`;
+    return `# Analysis (86%)\n\nQuery Type: ${analysis.queryType}\nComplexity: ${analysis.complexity}\nTables: ${analysis.tables.length ? analysis.tables.join(", ") : "N/A"}\nEstimated Cost: ${analysis.estimatedCost}`;
   }
 
   private generateCacheKey(options: SmartSqlOptions): string {
