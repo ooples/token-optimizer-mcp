@@ -352,7 +352,12 @@ export class AnomalyExplainer {
     const historicalData = options.historicalData || [];
 
     // Calculate anomaly score (normalized deviation)
-    const anomalyScore = Math.abs(anomaly.deviation / (anomaly.expectedValue || 1));
+    // Use nullish coalescing to only substitute when expectedValue is null/undefined.
+    // If expectedValue is 0, set anomalyScore to Infinity (or domain-specific value).
+    const denominator = anomaly.expectedValue ?? 1;
+    const anomalyScore = denominator === 0
+      ? Infinity
+      : Math.abs(anomaly.deviation / denominator);
 
     // Identify root causes
     const rootCauses = await this.identifyRootCauses(anomaly, historicalData, options.events);
@@ -362,9 +367,6 @@ export class AnomalyExplainer {
 
     // Calculate overall confidence
     const confidence = this.calculateExplanationConfidence(rootCauses, contributingFactors);
-
-    // Calculate anomaly score
-    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
 
     // Generate summary
     const summary = this.generateExplanationSummary(anomaly, rootCauses, anomalyScore);
@@ -391,7 +393,7 @@ export class AnomalyExplainer {
     const historicalData = options.historicalData || [];
 
     // Calculate anomaly score (normalized deviation)
-    const anomalyScore = Math.abs(anomaly.deviation / (anomaly.expectedValue || 1));
+    const anomalyScore = Math.abs(anomaly.deviation / (anomaly.expectedValue ?? 1));
 
     // Deep root cause analysis using multiple techniques
     const statisticalCauses = this.findStatisticalCauses(anomaly, historicalData);
@@ -412,10 +414,6 @@ export class AnomalyExplainer {
 
     const contributingFactors = this.identifyContributingFactors(anomaly, historicalData);
     const confidence = this.calculateExplanationConfidence(enrichedCauses, contributingFactors);
-    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
-
-    // Calculate anomaly score
-    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
 
     return {
       summary: this.generateRootCauseSummary(enrichedCauses),
@@ -972,11 +970,11 @@ export class AnomalyExplainer {
     const magnitude = Math.abs(anomaly.deviation).toFixed(1);
 
     if (rootCauses.length === 0) {
-      return `${anomaly.metric} showed a ${direction} of ${magnitude}σ from baseline (score: ${anomalyScore.toFixed(2)}) at ${new Date(anomaly.timestamp).toISOString()}. Further investigation needed to determine root cause.`;
+      return `${anomaly.metric} showed a ${direction} of ${magnitude}σ from baseline (score: ${_anomalyScore.toFixed(2)}) at ${new Date(anomaly.timestamp).toISOString()}. Further investigation needed to determine root cause.`;
     }
 
     const topCause = rootCauses[0];
-    return `${anomaly.metric} experienced a ${anomaly.severity} severity anomaly (${magnitude}σ deviation, score: ${anomalyScore.toFixed(2)}) at ${new Date(anomaly.timestamp).toISOString()}. Most likely cause (${(topCause.probability * 100).toFixed(0)}% probability): ${topCause.description}`;
+    return `${anomaly.metric} experienced a ${anomaly.severity} severity anomaly (${magnitude}σ deviation, score: ${_anomalyScore.toFixed(2)}) at ${new Date(anomaly.timestamp).toISOString()}. Most likely cause (${(topCause.probability * 100).toFixed(0)}% probability): ${topCause.description}`;
   }
 
   private findStatisticalCauses(
