@@ -47,25 +47,68 @@ export class CacheEngine {
 
     const fullDbPath = dbPath || path.join(cacheDir, 'cache.db');
 
-    // Initialize SQLite database
-    this.db = new Database(fullDbPath);
-    this.db.pragma('journal_mode = WAL'); // Write-Ahead Logging for better concurrency
+    // Initialize SQLite database with corruption handling
+    try {
+      this.db = new Database(fullDbPath);
+      this.db.pragma('journal_mode = WAL'); // Write-Ahead Logging for better concurrency
 
-    // Create cache table if it doesn't exist
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS cache (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        compressed_size INTEGER NOT NULL,
-        original_size INTEGER NOT NULL,
-        hit_count INTEGER DEFAULT 0,
-        created_at INTEGER NOT NULL,
-        last_accessed_at INTEGER NOT NULL
-      );
+      // Create cache table if it doesn't exist
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS cache (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          compressed_size INTEGER NOT NULL,
+          original_size INTEGER NOT NULL,
+          hit_count INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          last_accessed_at INTEGER NOT NULL
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
-      CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
-    `);
+        CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
+        CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
+      `);
+    } catch (error) {
+      // If database is corrupted, close it (if it was opened), delete it and create a new one
+      try {
+        // Try to close the database if it was partially opened
+        if ((this as any).db) {
+          (this as any).db.close();
+        }
+      } catch (closeError) {
+        // Ignore close errors
+      }
+
+      if (fs.existsSync(fullDbPath)) {
+        try {
+          fs.unlinkSync(fullDbPath);
+          // Also remove WAL files
+          const walPath = `${fullDbPath}-wal`;
+          const shmPath = `${fullDbPath}-shm`;
+          if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+          if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+        } catch (unlinkError) {
+          // Ignore errors during cleanup
+        }
+      }
+
+      // Create a fresh database
+      this.db = new Database(fullDbPath);
+      this.db.pragma('journal_mode = WAL');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS cache (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          compressed_size INTEGER NOT NULL,
+          original_size INTEGER NOT NULL,
+          hit_count INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          last_accessed_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
+        CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
+      `);
+    }
 
     // Initialize in-memory LRU cache for frequently accessed items
     this.memoryCache = new LRUCache<string, string>({
@@ -186,24 +229,40 @@ export class CacheEngine {
    * Evict least recently used entries to stay under size limit
    */
   evictLRU(maxSizeBytes: number): number {
-    const stmt = this.db.prepare(`
-      DELETE FROM cache
-      WHERE key IN (
-        SELECT key FROM cache
-        ORDER BY last_accessed_at ASC
-        LIMIT (
-          SELECT COUNT(*) FROM cache
-        ) - (
-          SELECT COUNT(*) FROM (
-            SELECT key, SUM(compressed_size) OVER (ORDER BY last_accessed_at DESC) as running_total
-            FROM cache
-            WHERE running_total <= ?
-          )
-        )
+    // Get keys to keep (most recently used) using a running total
+    const keysToKeep = this.db.prepare(`
+      SELECT key FROM (
+        SELECT
+          key,
+          SUM(compressed_size) OVER (ORDER BY last_accessed_at DESC) as running_total
+        FROM cache
       )
+      WHERE running_total <= ?
+    `).all(maxSizeBytes) as { key: string }[];
+
+    if (keysToKeep.length === 0) {
+      // If no keys fit in the limit, keep none and delete all
+      const result = this.db.prepare('DELETE FROM cache').run();
+      // Clear memory cache too
+      this.memoryCache.clear();
+      return result.changes;
+    }
+
+    // Delete entries not in the keep list
+    const placeholders = keysToKeep.map(() => '?').join(',');
+    const stmt = this.db.prepare(`
+      DELETE FROM cache WHERE key NOT IN (${placeholders})
     `);
 
-    const result = stmt.run(maxSizeBytes);
+    const result = stmt.run(...keysToKeep.map(k => k.key));
+
+    // Remove deleted entries from memory cache
+    for (const key of Array.from(this.memoryCache.keys())) {
+      if (!keysToKeep.some(k => k.key === key)) {
+        this.memoryCache.delete(key);
+      }
+    }
+
     return result.changes;
   }
 
