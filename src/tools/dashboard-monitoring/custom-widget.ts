@@ -225,7 +225,7 @@ export class CustomWidget {
       ) {
         const cached = this.cache.get(cacheKey);
         if (cached) {
-          const decompressed = decompress(cached, 'gzip');
+          const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
           const cachedResult = JSON.parse(
             decompressed.toString()
           ) as CustomWidgetResult;
@@ -297,8 +297,13 @@ export class CustomWidget {
         this.isReadOnlyOperation(options.operation)
       ) {
         const compressed = compress(JSON.stringify(result), 'gzip');
-        const ttl = this.getCacheTTL(options);
-        this.cache.set(cacheKey, compressed.toString(), tokensUsed, ttl);
+        // Store as base64 to preserve binary data integrity
+        this.cache.set(
+          cacheKey,
+          compressed.compressed.toString('base64'),
+          compressed.originalSize,
+          compressed.compressedSize
+        );
       }
 
       // Record metrics
