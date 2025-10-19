@@ -25,11 +25,25 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// Configuration constants
+const COMPRESSION_CONFIG = {
+  MIN_SIZE_THRESHOLD: 500, // bytes - minimum size before attempting compression
+} as const;
+
 // Initialize core modules
 const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
 const metrics = new MetricsCollector();
+
+/**
+ * Helper function to cache uncompressed text
+ * Used when compression is skipped (file too small or compression doesn't help)
+ */
+function cacheUncompressed(key: string, text: string, size: number): void {
+  // Store uncompressed text with size=0 for compressedSize to indicate no compression
+  cache.set(key, text, size, 0);
+}
 
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
@@ -275,10 +289,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const originalSize = Buffer.byteLength(text, 'utf8');
 
         // Minimum size threshold: don't compress small files
-        const MIN_SIZE_THRESHOLD = 500; // bytes
-        if (originalSize < MIN_SIZE_THRESHOLD) {
+        if (originalSize < COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD) {
           // Cache uncompressed for small files
-          cache.set(key, text, originalSize, originalSize);
+          cacheUncompressed(key, text, originalSize);
 
           return {
             content: [
@@ -296,7 +309,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     compressedSize: originalSize,
                     cached: true,
                     compressionSkipped: true,
-                    reason: `File too small (${originalSize} bytes < ${MIN_SIZE_THRESHOLD} bytes threshold)`,
+                    reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
                   },
                   null,
                   2
@@ -319,7 +332,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Check if compression actually reduces tokens
         if (compressedCount.tokens >= originalCount.tokens) {
           // Compression doesn't help with tokens, cache uncompressed
-          cache.set(key, text, originalSize, originalSize);
+          cacheUncompressed(key, text, originalSize);
 
           return {
             content: [
