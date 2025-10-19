@@ -126,6 +126,11 @@ export interface SmartSqlOutput {
 }
 
 export class SmartSql {
+  // Output formatting constants
+  private static readonly MAX_TOP_ITEMS = 3;
+  private static readonly MAX_RECENT_QUERIES = 5;
+  private static readonly MAX_QUERY_DISPLAY_LENGTH = 50;
+
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
@@ -624,7 +629,7 @@ export class SmartSql {
     const { executionPlan } = result;
     if (!executionPlan) return "# Execution Plan\n\nN/A";
 
-    const topSteps = executionPlan.steps.slice(0, 3).map(s => `  - ${s.operation} on ${s.table} (Cost: ${s.cost})`).join("\n");
+    const topSteps = executionPlan.steps.slice(0, SmartSql.MAX_TOP_ITEMS).map(s => `  - ${s.operation} on ${s.table} (Cost: ${s.cost})`).join("\n");
 
     return `# Execution Plan (80%)\n\nTotal Cost: ${executionPlan.totalCost}\nTop Steps:\n${topSteps}`;
   }
@@ -633,7 +638,7 @@ export class SmartSql {
     const { optimization } = result;
     if (!optimization) return "# Optimization\n\nN/A";
 
-    const topSuggestions = optimization.suggestions.slice(0, 3).map(s => `  - [${s.severity}] ${s.message}`).join("\n");
+    const topSuggestions = optimization.suggestions.slice(0, SmartSql.MAX_TOP_ITEMS).map(s => `  - [${s.severity}] ${s.message}`).join("\n");
 
     return `# Optimization (86%)\n\nPotential Speedup: ${optimization.potentialSpeedup}\nTop Suggestions:\n${topSuggestions}`;
   }
@@ -652,7 +657,7 @@ export class SmartSql {
     const { history } = result;
     if (!history) return "# History\n\nN/A";
 
-    const recent = history.slice(0, 5).map(h => `  - ${h.query.length > 50 ? h.query.slice(0, 50) + '...' : h.query} (${h.executionTime}ms)`).join("\n");
+    const recent = history.slice(0, SmartSql.MAX_RECENT_QUERIES).map(h => `  - ${h.query.length > SmartSql.MAX_QUERY_DISPLAY_LENGTH ? h.query.slice(0, SmartSql.MAX_QUERY_DISPLAY_LENGTH) + '...' : h.query} (${h.executionTime}ms)`).join("\n");
 
     return `# History (80%)\n\nTotal Entries: ${history.length}\nRecent Queries:\n${recent}`;
   }
