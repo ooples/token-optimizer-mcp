@@ -1444,6 +1444,55 @@ export class AnomalyExplainer {
 }
 
 // ============================================================================
+// Statistical Helper Functions
+// ============================================================================
+
+/**
+ * Calculate the arithmetic mean (average) of an array of numbers
+ */
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sum = values.reduce((acc, val) => acc + val, 0);
+  return sum / values.length;
+}
+
+/**
+ * Calculate the standard deviation of an array of numbers
+ */
+function stdev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const avg = mean(values);
+  const squaredDiffs = values.map(val => Math.pow(val - avg, 2));
+  const variance = mean(squaredDiffs);
+  return Math.sqrt(variance);
+}
+
+/**
+ * Calculate a percentile value from an array of numbers
+ * @param values - Array of numbers
+ * @param p - Percentile (0 to 1, e.g., 0.25 for 25th percentile)
+ */
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+
+  // Sort values in ascending order
+  const sorted = [...values].sort((a, b) => a - b);
+
+  // Calculate position
+  const index = p * (sorted.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+
+  // Interpolate if needed
+  if (lower === upper) {
+    return sorted[lower];
+  }
+
+  const weight = index - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+// ============================================================================
 // MCP Tool Definition
 // ============================================================================
 
