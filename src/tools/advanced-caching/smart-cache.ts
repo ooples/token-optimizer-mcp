@@ -378,7 +378,7 @@ export class SmartCacheTool extends EventEmitter {
         entry.frequency++;
         this.updateTTL(entry);
 
-        const metadata = this.getEntryMetadata(entry);
+        const metadata = this.getEntryMetadata(key, entry);
         return { value: entry.value, metadata };
       }
 
@@ -395,7 +395,7 @@ export class SmartCacheTool extends EventEmitter {
           await this.promoteEntry(key, entry, 'L2', 'L1');
         }
 
-        const metadata = this.getEntryMetadata(entry);
+        const metadata = this.getEntryMetadata(key, entry);
         return { value: entry.value, metadata };
       }
 
@@ -412,7 +412,7 @@ export class SmartCacheTool extends EventEmitter {
           await this.promoteEntry(key, entry, 'L3', 'L2');
         }
 
-        const metadata = this.getEntryMetadata(entry);
+        const metadata = this.getEntryMetadata(key, entry);
         return { value: entry.value, metadata };
       }
 
@@ -469,7 +469,7 @@ export class SmartCacheTool extends EventEmitter {
       this.scheduleWriteBack();
     }
 
-    const metadata = this.getEntryMetadata(entry);
+    const metadata = this.getEntryMetadata(key, entry);
     this.emit('entry-set', { key, tier, metadata });
 
     return { metadata };
@@ -670,12 +670,12 @@ export class SmartCacheTool extends EventEmitter {
 
     const target = targetTier || this.getPromotionTarget(sourceTier);
     if (target === sourceTier) {
-      return { metadata: this.getEntryMetadata(entry) };
+      return { metadata: this.getEntryMetadata(key, entry) };
     }
 
     await this.promoteEntry(key, entry, sourceTier, target);
 
-    return { metadata: this.getEntryMetadata(entry) };
+    return { metadata: this.getEntryMetadata(key, entry) };
   }
 
   /**
@@ -708,12 +708,12 @@ export class SmartCacheTool extends EventEmitter {
 
     const target = targetTier || this.getDemotionTarget(sourceTier);
     if (target === sourceTier) {
-      return { metadata: this.getEntryMetadata(entry) };
+      return { metadata: this.getEntryMetadata(key, entry) };
     }
 
     await this.demoteEntry(key, entry, sourceTier, target);
 
-    return { metadata: this.getEntryMetadata(entry) };
+    return { metadata: this.getEntryMetadata(key, entry) };
   }
 
   /**
@@ -958,9 +958,9 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Get entry metadata
    */
-  private getEntryMetadata(entry: CacheEntry): CacheEntryMetadata {
+  private getEntryMetadata(key: string, entry: CacheEntry): CacheEntryMetadata {
     return {
-      key: '',
+      key: key,
       tier: entry.tier,
       size: entry.size,
       hits: entry.hits,
