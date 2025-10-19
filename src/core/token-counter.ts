@@ -57,7 +57,10 @@ export class TokenCounter {
   /**
    * Calculate token savings from compression
    */
-  calculateSavings(originalText: string, compressedText: string): {
+  calculateSavings(
+    originalText: string,
+    compressedText: string
+  ): {
     originalTokens: number;
     compressedTokens: number;
     tokensSaved: number;
@@ -66,7 +69,8 @@ export class TokenCounter {
     const original = this.count(originalText);
     const compressed = this.count(compressedText);
     const saved = original.tokens - compressed.tokens;
-    const percentSaved = original.tokens > 0 ? (saved / original.tokens) * 100 : 0;
+    const percentSaved =
+      original.tokens > 0 ? (saved / original.tokens) * 100 : 0;
 
     return {
       originalTokens: original.tokens,
@@ -98,7 +102,9 @@ export class TokenCounter {
     const decoded = this.encoder.decode(truncatedTokens);
 
     // Handle potential type issues with decode return value
-    return typeof decoded === 'string' ? decoded : new TextDecoder().decode(decoded);
+    return typeof decoded === 'string'
+      ? decoded
+      : new TextDecoder().decode(decoded);
   }
 
   /**

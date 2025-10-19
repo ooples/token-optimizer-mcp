@@ -10,10 +10,10 @@
  * - Memory usage tracking
  */
 
-import { createHash } from "crypto";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
+import { createHash } from 'crypto';
+import { CacheEngine } from '../../core/cache-engine';
+import type { TokenCounter } from '../../core/token-counter';
+import type { MetricsCollector } from '../../core/metrics';
 
 // ===== Type Definitions =====
 
@@ -39,21 +39,21 @@ export interface CachedResponse {
 }
 
 export type CachingStrategy =
-  | "ttl"
-  | "etag"
-  | "event"
-  | "lru"
-  | "size-based"
-  | "hybrid";
+  | 'ttl'
+  | 'etag'
+  | 'event'
+  | 'lru'
+  | 'size-based'
+  | 'hybrid';
 export type InvalidationPattern =
-  | "time"
-  | "pattern"
-  | "tag"
-  | "manual"
-  | "event";
+  | 'time'
+  | 'pattern'
+  | 'tag'
+  | 'manual'
+  | 'event';
 
 export interface SmartCacheAPIOptions {
-  action: "get" | "set" | "invalidate" | "analyze" | "warm";
+  action: 'get' | 'set' | 'invalidate' | 'analyze' | 'warm';
 
   // Request data
   request?: APIRequest;
@@ -173,7 +173,7 @@ export class SmartCacheAPI {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -192,19 +192,19 @@ export class SmartCacheAPI {
       let result: SmartCacheAPIResult;
 
       switch (options.action) {
-        case "get":
+        case 'get':
           result = await this.getCachedResponse(options);
           break;
-        case "set":
+        case 'set':
           result = await this.setCachedResponse(options);
           break;
-        case "invalidate":
+        case 'invalidate':
           result = await this.invalidateCache(options);
           break;
-        case "analyze":
+        case 'analyze':
           result = await this.analyzeCache(options);
           break;
-        case "warm":
+        case 'warm':
           result = await this.warmCache(options);
           break;
         default:
@@ -225,7 +225,7 @@ export class SmartCacheAPI {
       return {
         success: false,
         action: options.action,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -234,16 +234,16 @@ export class SmartCacheAPI {
    * Get cached API response
    */
   private async getCachedResponse(
-    options: SmartCacheAPIOptions,
+    options: SmartCacheAPIOptions
   ): Promise<SmartCacheAPIResult> {
     if (!options.request) {
-      throw new Error("Request is required for get action");
+      throw new Error('Request is required for get action');
     }
 
     const cacheKey = this.generateCacheKey(options.request, options);
     const cachedString = this.cache.get(cacheKey);
     const cached = cachedString
-      ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
+      ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
       : null;
 
     // Update stats
@@ -274,7 +274,7 @@ export class SmartCacheAPI {
 
       return {
         success: true,
-        action: "get",
+        action: 'get',
         cached: false,
         metadata: {
           cacheKey,
@@ -292,7 +292,7 @@ export class SmartCacheAPI {
 
     return {
       success: true,
-      action: "get",
+      action: 'get',
       cached: false,
       metadata: {
         cacheKey,
@@ -308,16 +308,16 @@ export class SmartCacheAPI {
    * Set/cache API response
    */
   private async setCachedResponse(
-    options: SmartCacheAPIOptions,
+    options: SmartCacheAPIOptions
   ): Promise<SmartCacheAPIResult> {
     if (!options.request || !options.response) {
-      throw new Error("Request and response are required for set action");
+      throw new Error('Request and response are required for set action');
     }
 
     const cacheKey = this.generateCacheKey(options.request, options);
     const ttl = options.ttl || 3600; // 1 hour default
     const responseStr = JSON.stringify(options.response);
-    const size = Buffer.byteLength(responseStr, "utf-8");
+    const size = Buffer.byteLength(responseStr, 'utf-8');
 
     const cachedResponse: CachedResponse = {
       data: options.response,
@@ -334,9 +334,9 @@ export class SmartCacheAPI {
     const buffer = this.serializeCachedResponse(cachedResponse);
     this.cache.set(
       cacheKey,
-      buffer.toString("utf-8"),
+      buffer.toString('utf-8'),
       0, // originalSize
-      0, // compressedSize - tokens saved will be calculated on get
+      0 // compressedSize - tokens saved will be calculated on get
     );
 
     // Count tokens
@@ -344,7 +344,7 @@ export class SmartCacheAPI {
 
     return {
       success: true,
-      action: "set",
+      action: 'set',
       cached: true,
       metadata: {
         cacheKey,
@@ -361,17 +361,17 @@ export class SmartCacheAPI {
    * Invalidate cached entries
    */
   private async invalidateCache(
-    options: SmartCacheAPIOptions,
+    options: SmartCacheAPIOptions
   ): Promise<SmartCacheAPIResult> {
     const invalidated: string[] = [];
     let totalSize = 0;
 
-    const pattern = options.invalidationPattern || "manual";
+    const pattern = options.invalidationPattern || 'manual';
 
     switch (pattern) {
-      case "pattern":
+      case 'pattern':
         if (!options.pattern) {
-          throw new Error("Pattern is required for pattern-based invalidation");
+          throw new Error('Pattern is required for pattern-based invalidation');
         }
         // Pattern-based invalidation (e.g., '/api/users/*')
         const regex = this.patternToRegex(options.pattern);
@@ -381,7 +381,9 @@ export class SmartCacheAPI {
           if (regex.test(key)) {
             const cachedString = this.cache.get(key);
             const cached = cachedString
-              ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
+              ? this.deserializeCachedResponse(
+                  Buffer.from(cachedString, 'utf-8')
+                )
               : null;
             if (cached) {
               totalSize += cached.size;
@@ -394,9 +396,9 @@ export class SmartCacheAPI {
         }
         break;
 
-      case "tag":
+      case 'tag':
         if (!options.tags || options.tags.length === 0) {
-          throw new Error("Tags are required for tag-based invalidation");
+          throw new Error('Tags are required for tag-based invalidation');
         }
         // Tag-based invalidation
         const allKeysForTags = this.getAllCacheKeys();
@@ -404,11 +406,11 @@ export class SmartCacheAPI {
         for (const key of allKeysForTags) {
           const cachedString = this.cache.get(key);
           const cached = cachedString
-            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
             : null;
           if (cached && cached.tags) {
             const hasMatchingTag = cached.tags.some((tag: string) =>
-              options.tags!.includes(tag),
+              options.tags!.includes(tag)
             );
             if (hasMatchingTag) {
               totalSize += cached.size;
@@ -419,12 +421,12 @@ export class SmartCacheAPI {
         }
         break;
 
-      case "manual":
+      case 'manual':
         if (options.request) {
           const cacheKey = this.generateCacheKey(options.request, options);
           const cachedString = this.cache.get(cacheKey);
           const cached = cachedString
-            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
             : null;
           if (cached) {
             totalSize += cached.size;
@@ -434,7 +436,7 @@ export class SmartCacheAPI {
         }
         break;
 
-      case "time":
+      case 'time':
         // Time-based invalidation (expired entries)
         const allKeysForTime = this.getAllCacheKeys();
         const now = Date.now();
@@ -442,7 +444,7 @@ export class SmartCacheAPI {
         for (const key of allKeysForTime) {
           const cachedString = this.cache.get(key);
           const cached = cachedString
-            ? this.deserializeCachedResponse(Buffer.from(cachedString, "utf-8"))
+            ? this.deserializeCachedResponse(Buffer.from(cachedString, 'utf-8'))
             : null;
           if (cached) {
             const age = Math.floor((now - cached.timestamp) / 1000);
@@ -458,7 +460,7 @@ export class SmartCacheAPI {
 
     return {
       success: true,
-      action: "invalidate",
+      action: 'invalidate',
       invalidated: {
         count: invalidated.length,
         keys: invalidated,
@@ -477,7 +479,7 @@ export class SmartCacheAPI {
    * Analyze cache performance
    */
   private async analyzeCache(
-    options: SmartCacheAPIOptions,
+    options: SmartCacheAPIOptions
   ): Promise<SmartCacheAPIResult> {
     const allKeys = this.getAllCacheKeys();
     let totalHits = 0;
@@ -532,25 +534,25 @@ export class SmartCacheAPI {
 
     if (hitRate < 0.5) {
       recommendations.push(
-        "Low cache hit rate (<50%). Consider increasing TTL or using stale-while-revalidate.",
+        'Low cache hit rate (<50%). Consider increasing TTL or using stale-while-revalidate.'
       );
     }
 
     if (avgResponseSize > 100000) {
       recommendations.push(
-        "Large average response size (>100KB). Consider response compression or pagination.",
+        'Large average response size (>100KB). Consider response compression or pagination.'
       );
     }
 
     if (entryCount > (options.maxEntries || 1000)) {
       recommendations.push(
-        `High entry count (${entryCount}). Consider implementing LRU eviction or size limits.`,
+        `High entry count (${entryCount}). Consider implementing LRU eviction or size limits.`
       );
     }
 
     if (totalSize > (options.maxCacheSize || 10485760)) {
       recommendations.push(
-        `Cache size exceeds limit. Consider implementing size-based eviction.`,
+        `Cache size exceeds limit. Consider implementing size-based eviction.`
       );
     }
 
@@ -561,7 +563,7 @@ export class SmartCacheAPI {
 
     return {
       success: true,
-      action: "analyze",
+      action: 'analyze',
       analysis: {
         hitRate,
         missRate,
@@ -589,10 +591,10 @@ export class SmartCacheAPI {
    * Warm cache by pre-fetching endpoints
    */
   private async warmCache(
-    options: SmartCacheAPIOptions,
+    options: SmartCacheAPIOptions
   ): Promise<SmartCacheAPIResult> {
     if (!options.endpoints || options.endpoints.length === 0) {
-      throw new Error("Endpoints are required for warm action");
+      throw new Error('Endpoints are required for warm action');
     }
 
     const warmed: string[] = [];
@@ -603,7 +605,7 @@ export class SmartCacheAPI {
     for (const url of options.endpoints) {
       warmed.push(url);
       // Simulate warming by creating placeholder entries
-      const request: APIRequest = { url, method: "GET" };
+      const request: APIRequest = { url, method: 'GET' };
       const cacheKey = this.generateCacheKey(request, options);
 
       // Check if already cached
@@ -616,7 +618,7 @@ export class SmartCacheAPI {
 
     return {
       success: true,
-      action: "warm",
+      action: 'warm',
       warmed: {
         count: warmed.length,
         urls: warmed,
@@ -636,13 +638,13 @@ export class SmartCacheAPI {
    */
   private generateCacheKey(
     request: APIRequest,
-    options: SmartCacheAPIOptions,
+    options: SmartCacheAPIOptions
   ): string {
     if (options.customKeyGenerator) {
       return options.customKeyGenerator(request);
     }
 
-    const method = (request.method || "GET").toUpperCase();
+    const method = (request.method || 'GET').toUpperCase();
     let url = request.url;
 
     // Normalize query parameters if enabled
@@ -650,17 +652,17 @@ export class SmartCacheAPI {
       const sortedParams = Object.keys(request.params)
         .sort()
         .map((key) => `${key}=${request.params![key]}`)
-        .join("&");
+        .join('&');
       url = `${url}?${sortedParams}`;
     }
 
     // Filter headers
     const ignoreHeaders = options.ignoreHeaders || [
-      "date",
-      "x-request-id",
-      "x-trace-id",
-      "cookie",
-      "authorization",
+      'date',
+      'x-request-id',
+      'x-trace-id',
+      'cookie',
+      'authorization',
     ];
 
     const relevantHeaders = request.headers
@@ -672,14 +674,14 @@ export class SmartCacheAPI {
               acc[key] = request.headers![key];
               return acc;
             },
-            {} as Record<string, string>,
+            {} as Record<string, string>
           )
       : {};
 
     // Hash body if present
     const bodyHash = request.body
       ? this.hashString(JSON.stringify(request.body))
-      : "";
+      : '';
 
     const keyData = {
       method,
@@ -688,7 +690,7 @@ export class SmartCacheAPI {
       bodyHash,
     };
 
-    return `cache-${createHash("md5").update(JSON.stringify(keyData)).digest("hex")}`;
+    return `cache-${createHash('md5').update(JSON.stringify(keyData)).digest('hex')}`;
   }
 
   /**
@@ -698,7 +700,7 @@ export class SmartCacheAPI {
     cached: CachedResponse,
     isCached: boolean,
     isStale: boolean,
-    cacheKey: string,
+    cacheKey: string
   ): SmartCacheAPIResult {
     const age = Math.floor((Date.now() - cached.timestamp) / 1000);
     const expiresIn = cached.ttl - age;
@@ -739,7 +741,7 @@ export class SmartCacheAPI {
 
     return {
       success: true,
-      action: "get",
+      action: 'get',
       data: outputData,
       cached: isCached,
       stale: isStale,
@@ -763,9 +765,9 @@ export class SmartCacheAPI {
   private generateSummary(data: any): string {
     if (Array.isArray(data)) {
       return `Array with ${data.length} items`;
-    } else if (typeof data === "object" && data !== null) {
+    } else if (typeof data === 'object' && data !== null) {
       const keys = Object.keys(data);
-      return `Object with keys: ${keys.slice(0, 5).join(", ")}${keys.length > 5 ? "..." : ""}`;
+      return `Object with keys: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? '...' : ''}`;
     } else {
       return String(data).slice(0, 100);
     }
@@ -799,9 +801,9 @@ export class SmartCacheAPI {
   private patternToRegex(pattern: string): RegExp {
     // Convert glob-style pattern to regex
     const escaped = pattern
-      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-      .replace(/\*/g, ".*")
-      .replace(/\?/g, ".");
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*')
+      .replace(/\?/g, '.');
 
     return new RegExp(`^${escaped}$`);
   }
@@ -822,7 +824,7 @@ export class SmartCacheAPI {
     try {
       // Cache keys are generated from JSON data
       // This is a simplified extraction
-      return key.split(":")[1] || key;
+      return key.split(':')[1] || key;
     } catch {
       return key;
     }
@@ -833,7 +835,7 @@ export class SmartCacheAPI {
    */
   private serializeCachedResponse(cached: CachedResponse): Buffer {
     const json = JSON.stringify(cached);
-    return Buffer.from(json, "utf-8");
+    return Buffer.from(json, 'utf-8');
   }
 
   /**
@@ -841,14 +843,14 @@ export class SmartCacheAPI {
    */
   private deserializeCachedResponse(buffer: Buffer): CachedResponse {
     const json = buffer;
-    return JSON.parse(json.toString("utf-8")) as CachedResponse;
+    return JSON.parse(json.toString('utf-8')) as CachedResponse;
   }
 
   /**
    * Hash a string using SHA-256
    */
   private hashString(data: string): string {
-    return createHash("sha256").update(data).digest("hex");
+    return createHash('sha256').update(data).digest('hex');
   }
 }
 
@@ -860,7 +862,7 @@ export class SmartCacheAPI {
 export function getSmartCacheApi(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartCacheAPI {
   return new SmartCacheAPI(cache, tokenCounter, metrics);
 }
@@ -869,25 +871,25 @@ export function getSmartCacheApi(
  * CLI Function - Create Resources and Use Factory
  */
 export async function runSmartCacheApi(
-  options: SmartCacheAPIOptions,
+  options: SmartCacheAPIOptions
 ): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
-  const { CacheEngine: CacheEngineClass } = await import("../../core/cache-engine");
-  const { TokenCounter } = await import("../../core/token-counter");
-  const { MetricsCollector } = await import("../../core/metrics");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
+  const { CacheEngine: CacheEngineClass } = await import(
+    '../../core/cache-engine'
+  );
+  const { globalTokenCounter, globalMetricsCollector } = await import(
+    '../../core/globals'
+  );
 
   const cache = new CacheEngineClass(
-    join(homedir(), ".hypercontext", "cache"),
-    100,
+    join(homedir(), '.hypercontext', 'cache'),
+    100
   );
-  const tokenCounter = new TokenCounter();
-  const metrics = new MetricsCollector();
-
   const tool = getSmartCacheApi(
     cache,
-    tokenCounter,
-    metrics,
+    globalTokenCounter,
+    globalMetricsCollector
   );
   const result = await tool.run(options);
 
@@ -898,7 +900,7 @@ export async function runSmartCacheApi(
  * MCP Tool Definition
  */
 export const SMART_CACHE_API_TOOL_DEFINITION = {
-  name: "smart-cache-api",
+  name: 'smart-cache-api',
   description: `API Response Caching with 83% token reduction through intelligent cache management.
 
 Features:
@@ -925,82 +927,82 @@ Token Reduction:
 - Average: 83% reduction`,
 
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       action: {
-        type: "string",
-        enum: ["get", "set", "invalidate", "analyze", "warm"],
-        description: "Cache operation to perform",
+        type: 'string',
+        enum: ['get', 'set', 'invalidate', 'analyze', 'warm'],
+        description: 'Cache operation to perform',
       },
       request: {
-        type: "object",
-        description: "API request data (for get/set)",
+        type: 'object',
+        description: 'API request data (for get/set)',
         properties: {
-          url: { type: "string" },
-          method: { type: "string" },
-          headers: { type: "object" },
-          body: { type: "object" },
-          params: { type: "object" },
+          url: { type: 'string' },
+          method: { type: 'string' },
+          headers: { type: 'object' },
+          body: { type: 'object' },
+          params: { type: 'object' },
         },
       },
       response: {
-        description: "API response data (for set)",
+        description: 'API response data (for set)',
       },
       strategy: {
-        type: "string",
-        enum: ["ttl", "etag", "event", "lru", "size-based", "hybrid"],
-        description: "Caching strategy to use",
+        type: 'string',
+        enum: ['ttl', 'etag', 'event', 'lru', 'size-based', 'hybrid'],
+        description: 'Caching strategy to use',
       },
       ttl: {
-        type: "number",
-        description: "Time-to-live in seconds (default: 3600)",
+        type: 'number',
+        description: 'Time-to-live in seconds (default: 3600)',
       },
       invalidationPattern: {
-        type: "string",
-        enum: ["time", "pattern", "tag", "manual", "event"],
-        description: "Invalidation pattern to use",
+        type: 'string',
+        enum: ['time', 'pattern', 'tag', 'manual', 'event'],
+        description: 'Invalidation pattern to use',
       },
       pattern: {
-        type: "string",
-        description: "URL pattern for invalidation (e.g., /api/users/*)",
+        type: 'string',
+        description: 'URL pattern for invalidation (e.g., /api/users/*)',
       },
       tags: {
-        type: "array",
-        items: { type: "string" },
-        description: "Tags for grouping cached entries",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Tags for grouping cached entries',
       },
       staleWhileRevalidate: {
-        type: "boolean",
-        description: "Enable stale-while-revalidate",
+        type: 'boolean',
+        description: 'Enable stale-while-revalidate',
       },
       staleTime: {
-        type: "number",
-        description: "Time before considering cache stale (seconds)",
+        type: 'number',
+        description: 'Time before considering cache stale (seconds)',
       },
       endpoints: {
-        type: "array",
-        items: { type: "string" },
-        description: "Endpoints to warm (for warm action)",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Endpoints to warm (for warm action)',
       },
       maxCacheSize: {
-        type: "number",
-        description: "Maximum cache size in bytes",
+        type: 'number',
+        description: 'Maximum cache size in bytes',
       },
       maxEntries: {
-        type: "number",
-        description: "Maximum number of cache entries",
+        type: 'number',
+        description: 'Maximum number of cache entries',
       },
       normalizeQuery: {
-        type: "boolean",
-        description: "Normalize query parameters (default: true)",
+        type: 'boolean',
+        description: 'Normalize query parameters (default: true)',
       },
       ignoreHeaders: {
-        type: "array",
-        items: { type: "string" },
-        description: "Headers to exclude from cache key",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Headers to exclude from cache key',
       },
     },
-    required: ["action"],
+    required: ['action'],
   },
 };
 

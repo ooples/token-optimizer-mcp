@@ -11,17 +11,17 @@
  * - Generated SQL inspection
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import type { TokenCounter } from '../../core/token-counter';
+import type { MetricsCollector } from '../../core/metrics';
+import { createHash } from 'crypto';
 
 export type ORMType =
-  | "prisma"
-  | "sequelize"
-  | "typeorm"
-  | "mongoose"
-  | "generic";
+  | 'prisma'
+  | 'sequelize'
+  | 'typeorm'
+  | 'mongoose'
+  | 'generic';
 
 export interface SmartORMOptions {
   // Query code
@@ -43,23 +43,23 @@ export interface SmartORMOptions {
 }
 
 export interface Relationship {
-  type: "include" | "join" | "populate" | "select" | "with";
+  type: 'include' | 'join' | 'populate' | 'select' | 'with';
   name: string;
   model?: string;
   nested?: boolean;
 }
 
 export interface N1Instance {
-  type: "loop_query" | "map_query" | "sequential_query";
+  type: 'loop_query' | 'map_query' | 'sequential_query';
   location: number;
-  severity: "low" | "medium" | "high";
+  severity: 'low' | 'medium' | 'high';
   description: string;
   affectedModel?: string;
   estimatedQueries?: number;
 }
 
 export interface EagerLoadingSuggestion {
-  type: "include_relation" | "join_table" | "populate_field" | "select_related";
+  type: 'include_relation' | 'join_table' | 'populate_field' | 'select_related';
   description: string;
   estimatedReduction: number;
   example: string;
@@ -68,7 +68,7 @@ export interface EagerLoadingSuggestion {
 }
 
 export interface QueryReduction {
-  type: "batch_query" | "dataloader" | "aggregate" | "subquery";
+  type: 'batch_query' | 'dataloader' | 'aggregate' | 'subquery';
   description: string;
   currentQueries: number;
   optimizedQueries: number;
@@ -78,7 +78,7 @@ export interface QueryReduction {
 export interface IndexSuggestion {
   table: string;
   columns: string[];
-  type: "btree" | "hash" | "composite" | "unique";
+  type: 'btree' | 'hash' | 'composite' | 'unique';
   reason: string;
   estimatedImprovement: string;
 }
@@ -96,7 +96,7 @@ export interface SmartORMResult {
   n1Problems?: {
     hasN1: boolean;
     instances: N1Instance[];
-    severity: "low" | "medium" | "high";
+    severity: 'low' | 'medium' | 'high';
     totalEstimatedQueries?: number;
   };
 
@@ -128,7 +128,7 @@ export class SmartORM {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   async run(options: SmartORMOptions): Promise<SmartORMResult> {
@@ -140,7 +140,7 @@ export class SmartORM {
       const cached = await this.getCachedResult(cacheKey, options.ttl || 3600);
       if (cached) {
         this.metrics.record({
-          operation: "smart_orm",
+          operation: 'smart_orm',
           duration: Date.now() - startTime,
           cacheHit: true,
           success: true,
@@ -157,7 +157,7 @@ export class SmartORM {
     await this.cacheResult(cacheKey, result, options.ttl);
 
     this.metrics.record({
-      operation: "smart_orm",
+      operation: 'smart_orm',
       duration: Date.now() - startTime,
       cacheHit: false,
       success: true,
@@ -187,7 +187,7 @@ export class SmartORM {
     // Generate index suggestions
     const indexSuggestions = this.generateIndexSuggestions(
       queryInfo,
-      options.ormCode,
+      options.ormCode
     );
 
     // Estimate queries
@@ -206,7 +206,7 @@ export class SmartORM {
             estimatedImprovement: this.calculateEstimatedImprovement(
               n1Problems,
               eagerLoading,
-              queryReductions,
+              queryReductions
             ),
           }
         : undefined;
@@ -225,7 +225,7 @@ export class SmartORM {
     const estimatedQueries = this.estimateQueryCount(
       code,
       ormType,
-      relationships,
+      relationships
     );
 
     return {
@@ -240,10 +240,10 @@ export class SmartORM {
     const models: string[] = [];
 
     switch (ormType) {
-      case "prisma": {
+      case 'prisma': {
         // prisma.user.findMany, prisma.post.findUnique
         const matches = code.matchAll(
-          /prisma\.(\w+)\.(findMany|findUnique|findFirst|create|update|delete)/g,
+          /prisma\.(\w+)\.(findMany|findUnique|findFirst|create|update|delete)/g
         );
         for (const match of matches) {
           models.push(match[1]);
@@ -251,14 +251,14 @@ export class SmartORM {
         break;
       }
 
-      case "typeorm": {
+      case 'typeorm': {
         // getRepository(User), createQueryBuilder('user')
         const repoMatches = code.matchAll(/getRepository\((\w+)\)/g);
         for (const match of repoMatches) {
           models.push(match[1]);
         }
         const queryMatches = code.matchAll(
-          /createQueryBuilder\(['"](\w+)['"]\)/g,
+          /createQueryBuilder\(['"](\w+)['"]\)/g
         );
         for (const match of queryMatches) {
           models.push(match[1]);
@@ -266,26 +266,26 @@ export class SmartORM {
         break;
       }
 
-      case "sequelize": {
+      case 'sequelize': {
         // Model.findAll, User.findOne
         const matches = code.matchAll(
-          /(\w+)\.(findAll|findOne|findByPk|create|update|destroy)/g,
+          /(\w+)\.(findAll|findOne|findByPk|create|update|destroy)/g
         );
         for (const match of matches) {
-          if (match[1] !== "sequelize" && match[1] !== "this") {
+          if (match[1] !== 'sequelize' && match[1] !== 'this') {
             models.push(match[1]);
           }
         }
         break;
       }
 
-      case "mongoose": {
+      case 'mongoose': {
         // User.find, Model.findOne
         const matches = code.matchAll(
-          /(\w+)\.(find|findOne|findById|create|updateOne|deleteOne)/g,
+          /(\w+)\.(find|findOne|findById|create|updateOne|deleteOne)/g
         );
         for (const match of matches) {
-          if (match[1] !== "mongoose" && match[1] !== "this") {
+          if (match[1] !== 'mongoose' && match[1] !== 'this') {
             models.push(match[1]);
           }
         }
@@ -300,37 +300,37 @@ export class SmartORM {
     const relationships: Relationship[] = [];
 
     switch (ormType) {
-      case "prisma": {
+      case 'prisma': {
         // include: { posts: true, profile: { include: { avatar: true } } }
         const includeMatches = code.matchAll(/include:\s*{\s*(\w+):/g);
         for (const match of includeMatches) {
           relationships.push({
-            type: "include",
+            type: 'include',
             name: match[1],
           });
         }
         break;
       }
 
-      case "typeorm": {
+      case 'typeorm': {
         // leftJoinAndSelect, relations: ['posts', 'profile']
         const joinMatches = code.matchAll(
-          /(?:leftJoin|innerJoin)(?:AndSelect)?\(['"](\w+)['"]/g,
+          /(?:leftJoin|innerJoin)(?:AndSelect)?\(['"](\w+)['"]/g
         );
         for (const match of joinMatches) {
           relationships.push({
-            type: "join",
+            type: 'join',
             name: match[1],
           });
         }
         const relMatches = code.matchAll(/relations:\s*\[([^\]]+)\]/g);
         for (const match of relMatches) {
           const rels = match[1]
-            .split(",")
-            .map((r) => r.trim().replace(/['"]/g, ""));
+            .split(',')
+            .map((r) => r.trim().replace(/['"]/g, ''));
           rels.forEach((rel) => {
             relationships.push({
-              type: "join",
+              type: 'join',
               name: rel,
             });
           });
@@ -338,26 +338,26 @@ export class SmartORM {
         break;
       }
 
-      case "sequelize": {
+      case 'sequelize': {
         // include: [{ model: Post }, { model: Profile }]
         const includeMatches = code.matchAll(
-          /include:\s*\[\s*{\s*model:\s*(\w+)/g,
+          /include:\s*\[\s*{\s*model:\s*(\w+)/g
         );
         for (const match of includeMatches) {
           relationships.push({
-            type: "include",
+            type: 'include',
             name: match[1],
           });
         }
         break;
       }
 
-      case "mongoose": {
+      case 'mongoose': {
         // .populate('posts').populate('profile')
         const populateMatches = code.matchAll(/\.populate\(['"](\w+)['"]\)/g);
         for (const match of populateMatches) {
           relationships.push({
-            type: "populate",
+            type: 'populate',
             name: match[1],
           });
         }
@@ -371,7 +371,7 @@ export class SmartORM {
   private estimateQueryCount(
     code: string,
     ormType: ORMType,
-    relationships: Relationship[],
+    relationships: Relationship[]
   ): number {
     let count = 1; // Base query
 
@@ -429,7 +429,7 @@ export class SmartORM {
   private detectN1Problems(
     code: string,
     _queryInfo: any,
-    ormType: ORMType,
+    ormType: ORMType
   ): any {
     const instances: N1Instance[] = [];
 
@@ -440,10 +440,10 @@ export class SmartORM {
       const loopBody = match[1];
       if (this.hasQueryPattern(loopBody, ormType)) {
         instances.push({
-          type: "loop_query",
+          type: 'loop_query',
           location: match.index,
-          severity: "high",
-          description: "Query inside for loop - classic N+1 problem",
+          severity: 'high',
+          description: 'Query inside for loop - classic N+1 problem',
           estimatedQueries: 10, // Assume 10 iterations
         });
       }
@@ -455,10 +455,10 @@ export class SmartORM {
       const mapBody = match[1];
       if (this.hasQueryPattern(mapBody, ormType)) {
         instances.push({
-          type: "map_query",
+          type: 'map_query',
           location: match.index,
-          severity: "high",
-          description: "Query inside map function - N+1 problem",
+          severity: 'high',
+          description: 'Query inside map function - N+1 problem',
           estimatedQueries: 10,
         });
       }
@@ -468,16 +468,16 @@ export class SmartORM {
     const queryCount = (code.match(/await/g) || []).length;
     if (queryCount > 3) {
       const hasLoopIncludes =
-        code.includes("for") ||
-        code.includes("map") ||
-        code.includes("forEach");
+        code.includes('for') ||
+        code.includes('map') ||
+        code.includes('forEach');
       if (hasLoopIncludes) {
         instances.push({
-          type: "sequential_query",
+          type: 'sequential_query',
           location: 0,
-          severity: "medium",
+          severity: 'medium',
           description:
-            "Multiple sequential queries detected - consider batching",
+            'Multiple sequential queries detected - consider batching',
           estimatedQueries: queryCount,
         });
       }
@@ -485,10 +485,10 @@ export class SmartORM {
 
     const totalEstimatedQueries = instances.reduce(
       (sum, inst) => sum + (inst.estimatedQueries || 0),
-      0,
+      0
     );
     const severity =
-      instances.length > 2 ? "high" : instances.length > 0 ? "medium" : "low";
+      instances.length > 2 ? 'high' : instances.length > 0 ? 'medium' : 'low';
 
     return {
       hasN1: instances.length > 0,
@@ -514,51 +514,51 @@ export class SmartORM {
   private suggestEagerLoading(
     _queryInfo: any,
     n1Problems: any,
-    ormType: ORMType,
+    ormType: ORMType
   ): EagerLoadingSuggestion[] {
     const suggestions: EagerLoadingSuggestion[] = [];
 
     if (n1Problems?.hasN1) {
       switch (ormType) {
-        case "prisma":
+        case 'prisma':
           suggestions.push({
-            type: "include_relation",
+            type: 'include_relation',
             description:
-              "Use include to eager load relationships and avoid N+1 queries",
+              'Use include to eager load relationships and avoid N+1 queries',
             estimatedReduction: n1Problems.instances.length,
-            example: "include: { posts: true, profile: true }",
-            relationship: "related entities",
+            example: 'include: { posts: true, profile: true }',
+            relationship: 'related entities',
           });
           break;
 
-        case "typeorm":
+        case 'typeorm':
           suggestions.push({
-            type: "join_table",
+            type: 'join_table',
             description:
-              "Use relations or leftJoinAndSelect to eager load relationships",
+              'Use relations or leftJoinAndSelect to eager load relationships',
             estimatedReduction: n1Problems.instances.length,
             example: 'relations: ["posts", "profile"]',
-            relationship: "related entities",
+            relationship: 'related entities',
           });
           break;
 
-        case "sequelize":
+        case 'sequelize':
           suggestions.push({
-            type: "include_relation",
-            description: "Use include to eager load associations",
+            type: 'include_relation',
+            description: 'Use include to eager load associations',
             estimatedReduction: n1Problems.instances.length,
-            example: "include: [{ model: Post }, { model: Profile }]",
-            relationship: "associations",
+            example: 'include: [{ model: Post }, { model: Profile }]',
+            relationship: 'associations',
           });
           break;
 
-        case "mongoose":
+        case 'mongoose':
           suggestions.push({
-            type: "populate_field",
-            description: "Use populate to eager load references",
+            type: 'populate_field',
+            description: 'Use populate to eager load references',
             estimatedReduction: n1Problems.instances.length,
             example: '.populate("posts").populate("profile")',
-            relationship: "references",
+            relationship: 'references',
           });
           break;
       }
@@ -569,7 +569,7 @@ export class SmartORM {
 
   private generateQueryReductions(
     queryInfo: any,
-    n1Problems: any,
+    n1Problems: any
   ): QueryReduction[] {
     const reductions: QueryReduction[] = [];
 
@@ -579,8 +579,8 @@ export class SmartORM {
       const optimizedQueries = 1 + queryInfo.relationships.length;
 
       reductions.push({
-        type: "batch_query",
-        description: "Batch queries to reduce N+1 problem",
+        type: 'batch_query',
+        description: 'Batch queries to reduce N+1 problem',
         currentQueries: totalQueries,
         optimizedQueries,
         savings: totalQueries - optimizedQueries,
@@ -592,7 +592,7 @@ export class SmartORM {
 
   private generateIndexSuggestions(
     queryInfo: any,
-    code: string,
+    code: string
   ): IndexSuggestion[] {
     const suggestions: IndexSuggestion[] = [];
 
@@ -615,14 +615,14 @@ export class SmartORM {
     if (columns.size > 0) {
       queryInfo.models.forEach((model: string) => {
         columns.forEach((column) => {
-          if (column !== "id") {
+          if (column !== 'id') {
             // Skip primary keys
             suggestions.push({
               table: model,
               columns: [column],
-              type: "btree",
+              type: 'btree',
               reason: `Frequently used in WHERE clauses`,
-              estimatedImprovement: "20-40% faster queries",
+              estimatedImprovement: '20-40% faster queries',
             });
           }
         });
@@ -635,7 +635,7 @@ export class SmartORM {
   private estimateGeneratedSQL(
     _code: string,
     _ormType: ORMType,
-    queryInfo: any,
+    queryInfo: any
   ): any {
     const queries: string[] = [];
 
@@ -658,7 +658,7 @@ export class SmartORM {
   private calculateEstimatedImprovement(
     n1Problems: any,
     eagerLoading: EagerLoadingSuggestion[],
-    queryReductions: QueryReduction[],
+    queryReductions: QueryReduction[]
   ): number {
     let improvement = 0;
 
@@ -670,14 +670,14 @@ export class SmartORM {
     if (eagerLoading.length > 0) {
       improvement += eagerLoading.reduce(
         (sum, sugg) => sum + sugg.estimatedReduction * 5,
-        0,
+        0
       );
     }
 
     if (queryReductions.length > 0) {
       improvement += queryReductions.reduce(
         (sum, red) => sum + red.savings * 2,
-        0,
+        0
       );
     }
 
@@ -741,7 +741,7 @@ export class SmartORM {
     }
 
     const reductionPercentage = Math.round(
-      ((originalSize - compactSize) / originalSize) * 100,
+      ((originalSize - compactSize) / originalSize) * 100
     );
 
     return {
@@ -750,7 +750,7 @@ export class SmartORM {
       metrics: {
         originalTokens: Math.ceil(this.tokenCounter.count(fullResult).tokens),
         compactedTokens: Math.ceil(
-          this.tokenCounter.count(JSON.stringify(compactedData)).tokens,
+          this.tokenCounter.count(JSON.stringify(compactedData)).tokens
         ),
         reductionPercentage,
       },
@@ -758,9 +758,9 @@ export class SmartORM {
   }
 
   private generateCacheKey(options: SmartORMOptions): string {
-    const codeHash = createHash("sha256")
+    const codeHash = createHash('sha256')
       .update(options.ormCode)
-      .digest("hex")
+      .digest('hex')
       .substring(0, 16);
     const keyData = {
       codeHash,
@@ -790,7 +790,7 @@ export class SmartORM {
   private async cacheResult(
     key: string,
     result: any,
-    _ttl?: number,
+    _ttl?: number
   ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
     const cacheStr = JSON.stringify(cacheData);
@@ -806,7 +806,7 @@ export class SmartORM {
 export function getSmartOrm(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartORM {
   return new SmartORM(cache, tokenCounter, metrics);
 }
@@ -815,70 +815,70 @@ export function getSmartOrm(
  * CLI Function - Create Resources and Use Factory
  */
 export async function runSmartORM(options: SmartORMOptions): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
-  const { CacheEngine: CacheEngineClass } = await import("../../core/cache-engine");
-  const { TokenCounter } = await import("../../core/token-counter");
-  const { MetricsCollector } = await import("../../core/metrics");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
+  const { CacheEngine: CacheEngineClass } = await import(
+    '../../core/cache-engine'
+  );
+  const { globalTokenCounter, globalMetricsCollector } = await import(
+    '../../core/globals'
+  );
 
   const cache = new CacheEngineClass(
-    join(homedir(), ".hypercontext", "cache"),
-    100,
+    join(homedir(), '.hypercontext', 'cache'),
+    100
   );
-  const tokenCounter = new TokenCounter();
-  const metrics = new MetricsCollector();
-
-  const orm = getSmartOrm(cache, tokenCounter, metrics);
+  const orm = getSmartOrm(cache, globalTokenCounter, globalMetricsCollector);
   const result = await orm.run(options);
 
   return JSON.stringify(result, null, 2);
 }
 
 export const SMART_ORM_TOOL_DEFINITION = {
-  name: "smart_orm",
-  description: "ORM query optimizer with N+1 detection (83% token reduction)",
+  name: 'smart_orm',
+  description: 'ORM query optimizer with N+1 detection (83% token reduction)',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       ormCode: {
-        type: "string",
+        type: 'string',
         description:
-          "ORM query code to analyze (Prisma, TypeORM, Sequelize, Mongoose)",
+          'ORM query code to analyze (Prisma, TypeORM, Sequelize, Mongoose)',
       },
       ormType: {
-        type: "string",
-        enum: ["prisma", "sequelize", "typeorm", "mongoose", "generic"],
-        description: "ORM framework type",
+        type: 'string',
+        enum: ['prisma', 'sequelize', 'typeorm', 'mongoose', 'generic'],
+        description: 'ORM framework type',
       },
       detectN1: {
-        type: "boolean",
-        description: "Detect N+1 query problems (default: true)",
+        type: 'boolean',
+        description: 'Detect N+1 query problems (default: true)',
       },
       suggestEagerLoading: {
-        type: "boolean",
-        description: "Suggest eager loading optimizations (default: true)",
+        type: 'boolean',
+        description: 'Suggest eager loading optimizations (default: true)',
       },
       analyzeRelationships: {
-        type: "boolean",
-        description: "Analyze relationship patterns (default: false)",
+        type: 'boolean',
+        description: 'Analyze relationship patterns (default: false)',
       },
       estimateQueries: {
-        type: "boolean",
-        description: "Estimate generated SQL queries (default: false)",
+        type: 'boolean',
+        description: 'Estimate generated SQL queries (default: false)',
       },
       modelDefinitions: {
-        type: "string",
-        description: "Optional schema/model definitions for enhanced analysis",
+        type: 'string',
+        description: 'Optional schema/model definitions for enhanced analysis',
       },
       force: {
-        type: "boolean",
-        description: "Force fresh analysis, bypass cache (default: false)",
+        type: 'boolean',
+        description: 'Force fresh analysis, bypass cache (default: false)',
       },
       ttl: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 3600)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 3600)',
       },
     },
-    required: ["ormCode", "ormType"],
+    required: ['ormCode', 'ormType'],
   },
 };

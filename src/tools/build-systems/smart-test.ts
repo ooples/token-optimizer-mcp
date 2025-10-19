@@ -8,14 +8,14 @@
  * - Coverage delta tracking
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface TestResult {
   numTotalTests: number;
@@ -24,12 +24,12 @@ interface TestResult {
   numPendingTests: number;
   testResults: Array<{
     name: string;
-    status: "passed" | "failed" | "pending" | "skipped";
+    status: 'passed' | 'failed' | 'pending' | 'skipped';
     duration: number;
     failureMessage?: string;
     assertionResults?: Array<{
       title: string;
-      status: "passed" | "failed" | "pending";
+      status: 'passed' | 'failed' | 'pending';
       failureMessages: string[];
     }>;
   }>;
@@ -132,14 +132,14 @@ interface SmartTestOutput {
 
 export class SmartTest {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_test";
+  private cacheNamespace = 'smart_test';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
     _tokenCounter: TokenCounter,
     _metrics: MetricsCollector,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.projectRoot = projectRoot || process.cwd();
@@ -195,64 +195,64 @@ export class SmartTest {
     coverage: boolean;
     watch: boolean;
   }): Promise<TestResult> {
-    const args = ["--json"];
+    const args = ['--json'];
 
     if (options.pattern) {
       // Convert Windows backslashes to forward slashes
-      let normalizedPattern = options.pattern.replace(/\\/g, "/");
+      let normalizedPattern = options.pattern.replace(/\\/g, '/');
 
       // Escape regex special characters for Jest pattern matching
       // Preserve wildcards (*) as .* for regex, but escape other special chars
       normalizedPattern = normalizedPattern
-        .replace(/\./g, "\\.") // Escape dots
-        .replace(/\+/g, "\\+") // Escape plus
-        .replace(/\?/g, "\\?") // Escape question mark
-        .replace(/\[/g, "\\[") // Escape square brackets
-        .replace(/\]/g, "\\]")
-        .replace(/\(/g, "\\(") // Escape parentheses
-        .replace(/\)/g, "\\)")
-        .replace(/\{/g, "\\{") // Escape curly braces
-        .replace(/\}/g, "\\}")
-        .replace(/\^/g, "\\^") // Escape caret
-        .replace(/\$/g, "\\$") // Escape dollar
-        .replace(/\|/g, "\\|") // Escape pipe
-        .replace(/\*/g, ".*"); // Convert wildcard * to .* for regex
+        .replace(/\./g, '\\.') // Escape dots
+        .replace(/\+/g, '\\+') // Escape plus
+        .replace(/\?/g, '\\?') // Escape question mark
+        .replace(/\[/g, '\\[') // Escape square brackets
+        .replace(/\]/g, '\\]')
+        .replace(/\(/g, '\\(') // Escape parentheses
+        .replace(/\)/g, '\\)')
+        .replace(/\{/g, '\\{') // Escape curly braces
+        .replace(/\}/g, '\\}')
+        .replace(/\^/g, '\\^') // Escape caret
+        .replace(/\$/g, '\\$') // Escape dollar
+        .replace(/\|/g, '\\|') // Escape pipe
+        .replace(/\*/g, '.*'); // Convert wildcard * to .* for regex
 
-      args.push("--testPathPattern=" + normalizedPattern);
+      args.push('--testPathPattern=' + normalizedPattern);
     }
 
     if (options.onlyChanged) {
-      args.push("--onlyChanged");
+      args.push('--onlyChanged');
     }
 
     if (options.coverage) {
-      args.push("--coverage", "--coverageReporters=json-summary");
+      args.push('--coverage', '--coverageReporters=json-summary');
     }
 
     if (options.watch) {
-      args.push("--watch");
+      args.push('--watch');
     }
 
-    args.push("--no-colors");
+    args.push('--no-colors');
 
     return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
+      let stdout = '';
+      let stderr = '';
 
-      const jest = spawn("npm", ["run", "test", "--", ...args], {
+      const jest = spawn('npm', ['run', 'test', '--', ...args], {
         cwd: this.projectRoot,
         shell: true,
       });
 
-      jest.stdout.on("data", (data) => {
+      jest.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      jest.stderr.on("data", (data) => {
+      jest.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      jest.on("close", (_code) => {
+      jest.on('close', (_code) => {
         try {
           // Jest writes JSON to stdout even on failure
           const jsonMatch = stdout.match(/\{[\s\S]*\}/);
@@ -261,19 +261,19 @@ export class SmartTest {
             resolve(result);
           } else {
             reject(
-              new Error(`Failed to parse Jest output: ${stderr || stdout}`),
+              new Error(`Failed to parse Jest output: ${stderr || stdout}`)
             );
           }
         } catch (err) {
           reject(
             new Error(
-              `Failed to parse Jest output: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+              `Failed to parse Jest output: ${err instanceof Error ? err.message : String(err)}`
+            )
           );
         }
       });
 
-      jest.on("error", (err) => {
+      jest.on('error', (err) => {
         reject(err);
       });
     });
@@ -283,25 +283,25 @@ export class SmartTest {
    * Generate cache key based on test file contents
    */
   private async generateCacheKey(pattern?: string): Promise<string> {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(this.cacheNamespace);
-    hash.update(pattern || "all");
+    hash.update(pattern || 'all');
 
     // Hash package.json to detect dependency changes
-    const packageJsonPath = join(this.projectRoot, "package.json");
+    const packageJsonPath = join(this.projectRoot, 'package.json');
     if (existsSync(packageJsonPath)) {
-      const packageJson = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = readFileSync(packageJsonPath, 'utf-8');
       hash.update(packageJson);
     }
 
     // Hash jest config to detect config changes
-    const jestConfigPath = join(this.projectRoot, "jest.config.js");
+    const jestConfigPath = join(this.projectRoot, 'jest.config.js');
     if (existsSync(jestConfigPath)) {
-      const jestConfig = readFileSync(jestConfigPath, "utf-8");
+      const jestConfig = readFileSync(jestConfigPath, 'utf-8');
       hash.update(jestConfig);
     }
 
-    return `${this.cacheNamespace}:${hash.digest("hex")}`;
+    return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
   /**
@@ -349,7 +349,7 @@ export class SmartTest {
    */
   private transformOutput(
     result: TestResult,
-    fromCache = false,
+    fromCache = false
   ): SmartTestOutput {
     const failures = this.extractFailures(result);
     const newTests = this.detectNewTests(result);
@@ -374,7 +374,7 @@ export class SmartTest {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -404,9 +404,9 @@ export class SmartTest {
     }> = [];
 
     for (const testFile of result.testResults || []) {
-      if (testFile.status === "failed") {
+      if (testFile.status === 'failed') {
         for (const assertion of testFile.assertionResults || []) {
-          if (assertion.status === "failed") {
+          if (assertion.status === 'failed') {
             // Extract concise error message
             const error = this.extractConciseError(assertion.failureMessages);
 
@@ -429,28 +429,28 @@ export class SmartTest {
    */
   private extractConciseError(messages: string[]): string {
     if (!messages || messages.length === 0) {
-      return "Unknown error";
+      return 'Unknown error';
     }
 
     // Join all messages
-    const fullMessage = messages.join("\n");
+    const fullMessage = messages.join('\n');
 
     // Extract the most important lines
-    const lines = fullMessage.split("\n");
+    const lines = fullMessage.split('\n');
     const importantLines = lines.filter((line) => {
       // Keep expect() lines, received/expected, and error messages
       return (
-        line.includes("expect") ||
-        line.includes("Received:") ||
-        line.includes("Expected:") ||
-        line.includes("Error:") ||
-        line.includes("at ")
+        line.includes('expect') ||
+        line.includes('Received:') ||
+        line.includes('Expected:') ||
+        line.includes('Error:') ||
+        line.includes('at ')
       );
     });
 
     // Limit to first 5 important lines
     return (
-      importantLines.slice(0, 5).join("\n").trim() || fullMessage.slice(0, 200)
+      importantLines.slice(0, 5).join('\n').trim() || fullMessage.slice(0, 200)
     );
   }
 
@@ -458,11 +458,11 @@ export class SmartTest {
    * Extract error location from stack trace
    */
   private extractErrorLocation(messages: string[]): string | undefined {
-    const fullMessage = messages.join("\n");
-    const lines = fullMessage.split("\n");
+    const fullMessage = messages.join('\n');
+    const lines = fullMessage.split('\n');
 
     for (const line of lines) {
-      if (line.trim().startsWith("at ") && !line.includes("node_modules")) {
+      if (line.trim().startsWith('at ') && !line.includes('node_modules')) {
         // Extract file:line:column
         const match = line.match(/\(([^)]+):(\d+):(\d+)\)/);
         if (match) {
@@ -553,7 +553,7 @@ export function getSmartTestTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartTest {
   return new SmartTest(cache, tokenCounter, metrics, projectRoot);
 }
@@ -562,11 +562,11 @@ export function getSmartTestTool(
  * CLI-friendly function for running smart tests
  */
 export async function runSmartTest(
-  options: SmartTestOptions = {},
+  options: SmartTestOptions = {}
 ): Promise<string> {
   // Create standalone resources for CLI usage
   const cache = new CacheEngine(
-    join(homedir(), ".token-optimizer-cache", "cache.db"),
+    join(homedir(), '.token-optimizer-cache', 'cache.db')
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
@@ -575,14 +575,14 @@ export async function runSmartTest(
     cache,
     tokenCounter,
     metrics,
-    options.projectRoot,
+    options.projectRoot
   );
   try {
     const result = await smartTest.run(options);
 
     // Format as human-readable output
-    let output = `\n🧪 Smart Test Results ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\n🧪 Smart Test Results ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
@@ -602,12 +602,12 @@ export async function runSmartTest(
           output += `    Location: ${failure.location}\n`;
         }
         output += `    Error:\n`;
-        const errorLines = failure.error.split("\n");
+        const errorLines = failure.error.split('\n');
         for (const line of errorLines) {
           output += `      ${line}\n`;
         }
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Coverage delta
@@ -625,7 +625,7 @@ export async function runSmartTest(
       for (const test of result.newTests) {
         output += `  + ${test}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Metrics
@@ -642,43 +642,43 @@ export async function runSmartTest(
 
 // MCP Tool definition
 export const SMART_TEST_TOOL_DEFINITION = {
-  name: "smart_test",
+  name: 'smart_test',
   description:
-    "Run tests with intelligent caching, coverage tracking, and incremental test execution",
+    'Run tests with intelligent caching, coverage tracking, and incremental test execution',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       pattern: {
-        type: "string",
-        description: "Pattern to match test files",
+        type: 'string',
+        description: 'Pattern to match test files',
       },
       onlyChanged: {
-        type: "boolean",
-        description: "Run only tests that changed since last run",
+        type: 'boolean',
+        description: 'Run only tests that changed since last run',
         default: false,
       },
       force: {
-        type: "boolean",
-        description: "Force full test run (ignore cache)",
+        type: 'boolean',
+        description: 'Force full test run (ignore cache)',
         default: false,
       },
       coverage: {
-        type: "boolean",
-        description: "Collect coverage information",
+        type: 'boolean',
+        description: 'Collect coverage information',
         default: false,
       },
       watch: {
-        type: "boolean",
-        description: "Watch mode for continuous testing",
+        type: 'boolean',
+        description: 'Watch mode for continuous testing',
         default: false,
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 300)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 300)',
         default: 300,
       },
     },

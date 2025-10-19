@@ -18,24 +18,24 @@
  * 6. report: Generate comprehensive benchmark report
  */
 
-import { createHash, randomBytes } from "crypto";
-import { writeFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
+import { createHash, randomBytes } from 'crypto';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
 
 // ===== Type Definitions =====
 
-export type CacheStrategy = "LRU" | "LFU" | "FIFO" | "TTL" | "size" | "hybrid";
+export type CacheStrategy = 'LRU' | 'LFU' | 'FIFO' | 'TTL' | 'size' | 'hybrid';
 export type WorkloadType =
-  | "read-heavy"
-  | "write-heavy"
-  | "mixed"
-  | "custom"
-  | "realistic";
-export type ReportFormat = "markdown" | "html" | "json" | "pdf";
+  | 'read-heavy'
+  | 'write-heavy'
+  | 'mixed'
+  | 'custom'
+  | 'realistic';
+export type ReportFormat = 'markdown' | 'html' | 'json' | 'pdf';
 
 export interface CacheConfig {
   name: string;
@@ -43,7 +43,7 @@ export interface CacheConfig {
   maxSize?: number; // MB
   maxEntries?: number;
   ttl?: number; // seconds
-  evictionPolicy?: "strict" | "lazy";
+  evictionPolicy?: 'strict' | 'lazy';
   compressionEnabled?: boolean;
   params?: Record<string, any>; // Strategy-specific parameters
 }
@@ -55,8 +55,8 @@ export interface WorkloadConfig {
   concurrency: number;
   keyCount: number;
   valueSize: number; // bytes
-  keyDistribution?: "uniform" | "zipf" | "gaussian";
-  accessPattern?: "sequential" | "random" | "temporal";
+  keyDistribution?: 'uniform' | 'zipf' | 'gaussian';
+  accessPattern?: 'sequential' | 'random' | 'temporal';
 }
 
 export interface LatencyMetrics {
@@ -152,12 +152,12 @@ export interface LoadTestResults {
 
 export interface CacheBenchmarkOptions {
   operation:
-    | "run-benchmark"
-    | "compare"
-    | "load-test"
-    | "latency-test"
-    | "throughput-test"
-    | "report";
+    | 'run-benchmark'
+    | 'compare'
+    | 'load-test'
+    | 'latency-test'
+    | 'throughput-test'
+    | 'report';
 
   // Benchmark configuration
   config?: CacheConfig;
@@ -228,7 +228,7 @@ class BenchmarkExecutor {
   private cache: CacheEngine;
   private latencies: number[] = [];
   private operations: {
-    type: "read" | "write";
+    type: 'read' | 'write';
     timestamp: number;
     latency: number;
   }[] = [];
@@ -246,7 +246,7 @@ class BenchmarkExecutor {
    */
   async executeBenchmark(
     config: CacheConfig,
-    workload: WorkloadConfig,
+    workload: WorkloadConfig
   ): Promise<BenchmarkResults> {
     // Reset state
     this.reset();
@@ -263,8 +263,8 @@ class BenchmarkExecutor {
 
     // Calculate metrics
     const totalOps = this.operations.length;
-    const reads = this.operations.filter((op) => op.type === "read").length;
-    const writes = this.operations.filter((op) => op.type === "write").length;
+    const reads = this.operations.filter((op) => op.type === 'read').length;
+    const writes = this.operations.filter((op) => op.type === 'write').length;
 
     // Latency metrics
     const latency = this.calculateLatencyMetrics();
@@ -313,14 +313,14 @@ class BenchmarkExecutor {
    */
   private async warmup(
     config: CacheConfig,
-    workload: WorkloadConfig,
+    workload: WorkloadConfig
   ): Promise<void> {
     const warmupOps = Math.min(1000, workload.keyCount);
 
     for (let i = 0; i < warmupOps; i++) {
       const key = `warmup-key-${i}`;
       const value = this.generateValue(workload.valueSize);
-      this.cache.set(key, value.toString("utf-8"), 0, config.ttl || 3600);
+      this.cache.set(key, value.toString('utf-8'), 0, config.ttl || 3600);
     }
   }
 
@@ -329,7 +329,7 @@ class BenchmarkExecutor {
    */
   private async runWorkload(
     config: CacheConfig,
-    workload: WorkloadConfig,
+    workload: WorkloadConfig
   ): Promise<void> {
     const endTime = Date.now() + workload.duration * 1000;
     const ratio = workload.ratio || this.getDefaultRatio(workload.type);
@@ -351,7 +351,7 @@ class BenchmarkExecutor {
     config: CacheConfig,
     workload: WorkloadConfig,
     ratio: { read: number; write: number },
-    endTime: number,
+    endTime: number
   ): Promise<void> {
     const totalRatio = ratio.read + ratio.write;
     const readThreshold = ratio.read / totalRatio;
@@ -386,7 +386,7 @@ class BenchmarkExecutor {
     const latency = Number(endTime - startTime) / 1_000_000; // Convert to ms
 
     this.latencies.push(latency);
-    this.operations.push({ type: "read", timestamp: Date.now(), latency });
+    this.operations.push({ type: 'read', timestamp: Date.now(), latency });
 
     if (value) {
       this.hits++;
@@ -401,39 +401,39 @@ class BenchmarkExecutor {
   private async executeWrite(
     key: string,
     _config: CacheConfig,
-    workload: WorkloadConfig,
+    workload: WorkloadConfig
   ): Promise<void> {
     const startTime = process.hrtime.bigint();
     const value = this.generateValue(workload.valueSize);
-    const valueStr = value.toString("utf-8");
+    const valueStr = value.toString('utf-8');
     this.cache.set(key, valueStr, valueStr.length, valueStr.length);
     const endTime = process.hrtime.bigint();
 
     const latency = Number(endTime - startTime) / 1_000_000; // Convert to ms
 
     this.latencies.push(latency);
-    this.operations.push({ type: "write", timestamp: Date.now(), latency });
+    this.operations.push({ type: 'write', timestamp: Date.now(), latency });
   }
 
   /**
    * Generate cache key based on distribution
    */
   private generateKey(workload: WorkloadConfig): string {
-    const distribution = workload.keyDistribution || "uniform";
+    const distribution = workload.keyDistribution || 'uniform';
     let index: number;
 
     switch (distribution) {
-      case "uniform":
+      case 'uniform':
         index = Math.floor(Math.random() * workload.keyCount);
         break;
-      case "zipf":
+      case 'zipf':
         // Zipf distribution (80/20 rule approximation)
         index =
           Math.random() < 0.8
             ? Math.floor(Math.random() * (workload.keyCount * 0.2))
             : Math.floor(Math.random() * workload.keyCount);
         break;
-      case "gaussian":
+      case 'gaussian':
         // Gaussian distribution around middle keys
         const mean = workload.keyCount / 2;
         const stddev = workload.keyCount / 6;
@@ -441,8 +441,8 @@ class BenchmarkExecutor {
           0,
           Math.min(
             workload.keyCount - 1,
-            Math.floor(this.randomGaussian() * stddev + mean),
-          ),
+            Math.floor(this.randomGaussian() * stddev + mean)
+          )
         );
         break;
       default:
@@ -464,13 +464,13 @@ class BenchmarkExecutor {
    */
   private getDefaultRatio(type: WorkloadType): { read: number; write: number } {
     switch (type) {
-      case "read-heavy":
+      case 'read-heavy':
         return { read: 90, write: 10 };
-      case "write-heavy":
+      case 'write-heavy':
         return { read: 10, write: 90 };
-      case "mixed":
+      case 'mixed':
         return { read: 50, write: 50 };
-      case "realistic":
+      case 'realistic':
         return { read: 70, write: 30 }; // Typical web app ratio
       default:
         return { read: 50, write: 50 };
@@ -530,8 +530,8 @@ class BenchmarkExecutor {
   private calculateThroughputMetrics(duration: number): ThroughputMetrics {
     const durationSec = duration / 1000;
     const totalOps = this.operations.length;
-    const reads = this.operations.filter((op) => op.type === "read").length;
-    const writes = this.operations.filter((op) => op.type === "write").length;
+    const reads = this.operations.filter((op) => op.type === 'read').length;
+    const writes = this.operations.filter((op) => op.type === 'write').length;
 
     const operationsPerSecond = totalOps / durationSec;
     const readOps = reads / durationSec;
@@ -572,7 +572,7 @@ class BenchmarkExecutor {
 
     for (let t = startTime; t < endTime; t += windowMs) {
       const count = this.operations.filter(
-        (op) => op.timestamp >= t && op.timestamp < t + windowMs,
+        (op) => op.timestamp >= t && op.timestamp < t + windowMs
       ).length;
       windows.push(count);
     }
@@ -626,21 +626,21 @@ class ReportGenerator {
   generateReport(
     results: BenchmarkResults | ComparisonResult | LoadTestResults,
     format: ReportFormat,
-    includeCharts: boolean,
+    includeCharts: boolean
   ): { content: string; tokens: number } {
     let content: string;
 
     switch (format) {
-      case "markdown":
+      case 'markdown':
         content = this.generateMarkdown(results, includeCharts);
         break;
-      case "html":
+      case 'html':
         content = this.generateHTML(results, includeCharts);
         break;
-      case "json":
+      case 'json':
         content = JSON.stringify(results, null, 2);
         break;
-      case "pdf":
+      case 'pdf':
         // PDF generation would require additional libraries
         // For now, generate markdown that can be converted to PDF
         content = this.generateMarkdown(results, includeCharts);
@@ -657,23 +657,23 @@ class ReportGenerator {
    * Generate Markdown report
    */
   private generateMarkdown(results: any, includeCharts: boolean): string {
-    let md = "# Cache Benchmark Report\n\n";
+    let md = '# Cache Benchmark Report\n\n';
     md += `Generated: ${new Date().toISOString()}\n\n`;
 
-    if ("config" in results) {
+    if ('config' in results) {
       // Single benchmark result
       md += this.formatBenchmarkMarkdown(results as BenchmarkResults);
-    } else if ("configs" in results) {
+    } else if ('configs' in results) {
       // Comparison result
       md += this.formatComparisonMarkdown(results as ComparisonResult);
-    } else if ("phases" in results) {
+    } else if ('phases' in results) {
       // Load test result
       md += this.formatLoadTestMarkdown(results as LoadTestResults);
     }
 
     if (includeCharts) {
-      md += "\n## Visualizations\n\n";
-      md += "_Charts would be rendered here in HTML/PDF format_\n";
+      md += '\n## Visualizations\n\n';
+      md += '_Charts would be rendered here in HTML/PDF format_\n';
     }
 
     return md;
@@ -683,27 +683,27 @@ class ReportGenerator {
    * Format single benchmark result as Markdown
    */
   private formatBenchmarkMarkdown(result: BenchmarkResults): string {
-    let md = "## Configuration\n\n";
+    let md = '## Configuration\n\n';
     md += `- **Strategy**: ${result.config.strategy}\n`;
-    md += `- **Max Size**: ${result.config.maxSize || "unlimited"} MB\n`;
-    md += `- **TTL**: ${result.config.ttl || "none"} seconds\n\n`;
+    md += `- **Max Size**: ${result.config.maxSize || 'unlimited'} MB\n`;
+    md += `- **TTL**: ${result.config.ttl || 'none'} seconds\n\n`;
 
-    md += "## Workload\n\n";
+    md += '## Workload\n\n';
     md += `- **Type**: ${result.workload.type}\n`;
     md += `- **Duration**: ${result.workload.duration}s\n`;
     md += `- **Concurrency**: ${result.workload.concurrency}\n`;
     md += `- **Key Count**: ${result.workload.keyCount}\n`;
     md += `- **Value Size**: ${result.workload.valueSize} bytes\n\n`;
 
-    md += "## Operations\n\n";
+    md += '## Operations\n\n';
     md += `- **Total**: ${result.operations.total}\n`;
     md += `- **Reads**: ${result.operations.reads}\n`;
     md += `- **Writes**: ${result.operations.writes}\n`;
     md += `- **Hits**: ${result.operations.hits}\n`;
     md += `- **Misses**: ${result.operations.misses}\n\n`;
 
-    md += "## Performance\n\n";
-    md += "### Latency (ms)\n\n";
+    md += '## Performance\n\n';
+    md += '### Latency (ms)\n\n';
     md += `- **Mean**: ${result.performance.latency.mean.toFixed(3)}\n`;
     md += `- **Median**: ${result.performance.latency.median.toFixed(3)}\n`;
     md += `- **p50**: ${result.performance.latency.p50.toFixed(3)}\n`;
@@ -712,14 +712,14 @@ class ReportGenerator {
     md += `- **p99**: ${result.performance.latency.p99.toFixed(3)}\n`;
     md += `- **p99.9**: ${result.performance.latency.p99_9.toFixed(3)}\n\n`;
 
-    md += "### Throughput\n\n";
+    md += '### Throughput\n\n';
     md += `- **Operations/sec**: ${result.performance.throughput.operationsPerSecond.toFixed(2)}\n`;
     md += `- **Read ops/sec**: ${result.performance.throughput.readOps.toFixed(2)}\n`;
     md += `- **Write ops/sec**: ${result.performance.throughput.writeOps.toFixed(2)}\n`;
     md += `- **Peak throughput**: ${result.performance.throughput.peakThroughput.toFixed(2)}\n`;
     md += `- **Sustained throughput**: ${result.performance.throughput.sustainedThroughput.toFixed(2)}\n\n`;
 
-    md += "## Cache Performance\n\n";
+    md += '## Cache Performance\n\n';
     md += `- **Hit Rate**: ${(result.cache.hitRate * 100).toFixed(2)}%\n`;
     md += `- **Miss Rate**: ${(result.cache.missRate * 100).toFixed(2)}%\n`;
     md += `- **Evictions**: ${result.cache.evictions}\n`;
@@ -733,12 +733,12 @@ class ReportGenerator {
    * Format comparison result as Markdown
    */
   private formatComparisonMarkdown(result: ComparisonResult): string {
-    let md = "## Configuration Comparison\n\n";
+    let md = '## Configuration Comparison\n\n';
 
     md +=
-      "| Configuration | Strategy | Hit Rate | Latency (p95) | Throughput |\n";
+      '| Configuration | Strategy | Hit Rate | Latency (p95) | Throughput |\n';
     md +=
-      "|--------------|----------|----------|---------------|------------|\n";
+      '|--------------|----------|----------|---------------|------------|\n';
 
     for (const bench of result.results) {
       md += `| ${bench.config.name} | ${bench.config.strategy} | `;
@@ -747,26 +747,26 @@ class ReportGenerator {
       md += `${bench.performance.throughput.operationsPerSecond.toFixed(2)} ops/s |\n`;
     }
 
-    md += "\n## Winner\n\n";
+    md += '\n## Winner\n\n';
     md += `**${result.winner.config}** excels in ${result.winner.metric} with ${result.winner.value.toFixed(2)}\n\n`;
 
-    md += "## Rankings\n\n";
-    md += "### By Latency\n\n";
+    md += '## Rankings\n\n';
+    md += '### By Latency\n\n';
     result.rankings.byLatency.forEach((name, i) => {
       md += `${i + 1}. ${name}\n`;
     });
 
-    md += "\n### By Throughput\n\n";
+    md += '\n### By Throughput\n\n';
     result.rankings.byThroughput.forEach((name, i) => {
       md += `${i + 1}. ${name}\n`;
     });
 
-    md += "\n### By Hit Rate\n\n";
+    md += '\n### By Hit Rate\n\n';
     result.rankings.byHitRate.forEach((name, i) => {
       md += `${i + 1}. ${name}\n`;
     });
 
-    md += "\n## Recommendations\n\n";
+    md += '\n## Recommendations\n\n';
     result.recommendations.forEach((rec) => {
       md += `- ${rec}\n`;
     });
@@ -778,12 +778,12 @@ class ReportGenerator {
    * Format load test result as Markdown
    */
   private formatLoadTestMarkdown(result: LoadTestResults): string {
-    let md = "## Load Test Results\n\n";
+    let md = '## Load Test Results\n\n';
 
     md +=
-      "| Concurrency | Duration | Throughput | Error Rate | p99 Latency |\n";
+      '| Concurrency | Duration | Throughput | Error Rate | p99 Latency |\n';
     md +=
-      "|-------------|----------|------------|------------|-------------|\n";
+      '|-------------|----------|------------|------------|-------------|\n';
 
     for (const phase of result.phases) {
       md += `| ${phase.concurrency} | ${phase.duration}s | `;
@@ -792,7 +792,7 @@ class ReportGenerator {
       md += `${phase.p99Latency.toFixed(3)}ms |\n`;
     }
 
-    md += "\n## Summary\n\n";
+    md += '\n## Summary\n\n';
     md += `- **Max Concurrency**: ${result.maxConcurrency}\n`;
     md += `- **Total Requests**: ${result.summary.totalRequests}\n`;
     md += `- **Successful**: ${result.summary.successfulRequests}\n`;
@@ -801,7 +801,7 @@ class ReportGenerator {
     md += `- **Peak Throughput**: ${result.summary.peakThroughput.toFixed(2)} ops/s\n\n`;
 
     if (result.breakingPoint) {
-      md += "## Breaking Point\n\n";
+      md += '## Breaking Point\n\n';
       md += `System broke at **${result.breakingPoint.concurrency}** concurrent connections\n`;
       md += `Reason: ${result.breakingPoint.reason}\n`;
     }
@@ -871,7 +871,7 @@ export class CacheBenchmark {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     this.tokenCounter = tokenCounter;
     this.metrics = metrics;
@@ -897,7 +897,7 @@ export class CacheBenchmark {
           const originalTokens = this.tokenCounter.count(fullResult).tokens;
           const summary = this.generateResultSummary(cached);
           const summaryTokens = this.tokenCounter.count(
-            JSON.stringify(summary),
+            JSON.stringify(summary)
           ).tokens;
 
           return {
@@ -918,22 +918,22 @@ export class CacheBenchmark {
       let result: CacheBenchmarkResult;
 
       switch (options.operation) {
-        case "run-benchmark":
+        case 'run-benchmark':
           result = await this.runBenchmark(options);
           break;
-        case "compare":
+        case 'compare':
           result = await this.compareConfigurations(options);
           break;
-        case "load-test":
+        case 'load-test':
           result = await this.runLoadTest(options);
           break;
-        case "latency-test":
+        case 'latency-test':
           result = await this.runLatencyTest(options);
           break;
-        case "throughput-test":
+        case 'throughput-test':
           result = await this.runThroughputTest(options);
           break;
-        case "report":
+        case 'report':
           result = await this.generateReport(options);
           break;
         default:
@@ -954,7 +954,7 @@ export class CacheBenchmark {
       return {
         success: false,
         operation: options.operation,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
         metadata: {
           tokensUsed: 0,
           tokensSaved: 0,
@@ -969,16 +969,16 @@ export class CacheBenchmark {
    * Run a single benchmark
    */
   private async runBenchmark(
-    options: CacheBenchmarkOptions,
+    options: CacheBenchmarkOptions
   ): Promise<CacheBenchmarkResult> {
     if (!options.config) {
-      throw new Error("Config is required for run-benchmark");
+      throw new Error('Config is required for run-benchmark');
     }
 
     const workload = this.buildWorkloadConfig(options);
     const results = await this.executor.executeBenchmark(
       options.config,
-      workload,
+      workload
     );
 
     // Cache results
@@ -992,12 +992,12 @@ export class CacheBenchmark {
     const originalTokens = this.tokenCounter.count(fullResult).tokens;
     const summary = this.generateResultSummary(results);
     const summaryTokens = this.tokenCounter.count(
-      JSON.stringify(summary),
+      JSON.stringify(summary)
     ).tokens;
 
     return {
       success: true,
-      operation: "run-benchmark",
+      operation: 'run-benchmark',
       benchmarkResults: summary,
       metadata: {
         tokensUsed: summaryTokens,
@@ -1013,10 +1013,10 @@ export class CacheBenchmark {
    * Compare multiple configurations
    */
   private async compareConfigurations(
-    options: CacheBenchmarkOptions,
+    options: CacheBenchmarkOptions
   ): Promise<CacheBenchmarkResult> {
     if (!options.configs || options.configs.length < 2) {
-      throw new Error("At least 2 configs are required for comparison");
+      throw new Error('At least 2 configs are required for comparison');
     }
 
     const workload = this.buildWorkloadConfig(options);
@@ -1036,12 +1036,12 @@ export class CacheBenchmark {
     const originalTokens = this.tokenCounter.count(fullResult).tokens;
     const summary = this.generateComparisonSummary(comparison);
     const summaryTokens = this.tokenCounter.count(
-      JSON.stringify(summary),
+      JSON.stringify(summary)
     ).tokens;
 
     return {
       success: true,
-      operation: "compare",
+      operation: 'compare',
       comparison: summary,
       metadata: {
         tokensUsed: summaryTokens,
@@ -1057,18 +1057,18 @@ export class CacheBenchmark {
    * Run load test with increasing concurrency
    */
   private async runLoadTest(
-    options: CacheBenchmarkOptions,
+    options: CacheBenchmarkOptions
   ): Promise<CacheBenchmarkResult> {
     const maxConcurrency = options.maxConcurrency || 100;
     const stepSize = options.stepSize || 10;
     const phaseDuration = 30; // seconds per phase
 
-    const phases: LoadTestResults["phases"] = [];
-    let breakingPoint: LoadTestResults["breakingPoint"] | undefined;
+    const phases: LoadTestResults['phases'] = [];
+    let breakingPoint: LoadTestResults['breakingPoint'] | undefined;
 
     const config: CacheConfig = options.config || {
-      name: "default",
-      strategy: "LRU",
+      name: 'default',
+      strategy: 'LRU',
       ttl: 3600,
     };
 
@@ -1078,7 +1078,7 @@ export class CacheBenchmark {
       concurrency += stepSize
     ) {
       const workload: WorkloadConfig = {
-        type: options.workloadType || "mixed",
+        type: options.workloadType || 'mixed',
         duration: phaseDuration,
         concurrency,
         keyCount: 10000,
@@ -1107,15 +1107,15 @@ export class CacheBenchmark {
             concurrency,
             reason:
               errorRate > 0.05
-                ? "Error rate exceeded 5%"
-                : "p99 latency exceeded 1 second",
+                ? 'Error rate exceeded 5%'
+                : 'p99 latency exceeded 1 second',
           };
           break;
         }
       } catch (error) {
         breakingPoint = {
           concurrency,
-          reason: error instanceof Error ? error.message : "Unknown error",
+          reason: error instanceof Error ? error.message : 'Unknown error',
         };
         break;
       }
@@ -1124,7 +1124,7 @@ export class CacheBenchmark {
     // Calculate summary
     const totalRequests = phases.reduce(
       (sum, p) => sum + p.throughput * p.duration,
-      0,
+      0
     );
     const successfulRequests = totalRequests; // No error tracking yet
     const failedRequests = 0;
@@ -1150,12 +1150,12 @@ export class CacheBenchmark {
     const originalTokens = this.tokenCounter.count(fullResult).tokens;
     const summary = this.generateLoadTestSummary(loadTestResults);
     const summaryTokens = this.tokenCounter.count(
-      JSON.stringify(summary),
+      JSON.stringify(summary)
     ).tokens;
 
     return {
       success: true,
-      operation: "load-test",
+      operation: 'load-test',
       loadTestResults: summary,
       metadata: {
         tokensUsed: summaryTokens,
@@ -1171,11 +1171,11 @@ export class CacheBenchmark {
    * Run latency test with specific percentiles
    */
   private async runLatencyTest(
-    options: CacheBenchmarkOptions,
+    options: CacheBenchmarkOptions
   ): Promise<CacheBenchmarkResult> {
     const config: CacheConfig = options.config || {
-      name: "default",
-      strategy: "LRU",
+      name: 'default',
+      strategy: 'LRU',
       ttl: 3600,
     };
 
@@ -1200,12 +1200,12 @@ export class CacheBenchmark {
       stddev: latencyDistribution.stddev,
     };
     const summaryTokens = this.tokenCounter.count(
-      JSON.stringify(summary),
+      JSON.stringify(summary)
     ).tokens;
 
     return {
       success: true,
-      operation: "latency-test",
+      operation: 'latency-test',
       latencyDistribution: summary,
       metadata: {
         tokensUsed: summaryTokens,
@@ -1221,11 +1221,11 @@ export class CacheBenchmark {
    * Run throughput test
    */
   private async runThroughputTest(
-    options: CacheBenchmarkOptions,
+    options: CacheBenchmarkOptions
   ): Promise<CacheBenchmarkResult> {
     const config: CacheConfig = options.config || {
-      name: "default",
-      strategy: "LRU",
+      name: 'default',
+      strategy: 'LRU',
       ttl: 3600,
     };
 
@@ -1246,12 +1246,12 @@ export class CacheBenchmark {
       averageLatency: throughputResults.averageLatency,
     };
     const summaryTokens = this.tokenCounter.count(
-      JSON.stringify(summary),
+      JSON.stringify(summary)
     ).tokens;
 
     return {
       success: true,
-      operation: "throughput-test",
+      operation: 'throughput-test',
       throughputResults: summary,
       metadata: {
         tokensUsed: summaryTokens,
@@ -1267,11 +1267,11 @@ export class CacheBenchmark {
    * Generate comprehensive report
    */
   private async generateReport(
-    options: CacheBenchmarkOptions,
+    options: CacheBenchmarkOptions
   ): Promise<CacheBenchmarkResult> {
     if (!options.benchmarkId && !options.resultsPath) {
       throw new Error(
-        "Either benchmarkId or resultsPath is required for report generation",
+        'Either benchmarkId or resultsPath is required for report generation'
       );
     }
 
@@ -1280,16 +1280,16 @@ export class CacheBenchmark {
     const results = this.benchmarkCache.values().next().value;
 
     if (!results) {
-      throw new Error("No benchmark results available for report generation");
+      throw new Error('No benchmark results available for report generation');
     }
 
-    const format = options.format || "markdown";
+    const format = options.format || 'markdown';
     const includeCharts = options.includeCharts || false;
 
     const { content, tokens } = this.reportGenerator.generateReport(
       results,
       format,
-      includeCharts,
+      includeCharts
     );
 
     // Save report
@@ -1297,12 +1297,12 @@ export class CacheBenchmark {
       options.outputPath ||
       join(
         homedir(),
-        ".hypercontext",
-        "reports",
-        `benchmark-${Date.now()}.${format === "html" ? "html" : "md"}`,
+        '.hypercontext',
+        'reports',
+        `benchmark-${Date.now()}.${format === 'html' ? 'html' : 'md'}`
       );
 
-    writeFileSync(outputPath, content, "utf-8");
+    writeFileSync(outputPath, content, 'utf-8');
 
     // Calculate token reduction
     const fullResults = JSON.stringify(results);
@@ -1310,7 +1310,7 @@ export class CacheBenchmark {
 
     return {
       success: true,
-      operation: "report",
+      operation: 'report',
       reportPath: outputPath,
       reportFormat: format,
       metadata: {
@@ -1330,14 +1330,14 @@ export class CacheBenchmark {
     const workload = options.workload || {};
 
     return {
-      type: options.workloadType || workload.type || "mixed",
+      type: options.workloadType || workload.type || 'mixed',
       ratio: options.workloadRatio || workload.ratio,
       duration: options.duration || workload.duration || 60,
       concurrency: options.concurrency || workload.concurrency || 10,
       keyCount: workload.keyCount || 1000,
       valueSize: workload.valueSize || 1024,
-      keyDistribution: workload.keyDistribution || "uniform",
-      accessPattern: workload.accessPattern || "random",
+      keyDistribution: workload.keyDistribution || 'uniform',
+      accessPattern: workload.accessPattern || 'random',
     };
   }
 
@@ -1352,9 +1352,9 @@ export class CacheBenchmark {
       concurrency: options.concurrency,
     };
 
-    const hash = createHash("sha256")
+    const hash = createHash('sha256')
       .update(JSON.stringify(keyData))
-      .digest("hex");
+      .digest('hex');
 
     return `benchmark:${hash}`;
   }
@@ -1367,11 +1367,11 @@ export class CacheBenchmark {
       config: results.config.name,
       strategy: results.config.strategy,
       operations: results.operations.total,
-      hitRate: (results.cache.hitRate * 100).toFixed(2) + "%",
-      p95Latency: results.performance.latency.p95.toFixed(3) + "ms",
+      hitRate: (results.cache.hitRate * 100).toFixed(2) + '%',
+      p95Latency: results.performance.latency.p95.toFixed(3) + 'ms',
       throughput:
         results.performance.throughput.operationsPerSecond.toFixed(2) +
-        " ops/s",
+        ' ops/s',
     };
   }
 
@@ -1394,9 +1394,9 @@ export class CacheBenchmark {
   private generateLoadTestSummary(results: LoadTestResults): any {
     return {
       maxConcurrency: results.maxConcurrency,
-      peakThroughput: results.summary.peakThroughput.toFixed(2) + " ops/s",
+      peakThroughput: results.summary.peakThroughput.toFixed(2) + ' ops/s',
       totalRequests: results.summary.totalRequests,
-      breakingPoint: results.breakingPoint?.concurrency || "N/A",
+      breakingPoint: results.breakingPoint?.concurrency || 'N/A',
       phaseCount: results.phases.length,
     };
   }
@@ -1407,18 +1407,18 @@ export class CacheBenchmark {
   private analyzeComparison(results: BenchmarkResults[]): ComparisonResult {
     // Find winners by different metrics
     const byLatency = [...results].sort(
-      (a, b) => a.performance.latency.p95 - b.performance.latency.p95,
+      (a, b) => a.performance.latency.p95 - b.performance.latency.p95
     );
     const byThroughput = [...results].sort(
       (a, b) =>
         b.performance.throughput.operationsPerSecond -
-        a.performance.throughput.operationsPerSecond,
+        a.performance.throughput.operationsPerSecond
     );
     const byHitRate = [...results].sort(
-      (a, b) => b.cache.hitRate - a.cache.hitRate,
+      (a, b) => b.cache.hitRate - a.cache.hitRate
     );
     const byMemory = [...results].sort(
-      (a, b) => a.cache.memoryUsage - b.cache.memoryUsage,
+      (a, b) => a.cache.memoryUsage - b.cache.memoryUsage
     );
 
     // Overall winner (weighted score)
@@ -1446,19 +1446,19 @@ export class CacheBenchmark {
 
     if (byLatency[0].config.name !== winner.config) {
       recommendations.push(
-        `For lowest latency, use ${byLatency[0].config.name} (${byLatency[0].performance.latency.p95.toFixed(3)}ms p95)`,
+        `For lowest latency, use ${byLatency[0].config.name} (${byLatency[0].performance.latency.p95.toFixed(3)}ms p95)`
       );
     }
 
     if (byThroughput[0].config.name !== winner.config) {
       recommendations.push(
-        `For highest throughput, use ${byThroughput[0].config.name} (${byThroughput[0].performance.throughput.operationsPerSecond.toFixed(2)} ops/s)`,
+        `For highest throughput, use ${byThroughput[0].config.name} (${byThroughput[0].performance.throughput.operationsPerSecond.toFixed(2)} ops/s)`
       );
     }
 
     if (byHitRate[0].config.name !== winner.config) {
       recommendations.push(
-        `For best hit rate, use ${byHitRate[0].config.name} (${(byHitRate[0].cache.hitRate * 100).toFixed(2)}%)`,
+        `For best hit rate, use ${byHitRate[0].config.name} (${(byHitRate[0].cache.hitRate * 100).toFixed(2)}%)`
       );
     }
 
@@ -1467,7 +1467,7 @@ export class CacheBenchmark {
       results,
       winner: {
         config: winner.config,
-        metric: "overall",
+        metric: 'overall',
         value: winner.score,
       },
       rankings: {
@@ -1490,7 +1490,7 @@ export async function runCacheBenchmark(
   options: CacheBenchmarkOptions,
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): Promise<string> {
   const tool = new CacheBenchmark(cache, tokenCounter, metrics);
   const result = await tool.run(options);
@@ -1502,7 +1502,7 @@ export async function runCacheBenchmark(
  * MCP Tool Definition
  */
 export const CACHE_BENCHMARK_TOOL_DEFINITION = {
-  name: "cache-benchmark",
+  name: 'cache-benchmark',
   description: `Cache Performance Benchmarking with 89% token reduction through comprehensive testing and analysis.
 
 Features:
@@ -1531,121 +1531,121 @@ Token Reduction:
 - Average: 89% reduction`,
 
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "run-benchmark",
-          "compare",
-          "load-test",
-          "latency-test",
-          "throughput-test",
-          "report",
+          'run-benchmark',
+          'compare',
+          'load-test',
+          'latency-test',
+          'throughput-test',
+          'report',
         ],
-        description: "Benchmark operation to perform",
+        description: 'Benchmark operation to perform',
       },
       config: {
-        type: "object",
-        description: "Cache configuration for single benchmark",
+        type: 'object',
+        description: 'Cache configuration for single benchmark',
         properties: {
-          name: { type: "string" },
+          name: { type: 'string' },
           strategy: {
-            type: "string",
-            enum: ["LRU", "LFU", "FIFO", "TTL", "size", "hybrid"],
+            type: 'string',
+            enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'size', 'hybrid'],
           },
-          maxSize: { type: "number" },
-          maxEntries: { type: "number" },
-          ttl: { type: "number" },
+          maxSize: { type: 'number' },
+          maxEntries: { type: 'number' },
+          ttl: { type: 'number' },
         },
       },
       configs: {
-        type: "array",
-        description: "Multiple cache configurations for comparison",
+        type: 'array',
+        description: 'Multiple cache configurations for comparison',
         items: {
-          type: "object",
+          type: 'object',
           properties: {
-            name: { type: "string" },
+            name: { type: 'string' },
             strategy: {
-              type: "string",
-              enum: ["LRU", "LFU", "FIFO", "TTL", "size", "hybrid"],
+              type: 'string',
+              enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'size', 'hybrid'],
             },
           },
         },
       },
       duration: {
-        type: "number",
-        description: "Benchmark duration in seconds (default: 60)",
+        type: 'number',
+        description: 'Benchmark duration in seconds (default: 60)',
       },
       warmupDuration: {
-        type: "number",
-        description: "Warmup duration in seconds (default: 10)",
+        type: 'number',
+        description: 'Warmup duration in seconds (default: 10)',
       },
       workloadType: {
-        type: "string",
-        enum: ["read-heavy", "write-heavy", "mixed", "custom", "realistic"],
-        description: "Type of workload to simulate",
+        type: 'string',
+        enum: ['read-heavy', 'write-heavy', 'mixed', 'custom', 'realistic'],
+        description: 'Type of workload to simulate',
       },
       workloadRatio: {
-        type: "object",
-        description: "Custom read/write ratio",
+        type: 'object',
+        description: 'Custom read/write ratio',
         properties: {
-          read: { type: "number" },
-          write: { type: "number" },
+          read: { type: 'number' },
+          write: { type: 'number' },
         },
       },
       concurrency: {
-        type: "number",
-        description: "Number of concurrent workers (default: 10)",
+        type: 'number',
+        description: 'Number of concurrent workers (default: 10)',
       },
       rampUp: {
-        type: "number",
-        description: "Ramp-up time in seconds (for load-test)",
+        type: 'number',
+        description: 'Ramp-up time in seconds (for load-test)',
       },
       targetTPS: {
-        type: "number",
-        description: "Target transactions per second",
+        type: 'number',
+        description: 'Target transactions per second',
       },
       maxConcurrency: {
-        type: "number",
-        description: "Maximum concurrency for load test (default: 100)",
+        type: 'number',
+        description: 'Maximum concurrency for load test (default: 100)',
       },
       stepSize: {
-        type: "number",
-        description: "Concurrency step size for load test (default: 10)",
+        type: 'number',
+        description: 'Concurrency step size for load test (default: 10)',
       },
       percentiles: {
-        type: "array",
-        items: { type: "number" },
-        description: "Percentiles to measure (default: [50, 90, 95, 99])",
+        type: 'array',
+        items: { type: 'number' },
+        description: 'Percentiles to measure (default: [50, 90, 95, 99])',
       },
       format: {
-        type: "string",
-        enum: ["markdown", "html", "json", "pdf"],
-        description: "Report format (default: markdown)",
+        type: 'string',
+        enum: ['markdown', 'html', 'json', 'pdf'],
+        description: 'Report format (default: markdown)',
       },
       includeCharts: {
-        type: "boolean",
-        description: "Include charts in report",
+        type: 'boolean',
+        description: 'Include charts in report',
       },
       outputPath: {
-        type: "string",
-        description: "Path to save report",
+        type: 'string',
+        description: 'Path to save report',
       },
       benchmarkId: {
-        type: "string",
-        description: "ID of benchmark results to generate report for",
+        type: 'string',
+        description: 'ID of benchmark results to generate report for',
       },
       useCache: {
-        type: "boolean",
-        description: "Cache benchmark results (default: true)",
+        type: 'boolean',
+        description: 'Cache benchmark results (default: true)',
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 604800 - 7 days)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 604800 - 7 days)',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 

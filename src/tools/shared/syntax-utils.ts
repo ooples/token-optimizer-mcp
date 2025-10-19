@@ -14,13 +14,13 @@ export interface ChunkMetadata {
   endLine: number;
   size: number;
   type:
-    | "code"
-    | "comment"
-    | "import"
-    | "export"
-    | "function"
-    | "class"
-    | "other";
+    | 'code'
+    | 'comment'
+    | 'import'
+    | 'export'
+    | 'function'
+    | 'class'
+    | 'other';
 }
 
 export interface TruncationResult {
@@ -35,25 +35,25 @@ export interface TruncationResult {
  * Detect file type from extension
  */
 export function detectFileType(filePath: string): string {
-  const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  const ext = filePath.split('.').pop()?.toLowerCase() || '';
   const typeMap: Record<string, string> = {
-    ts: "typescript",
-    tsx: "typescript",
-    js: "javascript",
-    jsx: "javascript",
-    py: "python",
-    go: "go",
-    rs: "rust",
-    java: "java",
-    cpp: "cpp",
-    c: "c",
-    h: "c",
-    json: "json",
-    md: "markdown",
-    yml: "yaml",
-    yaml: "yaml",
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    py: 'python',
+    go: 'go',
+    rs: 'rust',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    h: 'c',
+    json: 'json',
+    md: 'markdown',
+    yml: 'yaml',
+    yaml: 'yaml',
   };
-  return typeMap[ext] || "text";
+  return typeMap[ext] || 'text';
 }
 
 /**
@@ -61,9 +61,9 @@ export function detectFileType(filePath: string): string {
  */
 export function chunkBySyntax(
   content: string,
-  maxChunkSize: number = 4000,
+  maxChunkSize: number = 4000
 ): ChunkResult {
-  const lines = content.split("\n");
+  const lines = content.split('\n');
   const chunks: string[] = [];
   const metadata: ChunkMetadata[] = [];
   let currentChunk: string[] = [];
@@ -78,7 +78,7 @@ export function chunkBySyntax(
     // Check if adding this line would exceed the chunk size
     if (currentSize + lineSize > maxChunkSize && currentChunk.length > 0) {
       // Save current chunk
-      const chunkContent = currentChunk.join("\n");
+      const chunkContent = currentChunk.join('\n');
       chunks.push(chunkContent);
       metadata.push({
         index: chunkIndex++,
@@ -100,7 +100,7 @@ export function chunkBySyntax(
 
   // Add remaining chunk
   if (currentChunk.length > 0) {
-    const chunkContent = currentChunk.join("\n");
+    const chunkContent = currentChunk.join('\n');
     chunks.push(chunkContent);
     metadata.push({
       index: chunkIndex,
@@ -121,30 +121,30 @@ export function chunkBySyntax(
 /**
  * Detect the type of a line
  */
-function detectLineType(line: string): ChunkMetadata["type"] {
+function detectLineType(line: string): ChunkMetadata['type'] {
   const trimmed = line.trim();
 
   if (
-    trimmed.startsWith("//") ||
-    trimmed.startsWith("#") ||
-    trimmed.startsWith("/*")
+    trimmed.startsWith('//') ||
+    trimmed.startsWith('#') ||
+    trimmed.startsWith('/*')
   ) {
-    return "comment";
+    return 'comment';
   }
-  if (trimmed.startsWith("import ") || trimmed.startsWith("from ")) {
-    return "import";
+  if (trimmed.startsWith('import ') || trimmed.startsWith('from ')) {
+    return 'import';
   }
-  if (trimmed.startsWith("export ")) {
-    return "export";
+  if (trimmed.startsWith('export ')) {
+    return 'export';
   }
-  if (trimmed.includes("function ") || trimmed.includes("=>")) {
-    return "function";
+  if (trimmed.includes('function ') || trimmed.includes('=>')) {
+    return 'function';
   }
-  if (trimmed.startsWith("class ")) {
-    return "class";
+  if (trimmed.startsWith('class ')) {
+    return 'class';
   }
 
-  return "other";
+  return 'other';
 }
 
 /**
@@ -157,7 +157,7 @@ export function truncateContent(
     keepTop?: number;
     keepBottom?: number;
     preserveStructure?: boolean;
-  } = {},
+  } = {}
 ): TruncationResult {
   const { keepTop = 100, keepBottom = 50, preserveStructure = true } = options;
 
@@ -171,7 +171,7 @@ export function truncateContent(
     };
   }
 
-  const lines = content.split("\n");
+  const lines = content.split('\n');
   const topLines = lines.slice(0, keepTop);
   const bottomLines = lines.slice(-keepBottom);
 
@@ -180,34 +180,34 @@ export function truncateContent(
   if (preserveStructure) {
     // Keep imports, exports, and structure
     const importLines = lines.filter(
-      (l) => l.trim().startsWith("import ") || l.trim().startsWith("export "),
+      (l) => l.trim().startsWith('import ') || l.trim().startsWith('export ')
     );
     const structureLines = lines.filter((l) => {
       const trimmed = l.trim();
       return (
-        trimmed.startsWith("class ") ||
-        trimmed.startsWith("interface ") ||
-        trimmed.startsWith("type ") ||
-        trimmed.startsWith("function ") ||
-        trimmed.startsWith("const ") ||
-        trimmed.startsWith("let ")
+        trimmed.startsWith('class ') ||
+        trimmed.startsWith('interface ') ||
+        trimmed.startsWith('type ') ||
+        trimmed.startsWith('function ') ||
+        trimmed.startsWith('const ') ||
+        trimmed.startsWith('let ')
       );
     });
 
     const kept = [
       ...importLines,
       ...structureLines.slice(0, 20), // Keep first 20 structure elements
-      "\n// ... [truncated] ...\n",
+      '\n// ... [truncated] ...\n',
       ...bottomLines,
     ];
 
-    truncated = kept.join("\n");
+    truncated = kept.join('\n');
   } else {
     truncated = [
       ...topLines,
-      "\n// ... [truncated] ...\n",
+      '\n// ... [truncated] ...\n',
       ...bottomLines,
-    ].join("\n");
+    ].join('\n');
   }
 
   return {
@@ -224,9 +224,9 @@ export function truncateContent(
  */
 export function extractChangedSections(
   content: string,
-  lineNumbers: number[],
+  lineNumbers: number[]
 ): string {
-  const lines = content.split("\n");
+  const lines = content.split('\n');
   const contextLines = 3;
   const sections: string[] = [];
 
@@ -254,22 +254,22 @@ export function extractChangedSections(
     const start = Math.max(0, group[0] - contextLines);
     const end = Math.min(
       lines.length,
-      group[group.length - 1] + contextLines + 1,
+      group[group.length - 1] + contextLines + 1
     );
 
     sections.push(`Lines ${start + 1}-${end}:`);
-    sections.push(lines.slice(start, end).join("\n"));
-    sections.push("");
+    sections.push(lines.slice(start, end).join('\n'));
+    sections.push('');
   }
 
-  return sections.join("\n");
+  return sections.join('\n');
 }
 
 /**
  * Check if content is minified/compressed
  */
 export function isMinified(content: string): boolean {
-  const lines = content.split("\n");
+  const lines = content.split('\n');
   if (lines.length < 5) {
     // For files with very few lines, check if they're minified based on length and whitespace
     if (lines.length === 1 && lines[0].length > 500) return true;
@@ -279,7 +279,7 @@ export function isMinified(content: string): boolean {
   const avgLineLength = content.length / lines.length;
   const hasVeryLongLines = lines.some((l) => l.length > 500);
   const hasMinimalWhitespace =
-    content.replace(/\s/g, "").length / content.length > 0.8;
+    content.replace(/\s/g, '').length / content.length > 0.8;
 
   return avgLineLength > 200 || (hasVeryLongLines && hasMinimalWhitespace);
 }
