@@ -1,4 +1,6 @@
 import fs from 'fs';
+import { createReadStream } from 'fs';
+import { createInterface } from 'readline';
 
 /**
  * Represents a parsed tool call operation from session logs
@@ -25,6 +27,8 @@ export interface SessionLogData {
  * This utility extracts tool call operations and system reminder tokens from
  * session log files, normalizing metadata to strings for consistent handling.
  *
+ * Uses streaming with readline to avoid blocking the event loop on large files.
+ *
  * @param jsonlFilePath - Path to the session-log.jsonl file
  * @returns Parsed operations and token counts
  *
@@ -32,16 +36,20 @@ export interface SessionLogData {
  * - Skips malformed JSONL lines silently
  * - Normalizes object metadata to JSON strings
  * - Returns empty arrays/zeros if file is empty
+ * - Uses streaming for memory efficiency on large logs
  */
-export function parseSessionLog(jsonlFilePath: string): SessionLogData {
-  const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
-  const lines = jsonlContent.trim().split('\n');
-
+export async function parseSessionLog(jsonlFilePath: string): Promise<SessionLogData> {
   const operations: Operation[] = [];
   let systemReminderTokens = 0;
   let toolTokens = 0;
 
-  for (const line of lines) {
+  const fileStream = createReadStream(jsonlFilePath, { encoding: 'utf-8' });
+  const rl = createInterface({
+    input: fileStream,
+    crlfDelay: Infinity,
+  });
+
+  for await (const line of rl) {
     if (!line.trim()) continue;
 
     try {
@@ -67,7 +75,7 @@ export function parseSessionLog(jsonlFilePath: string): SessionLogData {
       // Process system reminders
       if (event.type === 'system_reminder') {
         const tokens = event.tokens || 0;
-        systemReminderTokens = tokens;
+        systemReminderTokens += tokens;
       }
     } catch (parseError) {
       // Skip malformed JSONL lines
