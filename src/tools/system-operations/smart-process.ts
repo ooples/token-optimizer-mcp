@@ -135,20 +135,20 @@ export class SmartProcess {
         duration: Date.now() - startTime,
         success: result.success,
         cacheHit: result.metadata.cacheHit,
-        metadata: { pid: options.pid, name: options.name }
+        metadata: { pid: options.pid, name: options.name },
       });
 
       return result;
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       this.metricsCollector.record({
         operation: `smart-process:${operation}`,
         duration: Date.now() - startTime,
         success: false,
         cacheHit: false,
-        metadata: { error: errorMessage }
+        metadata: { error: errorMessage },
       });
 
       return {
@@ -159,13 +159,15 @@ export class SmartProcess {
           tokensUsed: this.tokenCounter.count(errorMessage).tokens,
           tokensSaved: 0,
           cacheHit: false,
-          executionTime: Date.now() - startTime
-        }
+          executionTime: Date.now() - startTime,
+        },
       };
     }
   }
 
-  private async startProcess(options: SmartProcessOptions): Promise<SmartProcessResult> {
+  private async startProcess(
+    options: SmartProcessOptions
+  ): Promise<SmartProcessResult> {
     if (!options.command) {
       throw new Error('Command required for start operation');
     }
@@ -174,7 +176,7 @@ export class SmartProcess {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       detached: options.detached,
-      stdio: 'pipe'
+      stdio: 'pipe',
     });
 
     const pid = child.pid!;
@@ -187,7 +189,7 @@ export class SmartProcess {
       cpu: 0,
       memory: 0,
       status: 'running',
-      startTime: Date.now()
+      startTime: Date.now(),
     };
 
     const dataStr = JSON.stringify(processInfo);
@@ -201,12 +203,14 @@ export class SmartProcess {
         tokensUsed,
         tokensSaved: 0,
         cacheHit: false,
-        executionTime: 0
-      }
+        executionTime: 0,
+      },
     };
   }
 
-  private async stopProcess(options: SmartProcessOptions): Promise<SmartProcessResult> {
+  private async stopProcess(
+    options: SmartProcessOptions
+  ): Promise<SmartProcessResult> {
     if (!options.pid && !options.name) {
       throw new Error('PID or name required for stop operation');
     }
@@ -221,7 +225,7 @@ export class SmartProcess {
       process.kill(pid, 'SIGTERM');
 
       // Wait for process to exit
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Check if still running
       try {
@@ -232,7 +236,9 @@ export class SmartProcess {
         // Process already exited
       }
     } catch (error) {
-      throw new Error(`Failed to stop process ${pid}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to stop process ${pid}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     this.runningProcesses.delete(pid);
@@ -249,12 +255,14 @@ export class SmartProcess {
         tokensUsed,
         tokensSaved: 0,
         cacheHit: false,
-        executionTime: 0
-      }
+        executionTime: 0,
+      },
     };
   }
 
-  private async getProcessStatus(options: SmartProcessOptions): Promise<SmartProcessResult> {
+  private async getProcessStatus(
+    options: SmartProcessOptions
+  ): Promise<SmartProcessResult> {
     const cacheKey = `process-status:${options.pid || options.name}`;
     const useCache = options.useCache !== false;
 
@@ -274,8 +282,8 @@ export class SmartProcess {
             tokensUsed,
             tokensSaved: baselineTokens - tokensUsed,
             cacheHit: true,
-            executionTime: 0
-          }
+            executionTime: 0,
+          },
         };
       }
     }
@@ -298,12 +306,14 @@ export class SmartProcess {
         tokensUsed,
         tokensSaved: 0,
         cacheHit: false,
-        executionTime: 0
-      }
+        executionTime: 0,
+      },
     };
   }
 
-  private async monitorProcess(options: SmartProcessOptions): Promise<SmartProcessResult> {
+  private async monitorProcess(
+    options: SmartProcessOptions
+  ): Promise<SmartProcessResult> {
     if (!options.pid) {
       throw new Error('PID required for monitor operation');
     }
@@ -324,7 +334,7 @@ export class SmartProcess {
             cpu: proc.cpu,
             memory: proc.memory,
             handles: proc.handles,
-            threads: proc.threads
+            threads: proc.threads,
           });
         }
       } catch {
@@ -332,7 +342,7 @@ export class SmartProcess {
         break;
       }
 
-      await new Promise(resolve => setTimeout(resolve, interval));
+      await new Promise((resolve) => setTimeout(resolve, interval));
     }
 
     const dataStr = JSON.stringify({ snapshots });
@@ -346,12 +356,14 @@ export class SmartProcess {
         tokensUsed,
         tokensSaved: 0,
         cacheHit: false,
-        executionTime: duration
-      }
+        executionTime: duration,
+      },
     };
   }
 
-  private async getProcessTree(options: SmartProcessOptions): Promise<SmartProcessResult> {
+  private async getProcessTree(
+    options: SmartProcessOptions
+  ): Promise<SmartProcessResult> {
     const cacheKey = `process-tree:${options.pid || 'all'}`;
     const useCache = options.useCache !== false;
 
@@ -371,8 +383,8 @@ export class SmartProcess {
             tokensUsed,
             tokensSaved: baselineTokens - tokensUsed,
             cacheHit: true,
-            executionTime: 0
-          }
+            executionTime: 0,
+          },
         };
       }
     }
@@ -395,23 +407,28 @@ export class SmartProcess {
         tokensUsed,
         tokensSaved: 0,
         cacheHit: false,
-        executionTime: 0
-      }
+        executionTime: 0,
+      },
     };
   }
 
-  private async restartProcess(options: SmartProcessOptions): Promise<SmartProcessResult> {
+  private async restartProcess(
+    options: SmartProcessOptions
+  ): Promise<SmartProcessResult> {
     // Stop the process
     await this.stopProcess(options);
 
     // Wait a moment
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Start it again
     return await this.startProcess(options);
   }
 
-  private async listProcesses(pid?: number, name?: string): Promise<ProcessInfo[]> {
+  private async listProcesses(
+    pid?: number,
+    name?: string
+  ): Promise<ProcessInfo[]> {
     const platform = process.platform;
 
     if (platform === 'win32') {
@@ -421,13 +438,16 @@ export class SmartProcess {
     }
   }
 
-  private async listProcessesWindows(pid?: number, name?: string): Promise<ProcessInfo[]> {
+  private async listProcessesWindows(
+    pid?: number,
+    name?: string
+  ): Promise<ProcessInfo[]> {
     // Use WMIC on Windows
     const query = pid
       ? `wmic process where "ProcessId=${pid}" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
       : name
-      ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-      : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
+        ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+        : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
 
     const { stdout } = await execAsync(query);
 
@@ -450,20 +470,23 @@ export class SmartProcess {
         status: 'running',
         startTime: Date.now(),
         handles: parseInt(parts[1]) || 0,
-        threads: parseInt(parts[6]) || 0
+        threads: parseInt(parts[6]) || 0,
       });
     }
 
     return processes;
   }
 
-  private async listProcessesUnix(pid?: number, name?: string): Promise<ProcessInfo[]> {
+  private async listProcessesUnix(
+    pid?: number,
+    name?: string
+  ): Promise<ProcessInfo[]> {
     // Use ps on Unix
     const query = pid
       ? `ps -p ${pid} -o pid,comm,args,%cpu,%mem,stat,lstart`
       : name
-      ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
-      : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
+        ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
+        : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
 
     const { stdout } = await execAsync(query);
 
@@ -484,7 +507,7 @@ export class SmartProcess {
         cpu: parseFloat(parts[parts.length - 3]) || 0,
         memory: parseFloat(parts[parts.length - 2]) || 0,
         status: this.parseUnixStatus(parts[parts.length - 1]),
-        startTime: Date.now()
+        startTime: Date.now(),
       });
     }
 
@@ -508,9 +531,13 @@ export class SmartProcess {
     }
   }
 
-  private async buildProcessTreeWindows(rootPid?: number): Promise<ProcessTreeNode> {
+  private async buildProcessTreeWindows(
+    rootPid?: number
+  ): Promise<ProcessTreeNode> {
     // Use WMIC to get parent-child relationships
-    const { stdout } = await execAsync('wmic process get ProcessId,ParentProcessId,Name /format:csv');
+    const { stdout } = await execAsync(
+      'wmic process get ProcessId,ParentProcessId,Name /format:csv'
+    );
 
     const lines = stdout.trim().split('\n').slice(1);
     const processMap = new Map<number, { name: string; children: number[] }>();
@@ -542,14 +569,16 @@ export class SmartProcess {
       return {
         pid,
         name: info.name,
-        children: info.children.map(buildNode)
+        children: info.children.map(buildNode),
       };
     };
 
     return buildNode(rootPid || process.pid);
   }
 
-  private async buildProcessTreeUnix(rootPid?: number): Promise<ProcessTreeNode> {
+  private async buildProcessTreeUnix(
+    rootPid?: number
+  ): Promise<ProcessTreeNode> {
     // Use pstree on Unix
     const pid = rootPid || process.pid;
     const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
@@ -558,7 +587,7 @@ export class SmartProcess {
     return {
       pid,
       name: 'process',
-      children: []
+      children: [],
     };
   }
 }
@@ -588,76 +617,85 @@ export async function runSmartProcess(
   const { homedir } = await import('os');
   const { join } = await import('path');
 
-  const cacheInstance = cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const cacheInstance =
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
-  const tool = getSmartProcess(cacheInstance, tokenCounterInstance, metricsInstance);
+  const tool = getSmartProcess(
+    cacheInstance,
+    tokenCounterInstance,
+    metricsInstance
+  );
   return await tool.run(options);
 }
 
 // MCP tool definition
 export const SMART_PROCESS_TOOL_DEFINITION = {
   name: 'smart_process',
-  description: 'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support.',
+  description:
+    'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support.',
   inputSchema: {
     type: 'object' as const,
     properties: {
       operation: {
         type: 'string' as const,
         enum: ['start', 'stop', 'status', 'monitor', 'tree', 'restart'],
-        description: 'Process operation to perform'
+        description: 'Process operation to perform',
       },
       pid: {
         type: 'number' as const,
-        description: 'Process ID (for stop, status, monitor, tree operations)'
+        description: 'Process ID (for stop, status, monitor, tree operations)',
       },
       name: {
         type: 'string' as const,
-        description: 'Process name (for stop, status operations)'
+        description: 'Process name (for stop, status operations)',
       },
       command: {
         type: 'string' as const,
-        description: 'Command to execute (for start operation)'
+        description: 'Command to execute (for start operation)',
       },
       args: {
         type: 'array' as const,
         items: { type: 'string' as const },
-        description: 'Command arguments (for start operation)'
+        description: 'Command arguments (for start operation)',
       },
       cwd: {
         type: 'string' as const,
-        description: 'Working directory (for start operation)'
+        description: 'Working directory (for start operation)',
       },
       env: {
         type: 'object' as const,
-        description: 'Environment variables (for start operation)'
+        description: 'Environment variables (for start operation)',
       },
       detached: {
         type: 'boolean' as const,
-        description: 'Run process in detached mode (for start operation)'
+        description: 'Run process in detached mode (for start operation)',
       },
       autoRestart: {
         type: 'boolean' as const,
-        description: 'Automatically restart on failure (for start operation)'
+        description: 'Automatically restart on failure (for start operation)',
       },
       interval: {
         type: 'number' as const,
-        description: 'Monitoring interval in milliseconds (for monitor operation)'
+        description:
+          'Monitoring interval in milliseconds (for monitor operation)',
       },
       duration: {
         type: 'number' as const,
-        description: 'Monitoring duration in milliseconds (for monitor operation)'
+        description:
+          'Monitoring duration in milliseconds (for monitor operation)',
       },
       useCache: {
         type: 'boolean' as const,
-        description: 'Use cache for status and tree operations (default: true)'
+        description: 'Use cache for status and tree operations (default: true)',
       },
       ttl: {
         type: 'number' as const,
-        description: 'Cache TTL in seconds (default: 30 for status, 60 for tree)'
-      }
+        description:
+          'Cache TTL in seconds (default: 30 for status, 60 for tree)',
+      },
     },
-    required: ['operation']
-  }
+    required: ['operation'],
+  },
 };

@@ -1,16 +1,19 @@
 /**
- * Global instances for backward compatibility with hypercontext-mcp
+ * Global shared instances for token counting and metrics collection
+ *
+ * These instances are shared across all tools to avoid duplicative instantiation
+ * and ensure consistent tracking across the application.
  */
 
-import { TokenCounter } from './token-counter.js';
-import { MetricsCollector } from './metrics.js';
-import { ConfigManager } from './config.js';
+import { TokenCounter } from './token-counter';
+import { MetricsCollector } from './metrics';
 
-// Create global token counter instance
+/**
+ * Global token counter instance shared across all tools
+ */
 export const globalTokenCounter = new TokenCounter();
 
-// Create global metrics collector instance
+/**
+ * Global metrics collector instance shared across all tools
+ */
 export const globalMetricsCollector = new MetricsCollector();
-
-// Create default config manager instance
-export const defaultConfigManager = new ConfigManager();

@@ -2,14 +2,14 @@
  * Hashing utilities for cache invalidation and file tracking
  */
 
-import { createHash } from "crypto";
-import { readFileSync, statSync } from "fs";
+import { createHash } from 'crypto';
+import { readFileSync, statSync } from 'fs';
 
 /**
  * Generate a hash for file content
  */
 export function hashContent(content: string | Buffer): string {
-  return createHash("sha256").update(content).digest("hex");
+  return createHash('sha256').update(content).digest('hex');
 }
 
 /**
@@ -49,7 +49,7 @@ export function hashFileMetadata(filePath: string): string {
   try {
     const stats = statSync(filePath);
     const metadataString = `${filePath}-${stats.size}-${stats.mtimeMs}`;
-    return createHash("md5").update(metadataString).digest("hex");
+    return createHash('md5').update(metadataString).digest('hex');
   } catch (error) {
     throw new Error(`Failed to hash file metadata ${filePath}: ${error}`);
   }
@@ -60,7 +60,7 @@ export function hashFileMetadata(filePath: string): string {
  */
 export function generateCacheKey(
   namespace: string,
-  params: Record<string, unknown>,
+  params: Record<string, unknown>
 ): string {
   const sortedParams = Object.keys(params)
     .sort()
@@ -69,11 +69,11 @@ export function generateCacheKey(
         acc[key] = params[key];
         return acc;
       },
-      {} as Record<string, unknown>,
+      {} as Record<string, unknown>
     );
 
   const paramString = JSON.stringify(sortedParams);
-  const hash = createHash("md5").update(paramString).digest("hex");
+  const hash = createHash('md5').update(paramString).digest('hex');
   return `${namespace}:${hash}`;
 }
 

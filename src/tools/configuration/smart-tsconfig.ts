@@ -9,14 +9,14 @@
  * - Optimization suggestions
  */
 
-import { readFile } from "fs/promises";
-import { resolve, dirname, join } from "path";
-import { existsSync } from "fs";
-import { homedir } from "os";
-import { CacheEngine } from "../../core/cache-engine";
-import { globalMetricsCollector } from "../../core/metrics";
-import { TokenCounter } from "../../core/token-counter";
-import { hashContent, generateCacheKey } from "../shared/hash-utils";
+import { readFile } from 'fs/promises';
+import { resolve, dirname, join } from 'path';
+import { existsSync } from 'fs';
+import { homedir } from 'os';
+import { CacheEngine } from '../../core/cache-engine';
+import { globalMetricsCollector } from '../../core/metrics';
+import { TokenCounter } from '../../core/token-counter';
+import { hashContent, generateCacheKey } from '../shared/hash-utils';
 
 // ==================== Type Definitions ====================
 
@@ -60,14 +60,14 @@ interface ResolvedTsConfig {
 }
 
 interface ConfigIssue {
-  severity: "error" | "warning" | "info";
+  severity: 'error' | 'warning' | 'info';
   category:
-    | "strict-mode"
-    | "target-version"
-    | "module-system"
-    | "paths"
-    | "performance"
-    | "compatibility";
+    | 'strict-mode'
+    | 'target-version'
+    | 'module-system'
+    | 'paths'
+    | 'performance'
+    | 'compatibility';
   message: string;
   suggestion?: string;
 }
@@ -111,7 +111,7 @@ class SmartTsConfig {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -127,9 +127,12 @@ class SmartTsConfig {
 
     try {
       // Generate cache key based on file content and path
-      const configContent = await readFile(configPath, "utf-8");
+      const configContent = await readFile(configPath, 'utf-8');
       const fileHash = hashContent(configContent);
-      const cacheKey = generateCacheKey("tsconfig", { path: configPath, hash: fileHash });
+      const cacheKey = generateCacheKey('tsconfig', {
+        path: configPath,
+        hash: fileHash,
+      });
 
       // Check cache first
       const cached = this.cache.get(cacheKey);
@@ -147,7 +150,7 @@ class SmartTsConfig {
 
           // Record metrics
           globalMetricsCollector.record({
-            operation: "smart-tsconfig",
+            operation: 'smart-tsconfig',
             duration: executionTime,
             cacheHit: true,
             success: true,
@@ -161,7 +164,7 @@ class SmartTsConfig {
             options.includeIssues ?? true,
             options.includeSuggestions ?? true,
             true,
-            executionTime,
+            executionTime
           );
 
           return output;
@@ -197,16 +200,16 @@ class SmartTsConfig {
       const maxAge = options.maxCacheAge ?? 7 * 24 * 60 * 60; // 7 days default
       this.cache.set(
         cacheKey,
-        Buffer.from(JSON.stringify(toCache)).toString("utf-8"),
+        Buffer.from(JSON.stringify(toCache)).toString('utf-8'),
         0,
-        maxAge,
+        maxAge
       );
 
       const executionTime = Date.now() - startTime;
 
       // Record metrics
       globalMetricsCollector.record({
-        operation: "smart-tsconfig",
+        operation: 'smart-tsconfig',
         duration: executionTime,
         cacheHit: false,
         success: true,
@@ -220,13 +223,13 @@ class SmartTsConfig {
         options.includeIssues ?? true,
         options.includeSuggestions ?? true,
         false,
-        executionTime,
+        executionTime
       );
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
       globalMetricsCollector.record({
-        operation: "smart-tsconfig",
+        operation: 'smart-tsconfig',
         duration: executionTime,
         cacheHit: false,
         success: false,
@@ -246,12 +249,12 @@ class SmartTsConfig {
     }
 
     // Look for tsconfig.json in project root
-    const defaultPath = join(this.projectRoot, "tsconfig.json");
+    const defaultPath = join(this.projectRoot, 'tsconfig.json');
     if (existsSync(defaultPath)) {
       return defaultPath;
     }
 
-    throw new Error("tsconfig.json not found. Specify configPath option.");
+    throw new Error('tsconfig.json not found. Specify configPath option.');
   }
 
   /**
@@ -285,7 +288,7 @@ class SmartTsConfig {
       }
 
       if (extendsChain.length > 20) {
-        throw new Error("Extends chain too deep (max 20)");
+        throw new Error('Extends chain too deep (max 20)');
       }
     }
 
@@ -304,18 +307,18 @@ class SmartTsConfig {
    * Parse a single tsconfig file
    */
   private async parseConfigFile(configPath: string): Promise<TsConfigJson> {
-    const content = await readFile(configPath, "utf-8");
+    const content = await readFile(configPath, 'utf-8');
 
     // Strip comments from JSON (tsconfig allows comments)
     const stripped = content
-      .replace(/\/\*[\s\S]*?\*\//g, "") // Multi-line comments
-      .replace(/\/\/.*/g, ""); // Single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, '') // Multi-line comments
+      .replace(/\/\/.*/g, ''); // Single-line comments
 
     try {
       return JSON.parse(stripped) as TsConfigJson;
     } catch (error) {
       throw new Error(
-        `Failed to parse ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to parse ${configPath}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -325,7 +328,7 @@ class SmartTsConfig {
    */
   private resolveExtendsPath(
     fromConfig: string,
-    extendsValue: string | string[],
+    extendsValue: string | string[]
   ): string {
     // For now, only handle single extends (not array)
     const extendsPath = Array.isArray(extendsValue)
@@ -333,16 +336,16 @@ class SmartTsConfig {
       : extendsValue;
 
     if (!extendsPath) {
-      throw new Error("Empty extends value");
+      throw new Error('Empty extends value');
     }
 
     const configDir = dirname(fromConfig);
 
     // Relative path
-    if (extendsPath.startsWith("./") || extendsPath.startsWith("../")) {
+    if (extendsPath.startsWith('./') || extendsPath.startsWith('../')) {
       const resolved = resolve(configDir, extendsPath);
       // Add .json if not present
-      return resolved.endsWith(".json") ? resolved : `${resolved}.json`;
+      return resolved.endsWith('.json') ? resolved : `${resolved}.json`;
     }
 
     // Node module (e.g., @tsconfig/node16/tsconfig.json)
@@ -354,7 +357,7 @@ class SmartTsConfig {
       return nodeModulePath;
     } catch {
       // Fallback: assume it's in node_modules
-      const nodeModulePath = join(configDir, "node_modules", extendsPath);
+      const nodeModulePath = join(configDir, 'node_modules', extendsPath);
       if (existsSync(nodeModulePath)) {
         return nodeModulePath;
       }
@@ -368,7 +371,7 @@ class SmartTsConfig {
    */
   private mergeConfigs(
     base: TsConfigJson,
-    override: TsConfigJson,
+    override: TsConfigJson
   ): TsConfigJson {
     return {
       ...base,
@@ -390,41 +393,41 @@ class SmartTsConfig {
     // Check strict mode
     if (!opts.strict) {
       issues.push({
-        severity: "warning",
-        category: "strict-mode",
-        message: "Strict mode is disabled",
+        severity: 'warning',
+        category: 'strict-mode',
+        message: 'Strict mode is disabled',
         suggestion: 'Enable "strict": true for better type safety',
       });
     }
 
     // Check target version
     const target = opts.target?.toLowerCase();
-    if (target && ["es3", "es5"].includes(target)) {
+    if (target && ['es3', 'es5'].includes(target)) {
       issues.push({
-        severity: "warning",
-        category: "target-version",
+        severity: 'warning',
+        category: 'target-version',
         message: `Old target version: ${opts.target}`,
         suggestion:
-          "Consider upgrading to ES2020 or later for better performance",
+          'Consider upgrading to ES2020 or later for better performance',
       });
     }
 
     // Check module system
     if (!opts.module) {
       issues.push({
-        severity: "info",
-        category: "module-system",
-        message: "No module system specified",
+        severity: 'info',
+        category: 'module-system',
+        message: 'No module system specified',
         suggestion: 'Specify "module" option (e.g., "esnext", "commonjs")',
       });
     }
 
     // Check esModuleInterop
-    if (opts.module === "commonjs" && !opts.esModuleInterop) {
+    if (opts.module === 'commonjs' && !opts.esModuleInterop) {
       issues.push({
-        severity: "warning",
-        category: "compatibility",
-        message: "esModuleInterop disabled with CommonJS",
+        severity: 'warning',
+        category: 'compatibility',
+        message: 'esModuleInterop disabled with CommonJS',
         suggestion:
           'Enable "esModuleInterop": true for better ES module compatibility',
       });
@@ -433,9 +436,9 @@ class SmartTsConfig {
     // Check skipLibCheck
     if (!opts.skipLibCheck) {
       issues.push({
-        severity: "info",
-        category: "performance",
-        message: "skipLibCheck is disabled",
+        severity: 'info',
+        category: 'performance',
+        message: 'skipLibCheck is disabled',
         suggestion: 'Enable "skipLibCheck": true to speed up compilation',
       });
     }
@@ -448,7 +451,7 @@ class SmartTsConfig {
    */
   private generateSuggestions(
     resolved: ResolvedTsConfig,
-    issues?: ConfigIssue[],
+    issues?: ConfigIssue[]
   ): string[] {
     const suggestions: string[] = [];
     const opts = resolved.compilerOptions;
@@ -456,28 +459,28 @@ class SmartTsConfig {
     // Extends chain suggestions
     if (resolved.extendsChain.length === 1) {
       suggestions.push(
-        "Consider using @tsconfig/* base configs for better defaults",
+        'Consider using @tsconfig/* base configs for better defaults'
       );
     }
 
     // Path mapping suggestions
     if (opts.paths && Object.keys(opts.paths).length > 10) {
       suggestions.push(
-        "Consider simplifying path mappings - too many can slow compilation",
+        'Consider simplifying path mappings - too many can slow compilation'
       );
     }
 
     // Output directory suggestions
     if (!opts.outDir) {
       suggestions.push(
-        'Specify "outDir" to keep source and build files separate',
+        'Specify "outDir" to keep source and build files separate'
       );
     }
 
     // Add issue-based suggestions
     if (issues) {
       for (const issue of issues) {
-        if (issue.severity === "warning" && issue.suggestion) {
+        if (issue.severity === 'warning' && issue.suggestion) {
           suggestions.push(issue.suggestion);
         }
       }
@@ -496,7 +499,7 @@ class SmartTsConfig {
     includeIssues: boolean = true,
     includeSuggestions: boolean = true,
     fromCache: boolean = false,
-    executionTime: number = 0,
+    executionTime: number = 0
   ): SmartTsConfigOutput {
     // Calculate original size (what would be returned without optimization)
     const originalOutput = {
@@ -518,7 +521,7 @@ class SmartTsConfig {
       resolved: fromCache
         ? {
             compilerOptions: this.compactCompilerOptions(
-              resolved.compilerOptions,
+              resolved.compilerOptions
             ),
             extendsChain: resolved.extendsChain,
             configPath: resolved.configPath,
@@ -541,10 +544,10 @@ class SmartTsConfig {
 
     // Calculate token metrics
     const originalTokens = this.tokenCounter.count(
-      JSON.stringify(originalOutput),
+      JSON.stringify(originalOutput)
     ).tokens;
     const compactTokens = this.tokenCounter.count(
-      JSON.stringify(compactOutput),
+      JSON.stringify(compactOutput)
     ).tokens;
     const savedTokens = Math.max(0, originalTokens - compactTokens);
     const savingsPercent =
@@ -564,7 +567,7 @@ class SmartTsConfig {
    * Compact compiler options by removing defaults
    */
   private compactCompilerOptions(
-    opts: TsConfigCompilerOptions,
+    opts: TsConfigCompilerOptions
   ): TsConfigCompilerOptions {
     const compacted: TsConfigCompilerOptions = {};
 
@@ -598,7 +601,7 @@ class SmartTsConfig {
 export function getSmartTsConfig(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartTsConfig {
   return new SmartTsConfig(cache, tokenCounter, projectRoot);
 }
@@ -610,9 +613,9 @@ export function getSmartTsConfig(
  * @returns Parsed and resolved tsconfig with metrics
  */
 export async function runSmartTsconfig(
-  options: SmartTsConfigOptions = {},
+  options: SmartTsConfigOptions = {}
 ): Promise<SmartTsConfigOutput> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"));
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
   const tokenCounter = new TokenCounter();
   const projectRoot = options.projectRoot ?? process.cwd();
   const tool = getSmartTsConfig(cache, tokenCounter, projectRoot);
@@ -627,31 +630,31 @@ export async function runSmartTsconfig(
 // ==================== MCP Tool Definition ====================
 
 export const SMART_TSCONFIG_TOOL_DEFINITION = {
-  name: "smart_tsconfig",
+  name: 'smart_tsconfig',
   description:
-    "Parse and analyze TypeScript configuration with 83% token reduction. Resolves extends chains, detects issues, and caches results for 7 days.",
+    'Parse and analyze TypeScript configuration with 83% token reduction. Resolves extends chains, detects issues, and caches results for 7 days.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       configPath: {
-        type: "string",
-        description: "Path to tsconfig.json (relative to projectRoot)",
+        type: 'string',
+        description: 'Path to tsconfig.json (relative to projectRoot)',
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory (defaults to cwd)",
+        type: 'string',
+        description: 'Project root directory (defaults to cwd)',
       },
       includeIssues: {
-        type: "boolean",
-        description: "Include configuration issues detection (default: true)",
+        type: 'boolean',
+        description: 'Include configuration issues detection (default: true)',
       },
       includeSuggestions: {
-        type: "boolean",
-        description: "Include optimization suggestions (default: true)",
+        type: 'boolean',
+        description: 'Include optimization suggestions (default: true)',
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 604800 = 7 days)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 604800 = 7 days)',
       },
     },
   },

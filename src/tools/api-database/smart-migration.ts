@@ -18,24 +18,27 @@
  * - Average: 83%+ reduction
  */
 
-import { createHash } from "crypto";
-import { CacheEngine, CacheEngine as CacheEngineClass } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
+import { createHash } from 'crypto';
+import {
+  CacheEngine,
+  CacheEngine as CacheEngineClass,
+} from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 export type MigrationAction =
-  | "list"
-  | "status"
-  | "pending"
-  | "history"
-  | "rollback"
-  | "generate";
-export type MigrationStatus = "pending" | "applied" | "failed";
-export type MigrationDirection = "up" | "down";
+  | 'list'
+  | 'status'
+  | 'pending'
+  | 'history'
+  | 'rollback'
+  | 'generate';
+export type MigrationStatus = 'pending' | 'applied' | 'failed';
+export type MigrationDirection = 'up' | 'down';
 
 export interface SmartMigrationOptions {
   // Action to perform
@@ -78,7 +81,7 @@ export interface MigrationStatusSummary {
 
 export interface MigrationHistoryEntry {
   migrationId: string;
-  action: "apply" | "rollback";
+  action: 'apply' | 'rollback';
   timestamp: string;
   executionTime: number;
   success: boolean;
@@ -138,7 +141,7 @@ export class SmartMigration {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   async run(options: SmartMigrationOptions): Promise<SmartMigrationOutput> {
@@ -149,7 +152,7 @@ export class SmartMigration {
       this.validateOptions(options);
 
       // Default action
-      const action = options.action || "list";
+      const action = options.action || 'list';
 
       // Generate cache key
       const cacheKey = this.generateCacheKey(options);
@@ -158,17 +161,17 @@ export class SmartMigration {
       if (!options.force && this.isReadOnlyAction(action)) {
         const cached = await this.getCachedResult(
           cacheKey,
-          options.ttl || 3600,
+          options.ttl || 3600
         );
         if (cached) {
           const output = this.transformOutput(
             cached,
             true,
-            Date.now() - startTime,
+            Date.now() - startTime
           );
 
           this.metrics.record({
-            operation: "smart_migration",
+            operation: 'smart_migration',
             duration: Date.now() - startTime,
             success: true,
             cacheHit: true,
@@ -192,11 +195,11 @@ export class SmartMigration {
       const output = this.transformOutput(
         result,
         false,
-        Date.now() - startTime,
+        Date.now() - startTime
       );
 
       this.metrics.record({
-        operation: "smart_migration",
+        operation: 'smart_migration',
         duration: Date.now() - startTime,
         success: true,
         cacheHit: false,
@@ -211,7 +214,7 @@ export class SmartMigration {
         error instanceof Error ? error.message : String(error);
 
       this.metrics.record({
-        operation: "smart_migration",
+        operation: 'smart_migration',
         duration: Date.now() - startTime,
         success: false,
         cacheHit: false,
@@ -229,30 +232,30 @@ export class SmartMigration {
   // ============================================================================
 
   private validateOptions(options: SmartMigrationOptions): void {
-    const action = options.action || "list";
+    const action = options.action || 'list';
 
     if (
       ![
-        "list",
-        "status",
-        "pending",
-        "history",
-        "rollback",
-        "generate",
+        'list',
+        'status',
+        'pending',
+        'history',
+        'rollback',
+        'generate',
       ].includes(action)
     ) {
       throw new Error(`Invalid action: ${action}`);
     }
 
-    if (action === "rollback" && !options.migrationId) {
-      throw new Error("migrationId is required for rollback action");
+    if (action === 'rollback' && !options.migrationId) {
+      throw new Error('migrationId is required for rollback action');
     }
 
-    if (action === "generate" && !options.migrationId) {
-      throw new Error("migrationId is required for generate action");
+    if (action === 'generate' && !options.migrationId) {
+      throw new Error('migrationId is required for generate action');
     }
 
-    if (options.direction && !["up", "down"].includes(options.direction)) {
+    if (options.direction && !['up', 'down'].includes(options.direction)) {
       throw new Error(`Invalid direction: ${options.direction}`);
     }
   }
@@ -263,28 +266,28 @@ export class SmartMigration {
 
   private async executeMigrationAction(
     action: MigrationAction,
-    options: SmartMigrationOptions,
+    options: SmartMigrationOptions
   ): Promise<SmartMigrationResult> {
     switch (action) {
-      case "list":
+      case 'list':
         return this.listMigrations(options.limit || 20);
 
-      case "status":
+      case 'status':
         return this.getMigrationStatus();
 
-      case "pending":
+      case 'pending':
         return this.getPendingMigrations(options.limit || 20);
 
-      case "history":
+      case 'history':
         return this.getMigrationHistory(options.limit || 50);
 
-      case "rollback":
+      case 'rollback':
         return this.rollbackMigration(
           options.migrationId!,
-          options.direction || "down",
+          options.direction || 'down'
         );
 
-      case "generate":
+      case 'generate':
         return this.generateMigration(options.migrationId!);
 
       default:
@@ -299,9 +302,9 @@ export class SmartMigration {
     const migrations: Migration[] = Array.from(
       { length: Math.min(limit, 20) },
       (_, i) => ({
-        id: `migration_${String(i + 1).padStart(4, "0")}`,
+        id: `migration_${String(i + 1).padStart(4, '0')}`,
         name: `create_users_table_${i + 1}`,
-        status: i % 3 === 0 ? "pending" : i % 3 === 1 ? "applied" : "failed",
+        status: i % 3 === 0 ? 'pending' : i % 3 === 1 ? 'applied' : 'failed',
         appliedAt:
           i % 3 === 1
             ? new Date(Date.now() - i * 86400000).toISOString()
@@ -309,7 +312,7 @@ export class SmartMigration {
         executionTime:
           i % 3 === 1 ? Math.floor(Math.random() * 1000) + 100 : undefined,
         checksum: this.generateChecksum(`migration_${i + 1}`),
-      }),
+      })
     );
 
     return {
@@ -328,8 +331,8 @@ export class SmartMigration {
       applied: 38,
       failed: 2,
       lastMigration: {
-        id: "migration_0038",
-        name: "add_user_roles_table",
+        id: 'migration_0038',
+        name: 'add_user_roles_table',
         appliedAt: new Date(Date.now() - 86400000).toISOString(),
       },
     };
@@ -341,7 +344,7 @@ export class SmartMigration {
   }
 
   private async getPendingMigrations(
-    limit: number,
+    limit: number
   ): Promise<SmartMigrationResult> {
     // NOTE: Placeholder for Phase 3
     // Real implementation will query database for pending migrations
@@ -349,11 +352,11 @@ export class SmartMigration {
     const migrations: Migration[] = Array.from(
       { length: Math.min(limit, 5) },
       (_, i) => ({
-        id: `migration_${String(i + 39).padStart(4, "0")}`,
+        id: `migration_${String(i + 39).padStart(4, '0')}`,
         name: `pending_migration_${i + 1}`,
-        status: "pending",
+        status: 'pending',
         checksum: this.generateChecksum(`pending_${i + 1}`),
-      }),
+      })
     );
 
     return {
@@ -363,7 +366,7 @@ export class SmartMigration {
   }
 
   private async getMigrationHistory(
-    limit: number,
+    limit: number
   ): Promise<SmartMigrationResult> {
     // NOTE: Placeholder for Phase 3
     // Real implementation will query migration history log
@@ -371,13 +374,13 @@ export class SmartMigration {
     const history: MigrationHistoryEntry[] = Array.from(
       { length: Math.min(limit, 50) },
       (_, i) => ({
-        migrationId: `migration_${String(i + 1).padStart(4, "0")}`,
-        action: i % 4 === 0 ? "rollback" : "apply",
+        migrationId: `migration_${String(i + 1).padStart(4, '0')}`,
+        action: i % 4 === 0 ? 'rollback' : 'apply',
         timestamp: new Date(Date.now() - i * 3600000).toISOString(),
         executionTime: Math.floor(Math.random() * 500) + 50,
         success: i % 10 !== 0, // 90% success rate
-        error: i % 10 === 0 ? "Constraint violation: duplicate key" : undefined,
-      }),
+        error: i % 10 === 0 ? 'Constraint violation: duplicate key' : undefined,
+      })
     );
 
     return {
@@ -388,7 +391,7 @@ export class SmartMigration {
 
   private async rollbackMigration(
     migrationId: string,
-    _direction: MigrationDirection,
+    _direction: MigrationDirection
   ): Promise<SmartMigrationResult> {
     // NOTE: Placeholder for Phase 3
     // Real implementation will execute rollback SQL and track changes
@@ -407,7 +410,7 @@ export class SmartMigration {
   }
 
   private async generateMigration(
-    migrationId: string,
+    migrationId: string
   ): Promise<SmartMigrationResult> {
     // NOTE: Placeholder for Phase 3
     // Real implementation will generate migration file with template
@@ -446,11 +449,11 @@ CREATE TABLE IF NOT EXISTS example (
   // ============================================================================
 
   private isReadOnlyAction(action: MigrationAction): boolean {
-    return ["list", "status", "pending", "history"].includes(action);
+    return ['list', 'status', 'pending', 'history'].includes(action);
   }
 
   private generateChecksum(data: string): string {
-    return createHash("sha256").update(data).digest("hex").substring(0, 16);
+    return createHash('sha256').update(data).digest('hex').substring(0, 16);
   }
 
   // ============================================================================
@@ -465,14 +468,14 @@ CREATE TABLE IF NOT EXISTS example (
       limit: options.limit,
     };
 
-    const hash = createHash("sha256");
-    hash.update("smart_migration:" + JSON.stringify(keyData));
-    return hash.digest("hex");
+    const hash = createHash('sha256');
+    hash.update('smart_migration:' + JSON.stringify(keyData));
+    return hash.digest('hex');
   }
 
   private async getCachedResult(
     key: string,
-    ttl: number,
+    ttl: number
   ): Promise<SmartMigrationResult | null> {
     try {
       const cached = this.cache.get(key);
@@ -503,7 +506,7 @@ CREATE TABLE IF NOT EXISTS example (
   private async cacheResult(
     key: string,
     result: SmartMigrationResult,
-    _ttl?: number,
+    _ttl?: number
   ): Promise<void> {
     try {
       // Add timestamp
@@ -515,18 +518,10 @@ CREATE TABLE IF NOT EXISTS example (
 
       // Cache for specified TTL (default: 1 hour)
       const cacheStr = JSON.stringify(cacheData);
-      this.cache.set(
-        key,
-        cacheStr,
-        tokensSaved,
-        cacheStr.length,
-      );
+      this.cache.set(key, cacheStr, tokensSaved, cacheStr.length);
     } catch (error) {
       // Caching failure should not break the operation
-      console.error(
-        "Failed to cache migration result:",
-        error
-      );
+      console.error('Failed to cache migration result:', error);
     }
   }
 
@@ -537,7 +532,7 @@ CREATE TABLE IF NOT EXISTS example (
   private transformOutput(
     result: SmartMigrationResult,
     fromCache: boolean,
-    duration: number,
+    duration: number
   ): SmartMigrationOutput {
     let output: string;
     let baselineTokens: number;
@@ -573,7 +568,7 @@ CREATE TABLE IF NOT EXISTS example (
       actualTokens = this.tokenCounter.count(output).tokens;
     } else {
       // Default: Minimal output
-      output = "# No migration data available";
+      output = '# No migration data available';
       actualTokens = this.tokenCounter.count(output).tokens;
     }
 
@@ -610,13 +605,13 @@ Migration #${i + 1}
 Migration ID: ${m.id}
 Migration Name: ${m.name}
 Current Status: ${m.status}
-Applied At Date/Time: ${m.appliedAt || "Not yet applied"}
-Execution Time (milliseconds): ${m.executionTime || "N/A"}
-File Checksum (SHA-256): ${m.checksum || "Not calculated"}
-Status Description: ${m.status === "applied" ? "Successfully applied to database" : m.status === "pending" ? "Waiting to be applied" : "Failed during execution"}
-`,
+Applied At Date/Time: ${m.appliedAt || 'Not yet applied'}
+Execution Time (milliseconds): ${m.executionTime || 'N/A'}
+File Checksum (SHA-256): ${m.checksum || 'Not calculated'}
+Status Description: ${m.status === 'applied' ? 'Successfully applied to database' : m.status === 'pending' ? 'Waiting to be applied' : 'Failed during execution'}
+`
         )
-        .join("\n");
+        .join('\n');
 
       return `# Database Migration List - Complete Report
 
@@ -625,9 +620,9 @@ MIGRATION DATABASE SUMMARY
 ======================================
 
 Total Number of Migrations: ${result.migrations.length}
-Applied Migrations: ${result.migrations.filter((m) => m.status === "applied").length}
-Pending Migrations: ${result.migrations.filter((m) => m.status === "pending").length}
-Failed Migrations: ${result.migrations.filter((m) => m.status === "failed").length}
+Applied Migrations: ${result.migrations.filter((m) => m.status === 'applied').length}
+Pending Migrations: ${result.migrations.filter((m) => m.status === 'pending').length}
+Failed Migrations: ${result.migrations.filter((m) => m.status === 'failed').length}
 
 ======================================
 COMPLETE MIGRATION DETAILS
@@ -655,9 +650,9 @@ Failed Migrations that Encountered Errors: ${result.status.failed}
 LAST APPLIED MIGRATION INFORMATION
 --------------------------------------
 
-Migration ID: ${result.status.lastMigration?.id || "No migrations applied yet"}
-Migration Name: ${result.status.lastMigration?.name || "N/A"}
-Applied At Date/Time: ${result.status.lastMigration?.appliedAt || "N/A"}
+Migration ID: ${result.status.lastMigration?.id || 'No migrations applied yet'}
+Migration Name: ${result.status.lastMigration?.name || 'N/A'}
+Applied At Date/Time: ${result.status.lastMigration?.appliedAt || 'N/A'}
 
 --------------------------------------
 DETAILED STATUS BREAKDOWN
@@ -672,7 +667,7 @@ Unfortunately, ${result.status.failed} migrations failed during execution.
 MIGRATION HEALTH STATUS
 --------------------------------------
 
-Overall migration health: ${result.status.failed === 0 ? "HEALTHY - No failed migrations" : "WARNING - Some migrations have failed"}
+Overall migration health: ${result.status.failed === 0 ? 'HEALTHY - No failed migrations' : 'WARNING - Some migrations have failed'}
 Completion rate: ${Math.round((result.status.applied / result.status.total) * 100)}%
 
 ======================================
@@ -688,10 +683,10 @@ Action: ${h.action}
 Timestamp: ${h.timestamp}
 Execution Time: ${h.executionTime}ms
 Success: ${h.success}
-Error: ${h.error || "None"}
----`,
+Error: ${h.error || 'None'}
+---`
         )
-        .join("\n");
+        .join('\n');
 
       return `# Complete Migration History
 
@@ -709,7 +704,7 @@ ROLLBACK OPERATION DETAILS
 ======================================
 
 Migration ID Being Rolled Back: ${result.rollback.migrationId}
-Rollback Operation Success Status: ${result.rollback.success ? "SUCCESS - Migration was successfully rolled back" : "FAILURE - Rollback encountered errors"}
+Rollback Operation Success Status: ${result.rollback.success ? 'SUCCESS - Migration was successfully rolled back' : 'FAILURE - Rollback encountered errors'}
 Total Execution Time (milliseconds): ${result.rollback.executionTime}ms
 Number of Database Changes Reverted: ${result.rollback.changesReverted}
 
@@ -717,7 +712,7 @@ Number of Database Changes Reverted: ${result.rollback.changesReverted}
 ROLLBACK IMPACT SUMMARY
 --------------------------------------
 
-The rollback operation ${result.rollback.success ? "successfully completed" : "failed"}.
+The rollback operation ${result.rollback.success ? 'successfully completed' : 'failed'}.
 This rollback reverted ${result.rollback.changesReverted} database changes.
 The operation took ${result.rollback.executionTime}ms to complete.
 
@@ -755,7 +750,7 @@ Complete migration file content shown above.`;
 
     return `# Cached (95%)
 
-${count} items | ${result.status ? `${result.status.applied}✓ ${result.status.pending}○` : "N/A"}
+${count} items | ${result.status ? `${result.status.applied}✓ ${result.status.pending}○` : 'N/A'}
 
 *Use force=true for fresh data*`;
   }
@@ -764,7 +759,7 @@ ${count} items | ${result.status ? `${result.status.applied}✓ ${result.status.
     const { status } = result;
 
     if (!status) {
-      return "# Status\n\nN/A";
+      return '# Status\n\nN/A';
     }
 
     return `# Status (90%)
@@ -774,14 +769,14 @@ Applied: ${status.applied}
 Pending: ${status.pending}
 Failed: ${status.failed}
 
-${status.lastMigration ? `Last: ${status.lastMigration.id} (${new Date(status.lastMigration.appliedAt).toLocaleString()})` : ""}`;
+${status.lastMigration ? `Last: ${status.lastMigration.id} (${new Date(status.lastMigration.appliedAt).toLocaleString()})` : ''}`;
   }
 
   private formatMigrationsOutput(result: SmartMigrationResult): string {
     const { migrations } = result;
 
     if (!migrations || migrations.length === 0) {
-      return "# Migrations\n\nNone";
+      return '# Migrations\n\nNone';
     }
 
     // Only show top 5 migrations for maximum token reduction
@@ -789,12 +784,12 @@ ${status.lastMigration ? `Last: ${status.lastMigration.id} (${new Date(status.la
     const migrationList = topMigrations
       .map((m) => {
         const status =
-          m.status === "applied" ? "✓" : m.status === "failed" ? "✗" : "○";
+          m.status === 'applied' ? '✓' : m.status === 'failed' ? '✗' : '○';
         return `${status} ${m.id}`;
       })
-      .join("\n");
+      .join('\n');
 
-    const summary = `${migrations.filter((m) => m.status === "applied").length}✓ ${migrations.filter((m) => m.status === "pending").length}○ ${migrations.filter((m) => m.status === "failed").length}✗`;
+    const summary = `${migrations.filter((m) => m.status === 'applied').length}✓ ${migrations.filter((m) => m.status === 'pending').length}○ ${migrations.filter((m) => m.status === 'failed').length}✗`;
 
     return `# Migrations (85%)
 
@@ -808,20 +803,20 @@ ${migrationList}`;
     const { history } = result;
 
     if (!history || history.length === 0) {
-      return "# History\n\nNone";
+      return '# History\n\nNone';
     }
 
     // Only show top 10 actions for maximum token reduction
     const recentHistory = history.slice(0, 10);
     const historyList = recentHistory
       .map((h) => {
-        const status = h.success ? "✓" : "✗";
+        const status = h.success ? '✓' : '✗';
         return `${status} ${h.action} ${h.migrationId}`;
       })
-      .join("\n");
+      .join('\n');
 
     const successRate = Math.round(
-      (history.filter((h) => h.success).length / history.length) * 100,
+      (history.filter((h) => h.success).length / history.length) * 100
     );
 
     return `# History (80%)
@@ -836,10 +831,10 @@ ${historyList}`;
     const { rollback } = result;
 
     if (!rollback) {
-      return "# Rollback\n\nN/A";
+      return '# Rollback\n\nN/A';
     }
 
-    const status = rollback.success ? "✓" : "✗";
+    const status = rollback.success ? '✓' : '✗';
 
     return `# Rollback (85%)
 
@@ -851,11 +846,11 @@ Time: ${rollback.executionTime}ms | Reverted: ${rollback.changesReverted}`;
     const { generated } = result;
 
     if (!generated) {
-      return "# Generated\n\nN/A";
+      return '# Generated\n\nN/A';
     }
 
     // Only show first 5 lines of preview for token reduction
-    const preview = generated.content.split("\n").slice(0, 5).join("\n");
+    const preview = generated.content.split('\n').slice(0, 5).join('\n');
 
     return `# Generated (85%)
 
@@ -875,7 +870,7 @@ ${preview}
 export function getSmartMigration(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartMigration {
   return new SmartMigration(cache, tokenCounter, metrics);
 }
@@ -885,22 +880,18 @@ export function getSmartMigration(
 // ============================================================================
 
 export async function runSmartMigration(
-  options: SmartMigrationOptions,
+  options: SmartMigrationOptions
 ): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
   const cache = new CacheEngineClass(
-    join(homedir(), ".hypercontext", "cache"),
-    100,
+    join(homedir(), '.hypercontext', 'cache'),
+    100
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const migration = getSmartMigration(
-    cache,
-    tokenCounter,
-    metrics,
-  );
+  const migration = getSmartMigration(cache, tokenCounter, metrics);
 
   const result = await migration.run(options);
 
@@ -909,7 +900,7 @@ export async function runSmartMigration(
 ---
 Tokens: ${result.tokens.actual} (saved ${result.tokens.saved}, ${result.tokens.reduction}% reduction)
 Execution time: ${result.executionTime}ms
-${result.cached ? "Cached result" : "Fresh analysis"}`;
+${result.cached ? 'Cached result' : 'Fresh analysis'}`;
 }
 
 // ============================================================================
@@ -917,43 +908,43 @@ ${result.cached ? "Cached result" : "Fresh analysis"}`;
 // ============================================================================
 
 export const SMART_MIGRATION_TOOL_DEFINITION = {
-  name: "smart_migration",
+  name: 'smart_migration',
   description:
-    "Database migration tracker with status monitoring and 83% token reduction. Supports listing migrations, checking status, viewing history, rollback operations, and migration generation.",
+    'Database migration tracker with status monitoring and 83% token reduction. Supports listing migrations, checking status, viewing history, rollback operations, and migration generation.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       action: {
-        type: "string",
-        enum: ["list", "status", "pending", "history", "rollback", "generate"],
-        description: "Action to perform (default: list)",
-        default: "list",
+        type: 'string',
+        enum: ['list', 'status', 'pending', 'history', 'rollback', 'generate'],
+        description: 'Action to perform (default: list)',
+        default: 'list',
       },
       migrationId: {
-        type: "string",
+        type: 'string',
         description:
-          "Migration ID (required for rollback and generate actions)",
+          'Migration ID (required for rollback and generate actions)',
       },
       direction: {
-        type: "string",
-        enum: ["up", "down"],
-        description: "Migration direction for rollback (default: down)",
-        default: "down",
+        type: 'string',
+        enum: ['up', 'down'],
+        description: 'Migration direction for rollback (default: down)',
+        default: 'down',
       },
       limit: {
-        type: "number",
+        type: 'number',
         description:
-          "Maximum number of results (default: 20 for list/pending, 50 for history)",
+          'Maximum number of results (default: 20 for list/pending, 50 for history)',
         default: 20,
       },
       force: {
-        type: "boolean",
-        description: "Force fresh analysis, bypassing cache",
+        type: 'boolean',
+        description: 'Force fresh analysis, bypassing cache',
         default: false,
       },
       ttl: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 3600)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 3600)',
         default: 3600,
       },
     },

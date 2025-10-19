@@ -107,7 +107,7 @@ export interface RootCause {
 export interface Evidence {
   type: 'statistical' | 'temporal' | 'causal' | 'contextual';
   description: string;
-  strength: number;
+  strength?: number;
   data?: any;
 }
 
@@ -362,6 +362,9 @@ export class AnomalyExplainer {
     // Calculate overall confidence
     const confidence = this.calculateExplanationConfidence(rootCauses, contributingFactors);
 
+    // Calculate anomaly score
+    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
+
     // Generate summary
     const summary = this.generateExplanationSummary(anomaly, rootCauses, anomalyScore);
 
@@ -405,6 +408,10 @@ export class AnomalyExplainer {
 
     const contributingFactors = this.identifyContributingFactors(anomaly, historicalData);
     const confidence = this.calculateExplanationConfidence(enrichedCauses, contributingFactors);
+    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
+
+    // Calculate anomaly score
+    const anomalyScore = this.calculateAnomalyScore(anomaly, historicalData);
 
     return {
       summary: this.generateRootCauseSummary(enrichedCauses),
@@ -548,7 +555,7 @@ export class AnomalyExplainer {
 
     // Determine result
     const avgStrength = evidence.length > 0
-      ? evidence.reduce((sum, e) => sum + e.strength, 0) / evidence.length
+      ? evidence.reduce((sum, e) => sum + (e.strength ?? 0), 0) / evidence.length
       : 0;
 
     let result: 'confirmed' | 'rejected' | 'inconclusive';
@@ -788,6 +795,23 @@ export class AnomalyExplainer {
   // Helper Methods
   // ============================================================================
 
+  /**
+   * Calculates an anomaly score using statistical methods (Z-score and IQR).
+   *
+   * This method evaluates how anomalous a value is compared to historical data
+   * by combining two statistical approaches:
+   * 1. Z-score: Measures how many standard deviations away from the mean
+   * 2. IQR (Interquartile Range): Detects outliers using quartile-based method
+   *
+   * @param anomaly - The anomaly object containing value and deviation
+   * @param historicalData - Array of historical data points for comparison
+   * @returns A normalized anomaly score between 0 and 1 (higher = more anomalous)
+   *
+   * @remarks
+   * - Returns absolute deviation if no historical data available
+   * - Combines Z-score and IQR for robust anomaly detection
+   * - Handles edge cases (zero std dev, empty IQR)
+   */
   private calculateAnomalyScore(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
     historicalData: Array<{ timestamp: number; value: number }>
@@ -797,6 +821,7 @@ export class AnomalyExplainer {
     }
 
     const values = historicalData.map(d => d.value);
+    const meanVal = mean(values);
     const stdDevVal = stdev(values);
 
     // Z-score
@@ -808,11 +833,12 @@ export class AnomalyExplainer {
     const iqr = q3 - q1;
     const lowerBound = q1 - 1.5 * iqr;
     const upperBound = q3 + 1.5 * iqr;
-    const iqrScore = anomaly.value < lowerBound || anomaly.value > upperBound ?
+    const iqrScore = (iqr > 0 && (anomaly.value < lowerBound || anomaly.value > upperBound)) ?
                      Math.abs(anomaly.value - meanVal) / iqr : 0;
 
-    // Combined score
-    return Math.max(zScore, iqrScore);
+    // Combined score, normalized to [0, 1]
+    const maxExpectedScore = 3; // Typical threshold for strong anomaly
+    return Math.min(1, Math.max(zScore, iqrScore) / maxExpectedScore);
   }
 
   private async identifyRootCauses(
@@ -936,17 +962,17 @@ export class AnomalyExplainer {
   private generateExplanationSummary(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
     rootCauses: RootCause[],
-    anomalyScore: number
+    _anomalyScore: number
   ): string {
     const direction = anomaly.value > anomaly.expectedValue ? 'increase' : 'decrease';
     const magnitude = Math.abs(anomaly.deviation).toFixed(1);
 
     if (rootCauses.length === 0) {
-      return `${anomaly.metric} showed a ${direction} of ${magnitude}σ from baseline at ${new Date(anomaly.timestamp).toISOString()}. Further investigation needed to determine root cause.`;
+      return `${anomaly.metric} showed a ${direction} of ${magnitude}σ from baseline (score: ${anomalyScore.toFixed(2)}) at ${new Date(anomaly.timestamp).toISOString()}. Further investigation needed to determine root cause.`;
     }
 
     const topCause = rootCauses[0];
-    return `${anomaly.metric} experienced a ${anomaly.severity} severity anomaly (${magnitude}σ deviation) at ${new Date(anomaly.timestamp).toISOString()}. Most likely cause (${(topCause.probability * 100).toFixed(0)}% probability): ${topCause.description}`;
+    return `${anomaly.metric} experienced a ${anomaly.severity} severity anomaly (${magnitude}σ deviation, score: ${anomalyScore.toFixed(2)}) at ${new Date(anomaly.timestamp).toISOString()}. Most likely cause (${(topCause.probability * 100).toFixed(0)}% probability): ${topCause.description}`;
   }
 
   private findStatisticalCauses(
@@ -1417,6 +1443,55 @@ export class AnomalyExplainer {
     };
     return ttls[operation] || 1800;
   }
+}
+
+// ============================================================================
+// Statistical Helper Functions
+// ============================================================================
+
+/**
+ * Calculate the arithmetic mean (average) of an array of numbers
+ */
+function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sum = values.reduce((acc, val) => acc + val, 0);
+  return sum / values.length;
+}
+
+/**
+ * Calculate the standard deviation of an array of numbers
+ */
+function stdev(values: number[]): number {
+  if (values.length === 0) return 0;
+  const avg = mean(values);
+  const squaredDiffs = values.map(val => Math.pow(val - avg, 2));
+  const variance = mean(squaredDiffs);
+  return Math.sqrt(variance);
+}
+
+/**
+ * Calculate a percentile value from an array of numbers
+ * @param values - Array of numbers
+ * @param p - Percentile (0 to 1, e.g., 0.25 for 25th percentile)
+ */
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+
+  // Sort values in ascending order
+  const sorted = [...values].sort((a, b) => a - b);
+
+  // Calculate position
+  const index = p * (sorted.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+
+  // Interpolate if needed
+  if (lower === upper) {
+    return sorted[lower];
+  }
+
+  const weight = index - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
 }
 
 // ============================================================================

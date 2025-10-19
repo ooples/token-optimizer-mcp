@@ -402,7 +402,6 @@ const FORMATTER_SUPPORT: Record<string, string> = {
 
 export class SmartPretty {
   private themeCache: Map<string, ThemeDefinition>;
-  private grammarCache: Map<string, any>;
 
   constructor(
     private cache: CacheEngine,
@@ -410,7 +409,6 @@ export class SmartPretty {
     private metricsCollector: MetricsCollector,
   ) {
     this.themeCache = new Map();
-    this.grammarCache = new Map();
 
     // Pre-load all built-in themes into cache
     for (const [name, theme] of Object.entries(THEMES)) {
@@ -507,7 +505,7 @@ export class SmartPretty {
     const codeHash = hashContent(code);
     const cacheKey = generateCacheKey(
       "pretty-highlight",
-      `${codeHash}:${language}:${outputMode}:${theme}`,
+      { codeHash, language, outputMode, theme },
     );
 
     // Check cache
@@ -789,7 +787,7 @@ export class SmartPretty {
     );
     const cacheKey = generateCacheKey(
       "pretty-format",
-      `${codeHash}:${language}:${configHash}`,
+      { codeHash, language, configHash },
     );
 
     // Check cache (88% reduction for incremental format)
@@ -1323,7 +1321,6 @@ export function getSmartPretty(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector,
-  projectRoot?: string,
 ): SmartPretty {
   return new SmartPretty(cache, tokenCounter, metrics);
 }

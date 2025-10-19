@@ -4,13 +4,13 @@
 
 export interface CacheEntry {
   key: string;
-  value: Buffer;  // Compressed binary data
+  value: Buffer; // Compressed binary data
   tokensSaved: number;
   createdAt: number;
   accessedAt: number;
   expiresAt: number;
   hitCount: number;
-  fileHash?: string;  // For git-aware invalidation
+  fileHash?: string; // For git-aware invalidation
   version: number;
 }
 

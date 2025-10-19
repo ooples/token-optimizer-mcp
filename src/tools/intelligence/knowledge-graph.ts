@@ -19,29 +19,29 @@
  * - Ranking caching (92% reduction, 15-min TTL)
  */
 
-import { createHash } from "crypto";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import graphlibPkg from "graphlib";
+import { createHash } from 'crypto';
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import graphlibPkg from 'graphlib';
 const { Graph, alg } = graphlibPkg;
 import {
   forceSimulation,
   forceLink,
   forceManyBody,
   forceCenter,
-} from "d3-force";
+} from 'd3-force';
 
 export interface KnowledgeGraphOptions {
   operation:
-    | "build-graph"
-    | "query"
-    | "find-paths"
-    | "detect-communities"
-    | "infer-relations"
-    | "visualize"
-    | "export-graph"
-    | "merge-graphs";
+    | 'build-graph'
+    | 'query'
+    | 'find-paths'
+    | 'detect-communities'
+    | 'infer-relations'
+    | 'visualize'
+    | 'export-graph'
+    | 'merge-graphs';
 
   // Graph building
   entities?: Array<{
@@ -70,28 +70,28 @@ export interface KnowledgeGraphOptions {
   sourceId?: string;
   targetId?: string;
   maxHops?: number;
-  algorithm?: "shortest" | "all" | "widest";
+  algorithm?: 'shortest' | 'all' | 'widest';
 
   // Community detection
-  communityAlgorithm?: "louvain" | "label-propagation" | "modularity";
+  communityAlgorithm?: 'louvain' | 'label-propagation' | 'modularity';
   minCommunitySize?: number;
 
   // Ranking
-  rankingAlgorithm?: "pagerank" | "betweenness" | "closeness" | "eigenvector";
+  rankingAlgorithm?: 'pagerank' | 'betweenness' | 'closeness' | 'eigenvector';
 
   // Relation inference
   confidenceThreshold?: number;
   maxInferences?: number;
 
   // Visualization
-  layout?: "force" | "hierarchical" | "circular" | "radial";
+  layout?: 'force' | 'hierarchical' | 'circular' | 'radial';
   maxNodes?: number;
   includeLabels?: boolean;
   imageWidth?: number;
   imageHeight?: number;
 
   // Export
-  format?: "json" | "graphml" | "dot" | "csv" | "cytoscape";
+  format?: 'json' | 'graphml' | 'dot' | 'csv' | 'cytoscape';
 
   // Merge
   graphs?: Array<{
@@ -99,7 +99,7 @@ export interface KnowledgeGraphOptions {
     nodes: any[];
     edges: any[];
   }>;
-  mergeStrategy?: "union" | "intersection" | "override";
+  mergeStrategy?: 'union' | 'intersection' | 'override';
 
   // Options
   graphId?: string;
@@ -153,7 +153,7 @@ export interface KnowledgeGraphResult {
       evidence: string[];
     }>;
     visualization?: {
-      format: "svg" | "json";
+      format: 'svg' | 'json';
       data: string | object;
       width?: number;
       height?: number;
@@ -207,7 +207,7 @@ export class KnowledgeGraphTool {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -231,7 +231,7 @@ export class KnowledgeGraphTool {
         if (cached) {
           const result = JSON.parse(cached);
           const tokensSaved = this.tokenCounter.count(
-            JSON.stringify(result),
+            JSON.stringify(result)
           ).tokens;
 
           this.metrics.record({
@@ -269,7 +269,7 @@ export class KnowledgeGraphTool {
           cacheKey,
           resultJson,
           resultJson.length,
-          resultJson.length,
+          resultJson.length
         );
       }
 
@@ -319,21 +319,21 @@ export class KnowledgeGraphTool {
    */
   private async executeOperation(options: KnowledgeGraphOptions): Promise<any> {
     switch (options.operation) {
-      case "build-graph":
+      case 'build-graph':
         return this.buildGraph(options);
-      case "query":
+      case 'query':
         return this.queryGraph(options);
-      case "find-paths":
+      case 'find-paths':
         return this.findPaths(options);
-      case "detect-communities":
+      case 'detect-communities':
         return this.detectCommunities(options);
-      case "infer-relations":
+      case 'infer-relations':
         return this.inferRelations(options);
-      case "visualize":
+      case 'visualize':
         return this.visualizeGraph(options);
-      case "export-graph":
+      case 'export-graph':
         return this.exportGraph(options);
-      case "merge-graphs":
+      case 'merge-graphs':
         return this.mergeGraphs(options);
       default:
         throw new Error(`Unknown operation: ${options.operation}`);
@@ -423,7 +423,7 @@ export class KnowledgeGraphTool {
 
     const pattern = options.pattern;
     if (!pattern) {
-      throw new Error("Pattern is required for query operation");
+      throw new Error('Pattern is required for query operation');
     }
 
     const matches: Array<{
@@ -444,7 +444,7 @@ export class KnowledgeGraphTool {
     // Generate all possible node combinations
     const nodeCombinations = this.generateNodeCombinations(
       graphData,
-      patternNodes,
+      patternNodes
     );
 
     for (const combination of nodeCombinations) {
@@ -466,7 +466,7 @@ export class KnowledgeGraphTool {
           (e) =>
             e.from === fromId &&
             e.to === toId &&
-            (!patternEdge.type || e.type === patternEdge.type),
+            (!patternEdge.type || e.type === patternEdge.type)
         );
 
         if (!edge) {
@@ -510,11 +510,11 @@ export class KnowledgeGraphTool {
 
     if (!options.sourceId || !options.targetId) {
       throw new Error(
-        "sourceId and targetId are required for find-paths operation",
+        'sourceId and targetId are required for find-paths operation'
       );
     }
 
-    const algorithm = options.algorithm || "shortest";
+    const algorithm = options.algorithm || 'shortest';
     const maxHops = options.maxHops || 10;
 
     const paths: Array<{
@@ -525,14 +525,14 @@ export class KnowledgeGraphTool {
     }> = [];
 
     switch (algorithm) {
-      case "shortest": {
+      case 'shortest': {
         // Use Dijkstra's algorithm
         const shortestPath = alg.dijkstra(graphData.graphlib, options.sourceId);
         if (shortestPath[options.targetId]) {
           const pathNodes = this.reconstructPath(
             shortestPath,
             options.sourceId,
-            options.targetId,
+            options.targetId
           );
           if (pathNodes.length > 0 && pathNodes.length <= maxHops + 1) {
             const pathEdges = this.getPathEdges(pathNodes, graphData);
@@ -547,13 +547,13 @@ export class KnowledgeGraphTool {
         break;
       }
 
-      case "all": {
+      case 'all': {
         // Find all paths using DFS
         const allPaths = this.findAllPaths(
           graphData,
           options.sourceId,
           options.targetId,
-          maxHops,
+          maxHops
         );
         for (const pathNodes of allPaths) {
           const pathEdges = this.getPathEdges(pathNodes, graphData);
@@ -567,13 +567,13 @@ export class KnowledgeGraphTool {
         break;
       }
 
-      case "widest": {
+      case 'widest': {
         // Find path with maximum bottleneck capacity
         const widestPath = this.findWidestPath(
           graphData,
           options.sourceId,
           options.targetId,
-          maxHops,
+          maxHops
         );
         if (widestPath.length > 0) {
           const pathEdges = this.getPathEdges(widestPath, graphData);
@@ -602,21 +602,21 @@ export class KnowledgeGraphTool {
       throw new Error(`Graph not found: ${graphId}`);
     }
 
-    const algorithm = options.communityAlgorithm || "louvain";
+    const algorithm = options.communityAlgorithm || 'louvain';
     const minSize = options.minCommunitySize || 2;
 
     let communities: Community[];
 
     switch (algorithm) {
-      case "louvain":
+      case 'louvain':
         communities = this.louvainCommunityDetection(graphData);
         break;
 
-      case "label-propagation":
+      case 'label-propagation':
         communities = this.labelPropagation(graphData);
         break;
 
-      case "modularity":
+      case 'modularity':
         communities = this.modularityCommunities(graphData);
         break;
 
@@ -686,14 +686,14 @@ export class KnowledgeGraphTool {
         const commonNeighbors = this.getCommonNeighbors(
           graphData,
           nodeA,
-          nodeB,
+          nodeB
         );
         const pathCount = this.countShortPaths(graphData, nodeA, nodeB, 3);
 
         const confidence = this.calculateInferenceConfidence(
           commonNeighbors.length,
           pathCount,
-          graphData.graphlib.nodeCount(),
+          graphData.graphlib.nodeCount()
         );
 
         if (confidence >= confidenceThreshold) {
@@ -706,7 +706,7 @@ export class KnowledgeGraphTool {
             graphData,
             nodeA,
             nodeB,
-            commonNeighbors,
+            commonNeighbors
           );
 
           inferred.push({
@@ -737,7 +737,7 @@ export class KnowledgeGraphTool {
       throw new Error(`Graph not found: ${graphId}`);
     }
 
-    const layout = options.layout || "force";
+    const layout = options.layout || 'force';
     const maxNodes = options.maxNodes || 100;
     const includeLabels = options.includeLabels !== false;
     const width = options.imageWidth || 800;
@@ -758,25 +758,25 @@ export class KnowledgeGraphTool {
 
     const edges = graphData.edges.filter(
       (e) =>
-        nodes.some((n) => n.id === e.from) && nodes.some((n) => n.id === e.to),
+        nodes.some((n) => n.id === e.from) && nodes.some((n) => n.id === e.to)
     );
 
     let layoutData: any;
 
     switch (layout) {
-      case "force":
+      case 'force':
         layoutData = this.forceDirectedLayout(nodes, edges, width, height);
         break;
 
-      case "hierarchical":
+      case 'hierarchical':
         layoutData = this.hierarchicalLayout(nodes, edges, width, height);
         break;
 
-      case "circular":
+      case 'circular':
         layoutData = this.circularLayout(nodes, edges, width, height);
         break;
 
-      case "radial":
+      case 'radial':
         layoutData = this.radialLayout(nodes, edges, width, height);
         break;
 
@@ -786,7 +786,7 @@ export class KnowledgeGraphTool {
 
     // Generate visualization data
     const visualization = {
-      format: "json" as const,
+      format: 'json' as const,
       data: {
         nodes: layoutData.nodes.map((n: any, i: number) => ({
           id: n.id,
@@ -821,27 +821,27 @@ export class KnowledgeGraphTool {
       throw new Error(`Graph not found: ${graphId}`);
     }
 
-    const format = options.format || "json";
+    const format = options.format || 'json';
     let data: string;
 
     switch (format) {
-      case "json":
+      case 'json':
         data = this.exportAsJSON(graphData);
         break;
 
-      case "graphml":
+      case 'graphml':
         data = this.exportAsGraphML(graphData);
         break;
 
-      case "dot":
+      case 'dot':
         data = this.exportAsDOT(graphData);
         break;
 
-      case "csv":
+      case 'csv':
         data = this.exportAsCSV(graphData);
         break;
 
-      case "cytoscape":
+      case 'cytoscape':
         data = this.exportAsCytoscape(graphData);
         break;
 
@@ -863,10 +863,10 @@ export class KnowledgeGraphTool {
    */
   private mergeGraphs(options: KnowledgeGraphOptions): any {
     if (!options.graphs || options.graphs.length < 2) {
-      throw new Error("At least 2 graphs are required for merge operation");
+      throw new Error('At least 2 graphs are required for merge operation');
     }
 
-    const mergeStrategy = options.mergeStrategy || "union";
+    const mergeStrategy = options.mergeStrategy || 'union';
     const graphId = options.graphId || this.generateGraphId();
 
     // Create merged graph
@@ -883,7 +883,7 @@ export class KnowledgeGraphTool {
     const sourceGraphs: string[] = [];
 
     switch (mergeStrategy) {
-      case "union": {
+      case 'union': {
         // Union: include all nodes and edges from all graphs
         for (const graph of options.graphs) {
           sourceGraphs.push(graph.id);
@@ -897,9 +897,7 @@ export class KnowledgeGraphTool {
           for (const edge of graph.edges) {
             const exists = mergedEdges.some(
               (e) =>
-                e.from === edge.from &&
-                e.to === edge.to &&
-                e.type === edge.type,
+                e.from === edge.from && e.to === edge.to && e.type === edge.type
             );
             if (!exists) {
               mergedEdges.push(edge);
@@ -909,14 +907,14 @@ export class KnowledgeGraphTool {
         break;
       }
 
-      case "intersection": {
+      case 'intersection': {
         // Intersection: only include nodes and edges present in all graphs
         const firstGraph = options.graphs[0];
         sourceGraphs.push(firstGraph.id);
 
         for (const node of firstGraph.nodes) {
           const inAllGraphs = options.graphs.every((g) =>
-            g.nodes.some((n) => n.id === node.id),
+            g.nodes.some((n) => n.id === node.id)
           );
           if (inAllGraphs) {
             mergedNodes.set(node.id, node);
@@ -927,10 +925,8 @@ export class KnowledgeGraphTool {
           const inAllGraphs = options.graphs.every((g) =>
             g.edges.some(
               (e) =>
-                e.from === edge.from &&
-                e.to === edge.to &&
-                e.type === edge.type,
-            ),
+                e.from === edge.from && e.to === edge.to && e.type === edge.type
+            )
           );
           if (
             inAllGraphs &&
@@ -943,7 +939,7 @@ export class KnowledgeGraphTool {
         break;
       }
 
-      case "override": {
+      case 'override': {
         // Override: later graphs override earlier ones
         for (const graph of options.graphs) {
           sourceGraphs.push(graph.id);
@@ -965,7 +961,7 @@ export class KnowledgeGraphTool {
     // Store merged graph
     const entities = Array.from(mergedNodes.values());
     this.buildGraph({
-      operation: "build-graph",
+      operation: 'build-graph',
       graphId,
       entities,
       relations: mergedEdges,
@@ -997,21 +993,21 @@ export class KnowledgeGraphTool {
         options.communityAlgorithm ||
         options.rankingAlgorithm,
     };
-    return `cache-${createHash("md5")
+    return `cache-${createHash('md5')
       .update(`knowledge-graph:${JSON.stringify(keyData)}`)
-      .digest("hex")}`;
+      .digest('hex')}`;
   }
 
   private getDefaultTTL(operation: string): number {
     const ttls: Record<string, number> = {
-      "build-graph": 3600, // 1 hour
+      'build-graph': 3600, // 1 hour
       query: 600, // 10 minutes
-      "find-paths": 1800, // 30 minutes
-      "detect-communities": 1800, // 30 minutes
-      "infer-relations": 900, // 15 minutes
+      'find-paths': 1800, // 30 minutes
+      'detect-communities': 1800, // 30 minutes
+      'infer-relations': 900, // 15 minutes
       visualize: 1800, // 30 minutes
-      "export-graph": 3600, // 1 hour
-      "merge-graphs": 3600, // 1 hour
+      'export-graph': 3600, // 1 hour
+      'merge-graphs': 3600, // 1 hour
     };
     return ttls[operation] || 600;
   }
@@ -1023,7 +1019,7 @@ export class KnowledgeGraphTool {
   private getDefaultGraphId(): string {
     if (this.graphs.size === 0) {
       throw new Error(
-        "No graphs available. Create a graph first using build-graph operation.",
+        'No graphs available. Create a graph first using build-graph operation.'
       );
     }
     return Array.from(this.graphs.keys())[0];
@@ -1035,7 +1031,7 @@ export class KnowledgeGraphTool {
       id?: string;
       type?: string;
       properties?: Record<string, any>;
-    }>,
+    }>
   ): Array<Record<string, string>> {
     // For simplicity, return combinations of first 100 matches
     const combinations: Array<Record<string, string>> = [];
@@ -1049,7 +1045,7 @@ export class KnowledgeGraphTool {
         if (patternNode.type && node.type !== patternNode.type) continue;
         if (patternNode.properties) {
           const propsMatch = Object.entries(patternNode.properties).every(
-            ([key, value]) => node.properties[key] === value,
+            ([key, value]) => node.properties[key] === value
           );
           if (!propsMatch) continue;
         }
@@ -1078,7 +1074,7 @@ export class KnowledgeGraphTool {
   private calculateMatchScore(
     nodes: any[],
     edges: any[],
-    pattern: any,
+    pattern: any
   ): number {
     // Simple scoring: base score + bonus for property matches
     let score = nodes.length + edges.length;
@@ -1088,7 +1084,7 @@ export class KnowledgeGraphTool {
       const patternNode = pattern.nodes.find((n: any) => n.type === node.type);
       if (patternNode && patternNode.properties) {
         const matchCount = Object.entries(patternNode.properties).filter(
-          ([key, value]) => node.properties[key] === value,
+          ([key, value]) => node.properties[key] === value
         ).length;
         score += matchCount * 0.5;
       }
@@ -1100,7 +1096,7 @@ export class KnowledgeGraphTool {
   private reconstructPath(
     dijkstraResult: Record<string, { distance: number; predecessor?: string }>,
     source: string,
-    target: string,
+    target: string
   ): string[] {
     const path: string[] = [];
     let current: string | undefined = target;
@@ -1120,7 +1116,7 @@ export class KnowledgeGraphTool {
 
   private getPathEdges(
     pathNodes: string[],
-    graphData: GraphData,
+    graphData: GraphData
   ): Array<{ from: string; to: string; type: string }> {
     const edges: Array<{ from: string; to: string; type: string }> = [];
 
@@ -1140,7 +1136,7 @@ export class KnowledgeGraphTool {
     graphData: GraphData,
     source: string,
     target: string,
-    maxHops: number,
+    maxHops: number
   ): string[][] {
     const paths: string[][] = [];
     const visited = new Set<string>();
@@ -1173,7 +1169,7 @@ export class KnowledgeGraphTool {
     graphData: GraphData,
     source: string,
     target: string,
-    maxHops: number,
+    maxHops: number
   ): string[] {
     // Use modified Dijkstra for maximum bottleneck capacity
     const capacity = new Map<string, number>();
@@ -1186,7 +1182,7 @@ export class KnowledgeGraphTool {
     }
 
     while (queue.size > 0) {
-      let maxNode = "";
+      let maxNode = '';
       let maxCap = -1;
 
       for (const nodeId of queue) {
@@ -1261,7 +1257,7 @@ export class KnowledgeGraphTool {
           const neighborCommunity = nodeToCommunity.get(neighbor)!;
           communityScores.set(
             neighborCommunity,
-            (communityScores.get(neighborCommunity) || 0) + 1,
+            (communityScores.get(neighborCommunity) || 0) + 1
           );
         }
 
@@ -1363,7 +1359,7 @@ export class KnowledgeGraphTool {
 
   private calculateCommunityDensity(
     graphData: GraphData,
-    members: string[],
+    members: string[]
   ): number {
     if (members.length < 2) return 0;
 
@@ -1386,7 +1382,7 @@ export class KnowledgeGraphTool {
 
   private calculateModularity(
     graphData: GraphData,
-    communities: Community[],
+    communities: Community[]
   ): number {
     const m = graphData.graphlib.edgeCount();
     if (m === 0) return 0;
@@ -1416,7 +1412,7 @@ export class KnowledgeGraphTool {
   private getCommonNeighbors(
     graphData: GraphData,
     nodeA: string,
-    nodeB: string,
+    nodeB: string
   ): string[] {
     const neighborsA = new Set([
       ...(graphData.graphlib.successors(nodeA) || []),
@@ -1442,7 +1438,7 @@ export class KnowledgeGraphTool {
     graphData: GraphData,
     source: string,
     target: string,
-    maxLength: number,
+    maxLength: number
   ): number {
     const paths = this.findAllPaths(graphData, source, target, maxLength);
     return paths.filter((p) => p.length <= maxLength + 1).length;
@@ -1451,7 +1447,7 @@ export class KnowledgeGraphTool {
   private calculateInferenceConfidence(
     commonNeighbors: number,
     pathCount: number,
-    _totalNodes: number,
+    _totalNodes: number
   ): number {
     // Simple confidence calculation
     const neighborScore = Math.min(commonNeighbors / 10, 1) * 0.6;
@@ -1463,17 +1459,17 @@ export class KnowledgeGraphTool {
     graphData: GraphData,
     nodeA: string,
     nodeB: string,
-    commonNeighbors: string[],
+    commonNeighbors: string[]
   ): string {
     // Infer type based on most common edge type from common neighbors
     const typeCounts = new Map<string, number>();
 
     for (const neighbor of commonNeighbors) {
       const edgeA = graphData.edges.find(
-        (e) => e.from === nodeA && e.to === neighbor,
+        (e) => e.from === nodeA && e.to === neighbor
       );
       const edgeB = graphData.edges.find(
-        (e) => e.from === neighbor && e.to === nodeB,
+        (e) => e.from === neighbor && e.to === nodeB
       );
 
       if (edgeA) {
@@ -1484,7 +1480,7 @@ export class KnowledgeGraphTool {
       }
     }
 
-    let maxType = "related";
+    let maxType = 'related';
     let maxCount = 0;
     for (const [type, count] of typeCounts) {
       if (count > maxCount) {
@@ -1497,7 +1493,7 @@ export class KnowledgeGraphTool {
   }
 
   private calculatePageRank(
-    graphData: GraphData,
+    graphData: GraphData
   ): Array<{ nodeId: string; score: number }> {
     const dampingFactor = 0.85;
     const epsilon = 0.0001;
@@ -1552,7 +1548,7 @@ export class KnowledgeGraphTool {
     nodes: any[],
     edges: any[],
     width: number,
-    height: number,
+    height: number
   ): any {
     // Convert to d3-force format
     const d3Nodes = nodes.map((n) => ({
@@ -1565,13 +1561,13 @@ export class KnowledgeGraphTool {
     // Run simulation
     const simulation = forceSimulation(d3Nodes)
       .force(
-        "link",
+        'link',
         forceLink(d3Links)
           .id((d: any) => d.id)
-          .distance(50),
+          .distance(50)
       )
-      .force("charge", forceManyBody().strength(-100))
-      .force("center", forceCenter(width / 2, height / 2));
+      .force('charge', forceManyBody().strength(-100))
+      .force('center', forceCenter(width / 2, height / 2));
 
     // Run for fixed number of ticks
     for (let i = 0; i < 100; i++) {
@@ -1585,7 +1581,7 @@ export class KnowledgeGraphTool {
     nodes: any[],
     edges: any[],
     width: number,
-    height: number,
+    height: number
   ): any {
     // Simple hierarchical layout
     const levels = new Map<string, number>();
@@ -1642,7 +1638,7 @@ export class KnowledgeGraphTool {
     nodes: any[],
     edges: any[],
     width: number,
-    height: number,
+    height: number
   ): any {
     const radius = Math.min(width, height) / 2 - 50;
     const centerX = width / 2;
@@ -1664,7 +1660,7 @@ export class KnowledgeGraphTool {
     nodes: any[],
     edges: any[],
     width: number,
-    height: number,
+    height: number
   ): any {
     // Similar to hierarchical but radial
     const levels = new Map<string, number>();
@@ -1745,13 +1741,13 @@ export class KnowledgeGraphTool {
       xml += `    </edge>\n`;
     }
 
-    xml += "  </graph>\n";
-    xml += "</graphml>";
+    xml += '  </graph>\n';
+    xml += '</graphml>';
     return xml;
   }
 
   private exportAsDOT(graphData: GraphData): string {
-    let dot = "digraph G {\n";
+    let dot = 'digraph G {\n';
 
     for (const [id, node] of graphData.nodes) {
       dot += `  "${id}" [label="${id}" type="${node.type}"];\n`;
@@ -1761,12 +1757,12 @@ export class KnowledgeGraphTool {
       dot += `  "${edge.from}" -> "${edge.to}" [label="${edge.type}"];\n`;
     }
 
-    dot += "}";
+    dot += '}';
     return dot;
   }
 
   private exportAsCSV(graphData: GraphData): string {
-    let csv = "type,from,to,edge_type\n";
+    let csv = 'type,from,to,edge_type\n';
 
     for (const [id, node] of graphData.nodes) {
       csv += `node,${id},${node.type},\n`;
@@ -1794,16 +1790,16 @@ export class KnowledgeGraphTool {
   private escapeXML(str: string): string {
     return str.replace(/[<>&'"]/g, (c) => {
       switch (c) {
-        case "<":
-          return "&lt;";
-        case ">":
-          return "&gt;";
-        case "&":
-          return "&amp;";
+        case '<':
+          return '&lt;';
+        case '>':
+          return '&gt;';
+        case '&':
+          return '&amp;';
         case "'":
-          return "&apos;";
+          return '&apos;';
         case '"':
-          return "&quot;";
+          return '&quot;';
         default:
           return c;
       }
@@ -1817,13 +1813,13 @@ let knowledgeGraphInstance: KnowledgeGraphTool | null = null;
 export function getKnowledgeGraphTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): KnowledgeGraphTool {
   if (!knowledgeGraphInstance) {
     knowledgeGraphInstance = new KnowledgeGraphTool(
       cache,
       tokenCounter,
-      metrics,
+      metrics
     );
   }
   return knowledgeGraphInstance;
@@ -1831,75 +1827,75 @@ export function getKnowledgeGraphTool(
 
 // MCP Tool definition
 export const KNOWLEDGE_GRAPH_TOOL_DEFINITION = {
-  name: "knowledge_graph",
+  name: 'knowledge_graph',
   description:
-    "Build and query knowledge graphs with 91% token reduction through intelligent caching. Supports graph building, pattern querying, path finding, community detection, node ranking, relation inference, visualization, and export.",
+    'Build and query knowledge graphs with 91% token reduction through intelligent caching. Supports graph building, pattern querying, path finding, community detection, node ranking, relation inference, visualization, and export.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "build-graph",
-          "query",
-          "find-paths",
-          "detect-communities",
-          "infer-relations",
-          "visualize",
-          "export-graph",
-          "merge-graphs",
+          'build-graph',
+          'query',
+          'find-paths',
+          'detect-communities',
+          'infer-relations',
+          'visualize',
+          'export-graph',
+          'merge-graphs',
         ],
-        description: "The knowledge graph operation to perform",
+        description: 'The knowledge graph operation to perform',
       },
       entities: {
-        type: "array",
-        description: "Entities to add to graph (for build-graph)",
+        type: 'array',
+        description: 'Entities to add to graph (for build-graph)',
       },
       relations: {
-        type: "array",
-        description: "Relations between entities (for build-graph)",
+        type: 'array',
+        description: 'Relations between entities (for build-graph)',
       },
       pattern: {
-        type: "object",
-        description: "Query pattern with nodes and edges (for query)",
+        type: 'object',
+        description: 'Query pattern with nodes and edges (for query)',
       },
       sourceId: {
-        type: "string",
-        description: "Source node ID (for find-paths)",
+        type: 'string',
+        description: 'Source node ID (for find-paths)',
       },
       targetId: {
-        type: "string",
-        description: "Target node ID (for find-paths)",
+        type: 'string',
+        description: 'Target node ID (for find-paths)',
       },
       algorithm: {
-        type: "string",
+        type: 'string',
         description:
-          "Algorithm to use (shortest/all/widest for paths, louvain/label-propagation/modularity for communities, pagerank/betweenness/closeness/eigenvector for ranking)",
+          'Algorithm to use (shortest/all/widest for paths, louvain/label-propagation/modularity for communities, pagerank/betweenness/closeness/eigenvector for ranking)',
       },
       layout: {
-        type: "string",
-        enum: ["force", "hierarchical", "circular", "radial"],
-        description: "Visualization layout (for visualize)",
+        type: 'string',
+        enum: ['force', 'hierarchical', 'circular', 'radial'],
+        description: 'Visualization layout (for visualize)',
       },
       format: {
-        type: "string",
-        enum: ["json", "graphml", "dot", "csv", "cytoscape"],
-        description: "Export format (for export-graph)",
+        type: 'string',
+        enum: ['json', 'graphml', 'dot', 'csv', 'cytoscape'],
+        description: 'Export format (for export-graph)',
       },
       graphId: {
-        type: "string",
-        description: "Graph identifier",
+        type: 'string',
+        description: 'Graph identifier',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching (default: true)",
+        type: 'boolean',
+        description: 'Enable caching (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds",
+        type: 'number',
+        description: 'Cache TTL in seconds',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

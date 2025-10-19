@@ -10,16 +10,16 @@
  * - Token-optimized output
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import type { TokenCounter } from '../../core/token-counter';
+import type { MetricsCollector } from '../../core/metrics';
+import { createHash } from 'crypto';
 
 interface SmartApiFetchOptions {
   /**
    * HTTP method
    */
-  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
   /**
    * Request URL
@@ -110,7 +110,7 @@ interface SmartApiFetchOutput {
 interface CircuitBreakerState {
   failures: number;
   lastFailure: number;
-  state: "closed" | "open" | "half-open";
+  state: 'closed' | 'open' | 'half-open';
 }
 
 // Circuit breaker: open after 5 consecutive failures, reset after 60 seconds
@@ -134,7 +134,7 @@ export class SmartApiFetch {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -152,7 +152,7 @@ export class SmartApiFetch {
     // Check circuit breaker
     if (this.isCircuitOpen(endpoint)) {
       throw new Error(
-        `Circuit breaker open for ${endpoint}. Too many consecutive failures.`,
+        `Circuit breaker open for ${endpoint}. Too many consecutive failures.`
       );
     }
 
@@ -165,12 +165,12 @@ export class SmartApiFetch {
           { ...cached, cacheAge },
           true,
           0,
-          Date.now() - startTime,
+          Date.now() - startTime
         );
 
         // Record metrics
         this.metrics.record({
-          operation: "smart_api_fetch",
+          operation: 'smart_api_fetch',
           cacheHit: true,
           success: true,
           duration: Date.now() - startTime,
@@ -196,7 +196,7 @@ export class SmartApiFetch {
         },
         false,
         0,
-        duration,
+        duration
       );
     }
 
@@ -217,7 +217,7 @@ export class SmartApiFetch {
           if (
             response.status >= 200 &&
             response.status < 300 &&
-            ["GET", "HEAD"].includes(options.method)
+            ['GET', 'HEAD'].includes(options.method)
           ) {
             this.cacheResult(cacheKey, response, options.ttl ?? 300);
           }
@@ -229,8 +229,8 @@ export class SmartApiFetch {
           // Don't retry on client errors (4xx except 429)
           if (
             error instanceof Error &&
-            error.message.includes("status: 4") &&
-            !error.message.includes("status: 429")
+            error.message.includes('status: 4') &&
+            !error.message.includes('status: 429')
           ) {
             this.recordCircuitBreakerFailure(endpoint);
             throw error;
@@ -248,7 +248,7 @@ export class SmartApiFetch {
         }
       }
 
-      throw lastError || new Error("Request failed after all retries");
+      throw lastError || new Error('Request failed after all retries');
     })();
 
     // Store in-flight request
@@ -271,7 +271,7 @@ export class SmartApiFetch {
 
       // Record metrics
       this.metrics.record({
-        operation: "smart_api_fetch",
+        operation: 'smart_api_fetch',
         cacheHit: false,
         success: result.success,
         duration,
@@ -290,7 +290,7 @@ export class SmartApiFetch {
    */
   private async executeRequest(
     options: SmartApiFetchOptions,
-    retryCount: number,
+    retryCount: number
   ): Promise<ApiResponse> {
     const timeout = options.timeout ?? 30000;
     const controller = new AbortController();
@@ -299,23 +299,23 @@ export class SmartApiFetch {
     try {
       // Prepare headers
       const headers: Record<string, string> = {
-        "User-Agent": "Hypercontext-MCP/1.0",
+        'User-Agent': 'Hypercontext-MCP/1.0',
         ...(options.headers || {}),
       };
 
       // Add retry header
       if (retryCount > 0) {
-        headers["X-Retry-Count"] = retryCount.toString();
+        headers['X-Retry-Count'] = retryCount.toString();
       }
 
       // Prepare body
       let body: string | undefined;
       if (options.body) {
-        if (typeof options.body === "string") {
+        if (typeof options.body === 'string') {
           body = options.body;
         } else {
           body = JSON.stringify(options.body);
-          headers["Content-Type"] = "application/json";
+          headers['Content-Type'] = 'application/json';
         }
       }
 
@@ -325,7 +325,7 @@ export class SmartApiFetch {
         headers,
         body,
         signal: controller.signal,
-        redirect: options.followRedirects !== false ? "follow" : "manual",
+        redirect: options.followRedirects !== false ? 'follow' : 'manual',
       });
 
       // Parse response
@@ -335,11 +335,11 @@ export class SmartApiFetch {
       });
 
       let responseBody: any;
-      const contentType = response.headers.get("content-type") || "";
+      const contentType = response.headers.get('content-type') || '';
 
       if (
         options.parseJson !== false &&
-        contentType.includes("application/json")
+        contentType.includes('application/json')
       ) {
         responseBody = await response.json();
       } else {
@@ -349,7 +349,7 @@ export class SmartApiFetch {
       // Check for error status
       if (response.status >= 400) {
         throw new Error(
-          `HTTP ${response.status} ${response.statusText} - ${options.url}`,
+          `HTTP ${response.status} ${response.statusText} - ${options.url}`
         );
       }
 
@@ -358,11 +358,11 @@ export class SmartApiFetch {
         statusText: response.statusText,
         headers: responseHeaders,
         body: responseBody,
-        etag: response.headers.get("etag") || undefined,
-        cacheControl: response.headers.get("cache-control") || undefined,
+        etag: response.headers.get('etag') || undefined,
+        cacheControl: response.headers.get('cache-control') || undefined,
       };
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new Error(`Request timeout after ${timeout}ms - ${options.url}`);
       }
       throw error;
@@ -390,7 +390,7 @@ export class SmartApiFetch {
    * Generate cache key from request details
    */
   private generateCacheKey(options: SmartApiFetchOptions): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(options.method);
     hash.update(options.url);
 
@@ -399,19 +399,19 @@ export class SmartApiFetch {
       const sortedHeaders = Object.keys(options.headers)
         .sort()
         .map((key) => `${key}:${options.headers![key]}`)
-        .join("|");
+        .join('|');
       hash.update(sortedHeaders);
     }
 
     if (options.body) {
       const bodyStr =
-        typeof options.body === "string"
+        typeof options.body === 'string'
           ? options.body
           : JSON.stringify(options.body);
       hash.update(bodyStr);
     }
 
-    return `api_fetch:${hash.digest("hex")}`;
+    return `api_fetch:${hash.digest('hex')}`;
   }
 
   /**
@@ -419,7 +419,7 @@ export class SmartApiFetch {
    */
   private getCachedResult(
     key: string,
-    ttl: number = 300,
+    ttl: number = 300
   ): SmartApiFetchResult | null {
     const cached = this.cache.get(key);
     if (!cached) {
@@ -459,7 +459,7 @@ export class SmartApiFetch {
     };
 
     const serialized = JSON.stringify(result);
-    const originalSize = Buffer.byteLength(serialized, "utf-8");
+    const originalSize = Buffer.byteLength(serialized, 'utf-8');
     const compressedSize = originalSize; // No actual compression in cache
 
     this.cache.set(key, serialized, originalSize, compressedSize);
@@ -472,7 +472,7 @@ export class SmartApiFetch {
     result: SmartApiFetchResult,
     fromCache: boolean,
     retries: number,
-    _duration: number,
+    _duration: number
   ): SmartApiFetchOutput {
     // Estimate baseline tokens (full response)
     const fullResponse = JSON.stringify(result, null, 2);
@@ -531,7 +531,7 @@ Body: ${bodyPreview}`;
    */
   private formatErrorOutput(
     result: SmartApiFetchResult,
-    retries: number,
+    retries: number
   ): string {
     return `✗ Request Failed
 Status: ${result.status} ${result.statusText}
@@ -545,7 +545,7 @@ Error: ${this.getBodyPreview(result.body)}`;
    */
   private formatRetriedOutput(
     result: SmartApiFetchResult,
-    retries: number,
+    retries: number
   ): string {
     const bodyPreview = this.getBodyPreview(result.body);
     return `✓ Request Successful (after ${retries} retries)
@@ -562,7 +562,7 @@ Body: ${bodyPreview}`;
     const headers = Object.keys(result.headers)
       .slice(0, 3)
       .map((k) => `  ${k}: ${result.headers[k]}`)
-      .join("\n");
+      .join('\n');
 
     return `✓ Request Successful
 Status: ${result.status} ${result.statusText}
@@ -577,16 +577,16 @@ Body: ${bodyPreview}`;
    */
   private getBodyPreview(body: any): string {
     if (body === null || body === undefined) {
-      return "(empty)";
+      return '(empty)';
     }
 
-    if (typeof body === "object") {
+    if (typeof body === 'object') {
       const str = JSON.stringify(body);
-      return str.length > 200 ? str.substring(0, 200) + "..." : str;
+      return str.length > 200 ? str.substring(0, 200) + '...' : str;
     }
 
     const str = String(body);
-    return str.length > 200 ? str.substring(0, 200) + "..." : str;
+    return str.length > 200 ? str.substring(0, 200) + '...' : str;
   }
 
   /**
@@ -594,14 +594,14 @@ Body: ${bodyPreview}`;
    */
   private isCircuitOpen(endpoint: string): boolean {
     const breaker = circuitBreakers.get(endpoint);
-    if (!breaker || breaker.state === "closed") {
+    if (!breaker || breaker.state === 'closed') {
       return false;
     }
 
-    if (breaker.state === "open") {
+    if (breaker.state === 'open') {
       // Check if reset time has passed
       if (Date.now() - breaker.lastFailure > CIRCUIT_BREAKER_RESET_MS) {
-        breaker.state = "half-open";
+        breaker.state = 'half-open';
         return false;
       }
       return true;
@@ -618,14 +618,14 @@ Body: ${bodyPreview}`;
     const breaker = circuitBreakers.get(endpoint) || {
       failures: 0,
       lastFailure: 0,
-      state: "closed" as const,
+      state: 'closed' as const,
     };
 
     breaker.failures++;
     breaker.lastFailure = Date.now();
 
     if (breaker.failures >= CIRCUIT_BREAKER_THRESHOLD) {
-      breaker.state = "open";
+      breaker.state = 'open';
     }
 
     circuitBreakers.set(endpoint, breaker);
@@ -646,7 +646,7 @@ Body: ${bodyPreview}`;
 export function getSmartApiFetch(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartApiFetch {
   return new SmartApiFetch(cache, tokenCounter, metrics);
 }
@@ -656,22 +656,22 @@ export function getSmartApiFetch(
 // ============================================================================
 
 export async function runSmartApiFetch(
-  options: SmartApiFetchOptions,
+  options: SmartApiFetchOptions
 ): Promise<string> {
   // Use global instances
   const { globalTokenCounter, globalMetricsCollector } = await import(
-    "../../core/globals"
+    '../../core/globals'
   );
-  const { CacheEngine } = await import("../../core/cache-engine");
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { CacheEngine } = await import('../../core/cache-engine');
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
 
   const smartFetch = getSmartApiFetch(
     cache,
     globalTokenCounter,
-    globalMetricsCollector,
+    globalMetricsCollector
   );
 
   const output = await smartFetch.run(options);
@@ -683,7 +683,7 @@ export async function runSmartApiFetch(
  * MCP Tool Definition
  */
 export const SMART_API_FETCH_TOOL_DEFINITION = {
-  name: "smart_api_fetch",
+  name: 'smart_api_fetch',
   description: `Execute HTTP requests with intelligent caching and retry logic.
 
 Features:
@@ -706,51 +706,51 @@ Perfect for:
 - External service communication
 - Data fetching with resilience`,
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       method: {
-        type: "string",
-        enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-        description: "HTTP method",
+        type: 'string',
+        enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+        description: 'HTTP method',
       },
       url: {
-        type: "string",
-        description: "Request URL",
+        type: 'string',
+        description: 'Request URL',
       },
       headers: {
-        type: "object",
-        description: "Request headers (optional)",
-        additionalProperties: { type: "string" },
+        type: 'object',
+        description: 'Request headers (optional)',
+        additionalProperties: { type: 'string' },
       },
       body: {
-        description: "Request body for POST/PUT/PATCH (optional)",
-        oneOf: [{ type: "string" }, { type: "object" }],
+        description: 'Request body for POST/PUT/PATCH (optional)',
+        oneOf: [{ type: 'string' }, { type: 'object' }],
       },
       ttl: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
       },
       maxRetries: {
-        type: "number",
-        description: "Maximum retry attempts (default: 3)",
+        type: 'number',
+        description: 'Maximum retry attempts (default: 3)',
       },
       timeout: {
-        type: "number",
-        description: "Request timeout in milliseconds (default: 30000)",
+        type: 'number',
+        description: 'Request timeout in milliseconds (default: 30000)',
       },
       force: {
-        type: "boolean",
-        description: "Force fresh request, ignore cache (default: false)",
+        type: 'boolean',
+        description: 'Force fresh request, ignore cache (default: false)',
       },
       followRedirects: {
-        type: "boolean",
-        description: "Follow HTTP redirects (default: true)",
+        type: 'boolean',
+        description: 'Follow HTTP redirects (default: true)',
       },
       parseJson: {
-        type: "boolean",
-        description: "Parse response as JSON (default: true)",
+        type: 'boolean',
+        description: 'Parse response as JSON (default: true)',
       },
     },
-    required: ["method", "url"],
+    required: ['method', 'url'],
   },
 };

@@ -714,7 +714,9 @@ export function generateProjectReport(
   }
 }
 
-function generateProjectMarkdownReport(analysis: ProjectAnalysisResult): string {
+function generateProjectMarkdownReport(
+  analysis: ProjectAnalysisResult
+): string {
   let md = `# Project Token Analysis Report\n\n`;
   md += `**Project Path:** ${analysis.projectPath}\n`;
   md += `**Analysis Date:** ${analysis.analysisTimestamp}\n`;
@@ -1028,7 +1030,9 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                         </tr>
                     </thead>
                     <tbody>
-                        ${analysis.topContributingSessions.map(session => `
+                        ${analysis.topContributingSessions
+                          .map(
+                            (session) => `
                         <tr>
                             <td><strong>${escapeHtml(session.sessionId)}</strong></td>
                             <td>${session.totalTokens.toLocaleString()}</td>
@@ -1036,7 +1040,9 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                             <td>${escapeHtml(session.duration)}</td>
                             <td>${escapeHtml(session.topTools[0]?.toolName || 'N/A')}</td>
                         </tr>
-                        `).join('')}
+                        `
+                          )
+                          .join('')}
                     </tbody>
                 </table>
             </section>
@@ -1054,7 +1060,9 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                         </tr>
                     </thead>
                     <tbody>
-                        ${analysis.topTools.map(tool => `
+                        ${analysis.topTools
+                          .map(
+                            (tool) => `
                         <tr>
                             <td><strong>${escapeHtml(tool.toolName)}</strong></td>
                             <td>${tool.totalTokens.toLocaleString()}</td>
@@ -1062,21 +1070,27 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                             <td>${tool.sessionCount}</td>
                             <td>${Math.round(tool.averageTokens).toLocaleString()}</td>
                         </tr>
-                        `).join('')}
+                        `
+                          )
+                          .join('')}
                     </tbody>
                 </table>
             </section>
 
-            ${analysis.recommendations.length > 0 ? `
+            ${
+              analysis.recommendations.length > 0
+                ? `
             <section class="section">
                 <div class="recommendations">
                     <h3>Recommendations</h3>
                     <ul>
-                        ${analysis.recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
+                        ${analysis.recommendations.map((rec) => `<li>${escapeHtml(rec)}</li>`).join('')}
                     </ul>
                 </div>
             </section>
-            ` : ''}
+            `
+                : ''
+            }
 
             <div class="export-buttons">
                 <button class="export-button" onclick="exportAsMarkdown()">Export as Markdown</button>

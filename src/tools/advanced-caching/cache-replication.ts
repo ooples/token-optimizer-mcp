@@ -18,57 +18,57 @@
  * - State snapshots with incremental updates (91% reduction)
  */
 
-import { EventEmitter } from "events";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
-import { createHash } from "crypto";
+import { EventEmitter } from 'events';
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { generateCacheKey } from '../shared/hash-utils';
+import { createHash } from 'crypto';
 
 /**
  * Replication modes
  */
 export type ReplicationMode =
-  | "primary-replica"
-  | "multi-primary"
-  | "master-slave" // Alias for primary-replica
-  | "peer-to-peer"; // Alias for multi-primary
+  | 'primary-replica'
+  | 'multi-primary'
+  | 'master-slave' // Alias for primary-replica
+  | 'peer-to-peer'; // Alias for multi-primary
 
 /**
  * Consistency models
  */
-export type ConsistencyModel = "eventual" | "strong" | "causal";
+export type ConsistencyModel = 'eventual' | 'strong' | 'causal';
 
 /**
  * Conflict resolution strategies
  */
 export type ConflictResolution =
-  | "last-write-wins"
-  | "first-write-wins"
-  | "merge"
-  | "custom"
-  | "vector-clock";
+  | 'last-write-wins'
+  | 'first-write-wins'
+  | 'merge'
+  | 'custom'
+  | 'vector-clock';
 
 /**
  * Node health status
  */
-export type NodeHealth = "healthy" | "degraded" | "unhealthy" | "offline";
+export type NodeHealth = 'healthy' | 'degraded' | 'unhealthy' | 'offline';
 
 /**
  * Replication operation types
  */
 export type ReplicationOperation =
-  | "configure"
-  | "add-replica"
-  | "remove-replica"
-  | "promote-replica"
-  | "sync"
-  | "status"
-  | "health-check"
-  | "resolve-conflicts"
-  | "snapshot"
-  | "restore"
-  | "rebalance";
+  | 'configure'
+  | 'add-replica'
+  | 'remove-replica'
+  | 'promote-replica'
+  | 'sync'
+  | 'status'
+  | 'health-check'
+  | 'resolve-conflicts'
+  | 'snapshot'
+  | 'restore'
+  | 'rebalance';
 
 /**
  * Replica node information
@@ -101,7 +101,7 @@ export interface VectorClock {
 export interface ReplicationEntry {
   key: string;
   value: any;
-  operation: "set" | "delete";
+  operation: 'set' | 'delete';
   timestamp: number;
   version: number;
   vectorClock: VectorClock;
@@ -314,7 +314,7 @@ export class CacheReplicationTool extends EventEmitter {
     cache: CacheEngine,
     tokenCounter: TokenCounter,
     metrics: MetricsCollector,
-    nodeId: string = "primary"
+    nodeId: string = 'primary'
   ) {
     super();
     this.cache = cache;
@@ -323,9 +323,9 @@ export class CacheReplicationTool extends EventEmitter {
 
     // Initialize default configuration
     this.config = {
-      mode: "primary-replica",
-      consistency: "eventual",
-      conflictResolution: "last-write-wins",
+      mode: 'primary-replica',
+      consistency: 'eventual',
+      conflictResolution: 'last-write-wins',
       syncInterval: 5000, // 5 seconds
       heartbeatInterval: 1000, // 1 second
       healthCheckInterval: 10000, // 10 seconds
@@ -349,10 +349,10 @@ export class CacheReplicationTool extends EventEmitter {
     // Initialize primary node
     this.nodes.set(nodeId, {
       id: nodeId,
-      region: "default",
-      endpoint: "local",
+      region: 'default',
+      endpoint: 'local',
       isPrimary: true,
-      health: "healthy",
+      health: 'healthy',
       lastHeartbeat: Date.now(),
       lag: 0,
       version: 0,
@@ -380,16 +380,14 @@ export class CacheReplicationTool extends EventEmitter {
   /**
    * Main entry point for replication operations
    */
-  async run(
-    options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult> {
+  async run(options: CacheReplicationOptions): Promise<CacheReplicationResult> {
     const startTime = Date.now();
     const { operation, useCache = true, cacheTTL = 300 } = options;
 
     // Generate cache key for cacheable operations
     let cacheKey: string | null = null;
     if (useCache && this.isCacheableOperation(operation)) {
-      cacheKey = generateCacheKey("replication", {
+      cacheKey = generateCacheKey('replication', {
         operation,
         ...this.getCacheKeyParams(options),
       });
@@ -416,48 +414,48 @@ export class CacheReplicationTool extends EventEmitter {
     }
 
     // Execute operation
-    let data: CacheReplicationResult["data"];
+    let data: CacheReplicationResult['data'];
     let nodesAffected = 0;
     let entriesSynced = 0;
 
     try {
       switch (operation) {
-        case "configure":
+        case 'configure':
           data = await this.configure(options);
           break;
-        case "add-replica":
+        case 'add-replica':
           data = await this.addReplica(options);
           nodesAffected = 1;
           break;
-        case "remove-replica":
+        case 'remove-replica':
           data = await this.removeReplica(options);
           nodesAffected = 1;
           break;
-        case "promote-replica":
+        case 'promote-replica':
           data = await this.promoteReplica(options);
           nodesAffected = 2;
           break;
-        case "sync":
+        case 'sync':
           const syncResult = await this.sync(options);
           data = syncResult.data;
           entriesSynced = syncResult.entriesSynced;
           break;
-        case "status":
+        case 'status':
           data = await this.getStatus(options);
           break;
-        case "health-check":
+        case 'health-check':
           data = await this.healthCheck(options);
           break;
-        case "resolve-conflicts":
+        case 'resolve-conflicts':
           data = await this.resolveConflicts(options);
           break;
-        case "snapshot":
+        case 'snapshot':
           data = await this.createSnapshot(options);
           break;
-        case "restore":
+        case 'restore':
           data = await this.restore(options);
           break;
-        case "rebalance":
+        case 'rebalance':
           data = await this.rebalance(options);
           nodesAffected = this.nodes.size;
           break;
@@ -525,7 +523,7 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async configure(
     options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     if (options.mode) {
       this.config.mode = options.mode;
     }
@@ -553,7 +551,7 @@ export class CacheReplicationTool extends EventEmitter {
       this.config.enableCompression = options.enableCompression;
     }
 
-    this.emit("configuration-updated", this.config);
+    this.emit('configuration-updated', this.config);
 
     return { config: { ...this.config } };
   }
@@ -563,11 +561,11 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async addReplica(
     options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const { nodeId, region, endpoint, weight } = options;
 
     if (!nodeId || !region || !endpoint) {
-      throw new Error("nodeId, region, and endpoint are required");
+      throw new Error('nodeId, region, and endpoint are required');
     }
 
     if (this.nodes.has(nodeId)) {
@@ -579,7 +577,7 @@ export class CacheReplicationTool extends EventEmitter {
       region,
       endpoint,
       isPrimary: false,
-      health: "healthy",
+      health: 'healthy',
       lastHeartbeat: Date.now(),
       lag: 0,
       version: 0,
@@ -592,7 +590,7 @@ export class CacheReplicationTool extends EventEmitter {
     this.nodes.set(nodeId, node);
     this.vectorClock[nodeId] = 0;
 
-    this.emit("replica-added", node);
+    this.emit('replica-added', node);
 
     // Initiate initial sync
     await this.syncNode(nodeId);
@@ -605,11 +603,11 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async removeReplica(
     options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const { nodeId } = options;
 
     if (!nodeId) {
-      throw new Error("nodeId is required");
+      throw new Error('nodeId is required');
     }
 
     const node = this.nodes.get(nodeId);
@@ -618,13 +616,15 @@ export class CacheReplicationTool extends EventEmitter {
     }
 
     if (node.isPrimary) {
-      throw new Error("Cannot remove primary node. Promote another replica first.");
+      throw new Error(
+        'Cannot remove primary node. Promote another replica first.'
+      );
     }
 
     this.nodes.delete(nodeId);
     delete this.vectorClock[nodeId];
 
-    this.emit("replica-removed", { nodeId });
+    this.emit('replica-removed', { nodeId });
 
     return { nodes: Array.from(this.nodes.values()) };
   }
@@ -634,11 +634,11 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async promoteReplica(
     options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const { targetNodeId } = options;
 
     if (!targetNodeId) {
-      throw new Error("targetNodeId is required");
+      throw new Error('targetNodeId is required');
     }
 
     const targetNode = this.nodes.get(targetNodeId);
@@ -656,7 +656,7 @@ export class CacheReplicationTool extends EventEmitter {
     );
 
     // Demote current primary if in primary-replica mode
-    if (currentPrimary && this.config.mode === "primary-replica") {
+    if (currentPrimary && this.config.mode === 'primary-replica') {
       currentPrimary.isPrimary = false;
     }
 
@@ -664,7 +664,7 @@ export class CacheReplicationTool extends EventEmitter {
     targetNode.isPrimary = true;
     this.stats.failoverCount++;
 
-    this.emit("replica-promoted", {
+    this.emit('replica-promoted', {
       from: currentPrimary?.id,
       to: targetNodeId,
     });
@@ -677,7 +677,7 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async sync(
     options: CacheReplicationOptions
-  ): Promise<{ data: CacheReplicationResult["data"]; entriesSynced: number }> {
+  ): Promise<{ data: CacheReplicationResult['data']; entriesSynced: number }> {
     const { deltaOnly = true } = options;
 
     const delta = this.createSyncDelta(deltaOnly);
@@ -695,14 +695,14 @@ export class CacheReplicationTool extends EventEmitter {
         node.lag = 0;
       } catch (error) {
         console.error(`Failed to sync with node ${nodeId}:`, error);
-        node.health = "degraded";
+        node.health = 'degraded';
       }
     }
 
     this.stats.syncCount++;
     this.stats.totalBytesTransferred += delta.size;
 
-    this.emit("sync-completed", { entriesSynced, delta });
+    this.emit('sync-completed', { entriesSynced, delta });
 
     return {
       data: {
@@ -718,7 +718,7 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async getStatus(
     _options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const stats = this.getStatsSnapshot();
     const nodes = Array.from(this.nodes.values());
 
@@ -734,7 +734,7 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async healthCheck(
     _options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const healthChecks: HealthCheckResult[] = [];
 
     const nodeEntries = Array.from(this.nodes.entries());
@@ -752,31 +752,33 @@ export class CacheReplicationTool extends EventEmitter {
 
       // Check heartbeat
       if (timeSinceHeartbeat > this.config.heartbeatInterval * 3) {
-        errors.push(
-          `No heartbeat received for ${timeSinceHeartbeat}ms`
-        );
-        node.health = "offline";
+        errors.push(`No heartbeat received for ${timeSinceHeartbeat}ms`);
+        node.health = 'offline';
       } else if (timeSinceHeartbeat > this.config.heartbeatInterval * 2) {
         warnings.push(`Delayed heartbeat: ${timeSinceHeartbeat}ms`);
-        node.health = "degraded";
+        node.health = 'degraded';
       }
 
       // Check capacity
       const usagePercent = node.used / node.capacity;
       if (usagePercent > 0.95) {
-        errors.push(`Storage capacity critical: ${(usagePercent * 100).toFixed(1)}%`);
+        errors.push(
+          `Storage capacity critical: ${(usagePercent * 100).toFixed(1)}%`
+        );
       } else if (usagePercent > 0.8) {
-        warnings.push(`Storage capacity high: ${(usagePercent * 100).toFixed(1)}%`);
+        warnings.push(
+          `Storage capacity high: ${(usagePercent * 100).toFixed(1)}%`
+        );
       }
 
       // Determine health status
       let health: NodeHealth;
       if (errors.length > 0) {
-        health = node.health === "offline" ? "offline" : "unhealthy";
+        health = node.health === 'offline' ? 'offline' : 'unhealthy';
       } else if (warnings.length > 0) {
-        health = "degraded";
+        health = 'degraded';
       } else {
-        health = "healthy";
+        health = 'healthy';
       }
 
       node.health = health;
@@ -797,7 +799,7 @@ export class CacheReplicationTool extends EventEmitter {
       });
     }
 
-    this.emit("health-check-completed", healthChecks);
+    this.emit('health-check-completed', healthChecks);
 
     return { healthChecks };
   }
@@ -807,7 +809,7 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async resolveConflicts(
     options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const conflicts = options.conflicts || this.pendingConflicts;
     const resolved: Conflict[] = [];
 
@@ -815,33 +817,35 @@ export class CacheReplicationTool extends EventEmitter {
       let resolution: ReplicationEntry;
 
       switch (this.config.conflictResolution) {
-        case "last-write-wins":
+        case 'last-write-wins':
           resolution =
             conflict.localEntry.timestamp > conflict.remoteEntry.timestamp
               ? conflict.localEntry
               : conflict.remoteEntry;
           break;
 
-        case "first-write-wins":
+        case 'first-write-wins':
           resolution =
             conflict.localEntry.timestamp < conflict.remoteEntry.timestamp
               ? conflict.localEntry
               : conflict.remoteEntry;
           break;
 
-        case "vector-clock":
+        case 'vector-clock':
           resolution = this.resolveWithVectorClock(conflict);
           break;
 
-        case "merge":
+        case 'merge':
           resolution = this.mergeConflict(conflict);
           break;
 
-        case "custom":
+        case 'custom':
           if (options.customResolver) {
             resolution = options.customResolver(conflict);
           } else {
-            throw new Error("Custom resolver required for custom conflict resolution");
+            throw new Error(
+              'Custom resolver required for custom conflict resolution'
+            );
           }
           break;
 
@@ -864,7 +868,7 @@ export class CacheReplicationTool extends EventEmitter {
 
     this.stats.resolvedConflictCount += resolved.length;
 
-    this.emit("conflicts-resolved", resolved);
+    this.emit('conflicts-resolved', resolved);
 
     return { conflicts: resolved };
   }
@@ -874,14 +878,14 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async createSnapshot(
     options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const snapshotId = this.generateSnapshotId();
     const entries: Array<[string, any]> = [];
 
     // Collect all cache entries
     // In production, this would iterate through the actual cache
     for (const entry of this.replicationLog) {
-      if (entry.operation === "set") {
+      if (entry.operation === 'set') {
         entries.push([entry.key, entry.value]);
       }
     }
@@ -895,7 +899,7 @@ export class CacheReplicationTool extends EventEmitter {
       id: snapshotId,
       version: this.currentVersion,
       timestamp: Date.now(),
-      nodeId: this.getPrimaryNode()?.id || "unknown",
+      nodeId: this.getPrimaryNode()?.id || 'unknown',
       entryCount: entries.length,
       size: Buffer.byteLength(compressed),
       compressed: this.config.enableCompression,
@@ -908,12 +912,12 @@ export class CacheReplicationTool extends EventEmitter {
     // Clean up old snapshots
     this.cleanupOldSnapshots();
 
-    this.emit("snapshot-created", metadata);
+    this.emit('snapshot-created', metadata);
 
     return {
       snapshot: {
         metadata,
-        data: options.includeMetadata ? compressed : "",
+        data: options.includeMetadata ? compressed : '',
       },
     };
   }
@@ -923,11 +927,11 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async restore(
     options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const { snapshotId } = options;
 
     if (!snapshotId) {
-      throw new Error("snapshotId is required");
+      throw new Error('snapshotId is required');
     }
 
     const snapshot = this.snapshots.get(snapshotId);
@@ -950,23 +954,26 @@ export class CacheReplicationTool extends EventEmitter {
       const entry: ReplicationEntry = {
         key,
         value,
-        operation: "set",
+        operation: 'set',
         timestamp: Date.now(),
         version: this.currentVersion,
         vectorClock: { ...this.vectorClock },
-        nodeId: this.getPrimaryNode()?.id || "unknown",
+        nodeId: this.getPrimaryNode()?.id || 'unknown',
         checksum: this.calculateChecksum(JSON.stringify(value)),
       };
       this.replicationLog.push(entry);
       this.cache.set(key, JSON.stringify(value), value.length, value.length);
     }
 
-    this.emit("restore-completed", { snapshotId, entriesRestored: entries.length });
+    this.emit('restore-completed', {
+      snapshotId,
+      entriesRestored: entries.length,
+    });
 
     return {
       snapshot: {
         metadata: snapshot.metadata,
-        data: "",
+        data: '',
       },
       stats: this.getStatsSnapshot(),
     };
@@ -977,11 +984,11 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private async rebalance(
     _options: CacheReplicationOptions
-  ): Promise<CacheReplicationResult["data"]> {
+  ): Promise<CacheReplicationResult['data']> {
     const nodes = Array.from(this.nodes.values()).filter((n) => !n.isPrimary);
 
     if (nodes.length === 0) {
-      throw new Error("No replica nodes to rebalance");
+      throw new Error('No replica nodes to rebalance');
     }
 
     // Calculate optimal weights based on capacity and current load
@@ -999,7 +1006,7 @@ export class CacheReplicationTool extends EventEmitter {
       node.weight = node.weight / totalWeight;
     }
 
-    this.emit("rebalance-completed", { nodes });
+    this.emit('rebalance-completed', { nodes });
 
     return { nodes: Array.from(this.nodes.values()) };
   }
@@ -1022,8 +1029,8 @@ export class CacheReplicationTool extends EventEmitter {
       clearInterval(this.syncTimer);
     }
     this.syncTimer = setInterval(() => {
-      this.sync({ operation: "sync" }).catch((err) => {
-        console.error("Auto-sync failed:", err);
+      this.sync({ operation: 'sync' }).catch((err) => {
+        console.error('Auto-sync failed:', err);
       });
     }, this.config.syncInterval);
   }
@@ -1048,8 +1055,8 @@ export class CacheReplicationTool extends EventEmitter {
       clearInterval(this.healthCheckTimer);
     }
     this.healthCheckTimer = setInterval(() => {
-      this.healthCheck({ operation: "health-check" }).catch((err) => {
-        console.error("Health check failed:", err);
+      this.healthCheck({ operation: 'health-check' }).catch((err) => {
+        console.error('Health check failed:', err);
       });
     }, this.config.healthCheckInterval);
   }
@@ -1062,8 +1069,8 @@ export class CacheReplicationTool extends EventEmitter {
       clearInterval(this.snapshotTimer);
     }
     this.snapshotTimer = setInterval(() => {
-      this.createSnapshot({ operation: "snapshot" }).catch((err) => {
-        console.error("Snapshot creation failed:", err);
+      this.createSnapshot({ operation: 'snapshot' }).catch((err) => {
+        console.error('Snapshot creation failed:', err);
       });
     }, this.config.snapshotInterval);
   }
@@ -1116,23 +1123,26 @@ export class CacheReplicationTool extends EventEmitter {
     // In production, this would send the delta over the network
     // For now, we simulate successful sync
     node.version = syncDelta.toVersion;
-    node.lag = Date.now() - (syncDelta.entries[syncDelta.entries.length - 1]?.timestamp || Date.now());
+    node.lag =
+      Date.now() -
+      (syncDelta.entries[syncDelta.entries.length - 1]?.timestamp ||
+        Date.now());
 
-    this.emit("node-synced", { nodeId, delta: syncDelta });
+    this.emit('node-synced', { nodeId, delta: syncDelta });
   }
 
   /**
    * Apply replication entry
    */
   private applyReplicationEntry(entry: ReplicationEntry): void {
-    if (entry.operation === "set") {
+    if (entry.operation === 'set') {
       this.cache.set(
         entry.key,
         JSON.stringify(entry.value),
         JSON.stringify(entry.value).length,
         JSON.stringify(entry.value).length
       );
-    } else if (entry.operation === "delete") {
+    } else if (entry.operation === 'delete') {
       this.cache.delete(entry.key);
     }
 
@@ -1194,17 +1204,15 @@ export class CacheReplicationTool extends EventEmitter {
 
     try {
       const localVal =
-        typeof local.value === "string"
-          ? JSON.parse(local.value)
-          : local.value;
+        typeof local.value === 'string' ? JSON.parse(local.value) : local.value;
       const remoteVal =
-        typeof remote.value === "string"
+        typeof remote.value === 'string'
           ? JSON.parse(remote.value)
           : remote.value;
 
       if (
-        typeof localVal === "object" &&
-        typeof remoteVal === "object" &&
+        typeof localVal === 'object' &&
+        typeof remoteVal === 'object' &&
         !Array.isArray(localVal) &&
         !Array.isArray(remoteVal)
       ) {
@@ -1223,7 +1231,10 @@ export class CacheReplicationTool extends EventEmitter {
       ...local,
       value: mergedValue,
       timestamp: Math.max(local.timestamp, remote.timestamp),
-      vectorClock: this.mergeVectorClocks(local.vectorClock, remote.vectorClock),
+      vectorClock: this.mergeVectorClocks(
+        local.vectorClock,
+        remote.vectorClock
+      ),
     };
   }
 
@@ -1260,12 +1271,13 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private getStatsSnapshot(): ReplicationStats {
     const nodes = Array.from(this.nodes.values());
-    const healthyNodes = nodes.filter((n) => n.health === "healthy");
+    const healthyNodes = nodes.filter((n) => n.health === 'healthy');
     const primaryNodes = nodes.filter((n) => n.isPrimary);
     const replicaNodes = nodes.filter((n) => !n.isPrimary);
 
     const lags = nodes.map((n) => n.lag);
-    const averageLag = lags.reduce((sum, lag) => sum + lag, 0) / lags.length || 0;
+    const averageLag =
+      lags.reduce((sum, lag) => sum + lag, 0) / lags.length || 0;
     const maxLag = Math.max(...lags, 0);
 
     const uptime = Date.now() - this.stats.startTime;
@@ -1324,7 +1336,7 @@ export class CacheReplicationTool extends EventEmitter {
    * Calculate checksum
    */
   private calculateChecksum(data: string): string {
-    return createHash("sha256").update(data).digest("hex").substring(0, 16);
+    return createHash('sha256').update(data).digest('hex').substring(0, 16);
   }
 
   /**
@@ -1332,7 +1344,7 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private compressData(data: string): string {
     // Simple compression simulation - in production would use zlib
-    return Buffer.from(data).toString("base64");
+    return Buffer.from(data).toString('base64');
   }
 
   /**
@@ -1340,14 +1352,14 @@ export class CacheReplicationTool extends EventEmitter {
    */
   private decompressData(data: string): string {
     // Simple decompression simulation
-    return Buffer.from(data, "base64").toString("utf-8");
+    return Buffer.from(data, 'base64').toString('utf-8');
   }
 
   /**
    * Check if operation is cacheable
    */
   private isCacheableOperation(operation: string): boolean {
-    return ["status", "health-check"].includes(operation);
+    return ['status', 'health-check'].includes(operation);
   }
 
   /**
@@ -1358,9 +1370,9 @@ export class CacheReplicationTool extends EventEmitter {
   ): Record<string, unknown> {
     const { operation, nodeId } = options;
     switch (operation) {
-      case "status":
+      case 'status':
         return {};
-      case "health-check":
+      case 'health-check':
         return { nodeId };
       default:
         return {};
@@ -1410,108 +1422,124 @@ export function getCacheReplicationTool(
  * MCP Tool Definition
  */
 export const CACHE_REPLICATION_TOOL_DEFINITION = {
-  name: "cache_replication",
+  name: 'cache_replication',
   description:
-    "Distributed cache replication with 88%+ token reduction. Supports primary-replica and multi-primary modes, strong/eventual consistency, automatic conflict resolution, failover, incremental sync, and health monitoring.",
+    'Distributed cache replication with 88%+ token reduction. Supports primary-replica and multi-primary modes, strong/eventual consistency, automatic conflict resolution, failover, incremental sync, and health monitoring.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "configure",
-          "add-replica",
-          "remove-replica",
-          "promote-replica",
-          "sync",
-          "status",
-          "health-check",
-          "resolve-conflicts",
-          "snapshot",
-          "restore",
-          "rebalance",
+          'configure',
+          'add-replica',
+          'remove-replica',
+          'promote-replica',
+          'sync',
+          'status',
+          'health-check',
+          'resolve-conflicts',
+          'snapshot',
+          'restore',
+          'rebalance',
         ],
-        description: "Replication operation to perform",
+        description: 'Replication operation to perform',
       },
       mode: {
-        type: "string",
-        enum: ["primary-replica", "multi-primary", "master-slave", "peer-to-peer"],
-        description: "Replication mode (for configure operation)",
+        type: 'string',
+        enum: [
+          'primary-replica',
+          'multi-primary',
+          'master-slave',
+          'peer-to-peer',
+        ],
+        description: 'Replication mode (for configure operation)',
       },
       consistency: {
-        type: "string",
-        enum: ["eventual", "strong", "causal"],
-        description: "Consistency model (for configure operation)",
+        type: 'string',
+        enum: ['eventual', 'strong', 'causal'],
+        description: 'Consistency model (for configure operation)',
       },
       conflictResolution: {
-        type: "string",
-        enum: ["last-write-wins", "first-write-wins", "merge", "custom", "vector-clock"],
-        description: "Conflict resolution strategy (for configure operation)",
+        type: 'string',
+        enum: [
+          'last-write-wins',
+          'first-write-wins',
+          'merge',
+          'custom',
+          'vector-clock',
+        ],
+        description: 'Conflict resolution strategy (for configure operation)',
       },
       syncInterval: {
-        type: "number",
-        description: "Sync interval in milliseconds (for configure operation)",
+        type: 'number',
+        description: 'Sync interval in milliseconds (for configure operation)',
       },
       heartbeatInterval: {
-        type: "number",
-        description: "Heartbeat interval in milliseconds (for configure operation)",
+        type: 'number',
+        description:
+          'Heartbeat interval in milliseconds (for configure operation)',
       },
       writeQuorum: {
-        type: "number",
-        description: "Number of replicas required for writes (for configure operation)",
+        type: 'number',
+        description:
+          'Number of replicas required for writes (for configure operation)',
       },
       readQuorum: {
-        type: "number",
-        description: "Number of replicas required for reads (for configure operation)",
+        type: 'number',
+        description:
+          'Number of replicas required for reads (for configure operation)',
       },
       nodeId: {
-        type: "string",
-        description: "Node ID (for add-replica/remove-replica operations)",
+        type: 'string',
+        description: 'Node ID (for add-replica/remove-replica operations)',
       },
       region: {
-        type: "string",
-        description: "Region name (for add-replica operation)",
+        type: 'string',
+        description: 'Region name (for add-replica operation)',
       },
       endpoint: {
-        type: "string",
-        description: "Node endpoint URL (for add-replica operation)",
+        type: 'string',
+        description: 'Node endpoint URL (for add-replica operation)',
       },
       weight: {
-        type: "number",
-        description: "Node weight for load balancing (for add-replica operation)",
+        type: 'number',
+        description:
+          'Node weight for load balancing (for add-replica operation)',
       },
       targetNodeId: {
-        type: "string",
-        description: "Target node ID (for promote-replica operation)",
+        type: 'string',
+        description: 'Target node ID (for promote-replica operation)',
       },
       force: {
-        type: "boolean",
-        description: "Force sync even if up-to-date (for sync operation)",
+        type: 'boolean',
+        description: 'Force sync even if up-to-date (for sync operation)',
       },
       deltaOnly: {
-        type: "boolean",
-        description: "Sync only delta changes (for sync operation)",
+        type: 'boolean',
+        description: 'Sync only delta changes (for sync operation)',
       },
       snapshotId: {
-        type: "string",
-        description: "Snapshot ID (for restore operation)",
+        type: 'string',
+        description: 'Snapshot ID (for restore operation)',
       },
       includeMetadata: {
-        type: "boolean",
-        description: "Include snapshot data in response (for snapshot operation)",
+        type: 'boolean',
+        description:
+          'Include snapshot data in response (for snapshot operation)',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable result caching (default: true)",
+        type: 'boolean',
+        description: 'Enable result caching (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 

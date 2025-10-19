@@ -13,11 +13,11 @@ const DEFAULT_CONFIG: HypercontextConfig = {
     maxSizeMB: 500,
     defaultTTL: 300, // 5 minutes
     ttlByType: {
-      'file_read': 300,
-      'git_status': 60,
-      'git_diff': 120,
-      'build_result': 600,
-      'test_result': 300,
+      file_read: 300,
+      git_status: 60,
+      git_diff: 120,
+      build_result: 600,
+      test_result: 300,
     },
     compression: 'auto',
   },
@@ -45,7 +45,8 @@ export class ConfigManager {
   private configPath: string;
 
   constructor(configPath?: string) {
-    this.configPath = configPath || join(homedir(), '.hypercontext', 'config.json');
+    this.configPath =
+      configPath || join(homedir(), '.hypercontext', 'config.json');
     this.config = this.loadConfig();
   }
 
@@ -64,7 +65,10 @@ export class ConfigManager {
     }
   }
 
-  private mergeConfig(defaults: HypercontextConfig, user: Partial<HypercontextConfig>): HypercontextConfig {
+  private mergeConfig(
+    defaults: HypercontextConfig,
+    user: Partial<HypercontextConfig>
+  ): HypercontextConfig {
     return {
       cache: { ...defaults.cache, ...user.cache },
       monitoring: { ...defaults.monitoring, ...user.monitoring },
@@ -93,5 +97,3 @@ export class ConfigManager {
     return this.config.monitoring.enabled;
   }
 }
-
-export const defaultConfigManager = new ConfigManager();

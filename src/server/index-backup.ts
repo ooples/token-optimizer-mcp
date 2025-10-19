@@ -10,8 +10,15 @@ import {
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
-import { analyzeTokenUsage, SessionAnalysisOptions } from '../analysis/session-analyzer.js';
-import { generateReport, ReportFormat, ReportOptions } from '../analysis/report-generator.js';
+import {
+  analyzeTokenUsage,
+  SessionAnalysisOptions,
+} from '../analysis/session-analyzer.js';
+import {
+  generateReport,
+  ReportFormat,
+  ReportOptions,
+} from '../analysis/report-generator.js';
 import { TurnData } from '../utils/thinking-mode.js';
 import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
@@ -177,7 +184,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to query. If not provided, uses current session.',
+              description:
+                'Optional session ID to query. If not provided, uses current session.',
             },
           },
         },
@@ -191,11 +199,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to optimize. If not provided, uses the current active session.',
+              description:
+                'Optional session ID to optimize. If not provided, uses the current active session.',
             },
             min_token_threshold: {
               type: 'number',
-              description: 'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+              description:
+                'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
             },
           },
         },
@@ -209,7 +219,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to analyze. If not provided, uses the current active session.',
+              description:
+                'Optional session ID to analyze. If not provided, uses the current active session.',
             },
             format: {
               type: 'string',
@@ -218,7 +229,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             outputPath: {
               type: 'string',
-              description: 'Optional path to save the report. If not provided, returns the report content.',
+              description:
+                'Optional path to save the report. If not provided, returns the report content.',
             },
           },
         },
@@ -232,7 +244,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to analyze. If not provided, uses the current active session.',
+              description:
+                'Optional session ID to analyze. If not provided, uses the current active session.',
             },
             groupBy: {
               type: 'string',
@@ -245,7 +258,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             anomalyThreshold: {
               type: 'number',
-              description: 'Multiplier for detecting anomalies (default: 3x average)',
+              description:
+                'Multiplier for detecting anomalies (default: 3x average)',
             },
           },
         },
@@ -259,7 +273,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to summarize. If not provided, uses the current active session.',
+              description:
+                'Optional session ID to summarize. If not provided, uses the current active session.',
             },
           },
         },
@@ -285,7 +300,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const originalCount = tokenCounter.count(text);
 
         // Compress text
-        const compressionResult = compression.compressToBase64(text, { quality });
+        const compressionResult = compression.compressToBase64(text, {
+          quality,
+        });
 
         // Cache the compressed text
         cache.set(
@@ -296,7 +313,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         );
 
         // Count compressed tokens
-        const compressedCount = tokenCounter.count(compressionResult.compressed);
+        const compressedCount = tokenCounter.count(
+          compressionResult.compressed
+        );
 
         return {
           content: [
@@ -471,7 +490,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     afterCompression: compressedTokens.tokens,
                     saved: tokenResult.tokens - compressedTokens.tokens,
                     percentSaved:
-                      ((tokenResult.tokens - compressedTokens.tokens) / tokenResult.tokens) *
+                      ((tokenResult.tokens - compressedTokens.tokens) /
+                        tokenResult.tokens) *
                       100,
                   },
                   size: {
@@ -508,7 +528,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           );
 
           // Read current session file
-          const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+          const sessionFilePath = path.join(
+            hooksDataPath,
+            'current-session.txt'
+          );
 
           if (!fs.existsSync(sessionFilePath)) {
             return {
@@ -526,7 +549,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Strip BOM and parse JSON
-          const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+          const sessionContent = fs
+            .readFileSync(sessionFilePath, 'utf-8')
+            .replace(/^\uFEFF/, '');
           const sessionData = JSON.parse(sessionContent);
 
           const targetSessionId = sessionId || sessionData.sessionId;
@@ -547,15 +572,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
-          const systemReminderPercent = totalTokens > 0
-            ? (systemReminderTokens / totalTokens) * 100
-            : 0;
-          const toolPercent = totalTokens > 0
-            ? (toolTokens / totalTokens) * 100
-            : 0;
+          const systemReminderPercent =
+            totalTokens > 0 ? (systemReminderTokens / totalTokens) * 100 : 0;
+          const toolPercent =
+            totalTokens > 0 ? (toolTokens / totalTokens) * 100 : 0;
 
           // Group operations by tool
-          const toolBreakdown: Record<string, { count: number; tokens: number }> = {};
+          const toolBreakdown: Record<
+            string,
+            { count: number; tokens: number }
+          > = {};
           for (const op of operations) {
             if (op.toolName === 'SYSTEM_REMINDERS') continue;
 
@@ -633,24 +659,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // --- 1. Identify Target Session ---
-          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
           let targetSessionId = sessionId;
 
           if (!targetSessionId) {
-            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            const sessionFilePath = path.join(
+              hooksDataPath,
+              'current-session.txt'
+            );
             if (!fs.existsSync(sessionFilePath)) {
               throw new Error('No active session found to optimize.');
             }
             // Strip BOM and parse JSON
-            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
           }
 
           // --- 2. Read Operations CSV ---
-          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
+          const csvFilePath = path.join(
+            hooksDataPath,
+            `operations-${targetSessionId}.csv`
+          );
           if (!fs.existsSync(csvFilePath)) {
-            throw new Error(`Operations file not found for session ${targetSessionId}`);
+            throw new Error(
+              `Operations file not found for session ${targetSessionId}`
+            );
           }
 
           const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
@@ -742,7 +783,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               compressionResult.originalSize
             );
 
-            const compressedCount = tokenCounter.count(compressionResult.compressed);
+            const compressedCount = tokenCounter.count(
+              compressionResult.compressed
+            );
             compressedTokens += compressedCount.tokens;
             operationsCompressed++;
             debugInfo.successfullyCompressed++;
@@ -750,7 +793,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           // --- 5. Return Summary with Debug Info ---
           const tokensSaved = originalTokens - compressedTokens;
-          const percentSaved = originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
+          const percentSaved =
+            originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
 
           return {
             content: [
@@ -793,7 +837,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'generate_session_report': {
-        const { sessionId, format = 'html', outputPath } = args as {
+        const {
+          sessionId,
+          format = 'html',
+          outputPath,
+        } = args as {
           sessionId?: string;
           format?: ReportFormat;
           outputPath?: string;
@@ -801,25 +849,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // Get session data
-          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
           let targetSessionId = sessionId;
           let sessionStartTime = '';
 
           if (!targetSessionId) {
-            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            const sessionFilePath = path.join(
+              hooksDataPath,
+              'current-session.txt'
+            );
             if (!fs.existsSync(sessionFilePath)) {
               throw new Error('No active session found');
             }
-            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
             sessionStartTime = sessionData.startTime;
           }
 
           // Read operations CSV
-          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
+          const csvFilePath = path.join(
+            hooksDataPath,
+            `operations-${targetSessionId}.csv`
+          );
           if (!fs.existsSync(csvFilePath)) {
-            throw new Error(`Operations file not found for session ${targetSessionId}`);
+            throw new Error(
+              `Operations file not found for session ${targetSessionId}`
+            );
           }
 
           const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
@@ -845,7 +908,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Generate report
           const reportOptions: ReportOptions = {
             sessionId: targetSessionId!,
-            sessionStartTime: sessionStartTime || operations[0]?.timestamp || 'Unknown',
+            sessionStartTime:
+              sessionStartTime || operations[0]?.timestamp || 'Unknown',
             includeCharts: format === 'html',
             includeTimeline: format === 'html',
           };
@@ -881,16 +945,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: 'text',
-                text: format === 'json' ? report : JSON.stringify(
-                  {
-                    success: true,
-                    format,
-                    sessionId: targetSessionId,
-                    report,
-                  },
-                  null,
-                  2
-                ),
+                text:
+                  format === 'json'
+                    ? report
+                    : JSON.stringify(
+                        {
+                          success: true,
+                          format,
+                          sessionId: targetSessionId,
+                          report,
+                        },
+                        null,
+                        2
+                      ),
               },
             ],
           };
@@ -911,7 +978,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'analyze_token_usage': {
-        const { sessionId, groupBy = 'turn', topN = 10, anomalyThreshold = 3 } = args as {
+        const {
+          sessionId,
+          groupBy = 'turn',
+          topN = 10,
+          anomalyThreshold = 3,
+        } = args as {
           sessionId?: string;
           groupBy?: SessionAnalysisOptions['groupBy'];
           topN?: number;
@@ -920,23 +992,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // Get session data
-          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
           let targetSessionId = sessionId;
 
           if (!targetSessionId) {
-            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            const sessionFilePath = path.join(
+              hooksDataPath,
+              'current-session.txt'
+            );
             if (!fs.existsSync(sessionFilePath)) {
               throw new Error('No active session found');
             }
-            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
           }
 
           // Read operations CSV
-          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
+          const csvFilePath = path.join(
+            hooksDataPath,
+            `operations-${targetSessionId}.csv`
+          );
           if (!fs.existsSync(csvFilePath)) {
-            throw new Error(`Operations file not found for session ${targetSessionId}`);
+            throw new Error(
+              `Operations file not found for session ${targetSessionId}`
+            );
           }
 
           const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
@@ -999,22 +1086,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { sessionId } = args as { sessionId?: string };
 
         try {
-          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
           let targetSessionId = sessionId;
 
           // Get session ID from current-session.txt if not provided
           if (!targetSessionId) {
-            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            const sessionFilePath = path.join(
+              hooksDataPath,
+              'current-session.txt'
+            );
             if (!fs.existsSync(sessionFilePath)) {
               throw new Error('No active session found');
             }
-            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
           }
 
           // Read session-log.jsonl
-          const jsonlFilePath = path.join(hooksDataPath, `session-log-${targetSessionId}.jsonl`);
+          const jsonlFilePath = path.join(
+            hooksDataPath,
+            `session-log-${targetSessionId}.jsonl`
+          );
 
           // Error handling: Throwing errors here is consistent with MCP protocol
           // which wraps tool errors in structured error responses automatically
@@ -1047,8 +1147,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           const tokensByServer: Record<string, ServerToolBreakdown> = {};
           const toolDurations: number[] = [];
-          const toolBreakdown: Record<string, { count: number; tokens: number; totalDuration: number }> = {};
-          const hookBreakdown: Record<string, { count: number; tokens: number }> = {};
+          const toolBreakdown: Record<
+            string,
+            { count: number; tokens: number; totalDuration: number }
+          > = {};
+          const hookBreakdown: Record<
+            string,
+            { count: number; tokens: number }
+          > = {};
 
           // DEBUG: Track parsing
           let mcpToolCallEvents = 0;
@@ -1083,7 +1189,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
                 // Track by tool name
                 if (!toolBreakdown[event.toolName]) {
-                  toolBreakdown[event.toolName] = { count: 0, tokens: 0, totalDuration: 0 };
+                  toolBreakdown[event.toolName] = {
+                    count: 0,
+                    tokens: 0,
+                    totalDuration: 0,
+                  };
                 }
                 toolBreakdown[event.toolName].count++;
                 toolBreakdown[event.toolName].tokens += tokens;
@@ -1095,25 +1205,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   const serverName = parts[1] || 'unknown';
                   const toolName = parts.slice(2).join('__') || 'unknown';
 
-                  console.error(`[DEBUG tool_call] Found MCP tool: ${event.toolName} -> server=${serverName}, tool=${toolName}, tokens=${tokens}`);
+                  console.error(
+                    `[DEBUG tool_call] Found MCP tool: ${event.toolName} -> server=${serverName}, tool=${toolName}, tokens=${tokens}`
+                  );
 
                   // Initialize server if not exists
                   if (!tokensByServer[serverName]) {
                     tokensByServer[serverName] = { total: 0, tools: {} };
-                    console.error(`[DEBUG tool_call] Initialized server: ${serverName}`);
+                    console.error(
+                      `[DEBUG tool_call] Initialized server: ${serverName}`
+                    );
                   }
 
                   // Initialize tool within server if not exists
                   if (!tokensByServer[serverName].tools[toolName]) {
-                    tokensByServer[serverName].tools[toolName] = { count: 0, tokens: 0 };
-                    console.error(`[DEBUG tool_call] Initialized tool: ${serverName}.${toolName}`);
+                    tokensByServer[serverName].tools[toolName] = {
+                      count: 0,
+                      tokens: 0,
+                    };
+                    console.error(
+                      `[DEBUG tool_call] Initialized tool: ${serverName}.${toolName}`
+                    );
                   }
 
                   // Aggregate tokens at both server and tool level
                   tokensByServer[serverName].total += tokens;
                   tokensByServer[serverName].tools[toolName].count++;
                   tokensByServer[serverName].tools[toolName].tokens += tokens;
-                  console.error(`[DEBUG tool_call] Updated: ${serverName}.${toolName} count=${tokensByServer[serverName].tools[toolName].count} tokens=${tokensByServer[serverName].tools[toolName].tokens}`);
+                  console.error(
+                    `[DEBUG tool_call] Updated: ${serverName}.${toolName} count=${tokensByServer[serverName].tools[toolName].count} tokens=${tokensByServer[serverName].tools[toolName].tokens}`
+                  );
                 }
               }
 
@@ -1127,7 +1248,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
                   // Add duration to tool breakdown
                   if (toolBreakdown[event.toolName]) {
-                    toolBreakdown[event.toolName].totalDuration += event.duration_ms;
+                    toolBreakdown[event.toolName].totalDuration +=
+                      event.duration_ms;
                   }
                 }
 
@@ -1139,18 +1261,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   const serverName = parts[1] || 'unknown';
                   const toolName = parts.slice(2).join('__') || 'unknown';
 
-                  console.error(`[DEBUG tool_result] Found MCP tool: ${event.toolName} -> server=${serverName}, tool=${toolName}, tokens=${tokens}`);
+                  console.error(
+                    `[DEBUG tool_result] Found MCP tool: ${event.toolName} -> server=${serverName}, tool=${toolName}, tokens=${tokens}`
+                  );
 
                   // Initialize server if not exists
                   if (!tokensByServer[serverName]) {
                     tokensByServer[serverName] = { total: 0, tools: {} };
-                    console.error(`[DEBUG tool_result] Initialized server: ${serverName}`);
+                    console.error(
+                      `[DEBUG tool_result] Initialized server: ${serverName}`
+                    );
                   }
 
                   // Initialize tool within server if not exists
                   if (!tokensByServer[serverName].tools[toolName]) {
-                    tokensByServer[serverName].tools[toolName] = { count: 0, tokens: 0 };
-                    console.error(`[DEBUG tool_result] Initialized tool: ${serverName}.${toolName}`);
+                    tokensByServer[serverName].tools[toolName] = {
+                      count: 0,
+                      tokens: 0,
+                    };
+                    console.error(
+                      `[DEBUG tool_result] Initialized tool: ${serverName}.${toolName}`
+                    );
                   }
 
                   // Aggregate tokens at both server and tool level
@@ -1158,7 +1289,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   tokensByServer[serverName].total += tokens;
                   tokensByServer[serverName].tools[toolName].count++;
                   tokensByServer[serverName].tools[toolName].tokens += tokens;
-                  console.error(`[DEBUG tool_result] Updated: ${serverName}.${toolName} count=${tokensByServer[serverName].tools[toolName].count} tokens=${tokensByServer[serverName].tools[toolName].tokens}`);
+                  console.error(
+                    `[DEBUG tool_result] Updated: ${serverName}.${toolName} count=${tokensByServer[serverName].tools[toolName].count} tokens=${tokensByServer[serverName].tools[toolName].tokens}`
+                  );
                 }
               }
 
@@ -1188,12 +1321,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Calculate total tokens
-          const totalTokens = Object.values(tokensByCategory).reduce((sum, val) => sum + val, 0);
+          const totalTokens = Object.values(tokensByCategory).reduce(
+            (sum, val) => sum + val,
+            0
+          );
 
           // Calculate duration
           let duration = 'Unknown';
           if (sessionStartTime) {
-            const endTime = sessionEndTime || new Date().toISOString().replace('T', ' ').substring(0, 19);
+            const endTime =
+              sessionEndTime ||
+              new Date().toISOString().replace('T', ' ').substring(0, 19);
             const start = new Date(sessionStartTime);
             const end = new Date(endTime);
             const diffMs = end.getTime() - start.getTime();
@@ -1203,15 +1341,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Calculate average tool duration
-          const avgToolDuration = toolDurations.length > 0
-            ? Math.round(toolDurations.reduce((sum, d) => sum + d, 0) / toolDurations.length)
-            : 0;
+          const avgToolDuration =
+            toolDurations.length > 0
+              ? Math.round(
+                  toolDurations.reduce((sum, d) => sum + d, 0) /
+                    toolDurations.length
+                )
+              : 0;
 
           // DEBUG: Log final state
-          console.error(`[DEBUG FINAL] MCP tool_call events: ${mcpToolCallEvents}`);
-          console.error(`[DEBUG FINAL] MCP tool_result events: ${mcpToolResultEvents}`);
-          console.error(`[DEBUG FINAL] tokensByServer keys: ${Object.keys(tokensByServer).join(', ') || 'EMPTY'}`);
-          console.error(`[DEBUG FINAL] tokensByServer content: ${JSON.stringify(tokensByServer, null, 2)}`);
+          console.error(
+            `[DEBUG FINAL] MCP tool_call events: ${mcpToolCallEvents}`
+          );
+          console.error(
+            `[DEBUG FINAL] MCP tool_result events: ${mcpToolResultEvents}`
+          );
+          console.error(
+            `[DEBUG FINAL] tokensByServer keys: ${Object.keys(tokensByServer).join(', ') || 'EMPTY'}`
+          );
+          console.error(
+            `[DEBUG FINAL] tokensByServer content: ${JSON.stringify(tokensByServer, null, 2)}`
+          );
 
           // Build response
           const summary = {
@@ -1230,19 +1380,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             tokensByCategory: {
               tools: {
                 tokens: tokensByCategory.tools,
-                percent: totalTokens > 0 ? (tokensByCategory.tools / totalTokens * 100).toFixed(2) : '0.00',
+                percent:
+                  totalTokens > 0
+                    ? ((tokensByCategory.tools / totalTokens) * 100).toFixed(2)
+                    : '0.00',
               },
               hooks: {
                 tokens: tokensByCategory.hooks,
-                percent: totalTokens > 0 ? (tokensByCategory.hooks / totalTokens * 100).toFixed(2) : '0.00',
+                percent:
+                  totalTokens > 0
+                    ? ((tokensByCategory.hooks / totalTokens) * 100).toFixed(2)
+                    : '0.00',
               },
               responses: {
                 tokens: tokensByCategory.responses,
-                percent: totalTokens > 0 ? (tokensByCategory.responses / totalTokens * 100).toFixed(2) : '0.00',
+                percent:
+                  totalTokens > 0
+                    ? (
+                        (tokensByCategory.responses / totalTokens) *
+                        100
+                      ).toFixed(2)
+                    : '0.00',
               },
               system_reminders: {
                 tokens: tokensByCategory.system_reminders,
-                percent: totalTokens > 0 ? (tokensByCategory.system_reminders / totalTokens * 100).toFixed(2) : '0.00',
+                percent:
+                  totalTokens > 0
+                    ? (
+                        (tokensByCategory.system_reminders / totalTokens) *
+                        100
+                      ).toFixed(2)
+                    : '0.00',
               },
             },
             tokensByServer,
