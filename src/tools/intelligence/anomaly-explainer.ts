@@ -17,6 +17,17 @@ import { TokenCounter } from "../../core/token-counter.js";
 import { MetricsCollector } from "../../core/metrics.js";
 import { generateCacheKey } from "../shared/hash-utils.js";
 
+/**
+ * Note on removed code: A _calculateAnomalyScore method using Z-score and IQR
+ * statistical analysis was removed as it was never called in the codebase.
+ *
+ * Current anomaly scoring uses inline normalized deviation calculations
+ * (see lines ~353-360, ~394-395 in the explain/analyze methods).
+ *
+ * If more sophisticated statistical anomaly detection is needed, consider
+ * implementing a method combining Z-score and IQR approaches with historical data.
+ */
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
