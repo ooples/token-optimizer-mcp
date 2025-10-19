@@ -20,6 +20,7 @@ import {
   ReportOptions,
 } from '../analysis/report-generator.js';
 import { TurnData } from '../utils/thinking-mode.js';
+import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -555,66 +556,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           const targetSessionId = sessionId || sessionData.sessionId;
 
-          // Read operations CSV
-          const csvFilePath = path.join(
+          // Read JSONL log
+          const jsonlFilePath = path.join(
             hooksDataPath,
-            `operations-${targetSessionId}.csv`
+            `session-log-${targetSessionId}.jsonl`
           );
 
-          if (!fs.existsSync(csvFilePath)) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: false,
-                    error: `Operations file not found for session ${targetSessionId}`,
-                    csvFilePath,
-                  }),
-                },
-              ],
-            };
+          // Error handling: Throw to let MCP wrap errors consistently
+          if (!fs.existsSync(jsonlFilePath)) {
+            throw new Error(`JSONL log not found for session ${targetSessionId}`);
           }
 
-          // Parse CSV
-          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
-          const lines = csvContent.trim().split('\n');
-
-          interface Operation {
-            timestamp: string;
-            toolName: string;
-            tokens: number;
-            metadata: string;
-          }
-
-          const operations: Operation[] = [];
-          let systemReminderTokens = 0;
-          let toolTokens = 0;
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            const parts = line.split(',');
-            if (parts.length < 3) continue;
-
-            const timestamp = parts[0];
-            const toolName = parts[1];
-            const tokens = parseInt(parts[2], 10) || 0;
-            const metadata = parts[3] || '';
-
-            operations.push({
-              timestamp,
-              toolName,
-              tokens,
-              metadata,
-            });
-
-            if (toolName === 'SYSTEM_REMINDERS') {
-              systemReminderTokens = tokens;
-            } else {
-              toolTokens += tokens;
-            }
-          }
+          // Parse JSONL using shared utility (now async with streaming)
+          const { operations, toolTokens, systemReminderTokens } = await parseSessionLog(jsonlFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
@@ -1162,21 +1116,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             `session-log-${targetSessionId}.jsonl`
           );
 
+          // Error handling: Throwing errors here is consistent with MCP protocol
+          // which wraps tool errors in structured error responses automatically
           if (!fs.existsSync(jsonlFilePath)) {
-            // Fallback: Use CSV format for backward compatibility
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: false,
-                    error: `JSONL log not found for session ${targetSessionId}. This session may not have JSONL logging enabled yet.`,
-                    jsonlFilePath,
-                    note: 'Use get_session_stats for CSV-based sessions',
-                  }),
-                },
-              ],
-            };
+            throw new Error(`JSONL log not found for session ${targetSessionId}`);
           }
 
           // Parse JSONL file
