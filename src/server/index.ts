@@ -13,6 +13,7 @@ import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import { MetricsCollector } from '../core/metrics.js';
 import { getPredictiveCacheTool, PREDICTIVE_CACHE_TOOL_DEFINITION } from '../tools/advanced-caching/predictive-cache.js';
+import { parseSessionLog } from './session-log-parser.js';
 import { getCacheWarmupTool, CACHE_WARMUP_TOOL_DEFINITION } from '../tools/advanced-caching/cache-warmup.js';
 import fs from 'fs';
 import path from 'path';
@@ -529,58 +530,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
           }
 
-          // Parse JSONL
+          // Parse JSONL using shared utility
           // TODO: Refactor to use async fs.promises or streaming (readline/createReadStream)
           // to avoid blocking event loop on large session logs
-          // TODO: Extract shared utility parseSessionLog(jsonlFilePath) that returns
-          // { operations, toolTokens, systemReminderTokens } to avoid duplication
-          // with index-backup.ts and maintain consistency
-          const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
-          const lines = jsonlContent.trim().split('\n');
-
-          interface Operation {
-            timestamp: string;
-            toolName: string;
-            tokens: number;
-            metadata: string;
-          }
-
-          const operations: Operation[] = [];
-          let systemReminderTokens = 0;
-          let toolTokens = 0;
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            try {
-              const event = JSON.parse(line);
-
-              // Process tool calls
-              if (event.type === 'tool_call') {
-                const tokens = event.estimatedTokens || 0;
-                operations.push({
-                  timestamp: event.timestamp,
-                  toolName: event.toolName,
-                  tokens,
-                  metadata: typeof event.metadata === 'string'
-                    ? event.metadata
-                    : event.metadata
-                      ? JSON.stringify(event.metadata)
-                      : '',
-                });
-                toolTokens += tokens;
-              }
-
-              // Process system reminders
-              if (event.type === 'system_reminder') {
-                const tokens = event.tokens || 0;
-                systemReminderTokens = tokens;
-              }
-            } catch (parseError) {
-              // Skip malformed JSONL lines
-              continue;
-            }
-          }
+          const { operations, toolTokens, systemReminderTokens } = parseSessionLog(jsonlFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;

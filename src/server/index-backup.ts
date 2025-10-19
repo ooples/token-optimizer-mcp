@@ -13,6 +13,7 @@ import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeTokenUsage, SessionAnalysisOptions } from '../analysis/session-analyzer.js';
 import { generateReport, ReportFormat, ReportOptions } from '../analysis/report-generator.js';
 import { TurnData } from '../utils/thinking-mode.js';
+import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -551,55 +552,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
           }
 
-          // Parse JSONL
+          // Parse JSONL using shared utility
           // TODO: Refactor to use async fs.promises or streaming (readline/createReadStream)
           // to avoid blocking event loop on large session logs
-          const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
-          const lines = jsonlContent.trim().split('\n');
-
-          interface Operation {
-            timestamp: string;
-            toolName: string;
-            tokens: number;
-            metadata: string;
-          }
-
-          const operations: Operation[] = [];
-          let systemReminderTokens = 0;
-          let toolTokens = 0;
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            try {
-              const event = JSON.parse(line);
-
-              // Process tool calls
-              if (event.type === 'tool_call') {
-                const tokens = event.estimatedTokens || 0;
-                operations.push({
-                  timestamp: event.timestamp,
-                  toolName: event.toolName,
-                  tokens,
-                  metadata: typeof event.metadata === 'string'
-                    ? event.metadata
-                    : event.metadata !== undefined
-                      ? JSON.stringify(event.metadata)
-                      : '',
-                });
-                toolTokens += tokens;
-              }
-
-              // Process system reminders
-              if (event.type === 'system_reminder') {
-                const tokens = event.tokens || 0;
-                systemReminderTokens = tokens;
-              }
-            } catch (parseError) {
-              // Skip malformed JSONL lines
-              continue;
-            }
-          }
+          const { operations, toolTokens, systemReminderTokens } = parseSessionLog(jsonlFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
