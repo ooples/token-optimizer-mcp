@@ -719,7 +719,7 @@ export class SmartREST {
     const originalSize = Buffer.byteLength(serialized, 'utf-8');
     const compressedSize = originalSize;
 
-    await this.cache.set(key, serialized, originalSize, compressedSize);
+    this.cache.set(key, serialized, originalSize, compressedSize);
   }
 }
 

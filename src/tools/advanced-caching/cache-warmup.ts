@@ -1307,11 +1307,11 @@ export class CacheWarmupTool extends EventEmitter {
     }
 
     return {
-      minute: parts[0] === '*' ? '*' : parseInt(parts[0]),
-      hour: parts[1] === '*' ? '*' : parseInt(parts[1]),
-      dayOfMonth: parts[2] === '*' ? '*' : parseInt(parts[2]),
-      month: parts[3] === '*' ? '*' : parseInt(parts[3]),
-      dayOfWeek: parts[4] === '*' ? '*' : parseInt(parts[4]),
+      minute: parts[0] === '*' ? '*' : parseInt(parts[0], 10),
+      hour: parts[1] === '*' ? '*' : parseInt(parts[1], 10),
+      dayOfMonth: parts[2] === '*' ? '*' : parseInt(parts[2], 10),
+      month: parts[3] === '*' ? '*' : parseInt(parts[3], 10),
+      dayOfWeek: parts[4] === '*' ? '*' : parseInt(parts[4], 10),
     };
   }
 
@@ -1433,12 +1433,19 @@ export class CacheWarmupTool extends EventEmitter {
   ): Promise<T> {
     if (!timeout) return promise;
 
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error('Operation timed out')), timeout)
-      ),
-    ]);
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Operation timed out')), timeout);
+
+      promise
+        .then((result) => {
+          clearTimeout(timer);
+          resolve(result);
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+    });
   }
 
   /**

@@ -12,8 +12,7 @@
  */
 
 import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { globalTokenCounter, globalMetricsCollector } from '../../core/globals.js';
 import { createHash } from 'crypto';
 
 interface SmartGraphQLOptions {
@@ -572,7 +571,7 @@ export class SmartGraphQL {
     const cacheKey = `cache-${createHash('md5')
       .update('graphql_schema:' + endpoint)
       .digest('hex')}`;
-    const cached = await this.cache.get(cacheKey);
+    const cached = this.cache.get(cacheKey);
 
     if (cached) {
       return JSON.parse(cached.toString());
@@ -718,7 +717,7 @@ export class SmartGraphQL {
     );
     const tokensSaved = tokensSavedResult.tokens;
 
-    await this.cache.set(key, JSON.stringify(cacheData), tokensSaved, ttl);
+    this.cache.set(key, JSON.stringify(cacheData), tokensSaved, ttl);
   }
 }
 
@@ -747,8 +746,8 @@ export async function runSmartGraphQL(
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const graphql = getSmartGraphQL(
     cache,
-    new TokenCounter(),
-    new MetricsCollector()
+    globalTokenCounter,
+    globalMetricsCollector
   );
 
   const result = await graphql.run(options);
