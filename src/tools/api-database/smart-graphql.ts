@@ -12,7 +12,9 @@
  */
 
 import { CacheEngine } from '../../core/cache-engine';
-import { globalTokenCounter, globalMetricsCollector } from '../../core/globals.js';
+import { globalTokenCounter, globalMetricsCollector } from '../../core/globals';
+import type { TokenCounter } from '../../core/token-counter';
+import type { MetricsCollector } from '../../core/metrics';
 import { createHash } from 'crypto';
 
 interface SmartGraphQLOptions {
