@@ -832,11 +832,12 @@ export class AnomalyExplainer {
     const iqr = q3 - q1;
     const lowerBound = q1 - 1.5 * iqr;
     const upperBound = q3 + 1.5 * iqr;
-    const iqrScore = anomaly.value < lowerBound || anomaly.value > upperBound ?
+    const iqrScore = (iqr > 0 && (anomaly.value < lowerBound || anomaly.value > upperBound)) ?
                      Math.abs(anomaly.value - meanVal) / iqr : 0;
 
-    // Combined score
-    return Math.max(zScore, iqrScore);
+    // Combined score, normalized to [0, 1]
+    const maxExpectedScore = 3; // Typical threshold for strong anomaly
+    return Math.min(1, Math.max(zScore, iqrScore) / maxExpectedScore);
   }
 
   private async identifyRootCauses(
