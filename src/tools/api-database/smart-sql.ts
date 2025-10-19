@@ -573,6 +573,16 @@ export class SmartSql {
 
   /**
    * Format output based on the type of result and cache status
+   *
+   * Formatting percentages shown in headers (e.g., '95%', '86%', '80%')
+   * represent estimated token reduction compared to a verbose baseline format.
+   * These percentages optimize for Claude's context window by showing only
+   * essential information while maintaining clarity.
+   *
+   * Percentage breakdown:
+   * - Cached (95%): Minimal output for cache hits
+   * - Analysis/Optimization (86%): Moderate reduction for core data
+   * - Plan/Validation/History (80%): Balanced reduction for detailed data
    */
   formatOutput(result: SmartSqlOutput): string {
     // If from cache, use cached output format
