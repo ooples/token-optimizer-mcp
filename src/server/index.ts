@@ -39,7 +39,7 @@ const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 const server = new Server(
   {
     name: 'token-optimizer-mcp',
-    version: '0.1.0',
+    version: '0.2.0',
   },
   {
     capabilities: {
@@ -272,23 +272,87 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Count original tokens
         const originalCount = tokenCounter.count(text);
+        const originalSize = Buffer.byteLength(text, 'utf8');
+
+        // Minimum size threshold: don't compress small files
+        const MIN_SIZE_THRESHOLD = 500; // bytes
+        if (originalSize < MIN_SIZE_THRESHOLD) {
+          // Cache uncompressed for small files
+          cache.set(key, text, originalSize, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `File too small (${originalSize} bytes < ${MIN_SIZE_THRESHOLD} bytes threshold)`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
 
         // Compress text
         const compressionResult = compression.compressToBase64(text, {
           quality,
         });
 
-        // Cache the compressed text
+        // Count compressed tokens
+        const compressedCount = tokenCounter.count(
+          compressionResult.compressed
+        );
+
+        // Check if compression actually reduces tokens
+        if (compressedCount.tokens >= originalCount.tokens) {
+          // Compression doesn't help with tokens, cache uncompressed
+          cache.set(key, text, originalSize, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
+        // Compression helps! Cache the compressed version
         cache.set(
           key,
           compressionResult.compressed,
           compressionResult.compressedSize,
           compressionResult.originalSize
-        );
-
-        // Count compressed tokens
-        const compressedCount = tokenCounter.count(
-          compressionResult.compressed
         );
 
         return {
@@ -306,6 +370,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   originalSize: compressionResult.originalSize,
                   compressedSize: compressionResult.compressedSize,
                   cached: true,
+                  compressionUsed: true,
                 },
                 null,
                 2
