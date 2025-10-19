@@ -25,11 +25,25 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// Configuration constants
+const COMPRESSION_CONFIG = {
+  MIN_SIZE_THRESHOLD: 500, // bytes - minimum size before attempting compression
+} as const;
+
 // Initialize core modules
 const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
 const metrics = new MetricsCollector();
+
+/**
+ * Helper function to cache uncompressed text
+ * Used when compression is skipped (file too small or compression doesn't help)
+ */
+function cacheUncompressed(key: string, text: string, size: number): void {
+  // Store uncompressed text with size=0 for compressedSize to indicate no compression
+  cache.set(key, text, size, 0);
+}
 
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
@@ -39,7 +53,7 @@ const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 const server = new Server(
   {
     name: 'token-optimizer-mcp',
-    version: '0.1.0',
+    version: '0.2.0',
   },
   {
     capabilities: {
@@ -272,23 +286,86 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Count original tokens
         const originalCount = tokenCounter.count(text);
+        const originalSize = Buffer.byteLength(text, 'utf8');
+
+        // Minimum size threshold: don't compress small files
+        if (originalSize < COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD) {
+          // Cache uncompressed for small files
+          cacheUncompressed(key, text, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
 
         // Compress text
         const compressionResult = compression.compressToBase64(text, {
           quality,
         });
 
-        // Cache the compressed text
+        // Count compressed tokens
+        const compressedCount = tokenCounter.count(
+          compressionResult.compressed
+        );
+
+        // Check if compression actually reduces tokens
+        if (compressedCount.tokens >= originalCount.tokens) {
+          // Compression doesn't help with tokens, cache uncompressed
+          cacheUncompressed(key, text, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
+        // Compression helps! Cache the compressed version
         cache.set(
           key,
           compressionResult.compressed,
           compressionResult.compressedSize,
           compressionResult.originalSize
-        );
-
-        // Count compressed tokens
-        const compressedCount = tokenCounter.count(
-          compressionResult.compressed
         );
 
         return {
@@ -306,6 +383,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   originalSize: compressionResult.originalSize,
                   compressedSize: compressionResult.compressedSize,
                   cached: true,
+                  compressionUsed: true,
                 },
                 null,
                 2
