@@ -127,7 +127,7 @@ function process(data: DataItem[]): number[] {
   },
   "env": {
     "node": true,
-    "es6": true"
+    "es6": true
   }
 }
 ```
