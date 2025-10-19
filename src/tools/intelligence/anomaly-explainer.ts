@@ -796,6 +796,18 @@ export class AnomalyExplainer {
   // Helper Methods
   // ============================================================================
 
+  /**
+   * Note: A statistical anomaly scoring method using Z-score and IQR was removed
+   * as it was never called in the codebase. Anomaly scores are currently calculated
+   * inline using normalized deviation (see lines 353-360, 394-395).
+   *
+   * If more sophisticated statistical anomaly detection is needed in the future,
+   * consider implementing a method that combines:
+   * - Z-score: measures standard deviations from mean
+   * - IQR method: detects outliers using quartile-based approach
+   * - Combined normalized score in range [0, 1]
+   */
+
   private async identifyRootCauses(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
     _historicalData: Array<{ timestamp: number; value: number }>,
