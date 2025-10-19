@@ -50,6 +50,9 @@ $global:SessionState = @{
     AutoCachedOps = 0
 }
 
+# Recent output buffer for tool name detection (stores last 10 lines)
+$global:RecentOutputBuffer = [System.Collections.Generic.Queue[string]]::new(10)
+
 # Automatic caching configuration
 $global:AutoCacheConfig = @{
     Enabled = $true
@@ -215,6 +218,38 @@ function Should-CacheResult {
         [int]$TokenDelta
     )
     return (-not $CacheHit -and -not [string]::IsNullOrWhiteSpace($ToolResult) -and $TokenDelta -ge $global:AutoCacheConfig.TokenThreshold)
+}
+
+function Detect-ToolNameFromContext {
+    param(
+        [System.Collections.Generic.Queue[string]]$RecentOutput
+    )
+
+    # Tool name detection patterns from claude-code output
+    # Patterns match common tool invocation formats in Claude Code's output
+    $patterns = @(
+        '(?:Using|Invoking|Calling)\s+(?:the\s+)?(\w+)\s+tool',  # "Using the Read tool"
+        'Tool:\s+(\w+)',  # "Tool: Read"
+        '(\w+)\s+tool\s+(?:invocation|call)',  # "Read tool invocation"
+        'mcp__(\w+)__(\w+)',  # MCP tool format "mcp__server__tool"
+        '(?:Read|Write|Edit|Bash|Grep|Glob|WebFetch|WebSearch|Task)\b'  # Direct tool name
+    )
+
+    # Search recent output buffer for tool name patterns
+    foreach ($line in $RecentOutput) {
+        foreach ($pattern in $patterns) {
+            if ($line -match $pattern) {
+                # MCP format: combine server and tool name
+                if ($Matches.Count -gt 2) {
+                    return "mcp__$($Matches[1])__$($Matches[2])"
+                }
+                # Standard format: return captured group or full match
+                return if ($Matches[1]) { $Matches[1] } else { $Matches[0] }
+            }
+        }
+    }
+
+    return $null
 }
 
 function Check-AutoCache {
@@ -653,6 +688,12 @@ function Invoke-ClaudeCodeWrapper {
                 break
             }
 
+            # Add line to output buffer for tool name detection
+            if ($global:RecentOutputBuffer.Count -ge 10) {
+                $global:RecentOutputBuffer.Dequeue() | Out-Null
+            }
+            $global:RecentOutputBuffer.Enqueue($line)
+
             # Parse system warnings
             $tokenInfo = Parse-SystemWarning -Line $line
             if ($tokenInfo) {
@@ -660,10 +701,14 @@ function Invoke-ClaudeCodeWrapper {
 
                 # Check if this is a tool call transition (tokens increased)
                 if ($tokenInfo.Used -gt $global:SessionState.LastTokens) {
-                    # Detect tool call from context
-                    # In production, tool name is parsed from claude-code output
-                    # For now, use a generic tool name when context is unavailable
-                    $toolName = $global:AutoCacheConfig.UnknownToolName
+                    # Detect tool call from recent output context
+                    $toolName = Detect-ToolNameFromContext -RecentOutput $global:RecentOutputBuffer
+
+                    if (-not $toolName) {
+                        # Fallback: Use high-confidence detection or unknown
+                        $toolName = $global:AutoCacheConfig.UnknownToolName
+                        Write-VerboseLog "Warning: Could not detect tool name from context, using '$toolName'"
+                    }
 
                     if (-not $inTurn) {
                         Start-Turn -UserMessagePreview $lastUserMessage
