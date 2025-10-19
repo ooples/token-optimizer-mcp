@@ -998,20 +998,6 @@ export class KnowledgeGraphTool {
       .digest('hex')}`;
   }
 
-  private getDefaultTTL(operation: string): number {
-    const ttls: Record<string, number> = {
-      'build-graph': 3600, // 1 hour
-      query: 600, // 10 minutes
-      'find-paths': 1800, // 30 minutes
-      'detect-communities': 1800, // 30 minutes
-      'infer-relations': 900, // 15 minutes
-      visualize: 1800, // 30 minutes
-      'export-graph': 3600, // 1 hour
-      'merge-graphs': 3600, // 1 hour
-    };
-    return ttls[operation] || 600;
-  }
-
   private generateGraphId(): string {
     return `graph_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }

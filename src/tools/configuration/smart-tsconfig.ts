@@ -14,8 +14,11 @@ import { resolve, dirname, join } from 'path';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine';
-import { globalMetricsCollector } from '../../core/metrics';
+import { MetricsCollector } from '../../core/metrics';
 import { TokenCounter } from '../../core/token-counter';
+
+// Initialize metrics collector
+const globalMetricsCollector = new MetricsCollector();
 import { hashContent, generateCacheKey } from '../shared/hash-utils';
 
 // ==================== Type Definitions ====================

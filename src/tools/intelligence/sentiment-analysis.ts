@@ -1438,30 +1438,6 @@ export class SentimentAnalysisTool {
   }
 
   /**
-   * Get cache TTL based on operation
-   */
-  private getCacheTTL(options: SentimentAnalysisOptions): number {
-    if (options.cacheTTL) {
-      return options.cacheTTL;
-    }
-
-    // Operation-specific TTLs for optimal token reduction
-    const ttlMap: Record<string, number> = {
-      'analyze-sentiment': 3600, // 1 hour (92% reduction)
-      'detect-emotions': 3600, // 1 hour (93% reduction)
-      'extract-topics': 86400, // 24 hours (95% reduction)
-      'classify-feedback': 3600, // 1 hour
-      'trend-analysis': 900, // 15 minutes (91% reduction)
-      'comparative-analysis': 900, // 15 minutes
-      'batch-analyze': 1800, // 30 minutes
-      'train-model': Infinity, // Never expire (93% reduction)
-      'export-results': 300, // 5 minutes
-    };
-
-    return ttlMap[options.operation] || 3600;
-  }
-
-  /**
    * Calculate input tokens
    */
   private calculateInputTokens(options: SentimentAnalysisOptions): number {
