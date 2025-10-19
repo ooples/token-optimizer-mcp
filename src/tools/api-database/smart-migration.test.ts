@@ -27,6 +27,8 @@ describe('Smart Migration - Import Type Corrections', () => {
       join(tmpdir(), '.test-cache', 'test.db'),
       100
     );
+    // Clear cache before each test to ensure fresh results
+    cacheEngine.clear();
     tokenCounter = new TokenCounter();
     metricsCollector = new MetricsCollector();
     smartMigration = new SmartMigration(
@@ -171,7 +173,7 @@ describe('Smart Migration - Import Type Corrections', () => {
 
   describe('CLI Function', () => {
     it('should run migration via CLI function', async () => {
-      const result = await runSmartMigration({ action: 'status' });
+      const result = await runSmartMigration({ action: 'status', force: true });
 
       expect(result).toBeDefined();
       expect(typeof result).toBe('string');

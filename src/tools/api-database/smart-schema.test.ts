@@ -23,6 +23,8 @@ describe('Smart Schema - Import Type Corrections', () => {
       join(tmpdir(), '.test-schema-cache', 'test.db'),
       100
     );
+    // Clear cache before each test to ensure fresh results
+    cacheEngine.clear();
     tokenCounter = new TokenCounter();
     metricsCollector = new MetricsCollector();
     smartSchema = new SmartSchema(cacheEngine, tokenCounter, metricsCollector);
