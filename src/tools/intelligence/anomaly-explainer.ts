@@ -351,7 +351,8 @@ export class AnomalyExplainer {
     const anomaly = options.anomaly;
     const historicalData = options.historicalData || [];
 
-    // Calculate anomaly score
+    // Calculate anomaly score (normalized deviation)
+    const anomalyScore = Math.abs(anomaly.deviation / (anomaly.expectedValue || 1));
 
     // Identify root causes
     const rootCauses = await this.identifyRootCauses(anomaly, historicalData, options.events);
@@ -388,6 +389,9 @@ export class AnomalyExplainer {
 
     const anomaly = options.anomaly;
     const historicalData = options.historicalData || [];
+
+    // Calculate anomaly score (normalized deviation)
+    const anomalyScore = Math.abs(anomaly.deviation / (anomaly.expectedValue || 1));
 
     // Deep root cause analysis using multiple techniques
     const statisticalCauses = this.findStatisticalCauses(anomaly, historicalData);
@@ -1025,7 +1029,7 @@ export class AnomalyExplainer {
         evidence: [{
           type: 'temporal',
           description: `Regular pattern repeats every ${seasonality.period ?? 0}ms`,
-          ...(seasonality.strength !== undefined ? { strength: seasonality.strength } : {})
+          strength: seasonality.strength ?? 0.5
         }],
         relatedMetrics: [anomaly.metric],
         timeRange: { start: anomaly.timestamp - (seasonality.period ?? 0), end: anomaly.timestamp }
