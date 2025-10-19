@@ -14,7 +14,7 @@ import { resolve, dirname, join } from 'path';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine';
-import { globalMetricsCollector } from '../../core/metrics';
+import { globalMetricsCollector } from '../../core/globals';
 import { TokenCounter } from '../../core/token-counter';
 import { hashContent, generateCacheKey } from '../shared/hash-utils';
 

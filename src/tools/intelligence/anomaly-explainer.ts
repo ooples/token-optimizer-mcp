@@ -16,7 +16,17 @@ import { CacheEngine } from "../../core/cache-engine.js";
 import { TokenCounter } from "../../core/token-counter.js";
 import { MetricsCollector } from "../../core/metrics.js";
 import { generateCacheKey } from "../shared/hash-utils.js";
-import { mean, stdev, percentile } from "stats-lite";
+
+/**
+ * Note on removed code: A _calculateAnomalyScore method using Z-score and IQR
+ * statistical analysis was removed as it was never called in the codebase.
+ *
+ * Current anomaly scoring uses inline normalized deviation calculations
+ * (see lines ~353-360, ~394-395 in the explain/analyze methods).
+ *
+ * If more sophisticated statistical anomaly detection is needed, consider
+ * implementing a method combining Z-score and IQR approaches with historical data.
+ */
 
 // ============================================================================
 // Type Definitions
@@ -798,50 +808,16 @@ export class AnomalyExplainer {
   // ============================================================================
 
   /**
-   * Calculates an anomaly score using statistical methods (Z-score and IQR).
+   * Note: A statistical anomaly scoring method using Z-score and IQR was removed
+   * as it was never called in the codebase. Anomaly scores are currently calculated
+   * inline using normalized deviation (see lines 353-360, 394-395).
    *
-   * This method evaluates how anomalous a value is compared to historical data
-   * by combining two statistical approaches:
-   * 1. Z-score: Measures how many standard deviations away from the mean
-   * 2. IQR (Interquartile Range): Detects outliers using quartile-based method
-   *
-   * @param anomaly - The anomaly object containing value and deviation
-   * @param historicalData - Array of historical data points for comparison
-   * @returns A normalized anomaly score between 0 and 1 (higher = more anomalous)
-   *
-   * @remarks
-   * - Returns absolute deviation if no historical data available
-   * - Combines Z-score and IQR for robust anomaly detection
-   * - Handles edge cases (zero std dev, empty IQR)
+   * If more sophisticated statistical anomaly detection is needed in the future,
+   * consider implementing a method that combines:
+   * - Z-score: measures standard deviations from mean
+   * - IQR method: detects outliers using quartile-based approach
+   * - Combined normalized score in range [0, 1]
    */
-  private calculateAnomalyScore(
-    anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,
-    historicalData: Array<{ timestamp: number; value: number }>
-  ): number {
-    if (historicalData.length === 0) {
-      return Math.abs(anomaly.deviation);
-    }
-
-    const values = historicalData.map(d => d.value);
-    const meanVal = mean(values);
-    const stdDevVal = stdev(values);
-
-    // Z-score
-    const zScore = stdDevVal > 0 ? Math.abs(anomaly.value - meanVal) / stdDevVal : 0;
-
-    // IQR method
-    const q1 = percentile(values, 0.25);
-    const q3 = percentile(values, 0.75);
-    const iqr = q3 - q1;
-    const lowerBound = q1 - 1.5 * iqr;
-    const upperBound = q3 + 1.5 * iqr;
-    const iqrScore = (iqr > 0 && (anomaly.value < lowerBound || anomaly.value > upperBound)) ?
-                     Math.abs(anomaly.value - meanVal) / iqr : 0;
-
-    // Combined score, normalized to [0, 1]
-    const maxExpectedScore = 3; // Typical threshold for strong anomaly
-    return Math.min(1, Math.max(zScore, iqrScore) / maxExpectedScore);
-  }
 
   private async identifyRootCauses(
     anomaly: NonNullable<AnomalyExplainerOptions['anomaly']>,

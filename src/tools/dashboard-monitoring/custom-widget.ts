@@ -1082,20 +1082,6 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
     return ['list', 'render', 'validate', 'get-schema'].includes(operation);
   }
 
-  private getCacheTTL(options: CustomWidgetOptions): number {
-    if (options.cacheTTL) return options.cacheTTL;
-
-    // Different TTLs based on operation
-    const ttlMap: Record<string, number> = {
-      list: 3600, // 1 hour
-      render: 300, // 5 minutes (based on refresh interval)
-      'get-schema': 86400, // 24 hours (schema rarely changes)
-      validate: 3600, // 1 hour
-    };
-
-    return ttlMap[options.operation] || 300;
-  }
-
   private generateWidgetId(name: string): string {
     const hash = createHash('sha256');
     hash.update(name + Date.now());
