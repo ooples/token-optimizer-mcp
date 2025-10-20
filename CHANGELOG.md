@@ -1,0 +1,98 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0] - 2025-10-19
+
+### Added
+- **CLI Wrapper** (`cli-wrapper.mjs`) - One-shot execution for PowerShell hooks integration
+  - Three input modes: stdin (recommended for PowerShell), file, and arguments
+  - Zero JSON escaping issues using stdin piping
+  - Production-ready error handling and validation
+  - Fast execution: <200ms end-to-end
+- **PowerShell Hooks Integration** - Complete hooks system in `hooks/` directory
+  - `dispatcher.ps1` - Main orchestrator for all hook events
+  - `token-optimizer-orchestrator.ps1` - Unified handler for optimization operations
+  - `invoke-token-optimizer.ps1` - PowerShell helper using stdin approach
+  - `invoke-mcp.ps1` - Generic MCP tool invocation helper
+  - Automatic MCP enforcement (blocks git CLI, blocks Read/Grep on code files)
+  - Context guard with intelligent optimization triggers
+  - Session tracking and analytics
+  - Cache warmup and periodic optimization
+- **CLI Wrapper Documentation** (`CLI_WRAPPER_README.md`) - Comprehensive usage guide
+- **Hooks Documentation** (`hooks/README.md`) - Setup and architecture guide
+
+### Changed
+- Package now includes `cli-wrapper.mjs` and `hooks/` directory in distribution
+- Updated version from 0.2.0 to 0.3.0
+
+### Technical Details
+- Solution for PowerShell-to-Node.js JSON escaping recommended by Google Gemini 2.5 Flash
+- Stdin piping avoids all shell escaping issues across Windows/Unix
+- Hooks work seamlessly with Claude Code lifecycle events
+- Zero manual intervention - fully automated token optimization
+
+## [0.2.0] - 2025-10-19
+
+### Added
+- Complete npm package configuration for public publishing
+- Comprehensive .npmignore for optimized package size
+- Package validation and installation testing scripts
+- Pre-publish checklist documentation
+- Proper package.json metadata (keywords, author, engines)
+- Binary entry point configuration for CLI usage
+- Export maps for modern Node.js module resolution
+
+### Changed
+- Updated package version from 0.1.0 to 0.2.0
+- Changed main entry point to dist/server/index.js (MCP server)
+- Updated license from ISC to MIT
+- Enhanced build and test scripts for CI/CD compatibility
+
+### Fixed
+- Package structure optimized for npm distribution
+- Entry point validation and shebang verification
+
+## [0.1.0] - 2025-01-XX
+
+### Added
+- Initial release of Token Optimizer MCP
+- Core caching engine with SQLite persistence
+- Token counting using tiktoken (GPT-4 tokenizer)
+- Brotli compression for optimal token efficiency
+- MCP server implementation with stdio transport
+- Dashboard monitoring and visualization tools
+- Intelligent caching strategies (predictive cache, cache warmup)
+- Session log parsing and analysis
+- Project-wide token optimization analysis
+- Metrics collection and reporting
+- Advanced file operations with caching
+- Build system integration tools
+- Code analysis and intelligence tools
+- Smart output formatting with compression
+- System operations with intelligent scheduling
+
+### Core Features
+- optimize_text - Compress and cache text to reduce token usage
+- get_cached - Retrieve previously cached and optimized text
+- count_tokens - Count tokens in text using tiktoken
+- compress_text - Compress text using Brotli compression
+- decompress_text - Decompress base64-encoded Brotli-compressed text
+- get_cache_stats - Get cache statistics including hit rate and compression ratio
+- clear_cache - Clear all cached data
+- analyze_optimization - Analyze text and get optimization recommendations
+
+### Technical Stack
+- Node.js 18+ runtime
+- TypeScript for type safety
+- SQLite (better-sqlite3) for persistent storage
+- tiktoken for accurate token counting
+- Brotli compression (built-in)
+- LRU caching for in-memory optimization
+- MCP SDK for protocol implementation
+
+[0.2.0]: https://github.com/ooples/token-optimizer-mcp/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/ooples/token-optimizer-mcp/releases/tag/v0.1.0
