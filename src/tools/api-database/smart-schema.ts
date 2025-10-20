@@ -403,13 +403,39 @@ export class SmartSchema {
     // Placeholder: Would use pg client
     // Query information_schema and pg_catalog
 
+    // Create mock schema with realistic data to demonstrate token reduction
+    const mockTables: TableInfo[] = Array.from({ length: 10 }, (_, i) => ({
+      name: `table_${i + 1}`,
+      schema: 'public',
+      type: 'TABLE' as const,
+      rowCount: 1000 + i * 100,
+      sizeBytes: 50000 + i * 10000,
+      columns: Array.from({ length: 5 }, (_, j) => ({
+        name: `column_${j + 1}`,
+        type: j === 0 ? 'integer' : j === 1 ? 'varchar(255)' : 'text',
+        nullable: j > 0,
+        defaultValue: j === 0 ? 'nextval(\'seq\')' : undefined,
+        isPrimaryKey: j === 0,
+        isForeignKey: false,
+      })),
+    }));
+
+    const mockIndexes: IndexInfo[] = Array.from({ length: 15 }, (_, i) => ({
+      schema: 'public',
+      table: `table_${Math.floor(i / 2) + 1}`,
+      name: `idx_table_${Math.floor(i / 2) + 1}_col_${i % 5 + 1}`,
+      columns: [`column_${i % 5 + 1}`],
+      isUnique: i % 3 === 0,
+      isPrimary: false,
+    }));
+
     const mockSchema: DatabaseSchema = {
       databaseType: 'postgresql',
       version: '15.0',
       schemaVersion: this.generateSchemaVersionHash('mock-pg-schema'),
-      tables: [],
+      tables: mockTables,
       views: [],
-      indexes: [],
+      indexes: mockIndexes,
       constraints: [],
       relationships: [],
     };

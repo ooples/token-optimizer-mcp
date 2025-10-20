@@ -231,12 +231,14 @@ export class CacheEngine {
   evictLRU(maxSizeBytes: number): number {
     // Get keys to keep (most recently used) using a running total
     const keysToKeep = this.db.prepare(`
-      SELECT key FROM (
+      WITH ranked AS (
         SELECT
           key,
-          SUM(compressed_size) OVER (ORDER BY last_accessed_at DESC) as running_total
+          compressed_size,
+          SUM(compressed_size) OVER (ORDER BY last_accessed_at DESC, key ASC) as running_total
         FROM cache
       )
+      SELECT key FROM ranked
       WHERE running_total <= ?
     `).all(maxSizeBytes) as { key: string }[];
 
