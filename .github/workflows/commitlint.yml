@@ -1,0 +1,100 @@
+name: Commit Lint
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  commitlint:
+    name: Lint Commit Messages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install commitlint dependencies
+        run: |
+          npm install --save-dev @commitlint/config-conventional @commitlint/cli
+
+      - name: Validate current commit (if any)
+        if: github.event_name == 'push'
+        run: npx commitlint --from HEAD~1 --to HEAD --verbose
+
+      - name: Validate PR commits
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        run: |
+          npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+      - name: Comment on PR with commit format guide
+        if: failure() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## Commit Message Format Issue
+
+            Your commit messages don't follow the Conventional Commits specification.
+
+            ### Required Format:
+            \`\`\`
+            <type>(<optional scope>): <description>
+
+            [optional body]
+
+            [optional footer]
+            \`\`\`
+
+            ### Valid Types:
+            - \`feat\`: A new feature
+            - \`fix\`: A bug fix
+            - \`docs\`: Documentation only changes
+            - \`style\`: Changes that don't affect code meaning (white-space, formatting)
+            - \`refactor\`: Code change that neither fixes a bug nor adds a feature
+            - \`perf\`: Code change that improves performance
+            - \`test\`: Adding missing tests or correcting existing tests
+            - \`build\`: Changes that affect the build system or external dependencies
+            - \`ci\`: Changes to CI configuration files and scripts
+            - \`chore\`: Other changes that don't modify src or test files
+            - \`revert\`: Reverts a previous commit
+
+            ### Examples:
+            \`\`\`
+            feat(auth): add OAuth2 authentication
+            fix(api): resolve race condition in token refresh
+            docs(readme): update installation instructions
+            refactor(core): simplify token optimization logic
+            \`\`\`
+
+            ### Breaking Changes:
+            Add \`BREAKING CHANGE:\` in the footer or append \`!\` after the type:
+            \`\`\`
+            feat!: remove deprecated API endpoints
+            \`\`\`
+
+            Please amend your commit messages to follow this format.
+
+            Learn more: [Conventional Commits](https://www.conventionalcommits.org/)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

@@ -1,0 +1,67 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=ussfwziaarnghjkxbqge"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_2c5a0dd3620c7d43fc4f7f3c9e15a2914f01c845"
+      }
+    },
+    "typescript-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "typescript-mcp"
+      ]
+    },
+    "database-postgresql": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@henkey/postgres-mcp-server",
+        "--connection-string",
+        "postgresql://monitoring:monitoring_password@localhost:5432/monitoring_service"
+      ]
+    },
+    "nx-mcp": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "nx-mcp@latest"
+      ]
+    },
+    "eslint": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@eslint/mcp@latest"
+      ]
+    },
+    "token-optimizer": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "token-optimizer-mcp@latest"
+      ],
+      "env": {
+        "TOKEN_OPTIMIZER_CACHE_DIR": "${HOME}/.token-optimizer-cache"
+      }
+    }
+  }
+}

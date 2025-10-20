@@ -1,0 +1,381 @@
+name: Quality Gates
+
+on:
+  pull_request:
+    branches: [ master ]
+  push:
+    branches: [ master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle-size:
+    name: Bundle Size Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Analyze bundle size
+        id: bundle_size
+        run: |
+          # Get current bundle size
+          CURRENT_SIZE=$(du -sb dist | cut -f1)
+          CURRENT_SIZE_MB=$(echo "scale=2; $CURRENT_SIZE / 1024 / 1024" | bc)
+
+          echo "current_size=$CURRENT_SIZE" >> $GITHUB_OUTPUT
+          echo "current_size_mb=$CURRENT_SIZE_MB" >> $GITHUB_OUTPUT
+
+          echo "Current bundle size: ${CURRENT_SIZE_MB} MB"
+
+          # Store baseline if it doesn't exist
+          BASELINE_FILE=".github/bundle-size-baseline.txt"
+          if [ ! -f "$BASELINE_FILE" ]; then
+            echo "$CURRENT_SIZE" > "$BASELINE_FILE"
+            echo "baseline_exists=false" >> $GITHUB_OUTPUT
+            echo "Created baseline with size: ${CURRENT_SIZE_MB} MB"
+            exit 0
+          fi
+
+          # Compare with baseline
+          BASELINE_SIZE=$(cat "$BASELINE_FILE")
+          BASELINE_SIZE_MB=$(echo "scale=2; $BASELINE_SIZE / 1024 / 1024" | bc)
+
+          echo "baseline_size=$BASELINE_SIZE" >> $GITHUB_OUTPUT
+          echo "baseline_size_mb=$BASELINE_SIZE_MB" >> $GITHUB_OUTPUT
+          echo "baseline_exists=true" >> $GITHUB_OUTPUT
+
+          # Calculate percentage change
+          PERCENT_CHANGE=$(echo "scale=2; (($CURRENT_SIZE - $BASELINE_SIZE) * 100) / $BASELINE_SIZE" | bc)
+
+          echo "percent_change=$PERCENT_CHANGE" >> $GITHUB_OUTPUT
+          echo "Bundle size change: ${PERCENT_CHANGE}%"
+
+          # Fail if size increased by more than 5%
+          if (( $(echo "$PERCENT_CHANGE > 5" | bc -l) )); then
+            echo "Error: Bundle size increased by ${PERCENT_CHANGE}% (limit: 5%)"
+            echo "Baseline: ${BASELINE_SIZE_MB} MB"
+            echo "Current: ${CURRENT_SIZE_MB} MB"
+            exit 1
+          fi
+
+      - name: Comment PR with bundle size
+        if: github.event_name == 'pull_request' && steps.bundle_size.outputs.baseline_exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const currentSize = '${{ steps.bundle_size.outputs.current_size_mb }}';
+            const baselineSize = '${{ steps.bundle_size.outputs.baseline_size_mb }}';
+            const percentChange = '${{ steps.bundle_size.outputs.percent_change }}';
+
+            const changeEmoji = parseFloat(percentChange) > 0 ? '📈' : '📉';
+            const statusEmoji = parseFloat(percentChange) > 5 ? '❌' : '✅';
+
+            const body = `## ${statusEmoji} Bundle Size Analysis
+
+            | Metric | Value |
+            |--------|-------|
+            | Current Size | ${currentSize} MB |
+            | Baseline Size | ${baselineSize} MB |
+            | Change | ${changeEmoji} ${percentChange}% |
+            | Status | ${parseFloat(percentChange) > 5 ? 'FAIL' : 'PASS'} (limit: +5%) |
+
+            ${parseFloat(percentChange) > 5 ? '⚠️ Bundle size has increased beyond the acceptable threshold.' : ''}
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: audit
+        run: |
+          npm audit --json > audit-results.json || true
+
+          # Check for high/critical vulnerabilities
+          HIGH_VULNS=$(cat audit-results.json | grep -o '"high":[0-9]*' | cut -d':' -f2 || echo "0")
+          CRITICAL_VULNS=$(cat audit-results.json | grep -o '"critical":[0-9]*' | cut -d':' -f2 || echo "0")
+
+          echo "high_vulnerabilities=$HIGH_VULNS" >> $GITHUB_OUTPUT
+          echo "critical_vulnerabilities=$CRITICAL_VULNS" >> $GITHUB_OUTPUT
+
+          if [ "$CRITICAL_VULNS" -gt 0 ]; then
+            echo "Error: Found $CRITICAL_VULNS critical vulnerabilities"
+            npm audit
+            exit 1
+          fi
+
+          if [ "$HIGH_VULNS" -gt 0 ]; then
+            echo "Warning: Found $HIGH_VULNS high vulnerabilities"
+            npm audit
+          fi
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-${{ github.sha }}
+          path: audit-results.json
+          retention-days: 30
+
+      - name: Comment PR with security audit
+        if: github.event_name == 'pull_request' && (steps.audit.outputs.high_vulnerabilities != '0' || steps.audit.outputs.critical_vulnerabilities != '0')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const high = '${{ steps.audit.outputs.high_vulnerabilities }}';
+            const critical = '${{ steps.audit.outputs.critical_vulnerabilities }}';
+
+            const body = `## 🔒 Security Audit Results
+
+            | Severity | Count |
+            |----------|-------|
+            | Critical | ${critical} |
+            | High | ${high} |
+
+            ${critical > 0 ? '❌ Critical vulnerabilities found! Please fix before merging.' : ''}
+            ${high > 0 ? '⚠️ High severity vulnerabilities detected. Consider updating dependencies.' : ''}
+
+            Run \`npm audit fix\` to attempt automatic fixes.
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  license-compliance:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install license checker
+        run: npm install -g license-checker
+
+      - name: Check licenses
+        id: license_check
+        run: |
+          # Generate license report
+          license-checker --json --out licenses.json || true
+
+          # List of allowed licenses (permissive open source)
+          ALLOWED_LICENSES=(
+            "MIT"
+            "ISC"
+            "Apache-2.0"
+            "BSD-2-Clause"
+            "BSD-3-Clause"
+            "0BSD"
+            "CC0-1.0"
+            "Unlicense"
+            "Python-2.0"
+          )
+
+          # Check for non-compliant licenses
+          license-checker --summary > license-summary.txt || true
+
+          echo "## License Summary" > license-report.md
+          echo "" >> license-report.md
+          cat license-summary.txt >> license-report.md
+
+          # Check for GPL and other copyleft licenses
+          COPYLEFT=$(license-checker --json | grep -E '"licenses": "(GPL|AGPL|LGPL)"' || true)
+
+          if [ -n "$COPYLEFT" ]; then
+            echo "Warning: Copyleft licenses detected"
+            echo "has_copyleft=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_copyleft=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report-${{ github.sha }}
+          path: |
+            licenses.json
+            license-summary.txt
+            license-report.md
+          retention-days: 30
+
+      - name: Comment PR with license info
+        if: github.event_name == 'pull_request' && steps.license_check.outputs.has_copyleft == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## ⚖️ License Compliance Warning
+
+            Copyleft licenses (GPL, AGPL, LGPL) detected in dependencies.
+
+            Please review the license report artifact for details.
+
+            Consider:
+            - Reviewing if these dependencies are necessary
+            - Finding alternative packages with permissive licenses
+            - Consulting legal team if unsure about license compatibility
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  dependency-vulnerabilities:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Snyk security scan (if available)
+        if: vars.SNYK_TOKEN != ''
+        run: |
+          npm install -g snyk
+          snyk test --json > snyk-results.json || true
+        env:
+          SNYK_TOKEN: ${{ vars.SNYK_TOKEN }}
+        continue-on-error: true
+
+      - name: Check outdated dependencies
+        id: outdated
+        run: |
+          npm outdated --json > outdated-deps.json || true
+
+          # Count outdated dependencies
+          OUTDATED_COUNT=$(cat outdated-deps.json | grep -o '"current"' | wc -l || echo "0")
+          echo "outdated_count=$OUTDATED_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$OUTDATED_COUNT" -gt 0 ]; then
+            echo "Found $OUTDATED_COUNT outdated dependencies"
+          fi
+
+      - name: Upload vulnerability scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-${{ github.sha }}
+          path: |
+            snyk-results.json
+            outdated-deps.json
+          retention-days: 30
+
+  code-quality:
+    name: Code Quality Metrics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Analyze code complexity
+        run: |
+          # Count TypeScript files
+          TS_FILES=$(find src -name "*.ts" -not -name "*.test.ts" -not -name "*.spec.ts" | wc -l)
+          echo "TypeScript files: $TS_FILES"
+
+          # Count lines of code
+          LOC=$(find src -name "*.ts" -not -name "*.test.ts" -not -name "*.spec.ts" -exec wc -l {} + | tail -1 | awk '{print $1}')
+          echo "Lines of code: $LOC"
+
+          # Count test files
+          TEST_FILES=$(find src -name "*.test.ts" -o -name "*.spec.ts" | wc -l)
+          echo "Test files: $TEST_FILES"
+
+          echo "## Code Quality Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- TypeScript files: $TS_FILES" >> $GITHUB_STEP_SUMMARY
+          echo "- Lines of code: $LOC" >> $GITHUB_STEP_SUMMARY
+          echo "- Test files: $TEST_FILES" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for TODO/FIXME comments
+        run: |
+          TODO_COUNT=$(grep -r "TODO" src --include="*.ts" | wc -l || echo "0")
+          FIXME_COUNT=$(grep -r "FIXME" src --include="*.ts" | wc -l || echo "0")
+
+          echo "TODO comments: $TODO_COUNT"
+          echo "FIXME comments: $FIXME_COUNT"
+
+          if [ "$FIXME_COUNT" -gt 0 ]; then
+            echo "⚠️ Found $FIXME_COUNT FIXME comments" >> $GITHUB_STEP_SUMMARY
+            grep -rn "FIXME" src --include="*.ts" >> $GITHUB_STEP_SUMMARY || true
+          fi

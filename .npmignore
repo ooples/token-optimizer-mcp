@@ -1,0 +1,103 @@
+# Source files (only ship dist/)
+src/
+tests/
+*.test.ts
+*.spec.ts
+
+# Development configuration
+.github/
+.vscode/
+.idea/
+.claude/
+*.log
+node_modules/
+
+# Build configuration
+tsconfig.json
+tsconfig.*.json
+jest.config.js
+jest.config.ts
+.eslintrc.js
+.eslintrc.json
+eslint.config.js
+.prettierrc
+.prettierrc.js
+.prettierrc.json
+
+# Documentation (except README, CHANGELOG, LICENSE)
+docs/
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE.md
+
+# Examples and scripts
+examples/
+scripts/
+*.ps1
+*.sh
+
+# Environment and secrets
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+circle.yml
+appveyor.yml
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# Development files
+agent-coordination-original.md
+gemini-rewrite.md
+batch-*.md
+*-instructions.md
+*-summary.md
+*-full.txt
+*-errors.txt
+check_*.ps1
+create_*.ps1
+debug_*.ps1
+get_*.ps1
+investigate_*.ps1
+parse_*.ps1
+test_*.ps1
+*.json.backup
+pr*_threads.json
+copilot_comments.json
+worktrees/
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npmrc
+
+# Build artifacts not needed
+*.tsbuildinfo
