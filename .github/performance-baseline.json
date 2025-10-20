@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "created": "2025-10-19",
+  "description": "Performance baseline for token-optimizer-mcp benchmarks",
+  "benchmarks": {
+    "token_optimization": {
+      "description": "Token optimization performance",
+      "avg_time_ms": 0,
+      "ops_per_sec": 0,
+      "note": "Initial baseline - to be updated after first benchmark run"
+    },
+    "cache_operations": {
+      "description": "Cache read/write performance",
+      "avg_time_ms": 0,
+      "ops_per_sec": 0,
+      "note": "Initial baseline - to be updated after first benchmark run"
+    },
+    "compression": {
+      "description": "Compression/decompression performance",
+      "avg_time_ms": 0,
+      "ops_per_sec": 0,
+      "note": "Initial baseline - to be updated after first benchmark run"
+    },
+    "tool_intelligence": {
+      "description": "Smart tool intelligence performance",
+      "avg_time_ms": 0,
+      "ops_per_sec": 0,
+      "note": "Initial baseline - to be updated after first benchmark run"
+    }
+  },
+  "system_info": {
+    "node_version": "20.x",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "notes": [
+    "This is an initial baseline with placeholder values.",
+    "After the first benchmark run, this file will be updated with actual performance metrics.",
+    "Performance regression threshold is set to 10% in CI workflow.",
+    "To update baseline: run benchmarks, copy results here, commit with 'chore: update performance baseline'"
+  ]
+}
