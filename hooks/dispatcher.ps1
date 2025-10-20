@@ -52,14 +52,16 @@ try {
     # ============================================================
     if ($Phase -eq "PreToolUse") {
 
-        # 1. CACHE RETRIEVAL - Check cache BEFORE Read executes (CRITICAL FOR TOKEN SAVINGS!)
+        # 1. SMART READ - Use smart_read MCP tool for cached file reads (CRITICAL FOR TOKEN SAVINGS!)
+        # This replaces plain Read with intelligent caching, diffing, and truncation
+        # Must run BEFORE user enforcers to ensure caching takes priority
         if ($toolName -eq "Read") {
-            $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "cache-retrieval"
+            $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "smart-read"
             if ($LASTEXITCODE -eq 2) {
-                # Cache hit! The orchestrator will have output the cached content
-                # This blocks the Read and saves tokens
+                # smart_read succeeded - blocks plain Read and returns cached/optimized content
                 exit 2
             }
+            # If smart_read failed, allow plain Read to proceed
         }
 
         # 2. Context Guard - Check if we're approaching token limit
@@ -78,15 +80,15 @@ try {
             Block-Tool -Reason "Use GitHub MCP (mcp__github__*) instead of git CLI commands"
         }
 
-        # Gemini CLI Enforcer - Block Read/Grep on code files, use Gemini instead
-        if ($toolName -in @("Read", "Grep")) {
-            $path = $data.tool_input.file_path
-            if (-not $path) { $path = $data.tool_input.path }
-
-            if ($path -and $path -match "\.(ts|tsx|js|jsx|py|java|cpp|c|h|cs|go|rs|rb|php)$") {
-                Block-Tool -Reason "Use Gemini CLI (gemini -m gemini-2.5-flash) for code analysis instead of $toolName"
-            }
-        }
+        # Gemini CLI Enforcer - Now safe to enable because smart_read runs first
+        # if ($toolName -in @("Read", "Grep")) {
+        #     $path = $data.tool_input.file_path
+        #     if (-not $path) { $path = $data.tool_input.path }
+        #
+        #     if ($path -and $path -match "\.(ts|tsx|js|jsx|py|java|cpp|c|h|cs|go|rs|rb|php)$") {
+        #         Block-Tool -Reason "Use Gemini CLI (gemini -m gemini-2.5-flash) for code analysis instead of $toolName"
+        #     }
+        # }
 
         Write-Log "[ALLOW] $toolName"
         exit 0

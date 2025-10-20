@@ -338,13 +338,13 @@ function Handle-SessionReport {
     }
 }
 
-function Handle-CacheRetrieval {
-    # CRITICAL: Check cache BEFORE Read executes to save tokens
-    # This is the missing piece that enables actual token savings
+function Handle-SmartRead {
+    # Use smart_read MCP tool for intelligent file reading with built-in caching
+    # This replaces plain Read with cache-aware, diff-based, truncated reading
     try {
         $input_json = [Console]::In.ReadToEnd()
         if (-not $input_json) {
-            Write-Log "No input received for cache retrieval" "WARN"
+            Write-Log "No input received for smart-read" "WARN"
             return
         }
 
@@ -362,37 +362,39 @@ function Handle-CacheRetrieval {
             return
         }
 
-        Write-Log "Checking cache for: $filePath" "DEBUG"
+        Write-Log "Calling smart_read for: $filePath" "DEBUG"
 
-        # Call get_cached MCP tool
+        # Call smart_read MCP tool with caching enabled
         $mcpArgs = @{
-            key = $filePath
+            path = $filePath
+            enableCache = $true
+            diffMode = $true
+            maxSize = 100000
+            includeMetadata = $true
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__get_cached" -ArgumentsJson $argsJson
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__smart_read" -ArgumentsJson $argsJson
         $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
-        if ($result -and $result.success -and $result.fromCache) {
-            # CACHE HIT - Block the Read and inject cached content
-            Write-Log "CACHE HIT: $filePath (saved tokens!)" "INFO"
+        if ($result -and $result.content) {
+            # SUCCESS - Block plain Read and return smart_read result
+            $fromCache = if ($result.metadata.fromCache) { "CACHE HIT" } else { "NEW READ" }
+            $isDiff = if ($result.metadata.isDiff) { "DIFF" } else { "FULL" }
+            $tokens = $result.metadata.tokenCount
+            $tokensSaved = if ($result.metadata.tokensSaved) { $result.metadata.tokensSaved } else { 0 }
 
-            # Count tokens in cached vs original
-            $cachedText = $result.text
-            $cachedTokens = [Math]::Ceiling($cachedText.Length / 4)
+            Write-Log "$fromCache - $isDiff: $filePath ($tokens tokens, saved $tokensSaved)" "INFO"
 
-            Write-Log "Cache retrieval stats: Cached content: $cachedTokens estimated tokens" "INFO"
-
-            # BLOCK the Read operation and return cached content
-            # This is done by exiting with code 2 and providing a custom response
+            # Return smart_read result and block plain Read
             $blockResponse = @{
                 continue = $false
-                stopReason = "CACHE HIT"
+                stopReason = "smart_read success"
                 hookSpecificOutput = @{
                     hookEventName = "PreToolUse"
-                    cacheHit = $true
+                    smartRead = $true
                     filePath = $filePath
-                    cachedContent = $cachedText
-                    estimatedTokens = $cachedTokens
+                    content = $result.content
+                    metadata = $result.metadata
                 }
             } | ConvertTo-Json -Depth 10 -Compress
 
@@ -400,13 +402,13 @@ function Handle-CacheRetrieval {
             exit 2
 
         } else {
-            # CACHE MISS - Allow Read to proceed
-            Write-Log "Cache miss: $filePath (will cache after Read)" "DEBUG"
+            # FAILED - Allow plain Read to proceed
+            Write-Log "smart_read failed for $filePath - falling back to plain Read" "WARN"
         }
 
     } catch {
-        Write-Log "Cache retrieval failed: $($_.Exception.Message)" "ERROR"
-        # On error, allow Read to proceed normally
+        Write-Log "smart_read failed: $($_.Exception.Message)" "ERROR"
+        # On error, allow plain Read to proceed
     }
 }
 
@@ -415,11 +417,8 @@ try {
     Write-Log "Phase: $Phase, Action: $Action" "INFO"
 
     switch ($Action) {
-        "auto-cache" {
-            Handle-AutoCache
-        }
-        "cache-retrieval" {
-            Handle-CacheRetrieval
+        "smart-read" {
+            Handle-SmartRead
         }
         "context-guard" {
             Handle-ContextGuard
