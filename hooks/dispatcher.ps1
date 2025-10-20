@@ -68,13 +68,13 @@ try {
             Block-Tool -Reason "Use GitHub MCP (mcp__github__*) instead of git CLI commands"
         }
 
-        # Ambiance MCP Enforcer - Block Read/Grep on code files
+        # Gemini CLI Enforcer - Block Read/Grep on code files, use Gemini instead
         if ($toolName -in @("Read", "Grep")) {
             $path = $data.tool_input.file_path
             if (-not $path) { $path = $data.tool_input.path }
 
             if ($path -and $path -match "\.(ts|tsx|js|jsx|py|java|cpp|c|h|cs|go|rs|rb|php)$") {
-                Block-Tool -Reason "Use Ambiance MCP (mcp__ambiance__*) for code analysis instead of $toolName"
+                Block-Tool -Reason "Use Gemini CLI (gemini -m gemini-2.5-flash) for code analysis instead of $toolName"
             }
         }
 
@@ -95,15 +95,9 @@ try {
         # 2. Track operation completion
         $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "session-track"
 
-        # 3. Periodic optimization (every 50 operations)
-        $sessionFile = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
-        if (Test-Path $sessionFile) {
-            $session = Get-Content $sessionFile -Raw | ConvertFrom-Json
-            if ($session.totalOperations -and ($session.totalOperations % 50 -eq 0)) {
-                Write-Log "Triggering periodic optimization at operation #$($session.totalOperations)"
-                $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "periodic-optimize"
-            }
-        }
+        # REMOVED: Periodic optimization every 50 operations (not production-ready)
+        # Auto-caching handles optimization on EVERY Read/Write/Edit operation
+        # Context guard handles emergency optimization when approaching token limits
 
         exit 0
     }
