@@ -131,20 +131,26 @@ jobs:
         run: |
           npm audit --json > audit-results.json || true
 
-          # Check for high/critical vulnerabilities
-          HIGH_VULNS=$(cat audit-results.json | grep -o '"high":[0-9]*' | cut -d':' -f2 || echo "0")
-          CRITICAL_VULNS=$(cat audit-results.json | grep -o '"critical":[0-9]*' | cut -d':' -f2 || echo "0")
+          # Check for high/critical vulnerabilities using Python for reliable JSON parsing
+          HIGH_VULNS=$(python3 -c "import json; data = json.load(open('audit-results.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('high', 0))")
+          CRITICAL_VULNS=$(python3 -c "import json; data = json.load(open('audit-results.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('critical', 0))")
+
+          # Ensure we have valid integers
+          HIGH_VULNS=${HIGH_VULNS:-0}
+          CRITICAL_VULNS=${CRITICAL_VULNS:-0}
 
           echo "high_vulnerabilities=$HIGH_VULNS" >> $GITHUB_OUTPUT
           echo "critical_vulnerabilities=$CRITICAL_VULNS" >> $GITHUB_OUTPUT
 
-          if [ "$CRITICAL_VULNS" -gt 0 ]; then
+          echo "Found $CRITICAL_VULNS critical and $HIGH_VULNS high severity vulnerabilities"
+
+          if [ "$CRITICAL_VULNS" -gt 0 ] 2>/dev/null; then
             echo "Error: Found $CRITICAL_VULNS critical vulnerabilities"
             npm audit
             exit 1
           fi
 
-          if [ "$HIGH_VULNS" -gt 0 ]; then
+          if [ "$HIGH_VULNS" -gt 0 ] 2>/dev/null; then
             echo "Warning: Found $HIGH_VULNS high vulnerabilities"
             npm audit
           fi
