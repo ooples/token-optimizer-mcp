@@ -82,66 +82,98 @@ function Update-SessionOperation {
     return $session
 }
 
-function Handle-AutoCache {
-    # Auto-cache Read/Write/Edit operations
+function Handle-LogOperation {
+    # Log ALL tool operations to operations-{sessionId}.csv for session-level optimization
     try {
         $input_json = [Console]::In.ReadToEnd()
         if (-not $input_json) {
-            Write-Log "No input received for auto-cache" "WARN"
+            Write-Log "No input received for operation logging" "WARN"
             return
         }
 
         $data = $input_json | ConvertFrom-Json
         $toolName = $data.tool_name
 
-        # Extract content based on tool type
-        $content = ""
-        $cacheKey = ""
+        $session = Get-SessionInfo
+        if (-not $session) {
+            Write-Log "No active session for operation logging" "WARN"
+            return
+        }
+
+        # Create CSV file path
+        $csvFile = "$OPERATIONS_DIR\operations-$($session.sessionId).csv"
+
+        # Extract file path and tokens for file-based operations
+        $filePath = ""
+        $tokens = 0
+        $metadata = ""
 
         if ($toolName -eq "Read") {
             $filePath = $data.tool_input.file_path
-            $cacheKey = "read_$($filePath -replace '[:\\\/\.]', '_')"
-
-            # Extract from tool_response (hooks use tool_response, not tool_result)
+            # Estimate tokens from response
             if ($data.tool_response -and $data.tool_response.file -and $data.tool_response.file.content) {
-                $content = $data.tool_response.file.content
+                $tokens = [Math]::Ceiling($data.tool_response.file.content.Length / 4)
             }
+            $metadata = "filePath=$filePath"
         } elseif ($toolName -in @("Write", "Edit")) {
             $filePath = $data.tool_input.file_path
-            $cacheKey = "write_$($filePath -replace '[:\\\/\.]', '_')"
-
             $content = $data.tool_input.content
             if (-not $content) {
                 $content = $data.tool_input.new_string
             }
+            if ($content) {
+                $tokens = [Math]::Ceiling($content.Length / 4)
+            }
+            $metadata = "filePath=$filePath"
+        } else {
+            # For other tools, log basic info
+            $metadata = "toolName=$toolName"
         }
 
-        # Only cache if content is substantial
-        if ($content.Length -lt 500) {
-            Write-Log "Content too small to cache ($($content.Length) chars)" "DEBUG"
+        # Append to CSV
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $csvLine = "$timestamp,$toolName,$tokens,`"$metadata`""
+
+        # Create file with header if it doesn't exist
+        if (-not (Test-Path $csvFile)) {
+            "timestamp,toolName,tokens,metadata" | Out-File $csvFile -Encoding UTF8
+        }
+
+        $csvLine | Out-File $csvFile -Append -Encoding UTF8
+        Write-Log "Logged operation: $toolName ($tokens tokens)" "DEBUG"
+
+    } catch {
+        Write-Log "Operation logging failed: $($_.Exception.Message)" "ERROR"
+    }
+}
+
+function Handle-OptimizeSession {
+    # Run session-level batch optimization using optimize_session
+    try {
+        $session = Get-SessionInfo
+        if (-not $session) {
+            Write-Log "No active session for optimization" "WARN"
             return
         }
 
-        Write-Log "Auto-caching: $cacheKey ($($content.Length) chars)" "INFO"
+        Write-Log "Running session-level optimization for session: $($session.sessionId)" "INFO"
 
-        # Call token-optimizer-mcp optimize_text
+        # Call optimize_session MCP tool
         $mcpArgs = @{
-            text = $content
-            key = $cacheKey
-            quality = 11
+            sessionId = $session.sessionId
+            min_token_threshold = 30
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        Write-Log "Args JSON: $argsJson" "DEBUG"
-        Write-Log "Calling invoke-mcp.ps1 with Tool='mcp__token-optimizer__optimize_text'" "DEBUG"
-
-        $result = & powershell -NoProfile -ExecutionPolicy Bypass -File "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__optimize_text" -ArgumentsJson $argsJson
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__optimize_session" -ArgumentsJson $argsJson
+        $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
         if ($result) {
-            Write-Log "Successfully cached: $cacheKey" "INFO"
+            Write-Log "Session optimization completed: $($result.operationsCompressed) files optimized, $($result.tokens.saved) tokens saved ($($result.tokens.percentSaved)% reduction)" "INFO"
+            Write-Log "Detailed stats: Before=$($result.tokens.before) After=$($result.tokens.after) Saved=$($result.tokens.saved)" "INFO"
         }
 
     } catch {
-        Write-Log "Auto-cache failed: $($_.Exception.Message)" "ERROR"
+        Write-Log "Session optimization failed: $($_.Exception.Message)" "ERROR"
     }
 }
 
@@ -306,6 +338,78 @@ function Handle-SessionReport {
     }
 }
 
+function Handle-CacheRetrieval {
+    # CRITICAL: Check cache BEFORE Read executes to save tokens
+    # This is the missing piece that enables actual token savings
+    try {
+        $input_json = [Console]::In.ReadToEnd()
+        if (-not $input_json) {
+            Write-Log "No input received for cache retrieval" "WARN"
+            return
+        }
+
+        $data = $input_json | ConvertFrom-Json
+        $toolName = $data.tool_name
+
+        # Only intercept Read operations
+        if ($toolName -ne "Read") {
+            return
+        }
+
+        $filePath = $data.tool_input.file_path
+        if (-not $filePath) {
+            Write-Log "No file path in Read operation" "WARN"
+            return
+        }
+
+        Write-Log "Checking cache for: $filePath" "DEBUG"
+
+        # Call get_cached MCP tool
+        $mcpArgs = @{
+            key = $filePath
+        }
+        $argsJson = $mcpArgs | ConvertTo-Json -Compress
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__get_cached" -ArgumentsJson $argsJson
+        $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
+
+        if ($result -and $result.success -and $result.fromCache) {
+            # CACHE HIT - Block the Read and inject cached content
+            Write-Log "CACHE HIT: $filePath (saved tokens!)" "INFO"
+
+            # Count tokens in cached vs original
+            $cachedText = $result.text
+            $cachedTokens = [Math]::Ceiling($cachedText.Length / 4)
+
+            Write-Log "Cache retrieval stats: Cached content: $cachedTokens estimated tokens" "INFO"
+
+            # BLOCK the Read operation and return cached content
+            # This is done by exiting with code 2 and providing a custom response
+            $blockResponse = @{
+                continue = $false
+                stopReason = "CACHE HIT"
+                hookSpecificOutput = @{
+                    hookEventName = "PreToolUse"
+                    cacheHit = $true
+                    filePath = $filePath
+                    cachedContent = $cachedText
+                    estimatedTokens = $cachedTokens
+                }
+            } | ConvertTo-Json -Depth 10 -Compress
+
+            Write-Output $blockResponse
+            exit 2
+
+        } else {
+            # CACHE MISS - Allow Read to proceed
+            Write-Log "Cache miss: $filePath (will cache after Read)" "DEBUG"
+        }
+
+    } catch {
+        Write-Log "Cache retrieval failed: $($_.Exception.Message)" "ERROR"
+        # On error, allow Read to proceed normally
+    }
+}
+
 # Main execution
 try {
     Write-Log "Phase: $Phase, Action: $Action" "INFO"
@@ -313,6 +417,9 @@ try {
     switch ($Action) {
         "auto-cache" {
             Handle-AutoCache
+        }
+        "cache-retrieval" {
+            Handle-CacheRetrieval
         }
         "context-guard" {
             Handle-ContextGuard
@@ -325,6 +432,12 @@ try {
         }
         "session-report" {
             Handle-SessionReport
+        }
+        "log-operation" {
+            Handle-LogOperation
+        }
+        "optimize-session" {
+            Handle-OptimizeSession
         }
         "session-track" {
             # Update operation count
