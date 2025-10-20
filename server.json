@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.ooples/token-optimizer-mcp",
+  "description": "Intelligent token optimization for Claude Code - achieving 95%+ token reduction through caching, compression, and smart tool intelligence. Provides 80+ smart tools for caching, API optimization, code analysis, and real-time monitoring.",
+  "repository": {
+    "url": "https://github.com/ooples/token-optimizer-mcp",
+    "source": "github"
+  },
+  "version": "2.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "token-optimizer-mcp",
+      "version": "2.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Directory path for cache storage (optional, defaults to ~/.token-optimizer-cache)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "TOKEN_OPTIMIZER_CACHE_DIR"
+        }
+      ]
+    }
+  ]
+}
