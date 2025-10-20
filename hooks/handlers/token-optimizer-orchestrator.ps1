@@ -373,7 +373,7 @@ function Handle-SmartRead {
             includeMetadata = $true
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__smart_read" -ArgumentsJson $argsJson
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "smart_read" -ArgumentsJson $argsJson
         $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
         if ($result -and $result.content) {
@@ -383,7 +383,7 @@ function Handle-SmartRead {
             $tokens = $result.metadata.tokenCount
             $tokensSaved = if ($result.metadata.tokensSaved) { $result.metadata.tokensSaved } else { 0 }
 
-            Write-Log "$fromCache - $isDiff: $filePath ($tokens tokens, saved $tokensSaved)" "INFO"
+            Write-Log "$fromCache - ${isDiff}: $filePath ($tokens tokens, saved $tokensSaved)" "INFO"
 
             # Return smart_read result and block plain Read
             $blockResponse = @{
