@@ -52,16 +52,26 @@ try {
     # ============================================================
     if ($Phase -eq "PreToolUse") {
 
-        # 1. Context Guard - Check if we're approaching token limit
+        # 1. CACHE RETRIEVAL - Check cache BEFORE Read executes (CRITICAL FOR TOKEN SAVINGS!)
+        if ($toolName -eq "Read") {
+            $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "cache-retrieval"
+            if ($LASTEXITCODE -eq 2) {
+                # Cache hit! The orchestrator will have output the cached content
+                # This blocks the Read and saves tokens
+                exit 2
+            }
+        }
+
+        # 2. Context Guard - Check if we're approaching token limit
         $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "context-guard"
         if ($LASTEXITCODE -eq 2) {
             Block-Tool -Reason "Context budget exhausted - session optimization required"
         }
 
-        # 2. Track operation
+        # 3. Track operation
         $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "session-track"
 
-        # 3. MCP Enforcers - Force usage of MCP tools over Bash/Read/Grep
+        # 4. MCP Enforcers - Force usage of MCP tools over Bash/Read/Grep
 
         # Git MCP Enforcer
         if ($toolName -eq "Bash" -and $data.tool_input.command -match "git\s") {
@@ -87,17 +97,12 @@ try {
     # ============================================================
     if ($Phase -eq "PostToolUse") {
 
-        # 1. Auto-cache Read/Write/Edit operations
-        if ($toolName -in @("Read", "Write", "Edit")) {
-            $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "auto-cache"
-        }
+        # 1. Log ALL tool operations to operations-{sessionId}.csv
+        #    This is CRITICAL for session-level optimization
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "log-operation"
 
-        # 2. Track operation completion
+        # 2. Track operation count
         $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "session-track"
-
-        # REMOVED: Periodic optimization every 50 operations (not production-ready)
-        # Auto-caching handles optimization on EVERY Read/Write/Edit operation
-        # Context guard handles emergency optimization when approaching token limits
 
         exit 0
     }
@@ -134,6 +139,10 @@ try {
     if ($Phase -eq "UserPromptSubmit") {
         # Track user prompts for analytics
         $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "session-track"
+
+        # CRITICAL: Run session-level optimization at end of user turn
+        # This batch-optimizes ALL file operations from the previous turn
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "optimize-session"
 
         exit 0
     }
