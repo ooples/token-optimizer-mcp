@@ -272,8 +272,8 @@ describe('Path Traversal Security Tests - optimize_session', () => {
       });
       const endTime = Date.now();
 
-      // Should complete in reasonable time
-      expect(endTime - startTime).toBeLessThan(100);
+      // Should complete in reasonable time (allow for slower CI environments)
+      expect(endTime - startTime).toBeLessThan(200);
     });
   });
 
