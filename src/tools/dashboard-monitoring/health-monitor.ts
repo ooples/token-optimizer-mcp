@@ -1084,13 +1084,13 @@ export class HealthMonitor {
     );
 
     // Cache result (30-second TTL for 90% reduction)
-    const tokensUsed = this.tokenCounter.count(JSON.stringify(status)).tokens;
-    const ttl = options.cacheTTL || 30; // 30 seconds
+    const statusStr = JSON.stringify(status);
+    const tokensUsed = this.tokenCounter.count(statusStr).tokens;
     this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(status)).toString('utf-8'),
-      tokensUsed,
-      ttl
+      Buffer.from(statusStr).toString('utf-8'),
+      statusStr.length,
+      Buffer.from(statusStr).length
     );
 
     return {
@@ -1151,15 +1151,13 @@ export class HealthMonitor {
     const aggregatedHistory = this.aggregateHistory(history);
 
     // Cache result
-    const tokensUsed = this.tokenCounter.count(
-      JSON.stringify(aggregatedHistory)
-    ).tokens;
-    const ttl = options.cacheTTL || 60; // 1 minute
+    const historyStr = JSON.stringify(aggregatedHistory);
+    const tokensUsed = this.tokenCounter.count(historyStr).tokens;
     this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(aggregatedHistory)).toString('utf-8'),
-      tokensUsed,
-      ttl
+      Buffer.from(historyStr).toString('utf-8'),
+      historyStr.length,
+      Buffer.from(historyStr).length
     );
 
     return {
@@ -1254,13 +1252,13 @@ export class HealthMonitor {
     const impact = dependencyAnalyzer.analyzeImpact(options.service, scenario);
 
     // Cache result
-    const tokensUsed = this.tokenCounter.count(JSON.stringify(impact)).tokens;
-    const ttl = options.cacheTTL || 600; // 10 minutes
+    const impactStr = JSON.stringify(impact);
+    const tokensUsed = this.tokenCounter.count(impactStr).tokens;
     this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(impact)).toString('utf-8'),
-      tokensUsed,
-      ttl
+      Buffer.from(impactStr).toString('utf-8'),
+      impactStr.length,
+      Buffer.from(impactStr).length
     );
 
     return {

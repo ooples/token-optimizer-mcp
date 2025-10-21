@@ -17,7 +17,7 @@ import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
 import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils';
 import { hashFile, generateCacheKey } from '../shared/hash-utils';
-import { cacheSet, cacheGet } from '../../utils/cache-helper';
+import { cacheGet, cacheSet } from '../../utils/cache-helper';
 import {
   chunkBySyntax,
   truncateContent,
@@ -138,12 +138,10 @@ export class SmartReadTool {
     // If we have cached data and diff mode is enabled
     if (cachedData && diffMode) {
       try {
-        const cachedContent = cachedData.content;
-
         // Check if content has meaningful changes
-        if (hasMeaningfulChanges(cachedContent, rawContent)) {
+        if (hasMeaningfulChanges(cachedData, rawContent)) {
           // Generate diff
-          const diff = generateDiff(cachedContent, rawContent, {
+          const diff = generateDiff(cachedData, rawContent, {
             contextLines: 3,
             ignoreWhitespace: true,
           });
