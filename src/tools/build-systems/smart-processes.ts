@@ -395,9 +395,10 @@ export class SmartProcesses {
   private cacheSnapshot(snapshot: ProcessSnapshot): void {
     const key = `${this.cacheNamespace}:snapshot`;
     const dataToCache = JSON.stringify(snapshot);
-    const dataSize = dataToCache.length;
+    const originalSize = this.estimateOriginalOutputSize(snapshot);
+    const compactSize = dataToCache.length;
 
-    this.cache.set(key, dataToCache, dataSize, dataSize);
+    this.cache.set(key, dataToCache, originalSize, compactSize);
   }
 
   /**

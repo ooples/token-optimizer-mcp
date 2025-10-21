@@ -472,12 +472,13 @@ export class SmartInstall {
   private cacheResult(key: string, result: InstallResult): void {
     const cacheData = { ...result, cachedAt: Date.now() };
     const dataToCache = JSON.stringify(cacheData);
-    const dataSize = dataToCache.length;
+    const originalSize = this.estimateOriginalOutputSize(result);
+    const compactSize = dataToCache.length;
     this.cache.set(
       this.cacheNamespace + ':' + key,
       dataToCache,
-      dataSize,
-      dataSize
+      originalSize,
+      compactSize
     );
   }
 

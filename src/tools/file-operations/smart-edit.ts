@@ -229,8 +229,8 @@ export class SmartEditTool {
       // Update cache
       if (opts.updateCache) {
         const cacheKey = generateCacheKey('file-edit', { path: filePath });
-        const tokensSaved = originalTokens - diffTokens;
-        this.cache.set(cacheKey, editedContent as any, opts.ttl, tokensSaved);
+        const contentSize = Buffer.from(editedContent, 'utf-8').length;
+        this.cache.set(cacheKey, editedContent, contentSize, contentSize);
       }
 
       // Record metrics

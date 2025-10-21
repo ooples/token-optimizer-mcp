@@ -249,7 +249,8 @@ export class SmartWriteTool {
       // Step 7: Update cache
       if (opts.updateCache) {
         const cacheKey = generateCacheKey('file-write', { path: filePath });
-        this.cache.set(cacheKey, finalContent as any, opts.ttl, tokensSaved);
+        const contentSize = Buffer.from(finalContent, 'utf-8').length;
+        this.cache.set(cacheKey, finalContent, contentSize, contentSize);
       }
 
       // Step 8: Record metrics

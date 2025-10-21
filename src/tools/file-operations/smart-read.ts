@@ -17,7 +17,7 @@ import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
 import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils';
 import { hashFile, generateCacheKey } from '../shared/hash-utils';
-import { compress, decompress } from '../shared/compression-utils';
+import { cacheSet, cacheGet } from '../../utils/cache-helper';
 import {
   chunkBySyntax,
   truncateContent,
@@ -118,15 +118,8 @@ export class SmartReadTool {
     });
 
     // Check cache
-    let cachedData: string | null = null;
-    let fromCache = false;
-
-    if (enableCache) {
-      cachedData = this.cache.get(cacheKey);
-      if (cachedData) {
-        fromCache = true;
-      }
-    }
+    const cachedData = enableCache ? cacheGet(this.cache, cacheKey) : null;
+    const fromCache = cachedData !== null;
 
     // Read file content
     const rawContent = readFileSync(filePath, encoding);
@@ -145,11 +138,7 @@ export class SmartReadTool {
     // If we have cached data and diff mode is enabled
     if (cachedData && diffMode) {
       try {
-        const decompressed = decompress(
-          Buffer.from(cachedData, 'base64'),
-          'gzip'
-        );
-        const cachedContent = decompressed.toString();
+        const cachedContent = cachedData.content;
 
         // Check if content has meaningful changes
         if (hasMeaningfulChanges(cachedContent, rawContent)) {
@@ -238,13 +227,7 @@ export class SmartReadTool {
       tokensSaved = originalTokens - firstChunkTokens;
     }
     if (enableCache && !fromCache) {
-      const result = compress(rawContent, 'gzip');
-      this.cache.set(
-        cacheKey,
-        result.compressed.toString('base64'),
-        result.originalSize,
-        result.compressedSize
-      );
+      cacheSet(this.cache, cacheKey, rawContent);
     }
 
     // Calculate final metrics
