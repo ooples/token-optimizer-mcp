@@ -225,7 +225,10 @@ export class CustomWidget {
       ) {
         const cached = this.cache.get(cacheKey);
         if (cached) {
-          const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
+          const decompressed = decompress(
+            Buffer.from(cached, 'base64'),
+            'gzip'
+          );
           const cachedResult = JSON.parse(
             decompressed.toString()
           ) as CustomWidgetResult;

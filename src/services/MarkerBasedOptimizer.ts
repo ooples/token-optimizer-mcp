@@ -1,9 +1,7 @@
 import { SummarizationModule } from '../modules/SummarizationModule.js';
 
 export class MarkerBasedOptimizer {
-  constructor(
-    private summarizationModule: SummarizationModule
-  ) {}
+  constructor(private summarizationModule: SummarizationModule) {}
 
   async processMarkers(prompt: string): Promise<string> {
     const regex = /<summarize>([\s\S]*?)<\/summarize>/g;
@@ -15,13 +13,14 @@ export class MarkerBasedOptimizer {
     while ((match = regex.exec(prompt)) !== null) {
       matches.push({
         match: match[0],
-        text: match[1]
+        text: match[1],
       });
     }
 
     // Process each match
     for (const { match: matchText, text: textToSummarize } of matches) {
-      const summaryResult = await this.summarizationModule.summarize(textToSummarize);
+      const summaryResult =
+        await this.summarizationModule.summarize(textToSummarize);
       result = result.replace(matchText, summaryResult.summary);
     }
 

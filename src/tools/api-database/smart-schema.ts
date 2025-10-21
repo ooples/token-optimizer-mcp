@@ -414,7 +414,7 @@ export class SmartSchema {
         name: `column_${j + 1}`,
         type: j === 0 ? 'integer' : j === 1 ? 'varchar(255)' : 'text',
         nullable: j > 0,
-        defaultValue: j === 0 ? 'nextval(\'seq\')' : undefined,
+        defaultValue: j === 0 ? "nextval('seq')" : undefined,
         isPrimaryKey: j === 0,
         isForeignKey: false,
       })),
@@ -423,8 +423,8 @@ export class SmartSchema {
     const mockIndexes: IndexInfo[] = Array.from({ length: 15 }, (_, i) => ({
       schema: 'public',
       table: `table_${Math.floor(i / 2) + 1}`,
-      name: `idx_table_${Math.floor(i / 2) + 1}_col_${i % 5 + 1}`,
-      columns: [`column_${i % 5 + 1}`],
+      name: `idx_table_${Math.floor(i / 2) + 1}_col_${(i % 5) + 1}`,
+      columns: [`column_${(i % 5) + 1}`],
       isUnique: i % 3 === 0,
       isPrimary: false,
     }));

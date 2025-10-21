@@ -28,7 +28,9 @@ export class SummarizationModule {
     options: SummarizationOptions = {}
   ): Promise<SummarizationResult> {
     const startTime = Date.now();
-    const originalTokenResult = await Promise.resolve(this.tokenCounter.count(text));
+    const originalTokenResult = await Promise.resolve(
+      this.tokenCounter.count(text)
+    );
     const originalTokens = originalTokenResult.tokens;
 
     // Build summarization prompt
@@ -37,10 +39,12 @@ export class SummarizationModule {
     // Generate summary using foundation model
     const summary = await this.model.generate(prompt, {
       maxTokens: options.maxOutputTokens || Math.floor(originalTokens * 0.3),
-      temperature: 0.3 // Lower temperature for factual summarization
+      temperature: 0.3, // Lower temperature for factual summarization
     });
 
-    const summaryTokenResult = await Promise.resolve(this.tokenCounter.count(summary));
+    const summaryTokenResult = await Promise.resolve(
+      this.tokenCounter.count(summary)
+    );
     const summaryTokens = summaryTokenResult.tokens;
     const compressionRatio = summaryTokens / originalTokens;
 
@@ -50,7 +54,7 @@ export class SummarizationModule {
         originalTokens,
         summaryTokens,
         compressionRatio,
-        latency: Date.now() - startTime
+        latency: Date.now() - startTime,
       });
     }
 
@@ -58,7 +62,7 @@ export class SummarizationModule {
       summary,
       originalTokens,
       summaryTokens,
-      compressionRatio
+      compressionRatio,
     };
   }
 
@@ -74,7 +78,8 @@ export class SummarizationModule {
     let prompt = `Please provide a ${style} summary of the following text in ${targetLength}:\n\n`;
 
     if (options.preserveCodeBlocks) {
-      prompt += 'IMPORTANT: Preserve all code blocks and technical details exactly as written.\n\n';
+      prompt +=
+        'IMPORTANT: Preserve all code blocks and technical details exactly as written.\n\n';
     }
 
     prompt += `Text to summarize:\n${text}\n\nSummary:`;

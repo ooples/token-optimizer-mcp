@@ -16,11 +16,11 @@
  * 8. get-impact - Analyze impact of service failures
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine';
+import { TokenCounter } from '../../core/token-counter';
+import { MetricsCollector } from '../../core/metrics';
+import { generateCacheKey } from '../shared/hash-utils';
+import { createHash } from 'crypto';
 
 // ============================================================================
 // Type Definitions
@@ -28,21 +28,21 @@ import { createHash } from "crypto";
 
 export interface HealthMonitorOptions {
   operation:
-    | "check"
-    | "register-check"
-    | "update-check"
-    | "delete-check"
-    | "get-status"
-    | "get-history"
-    | "configure-dependencies"
-    | "get-impact";
+    | 'check'
+    | 'register-check'
+    | 'update-check'
+    | 'delete-check'
+    | 'get-status'
+    | 'get-history'
+    | 'configure-dependencies'
+    | 'get-impact';
 
   // Check identification
   checkId?: string;
   checkName?: string;
 
   // Check configuration
-  checkType?: "http" | "tcp" | "database" | "command" | "custom";
+  checkType?: 'http' | 'tcp' | 'database' | 'command' | 'custom';
   checkConfig?: {
     // HTTP check
     url?: string;
@@ -87,7 +87,7 @@ export interface HealthMonitorOptions {
 
   // Impact analysis
   service?: string;
-  scenario?: "failure" | "degraded" | "maintenance";
+  scenario?: 'failure' | 'degraded' | 'maintenance';
 
   // Cache options
   useCache?: boolean;
@@ -118,30 +118,30 @@ export interface HealthMonitorResult {
 export interface HealthCheck {
   id: string;
   name: string;
-  type: "http" | "tcp" | "database" | "command" | "custom";
+  type: 'http' | 'tcp' | 'database' | 'command' | 'custom';
   config: Record<string, unknown>;
   interval: number;
   timeout: number;
   retries: number;
   enabled: boolean;
   lastCheck?: number;
-  lastStatus?: "pass" | "fail" | "warn";
+  lastStatus?: 'pass' | 'fail' | 'warn';
   createdAt: number;
   updatedAt: number;
 }
 
 export interface ServiceStatus {
   service: string;
-  status: "healthy" | "degraded" | "unhealthy" | "unknown";
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
   checks: Array<{
     name: string;
-    status: "pass" | "fail" | "warn";
+    status: 'pass' | 'fail' | 'warn';
     message?: string;
     duration?: number;
   }>;
   dependencies?: Array<{
     service: string;
-    status: "healthy" | "degraded" | "unhealthy" | "unknown";
+    status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
     critical: boolean;
   }>;
   lastChecked: number;
@@ -151,7 +151,7 @@ export interface HealthCheckEvent {
   checkId: string;
   checkName: string;
   timestamp: number;
-  status: "pass" | "fail" | "warn";
+  status: 'pass' | 'fail' | 'warn';
   duration: number;
   message?: string;
   metadata?: Record<string, unknown>;
@@ -173,7 +173,7 @@ export interface DependencyGraph {
 
 export interface ImpactAnalysis {
   service: string;
-  scenario: "failure" | "degraded" | "maintenance";
+  scenario: 'failure' | 'degraded' | 'maintenance';
   directImpact: string[];
   cascadingImpact: string[];
   totalAffected: number;
@@ -242,7 +242,7 @@ class HealthCheckStore {
   getHistory(
     checkId?: string,
     timeRange?: { start: number; end: number },
-    limit?: number,
+    limit?: number
   ): HealthCheckEvent[] {
     let filtered = this.history;
 
@@ -252,7 +252,7 @@ class HealthCheckStore {
 
     if (timeRange) {
       filtered = filtered.filter(
-        (e) => e.timestamp >= timeRange.start && e.timestamp <= timeRange.end,
+        (e) => e.timestamp >= timeRange.start && e.timestamp <= timeRange.end
       );
     }
 
@@ -266,13 +266,13 @@ class HealthCheckStore {
   setDependencies(
     service: string,
     dependsOn: string[],
-    critical: boolean = false,
+    critical: boolean = false
   ): void {
     this.dependencies.set(service, { dependsOn, critical });
   }
 
   getDependencies(
-    service: string,
+    service: string
   ): { dependsOn: string[]; critical: boolean } | undefined {
     return this.dependencies.get(service);
   }
@@ -303,10 +303,8 @@ const healthCheckStore = new HealthCheckStore();
 // ============================================================================
 
 class HealthCheckExecutor {
-  async executeCheck(
-    check: HealthCheck,
-  ): Promise<{
-    status: "pass" | "fail" | "warn";
+  async executeCheck(check: HealthCheck): Promise<{
+    status: 'pass' | 'fail' | 'warn';
     duration: number;
     message?: string;
   }> {
@@ -314,15 +312,15 @@ class HealthCheckExecutor {
 
     try {
       switch (check.type) {
-        case "http":
+        case 'http':
           return await this.executeHttpCheck(check, startTime);
-        case "tcp":
+        case 'tcp':
           return await this.executeTcpCheck(check, startTime);
-        case "database":
+        case 'database':
           return await this.executeDatabaseCheck(check, startTime);
-        case "command":
+        case 'command':
           return await this.executeCommandCheck(check, startTime);
-        case "custom":
+        case 'custom':
           return await this.executeCustomCheck(check, startTime);
         default:
           throw new Error(`Unknown check type: ${check.type}`);
@@ -330,18 +328,18 @@ class HealthCheckExecutor {
     } catch (error) {
       const duration = Date.now() - startTime;
       return {
-        status: "fail",
+        status: 'fail',
         duration,
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
 
   private async executeHttpCheck(
     check: HealthCheck,
-    _startTime: number,
+    _startTime: number
   ): Promise<{
-    status: "pass" | "fail" | "warn";
+    status: 'pass' | 'fail' | 'warn';
     duration: number;
     message?: string;
   }> {
@@ -355,18 +353,18 @@ class HealthCheckExecutor {
     };
 
     if (!config.url) {
-      throw new Error("HTTP check requires URL");
+      throw new Error('HTTP check requires URL');
     }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),
-      config.timeout || check.timeout || 5000,
+      config.timeout || check.timeout || 5000
     );
 
     try {
       const response = await fetch(config.url, {
-        method: config.method || "GET",
+        method: config.method || 'GET',
         signal: controller.signal,
       });
 
@@ -377,7 +375,7 @@ class HealthCheckExecutor {
       const expectedStatus = config.expectedStatus || 200;
       if (response.status !== expectedStatus) {
         return {
-          status: "fail",
+          status: 'fail',
           duration,
           message: `Expected status ${expectedStatus}, got ${response.status}`,
         };
@@ -388,14 +386,14 @@ class HealthCheckExecutor {
         const body = await response.text();
         if (!body.includes(config.expectedBody)) {
           return {
-            status: "warn",
+            status: 'warn',
             duration,
-            message: "Response body does not contain expected content",
+            message: 'Response body does not contain expected content',
           };
         }
       }
 
-      return { status: "pass", duration };
+      return { status: 'pass', duration };
     } catch (error) {
       clearTimeout(timeoutId);
       throw error;
@@ -404,9 +402,9 @@ class HealthCheckExecutor {
 
   private async executeTcpCheck(
     check: HealthCheck,
-    _startTime: number,
+    _startTime: number
   ): Promise<{
-    status: "pass" | "fail" | "warn";
+    status: 'pass' | 'fail' | 'warn';
     duration: number;
     message?: string;
   }> {
@@ -414,14 +412,14 @@ class HealthCheckExecutor {
     const config = check.config as { host?: string; port?: number };
 
     if (!config.host || !config.port) {
-      throw new Error("TCP check requires host and port");
+      throw new Error('TCP check requires host and port');
     }
 
     // Note: TCP connection check would require 'net' module
     // For now, return mock success
     const duration = Date.now() - startTime;
     return {
-      status: "pass",
+      status: 'pass',
       duration,
       message: `TCP connection to ${config.host}:${config.port} successful`,
     };
@@ -429,9 +427,9 @@ class HealthCheckExecutor {
 
   private async executeDatabaseCheck(
     check: HealthCheck,
-    _startTime: number,
+    _startTime: number
   ): Promise<{
-    status: "pass" | "fail" | "warn";
+    status: 'pass' | 'fail' | 'warn';
     duration: number;
     message?: string;
   }> {
@@ -439,24 +437,24 @@ class HealthCheckExecutor {
     const config = check.config as { query?: string };
 
     if (!config.query) {
-      throw new Error("Database check requires query");
+      throw new Error('Database check requires query');
     }
 
     // Note: Database connection would require specific DB clients
     // For now, return mock success
     const duration = Date.now() - startTime;
     return {
-      status: "pass",
+      status: 'pass',
       duration,
-      message: "Database query executed successfully",
+      message: 'Database query executed successfully',
     };
   }
 
   private async executeCommandCheck(
     check: HealthCheck,
-    _startTime: number,
+    _startTime: number
   ): Promise<{
-    status: "pass" | "fail" | "warn";
+    status: 'pass' | 'fail' | 'warn';
     duration: number;
     message?: string;
   }> {
@@ -464,14 +462,14 @@ class HealthCheckExecutor {
     const config = check.config as { command?: string; args?: string[] };
 
     if (!config.command) {
-      throw new Error("Command check requires command");
+      throw new Error('Command check requires command');
     }
 
     // Note: Command execution would require 'child_process'
     // For now, return mock success
     const duration = Date.now() - startTime;
     return {
-      status: "pass",
+      status: 'pass',
       duration,
       message: `Command '${config.command}' executed successfully`,
     };
@@ -479,9 +477,9 @@ class HealthCheckExecutor {
 
   private async executeCustomCheck(
     _check: HealthCheck,
-    _startTime: number,
+    _startTime: number
   ): Promise<{
-    status: "pass" | "fail" | "warn";
+    status: 'pass' | 'fail' | 'warn';
     duration: number;
     message?: string;
   }> {
@@ -489,9 +487,9 @@ class HealthCheckExecutor {
     // Custom checks would execute user-defined logic
     const duration = Date.now() - startTime;
     return {
-      status: "pass",
+      status: 'pass',
       duration,
-      message: "Custom check passed",
+      message: 'Custom check passed',
     };
   }
 }
@@ -547,7 +545,7 @@ class DependencyAnalyzer {
 
   analyzeImpact(
     service: string,
-    scenario: "failure" | "degraded" | "maintenance",
+    scenario: 'failure' | 'degraded' | 'maintenance'
   ): ImpactAnalysis {
     const directImpact: string[] = [];
     const cascadingImpact: string[] = [];
@@ -586,7 +584,7 @@ class DependencyAnalyzer {
       scenario,
       directImpact,
       cascadingImpact,
-      criticalServices,
+      criticalServices
     );
 
     return {
@@ -602,14 +600,14 @@ class DependencyAnalyzer {
   }
 
   private estimateDowntime(
-    scenario: "failure" | "degraded" | "maintenance",
+    scenario: 'failure' | 'degraded' | 'maintenance'
   ): number {
     switch (scenario) {
-      case "failure":
+      case 'failure':
         return 3600; // 1 hour
-      case "degraded":
+      case 'degraded':
         return 1800; // 30 minutes
-      case "maintenance":
+      case 'maintenance':
         return 600; // 10 minutes
       default:
         return 0;
@@ -621,38 +619,38 @@ class DependencyAnalyzer {
     scenario: string,
     directImpact: string[],
     cascadingImpact: string[],
-    criticalServices: string[],
+    criticalServices: string[]
   ): string[] {
     const recommendations: string[] = [];
 
     if (criticalServices.length > 0) {
       recommendations.push(
-        `Critical services will be affected: ${criticalServices.join(", ")}. Consider redundancy or failover mechanisms.`,
+        `Critical services will be affected: ${criticalServices.join(', ')}. Consider redundancy or failover mechanisms.`
       );
     }
 
     if (directImpact.length > 5) {
       recommendations.push(
-        `High number of direct dependents (${directImpact.length}). Consider load balancing or service splitting.`,
+        `High number of direct dependents (${directImpact.length}). Consider load balancing or service splitting.`
       );
     }
 
     if (cascadingImpact.length > 0) {
       recommendations.push(
-        `Cascading failures detected. Review dependency chains and implement circuit breakers.`,
+        `Cascading failures detected. Review dependency chains and implement circuit breakers.`
       );
     }
 
-    if (scenario === "failure") {
+    if (scenario === 'failure') {
       recommendations.push(
-        "Enable monitoring alerts for this service and its dependents.",
+        'Enable monitoring alerts for this service and its dependents.'
       );
-      recommendations.push("Implement automated failover or backup services.");
+      recommendations.push('Implement automated failover or backup services.');
     }
 
     if (recommendations.length === 0) {
       recommendations.push(
-        "No critical concerns detected. Continue monitoring.",
+        'No critical concerns detected. Continue monitoring.'
       );
     }
 
@@ -670,7 +668,7 @@ class StatusAggregator {
   async aggregateServiceStatus(
     service: string,
     includeDetails: boolean = false,
-    includeDependencies: boolean = false,
+    includeDependencies: boolean = false
   ): Promise<ServiceStatus> {
     const checks = healthCheckStore
       .getAllChecks()
@@ -678,7 +676,7 @@ class StatusAggregator {
 
     const checkResults: Array<{
       name: string;
-      status: "pass" | "fail" | "warn";
+      status: 'pass' | 'fail' | 'warn';
       message?: string;
       duration?: number;
     }> = [];
@@ -705,25 +703,25 @@ class StatusAggregator {
     }
 
     // Determine overall status
-    const hasFailures = checkResults.some((r) => r.status === "fail");
-    const hasWarnings = checkResults.some((r) => r.status === "warn");
+    const hasFailures = checkResults.some((r) => r.status === 'fail');
+    const hasWarnings = checkResults.some((r) => r.status === 'warn');
 
-    let overallStatus: "healthy" | "degraded" | "unhealthy" | "unknown";
+    let overallStatus: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
     if (hasFailures) {
-      overallStatus = "unhealthy";
+      overallStatus = 'unhealthy';
     } else if (hasWarnings) {
-      overallStatus = "degraded";
+      overallStatus = 'degraded';
     } else if (checkResults.length > 0) {
-      overallStatus = "healthy";
+      overallStatus = 'healthy';
     } else {
-      overallStatus = "unknown";
+      overallStatus = 'unknown';
     }
 
     // Get dependencies if requested
     let dependencies:
       | Array<{
           service: string;
-          status: "healthy" | "degraded" | "unhealthy" | "unknown";
+          status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
           critical: boolean;
         }>
       | undefined;
@@ -736,7 +734,7 @@ class StatusAggregator {
           const depStatus = await this.aggregateServiceStatus(
             depService,
             false,
-            false,
+            false
           );
           dependencies.push({
             service: depService,
@@ -767,7 +765,7 @@ export class HealthMonitor {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metricsCollector: MetricsCollector,
+    private metricsCollector: MetricsCollector
   ) {}
 
   async run(options: HealthMonitorOptions): Promise<HealthMonitorResult> {
@@ -776,35 +774,35 @@ export class HealthMonitor {
     try {
       // Validate operation
       if (!options.operation) {
-        throw new Error("Operation is required");
+        throw new Error('Operation is required');
       }
 
       // Execute operation
       let result: HealthMonitorResult;
 
       switch (options.operation) {
-        case "check":
+        case 'check':
           result = await this.executeCheck(options, startTime);
           break;
-        case "register-check":
+        case 'register-check':
           result = await this.registerCheck(options, startTime);
           break;
-        case "update-check":
+        case 'update-check':
           result = await this.updateCheck(options, startTime);
           break;
-        case "delete-check":
+        case 'delete-check':
           result = await this.deleteCheck(options, startTime);
           break;
-        case "get-status":
+        case 'get-status':
           result = await this.getStatus(options, startTime);
           break;
-        case "get-history":
+        case 'get-history':
           result = await this.getHistory(options, startTime);
           break;
-        case "configure-dependencies":
+        case 'configure-dependencies':
           result = await this.configureDependencies(options, startTime);
           break;
-        case "get-impact":
+        case 'get-impact':
           result = await this.getImpact(options, startTime);
           break;
         default:
@@ -831,7 +829,7 @@ export class HealthMonitor {
 
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error',
         metadata: {
           cacheHit: false,
         },
@@ -845,7 +843,7 @@ export class HealthMonitor {
 
   private async executeCheck(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
     const checkId = options.checkId;
     const checkName = options.checkName;
@@ -859,7 +857,7 @@ export class HealthMonitor {
       for (const check of checks) {
         const result = await checkExecutor.executeCheck(check);
 
-        if (result.status === "pass") {
+        if (result.status === 'pass') {
           healthyCount++;
         } else {
           unhealthyCount++;
@@ -913,8 +911,8 @@ export class HealthMonitor {
       metadata: {
         cacheHit: false,
         checksRun: 1,
-        healthyCount: result.status === "pass" ? 1 : 0,
-        unhealthyCount: result.status !== "pass" ? 1 : 0,
+        healthyCount: result.status === 'pass' ? 1 : 0,
+        unhealthyCount: result.status !== 'pass' ? 1 : 0,
       },
     };
   }
@@ -925,10 +923,10 @@ export class HealthMonitor {
 
   private async registerCheck(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
     if (!options.checkName || !options.checkType || !options.checkConfig) {
-      throw new Error("checkName, checkType, and checkConfig are required");
+      throw new Error('checkName, checkType, and checkConfig are required');
     }
 
     const checkId = this.generateCheckId(options.checkName);
@@ -963,13 +961,13 @@ export class HealthMonitor {
 
   private async updateCheck(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
     const checkId = options.checkId;
     const checkName = options.checkName;
 
     if (!checkId && !checkName) {
-      throw new Error("checkId or checkName is required");
+      throw new Error('checkId or checkName is required');
     }
 
     const check = checkId
@@ -990,7 +988,7 @@ export class HealthMonitor {
     const success = healthCheckStore.updateCheck(check.id, updates);
 
     if (!success) {
-      throw new Error("Failed to update check");
+      throw new Error('Failed to update check');
     }
 
     const updatedCheck = healthCheckStore.getCheck(check.id)!;
@@ -1010,13 +1008,13 @@ export class HealthMonitor {
 
   private async deleteCheck(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
     const checkId = options.checkId;
     const checkName = options.checkName;
 
     if (!checkId && !checkName) {
-      throw new Error("checkId or checkName is required");
+      throw new Error('checkId or checkName is required');
     }
 
     const check = checkId
@@ -1030,7 +1028,7 @@ export class HealthMonitor {
     const success = healthCheckStore.deleteCheck(check.id);
 
     if (!success) {
-      throw new Error("Failed to delete check");
+      throw new Error('Failed to delete check');
     }
 
     return {
@@ -1047,19 +1045,16 @@ export class HealthMonitor {
 
   private async getStatus(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
-    const service = options.service || "default";
+    const service = options.service || 'default';
 
     // Generate cache key
-    const cacheKey = generateCacheKey(
-      "health-status",
-      {
-        service,
-        includeDetails: options.includeDetails || false,
-        includeDependencies: options.includeDependencies || false,
-      },
-    );
+    const cacheKey = generateCacheKey('health-status', {
+      service,
+      includeDetails: options.includeDetails || false,
+      includeDependencies: options.includeDependencies || false,
+    });
 
     // Check cache (30-second TTL as specified)
     if (options.useCache !== false) {
@@ -1067,7 +1062,7 @@ export class HealthMonitor {
       if (cached) {
         const data = JSON.parse(cached.toString()) as ServiceStatus;
         const tokensSaved = this.tokenCounter.count(
-          JSON.stringify(data),
+          JSON.stringify(data)
         ).tokens;
 
         return {
@@ -1085,7 +1080,7 @@ export class HealthMonitor {
     const status = await statusAggregator.aggregateServiceStatus(
       service,
       options.includeDetails || false,
-      options.includeDependencies || false,
+      options.includeDependencies || false
     );
 
     // Cache result (30-second TTL for 90% reduction)
@@ -1093,9 +1088,9 @@ export class HealthMonitor {
     const ttl = options.cacheTTL || 30; // 30 seconds
     this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(status)).toString("utf-8"),
+      Buffer.from(JSON.stringify(status)).toString('utf-8'),
       tokensUsed,
-      ttl,
+      ttl
     );
 
     return {
@@ -1114,15 +1109,16 @@ export class HealthMonitor {
 
   private async getHistory(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
     const checkId = options.checkId;
 
     // Generate cache key
-    const cacheKey = generateCacheKey(
-      "health-history",
-      { checkId, timeRange: options.timeRange, limit: options.limit },
-    );
+    const cacheKey = generateCacheKey('health-history', {
+      checkId,
+      timeRange: options.timeRange,
+      limit: options.limit,
+    });
 
     // Check cache (1-minute TTL for history aggregation, 85% reduction)
     if (options.useCache !== false) {
@@ -1130,7 +1126,7 @@ export class HealthMonitor {
       if (cached) {
         const data = JSON.parse(cached.toString()) as HealthCheckEvent[];
         const tokensSaved = this.tokenCounter.count(
-          JSON.stringify(data),
+          JSON.stringify(data)
         ).tokens;
 
         return {
@@ -1148,7 +1144,7 @@ export class HealthMonitor {
     const history = healthCheckStore.getHistory(
       checkId,
       options.timeRange,
-      options.limit || 100,
+      options.limit || 100
     );
 
     // Aggregate for token reduction (return counts instead of full events)
@@ -1156,14 +1152,14 @@ export class HealthMonitor {
 
     // Cache result
     const tokensUsed = this.tokenCounter.count(
-      JSON.stringify(aggregatedHistory),
+      JSON.stringify(aggregatedHistory)
     ).tokens;
     const ttl = options.cacheTTL || 60; // 1 minute
     this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(aggregatedHistory)).toString("utf-8"),
+      Buffer.from(JSON.stringify(aggregatedHistory)).toString('utf-8'),
       tokensUsed,
-      ttl,
+      ttl
     );
 
     return {
@@ -1182,16 +1178,16 @@ export class HealthMonitor {
 
   private async configureDependencies(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
     if (!options.dependencies) {
-      throw new Error("dependencies configuration is required");
+      throw new Error('dependencies configuration is required');
     }
 
     const { service, dependsOn, critical } = options.dependencies;
 
     if (!service || !dependsOn) {
-      throw new Error("service and dependsOn are required");
+      throw new Error('service and dependsOn are required');
     }
 
     healthCheckStore.setDependencies(service, dependsOn, critical || false);
@@ -1199,15 +1195,10 @@ export class HealthMonitor {
     const graph = dependencyAnalyzer.buildDependencyGraph();
 
     // Cache dependency graph (token-based metrics)
-    const cacheKey = `cache-${createHash("md5").update("health-dependencies:graph").digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update('health-dependencies:graph').digest('hex')}`;
     const graphData = JSON.stringify(graph);
     const tokensUsed = this.tokenCounter.count(graphData).tokens;
-    this.cache.set(
-      cacheKey,
-      graphData,
-      tokensUsed,
-      tokensUsed,
-    );
+    this.cache.set(cacheKey, graphData, tokensUsed, tokensUsed);
 
     return {
       success: true,
@@ -1225,19 +1216,19 @@ export class HealthMonitor {
 
   private async getImpact(
     options: HealthMonitorOptions,
-    _startTime: number,
+    _startTime: number
   ): Promise<HealthMonitorResult> {
     if (!options.service) {
-      throw new Error("service is required for impact analysis");
+      throw new Error('service is required for impact analysis');
     }
 
-    const scenario = options.scenario || "failure";
+    const scenario = options.scenario || 'failure';
 
     // Generate cache key
-    const cacheKey = generateCacheKey(
-      "health-impact",
-      { service: options.service, scenario },
-    );
+    const cacheKey = generateCacheKey('health-impact', {
+      service: options.service,
+      scenario,
+    });
 
     // Check cache (10-minute TTL)
     if (options.useCache !== false) {
@@ -1245,7 +1236,7 @@ export class HealthMonitor {
       if (cached) {
         const data = JSON.parse(cached.toString()) as ImpactAnalysis;
         const tokensSaved = this.tokenCounter.count(
-          JSON.stringify(data),
+          JSON.stringify(data)
         ).tokens;
 
         return {
@@ -1267,9 +1258,9 @@ export class HealthMonitor {
     const ttl = options.cacheTTL || 600; // 10 minutes
     this.cache.set(
       cacheKey,
-      Buffer.from(JSON.stringify(impact)).toString("utf-8"),
+      Buffer.from(JSON.stringify(impact)).toString('utf-8'),
       tokensUsed,
-      ttl,
+      ttl
     );
 
     return {
@@ -1287,10 +1278,10 @@ export class HealthMonitor {
   // ========================================================================
 
   private generateCheckId(name: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(name);
     hash.update(Date.now().toString());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private aggregateHistory(history: HealthCheckEvent[]): HealthCheckEvent[] {
@@ -1322,7 +1313,7 @@ export class HealthMonitor {
 export function createHealthMonitor(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metricsCollector: MetricsCollector,
+  metricsCollector: MetricsCollector
 ): HealthMonitor {
   return new HealthMonitor(cache, tokenCounter, metricsCollector);
 }
@@ -1332,103 +1323,103 @@ export function createHealthMonitor(
 // ============================================================================
 
 export const healthMonitorTool = {
-  name: "health-monitor",
+  name: 'health-monitor',
   description:
-    "Monitor health status of systems, services, and applications with dependency tracking. Supports 8 operations: check, register-check, update-check, delete-check, get-status, get-history, configure-dependencies, get-impact. Achieves 87% token reduction through status caching and dependency graph compression.",
+    'Monitor health status of systems, services, and applications with dependency tracking. Supports 8 operations: check, register-check, update-check, delete-check, get-status, get-history, configure-dependencies, get-impact. Achieves 87% token reduction through status caching and dependency graph compression.',
 
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "check",
-          "register-check",
-          "update-check",
-          "delete-check",
-          "get-status",
-          "get-history",
-          "configure-dependencies",
-          "get-impact",
+          'check',
+          'register-check',
+          'update-check',
+          'delete-check',
+          'get-status',
+          'get-history',
+          'configure-dependencies',
+          'get-impact',
         ],
-        description: "Operation to perform",
+        description: 'Operation to perform',
       },
       checkId: {
-        type: "string",
-        description: "Check identifier",
+        type: 'string',
+        description: 'Check identifier',
       },
       checkName: {
-        type: "string",
-        description: "Check name",
+        type: 'string',
+        description: 'Check name',
       },
       checkType: {
-        type: "string",
-        enum: ["http", "tcp", "database", "command", "custom"],
-        description: "Type of health check",
+        type: 'string',
+        enum: ['http', 'tcp', 'database', 'command', 'custom'],
+        description: 'Type of health check',
       },
       checkConfig: {
-        type: "object",
-        description: "Check configuration",
+        type: 'object',
+        description: 'Check configuration',
       },
       interval: {
-        type: "number",
-        description: "Check interval in seconds",
+        type: 'number',
+        description: 'Check interval in seconds',
       },
       timeout: {
-        type: "number",
-        description: "Check timeout in milliseconds",
+        type: 'number',
+        description: 'Check timeout in milliseconds',
       },
       retries: {
-        type: "number",
-        description: "Number of retries on failure",
+        type: 'number',
+        description: 'Number of retries on failure',
       },
       dependencies: {
-        type: "object",
+        type: 'object',
         properties: {
-          service: { type: "string" },
-          dependsOn: { type: "array", items: { type: "string" } },
-          critical: { type: "boolean" },
+          service: { type: 'string' },
+          dependsOn: { type: 'array', items: { type: 'string' } },
+          critical: { type: 'boolean' },
         },
-        description: "Service dependency configuration",
+        description: 'Service dependency configuration',
       },
       includeDetails: {
-        type: "boolean",
-        description: "Include detailed check results",
+        type: 'boolean',
+        description: 'Include detailed check results',
       },
       includeDependencies: {
-        type: "boolean",
-        description: "Include dependency status",
+        type: 'boolean',
+        description: 'Include dependency status',
       },
       timeRange: {
-        type: "object",
+        type: 'object',
         properties: {
-          start: { type: "number" },
-          end: { type: "number" },
+          start: { type: 'number' },
+          end: { type: 'number' },
         },
-        description: "Time range for history query",
+        description: 'Time range for history query',
       },
       limit: {
-        type: "number",
-        description: "Maximum number of history entries",
+        type: 'number',
+        description: 'Maximum number of history entries',
       },
       service: {
-        type: "string",
-        description: "Service name for status or impact analysis",
+        type: 'string',
+        description: 'Service name for status or impact analysis',
       },
       scenario: {
-        type: "string",
-        enum: ["failure", "degraded", "maintenance"],
-        description: "Scenario for impact analysis",
+        type: 'string',
+        enum: ['failure', 'degraded', 'maintenance'],
+        description: 'Scenario for impact analysis',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching (default: true)",
+        type: 'boolean',
+        description: 'Enable caching (default: true)',
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds",
+        type: 'number',
+        description: 'Cache TTL in seconds',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };
