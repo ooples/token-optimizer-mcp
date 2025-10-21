@@ -9,10 +9,7 @@ import { compress, decompress } from '../tools/shared/compression-utils';
 /**
  * Get cached content with automatic decompression
  */
-export function cacheGet(
-  cache: CacheEngine,
-  key: string
-): string | null {
+export function cacheGet(cache: CacheEngine, key: string): string | null {
   const cachedData = cache.get(key);
   if (!cachedData) {
     return null;
