@@ -1,0 +1,402 @@
+
+> token-optimizer-mcp@0.1.0 build
+> tsc
+
+src/tools/advanced-caching/cache-analytics.ts(1,598): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/cache-compression.ts(477,51): error TS2322: Type 'string' is not assignable to type 'Uint8Array<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1014,7): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1035,9): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1275,7): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1295,9): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-invalidation.ts(1,545): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/cache-optimizer.ts(1,430): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/cache-partition.ts(1466,11): error TS6133: '_coAccessPatterns' is declared but its value is never read.
+src/tools/advanced-caching/cache-replication.ts(1,509): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/advanced-caching/cache-warmup.ts(1,648): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/predictive-cache.ts(1,868): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/advanced-caching/predictive-cache.ts(2,1): error TS6192: All imports in import declaration are unused.
+src/tools/advanced-caching/smart-cache.ts(1,677): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/api-database/index.ts(49,3): error TS2305: Module '"./smart-rest"' has no exported member 'SmartREST'.
+src/tools/api-database/index.ts(50,3): error TS2305: Module '"./smart-rest"' has no exported member 'getSmartRest'.
+src/tools/api-database/index.ts(51,3): error TS2305: Module '"./smart-rest"' has no exported member 'runSmartREST'.
+src/tools/api-database/index.ts(52,3): error TS2305: Module '"./smart-rest"' has no exported member 'SMART_REST_TOOL_DEFINITION'.
+src/tools/api-database/index.ts(53,8): error TS2305: Module '"./smart-rest"' has no exported member 'SmartRESTOptions'.
+src/tools/api-database/index.ts(54,8): error TS2305: Module '"./smart-rest"' has no exported member 'SmartRESTResult'.
+src/tools/api-database/index.ts(55,8): error TS2305: Module '"./smart-rest"' has no exported member 'EndpointInfo'.
+src/tools/api-database/index.ts(56,8): error TS2305: Module '"./smart-rest"' has no exported member 'ResourceGroup'.
+src/tools/api-database/index.ts(57,8): error TS2305: Module '"./smart-rest"' has no exported member 'HealthIssue'.
+src/tools/api-database/index.ts(58,8): error TS2305: Module '"./smart-rest"' has no exported member 'RateLimit'.
+src/tools/api-database/smart-api-fetch.ts(669,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-cache-api.ts(246,40): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(384,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(407,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(427,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(445,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(498,42): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(882,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-database.ts(1,641): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(2,1): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(3,1): error TS6133: 'TokenCounter' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(4,1): error TS6133: 'MetricsCollector' is declared but its value is never read.
+src/tools/api-database/smart-database.ts(5,1): error TS6133: 'CacheEngineClass' is declared but its value is never read.
+src/tools/api-database/smart-graphql.ts(755,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-migration.ts(23,15): error TS2300: Duplicate identifier 'TokenCounter'.
+src/tools/api-database/smart-migration.ts(24,15): error TS2300: Duplicate identifier 'MetricsCollector'.
+src/tools/api-database/smart-migration.ts(26,10): error TS2300: Duplicate identifier 'TokenCounter'.
+src/tools/api-database/smart-migration.ts(27,10): error TS2300: Duplicate identifier 'MetricsCollector'.
+src/tools/api-database/smart-migration.ts(897,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-migration.ts(900,28): error TS1361: 'TokenCounter' cannot be used as a value because it was imported using 'import type'.
+src/tools/api-database/smart-migration.ts(901,23): error TS1361: 'MetricsCollector' cannot be used as a value because it was imported using 'import type'.
+src/tools/api-database/smart-orm.ts(185,11): error TS6133: 'relationships' is declared but its value is never read.
+src/tools/api-database/smart-orm.ts(857,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-rest.ts(1,311): error TS6133: 'createHash' is declared but its value is never read.
+src/tools/api-database/smart-schema.ts(22,15): error TS2300: Duplicate identifier 'TokenCounter'.
+src/tools/api-database/smart-schema.ts(23,15): error TS2300: Duplicate identifier 'MetricsCollector'.
+src/tools/api-database/smart-schema.ts(25,10): error TS2300: Duplicate identifier 'TokenCounter'.
+src/tools/api-database/smart-schema.ts(26,10): error TS2300: Duplicate identifier 'MetricsCollector'.
+src/tools/api-database/smart-schema.ts(1166,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-schema.ts(1169,28): error TS1361: 'TokenCounter' cannot be used as a value because it was imported using 'import type'.
+src/tools/api-database/smart-schema.ts(1170,23): error TS1361: 'MetricsCollector' cannot be used as a value because it was imported using 'import type'.
+src/tools/api-database/smart-sql.ts(528,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(543,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(557,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(571,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(581,13): error TS6133: 'compact' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(654,5): error TS6133: 'ttl' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(663,11): error TS6133: 'tokensSaved' is declared but its value is never read.
+src/tools/api-database/smart-sql.ts(694,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-sql.ts(697,22): error TS2554: Expected 0 arguments, but got 1.
+src/tools/api-database/smart-websocket.ts(712,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-build.ts(120,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-build.ts(121,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-build.ts(601,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-docker.ts(729,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-install.ts(596,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-lint.ts(153,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(154,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(364,11): error TS6133: '_markAsIgnored' is declared but its value is never read.
+src/tools/build-systems/smart-lint.ts(611,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-logs.ts(875,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-network.ts(21,7): error TS6133: '_dnsResolve' is declared but its value is never read.
+src/tools/build-systems/smart-network.ts(183,11): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-network.ts(829,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-processes.ts(148,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(149,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-processes.ts(152,11): error TS6133: '_projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-system-metrics.ts(171,11): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/build-systems/smart-test.ts(135,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-test.ts(136,11): error TS6133: 'metrics' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(113,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/build-systems/smart-typecheck.ts(114,11): error TS6133: '_metrics' is declared but its value is never read.
+src/tools/code-analysis/smart-ambiance.ts(1,506): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(8,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(9,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(10,1): error TS6192: All imports in import declaration are unused.
+src/tools/code-analysis/smart-ambiance.ts(11,1): error TS6133: 'ts' is declared but its value is never read.
+src/tools/code-analysis/smart-ast-grep.ts(161,9): error TS6133: '_cachedResult' is declared but its value is never read.
+src/tools/code-analysis/smart-complexity.ts(746,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-dependencies.ts(1164,7): error TS2554: Expected 4 arguments, but got 5.
+src/tools/code-analysis/smart-exports.ts(254,11): error TS6133: '_reductionPercentage' is declared but its value is never read.
+src/tools/code-analysis/smart-exports.ts(449,11): error TS6133: '_fileDir' is declared but its value is never read.
+src/tools/code-analysis/smart-exports.ts(825,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-exports.ts(826,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/code-analysis/smart-imports.ts(272,11): error TS6133: '_reductionPercentage' is declared but its value is never read.
+src/tools/code-analysis/smart-imports.ts(923,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-imports.ts(924,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/code-analysis/smart-refactor.ts(17,54): error TS6133: 'SymbolInfo' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(18,60): error TS6133: 'ComplexityMetrics' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(162,11): error TS6133: '_symbolsResult' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(234,5): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-refactor.ts(235,5): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-refactor.ts(373,17): error TS6133: 'hash' is declared but its value is never read.
+src/tools/code-analysis/smart-refactor.ts(648,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-refactor.ts(649,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/code-analysis/smart-security.ts(554,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-security.ts(1291,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-symbols.ts(119,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-symbols.ts(711,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-typescript.ts(158,11): error TS6133: 'tokenCounter' is declared but its value is never read.
+src/tools/code-analysis/smart-typescript.ts(915,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-typescript.ts(916,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-config-read.ts(142,7): error TS6133: 'includeMetadata' is declared but its value is never read.
+src/tools/configuration/smart-config-read.ts(176,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(177,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(210,11): error TS2345: Argument of type 'Buffer<ArrayBufferLike>' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-config-read.ts(210,22): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(301,35): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-config-read.ts(301,44): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/configuration/smart-config-read.ts(313,37): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-config-read.ts(313,46): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/configuration/smart-config-read.ts(770,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-env.ts(1,338): error TS6133: 'fs' is declared but its value is never read.
+src/tools/configuration/smart-env.ts(2,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/configuration/smart-package-json.ts(835,11): error TS6133: '_size' is declared but its value is never read.
+src/tools/configuration/smart-package-json.ts(843,7): error TS2554: Expected 4 arguments, but got 5.
+src/tools/configuration/smart-package-json.ts(853,37): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-package-json.ts(854,12): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-package-json.ts(1108,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-tsconfig.ts(130,36): error TS2339: Property 'generateFileHash' does not exist on type 'typeof CacheEngine'.
+src/tools/configuration/smart-tsconfig.ts(131,40): error TS2339: Property 'createHash' does not exist on type 'Crypto'.
+src/tools/configuration/smart-tsconfig.ts(170,20): error TS2339: Property 'invalidateByFileHash' does not exist on type 'CacheEngine'.
+src/tools/configuration/smart-tsconfig.ts(199,25): error TS2554: Expected 0 arguments, but got 1.
+src/tools/configuration/smart-tsconfig.ts(199,34): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/configuration/smart-tsconfig.ts(548,37): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(548,54): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(550,7): error TS2365: Operator '>' cannot be applied to types 'TokenCountResult' and 'number'.
+src/tools/configuration/smart-tsconfig.ts(550,43): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/configuration/smart-tsconfig.ts(553,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(554,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(614,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-workflow.ts(1,464): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/configuration/smart-workflow.ts(8,1): error TS6133: 'parseYAML' is declared but its value is never read.
+src/tools/configuration/smart-workflow.ts(9,1): error TS6192: All imports in import declaration are unused.
+src/tools/dashboard-monitoring/alert-manager.ts(362,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(380,30): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(430,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(448,30): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(492,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(524,85): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(573,27): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(685,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(736,27): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(766,82): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(940,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1075,25): error TS2339: Property 'estimateFromBytes' does not exist on type 'TokenCounter'.
+src/tools/dashboard-monitoring/alert-manager.ts(1133,85): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1135,50): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(1139,85): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1141,50): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/alert-manager.ts(1145,85): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1153,85): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1162,86): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1174,86): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1185,88): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1200,88): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/custom-widget.ts(228,43): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/custom-widget.ts(303,31): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/custom-widget.ts(303,40): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(437,25): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/data-visualizer.ts(465,9): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/data-visualizer.ts(564,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(623,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(691,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(754,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(827,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1057,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1092,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1092,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1120,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1160,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1160,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1198,79): error TS2345: Argument of type '"graph"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/health-monitor.ts(1203,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1203,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1235,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1266,23): error TS2554: Expected 0 arguments, but got 1.
+src/tools/dashboard-monitoring/health-monitor.ts(1266,32): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/dashboard-monitoring/log-dashboard.ts(1,540): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/metric-collector.ts(1,848): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/monitoring-integration.ts(1,730): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/performance-tracker.ts(1,641): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/dashboard-monitoring/report-generator.ts(1,724): error TS6192: All imports in import declaration are unused.
+src/tools/dashboard-monitoring/report-generator.ts(6,1): error TS6192: All imports in import declaration are unused.
+src/tools/dashboard-monitoring/smart-dashboard.ts(1,790): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/file-operations/smart-branch.ts(228,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(231,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(234,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(237,44): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(238,32): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-branch.ts(250,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(265,11): error TS2345: Argument of type 'TokenCountResult' is not assignable to parameter of type 'number'.
+src/tools/file-operations/smart-branch.ts(276,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(593,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-edit.ts(226,79): error TS2554: Expected 4 arguments, but got 5.
+src/tools/file-operations/smart-edit.ts(471,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-edit.ts(472,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/file-operations/smart-glob.ts(258,9): error TS2322: Type 'number' is not assignable to type 'TokenCountResult'.
+src/tools/file-operations/smart-glob.ts(258,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-glob.ts(261,9): error TS2322: Type 'number' is not assignable to type 'TokenCountResult'.
+src/tools/file-operations/smart-glob.ts(261,26): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-glob.ts(264,27): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-glob.ts(264,44): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-glob.ts(265,32): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-glob.ts(265,47): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-glob.ts(276,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-glob.ts(277,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-glob.ts(292,11): error TS2554: Expected 4 arguments, but got 5.
+src/tools/file-operations/smart-glob.ts(303,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-glob.ts(429,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-glob.ts(430,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/file-operations/smart-grep.ts(274,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-grep.ts(278,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-grep.ts(282,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-grep.ts(330,11): error TS2554: Expected 4 arguments, but got 5.
+src/tools/file-operations/smart-grep.ts(480,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-grep.ts(481,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/file-operations/smart-log.ts(568,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-merge.ts(772,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-read.ts(125,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+  Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/file-operations/smart-read.ts(190,30): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/file-operations/smart-read.ts(245,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/file-operations/smart-read.ts(245,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/file-operations/smart-read.ts(377,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-status.ts(641,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-write.ts(239,78): error TS2554: Expected 4 arguments, but got 5.
+src/tools/file-operations/smart-write.ts(527,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-write.ts(528,41): error TS2554: Expected 0 arguments, but got 1.
+src/tools/intelligence/anomaly-explainer.ts(1,478): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/anomaly-explainer.ts(2,1): error TS6192: All imports in import declaration are unused.
+src/tools/intelligence/auto-remediation.ts(1,610): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/auto-remediation.ts(2,1): error TS6192: All imports in import declaration are unused.
+src/tools/intelligence/intelligent-assistant.ts(1,270): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/intelligent-assistant.ts(2,1): error TS6133: 'nlp' is declared but its value is never read.
+src/tools/intelligence/knowledge-graph.ts(999,21): error TS2304: Cannot find name 'createHash'.
+src/tools/intelligence/knowledge-graph.ts(1004,11): error TS6133: 'getDefaultTTL' is declared but its value is never read.
+src/tools/intelligence/natural-language-query.ts(1,391): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(1,711): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/pattern-recognition.ts(2,1): error TS6192: All imports in import declaration are unused.
+src/tools/intelligence/predictive-analytics.ts(1,711): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(1,387): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/intelligence/recommendation-engine.ts(2,1): error TS6133: 'stats' is declared but its value is never read.
+src/tools/intelligence/sentiment-analysis.ts(493,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(494,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(516,20): error TS2554: Expected 4 arguments, but got 2.
+src/tools/intelligence/sentiment-analysis.ts(518,27): error TS2554: Expected 0 arguments, but got 1.
+src/tools/intelligence/sentiment-analysis.ts(518,36): error TS2339: Property 'from' does not exist on type 'string'.
+src/tools/intelligence/sentiment-analysis.ts(533,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(546,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/smart-summarization.ts(1,939): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(1,497): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-diff.ts(7,3): error TS6133: 'diffLines' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(8,3): error TS6133: 'diffWords' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(9,3): error TS6133: 'diffChars' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(10,3): error TS6133: 'createTwoFilesPatch' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(12,3): error TS6133: 'parsePatch' is declared but its value is never read.
+src/tools/output-formatting/smart-diff.ts(14,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-diff.ts(15,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(1,437): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-export.ts(9,7): error TS6133: 'unparseCsv' is declared but its value is never read.
+src/tools/output-formatting/smart-export.ts(10,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(1,502): error TS6133: 'createReadStream' is declared but its value is never read.
+src/tools/output-formatting/smart-format.ts(4,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(5,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(6,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(8,7): error TS6198: All destructured elements are unused.
+src/tools/output-formatting/smart-format.ts(9,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-format.ts(10,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(1,567): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(9,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(10,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-log.ts(11,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-pretty.ts(405,11): error TS6133: 'grammarCache' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(510,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(517,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(608,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/output-formatting/smart-pretty.ts(608,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/output-formatting/smart-pretty.ts(792,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(799,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(867,29): error TS2554: Expected 0 arguments, but got 1.
+src/tools/output-formatting/smart-pretty.ts(867,38): error TS2339: Property 'compressed' does not exist on type 'string'.
+src/tools/output-formatting/smart-pretty.ts(1326,3): error TS6133: 'projectRoot' is declared but its value is never read.
+src/tools/output-formatting/smart-pretty.ts(1338,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/output-formatting/smart-report.ts(1,601): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-report.ts(7,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-report.ts(8,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(1,559): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(10,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(17,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(18,1): error TS6192: All imports in import declaration are unused.
+src/tools/output-formatting/smart-stream.ts(19,7): error TS6133: '_pipelineAsync' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(1,465): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(2,1): error TS6133: 'tarStream' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(3,1): error TS6133: 'tar' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(4,1): error TS6133: 'zlib' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(6,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(9,7): error TS6133: '_pipelineAsync' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(10,7): error TS6133: '_stat' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(11,7): error TS6133: '_readdir' is declared but its value is never read.
+src/tools/system-operations/smart-archive.ts(12,7): error TS6133: '_mkdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(1,471): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(3,1): error TS6133: 'path' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(5,7): error TS6133: 'stat' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(6,7): error TS6133: 'readdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(7,7): error TS6133: 'unlink' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(8,7): error TS6133: 'rmdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(9,7): error TS6133: 'mkdir' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(10,7): error TS6133: 'rename' is declared but its value is never read.
+src/tools/system-operations/smart-cleanup.ts(11,7): error TS6133: 'access' is declared but its value is never read.
+src/tools/system-operations/smart-cron.ts(288,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(325,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(570,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(715,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(844,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+  Type '"auto"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(919,79): error TS2345: Argument of type '`undefined:${string}` | `auto:${string}` | `cron:${string}` | `windows-task:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(955,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1076,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/system-operations/smart-cron.ts(1132,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1403,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-metrics.ts(1,618): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-metrics.ts(2,1): error TS6133: 'si' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(1,494): error TS6133: 'CacheEngine' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(5,1): error TS6133: 'net' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(6,1): error TS6133: 'crypto' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(7,7): error TS6133: '_execAsync' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(8,7): error TS6133: '_dnsLookup' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(9,7): error TS6133: '_dnsReverse' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(10,7): error TS6133: '_dnsResolve' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(11,7): error TS6133: '_dnsResolve4' is declared but its value is never read.
+src/tools/system-operations/smart-network.ts(12,7): error TS6133: '_dnsResolve6' is declared but its value is never read.
+src/tools/system-operations/smart-process.ts(159,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(201,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(249,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(267,32): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/system-operations/smart-process.ts(274,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(275,43): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/system-operations/smart-process.ts(290,38): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-process.ts(298,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(346,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(364,32): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/system-operations/smart-process.ts(371,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(372,43): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/tools/system-operations/smart-process.ts(387,38): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-process.ts(395,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(555,11): error TS6133: 'stdout' is declared but its value is never read.
+src/tools/system-operations/smart-process.ts(591,50): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-process.ts(592,65): error TS2554: Expected 0 arguments, but got 1.
+src/tools/system-operations/smart-service.ts(248,81): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(476,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(526,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(579,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`docker:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(789,79): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+  Type '`undefined:${string}`' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-service.ts(934,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-user.ts(264,77): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+  Type '"include-system:undefined"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-user.ts(318,78): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+  Type '"include-system:undefined"' is not assignable to type 'Encoding'.
+src/tools/system-operations/smart-user.ts(378,76): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(436,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(495,78): error TS2345: Argument of type '`${string}:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(527,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(551,70): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(583,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(604,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(636,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(658,81): error TS2345: Argument of type '"full"' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(690,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(1486,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
