@@ -14,7 +14,7 @@ import { CacheEngine } from '../../core/cache-engine';
 import { TokenCounter } from '../../core/token-counter';
 import { MetricsCollector } from '../../core/metrics';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, cpus, totalmem } from 'os';
 
 const execAsync = promisify(exec);
 
@@ -214,8 +214,8 @@ export class SmartProcesses {
       totalMemory,
       systemInfo: {
         platform: this.platform,
-        cpuCount: require('os').cpus().length,
-        totalMemoryMB: Math.round(require('os').totalmem() / 1024 / 1024),
+        cpuCount: cpus().length,
+        totalMemoryMB: Math.round(totalmem() / 1024 / 1024),
       },
     };
   }
@@ -302,7 +302,7 @@ export class SmartProcesses {
         if (isNaN(pid) || isNaN(cpu) || isNaN(memory)) continue;
 
         // Convert memory % to MB
-        const totalMemoryMB = require('os').totalmem() / 1024 / 1024;
+        const totalMemoryMB = totalmem() / 1024 / 1024;
         const memoryMB = (memory / 100) * totalMemoryMB;
 
         processes.push({
