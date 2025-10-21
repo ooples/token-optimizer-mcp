@@ -32,12 +32,11 @@ export class CacheEngine {
     misses: 0,
   };
 
-  constructor(
-    dbPath?: string,
-    maxMemoryItems: number = 1000
-  ) {
+  constructor(dbPath?: string, maxMemoryItems: number = 1000) {
     // Use user-provided path, environment variable, or default to ~/.token-optimizer-cache
-    const defaultCacheDir = process.env.TOKEN_OPTIMIZER_CACHE_DIR || path.join(os.homedir(), '.token-optimizer-cache');
+    const defaultCacheDir =
+      process.env.TOKEN_OPTIMIZER_CACHE_DIR ||
+      path.join(os.homedir(), '.token-optimizer-cache');
     const cacheDir = dbPath ? path.dirname(dbPath) : defaultCacheDir;
 
     // Ensure cache directory exists
@@ -133,7 +132,9 @@ export class CacheEngine {
     const stmt = this.db.prepare(`
       SELECT value, hit_count FROM cache WHERE key = ?
     `);
-    const row = stmt.get(key) as { value: string; hit_count: number } | undefined;
+    const row = stmt.get(key) as
+      | { value: string; hit_count: number }
+      | undefined;
 
     if (row) {
       this.stats.hits++;
@@ -151,7 +152,12 @@ export class CacheEngine {
   /**
    * Set a value in cache
    */
-  set(key: string, value: string, originalSize: number, compressedSize: number): void {
+  set(
+    key: string,
+    value: string,
+    originalSize: number,
+    compressedSize: number
+  ): void {
     const now = Date.now();
 
     const stmt = this.db.prepare(`
@@ -230,7 +236,9 @@ export class CacheEngine {
    */
   evictLRU(maxSizeBytes: number): number {
     // Get keys to keep (most recently used) using a running total
-    const keysToKeep = this.db.prepare(`
+    const keysToKeep = this.db
+      .prepare(
+        `
       WITH ranked AS (
         SELECT
           key,
@@ -240,7 +248,9 @@ export class CacheEngine {
       )
       SELECT key FROM ranked
       WHERE running_total <= ?
-    `).all(maxSizeBytes) as { key: string }[];
+    `
+      )
+      .all(maxSizeBytes) as { key: string }[];
 
     if (keysToKeep.length === 0) {
       // If no keys fit in the limit, keep none and delete all
@@ -256,11 +266,11 @@ export class CacheEngine {
       DELETE FROM cache WHERE key NOT IN (${placeholders})
     `);
 
-    const result = stmt.run(...keysToKeep.map(k => k.key));
+    const result = stmt.run(...keysToKeep.map((k) => k.key));
 
     // Remove deleted entries from memory cache
     for (const key of Array.from(this.memoryCache.keys())) {
-      if (!keysToKeep.some(k => k.key === key)) {
+      if (!keysToKeep.some((k) => k.key === key)) {
         this.memoryCache.delete(key);
       }
     }

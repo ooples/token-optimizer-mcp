@@ -18,7 +18,7 @@ export class MetricsAdapter implements IMetrics {
   recordSummarization(metrics: SummarizationMetrics): void {
     const record: SummarizationRecord = {
       ...metrics,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     this.summarizations.push(record);
@@ -38,8 +38,8 @@ export class MetricsAdapter implements IMetrics {
       outputTokens: metrics.summaryTokens,
       savedTokens: metrics.originalTokens - metrics.summaryTokens,
       metadata: {
-        compressionRatio: metrics.compressionRatio
-      }
+        compressionRatio: metrics.compressionRatio,
+      },
     });
   }
 
@@ -54,7 +54,7 @@ export class MetricsAdapter implements IMetrics {
         totalSummarizations: 0,
         averageCompressionRatio: 0,
         totalTokensSaved: 0,
-        averageLatency: 0
+        averageLatency: 0,
       };
     }
 
@@ -66,13 +66,17 @@ export class MetricsAdapter implements IMetrics {
       (sum, s) => sum + (s.originalTokens - s.summaryTokens),
       0
     );
-    const totalLatency = this.summarizations.reduce((sum, s) => sum + s.latency, 0);
+    const totalLatency = this.summarizations.reduce(
+      (sum, s) => sum + s.latency,
+      0
+    );
 
     return {
       totalSummarizations: this.summarizations.length,
-      averageCompressionRatio: totalCompressionRatio / this.summarizations.length,
+      averageCompressionRatio:
+        totalCompressionRatio / this.summarizations.length,
       totalTokensSaved,
-      averageLatency: totalLatency / this.summarizations.length
+      averageLatency: totalLatency / this.summarizations.length,
     };
   }
 }

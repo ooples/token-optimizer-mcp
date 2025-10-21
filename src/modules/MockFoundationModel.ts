@@ -1,4 +1,7 @@
-import { IFoundationModel, GenerationOptions } from '../interfaces/IFoundationModel.js';
+import {
+  IFoundationModel,
+  GenerationOptions,
+} from '../interfaces/IFoundationModel.js';
 
 /**
  * Mock foundation model for testing and demonstration
@@ -11,12 +14,17 @@ export class MockFoundationModel implements IFoundationModel {
     this.modelName = modelName;
   }
 
-  async generate(prompt: string, _options?: GenerationOptions): Promise<string> {
+  async generate(
+    prompt: string,
+    _options?: GenerationOptions
+  ): Promise<string> {
     // Simple mock implementation that shortens text
     // In production, this would call actual LLM APIs
 
     // Extract the text to summarize from the prompt
-    const textMatch = prompt.match(/Text to summarize:\n([\s\S]*?)\n\nSummary:/);
+    const textMatch = prompt.match(
+      /Text to summarize:\n([\s\S]*?)\n\nSummary:/
+    );
     if (!textMatch) {
       return 'Unable to generate summary';
     }
@@ -24,7 +32,9 @@ export class MockFoundationModel implements IFoundationModel {
     const textToSummarize = textMatch[1];
 
     // Simple summarization: take first and last sentences and key phrases
-    const sentences = textToSummarize.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const sentences = textToSummarize
+      .split(/[.!?]+/)
+      .filter((s) => s.trim().length > 0);
 
     if (sentences.length === 0) {
       return 'Empty content';

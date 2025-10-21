@@ -37,7 +37,9 @@ export interface SessionLogData {
  * - Returns empty arrays/zeros if file is empty
  * - Uses streaming for memory efficiency on large logs
  */
-export async function parseSessionLog(jsonlFilePath: string): Promise<SessionLogData> {
+export async function parseSessionLog(
+  jsonlFilePath: string
+): Promise<SessionLogData> {
   const operations: Operation[] = [];
   let systemReminderTokens = 0;
   let toolTokens = 0;
@@ -62,11 +64,12 @@ export async function parseSessionLog(jsonlFilePath: string): Promise<SessionLog
           toolName: event.toolName,
           tokens,
           // Normalize metadata to string
-          metadata: typeof event.metadata === 'string'
-            ? event.metadata
-            : event.metadata !== undefined
-              ? JSON.stringify(event.metadata)
-              : '',
+          metadata:
+            typeof event.metadata === 'string'
+              ? event.metadata
+              : event.metadata !== undefined
+                ? JSON.stringify(event.metadata)
+                : '',
         });
         toolTokens += tokens;
       }

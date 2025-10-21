@@ -1434,7 +1434,10 @@ export class CacheWarmupTool extends EventEmitter {
     if (!timeout) return promise;
 
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Operation timed out')), timeout);
+      const timer = setTimeout(
+        () => reject(new Error('Operation timed out')),
+        timeout
+      );
 
       promise
         .then((result) => {

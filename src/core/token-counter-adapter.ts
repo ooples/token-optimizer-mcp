@@ -2,7 +2,10 @@
  * Adapter to make TokenCounter implement ITokenCounter interface
  */
 
-import { ITokenCounter, TokenCountResult } from '../interfaces/ITokenCounter.js';
+import {
+  ITokenCounter,
+  TokenCountResult,
+} from '../interfaces/ITokenCounter.js';
 import { TokenCounter } from './token-counter.js';
 
 export class TokenCounterAdapter implements ITokenCounter {

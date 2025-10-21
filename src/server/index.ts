@@ -683,11 +683,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           // Error handling: Throw to let MCP wrap errors consistently
           if (!fs.existsSync(jsonlFilePath)) {
-            throw new Error(`JSONL log not found for session ${targetSessionId}`);
+            throw new Error(
+              `JSONL log not found for session ${targetSessionId}`
+            );
           }
 
           // Parse JSONL using shared utility (now async with streaming)
-          const { operations, toolTokens, systemReminderTokens } = await parseSessionLog(jsonlFilePath);
+          const { operations, toolTokens, systemReminderTokens } =
+            await parseSessionLog(jsonlFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
@@ -1077,7 +1080,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_write': {
-        const { path: filePath, content: fileContent, ...options } = args as any;
+        const {
+          path: filePath,
+          content: fileContent,
+          ...options
+        } = args as any;
         const result = await smartWrite.write(filePath, fileContent, options);
 
         return {
@@ -1143,7 +1150,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: 'text',
               text: JSON.stringify({
-                error: 'Tool not yet fully integrated - method signature needs verification',
+                error:
+                  'Tool not yet fully integrated - method signature needs verification',
                 tool: name,
               }),
             },

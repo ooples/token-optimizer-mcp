@@ -564,11 +564,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           // Error handling: Throw to let MCP wrap errors consistently
           if (!fs.existsSync(jsonlFilePath)) {
-            throw new Error(`JSONL log not found for session ${targetSessionId}`);
+            throw new Error(
+              `JSONL log not found for session ${targetSessionId}`
+            );
           }
 
           // Parse JSONL using shared utility (now async with streaming)
-          const { operations, toolTokens, systemReminderTokens } = await parseSessionLog(jsonlFilePath);
+          const { operations, toolTokens, systemReminderTokens } =
+            await parseSessionLog(jsonlFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
@@ -1119,7 +1122,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Error handling: Throwing errors here is consistent with MCP protocol
           // which wraps tool errors in structured error responses automatically
           if (!fs.existsSync(jsonlFilePath)) {
-            throw new Error(`JSONL log not found for session ${targetSessionId}`);
+            throw new Error(
+              `JSONL log not found for session ${targetSessionId}`
+            );
           }
 
           // Parse JSONL file
