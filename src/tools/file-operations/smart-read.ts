@@ -92,7 +92,7 @@ export class SmartReadTool {
 
     const {
       enableCache = true,
-      ttl = 3600,
+      ttl: _ttl = 3600,
       diffMode = true,
       maxSize = 100000, // 100KB default max
       chunkSize = 4000,
@@ -146,7 +146,7 @@ export class SmartReadTool {
     if (cachedData && diffMode) {
       try {
         const decompressed = decompress(
-          Buffer.from(cachedData, 'utf-8'),
+          Buffer.from(cachedData, 'base64'),
           'gzip'
         );
         const cachedContent = decompressed.toString();
@@ -238,8 +238,13 @@ export class SmartReadTool {
       tokensSaved = originalTokens - firstChunkTokens;
     }
     if (enableCache && !fromCache) {
-      const compressed = compress(rawContent, 'gzip');
-      this.cache.set(cacheKey, compressed.toString(), tokensSaved, ttl);
+      const result = compress(rawContent, 'gzip');
+      this.cache.set(
+        cacheKey,
+        result.compressed.toString('base64'),
+        result.originalSize,
+        result.compressedSize
+      );
     }
 
     // Calculate final metrics

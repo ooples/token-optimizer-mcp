@@ -66,8 +66,8 @@ jobs:
             echo "Error: dist directory not created"
             exit 1
           fi
-          if [ ! -f "dist/index.js" ]; then
-            echo "Error: dist/index.js not found"
+          if [ ! -f "dist/server/index.js" ]; then
+            echo "Error: dist/server/index.js not found"
             exit 1
           fi
           echo "Build artifacts verified successfully"

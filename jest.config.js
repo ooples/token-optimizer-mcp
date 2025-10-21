@@ -13,7 +13,7 @@ export default {
       },
     ],
   },
-  testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts'],
+  testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts', '**/*.bench.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/worktrees/', '/dist/'],
   collectCoverageFrom: [
     'src/**/*.ts',

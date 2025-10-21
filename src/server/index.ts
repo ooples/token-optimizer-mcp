@@ -20,6 +20,48 @@ import {
   getCacheWarmupTool,
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
+// File operations tools
+import {
+  getSmartReadTool,
+  SMART_READ_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-read.js';
+import {
+  getSmartWriteTool,
+  SMART_WRITE_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-write.js';
+import {
+  getSmartEditTool,
+  SMART_EDIT_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-edit.js';
+import {
+  getSmartGlobTool,
+  SMART_GLOB_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-glob.js';
+import {
+  getSmartGrepTool,
+  SMART_GREP_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-grep.js';
+// TODO: Re-enable after fixing method signatures
+// import {
+//   getSmartDiffTool,
+//   SMART_DIFF_TOOL_DEFINITION,
+// } from '../tools/file-operations/smart-diff.js';
+// import {
+//   getSmartBranchTool,
+//   SMART_BRANCH_TOOL_DEFINITION,
+// } from '../tools/file-operations/smart-branch.js';
+// import {
+//   getSmartMergeTool,
+//   SMART_MERGE_TOOL_DEFINITION,
+// } from '../tools/file-operations/smart-merge.js';
+// import {
+//   getSmartStatusTool,
+//   SMART_STATUS_TOOL_DEFINITION,
+// } from '../tools/file-operations/smart-status.js';
+// import {
+//   getSmartLogTool,
+//   SMART_LOG_TOOL_DEFINITION,
+// } from '../tools/file-operations/smart-log.js';
 import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
 import path from 'path';
@@ -48,6 +90,19 @@ function cacheUncompressed(key: string, text: string, size: number): void {
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
+
+// Initialize file operations tools
+const smartRead = getSmartReadTool(cache, tokenCounter, metrics);
+const smartWrite = getSmartWriteTool(cache, tokenCounter, metrics);
+const smartEdit = getSmartEditTool(cache, tokenCounter, metrics);
+const smartGlob = getSmartGlobTool(cache, tokenCounter, metrics);
+const smartGrep = getSmartGrepTool(cache, tokenCounter, metrics);
+// TODO: Fix method signatures for these tools before enabling
+// const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
+// const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
+// const smartMerge = getSmartMergeTool(cache, tokenCounter, metrics);
+// const smartStatus = getSmartStatusTool(cache, tokenCounter, metrics);
+// const smartLog = getSmartLogTool(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
@@ -267,6 +322,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       PREDICTIVE_CACHE_TOOL_DEFINITION,
       CACHE_WARMUP_TOOL_DEFINITION,
+      // File operations tools
+      SMART_READ_TOOL_DEFINITION,
+      SMART_WRITE_TOOL_DEFINITION,
+      SMART_EDIT_TOOL_DEFINITION,
+      SMART_GLOB_TOOL_DEFINITION,
+      SMART_GREP_TOOL_DEFINITION,
+      // TODO: Re-enable after fixing method signatures
+      // SMART_DIFF_TOOL_DEFINITION,
+      // SMART_BRANCH_TOOL_DEFINITION,
+      // SMART_MERGE_TOOL_DEFINITION,
+      // SMART_STATUS_TOOL_DEFINITION,
+      // SMART_LOG_TOOL_DEFINITION,
     ],
   };
 });
@@ -991,6 +1058,97 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(result, null, 2),
             },
           ],
+        };
+      }
+
+      // File operations tools
+      case 'smart_read': {
+        const { path: filePath, ...options } = args as any;
+        const result = await smartRead.read(filePath, options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_write': {
+        const { path: filePath, content: fileContent, ...options } = args as any;
+        const result = await smartWrite.write(filePath, fileContent, options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_edit': {
+        const { path: filePath, operations: editOps, ...options } = args as any;
+        const result = await smartEdit.edit(filePath, editOps, options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_glob': {
+        const { pattern, ...options } = args as any;
+        const result = await smartGlob.glob(pattern, options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_grep': {
+        const { pattern, ...options } = args as any;
+        const result = await smartGrep.grep(pattern, options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      // TODO: Fix these tool handlers - need to verify method signatures
+      case 'smart_diff':
+      case 'smart_branch':
+      case 'smart_merge':
+      case 'smart_status':
+      case 'smart_log': {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'Tool not yet fully integrated - method signature needs verification',
+                tool: name,
+              }),
+            },
+          ],
+          isError: true,
         };
       }
 
