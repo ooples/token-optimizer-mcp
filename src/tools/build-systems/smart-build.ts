@@ -375,9 +375,9 @@ export class SmartBuild {
 
     const dataToCache = JSON.stringify(toCache);
     const originalSize = this.estimateOriginalOutputSize(result);
-    const compressedSize = dataToCache.length;
+    const compactSize = dataToCache.length;
 
-    this.cache.set(key, dataToCache, originalSize, compressedSize);
+    this.cache.set(key, dataToCache, originalSize, compactSize);
   }
 
   /**

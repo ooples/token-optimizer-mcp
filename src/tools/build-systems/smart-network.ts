@@ -666,11 +666,14 @@ export class SmartNetwork {
    */
   private cacheResult(key: string, result: NetworkResult): void {
     const cacheData = { ...result, cachedAt: Date.now() };
+    const dataToCache = JSON.stringify(cacheData);
+    const originalSize = this.estimateOriginalOutputSize(result);
+    const compactSize = dataToCache.length;
     this.cache.set(
       this.cacheNamespace + ':' + key,
-      JSON.stringify(cacheData),
-      3600,
-      0
+      dataToCache,
+      originalSize,
+      compactSize
     );
   }
 

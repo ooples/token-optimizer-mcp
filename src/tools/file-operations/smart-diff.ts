@@ -218,12 +218,9 @@ export class SmartDiffTool {
 
       // Cache result
       if (opts.useCache) {
-        this.cache.set(
-          cacheKey,
-          JSON.stringify(result) as any,
-          originalTokens,
-          resultTokens
-        );
+        const resultString = JSON.stringify(result);
+        const resultSize = Buffer.from(resultString, 'utf-8').length;
+        this.cache.set(cacheKey, resultString, resultSize, resultSize);
       }
 
       // Record metrics

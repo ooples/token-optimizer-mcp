@@ -17,7 +17,9 @@ export class TokenOptimizer {
 
   async optimize(prompt: string): Promise<OptimizationResult> {
     let current = prompt;
-    const originalTokenResult = await Promise.resolve(this.tokenCounter.count(prompt));
+    const originalTokenResult = await Promise.resolve(
+      this.tokenCounter.count(prompt)
+    );
     const originalTokens = originalTokenResult.tokens;
     const appliedModules: string[] = [];
 
@@ -28,7 +30,9 @@ export class TokenOptimizer {
       appliedModules.push(module.name);
     }
 
-    const optimizedTokenResult = await Promise.resolve(this.tokenCounter.count(current));
+    const optimizedTokenResult = await Promise.resolve(
+      this.tokenCounter.count(current)
+    );
     const optimizedTokens = optimizedTokenResult.tokens;
 
     return {
@@ -36,7 +40,7 @@ export class TokenOptimizer {
       originalTokens,
       optimizedTokens,
       savings: originalTokens - optimizedTokens,
-      appliedModules
+      appliedModules,
     };
   }
 }
