@@ -3,7 +3,7 @@ name: Codex Auto-Fix on Failure
 on:
   workflow_run:
     # Trigger on core validation workflows; exclude Release to avoid branch-protected pushes
-    workflows: ["CI", "Quality Gates"]
+    workflows: ["CI", "Quality Gates", "Commit Lint"]
     types: [completed]
 
 permissions:
