@@ -19,7 +19,10 @@ function once(proc, predicate, timeoutMs = 5000) {
             resolve({ obj, raw: chunks.join('') });
             return;
           }
-        } catch {}
+        } catch (err) {
+          // Ignore partial JSON chunks; optionally log for diagnosis
+          // console.error(`Failed to parse JSON line: "${line}"`, err);
+        }
       }
     };
     const onErr = (d) => chunks.push(d.toString());

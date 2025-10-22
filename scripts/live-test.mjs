@@ -13,8 +13,10 @@ const { compressed: compressedB64, compressedSize, percentSaved: bytePercentSave
 const compBytes = Buffer.byteLength(compressedB64, 'base64');
 const keyTokens = tc.count(key).tokens;
 const savedIfExternal = origTokens - keyTokens; // externalized storage model
+// Round percentage to one decimal place by rounding at 0.1% precision
+const PERCENTAGE_PRECISION = 1000; // ratio * 1000 => percent * 10
 const percentSaved = origTokens > 0
-  ? Math.round((savedIfExternal / origTokens) * 1000) / 10
+  ? Math.round((savedIfExternal / origTokens) * PERCENTAGE_PRECISION) / 10
   : 0;
 
 console.log(
