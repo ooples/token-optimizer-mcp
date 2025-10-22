@@ -13,7 +13,9 @@ const { compressed: compressedB64, compressedSize, percentSaved: bytePercentSave
 const compBytes = Buffer.byteLength(compressedB64, 'base64');
 const keyTokens = tc.count(key).tokens;
 const savedIfExternal = origTokens - keyTokens; // externalized storage model
-const percentSaved = Math.round((savedIfExternal / origTokens) * 1000) / 10;
+const percentSaved = origTokens > 0
+  ? Math.round((savedIfExternal / origTokens) * 1000) / 10
+  : 0;
 
 console.log(
   JSON.stringify(

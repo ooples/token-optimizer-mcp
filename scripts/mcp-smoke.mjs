@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 
 function sendJson(proc, msg) {
-  proc.stdin.write(JSON.stringify(msg) + "\n");
+  proc.stdin.write(`${JSON.stringify(msg)}\n`);
 }
 
 function once(proc, predicate, timeoutMs = 5000) {
@@ -82,4 +82,3 @@ main().catch((e) => {
   console.error(e.stack || e.message || String(e));
   process.exit(1);
 });
-
