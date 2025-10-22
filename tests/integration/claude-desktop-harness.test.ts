@@ -249,9 +249,9 @@ describe('Claude Desktop Integration Harness', () => {
 
       it('should provide token savings metrics', () => {
         const original = 'Long text '.repeat(100);
-        const compressed = 'Short';
+        const contextTokens = 2; // Simulating metadata or small summary
 
-        const savings = tokenCounter.calculateSavings(original, compressed);
+        const savings = tokenCounter.calculateSavings(original, contextTokens);
 
         expect(savings.tokensSaved).toBeGreaterThan(0);
         expect(savings.percentSaved).toBeGreaterThan(0);

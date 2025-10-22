@@ -1,0 +1,531 @@
+
+> token-optimizer-mcp@2.4.0 lint
+> eslint src --ext .ts,.js
+
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\analysis\project-analyzer.ts
+   76:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  422:22  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\core\cache-engine.ts
+  69:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  77:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  89:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\server\index-backup.ts
+  1322:22  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\server\index.ts
+  1110:9   warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+  1113:22  warning  Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\server\session-log-parser.ts
+  82:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\server\web-server.ts
+  186:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  319:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\advanced-caching\cache-analytics.ts
+   482:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  1966:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1989:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\advanced-caching\cache-benchmark.ts
+    48:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   369:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   659:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   815:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1365:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1381:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1394:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\advanced-caching\cache-compression.ts
+    90:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   107:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   197:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   224:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   225:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   226:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   262:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   263:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   269:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   271:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   276:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   277:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   740:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   918:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   973:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1015:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  1039:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  1047:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1050:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1079:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1081:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1085:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1085:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1091:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1110:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1112:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1121:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1121:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1127:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1142:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1229:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1234:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  1249:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1259:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  1269:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\advanced-caching\cache-replication.ts
+   103:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   883:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   946:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1203:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1224:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\advanced-caching\predictive-cache.ts
+  573:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-api-fetch.ts
+   79:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  337:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  440:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  578:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-cache-api.ts
+   24:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   25:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   29:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   60:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   97:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  712:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  765:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  828:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-database.ts
+    81:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   119:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   483:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   484:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  1438:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-migration.ts
+  501:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-orm.ts
+  170:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  431:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  433:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  515:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  516:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  571:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  572:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  594:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  638:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  639:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  659:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  687:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  691:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  775:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  792:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-rest.ts
+   55:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   60:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  148:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  149:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  150:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  151:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  156:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  158:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  159:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  279:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  356:66  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  384:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  385:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  387:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  390:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  391:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  391:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  397:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  450:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  574:73  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  581:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  624:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  697:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  714:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-schema.ts
+  918:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\api-database\smart-websocket.ts
+   52:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:72  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  208:66  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  263:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  296:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  364:69  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  396:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  429:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  492:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  533:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  623:68  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  640:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  656:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  661:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-build.ts
+  360:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-docker.ts
+  569:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-install.ts
+  181:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  404:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  462:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-lint.ts
+  255:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  316:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  351:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-logs.ts
+  413:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  684:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-network.ts
+  657:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-processes.ts
+  385:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-system-metrics.ts
+  597:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-test.ts
+  323:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\build-systems\smart-typecheck.ts
+  411:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-ast-grep.ts
+  494:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  551:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  689:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  699:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-dependencies.ts
+   447:16  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   463:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   483:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   492:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   504:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   575:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   688:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  1080:75  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1205:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-exports.ts
+  489:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  538:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-imports.ts
+  803:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-refactor.ts
+  270:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  277:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  506:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-security.ts
+  1200:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-symbols.ts
+  657:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\code-analysis\smart-typescript.ts
+  901:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\configuration\smart-env.ts
+  443:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  710:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\configuration\smart-package-json.ts
+  429:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  455:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  464:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  503:16  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  514:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  523:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  625:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  652:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  668:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  683:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  695:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  742:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  752:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  764:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  772:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  792:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  865:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\configuration\smart-tsconfig.ts
+  358:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\dashboard-monitoring\alert-manager.ts
+    94:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   143:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   163:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   993:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1006:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1007:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1045:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\dashboard-monitoring\custom-widget.ts
+   54:20  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  172:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  511:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  842:65  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  843:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  946:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  962:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  963:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\dashboard-monitoring\data-visualizer.ts
+    34:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   169:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   170:9   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   173:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   381:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   813:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   845:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   848:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   883:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   903:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   915:70  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   916:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1361:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1364:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1413:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1483:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1507:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1508:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1551:11  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1552:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\dashboard-monitoring\log-dashboard.ts
+   114:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   124:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   145:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   815:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   827:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   862:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+   893:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   920:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   951:18  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1000:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1089:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1108:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1120:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1127:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1137:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\dashboard-monitoring\metric-collector.ts
+   654:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   932:67  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1010:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1019:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1110:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1130:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1150:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1170:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1185:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1194:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1206:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\dashboard-monitoring\monitoring-integration.ts
+   66:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   68:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  154:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  326:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  432:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  546:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  558:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  578:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  586:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  594:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  604:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-branch.ts
+  323:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  337:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  348:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  426:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  443:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  471:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  499:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-diff.ts
+  288:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  302:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  373:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  453:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-glob.ts
+  221:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  256:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  259:20  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-grep.ts
+  211:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  269:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  284:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  452:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-log.ts
+  281:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  295:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  306:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  389:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  466:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  491:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  507:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-merge.ts
+  324:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  338:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  352:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  430:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  446:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  478:20  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  487:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  517:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  543:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  552:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  561:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  562:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  578:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  630:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-status.ts
+  208:20  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  227:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  338:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  349:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  382:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  582:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\file-operations\smart-write.ts
+  127:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  195:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  362:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  459:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  471:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\intelligence\anomaly-explainer.ts
+   54:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   61:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  275:18  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  330:14  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  991:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\intelligence\knowledge-graph.ts
+    50:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+    56:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+    64:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+    99:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   100:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   125:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   184:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   190:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   320:75  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   346:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   357:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   374:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   416:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   433:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   503:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   597:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   651:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   732:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   764:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   791:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   816:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   864:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   875:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   881:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1019:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1061:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1062:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1063:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1070:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1534:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1535:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1538:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1552:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1567:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1568:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1571:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1624:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1625:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1628:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1646:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1647:12  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  1650:6   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\intelligence\sentiment-analysis.ts
+  453:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\output-formatting\smart-pretty.ts
+   578:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+   841:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+   931:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+   966:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1007:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\system-operations\smart-cron.ts
+   360:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+   391:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+   471:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+   480:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+   600:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1013:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1038:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1319:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\system-operations\smart-process.ts
+  235:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  340:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\system-operations\smart-service.ts
+  229:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  363:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  399:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  751:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  864:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  877:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  899:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\yolan\source\repos\token-optimizer-mcp\src\tools\system-operations\smart-user.ts
+  1068:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1076:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1229:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1246:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1269:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1272:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1342:18  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  1401:16  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 399 problems (0 errors, 399 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+

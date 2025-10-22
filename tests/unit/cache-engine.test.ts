@@ -182,6 +182,43 @@ describe('CacheEngine', () => {
       expect(stats.totalMisses).toBe(0);
       expect(stats.hitRate).toBe(0);
     });
+
+    it('should persist hit rate across cache engine restarts', () => {
+      // Set up initial cache with hits
+      cache.set('key1', 'value1', 6, 6);
+      cache.set('key2', 'value2', 6, 6);
+      cache.get('key1'); // Hit
+      cache.get('key1'); // Hit
+      cache.get('key2'); // Hit
+
+      const stats1 = cache.getStats();
+      expect(stats1.totalHits).toBe(3);
+      expect(stats1.hitRate).toBeGreaterThan(0);
+
+      // Close the first cache instance
+      cache.close();
+
+      // Create a new cache instance using the same database
+      const cache2 = new CacheEngine(testDbPath, 100);
+
+      // Hit count should persist from database
+      const stats2 = cache2.getStats();
+      expect(stats2.totalHits).toBeGreaterThanOrEqual(3);
+
+      // Make a new request to generate hits + misses for hit rate calculation
+      cache2.get('key1'); // Hit
+      cache2.get('nonexistent'); // Miss
+
+      const stats3 = cache2.getStats();
+      expect(stats3.totalHits).toBeGreaterThanOrEqual(4);
+      expect(stats3.hitRate).toBeGreaterThan(0); // Now we have hits and misses
+
+      // Clean up
+      cache2.close();
+
+      // Restart cache for cleanup (will be closed in afterEach)
+      cache = new CacheEngine(testDbPath, 100);
+    });
   });
 
   describe('Memory and Disk Cache Interaction', () => {
@@ -294,6 +331,50 @@ describe('CacheEngine', () => {
       // Recently accessed should still be there
       const stats = cache.getStats();
       expect(stats.totalEntries).toBeLessThan(10);
+    });
+
+    it('should not evict recently accessed entries during LRU (race condition fix)', async () => {
+      // Add two entries - one old, one that will be accessed
+      cache.set('old-key', 'old-value', 10, 10);
+      cache.set('key1', 'value1', 10, 10);
+
+      // Wait 100ms to make them both slightly old
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Access key1 just before eviction (updates last_accessed)
+      cache.get('key1');
+
+      // Immediately trigger eviction to keep only 10 bytes
+      // Without the fix, key1 could be deleted if it was included in the
+      // initial SELECT as "old" but was accessed before the DELETE
+      const evicted = cache.evictLRU(10);
+
+      // key1 should still exist because it was just accessed (within 1-second safety margin)
+      const value = cache.get('key1');
+      expect(value).toBe('value1');
+
+      // old-key should have been evicted (or might remain if it was selected first)
+      // This test verifies that recent access protects an entry
+    });
+
+    it('should evict entries older than 1 second safety margin', async () => {
+      // Add entry
+      cache.set('old-key', 'old-value', 10, 5);
+
+      // Wait longer than the 1-second safety margin
+      await new Promise(resolve => setTimeout(resolve, 1100));
+
+      // Add another entry (will be recent)
+      cache.set('new-key', 'new-value', 10, 5);
+
+      // Evict to very small size (should only keep new-key)
+      cache.evictLRU(5);
+
+      // Old key should be evicted
+      expect(cache.get('old-key')).toBeNull();
+
+      // New key should still exist
+      expect(cache.get('new-key')).toBe('new-value');
     });
   });
 
