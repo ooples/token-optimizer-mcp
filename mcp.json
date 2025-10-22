@@ -23,10 +23,9 @@
   "config": {
     "mcpServers": {
       "token-optimizer": {
-        "command": "npx",
+        "command": "node",
         "args": [
-          "-y",
-          "token-optimizer-mcp"
+          "./dist/server/index.js"
         ],
         "env": {
           "TOKEN_OPTIMIZER_CACHE_DIR": "${HOME}/.token-optimizer-cache"

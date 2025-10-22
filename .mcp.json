@@ -52,12 +52,9 @@
       ]
     },
     "token-optimizer": {
-      "command": "cmd",
+      "command": "node",
       "args": [
-        "/c",
-        "npx",
-        "-y",
-        "token-optimizer-mcp@latest"
+        "./dist/server/index.js"
       ],
       "env": {
         "TOKEN_OPTIMIZER_CACHE_DIR": "${HOME}/.token-optimizer-cache"
