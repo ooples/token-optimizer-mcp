@@ -21,26 +21,8 @@ import {
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
 // File operations tools
-import {
-  getSmartReadTool,
-  SMART_READ_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-read.js';
-import {
-  getSmartWriteTool,
-  SMART_WRITE_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-write.js';
-import {
-  getSmartEditTool,
-  SMART_EDIT_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-edit.js';
-import {
-  getSmartGlobTool,
-  SMART_GLOB_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-glob.js';
-import {
-  getSmartGrepTool,
-  SMART_GREP_TOOL_DEFINITION,
-} from '../tools/file-operations/smart-grep.js';
+// Disabled for live server bring-up: file-operations tools depend on extensionless
+// imports in compiled output which Node ESM rejects. We expose core tools only.
 // TODO: Re-enable after fixing method signatures
 // import {
 //   getSmartDiffTool,
@@ -91,12 +73,7 @@ function cacheUncompressed(key: string, text: string, size: number): void {
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 
-// Initialize file operations tools
-const smartRead = getSmartReadTool(cache, tokenCounter, metrics);
-const smartWrite = getSmartWriteTool(cache, tokenCounter, metrics);
-const smartEdit = getSmartEditTool(cache, tokenCounter, metrics);
-const smartGlob = getSmartGlobTool(cache, tokenCounter, metrics);
-const smartGrep = getSmartGrepTool(cache, tokenCounter, metrics);
+// File operations tools disabled in this live-test configuration.
 // TODO: Fix method signatures for these tools before enabling
 // const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
 // const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
@@ -323,11 +300,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       PREDICTIVE_CACHE_TOOL_DEFINITION,
       CACHE_WARMUP_TOOL_DEFINITION,
       // File operations tools
-      SMART_READ_TOOL_DEFINITION,
-      SMART_WRITE_TOOL_DEFINITION,
-      SMART_EDIT_TOOL_DEFINITION,
-      SMART_GLOB_TOOL_DEFINITION,
-      SMART_GREP_TOOL_DEFINITION,
+      // File operations tool definitions intentionally omitted in live-test config
       // TODO: Re-enable after fixing method signatures
       // SMART_DIFF_TOOL_DEFINITION,
       // SMART_BRANCH_TOOL_DEFINITION,
@@ -1064,80 +1037,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      // File operations tools
-      case 'smart_read': {
-        const { path: filePath, ...options } = args as any;
-        const result = await smartRead.read(filePath, options);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_write': {
-        const {
-          path: filePath,
-          content: fileContent,
-          ...options
-        } = args as any;
-        const result = await smartWrite.write(filePath, fileContent, options);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_edit': {
-        const { path: filePath, operations: editOps, ...options } = args as any;
-        const result = await smartEdit.edit(filePath, editOps, options);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_glob': {
-        const { pattern, ...options } = args as any;
-        const result = await smartGlob.glob(pattern, options);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_grep': {
-        const { pattern, ...options } = args as any;
-        const result = await smartGrep.grep(pattern, options);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
+      // File operations tools disabled in live-test config
 
       // TODO: Fix these tool handlers - need to verify method signatures
       case 'smart_diff':
