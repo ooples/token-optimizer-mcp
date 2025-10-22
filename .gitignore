@@ -38,3 +38,4 @@ coverage/
 
 # MCP registry tokens (secrets)
 .mcpregistry_github_token
+worktrees/
