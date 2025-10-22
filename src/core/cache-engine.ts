@@ -107,8 +107,8 @@ export class CacheEngine {
 
         // Try to close the database if it was partially opened
         try {
-          if ((this).db) {
-            (this).db.close();
+          if (this.db) {
+            this.db.close();
           }
         } catch (closeError) {
           // Ignore close errors
