@@ -1,7 +1,7 @@
 {
   "name": "token-optimizer-mcp",
   "version": "0.2.0",
-  "description": "Intelligent token optimization for Claude Code - achieving 95%+ token reduction through caching, compression, and smart tool intelligence",
+  "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
   "author": {
     "name": "ooples",
     "url": "https://github.com/ooples"
@@ -175,10 +175,10 @@
     }
   ],
   "metrics": {
-    "tokenReduction": "95%+",
-    "cacheHitRate": "85-95%",
-    "compressionRatio": "10:1 average",
+    "contextWindowSavings": "Up to 100% for cached content",
+    "cacheHitRate": "80%+ in typical usage",
+    "compressionRatio": "2-82x depending on content",
     "toolCount": "80+",
-    "responseTime": "<100ms"
+    "responseTime": "<10ms for cache operations"
   }
 }

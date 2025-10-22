@@ -2,7 +2,7 @@
   "name": "token-optimizer-mcp",
   "version": "2.4.0",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
-  "description": "Intelligent token optimization for Claude Code - achieving 95%+ token reduction through caching, compression, and smart tool intelligence",
+  "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
   "main": "dist/server/index.js",
   "types": "dist/server/index.d.ts",
   "bin": {
@@ -117,6 +117,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "async-mutex": "^0.5.0",
     "better-sqlite3": "^12.4.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",

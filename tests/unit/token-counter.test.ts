@@ -191,11 +191,11 @@ describe('TokenCounter', () => {
   describe('Token Savings Calculation', () => {
     it('should calculate savings correctly', () => {
       const original = 'This is a long text that will be compressed.';
-      const compressed = 'Short text.';
+      const contextTokens = 3; // Simulating metadata or summary
 
-      const savings = tokenCounter.calculateSavings(original, compressed);
+      const savings = tokenCounter.calculateSavings(original, contextTokens);
 
-      expect(savings.originalTokens).toBeGreaterThan(savings.compressedTokens);
+      expect(savings.originalTokens).toBeGreaterThan(savings.contextTokens);
       expect(savings.tokensSaved).toBeGreaterThan(0);
       expect(savings.percentSaved).toBeGreaterThan(0);
       expect(savings.percentSaved).toBeLessThanOrEqual(100);
@@ -203,37 +203,39 @@ describe('TokenCounter', () => {
 
     it('should handle no savings', () => {
       const text = 'Same text.';
+      const originalTokens = tokenCounter.count(text).tokens;
 
-      const savings = tokenCounter.calculateSavings(text, text);
+      const savings = tokenCounter.calculateSavings(text, originalTokens);
 
-      expect(savings.originalTokens).toBe(savings.compressedTokens);
+      expect(savings.originalTokens).toBe(savings.contextTokens);
       expect(savings.tokensSaved).toBe(0);
       expect(savings.percentSaved).toBe(0);
     });
 
     it('should handle negative savings (expansion)', () => {
       const original = 'Short';
-      const expanded = 'This is much longer than the original text.';
+      const originalTokens = tokenCounter.count(original).tokens;
+      const expandedTokens = 15; // Simulating expansion
 
-      const savings = tokenCounter.calculateSavings(original, expanded);
+      const savings = tokenCounter.calculateSavings(original, expandedTokens);
 
-      expect(savings.originalTokens).toBeLessThan(savings.compressedTokens);
+      expect(savings.originalTokens).toBeLessThan(savings.contextTokens);
       expect(savings.tokensSaved).toBeLessThan(0);
       expect(savings.percentSaved).toBeLessThan(0);
     });
 
     it('should calculate 100% savings for empty result', () => {
       const original = 'Original text';
-      const compressed = '';
+      const contextTokens = 0; // External caching - 100% savings
 
-      const savings = tokenCounter.calculateSavings(original, compressed);
+      const savings = tokenCounter.calculateSavings(original, contextTokens);
 
-      expect(savings.compressedTokens).toBe(0);
+      expect(savings.contextTokens).toBe(0);
       expect(savings.percentSaved).toBeCloseTo(100, 0);
     });
 
     it('should handle empty original', () => {
-      const savings = tokenCounter.calculateSavings('', 'result');
+      const savings = tokenCounter.calculateSavings('', 5);
 
       expect(savings.originalTokens).toBe(0);
       expect(savings.percentSaved).toBe(0);
@@ -252,9 +254,9 @@ describe('TokenCounter', () => {
         }
       `;
 
-      const compressed = `interface CacheEntry{key:string;value:string;compressedSize:number;originalSize:number;hitCount:number;createdAt:number;lastAccessedAt:number}`;
+      const contextTokens = 10; // Simulating metadata
 
-      const savings = tokenCounter.calculateSavings(original, compressed);
+      const savings = tokenCounter.calculateSavings(original, contextTokens);
 
       expect(savings.tokensSaved).toBeGreaterThan(0);
       expect(savings.percentSaved).toBeGreaterThan(0);
