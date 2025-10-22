@@ -1,0 +1,166 @@
+src/tools/advanced-caching/cache-compression.ts(486,51): error TS2322: Type 'string' is not assignable to type 'Uint8Array<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1023,7): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1044,9): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1284,7): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-compression.ts(1304,9): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/advanced-caching/cache-partition.ts(237,37): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-api-fetch.ts(669,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-cache-api.ts(246,40): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(384,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(407,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(427,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(445,46): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(498,42): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/api-database/smart-cache-api.ts(882,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-graphql.ts(755,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-migration.ts(895,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-orm.ts(856,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-schema.ts(1166,5): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-sql.ts(694,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/api-database/smart-websocket.ts(712,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-build.ts(600,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-docker.ts(729,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-install.ts(596,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-lint.ts(610,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-logs.ts(875,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/build-systems/smart-network.ts(829,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-complexity.ts(746,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-dependencies.ts(782,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-dependencies.ts(853,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-dependencies.ts(976,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-dependencies.ts(1026,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-exports.ts(257,40): error TS2345: Argument of type 'TokenCountResult' is not assignable to parameter of type 'number'.
+src/tools/code-analysis/smart-exports.ts(265,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-exports.ts(266,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-exports.ts(825,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-imports.ts(275,40): error TS2345: Argument of type 'TokenCountResult' is not assignable to parameter of type 'number'.
+src/tools/code-analysis/smart-imports.ts(283,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-imports.ts(284,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-imports.ts(923,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-refactor.ts(234,5): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-refactor.ts(235,5): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/code-analysis/smart-refactor.ts(648,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-security.ts(1291,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-symbols.ts(711,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/code-analysis/smart-typescript.ts(915,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-config-read.ts(176,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+src/tools/configuration/smart-config-read.ts(177,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+src/tools/configuration/smart-config-read.ts(210,11): error TS2345: Argument of type 'Buffer<ArrayBufferLike>' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-config-read.ts(210,22): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/configuration/smart-config-read.ts(333,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(334,7): error TS2322: Type 'number | TokenCountResult' is not assignable to type 'number | undefined'.
+src/tools/configuration/smart-config-read.ts(357,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(358,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-config-read.ts(770,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-package-json.ts(1108,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/configuration/smart-tsconfig.ts(553,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(554,7): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/configuration/smart-tsconfig.ts(614,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/alert-manager.ts(362,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(430,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(492,79): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(524,85): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(685,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(766,82): error TS2345: Argument of type '"all"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(940,81): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1133,85): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1139,85): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1145,85): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1153,85): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1162,86): error TS2345: Argument of type '"alerts"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1174,86): error TS2345: Argument of type '"events"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1185,88): error TS2345: Argument of type '"channels"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/alert-manager.ts(1200,88): error TS2345: Argument of type '"silences"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/custom-widget.ts(228,43): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/data-visualizer.ts(437,25): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/data-visualizer.ts(465,9): error TS2322: Type 'string' is not assignable to type 'Buffer<ArrayBufferLike>'.
+src/tools/dashboard-monitoring/data-visualizer.ts(564,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(623,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(691,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(754,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/data-visualizer.ts(827,7): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/dashboard-monitoring/health-monitor.ts(1057,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1120,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/dashboard-monitoring/health-monitor.ts(1198,79): error TS2345: Argument of type '"graph"' is not assignable to parameter of type 'Encoding'.
+src/tools/dashboard-monitoring/health-monitor.ts(1235,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/file-operations/smart-branch.ts(250,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(265,11): error TS2345: Argument of type 'TokenCountResult' is not assignable to parameter of type 'number'.
+src/tools/file-operations/smart-branch.ts(276,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-branch.ts(593,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-edit.ts(159,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-edit.ts(182,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-edit.ts(200,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-edit.ts(201,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-edit.ts(236,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-edit.ts(254,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-edit.ts(255,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-edit.ts(471,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-glob.ts(258,9): error TS2322: Type 'number' is not assignable to type 'TokenCountResult'.
+src/tools/file-operations/smart-glob.ts(261,9): error TS2322: Type 'number' is not assignable to type 'TokenCountResult'.
+src/tools/file-operations/smart-glob.ts(276,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-glob.ts(277,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-glob.ts(303,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-glob.ts(429,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-grep.ts(274,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-grep.ts(278,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-grep.ts(282,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-grep.ts(480,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-log.ts(568,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-merge.ts(772,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-read.ts(125,7): error TS2322: Type 'string | null' is not assignable to type 'Buffer<ArrayBufferLike> | null'.
+src/tools/file-operations/smart-read.ts(377,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-status.ts(641,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/file-operations/smart-write.ts(166,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-write.ts(247,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-write.ts(265,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-write.ts(266,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/file-operations/smart-write.ts(527,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/intelligence/sentiment-analysis.ts(493,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(494,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(533,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/intelligence/sentiment-analysis.ts(546,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/output-formatting/smart-pretty.ts(510,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(517,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(792,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/output-formatting/smart-pretty.ts(799,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Buffer<ArrayBufferLike>'.
+src/tools/output-formatting/smart-pretty.ts(1338,33): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-cron.ts(288,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(325,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(570,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(715,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(844,28): error TS2345: Argument of type 'SchedulerType' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(919,79): error TS2345: Argument of type '`undefined:${string}` | `auto:${string}` | `cron:${string}` | `windows-task:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-cron.ts(955,66): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1076,7): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Record<string, unknown>'.
+src/tools/system-operations/smart-cron.ts(1132,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-cron.ts(1403,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-process.ts(159,11): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(201,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(249,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(274,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(290,38): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-process.ts(298,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(346,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(371,13): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(387,38): error TS2345: Argument of type 'Buffer<ArrayBuffer>' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-process.ts(395,9): error TS2322: Type 'TokenCountResult' is not assignable to type 'number'.
+src/tools/system-operations/smart-process.ts(591,50): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-service.ts(248,81): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-service.ts(476,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-service.ts(526,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-service.ts(579,83): error TS2345: Argument of type '`docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-service.ts(789,79): error TS2345: Argument of type '`undefined:${string}` | `docker:${string}` | `systemd:${string}` | `windows:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-service.ts(934,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.
+src/tools/system-operations/smart-user.ts(264,77): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(318,78): error TS2345: Argument of type '"include-system:undefined" | "include-system:false" | "include-system:true"' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(378,76): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(436,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(495,78): error TS2345: Argument of type '`${string}:${string}`' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(527,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(551,70): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(583,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(604,77): error TS2345: Argument of type 'string' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(636,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(658,81): error TS2345: Argument of type '"full"' is not assignable to parameter of type 'Encoding'.
+src/tools/system-operations/smart-user.ts(690,67): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/tools/system-operations/smart-user.ts(1486,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.

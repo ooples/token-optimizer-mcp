@@ -601,13 +601,13 @@ export class SmartPretty {
 
     // Cache the result (85% reduction with grammar compression)
     if (useCache) {
-      const compressed = compress(JSON.stringify(result), 'gzip');
+      const compressionResult = compress(JSON.stringify(result), 'gzip');
       const resultTokens = this.tokenCounter.count(highlightedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressed.toString(),
+        compressionResult.compressed.toString(),
         resultTokens,
-        options.ttl || 3600
+        compressionResult.compressedSize
       );
     }
 
@@ -861,13 +861,13 @@ export class SmartPretty {
 
     // Cache the result
     if (useCache && formatted) {
-      const compressed = compress(JSON.stringify(result), 'gzip');
+      const compressionResult = compress(JSON.stringify(result), 'gzip');
       const resultTokens = this.tokenCounter.count(formattedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressed.toString(),
+        compressionResult.compressed.toString(),
         resultTokens,
-        options.ttl || 3600
+        compressionResult.compressedSize
       );
     }
 

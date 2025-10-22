@@ -344,10 +344,8 @@ export class AnomalyExplainer {
 
     // Calculate tokens and cache result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
-    const cacheTTL =
-      options.cacheTTL || this.getCacheTTLForOperation(options.operation);
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, cacheTTL);
+    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
 
     // Record metrics
     this.metricsCollector.record({
@@ -1583,20 +1581,6 @@ export class AnomalyExplainer {
     }
 
     return alternatives;
-  }
-
-  private getCacheTTLForOperation(operation: string): number {
-    const ttls: Record<string, number> = {
-      explain: 1800, // 30 minutes
-      'analyze-root-cause': 3600, // 1 hour
-      'generate-hypotheses': 86400, // 24 hours
-      'test-hypothesis': 1800, // 30 minutes
-      'get-baseline': 21600, // 6 hours
-      'correlate-events': 3600, // 1 hour
-      'impact-assessment': 1800, // 30 minutes
-      'suggest-remediation': 3600, // 1 hour
-    };
-    return ttls[operation] || 1800;
   }
 }
 
