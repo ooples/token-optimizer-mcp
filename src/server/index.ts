@@ -20,6 +20,81 @@ import {
   getCacheWarmupTool,
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
+import {
+  getCacheAnalyticsTool,
+  CACHE_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-analytics.js';
+import {
+  runCacheBenchmark,
+  CACHE_BENCHMARK_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-benchmark.js';
+import {
+  runCacheCompression,
+  CACHE_COMPRESSION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-compression.js';
+import {
+  getCacheInvalidationTool,
+  CACHE_INVALIDATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-invalidation.js';
+import {
+  getCacheOptimizerTool,
+  CACHE_OPTIMIZER_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-optimizer.js';
+import {
+  getCachePartitionTool,
+  CACHE_PARTITION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-partition.js';
+import {
+  getCacheReplicationTool,
+  CACHE_REPLICATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-replication.js';
+import {
+  getSmartCacheTool,
+  SMART_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/smart-cache.js';
+
+// API & Database tools
+import {
+  getSmartSql,
+  SMART_SQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-sql.js';
+import {
+  getSmartSchema,
+  SMART_SCHEMA_TOOL_DEFINITION,
+} from '../tools/api-database/smart-schema.js';
+import {
+  getSmartApiFetch,
+  SMART_API_FETCH_TOOL_DEFINITION,
+} from '../tools/api-database/smart-api-fetch.js';
+import {
+  getSmartCacheApi,
+  SMART_CACHE_API_TOOL_DEFINITION,
+} from '../tools/api-database/smart-cache-api.js';
+import {
+  getSmartDatabase,
+  SMART_DATABASE_TOOL_DEFINITION,
+} from '../tools/api-database/smart-database.js';
+import {
+  getSmartGraphQL,
+  SMART_GRAPHQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-graphql.js';
+import {
+  getSmartMigration,
+  SMART_MIGRATION_TOOL_DEFINITION,
+} from '../tools/api-database/smart-migration.js';
+import {
+  getSmartOrm,
+  SMART_ORM_TOOL_DEFINITION,
+} from '../tools/api-database/smart-orm.js';
+import {
+  getSmartRest,
+  SMART_REST_TOOL_DEFINITION,
+} from '../tools/api-database/smart-rest.js';
+import {
+  getSmartWebSocket,
+  SMART_WEBSOCKET_TOOL_DEFINITION,
+} from '../tools/api-database/smart-websocket.js';
+
 // File operations tools
 // Disabled for live server bring-up: file-operations tools depend on extensionless
 // imports in compiled output which Node ESM rejects. We expose core tools only.
@@ -72,6 +147,25 @@ function cacheUncompressed(key: string, text: string, size: number): void {
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
+const cacheAnalytics = getCacheAnalyticsTool(cache, tokenCounter, metrics);
+const cacheInvalidation = getCacheInvalidationTool(cache, tokenCounter, metrics);
+const cacheOptimizer = getCacheOptimizerTool(cache, tokenCounter, metrics);
+const cachePartition = getCachePartitionTool(cache, tokenCounter, metrics);
+const cacheReplication = getCacheReplicationTool(cache, tokenCounter, metrics);
+const smartCache = getSmartCacheTool(cache, tokenCounter, metrics);
+
+// Initialize API & Database tools
+const smartSql = getSmartSql(cache, tokenCounter, metrics);
+const smartSchema = getSmartSchema(cache, tokenCounter, metrics);
+const smartApiFetch = getSmartApiFetch(cache, tokenCounter, metrics);
+const smartCacheApi = getSmartCacheApi(cache, tokenCounter, metrics);
+const smartDatabase = getSmartDatabase(cache, tokenCounter, metrics);
+const smartGraphQL = getSmartGraphQL(cache, tokenCounter, metrics);
+const smartMigration = getSmartMigration(cache, tokenCounter, metrics);
+const smartOrm = getSmartOrm(cache, tokenCounter, metrics);
+const smartRest = getSmartRest(cache, tokenCounter, metrics);
+const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
+
 
 // File operations tools disabled in this live-test configuration.
 // TODO: Fix method signatures for these tools before enabling
@@ -299,6 +393,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       PREDICTIVE_CACHE_TOOL_DEFINITION,
       CACHE_WARMUP_TOOL_DEFINITION,
+      CACHE_ANALYTICS_TOOL_DEFINITION,
+      CACHE_BENCHMARK_TOOL_DEFINITION,
+      CACHE_COMPRESSION_TOOL_DEFINITION,
+      CACHE_INVALIDATION_TOOL_DEFINITION,
+      CACHE_OPTIMIZER_TOOL_DEFINITION,
+      CACHE_PARTITION_TOOL_DEFINITION,
+      CACHE_REPLICATION_TOOL_DEFINITION,
+      SMART_CACHE_TOOL_DEFINITION,
+      // API & Database tools
+      SMART_SQL_TOOL_DEFINITION,
+      SMART_SCHEMA_TOOL_DEFINITION,
+      SMART_API_FETCH_TOOL_DEFINITION,
+      SMART_CACHE_API_TOOL_DEFINITION,
+      SMART_DATABASE_TOOL_DEFINITION,
+      SMART_GRAPHQL_TOOL_DEFINITION,
+      SMART_MIGRATION_TOOL_DEFINITION,
+      SMART_ORM_TOOL_DEFINITION,
+      SMART_REST_TOOL_DEFINITION,
+      SMART_WEBSOCKET_TOOL_DEFINITION,
       // File operations tools
       // File operations tool definitions intentionally omitted in live-test config
       // TODO: Re-enable after fixing method signatures
