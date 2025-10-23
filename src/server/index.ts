@@ -220,6 +220,13 @@ import type { SmartWriteOptions } from '../tools/file-operations/smart-write.js'
 import type { SmartEditOptions } from '../tools/file-operations/smart-edit.js';
 import type { SmartGlobOptions } from '../tools/file-operations/smart-glob.js';
 import type { SmartGrepOptions } from '../tools/file-operations/smart-grep.js';
+// Tool handler argument types
+type SmartReadArgs = { path: string } & SmartReadOptions;
+type SmartWriteArgs = { path: string; content: string } & SmartWriteOptions;
+type SmartEditArgs = { path: string; operations: any[] } & SmartEditOptions;
+type SmartGlobArgs = { pattern: string } & SmartGlobOptions;
+type SmartGrepArgs = { pattern: string } & SmartGrepOptions;
+
 
 // Configuration constants
 const COMPRESSION_CONFIG = {
@@ -1804,8 +1811,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_read': {
-        const { path: filePath, ...options } = args as any;
-        const result = await smartRead.read(filePath, options as SmartReadOptions);
+        const { path: filePath, ...options } = args as unknown as SmartReadArgs;
+        const result = await smartRead.read(filePath, options);
         return {
           content: [
             {
@@ -1817,8 +1824,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_write': {
-        const { path: filePath, content, ...options } = args as any;
-        const result = await smartWrite.write(filePath, content, options as SmartWriteOptions);
+        const { path: filePath, content, ...options } = args as unknown as SmartWriteArgs;
+        const result = await smartWrite.write(filePath, content, options);
         return {
           content: [
             {
@@ -1830,8 +1837,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_edit': {
-        const { path: filePath, operations, ...options } = args as any;
-        const result = await smartEdit.edit(filePath, operations, options as SmartEditOptions);
+        const { path: filePath, operations, ...options } = args as unknown as SmartEditArgs;
+        const result = await smartEdit.edit(filePath, operations, options);
         return {
           content: [
             {
@@ -1843,8 +1850,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_glob': {
-        const { pattern, ...options } = args as any;
-        const result = await smartGlob.glob(pattern, options as SmartGlobOptions);
+        const { pattern, ...options } = args as unknown as SmartGlobArgs;
+        const result = await smartGlob.glob(pattern, options);
         return {
           content: [
             {
@@ -1856,8 +1863,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_grep': {
-        const { pattern, ...options } = args as any;
-        const result = await smartGrep.grep(pattern, options as SmartGrepOptions);
+        const { pattern, ...options } = args as unknown as SmartGrepArgs;
+        const result = await smartGrep.grep(pattern, options);
         return {
           content: [
             {
