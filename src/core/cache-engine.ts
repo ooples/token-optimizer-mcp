@@ -176,6 +176,52 @@ export class CacheEngine {
   }
 
   /**
+   * Get a value from cache with metadata (including compression info)
+   */
+  getWithMetadata(
+    key: string
+  ): { content: string; compressedSize: number } | null {
+    // Check memory cache first
+    const memValue = this.memoryCache.get(key);
+    if (memValue !== undefined) {
+      this.stats.hits++;
+      this.updateHitCount(key);
+      // For memory cache, we need to fetch compressed_size from DB
+      const stmt = this.db.prepare(`
+        SELECT compressed_size FROM cache WHERE key = ?
+      `);
+      const row = stmt.get(key) as { compressed_size: number } | undefined;
+      return {
+        content: memValue,
+        compressedSize: row?.compressed_size ?? 0,
+      };
+    }
+
+    // Check SQLite cache
+    const stmt = this.db.prepare(`
+      SELECT value, compressed_size, hit_count FROM cache WHERE key = ?
+    `);
+    const row = stmt.get(key) as
+      | { value: string; compressed_size: number; hit_count: number }
+      | undefined;
+
+    if (row) {
+      this.stats.hits++;
+      // Update hit count and last accessed time
+      this.updateHitCount(key);
+      // Add to memory cache for faster access
+      this.memoryCache.set(key, row.value);
+      return {
+        content: row.value,
+        compressedSize: row.compressed_size,
+      };
+    }
+
+    this.stats.misses++;
+    return null;
+  }
+
+  /**
    * Set a value in cache
    */
   set(
