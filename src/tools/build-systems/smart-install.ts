@@ -683,7 +683,8 @@ export const SMART_INSTALL_TOOL_DEFINITION = {
       packages: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Packages to install (if empty, installs all from package.json)',
+        description:
+          'Packages to install (if empty, installs all from package.json)',
       },
       dev: {
         type: 'boolean',
