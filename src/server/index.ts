@@ -25,6 +25,7 @@ import {
   getSmartAstGrepTool,
   SMART_AST_GREP_TOOL_DEFINITION,
 } from '../tools/code-analysis/smart-ast-grep.js';
+import type { SmartAstGrepOptions } from '../tools/code-analysis/smart-ast-grep.js';
 import {
   getCacheAnalyticsTool,
   CACHE_ANALYTICS_TOOL_DEFINITION,
@@ -1197,7 +1198,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Code analysis tools
       case 'smart_ast_grep': {
-        const options = args as any;
+        const options = args as unknown as SmartAstGrepOptions;
         const result = await smartAstGrep.grep(options.pattern, options);
         return {
           content: [
