@@ -25,7 +25,6 @@ import {
   getSmartAstGrepTool,
   SMART_AST_GREP_TOOL_DEFINITION,
 } from '../tools/code-analysis/smart-ast-grep.js';
-import type { SmartAstGrepOptions } from '../tools/code-analysis/smart-ast-grep.js';
 import {
   getCacheAnalyticsTool,
   CACHE_ANALYTICS_TOOL_DEFINITION,
