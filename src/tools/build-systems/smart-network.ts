@@ -932,3 +932,55 @@ export async function runSmartNetwork(
     smartNetwork.close();
   }
 }
+
+// MCP Tool definition
+export const SMART_NETWORK_TOOL_DEFINITION = {
+  name: 'smart_network',
+  description:
+    'Network diagnostics and monitoring with connectivity testing, port scanning, DNS resolution, and anomaly detection',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      operation: {
+        type: 'string',
+        enum: ['ping', 'port-scan', 'dns', 'traceroute', 'all'],
+        description: 'Network operation to perform',
+      },
+      hosts: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Hosts to test (for ping/port-scan operations)',
+      },
+      ports: {
+        type: 'array',
+        items: { type: 'number' },
+        description: 'Ports to scan (for port-scan operation)',
+      },
+      hostnames: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Hostnames for DNS resolution',
+      },
+      pingCount: {
+        type: 'number',
+        description: 'Number of ping attempts per host',
+        default: 4,
+      },
+      timeout: {
+        type: 'number',
+        description: 'Timeout in milliseconds',
+        default: 5000,
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory',
+      },
+      maxCacheAge: {
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 300)',
+        default: 300,
+      },
+    },
+    required: ['operation'],
+  },
+};

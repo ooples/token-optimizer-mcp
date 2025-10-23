@@ -802,3 +802,69 @@ export async function runSmartDocker(
     smartDocker.close();
   }
 }
+
+// MCP Tool definition
+export const SMART_DOCKER_TOOL_DEFINITION = {
+  name: 'smart_docker',
+  description:
+    'Docker operations with build/run/stop/logs support, image layer analysis, and optimization suggestions',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      operation: {
+        type: 'string',
+        enum: ['build', 'run', 'stop', 'logs', 'ps'],
+        description: 'Docker operation to perform',
+      },
+      force: {
+        type: 'boolean',
+        description: 'Force operation (ignore cache)',
+        default: false,
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory',
+      },
+      dockerfile: {
+        type: 'string',
+        description: 'Dockerfile path',
+      },
+      imageName: {
+        type: 'string',
+        description: 'Image name for build/run',
+      },
+      containerName: {
+        type: 'string',
+        description: 'Container name for run/stop/logs',
+      },
+      context: {
+        type: 'string',
+        description: 'Build context directory',
+      },
+      ports: {
+        type: 'array',
+        items: { type: 'string' },
+        description: "Port mappings for run (e.g., ['8080:80', '443:443'])",
+      },
+      env: {
+        type: 'object',
+        description: 'Environment variables for run',
+      },
+      follow: {
+        type: 'boolean',
+        description: 'Follow logs (tail mode)',
+        default: false,
+      },
+      tail: {
+        type: 'number',
+        description: 'Number of log lines to show',
+      },
+      maxCacheAge: {
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 3600)',
+        default: 3600,
+      },
+    },
+    required: ['operation'],
+  },
+};

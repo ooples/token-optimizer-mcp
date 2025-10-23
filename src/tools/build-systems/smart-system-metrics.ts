@@ -833,3 +833,44 @@ export async function runSmartSystemMetrics(
     smartMetrics.close();
   }
 }
+
+// MCP Tool definition
+export const SMART_SYSTEM_METRICS_TOOL_DEFINITION = {
+  name: 'smart_system_metrics',
+  description:
+    'System resource monitoring with CPU, memory, disk usage tracking, anomaly detection, and performance recommendations',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      force: {
+        type: 'boolean',
+        description: 'Force operation (ignore cache)',
+        default: false,
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory',
+      },
+      includeDisk: {
+        type: 'boolean',
+        description: 'Include disk metrics',
+        default: true,
+      },
+      diskPaths: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Disk paths to monitor (default: root partition)',
+      },
+      detectAnomalies: {
+        type: 'boolean',
+        description: 'Detect anomalies by comparing with previous snapshot',
+        default: true,
+      },
+      maxCacheAge: {
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 60)',
+        default: 60,
+      },
+    },
+  },
+};
