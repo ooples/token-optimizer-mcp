@@ -227,7 +227,6 @@ type SmartEditArgs = { path: string; operations: any[] } & SmartEditOptions;
 type SmartGlobArgs = { pattern: string } & SmartGlobOptions;
 type SmartGrepArgs = { pattern: string } & SmartGrepOptions;
 
-
 // Configuration constants
 const COMPRESSION_CONFIG = {
   MIN_SIZE_THRESHOLD: 500, // bytes - minimum size before attempting compression
@@ -1824,7 +1823,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_write': {
-        const { path: filePath, content, ...options } = args as unknown as SmartWriteArgs;
+        const {
+          path: filePath,
+          content,
+          ...options
+        } = args as unknown as SmartWriteArgs;
         const result = await smartWrite.write(filePath, content, options);
         return {
           content: [
@@ -1837,7 +1840,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_edit': {
-        const { path: filePath, operations, ...options } = args as unknown as SmartEditArgs;
+        const {
+          path: filePath,
+          operations,
+          ...options
+        } = args as unknown as SmartEditArgs;
         const result = await smartEdit.edit(filePath, operations, options);
         return {
           content: [
