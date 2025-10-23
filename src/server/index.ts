@@ -20,6 +20,81 @@ import {
   getCacheWarmupTool,
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
+import {
+  getCacheAnalyticsTool,
+  CACHE_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-analytics.js';
+import {
+  runCacheBenchmark,
+  CACHE_BENCHMARK_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-benchmark.js';
+import {
+  runCacheCompression,
+  CACHE_COMPRESSION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-compression.js';
+import {
+  getCacheInvalidationTool,
+  CACHE_INVALIDATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-invalidation.js';
+import {
+  getCacheOptimizerTool,
+  CACHE_OPTIMIZER_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-optimizer.js';
+import {
+  getCachePartitionTool,
+  CACHE_PARTITION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-partition.js';
+import {
+  getCacheReplicationTool,
+  CACHE_REPLICATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-replication.js';
+import {
+  getSmartCacheTool,
+  SMART_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/smart-cache.js';
+
+// API & Database tools
+import {
+  getSmartSql,
+  SMART_SQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-sql.js';
+import {
+  getSmartSchema,
+  SMART_SCHEMA_TOOL_DEFINITION,
+} from '../tools/api-database/smart-schema.js';
+import {
+  getSmartApiFetch,
+  SMART_API_FETCH_TOOL_DEFINITION,
+} from '../tools/api-database/smart-api-fetch.js';
+import {
+  getSmartCacheApi,
+  SMART_CACHE_API_TOOL_DEFINITION,
+} from '../tools/api-database/smart-cache-api.js';
+import {
+  getSmartDatabase,
+  SMART_DATABASE_TOOL_DEFINITION,
+} from '../tools/api-database/smart-database.js';
+import {
+  getSmartGraphQL,
+  SMART_GRAPHQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-graphql.js';
+import {
+  getSmartMigration,
+  SMART_MIGRATION_TOOL_DEFINITION,
+} from '../tools/api-database/smart-migration.js';
+import {
+  getSmartOrm,
+  SMART_ORM_TOOL_DEFINITION,
+} from '../tools/api-database/smart-orm.js';
+import {
+  getSmartRest,
+  SMART_REST_TOOL_DEFINITION,
+} from '../tools/api-database/smart-rest.js';
+import {
+  getSmartWebSocket,
+  SMART_WEBSOCKET_TOOL_DEFINITION,
+} from '../tools/api-database/smart-websocket.js';
+
 // File operations tools
 import {
   getSmartDiffTool,
@@ -69,6 +144,28 @@ function cacheUncompressed(key: string, text: string, size: number): void {
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
+const cacheAnalytics = getCacheAnalyticsTool(cache, tokenCounter, metrics);
+const cacheInvalidation = getCacheInvalidationTool(
+  cache,
+  tokenCounter,
+  metrics
+);
+const cacheOptimizer = getCacheOptimizerTool(cache, tokenCounter, metrics);
+const cachePartition = getCachePartitionTool(cache, tokenCounter, metrics);
+const cacheReplication = getCacheReplicationTool(cache, tokenCounter, metrics);
+const smartCache = getSmartCacheTool(cache, tokenCounter, metrics);
+
+// Initialize API & Database tools
+const smartSql = getSmartSql(cache, tokenCounter, metrics);
+const smartSchema = getSmartSchema(cache, tokenCounter, metrics);
+const smartApiFetch = getSmartApiFetch(cache, tokenCounter, metrics);
+const smartCacheApi = getSmartCacheApi(cache, tokenCounter, metrics);
+const smartDatabase = getSmartDatabase(cache, tokenCounter, metrics);
+const smartGraphQL = getSmartGraphQL(cache, tokenCounter, metrics);
+const smartMigration = getSmartMigration(cache, tokenCounter, metrics);
+const smartOrm = getSmartOrm(cache, tokenCounter, metrics);
+const smartRest = getSmartRest(cache, tokenCounter, metrics);
+const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
 
 const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
 const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
@@ -294,11 +391,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       PREDICTIVE_CACHE_TOOL_DEFINITION,
       CACHE_WARMUP_TOOL_DEFINITION,
+      CACHE_ANALYTICS_TOOL_DEFINITION,
+      CACHE_BENCHMARK_TOOL_DEFINITION,
+      CACHE_COMPRESSION_TOOL_DEFINITION,
+      CACHE_INVALIDATION_TOOL_DEFINITION,
+      CACHE_OPTIMIZER_TOOL_DEFINITION,
+      CACHE_PARTITION_TOOL_DEFINITION,
+      CACHE_REPLICATION_TOOL_DEFINITION,
+      SMART_CACHE_TOOL_DEFINITION,
+      // API & Database tools
+      SMART_SQL_TOOL_DEFINITION,
+      SMART_SCHEMA_TOOL_DEFINITION,
+      SMART_API_FETCH_TOOL_DEFINITION,
+      SMART_CACHE_API_TOOL_DEFINITION,
+      SMART_DATABASE_TOOL_DEFINITION,
+      SMART_GRAPHQL_TOOL_DEFINITION,
+      SMART_MIGRATION_TOOL_DEFINITION,
+      SMART_ORM_TOOL_DEFINITION,
+      SMART_REST_TOOL_DEFINITION,
+      SMART_WEBSOCKET_TOOL_DEFINITION,
+      // File operations tools
+
       SMART_DIFF_TOOL_DEFINITION,
       SMART_BRANCH_TOOL_DEFINITION,
       SMART_MERGE_TOOL_DEFINITION,
       SMART_STATUS_TOOL_DEFINITION,
       SMART_LOG_TOOL_DEFINITION,
+
     ],
   };
 });
@@ -1035,9 +1154,268 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case 'cache_analytics': {
+        const options = args as any;
+        const result = await cacheAnalytics.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_benchmark': {
+        const options = args as any;
+        const result = await runCacheBenchmark(
+          options,
+          cache,
+          tokenCounter,
+          metrics
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_compression': {
+        const options = args as any;
+        const result = await runCacheCompression(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_invalidation': {
+        const options = args as any;
+        const result = await cacheInvalidation.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_optimizer': {
+        const options = args as any;
+        const result = await cacheOptimizer.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_partition': {
+        const options = args as any;
+        const result = await cachePartition.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_replication': {
+        const options = args as any;
+        const result = await cacheReplication.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache': {
+        const options = args as any;
+        const result = await smartCache.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_sql': {
+        const options = args as any;
+        const result = await smartSql.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_schema': {
+        const options = args as any;
+        const result = await smartSchema.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_api_fetch': {
+        const options = args as any;
+        const result = await smartApiFetch.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache_api': {
+        const options = args as any;
+        const result = await smartCacheApi.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_database': {
+        const options = args as any;
+        const result = await smartDatabase.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_graphql': {
+        const options = args as any;
+        const result = await smartGraphQL.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_migration': {
+        const options = args as any;
+        const result = await smartMigration.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_orm': {
+        const options = args as any;
+        const result = await smartOrm.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_rest': {
+        const options = args as any;
+        const result = await smartRest.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_websocket': {
+        const options = args as any;
+        const result = await smartWebSocket.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+
       case 'smart_diff': {
         const options = args as any;
         const result = await smartDiff.diff(options);
+
         return {
           content: [
             {
