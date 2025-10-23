@@ -60,62 +60,11 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release
 
-  publish:
-    name: Publish to npm
-    runs-on: ubuntu-latest
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.release.outputs.new_release_version }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build for production
-        run: npm run build
-
-      - name: Prepare package for publishing
-        run: |
-          # Ensure package.json has correct version
-          npm version ${{ needs.release.outputs.new_release_version }} --no-git-tag-version --allow-same-version
-
-      - name: Publish to npm (OIDC)
-        run: npm publish --provenance --access public
-
-      - name: Verify publication
-        run: |
-          sleep 10
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          VERSION=${{ needs.release.outputs.new_release_version }}
-
-          echo "Verifying publication of ${PACKAGE_NAME}@${VERSION}"
-
-          PUBLISHED_VERSION=$(npm view ${PACKAGE_NAME}@${VERSION} version 2>/dev/null || echo "not_found")
-
-          if [ "$PUBLISHED_VERSION" = "$VERSION" ]; then
-            echo "Package successfully published!"
-          else
-            echo "Warning: Could not verify package publication"
-          fi
 
   notify:
     name: Notify Release
     runs-on: ubuntu-latest
-    needs: [release, publish]
+    needs: release
     if: needs.release.outputs.new_release_published == 'true'
 
     steps:
