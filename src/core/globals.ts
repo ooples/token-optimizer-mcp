@@ -5,8 +5,8 @@
  * and ensure consistent tracking across the application.
  */
 
-import { TokenCounter } from './token-counter';
-import { MetricsCollector } from './metrics';
+import { TokenCounter } from './token-counter.js';
+import { MetricsCollector } from './metrics.js';
 
 /**
  * Global token counter instance shared across all tools

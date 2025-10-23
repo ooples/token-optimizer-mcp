@@ -16,9 +16,9 @@
  * - Compressed ACL trees (88% reduction)
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';

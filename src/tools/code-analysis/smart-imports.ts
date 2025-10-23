@@ -12,9 +12,9 @@ import { createHash } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync } from 'fs';
-import { CacheEngine } from '../../core/cache-engine';
-import { MetricsCollector } from '../../core/metrics';
-import { TokenCounter } from '../../core/token-counter';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
 
 /**
  * Import statement information

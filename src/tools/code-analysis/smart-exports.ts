@@ -12,9 +12,9 @@ import { createHash } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { CacheEngine } from '../../core/cache-engine';
-import { MetricsCollector } from '../../core/metrics';
-import { TokenCounter } from '../../core/token-counter';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
 
 /**
  * Export statement information
@@ -694,7 +694,7 @@ export class SmartExportsTool {
             before:
               'export const a = ...\nexport const b = ...\nexport const c = ...',
             after:
-              "// In module.ts:\nconst a = ...\nconst b = ...\nexport { a, b };\n\n// In index.ts:\nexport { a, b } from './module';",
+              "// In module.ts:\nconst a = ...\nconst b = ...\nexport { a, b };\n\n// In index.ts:\nexport { a, b } from './module.js';",
           },
           impact: {
             readability: 'high',

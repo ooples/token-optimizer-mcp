@@ -26,4 +26,4 @@ export {
   type FormatResult,
   type LanguageDetectionResult,
   type ThemeApplicationResult,
-} from './smart-pretty';
+} from './smart-pretty.js';

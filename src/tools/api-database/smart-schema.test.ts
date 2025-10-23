@@ -4,10 +4,10 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { SmartSchema, getSmartSchema, runSmartSchema } from './smart-schema';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { SmartSchema, getSmartSchema, runSmartSchema } from './smart-schema.js';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { tmpdir } from 'os';
 import { join } from 'path';
 

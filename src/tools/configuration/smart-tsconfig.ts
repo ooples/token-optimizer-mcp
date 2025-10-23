@@ -13,10 +13,10 @@ import { readFile } from 'fs/promises';
 import { resolve, dirname, join } from 'path';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine';
-import { globalMetricsCollector } from '../../core/globals';
-import { TokenCounter } from '../../core/token-counter';
-import { hashContent, generateCacheKey } from '../shared/hash-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { globalMetricsCollector } from '../../core/globals.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
 
 // ==================== Type Definitions ====================
 

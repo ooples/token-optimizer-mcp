@@ -19,10 +19,10 @@ import { parse as parseBabel } from '@babel/parser';
 import pkg from 'glob';
 const { globSync } = pkg;
 import { relative, resolve, dirname, extname, join } from 'path';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { hashFileMetadata, generateCacheKey } from '../shared/hash-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { hashFileMetadata, generateCacheKey } from '../shared/hash-utils.js';
 
 /**
  * Represents an import in a file

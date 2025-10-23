@@ -16,10 +16,10 @@
  * 8. get-impact - Analyze impact of service failures
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { generateCacheKey } from '../shared/hash-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
 import { createHash } from 'crypto';
 
 // ============================================================================

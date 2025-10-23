@@ -17,9 +17,9 @@
  * Target Lines: 1,540
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import { EventEmitter } from 'events';

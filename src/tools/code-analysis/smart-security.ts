@@ -9,9 +9,9 @@
  * - <1 hour full scan requirement for daily TTL
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { MetricsCollector } from '../../core/metrics';
-import { TokenCounter } from '../../core/token-counter';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { join, relative, extname } from 'path';

@@ -11,13 +11,13 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine';
-import { MetricsCollector } from '../../core/metrics';
-import { TokenCounter } from '../../core/token-counter';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
 import {
   SmartComplexityTool,
   getSmartComplexityTool,
-} from './smart-complexity';
+} from './smart-complexity.js';
 
 export interface SmartRefactorOptions {
   filePath?: string;

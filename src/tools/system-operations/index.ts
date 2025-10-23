@@ -13,7 +13,7 @@ export {
   type ProcessInfo,
   type ProcessTreeNode,
   type ResourceSnapshot,
-} from './smart-process';
+} from './smart-process.js';
 
 export {
   SmartService,
@@ -26,7 +26,7 @@ export {
   type ServiceInfo,
   type HealthCheck,
   type DependencyGraph,
-} from './smart-service';
+} from './smart-service.js';
 
 // SmartNetwork - Implementation pending
 // SmartCleanup - Implementation pending
@@ -46,7 +46,7 @@ export {
   type ACLEntry,
   type SecurityIssue,
   type SecurityAuditReport,
-} from './smart-user';
+} from './smart-user.js';
 
 // SmartArchive - Implementation pending
 // Note: Exports temporarily removed until implementation is complete
@@ -67,4 +67,4 @@ export {
   type ExecutionRecord,
   type NextRunPrediction,
   type ScheduleValidation,
-} from './smart-cron';
+} from './smart-cron.js';

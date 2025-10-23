@@ -2,13 +2,13 @@
  * File Operations Tools - Token-Optimized File I/O
  */
 
-export * from './smart-read';
-export * from './smart-write';
-export * from './smart-edit';
-export * from './smart-glob';
-export * from './smart-grep';
-export * from './smart-status';
-export * from './smart-diff';
-export * from './smart-log';
-export * from './smart-branch';
-export * from './smart-merge';
+export * from './smart-read.js';
+export * from './smart-write.js';
+export * from './smart-edit.js';
+export * from './smart-glob.js';
+export * from './smart-grep.js';
+export * from './smart-status.js';
+export * from './smart-diff.js';
+export * from './smart-log.js';
+export * from './smart-branch.js';
+export * from './smart-merge.js';

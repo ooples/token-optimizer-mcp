@@ -22,9 +22,9 @@ import { createHash } from 'crypto';
 import {
   CacheEngine,
   CacheEngine as CacheEngineClass,
-} from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+} from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 
 // ============================================================================
 // Type Definitions

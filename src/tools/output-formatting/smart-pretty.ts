@@ -20,11 +20,11 @@
 import hljs from 'highlight';
 import { format as prettierFormat } from 'prettier';
 import chalk from 'chalk';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { compress, decompress } from '../shared/compression-utils';
-import { hashContent, generateCacheKey } from '../shared/hash-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { compress, decompress } from '../shared/compression-utils.js';
+import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
 import { homedir } from 'os';
 import { join } from 'path';
 

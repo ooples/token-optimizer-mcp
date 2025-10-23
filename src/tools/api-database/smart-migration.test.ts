@@ -8,10 +8,10 @@ import {
   SmartMigration,
   getSmartMigration,
   runSmartMigration,
-} from './smart-migration';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+} from './smart-migration.js';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
