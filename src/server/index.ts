@@ -148,7 +148,11 @@ function cacheUncompressed(key: string, text: string, size: number): void {
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 const cacheAnalytics = getCacheAnalyticsTool(cache, tokenCounter, metrics);
-const cacheInvalidation = getCacheInvalidationTool(cache, tokenCounter, metrics);
+const cacheInvalidation = getCacheInvalidationTool(
+  cache,
+  tokenCounter,
+  metrics
+);
 const cacheOptimizer = getCacheOptimizerTool(cache, tokenCounter, metrics);
 const cachePartition = getCachePartitionTool(cache, tokenCounter, metrics);
 const cacheReplication = getCacheReplicationTool(cache, tokenCounter, metrics);
@@ -165,7 +169,6 @@ const smartMigration = getSmartMigration(cache, tokenCounter, metrics);
 const smartOrm = getSmartOrm(cache, tokenCounter, metrics);
 const smartRest = getSmartRest(cache, tokenCounter, metrics);
 const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
-
 
 // File operations tools disabled in this live-test configuration.
 // TODO: Fix method signatures for these tools before enabling
@@ -1145,6 +1148,263 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'cache_warmup': {
         const options = args as any;
         const result = await cacheWarmup.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_analytics': {
+        const options = args as any;
+        const result = await cacheAnalytics.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_benchmark': {
+        const options = args as any;
+        const result = await runCacheBenchmark(
+          options,
+          cache,
+          tokenCounter,
+          metrics
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_compression': {
+        const options = args as any;
+        const result = await runCacheCompression(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_invalidation': {
+        const options = args as any;
+        const result = await cacheInvalidation.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_optimizer': {
+        const options = args as any;
+        const result = await cacheOptimizer.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_partition': {
+        const options = args as any;
+        const result = await cachePartition.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_replication': {
+        const options = args as any;
+        const result = await cacheReplication.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache': {
+        const options = args as any;
+        const result = await smartCache.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_sql': {
+        const options = args as any;
+        const result = await smartSql.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_schema': {
+        const options = args as any;
+        const result = await smartSchema.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_api_fetch': {
+        const options = args as any;
+        const result = await smartApiFetch.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache_api': {
+        const options = args as any;
+        const result = await smartCacheApi.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_database': {
+        const options = args as any;
+        const result = await smartDatabase.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_graphql': {
+        const options = args as any;
+        const result = await smartGraphQL.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_migration': {
+        const options = args as any;
+        const result = await smartMigration.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_orm': {
+        const options = args as any;
+        const result = await smartOrm.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_rest': {
+        const options = args as any;
+        const result = await smartRest.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_websocket': {
+        const options = args as any;
+        const result = await smartWebSocket.run(options);
 
         return {
           content: [
