@@ -113,6 +113,57 @@ import {
   SMART_WEBSOCKET_TOOL_DEFINITION,
 } from '../tools/api-database/smart-websocket.js';
 
+// Build Systems tools
+import {
+  getSmartProcessesTool,
+  SMART_PROCESSES_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-processes.js';
+import {
+  getSmartNetwork,
+  SMART_NETWORK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-network.js';
+import {
+  getSmartLogs,
+  SMART_LOGS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-logs.js';
+import {
+  getSmartLintTool,
+  SMART_LINT_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-lint.js';
+import {
+  getSmartInstall,
+  SMART_INSTALL_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-install.js';
+import {
+  getSmartDocker,
+  SMART_DOCKER_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-docker.js';
+import {
+  getSmartBuildTool,
+  SMART_BUILD_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-build.js';
+import {
+  getSmartSystemMetrics,
+  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-system-metrics.js';
+import {
+  getSmartTestTool,
+  SMART_TEST_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-test.js';
+import {
+  getSmartTypeCheckTool,
+  SMART_TYPECHECK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-typecheck.js';
+// System Operations tools
+import {
+  getSmartCron,
+  SMART_CRON_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-cron.js';
+import {
+  getSmartUser,
+  SMART_USER_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-user.js';
+
 // File operations tools
 import {
   getSmartDiffTool,
@@ -202,6 +253,22 @@ const monitoringIntegration = getMonitoringIntegration(
   tokenCounter,
   metrics
 );
+
+// Initialize Build Systems tools
+const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
+const smartNetwork = getSmartNetwork(cache);
+const smartLogs = getSmartLogs(cache);
+const smartLint = getSmartLintTool(cache, tokenCounter, metrics);
+const smartInstall = getSmartInstall(cache);
+const smartDocker = getSmartDocker(cache);
+const smartBuild = getSmartBuildTool(cache, tokenCounter, metrics);
+const smartSystemMetrics = getSmartSystemMetrics(cache);
+const smartTest = getSmartTestTool(cache, tokenCounter, metrics);
+const smartTypeCheck = getSmartTypeCheckTool(cache, tokenCounter, metrics);
+
+// Initialize System Operations tools
+const smartCron = getSmartCron(cache, tokenCounter, metrics);
+const smartUser = getSmartUser(cache, tokenCounter, metrics);
 
 const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
 const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
@@ -452,6 +519,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ALERT_MANAGER_TOOL_DEFINITION,
       METRIC_COLLECTOR_TOOL_DEFINITION,
       MONITORING_INTEGRATION_TOOL_DEFINITION,
+      // Build Systems tools
+      SMART_PROCESSES_TOOL_DEFINITION,
+      SMART_NETWORK_TOOL_DEFINITION,
+      SMART_LOGS_TOOL_DEFINITION,
+      SMART_LINT_TOOL_DEFINITION,
+      SMART_INSTALL_TOOL_DEFINITION,
+      SMART_DOCKER_TOOL_DEFINITION,
+      SMART_BUILD_TOOL_DEFINITION,
+      SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+      SMART_TEST_TOOL_DEFINITION,
+      SMART_TYPECHECK_TOOL_DEFINITION,
+      // System Operations tools
+      SMART_CRON_TOOL_DEFINITION,
+      SMART_USER_TOOL_DEFINITION,
       // File operations tools
 
       SMART_DIFF_TOOL_DEFINITION,
@@ -1456,6 +1537,162 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const options = args as any;
         const result = await smartWebSocket.run(options);
 
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_processes': {
+        const options = args as any;
+        const result = await smartProcesses.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_network': {
+        const options = args as any;
+        const result = await smartNetwork.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_logs': {
+        const options = args as any;
+        const result = await smartLogs.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_lint': {
+        const options = args as any;
+        const result = await smartLint.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_install': {
+        const options = args as any;
+        const result = await smartInstall.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_docker': {
+        const options = args as any;
+        const result = await smartDocker.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_build': {
+        const options = args as any;
+        const result = await smartBuild.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_system_metrics': {
+        const options = args as any;
+        const result = await smartSystemMetrics.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_test': {
+        const options = args as any;
+        const result = await smartTest.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_typecheck': {
+        const options = args as any;
+        const result = await smartTypeCheck.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cron': {
+        const options = args as any;
+        const result = await smartCron.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_user': {
+        const options = args as any;
+        const result = await smartUser.run(options);
         return {
           content: [
             {

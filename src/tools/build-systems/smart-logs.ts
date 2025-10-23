@@ -952,3 +952,53 @@ export async function runSmartLogs(
     smartLogs.close();
   }
 }
+
+// MCP Tool definition
+export const SMART_LOGS_TOOL_DEFINITION = {
+  name: 'smart_logs',
+  description:
+    'System log aggregation and analysis with multi-source support, pattern filtering, error detection, and insights',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sources: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Log sources to aggregate (file paths or system logs)',
+      },
+      level: {
+        type: 'string',
+        enum: ['error', 'warn', 'info', 'debug', 'all'],
+        description: 'Filter by log level',
+        default: 'all',
+      },
+      pattern: {
+        type: 'string',
+        description: 'Filter by pattern (regex)',
+      },
+      tail: {
+        type: 'number',
+        description: 'Number of lines to tail',
+        default: 100,
+      },
+      follow: {
+        type: 'boolean',
+        description: 'Follow mode (watch for new entries)',
+        default: false,
+      },
+      since: {
+        type: 'string',
+        description: "Time range filter (e.g., '1h', '24h', '7d')",
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory',
+      },
+      maxCacheAge: {
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 300)',
+        default: 300,
+      },
+    },
+  },
+};
