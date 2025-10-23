@@ -25,47 +25,21 @@ import {
   getSmartAstGrepTool,
   SMART_AST_GREP_TOOL_DEFINITION,
 } from '../tools/code-analysis/smart-ast-grep.js';
-import {
-  SMART_COMPLEXITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-complexity.js';
-import {
-  SMART_DEPENDENCIES_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-dependencies.js';
-import {
-  SMART_EXPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-exports.js';
-import {
-  SMART_IMPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-imports.js';
-import {
-  SMART_REFACTOR_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-refactor.js';
-import {
-  SMART_SECURITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-security.js';
-import {
-  SMART_SYMBOLS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-symbols.js';
-import {
-  SMART_TYPESCRIPT_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-typescript.js';
+import { SMART_COMPLEXITY_TOOL_DEFINITION } from '../tools/code-analysis/smart-complexity.js';
+import { SMART_DEPENDENCIES_TOOL_DEFINITION } from '../tools/code-analysis/smart-dependencies.js';
+import { SMART_EXPORTS_TOOL_DEFINITION } from '../tools/code-analysis/smart-exports.js';
+import { SMART_IMPORTS_TOOL_DEFINITION } from '../tools/code-analysis/smart-imports.js';
+import { SMART_REFACTOR_TOOL_DEFINITION } from '../tools/code-analysis/smart-refactor.js';
+import { SMART_SECURITY_TOOL_DEFINITION } from '../tools/code-analysis/smart-security.js';
+import { SMART_SYMBOLS_TOOL_DEFINITION } from '../tools/code-analysis/smart-symbols.js';
+import { SMART_TYPESCRIPT_TOOL_DEFINITION } from '../tools/code-analysis/smart-typescript.js';
 // Configuration tools
-import {
-  SMART_CONFIG_READ_TOOL_DEFINITION,
-} from '../tools/configuration/smart-config-read.js';
-import {
-  SMART_ENV_TOOL_DEFINITION,
-} from '../tools/configuration/smart-env.js';
-import {
-  SMART_PACKAGE_JSON_TOOL_DEFINITION,
-} from '../tools/configuration/smart-package-json.js';
-import {
-  SMART_TSCONFIG_TOOL_DEFINITION,
-} from '../tools/configuration/smart-tsconfig.js';
+import { SMART_CONFIG_READ_TOOL_DEFINITION } from '../tools/configuration/smart-config-read.js';
+import { SMART_ENV_TOOL_DEFINITION } from '../tools/configuration/smart-env.js';
+import { SMART_PACKAGE_JSON_TOOL_DEFINITION } from '../tools/configuration/smart-package-json.js';
+import { SMART_TSCONFIG_TOOL_DEFINITION } from '../tools/configuration/smart-tsconfig.js';
 // Output formatting tools
-import {
-  SMART_PRETTY_TOOL_DEFINITION,
-} from '../tools/output-formatting/smart-pretty.js';
+import { SMART_PRETTY_TOOL_DEFINITION } from '../tools/output-formatting/smart-pretty.js';
 import {
   getCacheAnalyticsTool,
   CACHE_ANALYTICS_TOOL_DEFINITION,
@@ -239,7 +213,11 @@ const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
 // Initialize monitoring tools
 const alertManager = getAlertManager(cache, tokenCounter, metrics);
 const metricCollectorTool = getMetricCollector(cache, tokenCounter, metrics);
-const monitoringIntegration = getMonitoringIntegration(cache, tokenCounter, metrics);
+const monitoringIntegration = getMonitoringIntegration(
+  cache,
+  tokenCounter,
+  metrics
+);
 
 // File operations tools disabled in this live-test configuration.
 // TODO: Fix method signatures for these tools before enabling
@@ -1251,16 +1229,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-
-      // Code analysis tools  
+      // Code analysis tools
       case 'smart_ast_grep': {
         const options = args as any;
         const result = await smartAstGrep.grep(options.pattern, options);
         return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
         };
       }
 
@@ -1278,13 +1257,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_tsconfig':
       case 'smart_pretty': {
         return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              error: `Tool ${name} registered but handler not yet implemented`,
-              tool: name,
-            }),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: `Tool ${name} registered but handler not yet implemented`,
+                tool: name,
+              }),
+            },
+          ],
           isError: true,
         };
       }
@@ -1545,7 +1526,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
-
 
       case 'alert_manager': {
         const options = args as any;
