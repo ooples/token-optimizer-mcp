@@ -23,9 +23,9 @@
  * 8. purge - Remove old metrics data
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector as CoreMetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector as CoreMetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
 
 // ============================================================================

@@ -1,8 +1,8 @@
 /** * SmartCache - Advanced Cache Management * * Track 2D - Tool #1: Comprehensive cache management (90%+ token reduction) * * Capabilities: * - Multi-tier caching (L1: Memory, L2: Disk, L3: Remote) * - 6 eviction strategies: LRU, LFU, FIFO, TTL, size-based, hybrid * - Cache stampede prevention with mutex locks * - Automatic tier promotion/demotion * - Write-through/write-back modes * - Batch operations with atomic guarantees * * Token Reduction Strategy: * - Cache metadata compression (95% reduction) * - Entry deduplication across tiers (92% reduction) * - Incremental state exports (delta-based, 94% reduction) * - Compressed statistics aggregation (93% reduction) */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { LRUCache } from 'lru-cache';
 import { EventEmitter } from 'events';
 

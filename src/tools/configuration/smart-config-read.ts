@@ -13,11 +13,11 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { parse as parseYAML } from 'yaml';
 import { parse as parseTOML } from '@iarna/toml';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { hashFile, generateCacheKey } from '../shared/hash-utils';
-import { compress, decompress } from '../shared/compression-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
+import { compress, decompress } from '../shared/compression-utils.js';
 import { homedir } from 'os';
 import { join } from 'path';
 

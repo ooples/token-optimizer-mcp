@@ -16,12 +16,12 @@
  * - Compressed schedule analysis (87% reduction)
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { generateCacheKey } from '../shared/hash-utils';
+import { generateCacheKey } from '../shared/hash-utils.js';
 import * as crypto from 'crypto';
 
 const execAsync = promisify(exec);

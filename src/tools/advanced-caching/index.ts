@@ -18,7 +18,7 @@ export {
   type CompressionRecommendation,
   type BenchmarkResult,
   type CompressionConfig,
-} from './cache-compression';
+} from './cache-compression.js';
 
 // Cache Benchmark Tool
 export {
@@ -37,7 +37,7 @@ export {
   type LatencyMetrics,
   type ThroughputMetrics,
   type ReportFormat,
-} from './cache-benchmark';
+} from './cache-benchmark.js';
 
 // Cache Analytics Tool
 // Note: Implementation pending - exports temporarily removed

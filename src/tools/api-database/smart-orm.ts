@@ -11,9 +11,9 @@
  * - Generated SQL inspection
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import type { TokenCounter } from '../../core/token-counter';
-import type { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import type { TokenCounter } from '../../core/token-counter.js';
+import type { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
 
 export type ORMType =

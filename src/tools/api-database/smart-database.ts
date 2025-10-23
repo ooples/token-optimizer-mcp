@@ -22,15 +22,15 @@ import { createHash } from 'crypto';
 import {
   CacheEngine,
   CacheEngine as CacheEngineClass,
-} from '../../core/cache-engine';
+} from '../../core/cache-engine.js';
 import {
   TokenCounter,
   TokenCounter as TokenCounterClass,
-} from '../../core/token-counter';
+} from '../../core/token-counter.js';
 import {
   MetricsCollector,
   MetricsCollector as MetricsCollectorClass,
-} from '../../core/metrics';
+} from '../../core/metrics.js';
 
 // ============================================================================
 // Type Definitions

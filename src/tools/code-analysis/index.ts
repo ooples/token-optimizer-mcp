@@ -9,7 +9,7 @@ export {
   getSmartTypeScriptTool,
   runSmartTypescript,
   SMART_TYPESCRIPT_TOOL_DEFINITION,
-} from './smart-typescript';
+} from './smart-typescript.js';
 
 export {
   SmartAstGrepTool,
@@ -19,7 +19,7 @@ export {
   type SmartAstGrepOptions,
   type SmartAstGrepResult,
   type AstMatch,
-} from './smart-ast-grep';
+} from './smart-ast-grep.js';
 
 // SmartAmbiance - Implementation pending
 // Note: Exports temporarily removed until implementation is complete
@@ -31,7 +31,7 @@ export {
   SMART_SECURITY_TOOL_DEFINITION,
   type SmartSecurityOptions,
   type SmartSecurityOutput,
-} from './smart-security';
+} from './smart-security.js';
 
 export {
   SmartDependenciesTool,
@@ -46,7 +46,7 @@ export {
   type CircularDependency,
   type UnusedDependency,
   type DependencyImpact,
-} from './smart-dependencies';
+} from './smart-dependencies.js';
 
 export {
   SmartSymbolsTool,
@@ -56,7 +56,7 @@ export {
   type SmartSymbolsOptions,
   type SmartSymbolsResult,
   type SymbolInfo,
-} from './smart-symbols';
+} from './smart-symbols.js';
 
 export {
   SmartComplexityTool,
@@ -67,7 +67,7 @@ export {
   type SmartComplexityResult,
   type ComplexityMetrics,
   type FunctionComplexity,
-} from './smart-complexity';
+} from './smart-complexity.js';
 
 export {
   SmartRefactorTool,
@@ -77,7 +77,7 @@ export {
   type SmartRefactorOptions,
   type SmartRefactorResult,
   type RefactorSuggestion,
-} from './smart-refactor';
+} from './smart-refactor.js';
 
 export {
   SmartImportsTool,
@@ -89,7 +89,7 @@ export {
   type ImportInfo,
   type ImportOptimization,
   type CircularDependency as ImportCircularDependency,
-} from './smart-imports';
+} from './smart-imports.js';
 
 export {
   SmartExportsTool,
@@ -101,4 +101,4 @@ export {
   type ExportInfo,
   type ExportDependency,
   type ExportOptimization,
-} from './smart-exports';
+} from './smart-exports.js';

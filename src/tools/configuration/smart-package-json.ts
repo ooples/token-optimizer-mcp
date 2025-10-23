@@ -14,9 +14,9 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { homedir } from 'os';
 
 interface PackageMetadata {

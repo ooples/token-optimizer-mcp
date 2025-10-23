@@ -3,8 +3,8 @@
  * Provides consistent caching interface across all tools
  */
 
-import { CacheEngine } from '../core/cache-engine';
-import { compress, decompress } from '../tools/shared/compression-utils';
+import { CacheEngine } from '../core/cache-engine.js';
+import { compress, decompress } from '../tools/shared/compression-utils.js';
 
 /**
  * Get cached content with automatic decompression

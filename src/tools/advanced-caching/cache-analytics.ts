@@ -17,9 +17,9 @@
  * Token Reduction Target: 88%+
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { EventEmitter } from 'events';
 import { writeFileSync } from 'fs';
 

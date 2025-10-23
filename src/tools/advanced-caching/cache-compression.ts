@@ -31,10 +31,10 @@ import {
   brotliDecompress,
   constants,
 } from 'zlib';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { generateCacheKey } from '../shared/hash-utils';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
+import { MetricsCollector } from '../../core/metrics.js';
 
 // Promisify compression functions
 const gzipAsync = promisify(gzip);

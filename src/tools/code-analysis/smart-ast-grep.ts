@@ -14,10 +14,10 @@
 import { execSync } from 'child_process';
 import { existsSync, statSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { hashFile } from '../shared/hash-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { hashFile } from '../shared/hash-utils.js';
 
 export interface SmartAstGrepOptions {
   // Pattern options

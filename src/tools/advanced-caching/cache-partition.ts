@@ -23,9 +23,9 @@
 
 import { createHash } from 'crypto';
 import { EventEmitter } from 'events';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 
 export interface CachePartitionOptions {
   operation:

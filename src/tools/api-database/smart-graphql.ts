@@ -11,10 +11,10 @@
  * - Token-optimized output
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { globalTokenCounter, globalMetricsCollector } from '../../core/globals';
-import type { TokenCounter } from '../../core/token-counter';
-import type { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { globalTokenCounter, globalMetricsCollector } from '../../core/globals.js';
+import type { TokenCounter } from '../../core/token-counter.js';
+import type { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
 
 interface SmartGraphQLOptions {

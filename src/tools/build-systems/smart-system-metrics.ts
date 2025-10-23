@@ -9,7 +9,7 @@
  */
 
 import { spawn } from 'child_process';
-import { CacheEngine } from '../../core/cache-engine';
+import { CacheEngine } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { homedir } from 'os';
 import { join } from 'path';

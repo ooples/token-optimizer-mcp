@@ -21,9 +21,9 @@
  * - Emotion classifier caching (93% reduction, infinite TTL)
  */
 
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
 
 // NLP libraries (to be installed: natural, compromise)
