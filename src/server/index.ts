@@ -10,82 +10,94 @@ import {
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
-import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
-import { MetricsCollector } from '../core/metrics.js';
-import {
-  getPredictiveCacheTool,
-  PREDICTIVE_CACHE_TOOL_DEFINITION,
-} from '../tools/advanced-caching/predictive-cache.js';
-import {
-  getCacheWarmupTool,
-  CACHE_WARMUP_TOOL_DEFINITION,
-} from '../tools/advanced-caching/cache-warmup.js';
-// File operations tools
-// Disabled for live server bring-up: file-operations tools depend on extensionless
-// imports in compiled output which Node ESM rejects. We expose core tools only.
-// TODO: Re-enable after fixing method signatures
-// import {
-//   getSmartDiffTool,
-//   SMART_DIFF_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-diff.js';
-// import {
-//   getSmartBranchTool,
-//   SMART_BRANCH_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-branch.js';
-// import {
-//   getSmartMergeTool,
-//   SMART_MERGE_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-merge.js';
-// import {
-//   getSmartStatusTool,
-//   SMART_STATUS_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-status.js';
-// import {
-//   getSmartLogTool,
-//   SMART_LOG_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-log.js';
-import { parseSessionLog } from './session-log-parser.js';
+import { analyzeTokenUsage, SessionAnalysisOptions } from '../analysis/session-analyzer.js';
+import { generateReport, ReportFormat, ReportOptions } from '../analysis/report-generator.js';
+import { TurnData } from '../utils/thinking-mode.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-// Configuration constants
-const COMPRESSION_CONFIG = {
-  MIN_SIZE_THRESHOLD: 500, // bytes - minimum size before attempting compression
-} as const;
+// Build Systems tools
+import {
+  getSmartProcessesTool,
+  SMART_PROCESSES_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-processes.js';
+import {
+  getSmartNetwork,
+  SMART_NETWORK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-network.js';
+import {
+  getSmartLogs,
+  SMART_LOGS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-logs.js';
+import {
+  getSmartLintTool,
+  SMART_LINT_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-lint.js';
+import {
+  getSmartInstall,
+  SMART_INSTALL_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-install.js';
+import {
+  getSmartDocker,
+  SMART_DOCKER_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-docker.js';
+import {
+  getSmartBuildTool,
+  SMART_BUILD_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-build.js';
+import {
+  getSmartSystemMetrics,
+  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-system-metrics.js';
+import {
+  getSmartTestTool,
+  SMART_TEST_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-test.js';
+import {
+  getSmartTypeCheckTool,
+  SMART_TYPECHECK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-typecheck.js';
+// System Operations tools
+import {
+  getSmartCron,
+  SMART_CRON_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-cron.js';
+import {
+  getSmartUser,
+  SMART_USER_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-user.js';
+import { MetricsCollector } from '../core/metrics.js';
 
 // Initialize core modules
 const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
+
+// Initialize metrics
 const metrics = new MetricsCollector();
 
-/**
- * Helper function to cache uncompressed text
- * Used when compression is skipped (file too small or compression doesn't help)
- */
-function cacheUncompressed(key: string, text: string, size: number): void {
-  // Store uncompressed text with size=0 for compressedSize to indicate no compression
-  cache.set(key, text, size, 0);
-}
+// Initialize Build Systems tools
+const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
+const smartNetwork = getSmartNetwork(cache);
+const smartLogs = getSmartLogs(cache);
+const smartLint = getSmartLintTool(cache, tokenCounter, metrics);
+const smartInstall = getSmartInstall(cache);
+const smartDocker = getSmartDocker(cache);
+const smartBuild = getSmartBuildTool(cache, tokenCounter, metrics);
+const smartSystemMetrics = getSmartSystemMetrics(cache);
+const smartTest = getSmartTestTool(cache, tokenCounter, metrics);
+const smartTypeCheck = getSmartTypeCheckTool(cache, tokenCounter, metrics);
 
-// Initialize advanced caching tools
-const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
-const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
-
-// File operations tools disabled in this live-test configuration.
-// TODO: Fix method signatures for these tools before enabling
-// const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
-// const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
-// const smartMerge = getSmartMergeTool(cache, tokenCounter, metrics);
-// const smartStatus = getSmartStatusTool(cache, tokenCounter, metrics);
-// const smartLog = getSmartLogTool(cache, tokenCounter, metrics);
+// Initialize System Operations tools
+const smartCron = getSmartCron(cache, tokenCounter, metrics);
+const smartUser = getSmartUser(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
   {
     name: 'token-optimizer-mcp',
-    version: '0.2.0',
+    version: '0.1.0',
   },
   {
     capabilities: {
@@ -235,8 +247,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description:
-                'Optional session ID to query. If not provided, uses current session.',
+              description: 'Optional session ID to query. If not provided, uses current session.',
             },
           },
         },
@@ -250,63 +261,93 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description:
-                'Optional session ID to optimize. If not provided, uses the current active session.',
+              description: 'Optional session ID to optimize. If not provided, uses the current active session.',
             },
             min_token_threshold: {
               type: 'number',
-              description:
-                'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+              description: 'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
             },
           },
         },
       },
-      // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
-      // This tool (analyze_project_tokens) is a new addition to the MCP server
       {
-        name: 'analyze_project_tokens',
+        name: 'generate_session_report',
         description:
-          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all operations-*.csv files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+          'Generate a comprehensive session report with token usage analysis, thinking mode detection, and visualizations. Supports HTML (with interactive charts), Markdown, and JSON formats.',
         inputSchema: {
           type: 'object',
           properties: {
-            projectPath: {
+            sessionId: {
               type: 'string',
-              description:
-                'Path to the project directory. If not provided, uses the hooks data directory.',
+              description: 'Optional session ID to analyze. If not provided, uses the current active session.',
             },
-            startDate: {
+            format: {
               type: 'string',
-              format: 'date',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              description: 'Optional start date filter (YYYY-MM-DD format).',
+              enum: ['html', 'markdown', 'json'],
+              description: 'Output format for the report (default: html)',
             },
-            endDate: {
+            outputPath: {
               type: 'string',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              description: 'Optional end date filter (YYYY-MM-DD format).',
-            },
-            costPerMillionTokens: {
-              type: 'number',
-              description:
-                'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
-              default: 30,
-              minimum: 0,
-              exclusiveMinimum: 0,
+              description: 'Optional path to save the report. If not provided, returns the report content.',
             },
           },
         },
       },
-      PREDICTIVE_CACHE_TOOL_DEFINITION,
-      CACHE_WARMUP_TOOL_DEFINITION,
-      // File operations tools
-      // File operations tool definitions intentionally omitted in live-test config
-      // TODO: Re-enable after fixing method signatures
-      // SMART_DIFF_TOOL_DEFINITION,
-      // SMART_BRANCH_TOOL_DEFINITION,
-      // SMART_MERGE_TOOL_DEFINITION,
-      // SMART_STATUS_TOOL_DEFINITION,
-      // SMART_LOG_TOOL_DEFINITION,
+      {
+        name: 'analyze_token_usage',
+        description:
+          'Perform detailed analysis of token usage patterns including top consumers, trends over time, anomaly detection, and optimization recommendations.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: {
+              type: 'string',
+              description: 'Optional session ID to analyze. If not provided, uses the current active session.',
+            },
+            groupBy: {
+              type: 'string',
+              enum: ['turn', 'tool', 'server', 'hour'],
+              description: 'How to group the analysis (default: turn)',
+            },
+            topN: {
+              type: 'number',
+              description: 'Number of top consumers to return (default: 10)',
+            },
+            anomalyThreshold: {
+              type: 'number',
+              description: 'Multiplier for detecting anomalies (default: 3x average)',
+            },
+          },
+        },
+      },
+      // Build Systems tools
+      SMART_PROCESSES_TOOL_DEFINITION,
+      SMART_NETWORK_TOOL_DEFINITION,
+      SMART_LOGS_TOOL_DEFINITION,
+      SMART_LINT_TOOL_DEFINITION,
+      SMART_INSTALL_TOOL_DEFINITION,
+      SMART_DOCKER_TOOL_DEFINITION,
+      SMART_BUILD_TOOL_DEFINITION,
+      SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+      SMART_TEST_TOOL_DEFINITION,
+      SMART_TYPECHECK_TOOL_DEFINITION,
+      // System Operations tools
+      SMART_CRON_TOOL_DEFINITION,
+      SMART_USER_TOOL_DEFINITION,
+      {
+        name: 'get_session_summary',
+        description:
+          'Get comprehensive session summary from session-log.jsonl including total tokens, turns, tool/hook counts, token breakdown by category and server, and duration. Reads from the new JSONL logging format (Priority 2).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: {
+              type: 'string',
+              description: 'Optional session ID to summarize. If not provided, uses the current active session.',
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -326,87 +367,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Count original tokens
         const originalCount = tokenCounter.count(text);
-        const originalSize = Buffer.byteLength(text, 'utf8');
-
-        // Minimum size threshold: don't compress small files
-        if (originalSize < COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD) {
-          // Cache uncompressed for small files
-          cacheUncompressed(key, text, originalSize);
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    key,
-                    originalTokens: originalCount.tokens,
-                    compressedTokens: originalCount.tokens,
-                    tokensSaved: 0,
-                    percentSaved: 0,
-                    originalSize,
-                    compressedSize: originalSize,
-                    cached: true,
-                    compressionSkipped: true,
-                    reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
-        }
 
         // Compress text
-        const compressionResult = compression.compressToBase64(text, {
-          quality,
-        });
+        const compressionResult = compression.compressToBase64(text, { quality });
 
-        // Count compressed tokens
-        const compressedCount = tokenCounter.count(
-          compressionResult.compressed
-        );
-
-        // Check if compression actually reduces tokens
-        if (compressedCount.tokens >= originalCount.tokens) {
-          // Compression doesn't help with tokens, cache uncompressed
-          cacheUncompressed(key, text, originalSize);
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(
-                  {
-                    success: true,
-                    key,
-                    originalTokens: originalCount.tokens,
-                    compressedTokens: originalCount.tokens,
-                    tokensSaved: 0,
-                    percentSaved: 0,
-                    originalSize,
-                    compressedSize: originalSize,
-                    cached: true,
-                    compressionSkipped: true,
-                    reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
-                  },
-                  null,
-                  2
-                ),
-              },
-            ],
-          };
-        }
-
-        // Compression helps! Cache the compressed version
+        // Cache the compressed text
         cache.set(
           key,
           compressionResult.compressed,
           compressionResult.compressedSize,
           compressionResult.originalSize
         );
+
+        // Count compressed tokens
+        const compressedCount = tokenCounter.count(compressionResult.compressed);
 
         return {
           content: [
@@ -423,7 +397,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   originalSize: compressionResult.originalSize,
                   compressedSize: compressionResult.compressedSize,
                   cached: true,
-                  compressionUsed: true,
                 },
                 null,
                 2
@@ -436,8 +409,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_cached': {
         const { key } = args as { key: string };
 
-        const cachedEntry = cache.getWithMetadata(key);
-        if (!cachedEntry) {
+        const cached = cache.get(key);
+        if (!cached) {
           return {
             content: [
               {
@@ -452,14 +425,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
 
-        let text: string;
-        // Check if the item was stored uncompressed (indicated by compressedSize === 0)
-        if (cachedEntry.compressedSize === 0) {
-          text = cachedEntry.content;
-        } else {
-          // Otherwise, it was compressed, so decompress it
-          text = compression.decompressFromBase64(cachedEntry.content);
-        }
+        // Decompress
+        const decompressed = compression.decompressFromBase64(cached);
 
         return {
           content: [
@@ -468,7 +435,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify({
                 success: true,
                 key,
-                text,
+                text: decompressed,
                 fromCache: true,
               }),
             },
@@ -588,8 +555,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     afterCompression: compressedTokens.tokens,
                     saved: tokenResult.tokens - compressedTokens.tokens,
                     percentSaved:
-                      ((tokenResult.tokens - compressedTokens.tokens) /
-                        tokenResult.tokens) *
+                      ((tokenResult.tokens - compressedTokens.tokens) / tokenResult.tokens) *
                       100,
                   },
                   size: {
@@ -626,10 +592,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           );
 
           // Read current session file
-          const sessionFilePath = path.join(
-            hooksDataPath,
-            'current-session.txt'
-          );
+          const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
 
           if (!fs.existsSync(sessionFilePath)) {
             return {
@@ -647,42 +610,83 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Strip BOM and parse JSON
-          const sessionContent = fs
-            .readFileSync(sessionFilePath, 'utf-8')
-            .replace(/^\uFEFF/, '');
+          const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
           const sessionData = JSON.parse(sessionContent);
 
           const targetSessionId = sessionId || sessionData.sessionId;
 
-          // Read JSONL log
-          const jsonlFilePath = path.join(
+          // Read operations CSV
+          const csvFilePath = path.join(
             hooksDataPath,
-            `session-log-${targetSessionId}.jsonl`
+            `operations-${targetSessionId}.csv`
           );
 
-          // Error handling: Throw to let MCP wrap errors consistently
-          if (!fs.existsSync(jsonlFilePath)) {
-            throw new Error(
-              `JSONL log not found for session ${targetSessionId}`
-            );
+          if (!fs.existsSync(csvFilePath)) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: false,
+                    error: `Operations file not found for session ${targetSessionId}`,
+                    csvFilePath,
+                  }),
+                },
+              ],
+            };
           }
 
-          // Parse JSONL using shared utility (now async with streaming)
-          const { operations, toolTokens, systemReminderTokens } =
-            await parseSessionLog(jsonlFilePath);
+          // Parse CSV
+          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
+          const lines = csvContent.trim().split('\n');
+
+          interface Operation {
+            timestamp: string;
+            toolName: string;
+            tokens: number;
+            metadata: string;
+          }
+
+          const operations: Operation[] = [];
+          let systemReminderTokens = 0;
+          let toolTokens = 0;
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            const parts = line.split(',');
+            if (parts.length < 3) continue;
+
+            const timestamp = parts[0];
+            const toolName = parts[1];
+            const tokens = parseInt(parts[2], 10) || 0;
+            const metadata = parts[3] || '';
+
+            operations.push({
+              timestamp,
+              toolName,
+              tokens,
+              metadata,
+            });
+
+            if (toolName === 'SYSTEM_REMINDERS') {
+              systemReminderTokens = tokens;
+            } else {
+              toolTokens += tokens;
+            }
+          }
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
-          const systemReminderPercent =
-            totalTokens > 0 ? (systemReminderTokens / totalTokens) * 100 : 0;
-          const toolPercent =
-            totalTokens > 0 ? (toolTokens / totalTokens) * 100 : 0;
+          const systemReminderPercent = totalTokens > 0
+            ? (systemReminderTokens / totalTokens) * 100
+            : 0;
+          const toolPercent = totalTokens > 0
+            ? (toolTokens / totalTokens) * 100
+            : 0;
 
           // Group operations by tool
-          const toolBreakdown: Record<
-            string,
-            { count: number; tokens: number }
-          > = {};
+          const toolBreakdown: Record<string, { count: number; tokens: number }> = {};
           for (const op of operations) {
             if (op.toolName === 'SYSTEM_REMINDERS') continue;
 
@@ -760,39 +764,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // --- 1. Identify Target Session ---
-          const hooksDataPath = path.join(
-            os.homedir(),
-            '.claude-global',
-            'hooks',
-            'data'
-          );
+          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
           let targetSessionId = sessionId;
 
           if (!targetSessionId) {
-            const sessionFilePath = path.join(
-              hooksDataPath,
-              'current-session.txt'
-            );
+            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
             if (!fs.existsSync(sessionFilePath)) {
               throw new Error('No active session found to optimize.');
             }
             // Strip BOM and parse JSON
-            const sessionContent = fs
-              .readFileSync(sessionFilePath, 'utf-8')
-              .replace(/^\uFEFF/, '');
+            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
           }
 
           // --- 2. Read Operations CSV ---
-          const csvFilePath = path.join(
-            hooksDataPath,
-            `operations-${targetSessionId}.csv`
-          );
+          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
           if (!fs.existsSync(csvFilePath)) {
-            throw new Error(
-              `Operations file not found for session ${targetSessionId}`
-            );
+            throw new Error(`Operations file not found for session ${targetSessionId}`);
           }
 
           const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
@@ -804,70 +793,71 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           let operationsCompressed = 0;
           const fileOpsToCompress = new Set<string>();
 
-          // DEBUG: Track filtering and security logic
+          // DEBUG: Track filtering logic
           const debugInfo = {
             totalLines: lines.length,
-            securityRejected: 0,
+            emptyLines: 0,
+            malformedLines: 0,
+            noFilePath: 0,
+            belowThreshold: 0,
+            duplicatePaths: 0,
+            candidatesFound: 0,
+            fileNotExists: 0,
+            successfullyCompressed: 0,
           };
 
           const fileToolNames = ['Read', 'Write', 'Edit'];
 
-          // SECURITY: Define secure base directory for file access
-          // Resolve to absolute path to prevent bypasses
-          const secureBaseDir = path.resolve(os.homedir());
-
           for (const line of lines) {
-            if (!line.trim()) continue;
+            if (!line.trim()) {
+              debugInfo.emptyLines++;
+              continue;
+            }
+
             const parts = line.split(',');
-            if (parts.length < 4) continue;
+            if (parts.length < 4) {
+              debugInfo.malformedLines++;
+              continue;
+            }
 
             const toolName = parts[1];
             const tokens = parseInt(parts[2], 10) || 0;
             let metadata = parts[3] || '';
 
-            // Strip surrounding quotes from file path
+            // FIX: Strip surrounding quotes from file path
             metadata = metadata.trim().replace(/^"(.*)"$/, '$1');
 
-            if (
-              fileToolNames.includes(toolName) &&
-              tokens > min_token_threshold &&
-              metadata
-            ) {
-              // SECURITY FIX: Validate file path to prevent path traversal
-              // Resolve the file path to absolute path
-              const resolvedFilePath = path.resolve(metadata);
-
-              // Check if the resolved path is within the secure base directory
-              if (!resolvedFilePath.startsWith(secureBaseDir)) {
-                // Log security event for rejected access attempt
-                console.error(
-                  `[SECURITY] Path traversal attempt detected and blocked: ${metadata}`
-                );
-                console.error(`[SECURITY] Resolved path: ${resolvedFilePath}`);
-                console.error(
-                  `[SECURITY] Secure base directory: ${secureBaseDir}`
-                );
-                debugInfo.securityRejected++;
-                continue;
-              }
-
-              fileOpsToCompress.add(resolvedFilePath);
+            // DEBUG: Track why operations are skipped
+            if (!fileToolNames.includes(toolName)) {
+              continue; // Not a file operation
             }
+
+            if (!metadata) {
+              debugInfo.noFilePath++;
+              continue;
+            }
+
+            if (tokens <= min_token_threshold) {
+              debugInfo.belowThreshold++;
+              continue;
+            }
+
+            // Check if already in set (duplicate)
+            if (fileOpsToCompress.has(metadata)) {
+              debugInfo.duplicatePaths++;
+              continue;
+            }
+
+            debugInfo.candidatesFound++;
+            fileOpsToCompress.add(metadata);
           }
 
           // --- 4. Batch Compress and Cache ---
           for (const filePath of fileOpsToCompress) {
-            // Additional security check before file access
-            const resolvedPath = path.resolve(filePath);
-            if (!resolvedPath.startsWith(secureBaseDir)) {
-              console.error(
-                `[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`
-              );
-              debugInfo.securityRejected++;
+            if (!fs.existsSync(filePath)) {
+              debugInfo.fileNotExists++;
               continue;
             }
-
-            if (!fs.existsSync(filePath)) continue;
 
             const fileContent = fs.readFileSync(filePath, 'utf-8');
             if (!fileContent) continue;
@@ -883,17 +873,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               compressionResult.originalSize
             );
 
-            const compressedCount = tokenCounter.count(
-              compressionResult.compressed
-            );
+            const compressedCount = tokenCounter.count(compressionResult.compressed);
             compressedTokens += compressedCount.tokens;
             operationsCompressed++;
+            debugInfo.successfullyCompressed++;
           }
 
           // --- 5. Return Summary with Debug Info ---
           const tokensSaved = originalTokens - compressedTokens;
-          const percentSaved =
-            originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
+          const percentSaved = originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
 
           return {
             content: [
@@ -911,10 +899,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                       saved: tokensSaved,
                       percentSaved: percentSaved,
                     },
-                    security: {
-                      pathsRejected: debugInfo.securityRejected,
-                      secureBaseDir: secureBaseDir,
-                    },
+                    debug: debugInfo,
                   },
                   null,
                   2
@@ -938,64 +923,105 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      case 'analyze_project_tokens': {
-        const { projectPath, startDate, endDate, costPerMillionTokens } =
-          args as {
-            projectPath?: string;
-            startDate?: string;
-            endDate?: string;
-            costPerMillionTokens?: number;
-          };
+      case 'generate_session_report': {
+        const { sessionId, format = 'html', outputPath } = args as {
+          sessionId?: string;
+          format?: ReportFormat;
+          outputPath?: string;
+        };
 
         try {
-          // Validate costPerMillionTokens input
-          const validatedCost =
-            costPerMillionTokens != null &&
-            Number.isFinite(costPerMillionTokens) &&
-            costPerMillionTokens >= 0
-              ? costPerMillionTokens
-              : undefined;
+          // Get session data
+          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          let targetSessionId = sessionId;
+          let sessionStartTime = '';
 
-          // Use provided path or default to global hooks directory
-          const targetPath = projectPath ?? os.homedir();
+          if (!targetSessionId) {
+            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            if (!fs.existsSync(sessionFilePath)) {
+              throw new Error('No active session found');
+            }
+            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionData = JSON.parse(sessionContent);
+            targetSessionId = sessionData.sessionId;
+            sessionStartTime = sessionData.startTime;
+          }
 
-          const result = await analyzeProjectTokens({
-            projectPath: targetPath,
-            startDate,
-            endDate,
-            costPerMillionTokens: validatedCost,
-          });
+          // Read operations CSV
+          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
+          if (!fs.existsSync(csvFilePath)) {
+            throw new Error(`Operations file not found for session ${targetSessionId}`);
+          }
 
-          // Generate token-optimized summary
-          const summary = {
-            success: true,
-            projectPath: result.projectPath,
-            analysisTimestamp: result.analysisTimestamp,
-            dateRange: result.dateRange,
-            summary: result.summary,
-            topContributingSessions: result.topContributingSessions
-              .slice(0, 5)
-              .map((s) => ({
-                sessionId: s.sessionId,
-                totalTokens: s.totalTokens,
-                duration: s.duration,
-                topTool: s.topTools[0]?.toolName || 'N/A',
-              })),
-            topTools: result.topTools.slice(0, 10).map((t) => ({
-              toolName: t.toolName,
-              totalTokens: t.totalTokens,
-              sessionCount: t.sessionCount,
-            })),
-            serverBreakdown: result.serverBreakdown,
-            costEstimation: result.costEstimation,
-            recommendations: result.recommendations,
+          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
+          const lines = csvContent.trim().split('\n');
+
+          const operations: TurnData[] = [];
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const parts = line.split(',');
+            if (parts.length < 3) continue;
+
+            operations.push({
+              timestamp: parts[0],
+              toolName: parts[1],
+              tokens: parseInt(parts[2], 10) || 0,
+              metadata: parts[3] || '',
+            });
+          }
+
+          // Analyze the session
+          const analysis = analyzeTokenUsage(operations);
+
+          // Generate report
+          const reportOptions: ReportOptions = {
+            sessionId: targetSessionId!,
+            sessionStartTime: sessionStartTime || operations[0]?.timestamp || 'Unknown',
+            includeCharts: format === 'html',
+            includeTimeline: format === 'html',
           };
 
+          const report = generateReport(analysis, format, reportOptions);
+
+          // Save to file if path provided
+          if (outputPath) {
+            fs.writeFileSync(outputPath, report, 'utf-8');
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(
+                    {
+                      success: true,
+                      message: `Report generated successfully`,
+                      outputPath,
+                      format,
+                      sessionId: targetSessionId,
+                      summary: analysis.summary,
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+            };
+          }
+
+          // Return report content
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(summary),
+                text: format === 'json' ? report : JSON.stringify(
+                  {
+                    success: true,
+                    format,
+                    sessionId: targetSessionId,
+                    report,
+                  },
+                  null,
+                  2
+                ),
               },
             ],
           };
@@ -1015,10 +1041,95 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      case 'predictive_cache': {
-        const options = args as any;
-        const result = await predictiveCache.run(options);
+      case 'analyze_token_usage': {
+        const { sessionId, groupBy = 'turn', topN = 10, anomalyThreshold = 3 } = args as {
+          sessionId?: string;
+          groupBy?: SessionAnalysisOptions['groupBy'];
+          topN?: number;
+          anomalyThreshold?: number;
+        };
 
+        try {
+          // Get session data
+          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          let targetSessionId = sessionId;
+
+          if (!targetSessionId) {
+            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            if (!fs.existsSync(sessionFilePath)) {
+              throw new Error('No active session found');
+            }
+            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionData = JSON.parse(sessionContent);
+            targetSessionId = sessionData.sessionId;
+          }
+
+          // Read operations CSV
+          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
+          if (!fs.existsSync(csvFilePath)) {
+            throw new Error(`Operations file not found for session ${targetSessionId}`);
+          }
+
+          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
+          const lines = csvContent.trim().split('\n');
+
+          const operations: TurnData[] = [];
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const parts = line.split(',');
+            if (parts.length < 3) continue;
+
+            operations.push({
+              timestamp: parts[0],
+              toolName: parts[1],
+              tokens: parseInt(parts[2], 10) || 0,
+              metadata: parts[3] || '',
+            });
+          }
+
+          // Analyze
+          const analysis = analyzeTokenUsage(operations, {
+            groupBy,
+            topN,
+            anomalyThreshold,
+          });
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    sessionId: targetSessionId,
+                    analysis,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+
+      case 'smart_processes': {
+        const options = args as any;
+        const result = await smartProcesses.run(options);
         return {
           content: [
             {
@@ -1029,10 +1140,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case 'cache_warmup': {
+      case 'smart_network': {
         const options = args as any;
-        const result = await cacheWarmup.run(options);
-
+        const result = await smartNetwork.run(options);
         return {
           content: [
             {
@@ -1043,29 +1153,430 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      // File operations tools disabled in live-test config
-
-      // TODO: Fix these tool handlers - need to verify method signatures
-      case 'smart_diff':
-      case 'smart_branch':
-      case 'smart_merge':
-      case 'smart_status':
-      case 'smart_log': {
+      case 'smart_logs': {
+        const options = args as any;
+        const result = await smartLogs.run(options);
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify({
-                error:
-                  'Tool not yet fully integrated - method signature needs verification',
-                tool: name,
-              }),
+              text: JSON.stringify(result, null, 2),
             },
           ],
-          isError: true,
         };
       }
 
+      case 'smart_lint': {
+        const options = args as any;
+        const result = await smartLint.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_install': {
+        const options = args as any;
+        const result = await smartInstall.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_docker': {
+        const options = args as any;
+        const result = await smartDocker.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_build': {
+        const options = args as any;
+        const result = await smartBuild.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_system_metrics': {
+        const options = args as any;
+        const result = await smartSystemMetrics.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_test': {
+        const options = args as any;
+        const result = await smartTest.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_typecheck': {
+        const options = args as any;
+        const result = await smartTypeCheck.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cron': {
+        const options = args as any;
+        const result = await smartCron.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_user': {
+        const options = args as any;
+        const result = await smartUser.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_session_summary': {
+        const { sessionId } = args as { sessionId?: string };
+
+        try {
+          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          let targetSessionId = sessionId;
+
+          // Get session ID from current-session.txt if not provided
+          if (!targetSessionId) {
+            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            if (!fs.existsSync(sessionFilePath)) {
+              throw new Error('No active session found');
+            }
+            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionData = JSON.parse(sessionContent);
+            targetSessionId = sessionData.sessionId;
+          }
+
+          // Read session-log.jsonl
+          const jsonlFilePath = path.join(hooksDataPath, `session-log-${targetSessionId}.jsonl`);
+
+          if (!fs.existsSync(jsonlFilePath)) {
+            // Fallback: Use CSV format for backward compatibility
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: false,
+                    error: `JSONL log not found for session ${targetSessionId}. This session may not have JSONL logging enabled yet.`,
+                    jsonlFilePath,
+                    note: 'Use get_session_stats for CSV-based sessions',
+                  }),
+                },
+              ],
+            };
+          }
+
+          // Parse JSONL file
+          const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
+          const lines = jsonlContent.trim().split('\n');
+
+          // Initialize statistics
+          let sessionStartTime = '';
+          let sessionEndTime = '';
+          let totalTurns = 0;
+          let totalTools = 0;
+          let totalHooks = 0;
+
+          const tokensByCategory: Record<string, number> = {
+            tools: 0,
+            hooks: 0,
+            responses: 0,
+            system_reminders: 0,
+          };
+
+          // Enhanced structure for granular MCP server tracking
+          interface ServerToolBreakdown {
+            total: number;
+            tools: Record<string, { count: number; tokens: number }>;
+          }
+          const tokensByServer: Record<string, ServerToolBreakdown> = {};
+          const toolDurations: number[] = [];
+          const toolBreakdown: Record<string, { count: number; tokens: number; totalDuration: number }> = {};
+          const hookBreakdown: Record<string, { count: number; tokens: number }> = {};
+
+          // DEBUG: Track parsing
+          let mcpToolCallEvents = 0;
+          let mcpToolResultEvents = 0;
+
+          // Parse each JSONL event
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            try {
+              const event = JSON.parse(line);
+
+              // Extract session start/end times
+              if (event.type === 'session_start') {
+                sessionStartTime = event.timestamp;
+              }
+
+              if (event.type === 'session_end') {
+                sessionEndTime = event.timestamp;
+              }
+
+              // Count turns (maximum turn number seen)
+              if (event.turn && event.turn > totalTurns) {
+                totalTurns = event.turn;
+              }
+
+              // Process tool calls (PreToolUse phase)
+              if (event.type === 'tool_call') {
+                totalTools++;
+                const tokens = event.estimatedTokens || 0;
+                tokensByCategory.tools += tokens;
+
+                // Track by tool name
+                if (!toolBreakdown[event.toolName]) {
+                  toolBreakdown[event.toolName] = { count: 0, tokens: 0, totalDuration: 0 };
+                }
+                toolBreakdown[event.toolName].count++;
+                toolBreakdown[event.toolName].tokens += tokens;
+
+                // Track by MCP server with tool-level granularity
+                if (event.toolName.startsWith('mcp__')) {
+                  mcpToolCallEvents++;
+                  const parts = event.toolName.split('__');
+                  const serverName = parts[1] || 'unknown';
+                  const toolName = parts.slice(2).join('__') || 'unknown';
+
+                  console.error(`[DEBUG tool_call] Found MCP tool: ${event.toolName} -> server=${serverName}, tool=${toolName}, tokens=${tokens}`);
+
+                  // Initialize server if not exists
+                  if (!tokensByServer[serverName]) {
+                    tokensByServer[serverName] = { total: 0, tools: {} };
+                    console.error(`[DEBUG tool_call] Initialized server: ${serverName}`);
+                  }
+
+                  // Initialize tool within server if not exists
+                  if (!tokensByServer[serverName].tools[toolName]) {
+                    tokensByServer[serverName].tools[toolName] = { count: 0, tokens: 0 };
+                    console.error(`[DEBUG tool_call] Initialized tool: ${serverName}.${toolName}`);
+                  }
+
+                  // Aggregate tokens at both server and tool level
+                  tokensByServer[serverName].total += tokens;
+                  tokensByServer[serverName].tools[toolName].count++;
+                  tokensByServer[serverName].tools[toolName].tokens += tokens;
+                  console.error(`[DEBUG tool_call] Updated: ${serverName}.${toolName} count=${tokensByServer[serverName].tools[toolName].count} tokens=${tokensByServer[serverName].tools[toolName].tokens}`);
+                }
+              }
+
+              // Process tool results (PostToolUse phase) - ALSO aggregate for MCP servers
+              if (event.type === 'tool_result') {
+                const tokens = event.actualTokens || 0;
+
+                // Track duration if available
+                if (event.duration_ms) {
+                  toolDurations.push(event.duration_ms);
+
+                  // Add duration to tool breakdown
+                  if (toolBreakdown[event.toolName]) {
+                    toolBreakdown[event.toolName].totalDuration += event.duration_ms;
+                  }
+                }
+
+                // CRITICAL FIX: Also aggregate MCP server attribution from tool_result events
+                // This fixes the empty tokensByServer issue
+                if (event.toolName.startsWith('mcp__')) {
+                  mcpToolResultEvents++;
+                  const parts = event.toolName.split('__');
+                  const serverName = parts[1] || 'unknown';
+                  const toolName = parts.slice(2).join('__') || 'unknown';
+
+                  console.error(`[DEBUG tool_result] Found MCP tool: ${event.toolName} -> server=${serverName}, tool=${toolName}, tokens=${tokens}`);
+
+                  // Initialize server if not exists
+                  if (!tokensByServer[serverName]) {
+                    tokensByServer[serverName] = { total: 0, tools: {} };
+                    console.error(`[DEBUG tool_result] Initialized server: ${serverName}`);
+                  }
+
+                  // Initialize tool within server if not exists
+                  if (!tokensByServer[serverName].tools[toolName]) {
+                    tokensByServer[serverName].tools[toolName] = { count: 0, tokens: 0 };
+                    console.error(`[DEBUG tool_result] Initialized tool: ${serverName}.${toolName}`);
+                  }
+
+                  // Aggregate tokens at both server and tool level
+                  // For MCP tools, increment count here since they don't have tool_call events
+                  tokensByServer[serverName].total += tokens;
+                  tokensByServer[serverName].tools[toolName].count++;
+                  tokensByServer[serverName].tools[toolName].tokens += tokens;
+                  console.error(`[DEBUG tool_result] Updated: ${serverName}.${toolName} count=${tokensByServer[serverName].tools[toolName].count} tokens=${tokensByServer[serverName].tools[toolName].tokens}`);
+                }
+              }
+
+              // Process hook executions
+              if (event.type === 'hook_execution') {
+                totalHooks++;
+                const tokens = event.estimated_tokens || 0;
+                tokensByCategory.hooks += tokens;
+
+                // Track by hook name
+                if (!hookBreakdown[event.hookName]) {
+                  hookBreakdown[event.hookName] = { count: 0, tokens: 0 };
+                }
+                hookBreakdown[event.hookName].count++;
+                hookBreakdown[event.hookName].tokens += tokens;
+              }
+
+              // Process system reminders
+              if (event.type === 'system_reminder') {
+                const tokens = event.tokens || 0;
+                tokensByCategory.system_reminders += tokens;
+              }
+            } catch (parseError) {
+              // Skip malformed JSONL lines
+              continue;
+            }
+          }
+
+          // Calculate total tokens
+          const totalTokens = Object.values(tokensByCategory).reduce((sum, val) => sum + val, 0);
+
+          // Calculate duration
+          let duration = 'Unknown';
+          if (sessionStartTime) {
+            const endTime = sessionEndTime || new Date().toISOString().replace('T', ' ').substring(0, 19);
+            const start = new Date(sessionStartTime);
+            const end = new Date(endTime);
+            const diffMs = end.getTime() - start.getTime();
+            const minutes = Math.floor(diffMs / 60000);
+            const seconds = Math.floor((diffMs % 60000) / 1000);
+            duration = `${minutes}m ${seconds}s`;
+          }
+
+          // Calculate average tool duration
+          const avgToolDuration = toolDurations.length > 0
+            ? Math.round(toolDurations.reduce((sum, d) => sum + d, 0) / toolDurations.length)
+            : 0;
+
+          // DEBUG: Log final state
+          console.error(`[DEBUG FINAL] MCP tool_call events: ${mcpToolCallEvents}`);
+          console.error(`[DEBUG FINAL] MCP tool_result events: ${mcpToolResultEvents}`);
+          console.error(`[DEBUG FINAL] tokensByServer keys: ${Object.keys(tokensByServer).join(', ') || 'EMPTY'}`);
+          console.error(`[DEBUG FINAL] tokensByServer content: ${JSON.stringify(tokensByServer, null, 2)}`);
+
+          // Build response
+          const summary = {
+            success: true,
+            sessionId: targetSessionId,
+            totalTokens,
+            totalTurns,
+            totalTools,
+            totalHooks,
+            duration,
+            debug: {
+              mcpToolCallEvents,
+              mcpToolResultEvents,
+              tokensByServerKeys: Object.keys(tokensByServer),
+            },
+            tokensByCategory: {
+              tools: {
+                tokens: tokensByCategory.tools,
+                percent: totalTokens > 0 ? (tokensByCategory.tools / totalTokens * 100).toFixed(2) : '0.00',
+              },
+              hooks: {
+                tokens: tokensByCategory.hooks,
+                percent: totalTokens > 0 ? (tokensByCategory.hooks / totalTokens * 100).toFixed(2) : '0.00',
+              },
+              responses: {
+                tokens: tokensByCategory.responses,
+                percent: totalTokens > 0 ? (tokensByCategory.responses / totalTokens * 100).toFixed(2) : '0.00',
+              },
+              system_reminders: {
+                tokens: tokensByCategory.system_reminders,
+                percent: totalTokens > 0 ? (tokensByCategory.system_reminders / totalTokens * 100).toFixed(2) : '0.00',
+              },
+            },
+            tokensByServer,
+            toolBreakdown,
+            hookBreakdown,
+            performance: {
+              avgToolDuration_ms: avgToolDuration,
+              totalToolCalls: totalTools,
+              toolsWithDuration: toolDurations.length,
+            },
+          };
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(summary, null, 2),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -1084,41 +1595,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Helper to run cleanup operations with error handling
-function runCleanupOperations(operations: { fn: () => void; name: string }[]) {
-  for (const op of operations) {
-    try {
-      op.fn();
-    } catch (err) {
-      console.error(`Error during cleanup (${op.name}):`, err);
-    }
-  }
-}
-
-// Shared cleanup function to avoid duplication between signal handlers
-function cleanup() {
-  runCleanupOperations([
-    { fn: () => cache?.close(), name: 'closing cache' },
-    { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
-    // Note: predictiveCache and cacheWarmup do not implement dispose() methods
-    // Removed dispose() calls to prevent runtime errors during cleanup
-  ]);
-}
-
 // Start server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Cleanup on exit - Note: the signal handlers use try-catch blocks
-  // to ensure cleanup continues even if disposal fails
+  // Cleanup on exit
   process.on('SIGINT', () => {
-    cleanup();
+    cache.close();
+    tokenCounter.free();
     process.exit(0);
   });
 
   process.on('SIGTERM', () => {
-    cleanup();
+    cache.close();
+    tokenCounter.free();
     process.exit(0);
   });
 }

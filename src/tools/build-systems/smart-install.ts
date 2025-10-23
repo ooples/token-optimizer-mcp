@@ -657,3 +657,44 @@ export async function runSmartInstall(
     smartInstall.close();
   }
 }
+
+// MCP Tool definition
+export const SMART_INSTALL_TOOL_DEFINITION = {
+  name: 'smart_install',
+  description:
+    'Package installation with dependency analysis, conflict detection, and smart caching for npm/yarn/pnpm',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      force: {
+        type: 'boolean',
+        description: 'Force reinstall (ignore cache)',
+        default: false,
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory',
+      },
+      packageManager: {
+        type: 'string',
+        enum: ['npm', 'yarn', 'pnpm'],
+        description: 'Package manager to use (auto-detect if not specified)',
+      },
+      packages: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Packages to install (if empty, installs all from package.json)',
+      },
+      dev: {
+        type: 'boolean',
+        description: 'Install as dev dependency',
+        default: false,
+      },
+      maxCacheAge: {
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 3600)',
+        default: 3600,
+      },
+    },
+  },
+};
