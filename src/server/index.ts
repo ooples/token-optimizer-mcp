@@ -20,6 +20,52 @@ import {
   getCacheWarmupTool,
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
+// Code analysis tools
+import {
+  getSmartAstGrepTool,
+  SMART_AST_GREP_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-ast-grep.js';
+import {
+  SMART_COMPLEXITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-complexity.js';
+import {
+  SMART_DEPENDENCIES_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-dependencies.js';
+import {
+  SMART_EXPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-exports.js';
+import {
+  SMART_IMPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-imports.js';
+import {
+  SMART_REFACTOR_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-refactor.js';
+import {
+  SMART_SECURITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-security.js';
+import {
+  SMART_SYMBOLS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-symbols.js';
+import {
+  SMART_TYPESCRIPT_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-typescript.js';
+// Configuration tools
+import {
+  SMART_CONFIG_READ_TOOL_DEFINITION,
+} from '../tools/configuration/smart-config-read.js';
+import {
+  SMART_ENV_TOOL_DEFINITION,
+} from '../tools/configuration/smart-env.js';
+import {
+  SMART_PACKAGE_JSON_TOOL_DEFINITION,
+} from '../tools/configuration/smart-package-json.js';
+import {
+  SMART_TSCONFIG_TOOL_DEFINITION,
+} from '../tools/configuration/smart-tsconfig.js';
+// Output formatting tools
+import {
+  SMART_PRETTY_TOOL_DEFINITION,
+} from '../tools/output-formatting/smart-pretty.js';
 // File operations tools
 // Disabled for live server bring-up: file-operations tools depend on extensionless
 // imports in compiled output which Node ESM rejects. We expose core tools only.
@@ -72,6 +118,12 @@ function cacheUncompressed(key: string, text: string, size: number): void {
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
+// Code analysis tool instances
+const smartAstGrep = getSmartAstGrepTool(cache, tokenCounter, metrics);
+
+// Configuration tool instances
+
+// Output formatting tool instances
 
 // File operations tools disabled in this live-test configuration.
 // TODO: Fix method signatures for these tools before enabling
@@ -299,6 +351,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       PREDICTIVE_CACHE_TOOL_DEFINITION,
       CACHE_WARMUP_TOOL_DEFINITION,
+      // Code analysis tools
+      SMART_AST_GREP_TOOL_DEFINITION,
+      SMART_COMPLEXITY_TOOL_DEFINITION,
+      SMART_DEPENDENCIES_TOOL_DEFINITION,
+      SMART_EXPORTS_TOOL_DEFINITION,
+      SMART_IMPORTS_TOOL_DEFINITION,
+      SMART_REFACTOR_TOOL_DEFINITION,
+      SMART_SECURITY_TOOL_DEFINITION,
+      SMART_SYMBOLS_TOOL_DEFINITION,
+      SMART_TYPESCRIPT_TOOL_DEFINITION,
+      // Configuration tools
+      SMART_CONFIG_READ_TOOL_DEFINITION,
+      SMART_ENV_TOOL_DEFINITION,
+      SMART_PACKAGE_JSON_TOOL_DEFINITION,
+      SMART_TSCONFIG_TOOL_DEFINITION,
+      // Output formatting tools
+      SMART_PRETTY_TOOL_DEFINITION,
       // File operations tools
       // File operations tool definitions intentionally omitted in live-test config
       // TODO: Re-enable after fixing method signatures
@@ -1040,6 +1109,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(result, null, 2),
             },
           ],
+        };
+      }
+
+
+      // Code analysis tools  
+      case 'smart_ast_grep': {
+        const options = args as any;
+        const result = await smartAstGrep.grep(options.pattern, options);
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          }],
+        };
+      }
+
+      case 'smart_complexity':
+      case 'smart_dependencies':
+      case 'smart_exports':
+      case 'smart_imports':
+      case 'smart_refactor':
+      case 'smart_security':
+      case 'smart_symbols':
+      case 'smart_typescript':
+      case 'smart_config_read':
+      case 'smart_env':
+      case 'smart_package_json':
+      case 'smart_tsconfig':
+      case 'smart_pretty': {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              error: `Tool ${name} registered but handler not yet implemented`,
+              tool: name,
+            }),
+          }],
+          isError: true,
         };
       }
 
