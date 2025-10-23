@@ -74,6 +74,15 @@ import {
   getSmartUser,
   SMART_USER_TOOL_DEFINITION,
 } from '../tools/system-operations/smart-user.js';
+// Advanced Caching tools
+import {
+  getPredictiveCacheTool,
+  PREDICTIVE_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/predictive-cache.js';
+import {
+  getCacheWarmupTool,
+  CACHE_WARMUP_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-warmup.js';
 import { MetricsCollector } from '../core/metrics.js';
 
 // Initialize core modules
@@ -99,6 +108,10 @@ const smartTypeCheck = getSmartTypeCheckTool(cache, tokenCounter, metrics);
 // Initialize System Operations tools
 const smartCron = getSmartCron(cache, tokenCounter, metrics);
 const smartUser = getSmartUser(cache, tokenCounter, metrics);
+
+// Initialize Advanced Caching tools
+const predictiveCacheTool = getPredictiveCacheTool(cache, tokenCounter, metrics);
+const cacheWarmupTool = getCacheWarmupTool(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
@@ -348,6 +361,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // System Operations tools
       SMART_CRON_TOOL_DEFINITION,
       SMART_USER_TOOL_DEFINITION,
+      // Advanced Caching tools
+      PREDICTIVE_CACHE_TOOL_DEFINITION,
+      CACHE_WARMUP_TOOL_DEFINITION,
       {
         name: 'get_session_summary',
         description:
@@ -1359,6 +1375,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_user': {
         const options = args as any;
         const result = await smartUser.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'predictive_cache': {
+        const options = args as any;
+        const result = await predictiveCacheTool.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_warmup': {
+        const options = args as any;
+        const result = await cacheWarmupTool.run(options);
         return {
           content: [
             {
