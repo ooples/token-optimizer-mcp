@@ -52,6 +52,18 @@ import {
   getSmartCacheTool,
   SMART_CACHE_TOOL_DEFINITION,
 } from '../tools/advanced-caching/smart-cache.js';
+import {
+  getAlertManager,
+  ALERT_MANAGER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/alert-manager.js';
+import {
+  getMetricCollector,
+  METRIC_COLLECTOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/metric-collector.js';
+import {
+  getMonitoringIntegration,
+  MONITORING_INTEGRATION_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/monitoring-integration.js';
 
 // API & Database tools
 import {
@@ -173,6 +185,15 @@ const smartMigration = getSmartMigration(cache, tokenCounter, metrics);
 const smartOrm = getSmartOrm(cache, tokenCounter, metrics);
 const smartRest = getSmartRest(cache, tokenCounter, metrics);
 const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
+
+// Initialize monitoring tools
+const alertManager = getAlertManager(cache, tokenCounter, metrics);
+const metricCollectorTool = getMetricCollector(cache, tokenCounter, metrics);
+const monitoringIntegration = getMonitoringIntegration(
+  cache,
+  tokenCounter,
+  metrics
+);
 
 const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
 const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
@@ -417,6 +438,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       SMART_ORM_TOOL_DEFINITION,
       SMART_REST_TOOL_DEFINITION,
       SMART_WEBSOCKET_TOOL_DEFINITION,
+      // Dashboard & Monitoring tools
+      ALERT_MANAGER_TOOL_DEFINITION,
+      METRIC_COLLECTOR_TOOL_DEFINITION,
+      MONITORING_INTEGRATION_TOOL_DEFINITION,
       // File operations tools
 
       SMART_DIFF_TOOL_DEFINITION,
@@ -1473,6 +1498,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_log': {
         const options = args as SmartLogOptions;
         const result = await smartLog.log(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'alert_manager': {
+        const options = args as any;
+        const result = await alertManager.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'metric_collector': {
+        const options = args as any;
+        const result = await metricCollectorTool.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'monitoring_integration': {
+        const options = args as any;
+        const result = await monitoringIntegration.run(options);
         return {
           content: [
             {
