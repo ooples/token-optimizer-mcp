@@ -1826,7 +1826,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 
       case 'knowledge_graph': {
-        const options = args as any;
+        const options = args as KnowledgeGraphOptions;
         const result = await knowledgeGraph.run(options);
         return {
           content: [
