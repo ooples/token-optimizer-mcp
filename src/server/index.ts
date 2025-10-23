@@ -69,6 +69,22 @@ import {
   getMonitoringIntegration,
   MONITORING_INTEGRATION_TOOL_DEFINITION,
 } from '../tools/dashboard-monitoring/monitoring-integration.js';
+import {
+  getCustomWidget,
+  CUSTOM_WIDGET_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/custom-widget.js';
+import {
+  getDataVisualizer,
+  DATA_VISUALIZER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/data-visualizer.js';
+import {
+  getHealthMonitor,
+  HEALTH_MONITOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/health-monitor.js';
+import {
+  getLogDashboard,
+  LOG_DASHBOARD_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/log-dashboard.js';
 
 // API & Database tools
 import {
@@ -252,6 +268,10 @@ const monitoringIntegration = getMonitoringIntegration(
   tokenCounter,
   metrics
 );
+const customWidget = getCustomWidget(cache, tokenCounter, metrics);
+const dataVisualizer = getDataVisualizer(cache, tokenCounter, metrics);
+const healthMonitor = getHealthMonitor(cache, tokenCounter, metrics);
+const logDashboard = getLogDashboard(cache, tokenCounter, metrics);
 
 // Initialize Build Systems tools
 const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
@@ -518,6 +538,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ALERT_MANAGER_TOOL_DEFINITION,
       METRIC_COLLECTOR_TOOL_DEFINITION,
       MONITORING_INTEGRATION_TOOL_DEFINITION,
+      CUSTOM_WIDGET_TOOL_DEFINITION,
+      DATA_VISUALIZER_TOOL_DEFINITION,
+      HEALTH_MONITOR_TOOL_DEFINITION,
+      LOG_DASHBOARD_TOOL_DEFINITION,
       // Build Systems tools
       SMART_PROCESSES_TOOL_DEFINITION,
       SMART_NETWORK_TOOL_DEFINITION,
@@ -1806,6 +1830,59 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
+
+      case 'custom_widget': {
+        const options = args as any;
+        const result = await customWidget.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'data_visualizer': {
+        const options = args as any;
+        const result = await dataVisualizer.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'health_monitor': {
+        const options = args as any;
+        const result = await healthMonitor.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'log_dashboard': {
+        const options = args as any;
+        const result = await logDashboard.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
 
       default:
         throw new Error(`Unknown tool: ${name}`);
