@@ -1,9 +1,9 @@
 /**
- * DataVisualizer - Advanced data visualization with multiple chart types and interactive features
- * Track 2E - Tool #8
+ * ReportGenerator - Multi-format report generation with templating and scheduling
+ * Track 2E - Tool #5
  *
- * Target: 1,620 lines, 91% token reduction
- * Operations: 8 (create-chart, update-chart, export-chart, create-heatmap, create-timeline, create-network-graph, create-sankey, animate)
+ * Target: 1,350 lines, 90% token reduction
+ * Operations: 6 (generate, schedule, list-schedules, cancel-schedule, get-report, export)
  */
 
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -15,7 +15,7 @@ import { createHash } from 'crypto';
 // Type Definitions
 // ============================================================================
 
-export interface DataVisualizerOptions {
+export interface ReportGeneratorOptions {
   operation:
     | 'create-chart'
     | 'update-chart'
@@ -173,7 +173,7 @@ export interface Chart {
   metadata?: Record<string, any>;
 }
 
-export interface DataVisualizerResult {
+export interface ReportGeneratorResult {
   success: boolean;
   data?: {
     chart?: Chart;
@@ -190,10 +190,10 @@ export interface DataVisualizerResult {
 }
 
 // ============================================================================
-// DataVisualizer Class
+// ReportGenerator Class
 // ============================================================================
 
-export class DataVisualizer {
+export class ReportGenerator {
   private charts: Map<string, Chart> = new Map();
   private chartCounter = 0;
 
@@ -206,12 +206,12 @@ export class DataVisualizer {
   /**
    * Main entry point for all data visualizer operations
    */
-  async run(options: DataVisualizerOptions): Promise<DataVisualizerResult> {
+  async run(options: ReportGeneratorOptions): Promise<ReportGeneratorResult> {
     const startTime = Date.now();
 
     try {
       // Route to appropriate operation handler
-      let result: DataVisualizerResult;
+      let result: ReportGeneratorResult;
 
       switch (options.operation) {
         case 'create-chart':
@@ -244,7 +244,7 @@ export class DataVisualizer {
 
       // Record metrics
       this.metricsCollector.record({
-        operation: `data-visualizer:${options.operation}`,
+        operation: `report-generator:${options.operation}`,
         duration: Date.now() - startTime,
         success: result.success,
         cacheHit: result.metadata.cacheHit,
@@ -254,7 +254,7 @@ export class DataVisualizer {
     } catch (error) {
       // Record error metrics
       this.metricsCollector.record({
-        operation: `data-visualizer:${options.operation}`,
+        operation: `report-generator:${options.operation}`,
         duration: Date.now() - startTime,
         success: false,
         cacheHit: false,
@@ -276,8 +276,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createChart(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.data || !options.chartType) {
       throw new Error(
         'Data and chart type are required for create-chart operation'
@@ -348,8 +348,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async updateChart(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.chartId) {
       throw new Error('Chart ID is required for update-chart operation');
     }
@@ -402,8 +402,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async exportChart(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.chartId) {
       throw new Error('Chart ID is required for export-chart operation');
     }
@@ -495,8 +495,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createHeatmap(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.heatmapConfig) {
       throw new Error(
         'Heatmap configuration is required for create-heatmap operation'
@@ -572,8 +572,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createTimeline(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.timelineConfig || !options.timelineConfig.events) {
       throw new Error(
         'Timeline configuration with events is required for create-timeline operation'
@@ -625,8 +625,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createNetworkGraph(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.networkConfig) {
       throw new Error(
         'Network configuration is required for create-network-graph operation'
@@ -687,8 +687,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createSankey(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.sankeyConfig) {
       throw new Error(
         'Sankey configuration is required for create-sankey operation'
@@ -744,8 +744,8 @@ export class DataVisualizer {
   // ============================================================================
 
   private async animate(
-    options: DataVisualizerOptions
-  ): Promise<DataVisualizerResult> {
+    options: ReportGeneratorOptions
+  ): Promise<ReportGeneratorResult> {
     if (!options.chartId) {
       throw new Error('Chart ID is required for animate operation');
     }
@@ -810,7 +810,7 @@ export class DataVisualizer {
   // Helper Methods - Chart Building
   // ============================================================================
 
-  private buildChartConfig(options: DataVisualizerOptions): any {
+  private buildChartConfig(options: ReportGeneratorOptions): any {
     const config = options.chartConfig || {};
 
     return {
@@ -1265,7 +1265,7 @@ export class DataVisualizer {
 
   private async exportToSVG(
     chart: Chart,
-    options: DataVisualizerOptions
+    options: ReportGeneratorOptions
   ): Promise<Buffer> {
     // Generate SVG based on chart type
     let svg: string;
@@ -1288,7 +1288,7 @@ export class DataVisualizer {
 
   private async exportToPNG(
     chart: Chart,
-    options: DataVisualizerOptions
+    options: ReportGeneratorOptions
   ): Promise<Buffer> {
     // For PNG export, we would typically use a library like canvas or puppeteer
     // For now, return SVG wrapped in data URI format that can be converted
@@ -1298,7 +1298,7 @@ export class DataVisualizer {
 
   private async exportToPDF(
     chart: Chart,
-    _options: DataVisualizerOptions
+    _options: ReportGeneratorOptions
   ): Promise<Buffer> {
     // For PDF export, we would use a library like pdfkit or puppeteer
     // For now, return a simple PDF structure
@@ -1308,7 +1308,7 @@ export class DataVisualizer {
 
   private async exportToHTML(
     chart: Chart,
-    options: DataVisualizerOptions
+    options: ReportGeneratorOptions
   ): Promise<Buffer> {
     const svg = await this.exportToSVG(chart, options);
 
@@ -1350,7 +1350,7 @@ export class DataVisualizer {
 
   private generateBasicChartSVG(
     chart: Chart,
-    options: DataVisualizerOptions
+    options: ReportGeneratorOptions
   ): string {
     const width = options.exportWidth || 800;
     const height = options.exportHeight || 600;
@@ -1400,7 +1400,7 @@ export class DataVisualizer {
 
   private generatePieChartSVG(
     chart: Chart,
-    options: DataVisualizerOptions
+    options: ReportGeneratorOptions
   ): string {
     const width = options.exportWidth || 600;
     const height = options.exportHeight || 600;
@@ -1820,7 +1820,7 @@ export class DataVisualizer {
 
   private generateCacheKey(
     operation: string,
-    options: DataVisualizerOptions
+    options: ReportGeneratorOptions
   ): string {
     const hash = createHash('sha256');
     hash.update(operation);
@@ -1838,6 +1838,6 @@ export class DataVisualizer {
         exportFormat: options.exportFormat,
       })
     );
-    return `data-visualizer:${operation}:${hash.digest('hex')}`;
+    return `report-generator:${operation}:${hash.digest('hex')}`;
   }
 }

@@ -1,9 +1,9 @@
 /**
- * Track 2E Tool #4: HealthMonitor
+ * Track 2E Tool #6: SmartDashboard
  *
- * Purpose: Monitor health status of systems, services, and applications with dependency tracking.
- * Target Lines: 1,320
- * Token Reduction: 87%
+ * Purpose: Unified dashboard management with widget management and multi-source data integration.
+ * Target Lines: 1,980
+ * Token Reduction: 90%
  *
  * Operations:
  * 1. check - Run health checks
@@ -26,7 +26,7 @@ import { createHash } from 'crypto';
 // Type Definitions
 // ============================================================================
 
-export interface HealthMonitorOptions {
+export interface SmartDashboardOptions {
   operation:
     | 'check'
     | 'register-check'
@@ -94,7 +94,7 @@ export interface HealthMonitorOptions {
   cacheTTL?: number;
 }
 
-export interface HealthMonitorResult {
+export interface SmartDashboardResult {
   success: boolean;
   data?: {
     check?: HealthCheck;
@@ -758,17 +758,17 @@ class StatusAggregator {
 const statusAggregator = new StatusAggregator();
 
 // ============================================================================
-// Main HealthMonitor Class
+// Main SmartDashboard Class
 // ============================================================================
 
-export class HealthMonitor {
+export class SmartDashboard {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
     private metricsCollector: MetricsCollector
   ) {}
 
-  async run(options: HealthMonitorOptions): Promise<HealthMonitorResult> {
+  async run(options: SmartDashboardOptions): Promise<SmartDashboardResult> {
     const startTime = Date.now();
 
     try {
@@ -778,7 +778,7 @@ export class HealthMonitor {
       }
 
       // Execute operation
-      let result: HealthMonitorResult;
+      let result: SmartDashboardResult;
 
       switch (options.operation) {
         case 'check':
@@ -811,7 +811,7 @@ export class HealthMonitor {
 
       // Record metrics
       this.metricsCollector.record({
-        operation: `health-monitor:${options.operation}`,
+        operation: `smart-dashboard:${options.operation}`,
         duration: Date.now() - startTime,
         success: result.success,
         cacheHit: result.metadata.cacheHit,
@@ -821,7 +821,7 @@ export class HealthMonitor {
     } catch (error) {
       // Record error metrics
       this.metricsCollector.record({
-        operation: `health-monitor:${options.operation}`,
+        operation: `smart-dashboard:${options.operation}`,
         duration: Date.now() - startTime,
         success: false,
         cacheHit: false,
@@ -842,9 +842,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async executeCheck(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     const checkId = options.checkId;
     const checkName = options.checkName;
 
@@ -922,9 +922,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async registerCheck(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     if (!options.checkName || !options.checkType || !options.checkConfig) {
       throw new Error('checkName, checkType, and checkConfig are required');
     }
@@ -960,9 +960,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async updateCheck(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     const checkId = options.checkId;
     const checkName = options.checkName;
 
@@ -1007,9 +1007,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async deleteCheck(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     const checkId = options.checkId;
     const checkName = options.checkName;
 
@@ -1044,9 +1044,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async getStatus(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     const service = options.service || 'default';
 
     // Generate cache key
@@ -1108,9 +1108,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async getHistory(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     const checkId = options.checkId;
 
     // Generate cache key
@@ -1175,9 +1175,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async configureDependencies(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     if (!options.dependencies) {
       throw new Error('dependencies configuration is required');
     }
@@ -1213,9 +1213,9 @@ export class HealthMonitor {
   // ========================================================================
 
   private async getImpact(
-    options: HealthMonitorOptions,
+    options: SmartDashboardOptions,
     _startTime: number
-  ): Promise<HealthMonitorResult> {
+  ): Promise<SmartDashboardResult> {
     if (!options.service) {
       throw new Error('service is required for impact analysis');
     }
@@ -1308,22 +1308,22 @@ export class HealthMonitor {
 // Factory Function
 // ============================================================================
 
-export function createHealthMonitor(
+export function createSmartDashboard(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metricsCollector: MetricsCollector
-): HealthMonitor {
-  return new HealthMonitor(cache, tokenCounter, metricsCollector);
+): SmartDashboard {
+  return new SmartDashboard(cache, tokenCounter, metricsCollector);
 }
 
 // ============================================================================
 // MCP Tool Definition
 // ============================================================================
 
-export const healthMonitorTool = {
-  name: 'health-monitor',
+export const smartDashboardTool = {
+  name: 'smart-dashboard',
   description:
-    'Monitor health status of systems, services, and applications with dependency tracking. Supports 8 operations: check, register-check, update-check, delete-check, get-status, get-history, configure-dependencies, get-impact. Achieves 87% token reduction through status caching and dependency graph compression.',
+    'Unified dashboard management with widget management and multi-source data integration. Supports 8 operations: check, register-check, update-check, delete-check, get-status, get-history, configure-dependencies, get-impact. Achieves 87% token reduction through status caching and dependency graph compression.',
 
   inputSchema: {
     type: 'object',
