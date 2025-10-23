@@ -58,8 +58,6 @@ import {
   getSmartCacheTool,
   SMART_CACHE_TOOL_DEFINITION,
 } from '../tools/advanced-caching/smart-cache.js';
-
-// Monitoring Tools (3 tools)
 import {
   getAlertManager,
   ALERT_MANAGER_TOOL_DEFINITION,
@@ -116,33 +114,37 @@ import {
 } from '../tools/api-database/smart-websocket.js';
 
 // File operations tools
-// Disabled for live server bring-up: file-operations tools depend on extensionless
-// imports in compiled output which Node ESM rejects. We expose core tools only.
-// TODO: Re-enable after fixing method signatures
-// import {
-//   getSmartDiffTool,
-//   SMART_DIFF_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-diff.js';
-// import {
-//   getSmartBranchTool,
-//   SMART_BRANCH_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-branch.js';
-// import {
-//   getSmartMergeTool,
-//   SMART_MERGE_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-merge.js';
-// import {
-//   getSmartStatusTool,
-//   SMART_STATUS_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-status.js';
-// import {
-//   getSmartLogTool,
-//   SMART_LOG_TOOL_DEFINITION,
-// } from '../tools/file-operations/smart-log.js';
+import {
+  getSmartDiffTool,
+  SMART_DIFF_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-diff.js';
+import {
+  getSmartBranchTool,
+  SMART_BRANCH_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-branch.js';
+import {
+  getSmartMergeTool,
+  SMART_MERGE_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-merge.js';
+import {
+  getSmartStatusTool,
+  SMART_STATUS_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-status.js';
+import {
+  getSmartLogTool,
+  SMART_LOG_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-log.js';
 import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+
+// Type imports for file-operations tools
+import type { SmartDiffOptions } from '../tools/file-operations/smart-diff.js';
+import type { SmartBranchOptions } from '../tools/file-operations/smart-branch.js';
+import type { SmartMergeOptions } from '../tools/file-operations/smart-merge.js';
+import type { SmartStatusOptions } from '../tools/file-operations/smart-status.js';
+import type { SmartLogOptions } from '../tools/file-operations/smart-log.js';
 
 // Configuration constants
 const COMPRESSION_CONFIG = {
@@ -201,13 +203,11 @@ const monitoringIntegration = getMonitoringIntegration(
   metrics
 );
 
-// File operations tools disabled in this live-test configuration.
-// TODO: Fix method signatures for these tools before enabling
-// const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
-// const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
-// const smartMerge = getSmartMergeTool(cache, tokenCounter, metrics);
-// const smartStatus = getSmartStatusTool(cache, tokenCounter, metrics);
-// const smartLog = getSmartLogTool(cache, tokenCounter, metrics);
+const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
+const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
+const smartMerge = getSmartMergeTool(cache, tokenCounter, metrics);
+const smartStatus = getSmartStatusTool(cache, tokenCounter, metrics);
+const smartLog = getSmartLogTool(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
@@ -448,18 +448,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       SMART_ORM_TOOL_DEFINITION,
       SMART_REST_TOOL_DEFINITION,
       SMART_WEBSOCKET_TOOL_DEFINITION,
-      // Monitoring tools
+      // Dashboard & Monitoring tools
       ALERT_MANAGER_TOOL_DEFINITION,
       METRIC_COLLECTOR_TOOL_DEFINITION,
       MONITORING_INTEGRATION_TOOL_DEFINITION,
       // File operations tools
-      // File operations tool definitions intentionally omitted in live-test config
-      // TODO: Re-enable after fixing method signatures
-      // SMART_DIFF_TOOL_DEFINITION,
-      // SMART_BRANCH_TOOL_DEFINITION,
-      // SMART_MERGE_TOOL_DEFINITION,
-      // SMART_STATUS_TOOL_DEFINITION,
-      // SMART_LOG_TOOL_DEFINITION,
+
+      SMART_DIFF_TOOL_DEFINITION,
+      SMART_BRANCH_TOOL_DEFINITION,
+      SMART_MERGE_TOOL_DEFINITION,
+      SMART_STATUS_TOOL_DEFINITION,
+      SMART_LOG_TOOL_DEFINITION,
     ],
   };
 });
@@ -1467,10 +1466,75 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case 'smart_diff': {
+        const options = args as SmartDiffOptions;
+        const result = await smartDiff.diff(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_branch': {
+        const options = args as SmartBranchOptions;
+        const result = await smartBranch.branch(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_merge': {
+        const options = args as SmartMergeOptions;
+        const result = await smartMerge.merge(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_status': {
+        const options = args as SmartStatusOptions;
+        const result = await smartStatus.status(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_log': {
+        const options = args as SmartLogOptions;
+        const result = await smartLog.log(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
       case 'alert_manager': {
         const options = args as any;
         const result = await alertManager.run(options);
-
         return {
           content: [
             {
@@ -1484,7 +1548,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'metric_collector': {
         const options = args as any;
         const result = await metricCollectorTool.run(options);
-
         return {
           content: [
             {
@@ -1498,7 +1561,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'monitoring_integration': {
         const options = args as any;
         const result = await monitoringIntegration.run(options);
-
         return {
           content: [
             {
@@ -1506,29 +1568,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify(result, null, 2),
             },
           ],
-        };
-      }
-
-      // File operations tools disabled in live-test config
-
-      // TODO: Fix these tool handlers - need to verify method signatures
-      case 'smart_diff':
-      case 'smart_branch':
-      case 'smart_merge':
-      case 'smart_status':
-      case 'smart_log': {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                error:
-                  'Tool not yet fully integrated - method signature needs verification',
-                tool: name,
-              }),
-            },
-          ],
-          isError: true,
         };
       }
 
