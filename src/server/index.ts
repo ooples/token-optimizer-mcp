@@ -86,13 +86,13 @@ const metrics = new MetricsCollector();
 
 // Initialize Build Systems tools
 const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
-const smartNetwork = getSmartNetwork(cache, tokenCounter, metrics);
-const smartLogs = getSmartLogs(cache, tokenCounter, metrics);
+const smartNetwork = getSmartNetwork(cache);
+const smartLogs = getSmartLogs(cache);
 const smartLint = getSmartLintTool(cache, tokenCounter, metrics);
-const smartInstall = getSmartInstall(cache, tokenCounter, metrics);
-const smartDocker = getSmartDocker(cache, tokenCounter, metrics);
+const smartInstall = getSmartInstall(cache);
+const smartDocker = getSmartDocker(cache);
 const smartBuild = getSmartBuildTool(cache, tokenCounter, metrics);
-const smartSystemMetrics = getSmartSystemMetrics(cache, tokenCounter, metrics);
+const smartSystemMetrics = getSmartSystemMetrics(cache);
 const smartTest = getSmartTestTool(cache, tokenCounter, metrics);
 const smartTypeCheck = getSmartTypeCheckTool(cache, tokenCounter, metrics);
 
