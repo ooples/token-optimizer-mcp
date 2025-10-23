@@ -267,7 +267,6 @@ const monitoringIntegration = getMonitoringIntegration(
 const knowledgeGraph = getKnowledgeGraphTool(cache, tokenCounter, metrics);
 const sentimentAnalysis = getSentimentAnalysisTool(cache, tokenCounter, metrics);
 
-
 // Initialize Build Systems tools
 const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
 const smartNetwork = getSmartNetwork(cache);
