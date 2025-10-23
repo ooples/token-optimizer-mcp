@@ -121,6 +121,13 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+// Type imports for file-operations tools
+import type { SmartDiffOptions } from '../tools/file-operations/smart-diff.js';
+import type { SmartBranchOptions } from '../tools/file-operations/smart-branch.js';
+import type { SmartMergeOptions } from '../tools/file-operations/smart-merge.js';
+import type { SmartStatusOptions } from '../tools/file-operations/smart-status.js';
+import type { SmartLogOptions } from '../tools/file-operations/smart-log.js';
+
 // Configuration constants
 const COMPRESSION_CONFIG = {
   MIN_SIZE_THRESHOLD: 500, // bytes - minimum size before attempting compression
@@ -1411,7 +1418,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_diff': {
-        const options = args as any;
+        const options = args as SmartDiffOptions;
         const result = await smartDiff.diff(options);
 
         return {
@@ -1425,7 +1432,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_branch': {
-        const options = args as any;
+        const options = args as SmartBranchOptions;
         const result = await smartBranch.branch(options);
         return {
           content: [
@@ -1438,7 +1445,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_merge': {
-        const options = args as any;
+        const options = args as SmartMergeOptions;
         const result = await smartMerge.merge(options);
         return {
           content: [
@@ -1451,7 +1458,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_status': {
-        const options = args as any;
+        const options = args as SmartStatusOptions;
         const result = await smartStatus.status(options);
         return {
           content: [
@@ -1464,7 +1471,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_log': {
-        const options = args as any;
+        const options = args as SmartLogOptions;
         const result = await smartLog.log(options);
         return {
           content: [
