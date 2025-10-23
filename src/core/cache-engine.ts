@@ -26,7 +26,10 @@ export interface CacheStats {
 
 export class CacheEngine {
   private db!: Database.Database;
-  private memoryCache: LRUCache<string, string>;
+  private memoryCache: LRUCache<
+    string,
+    { content: string; compressedSize: number }
+  >;
   private dbPath!: string;
   private stats = {
     hits: 0,
@@ -136,7 +139,10 @@ export class CacheEngine {
     }
 
     // Initialize in-memory LRU cache for frequently accessed items
-    this.memoryCache = new LRUCache<string, string>({
+    this.memoryCache = new LRUCache<
+      string,
+      { content: string; compressedSize: number }
+    >({
       max: maxMemoryItems,
       ttl: 1000 * 60 * 60, // 1 hour TTL
     });
@@ -151,15 +157,15 @@ export class CacheEngine {
     if (memValue !== undefined) {
       this.stats.hits++;
       this.updateHitCount(key);
-      return memValue;
+      return memValue.content;
     }
 
     // Check SQLite cache
     const stmt = this.db.prepare(`
-      SELECT value, hit_count FROM cache WHERE key = ?
+      SELECT value, compressed_size FROM cache WHERE key = ?
     `);
     const row = stmt.get(key) as
-      | { value: string; hit_count: number }
+      | { value: string; compressed_size: number }
       | undefined;
 
     if (row) {
@@ -167,8 +173,52 @@ export class CacheEngine {
       // Update hit count and last accessed time
       this.updateHitCount(key);
       // Add to memory cache for faster access
-      this.memoryCache.set(key, row.value);
+      this.memoryCache.set(key, {
+        content: row.value,
+        compressedSize: row.compressed_size,
+      });
       return row.value;
+    }
+
+    this.stats.misses++;
+    return null;
+  }
+
+  /**
+   * Get a value from cache with metadata (including compression info)
+   */
+  getWithMetadata(
+    key: string
+  ): { content: string; compressedSize: number } | null {
+    // Check memory cache first
+    const memValue = this.memoryCache.get(key);
+    if (memValue !== undefined) {
+      this.stats.hits++;
+      this.updateHitCount(key);
+      return memValue;
+    }
+
+    // Check SQLite cache
+    const stmt = this.db.prepare(`
+      SELECT value, compressed_size FROM cache WHERE key = ?
+    `);
+    const row = stmt.get(key) as
+      | { value: string; compressed_size: number }
+      | undefined;
+
+    if (row) {
+      this.stats.hits++;
+      // Update hit count and last accessed time
+      this.updateHitCount(key);
+      // Add to memory cache for faster access
+      this.memoryCache.set(key, {
+        content: row.value,
+        compressedSize: row.compressed_size,
+      });
+      return {
+        content: row.value,
+        compressedSize: row.compressed_size,
+      };
     }
 
     this.stats.misses++;
@@ -198,7 +248,7 @@ export class CacheEngine {
     stmt.run(key, value, compressedSize, originalSize, key, key, now, now);
 
     // Add to memory cache
-    this.memoryCache.set(key, value);
+    this.memoryCache.set(key, { content: value, compressedSize });
   }
 
   /**

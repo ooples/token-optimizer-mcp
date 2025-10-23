@@ -436,8 +436,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_cached': {
         const { key } = args as { key: string };
 
-        const cached = cache.get(key);
-        if (!cached) {
+        const cachedEntry = cache.getWithMetadata(key);
+        if (!cachedEntry) {
           return {
             content: [
               {
@@ -452,8 +452,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
 
-        // Decompress
-        const decompressed = compression.decompressFromBase64(cached);
+        let text: string;
+        // Check if the item was stored uncompressed (indicated by compressedSize === 0)
+        if (cachedEntry.compressedSize === 0) {
+          text = cachedEntry.content;
+        } else {
+          // Otherwise, it was compressed, so decompress it
+          text = compression.decompressFromBase64(cachedEntry.content);
+        }
 
         return {
           content: [
@@ -462,7 +468,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify({
                 success: true,
                 key,
-                text: decompressed,
+                text,
                 fromCache: true,
               }),
             },
