@@ -1197,7 +1197,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // Code analysis tools
       case 'smart_ast_grep': {
-        const options = args as unknown as SmartAstGrepOptions;
+        const options = args as any;
         const result = await smartAstGrep.grep(options.pattern, options);
         return {
           content: [
