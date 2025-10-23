@@ -12,18 +12,18 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils';
-import { hashFile, generateCacheKey } from '../shared/hash-utils';
-import { cacheGet, cacheSet } from '../../utils/cache-helper';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils.js';
+import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
+import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
 import {
   chunkBySyntax,
   truncateContent,
   detectFileType,
   isMinified,
-} from '../shared/syntax-utils';
+} from '../shared/syntax-utils.js';
 
 export interface SmartReadOptions {
   // Cache options
