@@ -417,7 +417,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       SMART_MERGE_TOOL_DEFINITION,
       SMART_STATUS_TOOL_DEFINITION,
       SMART_LOG_TOOL_DEFINITION,
-
     ],
   };
 });
@@ -1410,7 +1409,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
-
 
       case 'smart_diff': {
         const options = args as any;
