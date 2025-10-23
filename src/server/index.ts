@@ -20,6 +20,51 @@ import {
   getCacheWarmupTool,
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
+// Advanced Caching Tools (8 tools)
+import {
+  runCacheAnalytics,
+  CACHE_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-analytics.js';
+import CacheBenchmark, {
+  CACHE_BENCHMARK_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-benchmark.js';
+import {
+  runCacheCompression,
+  CACHE_COMPRESSION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-compression.js';
+import {
+  runCacheInvalidation,
+  CACHE_INVALIDATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-invalidation.js';
+import {
+  runCacheOptimizer,
+  CACHE_OPTIMIZER_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-optimizer.js';
+import {
+  getCachePartitionTool,
+  CACHE_PARTITION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-partition.js';
+import {
+  runCacheReplication,
+  CACHE_REPLICATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-replication.js';
+import {
+  runSmartCache,
+  SMART_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/smart-cache.js';
+// Monitoring Tools (3 tools)
+import {
+  getAlertManager,
+  ALERT_MANAGER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/alert-manager.js';
+import {
+  getMetricCollector,
+  METRIC_COLLECTOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/metric-collector.js';
+import {
+  getMonitoringIntegration,
+  MONITORING_INTEGRATION_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/monitoring-integration.js';
 // File operations tools
 // Disabled for live server bring-up: file-operations tools depend on extensionless
 // imports in compiled output which Node ESM rejects. We expose core tools only.
@@ -72,6 +117,15 @@ function cacheUncompressed(key: string, text: string, size: number): void {
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
+
+// Advanced Caching tools (8 tools)
+const cacheBenchmark = new CacheBenchmark(cache, tokenCounter, metrics);
+const cachePartition = getCachePartitionTool(cache, tokenCounter, metrics);
+
+// Monitoring tools (3 tools)
+const alertManager = getAlertManager(cache, tokenCounter, metrics);
+const metricCollectorTool = getMetricCollector(cache, tokenCounter, metrics);
+const monitoringIntegration = getMonitoringIntegration(cache, tokenCounter, metrics);
 
 // File operations tools disabled in this live-test configuration.
 // TODO: Fix method signatures for these tools before enabling
