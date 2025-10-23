@@ -187,7 +187,11 @@ const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
 // Initialize monitoring tools
 const alertManager = getAlertManager(cache, tokenCounter, metrics);
 const metricCollectorTool = getMetricCollector(cache, tokenCounter, metrics);
-const monitoringIntegration = getMonitoringIntegration(cache, tokenCounter, metrics);
+const monitoringIntegration = getMonitoringIntegration(
+  cache,
+  tokenCounter,
+  metrics
+);
 
 // File operations tools disabled in this live-test configuration.
 // TODO: Fix method signatures for these tools before enabling
@@ -1438,7 +1442,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
-
 
       case 'alert_manager': {
         const options = args as any;
