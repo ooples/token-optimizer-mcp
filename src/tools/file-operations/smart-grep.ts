@@ -16,11 +16,11 @@ import glob from 'glob';
 const { globSync } = glob;
 import { relative, join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { generateCacheKey } from '../shared/hash-utils';
-import { detectFileType } from '../shared/syntax-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
+import { detectFileType } from '../shared/syntax-utils.js';
 
 export interface GrepMatch {
   file: string; // File path

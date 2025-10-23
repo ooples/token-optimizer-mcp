@@ -14,11 +14,11 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { generateCacheKey } from '../shared/hash-utils';
-import { generateUnifiedDiff } from '../shared/diff-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
+import { generateUnifiedDiff } from '../shared/diff-utils.js';
 
 export interface EditOperation {
   type: 'replace' | 'insert' | 'delete';
