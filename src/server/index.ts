@@ -217,13 +217,19 @@ import type { SmartStatusOptions } from '../tools/file-operations/smart-status.j
 import type { SmartLogOptions } from '../tools/file-operations/smart-log.js';
 import type { SmartReadOptions } from '../tools/file-operations/smart-read.js';
 import type { SmartWriteOptions } from '../tools/file-operations/smart-write.js';
-import type { SmartEditOptions } from '../tools/file-operations/smart-edit.js';
+import type {
+  SmartEditOptions,
+  EditOperation,
+} from '../tools/file-operations/smart-edit.js';
 import type { SmartGlobOptions } from '../tools/file-operations/smart-glob.js';
 import type { SmartGrepOptions } from '../tools/file-operations/smart-grep.js';
 // Tool handler argument types
 type SmartReadArgs = { path: string } & SmartReadOptions;
 type SmartWriteArgs = { path: string; content: string } & SmartWriteOptions;
-type SmartEditArgs = { path: string; operations: any[] } & SmartEditOptions;
+type SmartEditArgs = {
+  path: string;
+  operations: EditOperation | EditOperation[];
+} & SmartEditOptions;
 type SmartGlobArgs = { pattern: string } & SmartGlobOptions;
 type SmartGrepArgs = { pattern: string } & SmartGrepOptions;
 
