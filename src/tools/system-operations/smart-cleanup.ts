@@ -1,97 +1,134 @@
-﻿/**
- * SmartCleanup - Intelligent Cleanup Management
+/**
+ * SmartCleanup - Intelligent Filesystem Cleanup Management
  *
  * Track 2C - System Operations & Output
  * Target Token Reduction: 88%+
  *
  * Provides cross-platform filesystem cleanup operations with smart caching:
  * - Analyze, preview, and clean temporary files
- * - - Cache and log file management
- * - - Build artifact cleanup
- * - - Safe deletion with preview mode
+ * - Cache and log file management
+ * - Build artifact cleanup
+ * - Safe deletion with preview mode
  * - Cross-platform support (Windows/Linux/macOS)
  */
 
-import { spawn, ChildProcess } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { promisify } from 'util';
-import { exec } from 'child_process';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 
-const execAsync = promisify(exec);
+const readdir = promisify(fs.readdir);
+const stat = promisify(fs.stat);
+const unlink = promisify(fs.unlink);
+const rmdir = promisify(fs.rmdir);
 
 export interface SmartCleanupOptions {
-  operation: 'start' | 'stop' | 'status' | 'monitor' | 'tree' | 'restart';
+  operation:
+    | 'analyze'
+    | 'preview'
+    | 'execute'
+    | 'clean-temp'
+    | 'clean-cache'
+    | 'clean-logs'
+    | 'clean-build';
 
-  // Cleanup identification
-  pid?: number;
-  name?: string;
-  command?: string;
-  args?: string[];
-
-  // Options
-  cwd?: string;
-  env?: Record<string, string>;
-  detached?: boolean;
-  autoRestart?: boolean;
-
-  // Monitoring
-  interval?: number; // Monitoring interval in ms
-  duration?: number; // Monitoring duration in ms
+  // Target paths
+  paths?: string[];
+  patterns?: string[]; // glob patterns
+  olderThan?: number; // days
+  recursive?: boolean;
+  dryRun?: boolean;
 
   // Cache control
   useCache?: boolean;
   ttl?: number;
 }
 
-export interface CleanupInfo {
-  pid: number;
-  name: string;
-  command: string;
-  cpu: number;
-  memory: number;
-  status: 'running' | 'sleeping' | 'stopped' | 'zombie';
-  startTime: number;
-  handles?: number; // Windows only
-  threads?: number;
+export interface CleanableFile {
+  path: string;
+  size: number;
+  type: 'temp' | 'cache' | 'log' | 'build' | 'other';
+  age: number; // days
+  lastModified: Date;
 }
 
-export interface CleanupTreeNode {
-  pid: number;
-  name: string;
-  children: CleanupTreeNode[];
-}
-
-export interface ResourceSnapshot {
-  timestamp: number;
-  cpu: number;
-  memory: number;
-  handles?: number;
-  threads?: number;
-}
-
-export interface SmartCleanupResult {
+export interface CleanupResult {
   success: boolean;
   operation: string;
   data: {
-    process?: CleanupInfo;
-    processes?: CleanupInfo[];
-    tree?: CleanupTreeNode;
-    snapshots?: ResourceSnapshot[];
-    output?: string;
-    error?: string;
+    filesScanned: number;
+    filesDeleted: number;
+    spaceSaved: number; // bytes
+    files?: CleanableFile[];
+    errors?: Array<{
+      path: string;
+      error: string;
+    }>;
   };
   metadata: {
+    timestamp: Date;
+    duration: number;
+    dryRun: boolean;
+    cached: boolean;
     tokensUsed: number;
     tokensSaved: number;
-    cacheHit: boolean;
-    executionTime: number;
   };
 }
 
 export class SmartCleanup {
-  private runningCleanupes = new Map<number, ChildProcess>();
+  private readonly TEMP_PATTERNS = [
+    '*.tmp',
+    '*.temp',
+    '*.bak',
+    '*.old',
+    '~*',
+    '.DS_Store',
+    'Thumbs.db',
+    'desktop.ini',
+  ];
+
+  private readonly CACHE_DIRS = [
+    '.cache',
+    'node_modules/.cache',
+    '.npm',
+    '.yarn/cache',
+    '.pnpm-store',
+    'pip-cache',
+    '__pycache__',
+    '.pytest_cache',
+    '.mypy_cache',
+    '.vscode',
+    '.idea',
+  ];
+
+  private readonly LOG_PATTERNS = ['*.log', '*.log.*', '*.out', '*.err'];
+
+  private readonly BUILD_DIRS = [
+    'dist',
+    'build',
+    'out',
+    '.next',
+    '.nuxt',
+    'target',
+    'bin',
+    'obj',
+    '.tsbuildinfo',
+  ];
+
+  private readonly SYSTEM_DIRS = [
+    'System32',
+    'Windows',
+    'Program Files',
+    'Program Files (x86)',
+    '/bin',
+    '/sbin',
+    '/usr/bin',
+    '/usr/sbin',
+    '/system',
+  ];
 
   constructor(
     private cache: CacheEngine,
@@ -99,31 +136,34 @@ export class SmartCleanup {
     private metricsCollector: MetricsCollector
   ) {}
 
-  async run(options: SmartCleanupOptions): Promise<SmartCleanupResult> {
+  async run(options: SmartCleanupOptions): Promise<CleanupResult> {
     const startTime = Date.now();
     const operation = options.operation;
 
-    let result: SmartCleanupResult;
-
     try {
+      let result: CleanupResult;
+
       switch (operation) {
-        case 'start':
-          result = await this.startCleanup(options);
+        case 'analyze':
+          result = await this.analyzeCleanable(options);
           break;
-        case 'stop':
-          result = await this.stopCleanup(options);
+        case 'preview':
+          result = await this.previewCleanup(options);
           break;
-        case 'status':
-          result = await this.getCleanupStatus(options);
+        case 'execute':
+          result = await this.executeCleanup(options);
           break;
-        case 'monitor':
-          result = await this.monitorCleanup(options);
+        case 'clean-temp':
+          result = await this.cleanTemp(options);
           break;
-        case 'tree':
-          result = await this.getCleanupTree(options);
+        case 'clean-cache':
+          result = await this.cleanCache(options);
           break;
-        case 'restart':
-          result = await this.restartCleanup(options);
+        case 'clean-logs':
+          result = await this.cleanLogs(options);
+          break;
+        case 'clean-build':
+          result = await this.cleanBuild(options);
           break;
         default:
           throw new Error(`Unknown operation: ${operation}`);
@@ -134,8 +174,12 @@ export class SmartCleanup {
         operation: `smart-cleanup:${operation}`,
         duration: Date.now() - startTime,
         success: result.success,
-        cacheHit: result.metadata.cacheHit,
-        metadata: { pid: options.pid, name: options.name },
+        cacheHit: result.metadata.cached,
+        metadata: {
+          filesScanned: result.data.filesScanned,
+          filesDeleted: result.data.filesDeleted,
+          spaceSaved: result.data.spaceSaved,
+        },
       });
 
       return result;
@@ -154,441 +198,402 @@ export class SmartCleanup {
       return {
         success: false,
         operation,
-        data: { error: errorMessage },
+        data: {
+          filesScanned: 0,
+          filesDeleted: 0,
+          spaceSaved: 0,
+          errors: [{ path: 'N/A', error: errorMessage }],
+        },
         metadata: {
+          timestamp: new Date(),
+          duration: Date.now() - startTime,
+          dryRun: options.dryRun || false,
+          cached: false,
           tokensUsed: this.tokenCounter.count(errorMessage).tokens,
           tokensSaved: 0,
-          cacheHit: false,
-          executionTime: Date.now() - startTime,
         },
       };
     }
   }
 
-  private async startCleanup(
+  private async analyzeCleanable(
     options: SmartCleanupOptions
-  ): Promise<SmartCleanupResult> {
-    if (!options.command) {
-      throw new Error('Command required for start operation');
+  ): Promise<CleanupResult> {
+    const startTime = Date.now();
+    const cacheKey = `cleanup-analysis:${JSON.stringify(options.paths)}`;
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const result = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20;
+
+        return {
+          ...result,
+          metadata: {
+            ...result.metadata,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+            cached: true,
+          },
+        };
+      }
     }
 
-    const child = spawn(options.command, options.args || [], {
-      cwd: options.cwd,
-      env: { ...process.env, ...options.env },
-      detached: options.detached,
-      stdio: 'pipe',
-    });
+    // Scan for cleanable files
+    const paths = options.paths || [process.cwd()];
+    const files: CleanableFile[] = [];
+    const errors: Array<{ path: string; error: string }> = [];
+    let filesScanned = 0;
 
-    const pid = child.pid!;
-    this.runningCleanupes.set(pid, child);
+    for (const basePath of paths) {
+      try {
+        const found = await this.scanDirectory(
+          basePath,
+          options.recursive !== false,
+          options.olderThan || 7
+        );
+        files.push(...found);
+        filesScanned += found.length;
+      } catch (error) {
+        errors.push({
+          path: basePath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
-    const processInfo: CleanupInfo = {
-      pid,
-      name: options.name || options.command,
-      command: options.command,
-      cpu: 0,
-      memory: 0,
-      status: 'running',
-      startTime: Date.now(),
-    };
+    const spaceSaved = files.reduce((sum, file) => sum + file.size, 0);
 
-    const dataStr = JSON.stringify(processInfo);
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    return {
-      success: true,
-      operation: 'start',
-      data: { process: processInfo },
+    const result: CleanupResult = {
+      success: errors.length === 0,
+      operation: 'analyze',
+      data: {
+        filesScanned,
+        filesDeleted: 0,
+        spaceSaved,
+        files,
+        errors: errors.length > 0 ? errors : undefined,
+      },
       metadata: {
-        tokensUsed,
+        timestamp: new Date(),
+        duration: Date.now() - startTime,
+        dryRun: true,
+        cached: false,
+        tokensUsed: 0,
         tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
       },
     };
+
+    const resultStr = JSON.stringify(result);
+    const tokensUsed = this.tokenCounter.count(resultStr).tokens;
+    result.metadata.tokensUsed = tokensUsed;
+
+    // Cache the result
+    if (useCache) {
+      await this.cache.set(cacheKey, resultStr, tokensUsed, tokensUsed);
+    }
+
+    return result;
   }
 
-  private async stopCleanup(
+  private async previewCleanup(
     options: SmartCleanupOptions
-  ): Promise<SmartCleanupResult> {
-    if (!options.pid && !options.name) {
-      throw new Error('PID or name required for stop operation');
+  ): Promise<CleanupResult> {
+    // Preview is the same as analyze
+    return await this.analyzeCleanable({ ...options, operation: 'analyze' });
+  }
+
+  private async executeCleanup(
+    options: SmartCleanupOptions
+  ): Promise<CleanupResult> {
+    const startTime = Date.now();
+
+    // First get the list of files to clean
+    const analysis = await this.analyzeCleanable({
+      ...options,
+      operation: 'analyze',
+    });
+
+    if (!analysis.success || !analysis.data.files) {
+      return analysis;
     }
 
-    const pid = options.pid;
-    if (!pid) {
-      throw new Error('PID required (name-based stopping not yet implemented)');
+    const dryRun = options.dryRun !== false; // Default to dry run for safety
+    const files = analysis.data.files;
+    const errors: Array<{ path: string; error: string }> = [];
+    let filesDeleted = 0;
+    let spaceSaved = 0;
+
+    if (!dryRun) {
+      for (const file of files) {
+        try {
+          await this.deleteFile(file.path);
+          filesDeleted++;
+          spaceSaved += file.size;
+        } catch (error) {
+          errors.push({
+            path: file.path,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
     }
 
-    // Try graceful stop first
+    const result: CleanupResult = {
+      success: errors.length === 0,
+      operation: 'execute',
+      data: {
+        filesScanned: analysis.data.filesScanned,
+        filesDeleted,
+        spaceSaved: dryRun ? 0 : spaceSaved,
+        files: dryRun ? files : undefined,
+        errors: errors.length > 0 ? errors : undefined,
+      },
+      metadata: {
+        timestamp: new Date(),
+        duration: Date.now() - startTime,
+        dryRun,
+        cached: false,
+        tokensUsed: 0,
+        tokensSaved: 0,
+      },
+    };
+
+    const resultStr = JSON.stringify(result);
+    const tokensUsed = this.tokenCounter.count(resultStr).tokens;
+    result.metadata.tokensUsed = tokensUsed;
+
+    return result;
+  }
+
+  private async cleanTemp(options: SmartCleanupOptions): Promise<CleanupResult> {
+    const tempDirs = [
+      os.tmpdir(),
+      path.join(os.homedir(), 'AppData', 'Local', 'Temp'),
+      '/tmp',
+      '/var/tmp',
+    ];
+
+    return await this.executeCleanup({
+      ...options,
+      operation: 'execute',
+      paths: tempDirs.filter((dir) => fs.existsSync(dir)),
+      patterns: this.TEMP_PATTERNS,
+    });
+  }
+
+  private async cleanCache(
+    options: SmartCleanupOptions
+  ): Promise<CleanupResult> {
+    const basePaths = options.paths || [process.cwd()];
+    const cachePaths: string[] = [];
+
+    for (const basePath of basePaths) {
+      for (const cacheDir of this.CACHE_DIRS) {
+        const fullPath = path.join(basePath, cacheDir);
+        if (fs.existsSync(fullPath)) {
+          cachePaths.push(fullPath);
+        }
+      }
+    }
+
+    return await this.executeCleanup({
+      ...options,
+      operation: 'execute',
+      paths: cachePaths,
+    });
+  }
+
+  private async cleanLogs(options: SmartCleanupOptions): Promise<CleanupResult> {
+    return await this.executeCleanup({
+      ...options,
+      operation: 'execute',
+      patterns: this.LOG_PATTERNS,
+      olderThan: options.olderThan || 30, // Default to 30 days for logs
+    });
+  }
+
+  private async cleanBuild(
+    options: SmartCleanupOptions
+  ): Promise<CleanupResult> {
+    const basePaths = options.paths || [process.cwd()];
+    const buildPaths: string[] = [];
+
+    for (const basePath of basePaths) {
+      for (const buildDir of this.BUILD_DIRS) {
+        const fullPath = path.join(basePath, buildDir);
+        if (fs.existsSync(fullPath)) {
+          buildPaths.push(fullPath);
+        }
+      }
+    }
+
+    return await this.executeCleanup({
+      ...options,
+      operation: 'execute',
+      paths: buildPaths,
+    });
+  }
+
+  private async scanDirectory(
+    dirPath: string,
+    recursive: boolean,
+    olderThanDays: number
+  ): Promise<CleanableFile[]> {
+    const files: CleanableFile[] = [];
+
+    // Safety check: don't scan system directories
+    if (this.isSystemDirectory(dirPath)) {
+      return files;
+    }
+
     try {
-      process.kill(pid, 'SIGTERM');
+      const entries = await readdir(dirPath, { withFileTypes: true });
 
-      // Wait for process to exit
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
 
-      // Check if still running
-      try {
-        process.kill(pid, 0); // Signal 0 checks if process exists
-        // Still running, force kill
-        process.kill(pid, 'SIGKILL');
-      } catch {
-        // Cleanup already exited
+        try {
+          if (entry.isDirectory()) {
+            if (recursive && this.isCleanableDirectory(entry.name)) {
+              const subFiles = await this.scanDirectory(
+                fullPath,
+                recursive,
+                olderThanDays
+              );
+              files.push(...subFiles);
+            }
+          } else if (entry.isFile()) {
+            const fileInfo = await this.getFileInfo(
+              fullPath,
+              entry.name,
+              olderThanDays
+            );
+            if (fileInfo) {
+              files.push(fileInfo);
+            }
+          }
+        } catch {
+          // Skip files/dirs we can't access
+          continue;
+        }
+      }
+    } catch {
+      // Skip directories we can't read
+    }
+
+    return files;
+  }
+
+  private async getFileInfo(
+    filePath: string,
+    fileName: string,
+    olderThanDays: number
+  ): Promise<CleanableFile | null> {
+    try {
+      const stats = await stat(filePath);
+      const ageInDays =
+        (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
+
+      // Only include files older than threshold
+      if (ageInDays < olderThanDays) {
+        return null;
+      }
+
+      const type = this.determineFileType(fileName);
+
+      return {
+        path: filePath,
+        size: stats.size,
+        type,
+        age: Math.floor(ageInDays),
+        lastModified: stats.mtime,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private determineFileType(
+    fileName: string
+  ): 'temp' | 'cache' | 'log' | 'build' | 'other' {
+    const lowerName = fileName.toLowerCase();
+
+    if (
+      this.TEMP_PATTERNS.some((pattern) =>
+        this.matchPattern(lowerName, pattern)
+      )
+    ) {
+      return 'temp';
+    }
+
+    if (
+      this.LOG_PATTERNS.some((pattern) => this.matchPattern(lowerName, pattern))
+    ) {
+      return 'log';
+    }
+
+    if (lowerName.includes('cache')) {
+      return 'cache';
+    }
+
+    return 'other';
+  }
+
+  private matchPattern(fileName: string, pattern: string): boolean {
+    const regex = new RegExp(
+      '^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$'
+    );
+    return regex.test(fileName);
+  }
+
+  private isCleanableDirectory(dirName: string): boolean {
+    // Allow scanning these specific cache/build directories
+    return (
+      this.CACHE_DIRS.some((cache) => dirName === cache.split('/').pop()) ||
+      this.BUILD_DIRS.includes(dirName)
+    );
+  }
+
+  private isSystemDirectory(dirPath: string): boolean {
+    const normalized = path.normalize(dirPath);
+    return this.SYSTEM_DIRS.some((sysDir) => normalized.includes(sysDir));
+  }
+
+  private async deleteFile(filePath: string): Promise<void> {
+    try {
+      const stats = await stat(filePath);
+
+      if (stats.isDirectory()) {
+        await this.deleteDirectory(filePath);
+      } else {
+        await unlink(filePath);
       }
     } catch (error) {
       throw new Error(
-        `Failed to stop process ${pid}: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to delete ${filePath}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-
-    this.runningCleanupes.delete(pid);
-
-    const result = { pid, stopped: true };
-    const dataStr = JSON.stringify(result);
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    return {
-      success: true,
-      operation: 'stop',
-      data: { output: dataStr },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
-      },
-    };
   }
 
-  private async getCleanupStatus(
-    options: SmartCleanupOptions
-  ): Promise<SmartCleanupResult> {
-    const cacheKey = `process-status:${options.pid || options.name}`;
-    const useCache = options.useCache !== false;
+  private async deleteDirectory(dirPath: string): Promise<void> {
+    const entries = await readdir(dirPath, { withFileTypes: true });
 
-    // Check cache
-    if (useCache) {
-      const cached = await this.cache.get(cacheKey);
-      if (cached) {
-        const dataStr = cached;
-        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 20; // Estimate baseline
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
 
-        return {
-          success: true,
-          operation: 'status',
-          data: JSON.parse(dataStr),
-          metadata: {
-            tokensUsed,
-            tokensSaved: baselineTokens - tokensUsed,
-            cacheHit: true,
-            executionTime: 0,
-          },
-        };
+      if (entry.isDirectory()) {
+        await this.deleteDirectory(fullPath);
+      } else {
+        await unlink(fullPath);
       }
     }
 
-    // Fresh status check
-    const processes = await this.listCleanupes(options.pid, options.name);
-    const dataStr = JSON.stringify({ processes });
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    // Cache the result
-    if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
-    }
-
-    return {
-      success: true,
-      operation: 'status',
-      data: { processes },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
-      },
-    };
-  }
-
-  private async monitorCleanup(
-    options: SmartCleanupOptions
-  ): Promise<SmartCleanupResult> {
-    if (!options.pid) {
-      throw new Error('PID required for monitor operation');
-    }
-
-    const interval = options.interval || 1000;
-    const duration = options.duration || 10000;
-    const snapshots: ResourceSnapshot[] = [];
-
-    const endTime = Date.now() + duration;
-
-    while (Date.now() < endTime) {
-      try {
-        const processes = await this.listCleanupes(options.pid);
-        if (processes.length > 0) {
-          const proc = processes[0];
-          snapshots.push({
-            timestamp: Date.now(),
-            cpu: proc.cpu,
-            memory: proc.memory,
-            handles: proc.handles,
-            threads: proc.threads,
-          });
-        }
-      } catch {
-        // Cleanup may have exited
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, interval));
-    }
-
-    const dataStr = JSON.stringify({ snapshots });
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    return {
-      success: true,
-      operation: 'monitor',
-      data: { snapshots },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: duration,
-      },
-    };
-  }
-
-  private async getCleanupTree(
-    options: SmartCleanupOptions
-  ): Promise<SmartCleanupResult> {
-    const cacheKey = `process-tree:${options.pid || 'all'}`;
-    const useCache = options.useCache !== false;
-
-    // Check cache
-    if (useCache) {
-      const cached = await this.cache.get(cacheKey);
-      if (cached) {
-        const dataStr = cached;
-        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 20; // Estimate baseline
-
-        return {
-          success: true,
-          operation: 'tree',
-          data: JSON.parse(dataStr),
-          metadata: {
-            tokensUsed,
-            tokensSaved: baselineTokens - tokensUsed,
-            cacheHit: true,
-            executionTime: 0,
-          },
-        };
-      }
-    }
-
-    // Build process tree
-    const tree = await this.buildCleanupTree(options.pid);
-    const dataStr = JSON.stringify({ tree });
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    // Cache the result
-    if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
-    }
-
-    return {
-      success: true,
-      operation: 'tree',
-      data: { tree },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
-      },
-    };
-  }
-
-  private async restartCleanup(
-    options: SmartCleanupOptions
-  ): Promise<SmartCleanupResult> {
-    // Stop the process
-    await this.stopCleanup(options);
-
-    // Wait a moment
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Start it again
-    return await this.startCleanup(options);
-  }
-
-  private async listCleanupes(
-    pid?: number,
-    name?: string
-  ): Promise<CleanupInfo[]> {
-    const platform = process.platform;
-
-    if (platform === 'win32') {
-      return await this.listCleanupesWindows(pid, name);
-    } else {
-      return await this.listCleanupesUnix(pid, name);
-    }
-  }
-
-  private async listCleanupesWindows(
-    pid?: number,
-    name?: string
-  ): Promise<CleanupInfo[]> {
-    // Use WMIC on Windows
-    const query = pid
-      ? `wmic process where "CleanupId=${pid}" get CleanupId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-      : name
-        ? `wmic process where "Name='${name}'" get CleanupId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-        : `wmic process get CleanupId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
-
-    const { stdout } = await execAsync(query);
-
-    // Parse CSV output
-    const lines = stdout.trim().split('\n').slice(1); // Skip header
-    const processes: CleanupInfo[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      const parts = line.split(',');
-      if (parts.length < 7) continue;
-
-      processes.push({
-        pid: parseInt(parts[4]) || 0,
-        name: parts[3] || '',
-        command: parts[0] || '',
-        cpu: 0, // Calculate from kernel + user time
-        memory: parseInt(parts[7]) || 0,
-        status: 'running',
-        startTime: Date.now(),
-        handles: parseInt(parts[1]) || 0,
-        threads: parseInt(parts[6]) || 0,
-      });
-    }
-
-    return processes;
-  }
-
-  private async listCleanupesUnix(
-    pid?: number,
-    name?: string
-  ): Promise<CleanupInfo[]> {
-    // Use ps on Unix
-    const query = pid
-      ? `ps -p ${pid} -o pid,comm,args,%cpu,%mem,stat,lstart`
-      : name
-        ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
-        : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
-
-    const { stdout } = await execAsync(query);
-
-    // Parse ps output
-    const lines = stdout.trim().split('\n').slice(1); // Skip header
-    const processes: CleanupInfo[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      const parts = line.trim().split(/\s+/);
-      if (parts.length < 7) continue;
-
-      processes.push({
-        pid: parseInt(parts[0]) || 0,
-        name: parts[1] || '',
-        command: parts.slice(2, -3).join(' '),
-        cpu: parseFloat(parts[parts.length - 3]) || 0,
-        memory: parseFloat(parts[parts.length - 2]) || 0,
-        status: this.parseUnixStatus(parts[parts.length - 1]),
-        startTime: Date.now(),
-      });
-    }
-
-    return processes;
-  }
-
-  private parseUnixStatus(stat: string): CleanupInfo['status'] {
-    if (stat.includes('R')) return 'running';
-    if (stat.includes('S')) return 'sleeping';
-    if (stat.includes('Z')) return 'zombie';
-    return 'stopped';
-  }
-
-  private async buildCleanupTree(rootPid?: number): Promise<CleanupTreeNode> {
-    const platform = process.platform;
-
-    if (platform === 'win32') {
-      return await this.buildCleanupTreeWindows(rootPid);
-    } else {
-      return await this.buildCleanupTreeUnix(rootPid);
-    }
-  }
-
-  private async buildCleanupTreeWindows(
-    rootPid?: number
-  ): Promise<CleanupTreeNode> {
-    // Use WMIC to get parent-child relationships
-    const { stdout } = await execAsync(
-      'wmic process get CleanupId,ParentCleanupId,Name /format:csv'
-    );
-
-    const lines = stdout.trim().split('\n').slice(1);
-    const processMap = new Map<number, { name: string; children: number[] }>();
-    let parentMap = new Map<number, number>();
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      const parts = line.split(',');
-      if (parts.length < 4) continue;
-
-      const pid = parseInt(parts[3]) || 0;
-      const ppid = parseInt(parts[2]) || 0;
-      const name = parts[1] || '';
-
-      processMap.set(pid, { name, children: [] });
-      parentMap.set(pid, ppid);
-    }
-
-    // Build tree
-    for (const [pid, ppid] of parentMap) {
-      if (ppid && processMap.has(ppid)) {
-        processMap.get(ppid)!.children.push(pid);
-      }
-    }
-
-    const buildNode = (pid: number): CleanupTreeNode => {
-      const info = processMap.get(pid) || { name: 'unknown', children: [] };
-      return {
-        pid,
-        name: info.name,
-        children: info.children.map(buildNode),
-      };
-    };
-
-    return buildNode(rootPid || process.pid);
-  }
-
-  private async buildCleanupTreeUnix(
-    rootPid?: number
-  ): Promise<CleanupTreeNode> {
-    // Use pstree on Unix
-    const pid = rootPid || process.pid;
-    const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
-
-    // Parse pstree output (simplified)
-    return {
-      pid,
-      name: 'process',
-      children: [],
-    };
+    await rmdir(dirPath);
   }
 }
 
@@ -613,7 +618,7 @@ export async function runSmartCleanup(
   cache?: CacheEngine,
   tokenCounter?: TokenCounter,
   metricsCollector?: MetricsCollector
-): Promise<SmartCleanupResult> {
+): Promise<CleanupResult> {
   const { homedir } = await import('os');
   const { join } = await import('path');
 
@@ -631,69 +636,59 @@ export async function runSmartCleanup(
 }
 
 // MCP tool definition
-export const SMART_PROCESS_TOOL_DEFINITION = {
+export const SMART_CLEANUP_TOOL_DEFINITION = {
   name: 'smart_cleanup',
   description:
-    'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support.',
+    'Intelligent filesystem cleanup with smart caching (88%+ token reduction). Analyze, preview, and clean temporary files, caches, logs, and build artifacts safely.',
   inputSchema: {
     type: 'object' as const,
     properties: {
       operation: {
         type: 'string' as const,
-        enum: ['start', 'stop', 'status', 'monitor', 'tree', 'restart'],
+        enum: [
+          'analyze',
+          'preview',
+          'execute',
+          'clean-temp',
+          'clean-cache',
+          'clean-logs',
+          'clean-build',
+        ],
         description: 'Cleanup operation to perform',
       },
-      pid: {
-        type: 'number' as const,
-        description: 'Cleanup ID (for stop, status, monitor, tree operations)',
-      },
-      name: {
-        type: 'string' as const,
-        description: 'Cleanup name (for stop, status operations)',
-      },
-      command: {
-        type: 'string' as const,
-        description: 'Command to execute (for start operation)',
-      },
-      args: {
+      paths: {
         type: 'array' as const,
         items: { type: 'string' as const },
-        description: 'Command arguments (for start operation)',
+        description:
+          'Target paths to clean (defaults to current working directory)',
       },
-      cwd: {
-        type: 'string' as const,
-        description: 'Working directory (for start operation)',
+      patterns: {
+        type: 'array' as const,
+        items: { type: 'string' as const },
+        description: 'Glob patterns for file matching (e.g., *.tmp, *.log)',
       },
-      env: {
-        type: 'object' as const,
-        description: 'Environment variables (for start operation)',
-      },
-      detached: {
-        type: 'boolean' as const,
-        description: 'Run process in detached mode (for start operation)',
-      },
-      autoRestart: {
-        type: 'boolean' as const,
-        description: 'Automatically restart on failure (for start operation)',
-      },
-      interval: {
+      olderThan: {
         type: 'number' as const,
         description:
-          'Monitoring interval in milliseconds (for monitor operation)',
+          'Only clean files older than this many days (default: 7 for most, 30 for logs)',
       },
-      duration: {
-        type: 'number' as const,
+      recursive: {
+        type: 'boolean' as const,
         description:
-          'Monitoring duration in milliseconds (for monitor operation)',
+          'Recursively scan directories (default: true for analyze/preview, false for execute)',
+      },
+      dryRun: {
+        type: 'boolean' as const,
+        description:
+          'Preview mode - show what would be deleted without deleting (default: true for execute)',
       },
       useCache: {
         type: 'boolean' as const,
-        description: 'Use cache for status and tree operations (default: true)',
+        description: 'Use cache for analysis results (default: true)',
       },
       ttl: {
         type: 'number' as const,
-        description:
-          'Cache TTL in seconds (default: 30 for status, 60 for tree)',
+        description: 'Cache TTL in seconds (default: 300)',
       },
     },
     required: ['operation'],

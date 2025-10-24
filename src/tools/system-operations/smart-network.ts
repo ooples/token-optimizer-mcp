@@ -1,14 +1,14 @@
 ﻿/**
- * SmartNetwork - Intelligent Network Management
+ * SmartNetwork - Intelligent Process Management
  *
  * Track 2C - System Operations & Output
  * Target Token Reduction: 88%+
  *
- * Provides cross-platform network operations with smart caching:
- * - Ping, traceroute, DNS lookups, port scanning
- * - - Connection testing and latency measurement
- * - - DNS resolution and reverse lookups
- * - - Port scanning and connectivity checks
+ * Provides cross-platform process management with smart caching:
+ * - Start, stop, monitor processes
+ * - Resource usage tracking (CPU, memory, handles)
+ * - Process tree analysis
+ * - Automatic restart on failure
  * - Cross-platform support (Windows/Linux/macOS)
  */
 
@@ -24,7 +24,7 @@ const execAsync = promisify(exec);
 export interface SmartNetworkOptions {
   operation: 'start' | 'stop' | 'status' | 'monitor' | 'tree' | 'restart';
 
-  // Network identification
+  // Process identification
   pid?: number;
   name?: string;
   command?: string;
@@ -45,7 +45,7 @@ export interface SmartNetworkOptions {
   ttl?: number;
 }
 
-export interface NetworkInfo {
+export interface ProcessInfo {
   pid: number;
   name: string;
   command: string;
@@ -57,10 +57,10 @@ export interface NetworkInfo {
   threads?: number;
 }
 
-export interface NetworkTreeNode {
+export interface ProcessTreeNode {
   pid: number;
   name: string;
-  children: NetworkTreeNode[];
+  children: ProcessTreeNode[];
 }
 
 export interface ResourceSnapshot {
@@ -75,9 +75,9 @@ export interface SmartNetworkResult {
   success: boolean;
   operation: string;
   data: {
-    process?: NetworkInfo;
-    processes?: NetworkInfo[];
-    tree?: NetworkTreeNode;
+    process?: ProcessInfo;
+    processes?: ProcessInfo[];
+    tree?: ProcessTreeNode;
     snapshots?: ResourceSnapshot[];
     output?: string;
     error?: string;
@@ -91,7 +91,7 @@ export interface SmartNetworkResult {
 }
 
 export class SmartNetwork {
-  private runningNetworkes = new Map<number, ChildProcess>();
+  private runningProcesses = new Map<number, ChildProcess>();
 
   constructor(
     private cache: CacheEngine,
@@ -108,22 +108,22 @@ export class SmartNetwork {
     try {
       switch (operation) {
         case 'start':
-          result = await this.startNetwork(options);
+          result = await this.startProcess(options);
           break;
         case 'stop':
-          result = await this.stopNetwork(options);
+          result = await this.stopProcess(options);
           break;
         case 'status':
-          result = await this.getNetworkStatus(options);
+          result = await this.getProcessStatus(options);
           break;
         case 'monitor':
-          result = await this.monitorNetwork(options);
+          result = await this.monitorProcess(options);
           break;
         case 'tree':
-          result = await this.getNetworkTree(options);
+          result = await this.getProcessTree(options);
           break;
         case 'restart':
-          result = await this.restartNetwork(options);
+          result = await this.restartProcess(options);
           break;
         default:
           throw new Error(`Unknown operation: ${operation}`);
@@ -165,7 +165,7 @@ export class SmartNetwork {
     }
   }
 
-  private async startNetwork(
+  private async startProcess(
     options: SmartNetworkOptions
   ): Promise<SmartNetworkResult> {
     if (!options.command) {
@@ -180,9 +180,9 @@ export class SmartNetwork {
     });
 
     const pid = child.pid!;
-    this.runningNetworkes.set(pid, child);
+    this.runningProcesses.set(pid, child);
 
-    const processInfo: NetworkInfo = {
+    const processInfo: ProcessInfo = {
       pid,
       name: options.name || options.command,
       command: options.command,
@@ -208,7 +208,7 @@ export class SmartNetwork {
     };
   }
 
-  private async stopNetwork(
+  private async stopProcess(
     options: SmartNetworkOptions
   ): Promise<SmartNetworkResult> {
     if (!options.pid && !options.name) {
@@ -233,7 +233,7 @@ export class SmartNetwork {
         // Still running, force kill
         process.kill(pid, 'SIGKILL');
       } catch {
-        // Network already exited
+        // Process already exited
       }
     } catch (error) {
       throw new Error(
@@ -241,7 +241,7 @@ export class SmartNetwork {
       );
     }
 
-    this.runningNetworkes.delete(pid);
+    this.runningProcesses.delete(pid);
 
     const result = { pid, stopped: true };
     const dataStr = JSON.stringify(result);
@@ -260,7 +260,7 @@ export class SmartNetwork {
     };
   }
 
-  private async getNetworkStatus(
+  private async getProcessStatus(
     options: SmartNetworkOptions
   ): Promise<SmartNetworkResult> {
     const cacheKey = `process-status:${options.pid || options.name}`;
@@ -289,7 +289,7 @@ export class SmartNetwork {
     }
 
     // Fresh status check
-    const processes = await this.listNetworkes(options.pid, options.name);
+    const processes = await this.listProcesses(options.pid, options.name);
     const dataStr = JSON.stringify({ processes });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
@@ -311,7 +311,7 @@ export class SmartNetwork {
     };
   }
 
-  private async monitorNetwork(
+  private async monitorProcess(
     options: SmartNetworkOptions
   ): Promise<SmartNetworkResult> {
     if (!options.pid) {
@@ -326,7 +326,7 @@ export class SmartNetwork {
 
     while (Date.now() < endTime) {
       try {
-        const processes = await this.listNetworkes(options.pid);
+        const processes = await this.listProcesses(options.pid);
         if (processes.length > 0) {
           const proc = processes[0];
           snapshots.push({
@@ -338,7 +338,7 @@ export class SmartNetwork {
           });
         }
       } catch {
-        // Network may have exited
+        // Process may have exited
         break;
       }
 
@@ -361,7 +361,7 @@ export class SmartNetwork {
     };
   }
 
-  private async getNetworkTree(
+  private async getProcessTree(
     options: SmartNetworkOptions
   ): Promise<SmartNetworkResult> {
     const cacheKey = `process-tree:${options.pid || 'all'}`;
@@ -390,7 +390,7 @@ export class SmartNetwork {
     }
 
     // Build process tree
-    const tree = await this.buildNetworkTree(options.pid);
+    const tree = await this.buildProcessTree(options.pid);
     const dataStr = JSON.stringify({ tree });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
@@ -412,48 +412,48 @@ export class SmartNetwork {
     };
   }
 
-  private async restartNetwork(
+  private async restartProcess(
     options: SmartNetworkOptions
   ): Promise<SmartNetworkResult> {
     // Stop the process
-    await this.stopNetwork(options);
+    await this.stopProcess(options);
 
     // Wait a moment
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Start it again
-    return await this.startNetwork(options);
+    return await this.startProcess(options);
   }
 
-  private async listNetworkes(
+  private async listProcesses(
     pid?: number,
     name?: string
-  ): Promise<NetworkInfo[]> {
+  ): Promise<ProcessInfo[]> {
     const platform = process.platform;
 
     if (platform === 'win32') {
-      return await this.listNetworkesWindows(pid, name);
+      return await this.listProcessesWindows(pid, name);
     } else {
-      return await this.listNetworkesUnix(pid, name);
+      return await this.listProcessesUnix(pid, name);
     }
   }
 
-  private async listNetworkesWindows(
+  private async listProcessesWindows(
     pid?: number,
     name?: string
-  ): Promise<NetworkInfo[]> {
+  ): Promise<ProcessInfo[]> {
     // Use WMIC on Windows
     const query = pid
-      ? `wmic process where "NetworkId=${pid}" get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+      ? `wmic process where "ProcessId=${pid}" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
       : name
-        ? `wmic process where "Name='${name}'" get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-        : `wmic process get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
+        ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+        : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
 
     const { stdout } = await execAsync(query);
 
     // Parse CSV output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
-    const processes: NetworkInfo[] = [];
+    const processes: ProcessInfo[] = [];
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -477,10 +477,10 @@ export class SmartNetwork {
     return processes;
   }
 
-  private async listNetworkesUnix(
+  private async listProcessesUnix(
     pid?: number,
     name?: string
-  ): Promise<NetworkInfo[]> {
+  ): Promise<ProcessInfo[]> {
     // Use ps on Unix
     const query = pid
       ? `ps -p ${pid} -o pid,comm,args,%cpu,%mem,stat,lstart`
@@ -492,7 +492,7 @@ export class SmartNetwork {
 
     // Parse ps output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
-    const processes: NetworkInfo[] = [];
+    const processes: ProcessInfo[] = [];
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -514,29 +514,29 @@ export class SmartNetwork {
     return processes;
   }
 
-  private parseUnixStatus(stat: string): NetworkInfo['status'] {
+  private parseUnixStatus(stat: string): ProcessInfo['status'] {
     if (stat.includes('R')) return 'running';
     if (stat.includes('S')) return 'sleeping';
     if (stat.includes('Z')) return 'zombie';
     return 'stopped';
   }
 
-  private async buildNetworkTree(rootPid?: number): Promise<NetworkTreeNode> {
+  private async buildProcessTree(rootPid?: number): Promise<ProcessTreeNode> {
     const platform = process.platform;
 
     if (platform === 'win32') {
-      return await this.buildNetworkTreeWindows(rootPid);
+      return await this.buildProcessTreeWindows(rootPid);
     } else {
-      return await this.buildNetworkTreeUnix(rootPid);
+      return await this.buildProcessTreeUnix(rootPid);
     }
   }
 
-  private async buildNetworkTreeWindows(
+  private async buildProcessTreeWindows(
     rootPid?: number
-  ): Promise<NetworkTreeNode> {
+  ): Promise<ProcessTreeNode> {
     // Use WMIC to get parent-child relationships
     const { stdout } = await execAsync(
-      'wmic process get NetworkId,ParentNetworkId,Name /format:csv'
+      'wmic process get ProcessId,ParentProcessId,Name /format:csv'
     );
 
     const lines = stdout.trim().split('\n').slice(1);
@@ -564,7 +564,7 @@ export class SmartNetwork {
       }
     }
 
-    const buildNode = (pid: number): NetworkTreeNode => {
+    const buildNode = (pid: number): ProcessTreeNode => {
       const info = processMap.get(pid) || { name: 'unknown', children: [] };
       return {
         pid,
@@ -576,9 +576,9 @@ export class SmartNetwork {
     return buildNode(rootPid || process.pid);
   }
 
-  private async buildNetworkTreeUnix(
+  private async buildProcessTreeUnix(
     rootPid?: number
-  ): Promise<NetworkTreeNode> {
+  ): Promise<ProcessTreeNode> {
     // Use pstree on Unix
     const pid = rootPid || process.pid;
     const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
@@ -631,8 +631,8 @@ export async function runSmartNetwork(
 }
 
 // MCP tool definition
-export const SMART_PROCESS_TOOL_DEFINITION = {
-  name: 'smart_network',
+export const SMART_NETWORK_TOOL_DEFINITION = {
+  name: 'smart_process',
   description:
     'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support.',
   inputSchema: {
@@ -641,15 +641,15 @@ export const SMART_PROCESS_TOOL_DEFINITION = {
       operation: {
         type: 'string' as const,
         enum: ['start', 'stop', 'status', 'monitor', 'tree', 'restart'],
-        description: 'Network operation to perform',
+        description: 'Process operation to perform',
       },
       pid: {
         type: 'number' as const,
-        description: 'Network ID (for stop, status, monitor, tree operations)',
+        description: 'Process ID (for stop, status, monitor, tree operations)',
       },
       name: {
         type: 'string' as const,
-        description: 'Network name (for stop, status operations)',
+        description: 'Process name (for stop, status operations)',
       },
       command: {
         type: 'string' as const,

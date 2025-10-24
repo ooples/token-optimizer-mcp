@@ -1,129 +1,350 @@
-﻿/**
- * SmartMetrics - Intelligent Metrics Management
+/**
+ * SmartMetrics - System Metrics Collection
  *
  * Track 2C - System Operations & Output
  * Target Token Reduction: 88%+
  *
  * Provides cross-platform system metrics collection with smart caching:
- * - CPU, memory, disk, and network statistics
- * - - Real-time performance monitoring
- * - - Historical metrics tracking
- * - - System health assessment
+ * - CPU usage, cores, model, speed, load average
+ * - Memory total, used, free, percentage
+ * - Disk usage per drive
+ * - Network interface statistics
+ * - Real-time monitoring with sampling
  * - Cross-platform support (Windows/Linux/macOS)
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import { promisify } from 'util';
+import os from 'os';
 import { exec } from 'child_process';
+import { promisify } from 'util';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 
 const execAsync = promisify(exec);
 
+// ===========================
+// Interfaces
+// ===========================
+
 export interface SmartMetricsOptions {
-  operation: 'start' | 'stop' | 'status' | 'monitor' | 'tree' | 'restart';
-
-  // Metrics identification
-  pid?: number;
-  name?: string;
-  command?: string;
-  args?: string[];
-
-  // Options
-  cwd?: string;
-  env?: Record<string, string>;
-  detached?: boolean;
-  autoRestart?: boolean;
-
-  // Monitoring
-  interval?: number; // Monitoring interval in ms
-  duration?: number; // Monitoring duration in ms
-
-  // Cache control
-  useCache?: boolean;
-  ttl?: number;
+  operation: 'cpu' | 'memory' | 'disk' | 'network' | 'all' | 'monitor';
+  interval?: number; // for monitor (ms), default: 1000
+  duration?: number; // for monitor (ms), default: 10000
+  drives?: string[]; // for disk (optional filter), e.g., ['C:', 'D:']
+  useCache?: boolean; // default: true
+  ttl?: number; // cache TTL in seconds, default: 5
 }
 
-export interface MetricsInfo {
-  pid: number;
-  name: string;
-  command: string;
-  cpu: number;
-  memory: number;
-  status: 'running' | 'sleeping' | 'stopped' | 'zombie';
-  startTime: number;
-  handles?: number; // Windows only
-  threads?: number;
+export interface CPUMetrics {
+  usage: number; // percentage (0-100)
+  cores: number; // number of CPU cores
+  model: string; // CPU model name
+  speed: number; // CPU speed in MHz
+  loadAverage?: number[]; // 1, 5, 15 minute load averages (Unix only)
 }
 
-export interface MetricsTreeNode {
-  pid: number;
-  name: string;
-  children: MetricsTreeNode[];
+export interface MemoryMetrics {
+  total: number; // bytes
+  used: number; // bytes
+  free: number; // bytes
+  percentage: number; // percentage (0-100)
 }
 
-export interface ResourceSnapshot {
-  timestamp: number;
-  cpu: number;
-  memory: number;
-  handles?: number;
-  threads?: number;
+export interface DiskMetrics {
+  drive: string; // drive letter (Windows) or mount point (Unix)
+  total: number; // bytes
+  used: number; // bytes
+  free: number; // bytes
+  percentage: number; // percentage (0-100)
 }
 
-export interface SmartMetricsResult {
+export interface NetworkInterfaceMetrics {
+  name: string; // interface name
+  bytesReceived: number; // total bytes received
+  bytesSent: number; // total bytes sent
+}
+
+export interface NetworkMetrics {
+  interfaces: NetworkInterfaceMetrics[];
+}
+
+export interface MetricsSample {
+  timestamp: Date;
+  cpu?: CPUMetrics;
+  memory?: MemoryMetrics;
+  disk?: DiskMetrics[];
+  network?: NetworkMetrics;
+}
+
+export interface MetricsResult {
   success: boolean;
   operation: string;
   data: {
-    process?: MetricsInfo;
-    processes?: MetricsInfo[];
-    tree?: MetricsTreeNode;
-    snapshots?: ResourceSnapshot[];
-    output?: string;
-    error?: string;
+    cpu?: CPUMetrics;
+    memory?: MemoryMetrics;
+    disk?: DiskMetrics[];
+    network?: NetworkMetrics;
+    samples?: MetricsSample[]; // for monitor operation
   };
   metadata: {
+    timestamp: Date;
+    duration: number; // ms
+    cached: boolean;
     tokensUsed: number;
     tokensSaved: number;
-    cacheHit: boolean;
-    executionTime: number;
   };
 }
 
-export class SmartMetrics {
-  private runningMetricses = new Map<number, ChildProcess>();
+// ===========================
+// Helper Functions
+// ===========================
 
+/**
+ * Get CPU usage percentage
+ * Uses os.cpus() to calculate CPU usage from idle vs total time
+ */
+function getCPUUsage(): number {
+  const cpus = os.cpus();
+  let totalIdle = 0;
+  let totalTick = 0;
+
+  for (const cpu of cpus) {
+    for (const type in cpu.times) {
+      totalTick += cpu.times[type as keyof typeof cpu.times];
+    }
+    totalIdle += cpu.times.idle;
+  }
+
+  const idle = totalIdle / cpus.length;
+  const total = totalTick / cpus.length;
+  const usage = 100 - (100 * idle) / total;
+
+  return Math.max(0, Math.min(100, usage)); // clamp to 0-100
+}
+
+/**
+ * Get CPU metrics
+ */
+async function getCPUMetrics(): Promise<CPUMetrics> {
+  const cpus = os.cpus();
+  const usage = getCPUUsage();
+  const cores = cpus.length;
+  const model = cpus[0]?.model || 'Unknown';
+  const speed = cpus[0]?.speed || 0;
+
+  // Load average (Unix only)
+  let loadAverage: number[] | undefined;
+  try {
+    const load = os.loadavg();
+    if (load && load.length > 0) {
+      loadAverage = load;
+    }
+  } catch {
+    // Windows doesn't support loadavg
+  }
+
+  return {
+    usage,
+    cores,
+    model,
+    speed,
+    loadAverage,
+  };
+}
+
+/**
+ * Get memory metrics
+ */
+async function getMemoryMetrics(): Promise<MemoryMetrics> {
+  const total = os.totalmem();
+  const free = os.freemem();
+  const used = total - free;
+  const percentage = (used / total) * 100;
+
+  return {
+    total,
+    used,
+    free,
+    percentage,
+  };
+}
+
+/**
+ * Get disk metrics (Windows)
+ */
+async function getDiskMetricsWindows(
+  drives?: string[]
+): Promise<DiskMetrics[]> {
+  try {
+    // Use WMIC to get disk info
+    const { stdout } = await execAsync(
+      'wmic logicaldisk get Caption,Size,FreeSpace /format:csv'
+    );
+
+    const lines = stdout.trim().split('\n').slice(1); // Skip header
+    const disks: DiskMetrics[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parts = line.split(',');
+      if (parts.length < 4) continue;
+
+      const drive = parts[1]?.trim();
+      const freeSpace = parseInt(parts[2]) || 0;
+      const size = parseInt(parts[3]) || 0;
+
+      if (!drive || size === 0) continue;
+
+      // Filter by drives if specified
+      if (drives && drives.length > 0 && !drives.includes(drive)) {
+        continue;
+      }
+
+      const used = size - freeSpace;
+      const percentage = size > 0 ? (used / size) * 100 : 0;
+
+      disks.push({
+        drive,
+        total: size,
+        used,
+        free: freeSpace,
+        percentage,
+      });
+    }
+
+    return disks;
+  } catch (error) {
+    throw new Error(
+      `Failed to get disk metrics: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Get disk metrics (Unix)
+ */
+async function getDiskMetricsUnix(drives?: string[]): Promise<DiskMetrics[]> {
+  try {
+    // Use df command
+    const { stdout } = await execAsync('df -k');
+
+    const lines = stdout.trim().split('\n').slice(1); // Skip header
+    const disks: DiskMetrics[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 6) continue;
+
+      const drive = parts[5]; // Mount point
+      const total = parseInt(parts[1]) * 1024; // Convert KB to bytes
+      const used = parseInt(parts[2]) * 1024;
+      const free = parseInt(parts[3]) * 1024;
+
+      if (!drive || total === 0) continue;
+
+      // Filter by drives if specified
+      if (drives && drives.length > 0 && !drives.includes(drive)) {
+        continue;
+      }
+
+      const percentage = total > 0 ? (used / total) * 100 : 0;
+
+      disks.push({
+        drive,
+        total,
+        used,
+        free,
+        percentage,
+      });
+    }
+
+    return disks;
+  } catch (error) {
+    throw new Error(
+      `Failed to get disk metrics: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Get disk metrics (cross-platform)
+ */
+async function getDiskMetrics(drives?: string[]): Promise<DiskMetrics[]> {
+  const platform = os.platform();
+
+  if (platform === 'win32') {
+    return await getDiskMetricsWindows(drives);
+  } else {
+    return await getDiskMetricsUnix(drives);
+  }
+}
+
+/**
+ * Get network metrics
+ */
+async function getNetworkMetrics(): Promise<NetworkMetrics> {
+  const interfaces = os.networkInterfaces();
+  const metrics: NetworkInterfaceMetrics[] = [];
+
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    if (!addrs) continue;
+
+    // Note: os.networkInterfaces() doesn't provide byte counts
+    // This is a basic implementation that returns interface names
+    // For actual byte counts, would need to read from /proc/net/dev (Linux)
+    // or use platform-specific commands
+
+    metrics.push({
+      name,
+      bytesReceived: 0, // Would need platform-specific implementation
+      bytesSent: 0, // Would need platform-specific implementation
+    });
+  }
+
+  return {
+    interfaces: metrics,
+  };
+}
+
+// ===========================
+// SmartMetrics Class
+// ===========================
+
+export class SmartMetrics {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
     private metricsCollector: MetricsCollector
   ) {}
 
-  async run(options: SmartMetricsOptions): Promise<SmartMetricsResult> {
+  async run(options: SmartMetricsOptions): Promise<MetricsResult> {
     const startTime = Date.now();
     const operation = options.operation;
 
-    let result: SmartMetricsResult;
-
     try {
+      let result: MetricsResult;
+
       switch (operation) {
-        case 'start':
-          result = await this.startMetrics(options);
+        case 'cpu':
+          result = await this.getCPU(options);
           break;
-        case 'stop':
-          result = await this.stopMetrics(options);
+        case 'memory':
+          result = await this.getMemory(options);
           break;
-        case 'status':
-          result = await this.getMetricsStatus(options);
+        case 'disk':
+          result = await this.getDisk(options);
+          break;
+        case 'network':
+          result = await this.getNetwork(options);
+          break;
+        case 'all':
+          result = await this.getAll(options);
           break;
         case 'monitor':
-          result = await this.monitorMetrics(options);
-          break;
-        case 'tree':
-          result = await this.getMetricsTree(options);
-          break;
-        case 'restart':
-          result = await this.restartMetrics(options);
+          result = await this.monitor(options);
           break;
         default:
           throw new Error(`Unknown operation: ${operation}`);
@@ -134,8 +355,8 @@ export class SmartMetrics {
         operation: `smart-metrics:${operation}`,
         duration: Date.now() - startTime,
         success: result.success,
-        cacheHit: result.metadata.cacheHit,
-        metadata: { pid: options.pid, name: options.name },
+        cacheHit: result.metadata.cached,
+        metadata: { operation },
       });
 
       return result;
@@ -154,440 +375,335 @@ export class SmartMetrics {
       return {
         success: false,
         operation,
-        data: { error: errorMessage },
+        data: {},
         metadata: {
+          timestamp: new Date(),
+          duration: Date.now() - startTime,
+          cached: false,
           tokensUsed: this.tokenCounter.count(errorMessage).tokens,
           tokensSaved: 0,
-          cacheHit: false,
-          executionTime: Date.now() - startTime,
         },
       };
     }
   }
 
-  private async startMetrics(
-    options: SmartMetricsOptions
-  ): Promise<SmartMetricsResult> {
-    if (!options.command) {
-      throw new Error('Command required for start operation');
-    }
-
-    const child = spawn(options.command, options.args || [], {
-      cwd: options.cwd,
-      env: { ...process.env, ...options.env },
-      detached: options.detached,
-      stdio: 'pipe',
-    });
-
-    const pid = child.pid!;
-    this.runningMetricses.set(pid, child);
-
-    const processInfo: MetricsInfo = {
-      pid,
-      name: options.name || options.command,
-      command: options.command,
-      cpu: 0,
-      memory: 0,
-      status: 'running',
-      startTime: Date.now(),
-    };
-
-    const dataStr = JSON.stringify(processInfo);
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    return {
-      success: true,
-      operation: 'start',
-      data: { process: processInfo },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
-      },
-    };
-  }
-
-  private async stopMetrics(
-    options: SmartMetricsOptions
-  ): Promise<SmartMetricsResult> {
-    if (!options.pid && !options.name) {
-      throw new Error('PID or name required for stop operation');
-    }
-
-    const pid = options.pid;
-    if (!pid) {
-      throw new Error('PID required (name-based stopping not yet implemented)');
-    }
-
-    // Try graceful stop first
-    try {
-      process.kill(pid, 'SIGTERM');
-
-      // Wait for process to exit
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Check if still running
-      try {
-        process.kill(pid, 0); // Signal 0 checks if process exists
-        // Still running, force kill
-        process.kill(pid, 'SIGKILL');
-      } catch {
-        // Metrics already exited
-      }
-    } catch (error) {
-      throw new Error(
-        `Failed to stop process ${pid}: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-
-    this.runningMetricses.delete(pid);
-
-    const result = { pid, stopped: true };
-    const dataStr = JSON.stringify(result);
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    return {
-      success: true,
-      operation: 'stop',
-      data: { output: dataStr },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
-      },
-    };
-  }
-
-  private async getMetricsStatus(
-    options: SmartMetricsOptions
-  ): Promise<SmartMetricsResult> {
-    const cacheKey = `process-status:${options.pid || options.name}`;
+  private async getCPU(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const cacheKey = 'metrics:cpu';
     const useCache = options.useCache !== false;
 
     // Check cache
     if (useCache) {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
-        const dataStr = cached;
-        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
         const baselineTokens = tokensUsed * 20; // Estimate baseline
 
         return {
           success: true,
-          operation: 'status',
-          data: JSON.parse(dataStr),
+          operation: 'cpu',
+          data: { cpu: data },
           metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
             tokensUsed,
             tokensSaved: baselineTokens - tokensUsed,
-            cacheHit: true,
-            executionTime: 0,
           },
         };
       }
     }
 
-    // Fresh status check
-    const processes = await this.listMetricses(options.pid, options.name);
-    const dataStr = JSON.stringify({ processes });
+    // Fresh metrics
+    const cpu = await getCPUMetrics();
+    const dataStr = JSON.stringify(cpu);
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
     // Cache the result
     if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
     }
 
     return {
       success: true,
-      operation: 'status',
-      data: { processes },
+      operation: 'cpu',
+      data: { cpu },
       metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
         tokensUsed,
         tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
       },
     };
   }
 
-  private async monitorMetrics(
+  private async getMemory(
     options: SmartMetricsOptions
-  ): Promise<SmartMetricsResult> {
-    if (!options.pid) {
-      throw new Error('PID required for monitor operation');
+  ): Promise<MetricsResult> {
+    const cacheKey = 'metrics:memory';
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'memory',
+          data: { memory: data },
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
     }
 
-    const interval = options.interval || 1000;
-    const duration = options.duration || 10000;
-    const snapshots: ResourceSnapshot[] = [];
+    // Fresh metrics
+    const memory = await getMemoryMetrics();
+    const dataStr = JSON.stringify(memory);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
-    const endTime = Date.now() + duration;
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+    }
+
+    return {
+      success: true,
+      operation: 'memory',
+      data: { memory },
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async getDisk(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const cacheKey = `metrics:disk:${options.drives?.join(',') || 'all'}`;
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'disk',
+          data: { disk: data },
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics
+    const disk = await getDiskMetrics(options.drives);
+    const dataStr = JSON.stringify(disk);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+    }
+
+    return {
+      success: true,
+      operation: 'disk',
+      data: { disk },
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async getNetwork(
+    options: SmartMetricsOptions
+  ): Promise<MetricsResult> {
+    const cacheKey = 'metrics:network';
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'network',
+          data: { network: data },
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics
+    const network = await getNetworkMetrics();
+    const dataStr = JSON.stringify(network);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+    }
+
+    return {
+      success: true,
+      operation: 'network',
+      data: { network },
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async getAll(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const cacheKey = `metrics:all:${options.drives?.join(',') || 'all'}`;
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'all',
+          data,
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics - collect all
+    const [cpu, memory, disk, network] = await Promise.all([
+      getCPUMetrics(),
+      getMemoryMetrics(),
+      getDiskMetrics(options.drives),
+      getNetworkMetrics(),
+    ]);
+
+    const data = { cpu, memory, disk, network };
+    const dataStr = JSON.stringify(data);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+    }
+
+    return {
+      success: true,
+      operation: 'all',
+      data,
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async monitor(
+    options: SmartMetricsOptions
+  ): Promise<MetricsResult> {
+    const interval = options.interval || 1000; // 1 second default
+    const duration = options.duration || 10000; // 10 seconds default
+    const samples: MetricsSample[] = [];
+
+    const startTime = Date.now();
+    const endTime = startTime + duration;
 
     while (Date.now() < endTime) {
-      try {
-        const processes = await this.listMetricses(options.pid);
-        if (processes.length > 0) {
-          const proc = processes[0];
-          snapshots.push({
-            timestamp: Date.now(),
-            cpu: proc.cpu,
-            memory: proc.memory,
-            handles: proc.handles,
-            threads: proc.threads,
-          });
-        }
-      } catch {
-        // Metrics may have exited
-        break;
-      }
+      // Collect sample
+      const [cpu, memory, disk, network] = await Promise.all([
+        getCPUMetrics(),
+        getMemoryMetrics(),
+        getDiskMetrics(options.drives),
+        getNetworkMetrics(),
+      ]);
 
-      await new Promise((resolve) => setTimeout(resolve, interval));
+      samples.push({
+        timestamp: new Date(),
+        cpu,
+        memory,
+        disk,
+        network,
+      });
+
+      // Wait for next interval
+      const nextSampleTime = startTime + samples.length * interval;
+      const waitTime = Math.max(0, nextSampleTime - Date.now());
+
+      if (waitTime > 0 && Date.now() + waitTime < endTime) {
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      }
     }
 
-    const dataStr = JSON.stringify({ snapshots });
+    const data = { samples };
+    const dataStr = JSON.stringify(data);
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
 
     return {
       success: true,
       operation: 'monitor',
-      data: { snapshots },
+      data,
       metadata: {
+        timestamp: new Date(),
+        duration: Date.now() - startTime,
+        cached: false,
         tokensUsed,
         tokensSaved: 0,
-        cacheHit: false,
-        executionTime: duration,
       },
-    };
-  }
-
-  private async getMetricsTree(
-    options: SmartMetricsOptions
-  ): Promise<SmartMetricsResult> {
-    const cacheKey = `process-tree:${options.pid || 'all'}`;
-    const useCache = options.useCache !== false;
-
-    // Check cache
-    if (useCache) {
-      const cached = await this.cache.get(cacheKey);
-      if (cached) {
-        const dataStr = cached;
-        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 20; // Estimate baseline
-
-        return {
-          success: true,
-          operation: 'tree',
-          data: JSON.parse(dataStr),
-          metadata: {
-            tokensUsed,
-            tokensSaved: baselineTokens - tokensUsed,
-            cacheHit: true,
-            executionTime: 0,
-          },
-        };
-      }
-    }
-
-    // Build process tree
-    const tree = await this.buildMetricsTree(options.pid);
-    const dataStr = JSON.stringify({ tree });
-    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-
-    // Cache the result
-    if (useCache) {
-      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
-    }
-
-    return {
-      success: true,
-      operation: 'tree',
-      data: { tree },
-      metadata: {
-        tokensUsed,
-        tokensSaved: 0,
-        cacheHit: false,
-        executionTime: 0,
-      },
-    };
-  }
-
-  private async restartMetrics(
-    options: SmartMetricsOptions
-  ): Promise<SmartMetricsResult> {
-    // Stop the process
-    await this.stopMetrics(options);
-
-    // Wait a moment
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Start it again
-    return await this.startMetrics(options);
-  }
-
-  private async listMetricses(
-    pid?: number,
-    name?: string
-  ): Promise<MetricsInfo[]> {
-    const platform = process.platform;
-
-    if (platform === 'win32') {
-      return await this.listMetricsesWindows(pid, name);
-    } else {
-      return await this.listMetricsesUnix(pid, name);
-    }
-  }
-
-  private async listMetricsesWindows(
-    pid?: number,
-    name?: string
-  ): Promise<MetricsInfo[]> {
-    // Use WMIC on Windows
-    const query = pid
-      ? `wmic process where "MetricsId=${pid}" get MetricsId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-      : name
-        ? `wmic process where "Name='${name}'" get MetricsId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-        : `wmic process get MetricsId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
-
-    const { stdout } = await execAsync(query);
-
-    // Parse CSV output
-    const lines = stdout.trim().split('\n').slice(1); // Skip header
-    const processes: MetricsInfo[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      const parts = line.split(',');
-      if (parts.length < 7) continue;
-
-      processes.push({
-        pid: parseInt(parts[4]) || 0,
-        name: parts[3] || '',
-        command: parts[0] || '',
-        cpu: 0, // Calculate from kernel + user time
-        memory: parseInt(parts[7]) || 0,
-        status: 'running',
-        startTime: Date.now(),
-        handles: parseInt(parts[1]) || 0,
-        threads: parseInt(parts[6]) || 0,
-      });
-    }
-
-    return processes;
-  }
-
-  private async listMetricsesUnix(
-    pid?: number,
-    name?: string
-  ): Promise<MetricsInfo[]> {
-    // Use ps on Unix
-    const query = pid
-      ? `ps -p ${pid} -o pid,comm,args,%cpu,%mem,stat,lstart`
-      : name
-        ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
-        : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
-
-    const { stdout } = await execAsync(query);
-
-    // Parse ps output
-    const lines = stdout.trim().split('\n').slice(1); // Skip header
-    const processes: MetricsInfo[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      const parts = line.trim().split(/\s+/);
-      if (parts.length < 7) continue;
-
-      processes.push({
-        pid: parseInt(parts[0]) || 0,
-        name: parts[1] || '',
-        command: parts.slice(2, -3).join(' '),
-        cpu: parseFloat(parts[parts.length - 3]) || 0,
-        memory: parseFloat(parts[parts.length - 2]) || 0,
-        status: this.parseUnixStatus(parts[parts.length - 1]),
-        startTime: Date.now(),
-      });
-    }
-
-    return processes;
-  }
-
-  private parseUnixStatus(stat: string): MetricsInfo['status'] {
-    if (stat.includes('R')) return 'running';
-    if (stat.includes('S')) return 'sleeping';
-    if (stat.includes('Z')) return 'zombie';
-    return 'stopped';
-  }
-
-  private async buildMetricsTree(rootPid?: number): Promise<MetricsTreeNode> {
-    const platform = process.platform;
-
-    if (platform === 'win32') {
-      return await this.buildMetricsTreeWindows(rootPid);
-    } else {
-      return await this.buildMetricsTreeUnix(rootPid);
-    }
-  }
-
-  private async buildMetricsTreeWindows(
-    rootPid?: number
-  ): Promise<MetricsTreeNode> {
-    // Use WMIC to get parent-child relationships
-    const { stdout } = await execAsync(
-      'wmic process get MetricsId,ParentMetricsId,Name /format:csv'
-    );
-
-    const lines = stdout.trim().split('\n').slice(1);
-    const processMap = new Map<number, { name: string; children: number[] }>();
-    let parentMap = new Map<number, number>();
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      const parts = line.split(',');
-      if (parts.length < 4) continue;
-
-      const pid = parseInt(parts[3]) || 0;
-      const ppid = parseInt(parts[2]) || 0;
-      const name = parts[1] || '';
-
-      processMap.set(pid, { name, children: [] });
-      parentMap.set(pid, ppid);
-    }
-
-    // Build tree
-    for (const [pid, ppid] of parentMap) {
-      if (ppid && processMap.has(ppid)) {
-        processMap.get(ppid)!.children.push(pid);
-      }
-    }
-
-    const buildNode = (pid: number): MetricsTreeNode => {
-      const info = processMap.get(pid) || { name: 'unknown', children: [] };
-      return {
-        pid,
-        name: info.name,
-        children: info.children.map(buildNode),
-      };
-    };
-
-    return buildNode(rootPid || process.pid);
-  }
-
-  private async buildMetricsTreeUnix(
-    rootPid?: number
-  ): Promise<MetricsTreeNode> {
-    // Use pstree on Unix
-    const pid = rootPid || process.pid;
-    const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
-
-    // Parse pstree output (simplified)
-    return {
-      pid,
-      name: 'process',
-      children: [],
     };
   }
 }
@@ -613,7 +729,7 @@ export async function runSmartMetrics(
   cache?: CacheEngine,
   tokenCounter?: TokenCounter,
   metricsCollector?: MetricsCollector
-): Promise<SmartMetricsResult> {
+): Promise<MetricsResult> {
   const { homedir } = await import('os');
   const { join } = await import('path');
 
@@ -630,70 +746,46 @@ export async function runSmartMetrics(
   return await tool.run(options);
 }
 
-// MCP tool definition
-export const SMART_PROCESS_TOOL_DEFINITION = {
+// ===========================
+// MCP Tool Definition
+// ===========================
+
+export const SMART_METRICS_TOOL_DEFINITION = {
   name: 'smart_metrics',
   description:
-    'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support.',
+    'System metrics collection with smart caching (88%+ token reduction). Get CPU, memory, disk, network stats, or monitor metrics over time with cross-platform support.',
   inputSchema: {
     type: 'object' as const,
     properties: {
       operation: {
         type: 'string' as const,
-        enum: ['start', 'stop', 'status', 'monitor', 'tree', 'restart'],
-        description: 'Metrics operation to perform',
-      },
-      pid: {
-        type: 'number' as const,
-        description: 'Metrics ID (for stop, status, monitor, tree operations)',
-      },
-      name: {
-        type: 'string' as const,
-        description: 'Metrics name (for stop, status operations)',
-      },
-      command: {
-        type: 'string' as const,
-        description: 'Command to execute (for start operation)',
-      },
-      args: {
-        type: 'array' as const,
-        items: { type: 'string' as const },
-        description: 'Command arguments (for start operation)',
-      },
-      cwd: {
-        type: 'string' as const,
-        description: 'Working directory (for start operation)',
-      },
-      env: {
-        type: 'object' as const,
-        description: 'Environment variables (for start operation)',
-      },
-      detached: {
-        type: 'boolean' as const,
-        description: 'Run process in detached mode (for start operation)',
-      },
-      autoRestart: {
-        type: 'boolean' as const,
-        description: 'Automatically restart on failure (for start operation)',
+        enum: ['cpu', 'memory', 'disk', 'network', 'all', 'monitor'],
+        description:
+          'Metrics operation: cpu (CPU usage), memory (RAM usage), disk (disk usage), network (network interfaces), all (all metrics), monitor (monitor metrics over time)',
       },
       interval: {
         type: 'number' as const,
         description:
-          'Monitoring interval in milliseconds (for monitor operation)',
+          'Monitoring interval in milliseconds (for monitor operation, default: 1000)',
       },
       duration: {
         type: 'number' as const,
         description:
-          'Monitoring duration in milliseconds (for monitor operation)',
+          'Monitoring duration in milliseconds (for monitor operation, default: 10000)',
+      },
+      drives: {
+        type: 'array' as const,
+        items: { type: 'string' as const },
+        description:
+          'Filter specific drives (for disk operation, e.g., ["C:", "D:"] on Windows, ["/", "/home"] on Unix)',
       },
       useCache: {
         type: 'boolean' as const,
-        description: 'Use cache for status and tree operations (default: true)',
+        description: 'Use cache for metrics (default: true)',
       },
       ttl: {
         type: 'number' as const,
-        description:
-          'Cache TTL in seconds (default: 30 for status, 60 for tree)',
+        description: 'Cache TTL in seconds (default: 5 for most metrics, 10 for disk)',
       },
     },
     required: ['operation'],
