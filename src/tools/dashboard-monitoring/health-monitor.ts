@@ -1505,7 +1505,6 @@ export function getHealthMonitor(
   return healthMonitorInstance;
 }
 
-
 export const HEALTH_MONITOR_TOOL_DEFINITION = {
   name: 'health_monitor',
   description:
