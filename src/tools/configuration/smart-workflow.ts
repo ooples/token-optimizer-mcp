@@ -241,7 +241,8 @@ export class SmartWorkflowTool {
         ttl
       );
       const uncompressedJson = JSON.stringify(result);
-      const uncompressedTokens = this.tokenCounter.count(uncompressedJson).tokens;
+      const uncompressedTokens =
+        this.tokenCounter.count(uncompressedJson).tokens;
       result.metadata.tokenCount = uncompressedTokens;
       result.metadata.tokensSaved = originalTokens - uncompressedTokens;
       result.metadata.compressionRatio = uncompressedTokens / originalTokens;
@@ -359,7 +360,6 @@ export class SmartWorkflowTool {
     }
     return Array.from(secrets);
   }
-
 
   private detectFormat(
     filePath: string,
