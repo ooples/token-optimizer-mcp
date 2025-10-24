@@ -1860,98 +1860,100 @@ export function getDataVisualizer(
   return dataVisualizerInstance;
 }
 
-// MCP Tool definition
+// MCP Tool definition - Input schema for data_visualizer tool
+export const DATA_VISUALIZER_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    operation: {
+      type: 'string',
+      enum: [
+        'create-chart',
+        'update-chart',
+        'delete-chart',
+        'list-charts',
+        'render',
+        'export',
+        'create-heatmap',
+        'create-timeline',
+        'create-network',
+        'create-sankey',
+        'create-animation',
+      ],
+      description: 'Visualization operation to perform',
+    },
+    chartId: {
+      type: 'string',
+      description: 'Chart ID (required for update, delete, render)',
+    },
+    chartType: {
+      type: 'string',
+      enum: ['line', 'bar', 'pie', 'scatter', 'area', 'radar', 'bubble'],
+      description: 'Chart type',
+    },
+    data: {
+      type: 'object',
+      description: 'Chart data with labels and datasets',
+    },
+    chartConfig: {
+      type: 'object',
+      description: 'Chart configuration',
+    },
+    heatmapConfig: {
+      type: 'object',
+      description: 'Heatmap configuration',
+    },
+    timelineConfig: {
+      type: 'object',
+      description: 'Timeline configuration',
+    },
+    networkConfig: {
+      type: 'object',
+      description: 'Network graph configuration',
+    },
+    sankeyConfig: {
+      type: 'object',
+      description: 'Sankey diagram configuration',
+    },
+    animationConfig: {
+      type: 'object',
+      description: 'Animation configuration',
+    },
+    renderFormat: {
+      type: 'string',
+      enum: ['svg', 'canvas', 'html', 'json'],
+      description: 'Rendering format (default: svg)',
+      default: 'svg',
+    },
+    exportFormat: {
+      type: 'string',
+      enum: ['svg', 'png', 'pdf', 'json'],
+      description: 'Export format (default: svg)',
+      default: 'svg',
+    },
+    exportWidth: {
+      type: 'number',
+      description: 'Export width in pixels',
+    },
+    exportHeight: {
+      type: 'number',
+      description: 'Export height in pixels',
+    },
+    useCache: {
+      type: 'boolean',
+      description: 'Enable caching',
+      default: true,
+    },
+    cacheTTL: {
+      type: 'number',
+      description: 'Cache TTL in seconds',
+    },
+  },
+  required: ['operation'],
+};
+
 export const DATA_VISUALIZER_TOOL_DEFINITION = {
   name: 'data_visualizer',
   description:
     'Create and manage interactive data visualizations with 92% token reduction through SVG/Canvas optimization and configuration caching',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      operation: {
-        type: 'string',
-        enum: [
-          'create-chart',
-          'update-chart',
-          'delete-chart',
-          'list-charts',
-          'render',
-          'export',
-          'create-heatmap',
-          'create-timeline',
-          'create-network',
-          'create-sankey',
-          'create-animation',
-        ],
-        description: 'Visualization operation to perform',
-      },
-      chartId: {
-        type: 'string',
-        description: 'Chart ID (required for update, delete, render)',
-      },
-      chartType: {
-        type: 'string',
-        enum: ['line', 'bar', 'pie', 'scatter', 'area', 'radar', 'bubble'],
-        description: 'Chart type',
-      },
-      data: {
-        type: 'object',
-        description: 'Chart data with labels and datasets',
-      },
-      chartConfig: {
-        type: 'object',
-        description: 'Chart configuration',
-      },
-      heatmapConfig: {
-        type: 'object',
-        description: 'Heatmap configuration',
-      },
-      timelineConfig: {
-        type: 'object',
-        description: 'Timeline configuration',
-      },
-      networkConfig: {
-        type: 'object',
-        description: 'Network graph configuration',
-      },
-      sankeyConfig: {
-        type: 'object',
-        description: 'Sankey diagram configuration',
-      },
-      animationConfig: {
-        type: 'object',
-        description: 'Animation configuration',
-      },
-      renderFormat: {
-        type: 'string',
-        enum: ['svg', 'canvas', 'html', 'json'],
-        description: 'Rendering format (default: svg)',
-        default: 'svg',
-      },
-      exportFormat: {
-        type: 'string',
-        enum: ['svg', 'png', 'pdf', 'json'],
-        description: 'Export format (default: svg)',
-        default: 'svg',
-      },
-      exportWidth: {
-        type: 'number',
-        description: 'Export width in pixels',
-      },
-      exportHeight: {
-        type: 'number',
-        description: 'Export height in pixels',
-      },
-      useCache: {
-        type: 'boolean',
-        description: 'Enable caching',
-        default: true,
-      },
-      cacheTTL: {
-        type: 'number',
-        description: 'Cache TTL in seconds',
-      },
-    },
-    required: ['operation'],
-  },
+  inputSchema: DATA_VISUALIZER_INPUT_SCHEMA,
 };
