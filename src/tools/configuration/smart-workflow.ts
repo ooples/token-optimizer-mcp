@@ -321,62 +321,45 @@ export class SmartWorkflowTool {
 
   getSecrets(parsedWorkflow: ParsedWorkflow): string[] {
     const secrets = new Set<string>();
+    const SECRET_PATTERN = /${{\s*secrets\.(\w+)\s*\}\}/g;
+
+    const extractSecretsFromString = (value: string): void => {
+      const matches = value.match(SECRET_PATTERN);
+      if (matches) {
+        for (const match of matches) {
+          const secretName = match.replace(/${{\s*secrets\.|[}\s]/g, '');
+          secrets.add(secretName);
+        }
+      }
+    };
+
     for (const job of parsedWorkflow.jobs) {
       if (job.env) {
         for (const value of Object.values(job.env)) {
-          const matches = value.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
-          if (matches) {
-            for (const match of matches) {
-              const secretName = match.replace(/${{\s*secrets\.|[}\s]/g, '');
-              secrets.add(secretName);
-            }
-          }
+          extractSecretsFromString(value);
         }
       }
       for (const step of job.steps) {
         if (step.with) {
           for (const value of Object.values(step.with)) {
             if (typeof value === 'string') {
-              const matches = value.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
-              if (matches) {
-                for (const match of matches) {
-                  const secretName = match.replace(
-                    /${{\s*secrets\.|[}\s]/g,
-                    ''
-                  );
-                  secrets.add(secretName);
-                }
-              }
+              extractSecretsFromString(value);
             }
           }
         }
         if (step.env) {
           for (const value of Object.values(step.env)) {
-            const matches = value.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
-            if (matches) {
-              for (const match of matches) {
-                const secretName = match.replace(
-                  /${{\s*secrets\.|[}\s]/g,
-                  ''
-                );
-                secrets.add(secretName);
-              }
-            }
+            extractSecretsFromString(value);
           }
         }
         if (step.run) {
-          const matches = step.run.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
-          if (matches) {
-            for (const match of matches) {
-              const secretName = match.replace(/${{\s*secrets\.|[}\s]/g, '');
-              secrets.add(secretName);
-            }
-          }
+          extractSecretsFromString(step.run);
         }
       }
     }
     return Array.from(secrets);
   }
+
 
   private detectFormat(
     filePath: string,
