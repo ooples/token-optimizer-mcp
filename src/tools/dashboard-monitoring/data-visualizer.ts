@@ -1860,6 +1860,7 @@ export function getDataVisualizer(
   return dataVisualizerInstance;
 }
 
+// MCP Tool definition
 // MCP Tool definition - Input schema for data_visualizer tool
 export const DATA_VISUALIZER_INPUT_SCHEMA = {
   type: 'object',

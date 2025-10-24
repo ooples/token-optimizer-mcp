@@ -212,9 +212,11 @@ const performanceMetricStore = new PerformanceMetricStore();
 
 class StatisticalEngine {
   // Simple linear regression
-  private calculateLinearRegression(
-    data: Array<{ x: number; y: number }>
-  ): { slope: number; intercept: number; rSquared: number } {
+  private calculateLinearRegression(data: Array<{ x: number; y: number }>): {
+    slope: number;
+    intercept: number;
+    rSquared: number;
+  } {
     if (data.length < 2) {
       return { slope: 0, intercept: 0, rSquared: 0 };
     }
@@ -278,10 +280,14 @@ class StatisticalEngine {
       // Strong correlation
       if (slope > 0.001) {
         trendType = 'increasing';
-        recommendations.push('Performance is showing a strong increasing trend. Investigate potential resource bottlenecks or increased load.');
+        recommendations.push(
+          'Performance is showing a strong increasing trend. Investigate potential resource bottlenecks or increased load.'
+        );
       } else if (slope < -0.001) {
         trendType = 'decreasing';
-        recommendations.push('Performance is showing a strong decreasing trend. This is generally positive, but ensure it aligns with expectations (e.g., optimizations).');
+        recommendations.push(
+          'Performance is showing a strong decreasing trend. This is generally positive, but ensure it aligns with expectations (e.g., optimizations).'
+        );
       } else {
         trendType = 'stable';
         recommendations.push('Performance is stable. Continue monitoring.');
@@ -290,17 +296,25 @@ class StatisticalEngine {
       // Moderate correlation
       if (slope > 0.001) {
         trendType = 'increasing';
-        recommendations.push('Performance is showing a moderate increasing trend. Keep an eye on it for potential issues.');
+        recommendations.push(
+          'Performance is showing a moderate increasing trend. Keep an eye on it for potential issues.'
+        );
       } else if (slope < -0.001) {
         trendType = 'decreasing';
-        recommendations.push('Performance is showing a moderate decreasing trend. Good, but verify the cause.');
+        recommendations.push(
+          'Performance is showing a moderate decreasing trend. Good, but verify the cause.'
+        );
       } else {
         trendType = 'stable';
-        recommendations.push('Performance is relatively stable, but with some fluctuations. Consider reducing noise or improving measurement precision.');
+        recommendations.push(
+          'Performance is relatively stable, but with some fluctuations. Consider reducing noise or improving measurement precision.'
+        );
       }
     } else {
       trendType = 'volatile';
-      recommendations.push('Performance is volatile or shows no clear trend. This could indicate inconsistent behavior or external factors. Investigate.');
+      recommendations.push(
+        'Performance is volatile or shows no clear trend. This could indicate inconsistent behavior or external factors. Investigate.'
+      );
     }
 
     return {
@@ -316,10 +330,7 @@ class StatisticalEngine {
     };
   }
 
-  forecast(
-    metrics: PerformanceMetric[],
-    horizon: number
-  ): PerformanceForecast {
+  forecast(metrics: PerformanceMetric[], horizon: number): PerformanceForecast {
     if (metrics.length < 2) {
       return {
         metricId: metrics[0]?.id || 'unknown',
@@ -341,7 +352,10 @@ class StatisticalEngine {
     for (let i = 1; i <= horizon; i++) {
       const futureTimestamp = lastTimestamp + i * timeStep;
       const forecastedValue = slope * futureTimestamp + intercept;
-      forecastPoints.push({ timestamp: futureTimestamp, value: forecastedValue });
+      forecastPoints.push({
+        timestamp: futureTimestamp,
+        value: forecastedValue,
+      });
     }
 
     return {
@@ -365,8 +379,10 @@ class StatisticalEngine {
       };
     }
 
-    const avg1 = metrics1.reduce((sum, m) => sum + m.value, 0) / metrics1.length;
-    const avg2 = metrics2.reduce((sum, m) => sum + m.value, 0) / metrics2.length;
+    const avg1 =
+      metrics1.reduce((sum, m) => sum + m.value, 0) / metrics1.length;
+    const avg2 =
+      metrics2.reduce((sum, m) => sum + m.value, 0) / metrics2.length;
 
     let comparisonResult: PerformanceComparison['comparisonResult'] = 'similar';
     let percentageChange: number | undefined;
@@ -439,14 +455,18 @@ class StatisticalEngine {
     const recommendations: string[] = [];
 
     if (historicalAvg === 0) {
-      if (recentAvg > 0 && threshold < 100) { // If historical was 0 and recent is not, and threshold is not 100%
+      if (recentAvg > 0 && threshold < 100) {
+        // If historical was 0 and recent is not, and threshold is not 100%
         regressionDetected = true;
         thresholdExceeded = 100;
         changePoint = recentMetrics[0].timestamp;
-        recommendations.push('Significant performance change detected from zero baseline. Investigate immediately.');
+        recommendations.push(
+          'Significant performance change detected from zero baseline. Investigate immediately.'
+        );
       }
     } else {
-      const percentageChange = ((recentAvg - historicalAvg) / historicalAvg) * 100;
+      const percentageChange =
+        ((recentAvg - historicalAvg) / historicalAvg) * 100;
 
       // Assuming higher value is worse for regression (e.g., higher response time, higher CPU)
       const isHigherWorse = true; // Simplification
@@ -498,7 +518,9 @@ export class PerformanceTracker {
     private metricsCollector: MetricsCollector
   ) {}
 
-  async run(options: PerformanceTrackerOptions): Promise<PerformanceTrackerResult> {
+  async run(
+    options: PerformanceTrackerOptions
+  ): Promise<PerformanceTrackerResult> {
     const startTime = Date.now();
 
     try {
@@ -575,11 +597,21 @@ export class PerformanceTracker {
     options: PerformanceTrackerOptions,
     _startTime: number
   ): Promise<PerformanceTrackerResult> {
-    if (!options.metricName || !options.metricType || options.value === undefined) {
-      throw new Error('metricName, metricType, and value are required for tracking');
+    if (
+      !options.metricName ||
+      !options.metricType ||
+      options.value === undefined
+    ) {
+      throw new Error(
+        'metricName, metricType, and value are required for tracking'
+      );
     }
 
-    const metricId = this.generateMetricId(options.metricName, options.metricType, options.tags || {});
+    const metricId = this.generateMetricId(
+      options.metricName,
+      options.metricType,
+      options.tags || {}
+    );
 
     const metric: PerformanceMetric = {
       id: metricId,
@@ -614,7 +646,13 @@ export class PerformanceTracker {
       throw new Error('metricId or metricName is required for querying');
     }
 
-    const queryMetricId = options.metricId || this.generateMetricId(options.metricName!, options.metricType || 'custom', options.tags || {});
+    const queryMetricId =
+      options.metricId ||
+      this.generateMetricId(
+        options.metricName!,
+        options.metricType || 'custom',
+        options.tags || {}
+      );
 
     // Generate cache key
     const cacheKey = generateCacheKey('performance-query', {
@@ -685,7 +723,13 @@ export class PerformanceTracker {
       throw new Error('metricId or metricName is required for trend analysis');
     }
 
-    const analyzeMetricId = options.metricId || this.generateMetricId(options.metricName!, options.metricType || 'custom', options.tags || {});
+    const analyzeMetricId =
+      options.metricId ||
+      this.generateMetricId(
+        options.metricName!,
+        options.metricType || 'custom',
+        options.tags || {}
+      );
 
     // Generate cache key
     const cacheKey = generateCacheKey('performance-trend', {
@@ -762,7 +806,13 @@ export class PerformanceTracker {
       throw new Error('forecastHorizon (positive number) is required');
     }
 
-    const forecastMetricId = options.metricId || this.generateMetricId(options.metricName!, options.metricType || 'custom', options.tags || {});
+    const forecastMetricId =
+      options.metricId ||
+      this.generateMetricId(
+        options.metricName!,
+        options.metricType || 'custom',
+        options.tags || {}
+      );
 
     // Generate cache key
     const cacheKey = generateCacheKey('performance-forecast', {
@@ -799,10 +849,15 @@ export class PerformanceTracker {
     );
 
     if (metrics.length < 2) {
-      throw new Error('Not enough historical data to generate a forecast (at least 2 points needed)');
+      throw new Error(
+        'Not enough historical data to generate a forecast (at least 2 points needed)'
+      );
     }
 
-    const forecast = statisticalEngine.forecast(metrics, options.forecastHorizon);
+    const forecast = statisticalEngine.forecast(
+      metrics,
+      options.forecastHorizon
+    );
 
     // Cache result
     const forecastStr = JSON.stringify(forecast);
@@ -833,7 +888,9 @@ export class PerformanceTracker {
     _startTime: number
   ): Promise<PerformanceTrackerResult> {
     if (!options.comparisonMetricId1 || !options.comparisonMetricId2) {
-      throw new Error('comparisonMetricId1 and comparisonMetricId2 are required for comparison');
+      throw new Error(
+        'comparisonMetricId1 and comparisonMetricId2 are required for comparison'
+      );
     }
 
     // Generate cache key
@@ -912,13 +969,24 @@ export class PerformanceTracker {
     _startTime: number
   ): Promise<PerformanceTrackerResult> {
     if (!options.metricId && !options.metricName) {
-      throw new Error('metricId or metricName is required for regression detection');
+      throw new Error(
+        'metricId or metricName is required for regression detection'
+      );
     }
-    if (options.regressionThreshold === undefined || options.regressionThreshold <= 0) {
+    if (
+      options.regressionThreshold === undefined ||
+      options.regressionThreshold <= 0
+    ) {
       throw new Error('regressionThreshold (positive number) is required');
     }
 
-    const regressionMetricId = options.metricId || this.generateMetricId(options.metricName!, options.metricType || 'custom', options.tags || {});
+    const regressionMetricId =
+      options.metricId ||
+      this.generateMetricId(
+        options.metricName!,
+        options.metricType || 'custom',
+        options.tags || {}
+      );
 
     // Generate cache key
     const cacheKey = generateCacheKey('performance-regression', {
@@ -956,7 +1024,9 @@ export class PerformanceTracker {
     );
 
     if (metrics.length < 10) {
-      throw new Error('Not enough data to detect regressions (at least 10 points recommended)');
+      throw new Error(
+        'Not enough data to detect regressions (at least 10 points recommended)'
+      );
     }
 
     const regression = statisticalEngine.detectRegression(
@@ -1100,11 +1170,11 @@ export class PerformanceTracker {
     const sections: Array<{ title: string; content: string }> = [];
 
     if (allMetrics.length > 0) {
-      const uniqueMetricIds = new Set(allMetrics.map(m => m.id));
+      const uniqueMetricIds = new Set(allMetrics.map((m) => m.id));
       summary += `Total unique metrics tracked: ${uniqueMetricIds.size}.\n`;
 
       for (const metricId of uniqueMetricIds) {
-        const metricsForId = allMetrics.filter(m => m.id === metricId);
+        const metricsForId = allMetrics.filter((m) => m.id === metricId);
         if (metricsForId.length > 0) {
           const trend = statisticalEngine.analyzeTrend(metricsForId);
           sections.push({
@@ -1112,7 +1182,10 @@ export class PerformanceTracker {
             content: `Trend Type: ${trend.trendType}\nSlope: ${trend.slope?.toFixed(4)}\nR-squared: ${trend.rSquared?.toFixed(4)}\nRecommendations: ${trend.recommendations.join(', ')}`,
           });
 
-          const regression = statisticalEngine.detectRegression(metricsForId, 10); // Default threshold
+          const regression = statisticalEngine.detectRegression(
+            metricsForId,
+            10
+          ); // Default threshold
           if (regression.regressionDetected) {
             sections.push({
               title: `Regression Detection for ${metricsForId[0].name} (${metricId})`,
@@ -1156,7 +1229,11 @@ export class PerformanceTracker {
   // Helper Methods
   // ========================================================================
 
-  private generateMetricId(name: string, type: string, tags: Record<string, string>): string {
+  private generateMetricId(
+    name: string,
+    type: string,
+    tags: Record<string, string>
+  ): string {
     const tagString = Object.keys(tags)
       .sort()
       .map((key) => `${key}:${tags[key]}`)
@@ -1211,7 +1288,8 @@ export const performanceTrackerTool = {
       },
       metricName: {
         type: 'string',
-        description: 'Name of the performance metric (e.g., "api_response_time")',
+        description:
+          'Name of the performance metric (e.g., "api_response_time")',
       },
       metricType: {
         type: 'string',
@@ -1225,7 +1303,8 @@ export const performanceTrackerTool = {
       tags: {
         type: 'object',
         additionalProperties: { type: 'string' },
-        description: 'Key-value pairs for tagging and filtering metrics (e.g., { "service": "auth", "env": "prod" })',
+        description:
+          'Key-value pairs for tagging and filtering metrics (e.g., { "service": "auth", "env": "prod" })',
       },
       timeRange: {
         type: 'object',
@@ -1261,11 +1340,13 @@ export const performanceTrackerTool = {
       },
       baselineId: {
         type: 'string',
-        description: 'ID of the performance baseline to retrieve or compare against',
+        description:
+          'ID of the performance baseline to retrieve or compare against',
       },
       regressionThreshold: {
         type: 'number',
-        description: 'Percentage change threshold to detect a regression (e.g., 10 for 10% change)',
+        description:
+          'Percentage change threshold to detect a regression (e.g., 10 for 10% change)',
       },
       reportFormat: {
         type: 'string',
@@ -1282,7 +1363,8 @@ export const performanceTrackerTool = {
       },
       cacheTTL: {
         type: 'number',
-        description: 'Cache TTL in seconds (not directly used in this implementation, but kept for consistency)',
+        description:
+          'Cache TTL in seconds (not directly used in this implementation, but kept for consistency)',
       },
     },
     required: ['operation'],

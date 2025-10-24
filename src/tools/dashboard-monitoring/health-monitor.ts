@@ -1505,6 +1505,7 @@ export function getHealthMonitor(
   return healthMonitorInstance;
 }
 
+// MCP Tool definition
 export const HEALTH_MONITOR_TOOL_DEFINITION = {
   name: 'health_monitor',
   description:

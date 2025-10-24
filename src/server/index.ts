@@ -26,38 +26,6 @@ import {
   SMART_AST_GREP_TOOL_DEFINITION,
 } from '../tools/code-analysis/smart-ast-grep.js';
 import {
-  getSmartComplexityTool,
-  SMART_COMPLEXITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-complexity.js';
-import {
-  getSmartDependenciesTool,
-  SMART_DEPENDENCIES_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-dependencies.js';
-import {
-  getSmartExportsTool,
-  SMART_EXPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-exports.js';
-import {
-  getSmartImportsTool,
-  SMART_IMPORTS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-imports.js';
-import {
-  getSmartRefactorTool,
-  SMART_REFACTOR_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-refactor.js';
-import {
-  getSmartSecurityTool,
-  SMART_SECURITY_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-security.js';
-import {
-  getSmartSymbolsTool,
-  SMART_SYMBOLS_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-symbols.js';
-import {
-  getSmartTypeScriptTool,
-  SMART_TYPESCRIPT_TOOL_DEFINITION,
-} from '../tools/code-analysis/smart-typescript.js';
-import {
   getCacheAnalyticsTool,
   CACHE_ANALYTICS_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-analytics.js';
@@ -101,18 +69,22 @@ import {
   getMonitoringIntegration,
   MONITORING_INTEGRATION_TOOL_DEFINITION,
 } from '../tools/dashboard-monitoring/monitoring-integration.js';
-
-// Intelligence & AI tools
 import {
-  getKnowledgeGraphTool,
-  KNOWLEDGE_GRAPH_TOOL_DEFINITION,
-  KnowledgeGraphOptions,
-} from '../tools/intelligence/knowledge-graph.js';
+  getCustomWidget,
+  CUSTOM_WIDGET_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/custom-widget.js';
 import {
-  getSentimentAnalysisTool,
-  SENTIMENT_ANALYSIS_TOOL_DEFINITION,
-  SentimentAnalysisOptions,
-} from '../tools/intelligence/sentiment-analysis.js';
+  getDataVisualizer,
+  DATA_VISUALIZER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/data-visualizer.js';
+import {
+  getHealthMonitor,
+  HEALTH_MONITOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/health-monitor.js';
+import {
+  getLogDashboard,
+  LOG_DASHBOARD_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/log-dashboard.js';
 
 // API & Database tools
 import {
@@ -302,14 +274,6 @@ const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 // Code analysis tool instances
 const smartAstGrep = getSmartAstGrepTool(cache, tokenCounter, metrics);
-const smartComplexity = getSmartComplexityTool(cache, tokenCounter, metrics);
-const smartDependencies = getSmartDependenciesTool(cache, tokenCounter, metrics);
-const smartExports = getSmartExportsTool(cache, tokenCounter, metrics);
-const smartImports = getSmartImportsTool(cache, tokenCounter, metrics);
-const smartRefactor = getSmartRefactorTool(cache, tokenCounter, metrics);
-const smartSecurity = getSmartSecurityTool(cache, tokenCounter, metrics);
-const smartSymbols = getSmartSymbolsTool(cache, tokenCounter, metrics);
-const smartTypeScript = getSmartTypeScriptTool(cache, tokenCounter, metrics);
 const cacheAnalytics = getCacheAnalyticsTool(cache, tokenCounter, metrics);
 const cacheInvalidation = getCacheInvalidationTool(
   cache,
@@ -341,10 +305,10 @@ const monitoringIntegration = getMonitoringIntegration(
   tokenCounter,
   metrics
 );
-
-// Initialize Intelligence & AI tools
-const knowledgeGraph = getKnowledgeGraphTool(cache, tokenCounter, metrics);
-const sentimentAnalysis = getSentimentAnalysisTool(cache, tokenCounter, metrics);
+const customWidget = getCustomWidget(cache, tokenCounter, metrics);
+const dataVisualizer = getDataVisualizer(cache, tokenCounter, metrics);
+const healthMonitor = getHealthMonitor(cache, tokenCounter, metrics);
+const logDashboard = getLogDashboard(cache, tokenCounter, metrics);
 
 // Initialize Build Systems tools
 const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
@@ -593,14 +557,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       CACHE_WARMUP_TOOL_DEFINITION,
       // Code analysis tools
       SMART_AST_GREP_TOOL_DEFINITION,
-      SMART_COMPLEXITY_TOOL_DEFINITION,
-      SMART_DEPENDENCIES_TOOL_DEFINITION,
-      SMART_EXPORTS_TOOL_DEFINITION,
-      SMART_IMPORTS_TOOL_DEFINITION,
-      SMART_REFACTOR_TOOL_DEFINITION,
-      SMART_SECURITY_TOOL_DEFINITION,
-      SMART_SYMBOLS_TOOL_DEFINITION,
-      SMART_TYPESCRIPT_TOOL_DEFINITION,
       CACHE_ANALYTICS_TOOL_DEFINITION,
       CACHE_BENCHMARK_TOOL_DEFINITION,
       CACHE_COMPRESSION_TOOL_DEFINITION,
@@ -624,9 +580,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ALERT_MANAGER_TOOL_DEFINITION,
       METRIC_COLLECTOR_TOOL_DEFINITION,
       MONITORING_INTEGRATION_TOOL_DEFINITION,
-      // Intelligence & AI tools
-      KNOWLEDGE_GRAPH_TOOL_DEFINITION,
-      SENTIMENT_ANALYSIS_TOOL_DEFINITION,
+      CUSTOM_WIDGET_TOOL_DEFINITION,
+      DATA_VISUALIZER_TOOL_DEFINITION,
+      HEALTH_MONITOR_TOOL_DEFINITION,
+      LOG_DASHBOARD_TOOL_DEFINITION,
       // Build Systems tools
       SMART_PROCESSES_TOOL_DEFINITION,
       SMART_NETWORK_TOOL_DEFINITION,
@@ -1402,110 +1359,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
-      case 'smart_complexity': {
-        const options = args as any;
-        const result = await smartComplexity.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_dependencies': {
-        const options = args as any;
-        const result = await smartDependencies.analyze(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_exports': {
-        const options = args as any;
-        const result = await smartExports.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_imports': {
-        const options = args as any;
-        const result = await smartImports.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_refactor': {
-        const options = args as any;
-        const result = await smartRefactor.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_security': {
-        const options = args as any;
-        const result = await smartSecurity.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_symbols': {
-        const options = args as any;
-        const result = await smartSymbols.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'smart_typescript': {
-        const options = args as any;
-        const result = await smartTypeScript.run(options);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
 
       case 'cache_analytics': {
         const options = args as any;
@@ -2098,9 +1951,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case 'knowledge_graph': {
-        const options = args as unknown as KnowledgeGraphOptions;
-        const result = await knowledgeGraph.run(options);
+      case 'custom_widget': {
+        const options = args as any;
+        const result = await customWidget.run(options);
         return {
           content: [
             {
@@ -2111,9 +1964,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      case 'sentiment_analysis': {
-        const options = args as unknown as SentimentAnalysisOptions;
-        const result = await sentimentAnalysis.run(options);
+      case 'data_visualizer': {
+        const options = args as any;
+        const result = await dataVisualizer.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'health_monitor': {
+        const options = args as any;
+        const result = await healthMonitor.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'log_dashboard': {
+        const options = args as any;
+        const result = await logDashboard.run(options);
         return {
           content: [
             {

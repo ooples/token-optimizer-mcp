@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Dependencies Tool - 83% Token Reduction
  *
  * Achieves token reduction through:
@@ -16,8 +16,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { parse as parseTypescript } from '@typescript-eslint/typescript-estree';
 import { parse as parseBabel } from '@babel/parser';
-import pkg from 'glob';
-const { globSync } = pkg;
+import { globSync } from 'glob';
 import { relative, resolve, dirname, extname, join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
