@@ -70,6 +70,18 @@ import {
   MONITORING_INTEGRATION_TOOL_DEFINITION,
 } from '../tools/dashboard-monitoring/monitoring-integration.js';
 
+// Intelligence & AI tools
+import {
+  getKnowledgeGraphTool,
+  KNOWLEDGE_GRAPH_TOOL_DEFINITION,
+  KnowledgeGraphOptions,
+} from '../tools/intelligence/knowledge-graph.js';
+import {
+  getSentimentAnalysisTool,
+  SENTIMENT_ANALYSIS_TOOL_DEFINITION,
+  SentimentAnalysisOptions,
+} from '../tools/intelligence/sentiment-analysis.js';
+
 // API & Database tools
 import {
   getSmartSql,
@@ -289,6 +301,10 @@ const monitoringIntegration = getMonitoringIntegration(
   tokenCounter,
   metrics
 );
+
+// Initialize Intelligence & AI tools
+const knowledgeGraph = getKnowledgeGraphTool(cache, tokenCounter, metrics);
+const sentimentAnalysis = getSentimentAnalysisTool(cache, tokenCounter, metrics);
 
 // Initialize Build Systems tools
 const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
@@ -560,6 +576,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ALERT_MANAGER_TOOL_DEFINITION,
       METRIC_COLLECTOR_TOOL_DEFINITION,
       MONITORING_INTEGRATION_TOOL_DEFINITION,
+      // Intelligence & AI tools
+      KNOWLEDGE_GRAPH_TOOL_DEFINITION,
+      SENTIMENT_ANALYSIS_TOOL_DEFINITION,
       // Build Systems tools
       SMART_PROCESSES_TOOL_DEFINITION,
       SMART_NETWORK_TOOL_DEFINITION,
@@ -1917,6 +1936,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'monitoring_integration': {
         const options = args as any;
         const result = await monitoringIntegration.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'knowledge_graph': {
+        const options = args as unknown as KnowledgeGraphOptions;
+        const result = await knowledgeGraph.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'sentiment_analysis': {
+        const options = args as unknown as SentimentAnalysisOptions;
+        const result = await sentimentAnalysis.run(options);
         return {
           content: [
             {
