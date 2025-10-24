@@ -1,1 +1,701 @@
-﻿/** * SmartNetwork - Intelligent Network Operations * * Track 2C - Tool #3: Network operations with smart caching (85%+ token reduction) * * Capabilities: * - Connectivity checks (ping, traceroute) * - Port scanning and availability * - DNS resolution and lookup * - Network interface information * - Bandwidth monitoring * * Token Reduction Strategy: * - Cache DNS lookups (96% reduction) * - Incremental connectivity status (85% reduction) * - Compressed network topology (87% reduction) */ // ===========================// Types & Interfaces// ===========================export type NetworkOperation = 'ping' | 'traceroute' | 'port-scan' | 'dns-lookup' | 'reverse-dns' |                               'check-connectivity' | 'list-interfaces' | 'bandwidth-test';export interface SmartNetworkOptions {  operation: NetworkOperation;  host?: string;  port?: number;  ports?: number[];  count?: number;  timeout?: number;  useCache?: boolean;  ttl?: number;}export interface PingResult {  host: string;  alive: boolean;  responseTime?: number;  packetLoss?: number;  packetsTransmitted: number;  packetsReceived: number;  minRtt?: number;  avgRtt?: number;  maxRtt?: number;}export interface TracerouteHop {  hop: number;  address: string;  hostname?: string;  responseTime: number;}export interface PortScanResult {  port: number;  open: boolean;  service?: string;}export interface DNSResult {  hostname: string;  addresses: string[];  type: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT';  ttl?: number;}export interface NetworkInterface {  name: string;  addresses: {    address: string;    family: 'IPv4' | 'IPv6';    netmask: string;    internal: boolean;  }[];  mac?: string;  status?: 'up' | 'down';}export interface BandwidthResult {  downloadSpeed: number; // Mbps  uploadSpeed: number;   // Mbps  latency: number;       // ms  jitter: number;        // ms}export interface SmartNetworkResult {  success: boolean;  operation: NetworkOperation;  data: {    ping?: PingResult;    traceroute?: TracerouteHop[];    portScan?: PortScanResult[];    dns?: DNSResult;    reverseDns?: string[];    interfaces?: NetworkInterface[];    bandwidth?: BandwidthResult;    connectivity?: boolean;    error?: string;  };  metadata: {    tokensUsed: number;    tokensSaved: number;    cacheHit: boolean;    executionTime: number;  };}// ===========================// SmartNetwork Class// ===========================export class SmartNetwork {  constructor(    private cache: CacheEngine,    private tokenCounter: TokenCounter,    private metricsCollector: MetricsCollector  ) {}  /**   * Main entry point for network operations   */  async run(options: SmartNetworkOptions): Promise<SmartNetworkResult> {    const startTime = Date.now();    const operation = options.operation;    let result: SmartNetworkResult;    try {      switch (operation) {        case 'ping':          result = await this.ping(options);          break;        case 'traceroute':          result = await this.traceroute(options);          break;        case 'port-scan':          result = await this.portScan(options);          break;        case 'dns-lookup':          result = await this.dnsLookup(options);          break;        case 'reverse-dns':          result = await this.reverseDns(options);          break;        case 'check-connectivity':          result = await this.checkConnectivity(options);          break;        case 'list-interfaces':          result = await this.listInterfaces(options);          break;        case 'bandwidth-test':          result = await this.bandwidthTest(options);          break;        default:          throw new Error(`Unknown operation: ${operation}`);      }      // Record metrics      this.metricsCollector.record({        operation: `smart-network:${operation}`,        duration: Date.now() - startTime,        success: result.success,        cacheHit: result.metadata.cacheHit,        metadata: { host: options.host, port: options.port }      });      return result;    } catch (error) {      const errorMessage = error instanceof Error ? error.message : String(error);      const errorResult: SmartNetworkResult = {        success: false,        operation,        data: { error: errorMessage },        metadata: {          tokensUsed: this.tokenCounter.count(errorMessage).tokens,          tokensSaved: 0,          cacheHit: false,          executionTime: Date.now() - startTime        }      };      this.metricsCollector.record({        operation: `smart-network:${operation}`,        duration: Date.now() - startTime,        success: false,        cacheHit: false,        metadata: { error: errorMessage, host: options.host }      });      return errorResult;    }  }  /**   * Ping a host   */  private async ping(options: SmartNetworkOptions): Promise<SmartNetworkResult> {    if (!options.host) {      throw new Error('Host is required for ping operation');    }    const count = options.count || 4;    const timeout = options.timeout || 5000;    const platform = process.platform;    let command: string;    if (platform === 'win32') {      command = `ping -n ${count} -w ${timeout} ${options.host}`;    } else {      command = `ping -c ${count} -W ${Math.floor(timeout / 1000)} ${options.host}`;    }    try {      const { stdout } = await execAsync(command);      const pingResult = this.parsePingOutput(stdout, options.host, platform);      const dataStr = JSON.stringify({ ping: pingResult });      const tokensUsed = this.tokenCounter.count(dataStr).tokens;      return {        success: true,        operation: 'ping',        data: { ping: pingResult },        metadata: {          tokensUsed,          tokensSaved: 0,          cacheHit: false,          executionTime: 0        }      };    } catch (error) {      // Ping failed - host unreachable      const pingResult: PingResult = {        host: options.host,        alive: false,        packetsTransmitted: count,        packetsReceived: 0,        packetLoss: 100      };      const dataStr = JSON.stringify({ ping: pingResult });      const tokensUsed = this.tokenCounter.count(dataStr).tokens;      return {        success: true,        operation: 'ping',        data: { ping: pingResult },        metadata: {          tokensUsed,          tokensSaved: 0,          cacheHit: false,          executionTime: 0        }      };    }  }  /**   * Parse ping command output   */  private parsePingOutput(output: string, host: string, platform: string): PingResult {    const result: PingResult = {      host,      alive: true,      packetsTransmitted: 0,      packetsReceived: 0    };    if (platform === 'win32') {      // Windows ping output parsing      const sentMatch = output.match(/Sent = (\d+)/);      const receivedMatch = output.match(/Received = (\d+)/);      const lostMatch = output.match(/Lost = (\d+)/);      const timeMatch = output.match(/Average = (\d+)ms/);      if (sentMatch) result.packetsTransmitted = parseInt(sentMatch[1]);      if (receivedMatch) result.packetsReceived = parseInt(receivedMatch[1]);      if (lostMatch) {        const lost = parseInt(lostMatch[1]);        result.packetLoss = result.packetsTransmitted > 0          ? (lost / result.packetsTransmitted) * 100          : 100;      }      if (timeMatch) result.avgRtt = parseInt(timeMatch[1]);    } else {      // Unix ping output parsing      const statsMatch = output.match(/(\d+) packets transmitted, (\d+) received/);      const rttMatch = output.match(/min\/avg\/max(?:\/mdev)? = ([\d.]+)\/([\d.]+)\/([\d.]+)/);      if (statsMatch) {        result.packetsTransmitted = parseInt(statsMatch[1]);        result.packetsReceived = parseInt(statsMatch[2]);        result.packetLoss = result.packetsTransmitted > 0          ? ((result.packetsTransmitted - result.packetsReceived) / result.packetsTransmitted) * 100          : 100;      }      if (rttMatch) {        result.minRtt = parseFloat(rttMatch[1]);        result.avgRtt = parseFloat(rttMatch[2]);        result.maxRtt = parseFloat(rttMatch[3]);        result.responseTime = result.avgRtt;      }    }    return result;  }  /**   * Traceroute to a host   */  private async traceroute(options: SmartNetworkOptions): Promise<SmartNetworkResult> {    if (!options.host) {      throw new Error('Host is required for traceroute operation');    }    const platform = process.platform;    let command: string;    if (platform === 'win32') {      command = `tracert -h 30 ${options.host}`;    } else {      command = `traceroute -m 30 ${options.host}`;    }    try {      const { stdout } = await execAsync(command, { timeout: 60000 });      const hops = this.parseTracerouteOutput(stdout, platform);      const dataStr = JSON.stringify({ traceroute: hops });      const tokensUsed = this.tokenCounter.count(dataStr).tokens;      return {        success: true,        operation: 'traceroute',        data: { traceroute: hops },        metadata: {          tokensUsed,          tokensSaved: 0,          cacheHit: false,          executionTime: 0        }      };    } catch (error) {      throw new Error(`Traceroute failed: ${error instanceof Error ? error.message : String(error)}`);    }  }  /**   * Parse traceroute output   */  private parseTracerouteOutput(output: string, platform: string): TracerouteHop[] {    const hops: TracerouteHop[] = [];    const lines = output.split('\n');    for (const line of lines) {      let hopMatch: RegExpMatchArray | null;      if (platform === 'win32') {        // Windows: "  1    <1 ms    <1 ms    <1 ms  192.168.1.1"        hopMatch = line.match(/^\s*(\d+)\s+(?:<?\d+|[*])\s*ms\s+(?:<?\d+|[*])\s*ms\s+(?:<?\d+|[*])\s*ms\s+([\d.]+|[\w.-]+)/);      } else {        // Unix: " 1  192.168.1.1 (192.168.1.1)  1.234 ms  1.123 ms  1.456 ms"        hopMatch = line.match(/^\s*(\d+)\s+([\d.]+|[\w.-]+)\s+(?:\(([\d.]+)\))?\s+([\d.]+)\s*ms/);      }      if (hopMatch) {        const hop: TracerouteHop = {          hop: parseInt(hopMatch[1]),          address: platform === 'win32' ? hopMatch[2] : (hopMatch[3] || hopMatch[2]),          hostname: platform === 'win32' ? undefined : hopMatch[2],          responseTime: platform === 'win32' ? 0 : parseFloat(hopMatch[4])        };        hops.push(hop);      }    }    return hops;  }  /**   * Scan port(s) on a host   */  private async portScan(options: SmartNetworkOptions): Promise<SmartNetworkResult> {    if (!options.host) {      throw new Error('Host is required for port scan operation');    }    const ports = options.ports || (options.port ? [options.port] : [80, 443, 22, 21, 25, 3306, 5432, 6379, 27017]);    const timeout = options.timeout || 2000;    const scanResults = await Promise.all(      ports.map(port => this.checkPort(options.host!, port, timeout))    );    const dataStr = JSON.stringify({ portScan: scanResults });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    return {      success: true,      operation: 'port-scan',      data: { portScan: scanResults },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Check if a specific port is open   */  private async checkPort(host: string, port: number, timeout: number): Promise<PortScanResult> {    return new Promise(resolve => {      const socket = new net.Socket();      let isResolved = false;      const onTimeout = () => {        if (!isResolved) {          isResolved = true;          socket.destroy();          resolve({ port, open: false });        }      };      socket.setTimeout(timeout);      socket.on('timeout', onTimeout);      socket.on('connect', () => {        if (!isResolved) {          isResolved = true;          socket.destroy();          resolve({ port, open: true, service: this.getServiceName(port) });        }      });      socket.on('error', () => {        if (!isResolved) {          isResolved = true;          resolve({ port, open: false });        }      });      socket.connect(port, host);    });  }  /**   * Get common service name for a port   */  private getServiceName(port: number): string | undefined {    const services: Record<number, string> = {      20: 'FTP Data',      21: 'FTP Control',      22: 'SSH',      23: 'Telnet',      25: 'SMTP',      53: 'DNS',      80: 'HTTP',      110: 'POP3',      143: 'IMAP',      443: 'HTTPS',      3306: 'MySQL',      5432: 'PostgreSQL',      6379: 'Redis',      27017: 'MongoDB',      3000: 'Node.js Dev',      8080: 'HTTP Proxy'    };    return services[port];  }  /**   * DNS lookup with caching   */  private async dnsLookup(options: SmartNetworkOptions): Promise<SmartNetworkResult> {    if (!options.host) {      throw new Error('Host is required for DNS lookup operation');    }    const cacheKey = `cache-${crypto.createHash("md5").update('dns-lookup', options.host).digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const tokensUsed = this.tokenCounter.count(cached).tokens;        const baselineTokens = tokensUsed * 25; // DNS lookups have massive baseline (no caching)        return {          success: true,          operation: 'dns-lookup',          data: JSON.parse(cached),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Perform DNS lookup    try {      const addresses4 = await dnsResolve4(options.host).catch(() => [] as string[]);      const addresses6 = await _dnsResolve6(options.host).catch(() => [] as string[]);      const dnsResult: DNSResult = {        hostname: options.host,        addresses: [...addresses4, ...addresses6],        type: addresses4.length > 0 ? 'A' : 'AAAA'      };      const dataStr = JSON.stringify({ dns: dnsResult });      const tokensUsed = this.tokenCounter.count(dataStr).tokens;      // Cache the result (DNS lookups change infrequently, longer TTL)      if (useCache) {        const dataSize = dataStr.length;        await this.cache.set(cacheKey, dataStr, dataSize, dataSize);      }      return {        success: true,        operation: 'dns-lookup',        data: { dns: dnsResult },        metadata: {          tokensUsed,          tokensSaved: 0,          cacheHit: false,          executionTime: 0        }      };    } catch (error) {      throw new Error(`DNS lookup failed: ${error instanceof Error ? error.message : String(error)}`);    }  }  /**   * Reverse DNS lookup   */  private async reverseDns(options: SmartNetworkOptions): Promise<SmartNetworkResult> {    if (!options.host) {      throw new Error('Host (IP address) is required for reverse DNS operation');    }    const cacheKey = `cache-${crypto.createHash("md5").update('reverse-dns', options.host).digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const tokensUsed = this.tokenCounter.count(cached).tokens;        const baselineTokens = tokensUsed * 20;        return {          success: true,          operation: 'reverse-dns',          data: JSON.parse(cached),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Perform reverse DNS lookup    try {      const hostnames = await dnsReverse(options.host);      const dataStr = JSON.stringify({ reverseDns: hostnames });      const tokensUsed = this.tokenCounter.count(dataStr).tokens;      // Cache the result      if (useCache) {        const dataSize = dataStr.length;        await this.cache.set(cacheKey, dataStr, dataSize, dataSize);      }      return {        success: true,        operation: 'reverse-dns',        data: { reverseDns: hostnames },        metadata: {          tokensUsed,          tokensSaved: 0,          cacheHit: false,          executionTime: 0        }      };    } catch (error) {      throw new Error(`Reverse DNS lookup failed: ${error instanceof Error ? error.message : String(error)}`);    }  }  /**   * Check internet connectivity   */  private async checkConnectivity(_options: SmartNetworkOptions): Promise<SmartNetworkResult> {    const testHosts = ['8.8.8.8', '1.1.1.1']; // Google DNS and Cloudflare DNS    let connected = false;    for (const host of testHosts) {      try {        const result = await this.checkPort(host, 53, 2000);        if (result.open) {          connected = true;          break;        }      } catch {        continue;      }    }    const dataStr = JSON.stringify({ connectivity: connected });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    return {      success: true,      operation: 'check-connectivity',      data: { connectivity: connected },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * List network interfaces   */  private async listInterfaces(_options: SmartNetworkOptions): Promise<SmartNetworkResult> {    const os = await import('os');    const networkInterfaces = os.networkInterfaces();    const interfaces: NetworkInterface[] = [];    for (const [name, addresses] of Object.entries(networkInterfaces)) {      if (!addresses) continue;      const iface: NetworkInterface = {        name,        addresses: addresses.map(addr => ({          address: addr.address,          family: addr.family as 'IPv4' | 'IPv6',          netmask: addr.netmask,          internal: addr.internal        })),        mac: addresses[0]?.mac,        status: 'up' // Node.js doesn't provide status, assume up if listed      };      interfaces.push(iface);    }    const dataStr = JSON.stringify({ interfaces });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    return {      success: true,      operation: 'list-interfaces',      data: { interfaces },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Simple bandwidth test (ping-based latency, not full speed test)   */  private async bandwidthTest(options: SmartNetworkOptions): Promise<SmartNetworkResult> {    const testHost = options.host || '8.8.8.8';    // Perform multiple pings to measure latency and jitter    const pingResults: number[] = [];    const pingCount = 10;    for (let i = 0; i < pingCount; i++) {      try {        const result = await this.ping({ ...options, operation: 'ping', host: testHost, count: 1 });        if (result.data.ping?.avgRtt) {          pingResults.push(result.data.ping.avgRtt);        }      } catch {        // Skip failed pings      }    }    if (pingResults.length === 0) {      throw new Error('Bandwidth test failed: No successful pings');    }    const avgLatency = pingResults.reduce((a, b) => a + b, 0) / pingResults.length;    const variance = pingResults.reduce((sum, val) => sum + Math.pow(val - avgLatency, 2), 0) / pingResults.length;    const jitter = Math.sqrt(variance);    const bandwidth: BandwidthResult = {      downloadSpeed: 0, // Not implemented (requires actual download test)      uploadSpeed: 0,   // Not implemented (requires actual upload test)      latency: avgLatency,      jitter    };    const dataStr = JSON.stringify({ bandwidth });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    return {      success: true,      operation: 'bandwidth-test',      data: { bandwidth },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }}// ===========================// Factory Function// ===========================export function getSmartNetwork(  cache: CacheEngine,  tokenCounter: TokenCounter,  metricsCollector: MetricsCollector): SmartNetwork {  return new SmartNetwork(cache, tokenCounter, metricsCollector);}// ===========================// Standalone Runner Function (CLI)// ===========================export async function runSmartNetwork(  options: SmartNetworkOptions,  cache?: CacheEngine,  tokenCounter?: TokenCounter,  metricsCollector?: MetricsCollector): Promise<SmartNetworkResult> {  const { homedir } = await import('os');  const { join } = await import('path');  const cacheInstance = cache || new CacheEngine(100, join(homedir(), '.hypercontext', 'cache'));  const tokenCounterInstance = tokenCounter || new TokenCounter();  const metricsInstance = metricsCollector || new MetricsCollector();  const tool = getSmartNetwork(cacheInstance, tokenCounterInstance, metricsInstance);  return await tool.run(options);}// ===========================// MCP Tool Definition// ===========================export const SMART_NETWORK_TOOL_DEFINITION = {  name: 'smart_network',  description: 'Intelligent network operations with smart caching (85%+ token reduction). Ping, traceroute, port scanning, DNS lookups, and connectivity checks with extensive caching for DNS results.',  inputSchema: {    type: 'object' as const,    properties: {      operation: {        type: 'string' as const,        enum: ['ping', 'traceroute', 'port-scan', 'dns-lookup', 'reverse-dns', 'check-connectivity', 'list-interfaces', 'bandwidth-test'],        description: 'Network operation to perform'      },      host: {        type: 'string' as const,        description: 'Target host (hostname or IP address)'      },      port: {        type: 'number' as const,        description: 'Target port for port-scan operation'      },      ports: {        type: 'array' as const,        items: { type: 'number' as const },        description: 'Array of ports to scan (default: common ports)'      },      count: {        type: 'number' as const,        description: 'Number of ping packets to send (default: 4)',        default: 4      },      timeout: {        type: 'number' as const,        description: 'Timeout in milliseconds (default: 5000)',        default: 5000      },      useCache: {        type: 'boolean' as const,        description: 'Use cached results when available (default: true)',        default: true      },      ttl: {        type: 'number' as const,        description: 'Cache TTL in seconds (default: 3600 for DNS, 30 for others)'      }    },    required: ['operation']  }};
+﻿/**
+ * SmartNetwork - Intelligent Network Management
+ *
+ * Track 2C - System Operations & Output
+ * Target Token Reduction: 88%+
+ *
+ * Provides cross-platform process management with smart caching:
+ * - Start, stop, monitor processes
+ * - Resource usage tracking (CPU, memory, handles)
+ * - Network tree analysis
+ * - Automatic restart on failure
+ * - Cross-platform support (Windows/Linux/macOS)
+ */
+
+import { spawn, ChildProcess } from 'child_process';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+
+const execAsync = promisify(exec);
+
+export interface SmartNetworkOptions {
+  operation: 'start' | 'stop' | 'status' | 'monitor' | 'tree' | 'restart';
+
+  // Network identification
+  pid?: number;
+  name?: string;
+  command?: string;
+  args?: string[];
+
+  // Options
+  cwd?: string;
+  env?: Record<string, string>;
+  detached?: boolean;
+  autoRestart?: boolean;
+
+  // Monitoring
+  interval?: number; // Monitoring interval in ms
+  duration?: number; // Monitoring duration in ms
+
+  // Cache control
+  useCache?: boolean;
+  ttl?: number;
+}
+
+export interface NetworkInfo {
+  pid: number;
+  name: string;
+  command: string;
+  cpu: number;
+  memory: number;
+  status: 'running' | 'sleeping' | 'stopped' | 'zombie';
+  startTime: number;
+  handles?: number; // Windows only
+  threads?: number;
+}
+
+export interface NetworkTreeNode {
+  pid: number;
+  name: string;
+  children: NetworkTreeNode[];
+}
+
+export interface ResourceSnapshot {
+  timestamp: number;
+  cpu: number;
+  memory: number;
+  handles?: number;
+  threads?: number;
+}
+
+export interface SmartNetworkResult {
+  success: boolean;
+  operation: string;
+  data: {
+    process?: NetworkInfo;
+    processes?: NetworkInfo[];
+    tree?: NetworkTreeNode;
+    snapshots?: ResourceSnapshot[];
+    output?: string;
+    error?: string;
+  };
+  metadata: {
+    tokensUsed: number;
+    tokensSaved: number;
+    cacheHit: boolean;
+    executionTime: number;
+  };
+}
+
+export class SmartNetwork {
+  private runningNetworkes = new Map<number, ChildProcess>();
+
+  constructor(
+    private cache: CacheEngine,
+    private tokenCounter: TokenCounter,
+    private metricsCollector: MetricsCollector
+  ) {}
+
+  async run(options: SmartNetworkOptions): Promise<SmartNetworkResult> {
+    const startTime = Date.now();
+    const operation = options.operation;
+
+    let result: SmartNetworkResult;
+
+    try {
+      switch (operation) {
+        case 'start':
+          result = await this.startNetwork(options);
+          break;
+        case 'stop':
+          result = await this.stopNetwork(options);
+          break;
+        case 'status':
+          result = await this.getNetworkStatus(options);
+          break;
+        case 'monitor':
+          result = await this.monitorNetwork(options);
+          break;
+        case 'tree':
+          result = await this.getNetworkTree(options);
+          break;
+        case 'restart':
+          result = await this.restartNetwork(options);
+          break;
+        default:
+          throw new Error(`Unknown operation: ${operation}`);
+      }
+
+      // Record metrics
+      this.metricsCollector.record({
+        operation: `smart-network:${operation}`,
+        duration: Date.now() - startTime,
+        success: result.success,
+        cacheHit: result.metadata.cacheHit,
+        metadata: { pid: options.pid, name: options.name },
+      });
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      this.metricsCollector.record({
+        operation: `smart-network:${operation}`,
+        duration: Date.now() - startTime,
+        success: false,
+        cacheHit: false,
+        metadata: { error: errorMessage },
+      });
+
+      return {
+        success: false,
+        operation,
+        data: { error: errorMessage },
+        metadata: {
+          tokensUsed: this.tokenCounter.count(errorMessage).tokens,
+          tokensSaved: 0,
+          cacheHit: false,
+          executionTime: Date.now() - startTime,
+        },
+      };
+    }
+  }
+
+  private async startNetwork(
+    options: SmartNetworkOptions
+  ): Promise<SmartNetworkResult> {
+    if (!options.command) {
+      throw new Error('Command required for start operation');
+    }
+
+    const child = spawn(options.command, options.args || [], {
+      cwd: options.cwd,
+      env: { ...process.env, ...options.env },
+      detached: options.detached,
+      stdio: 'pipe',
+    });
+
+    const pid = child.pid!;
+    this.runningNetworkes.set(pid, child);
+
+    const processInfo: NetworkInfo = {
+      pid,
+      name: options.name || options.command,
+      command: options.command,
+      cpu: 0,
+      memory: 0,
+      status: 'running',
+      startTime: Date.now(),
+    };
+
+    const dataStr = JSON.stringify(processInfo);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    return {
+      success: true,
+      operation: 'start',
+      data: { process: processInfo },
+      metadata: {
+        tokensUsed,
+        tokensSaved: 0,
+        cacheHit: false,
+        executionTime: 0,
+      },
+    };
+  }
+
+  private async stopNetwork(
+    options: SmartNetworkOptions
+  ): Promise<SmartNetworkResult> {
+    if (!options.pid && !options.name) {
+      throw new Error('PID or name required for stop operation');
+    }
+
+    const pid = options.pid;
+    if (!pid) {
+      throw new Error('PID required (name-based stopping not yet implemented)');
+    }
+
+    // Try graceful stop first
+    try {
+      process.kill(pid, 'SIGTERM');
+
+      // Wait for process to exit
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Check if still running
+      try {
+        process.kill(pid, 0); // Signal 0 checks if process exists
+        // Still running, force kill
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Network already exited
+      }
+    } catch (error) {
+      throw new Error(
+        `Failed to stop process ${pid}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    this.runningNetworkes.delete(pid);
+
+    const result = { pid, stopped: true };
+    const dataStr = JSON.stringify(result);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    return {
+      success: true,
+      operation: 'stop',
+      data: { output: dataStr },
+      metadata: {
+        tokensUsed,
+        tokensSaved: 0,
+        cacheHit: false,
+        executionTime: 0,
+      },
+    };
+  }
+
+  private async getNetworkStatus(
+    options: SmartNetworkOptions
+  ): Promise<SmartNetworkResult> {
+    const cacheKey = `process-status:${options.pid || options.name}`;
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const dataStr = cached;
+        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'status',
+          data: JSON.parse(dataStr),
+          metadata: {
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+            cacheHit: true,
+            executionTime: 0,
+          },
+        };
+      }
+    }
+
+    // Fresh status check
+    const processes = await this.listNetworkes(options.pid, options.name);
+    const dataStr = JSON.stringify({ processes });
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    // Cache the result
+    if (useCache) {
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+    }
+
+    return {
+      success: true,
+      operation: 'status',
+      data: { processes },
+      metadata: {
+        tokensUsed,
+        tokensSaved: 0,
+        cacheHit: false,
+        executionTime: 0,
+      },
+    };
+  }
+
+  private async monitorNetwork(
+    options: SmartNetworkOptions
+  ): Promise<SmartNetworkResult> {
+    if (!options.pid) {
+      throw new Error('PID required for monitor operation');
+    }
+
+    const interval = options.interval || 1000;
+    const duration = options.duration || 10000;
+    const snapshots: ResourceSnapshot[] = [];
+
+    const endTime = Date.now() + duration;
+
+    while (Date.now() < endTime) {
+      try {
+        const processes = await this.listNetworkes(options.pid);
+        if (processes.length > 0) {
+          const proc = processes[0];
+          snapshots.push({
+            timestamp: Date.now(),
+            cpu: proc.cpu,
+            memory: proc.memory,
+            handles: proc.handles,
+            threads: proc.threads,
+          });
+        }
+      } catch {
+        // Network may have exited
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+
+    const dataStr = JSON.stringify({ snapshots });
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    return {
+      success: true,
+      operation: 'monitor',
+      data: { snapshots },
+      metadata: {
+        tokensUsed,
+        tokensSaved: 0,
+        cacheHit: false,
+        executionTime: duration,
+      },
+    };
+  }
+
+  private async getNetworkTree(
+    options: SmartNetworkOptions
+  ): Promise<SmartNetworkResult> {
+    const cacheKey = `process-tree:${options.pid || 'all'}`;
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const dataStr = cached;
+        const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'tree',
+          data: JSON.parse(dataStr),
+          metadata: {
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+            cacheHit: true,
+            executionTime: 0,
+          },
+        };
+      }
+    }
+
+    // Build process tree
+    const tree = await this.buildNetworkTree(options.pid);
+    const dataStr = JSON.stringify({ tree });
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    // Cache the result
+    if (useCache) {
+      await this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+    }
+
+    return {
+      success: true,
+      operation: 'tree',
+      data: { tree },
+      metadata: {
+        tokensUsed,
+        tokensSaved: 0,
+        cacheHit: false,
+        executionTime: 0,
+      },
+    };
+  }
+
+  private async restartNetwork(
+    options: SmartNetworkOptions
+  ): Promise<SmartNetworkResult> {
+    // Stop the process
+    await this.stopNetwork(options);
+
+    // Wait a moment
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Start it again
+    return await this.startNetwork(options);
+  }
+
+  private async listNetworkes(
+    pid?: number,
+    name?: string
+  ): Promise<NetworkInfo[]> {
+    const platform = process.platform;
+
+    if (platform === 'win32') {
+      return await this.listNetworkesWindows(pid, name);
+    } else {
+      return await this.listNetworkesUnix(pid, name);
+    }
+  }
+
+  private async listNetworkesWindows(
+    pid?: number,
+    name?: string
+  ): Promise<NetworkInfo[]> {
+    // Use WMIC on Windows
+    const query = pid
+      ? `wmic process where "NetworkId=${pid}" get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+      : name
+        ? `wmic process where "Name='${name}'" get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+        : `wmic process get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
+
+    const { stdout } = await execAsync(query);
+
+    // Parse CSV output
+    const lines = stdout.trim().split('\n').slice(1); // Skip header
+    const processes: NetworkInfo[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parts = line.split(',');
+      if (parts.length < 7) continue;
+
+      processes.push({
+        pid: parseInt(parts[4]) || 0,
+        name: parts[3] || '',
+        command: parts[0] || '',
+        cpu: 0, // Calculate from kernel + user time
+        memory: parseInt(parts[7]) || 0,
+        status: 'running',
+        startTime: Date.now(),
+        handles: parseInt(parts[1]) || 0,
+        threads: parseInt(parts[6]) || 0,
+      });
+    }
+
+    return processes;
+  }
+
+  private async listNetworkesUnix(
+    pid?: number,
+    name?: string
+  ): Promise<NetworkInfo[]> {
+    // Use ps on Unix
+    const query = pid
+      ? `ps -p ${pid} -o pid,comm,args,%cpu,%mem,stat,lstart`
+      : name
+        ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
+        : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
+
+    const { stdout } = await execAsync(query);
+
+    // Parse ps output
+    const lines = stdout.trim().split('\n').slice(1); // Skip header
+    const processes: NetworkInfo[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 7) continue;
+
+      processes.push({
+        pid: parseInt(parts[0]) || 0,
+        name: parts[1] || '',
+        command: parts.slice(2, -3).join(' '),
+        cpu: parseFloat(parts[parts.length - 3]) || 0,
+        memory: parseFloat(parts[parts.length - 2]) || 0,
+        status: this.parseUnixStatus(parts[parts.length - 1]),
+        startTime: Date.now(),
+      });
+    }
+
+    return processes;
+  }
+
+  private parseUnixStatus(stat: string): NetworkInfo['status'] {
+    if (stat.includes('R')) return 'running';
+    if (stat.includes('S')) return 'sleeping';
+    if (stat.includes('Z')) return 'zombie';
+    return 'stopped';
+  }
+
+  private async buildNetworkTree(rootPid?: number): Promise<NetworkTreeNode> {
+    const platform = process.platform;
+
+    if (platform === 'win32') {
+      return await this.buildNetworkTreeWindows(rootPid);
+    } else {
+      return await this.buildNetworkTreeUnix(rootPid);
+    }
+  }
+
+  private async buildNetworkTreeWindows(
+    rootPid?: number
+  ): Promise<NetworkTreeNode> {
+    // Use WMIC to get parent-child relationships
+    const { stdout } = await execAsync(
+      'wmic process get NetworkId,ParentNetworkId,Name /format:csv'
+    );
+
+    const lines = stdout.trim().split('\n').slice(1);
+    const processMap = new Map<number, { name: string; children: number[] }>();
+    let parentMap = new Map<number, number>();
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parts = line.split(',');
+      if (parts.length < 4) continue;
+
+      const pid = parseInt(parts[3]) || 0;
+      const ppid = parseInt(parts[2]) || 0;
+      const name = parts[1] || '';
+
+      processMap.set(pid, { name, children: [] });
+      parentMap.set(pid, ppid);
+    }
+
+    // Build tree
+    for (const [pid, ppid] of parentMap) {
+      if (ppid && processMap.has(ppid)) {
+        processMap.get(ppid)!.children.push(pid);
+      }
+    }
+
+    const buildNode = (pid: number): NetworkTreeNode => {
+      const info = processMap.get(pid) || { name: 'unknown', children: [] };
+      return {
+        pid,
+        name: info.name,
+        children: info.children.map(buildNode),
+      };
+    };
+
+    return buildNode(rootPid || process.pid);
+  }
+
+  private async buildNetworkTreeUnix(
+    rootPid?: number
+  ): Promise<NetworkTreeNode> {
+    // Use pstree on Unix
+    const pid = rootPid || process.pid;
+    const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
+
+    // Parse pstree output (simplified)
+    return {
+      pid,
+      name: 'process',
+      children: [],
+    };
+  }
+}
+
+// ===========================
+// Factory Function
+// ===========================
+
+export function getSmartNetwork(
+  cache: CacheEngine,
+  tokenCounter: TokenCounter,
+  metricsCollector: MetricsCollector
+): SmartNetwork {
+  return new SmartNetwork(cache, tokenCounter, metricsCollector);
+}
+
+// ===========================
+// Standalone Runner Function (CLI)
+// ===========================
+
+export async function runSmartNetwork(
+  options: SmartNetworkOptions,
+  cache?: CacheEngine,
+  tokenCounter?: TokenCounter,
+  metricsCollector?: MetricsCollector
+): Promise<SmartNetworkResult> {
+  const { homedir } = await import('os');
+  const { join } = await import('path');
+
+  const cacheInstance =
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const tokenCounterInstance = tokenCounter || new TokenCounter();
+  const metricsInstance = metricsCollector || new MetricsCollector();
+
+  const tool = getSmartNetwork(
+    cacheInstance,
+    tokenCounterInstance,
+    metricsInstance
+  );
+  return await tool.run(options);
+}
+
+// MCP tool definition
+export const SMART_PROCESS_TOOL_DEFINITION = {
+  name: 'smart_network',
+  description:
+    'Intelligent process management with smart caching (88%+ token reduction). Start, stop, monitor processes with resource tracking and cross-platform support.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      operation: {
+        type: 'string' as const,
+        enum: ['start', 'stop', 'status', 'monitor', 'tree', 'restart'],
+        description: 'Network operation to perform',
+      },
+      pid: {
+        type: 'number' as const,
+        description: 'Network ID (for stop, status, monitor, tree operations)',
+      },
+      name: {
+        type: 'string' as const,
+        description: 'Network name (for stop, status operations)',
+      },
+      command: {
+        type: 'string' as const,
+        description: 'Command to execute (for start operation)',
+      },
+      args: {
+        type: 'array' as const,
+        items: { type: 'string' as const },
+        description: 'Command arguments (for start operation)',
+      },
+      cwd: {
+        type: 'string' as const,
+        description: 'Working directory (for start operation)',
+      },
+      env: {
+        type: 'object' as const,
+        description: 'Environment variables (for start operation)',
+      },
+      detached: {
+        type: 'boolean' as const,
+        description: 'Run process in detached mode (for start operation)',
+      },
+      autoRestart: {
+        type: 'boolean' as const,
+        description: 'Automatically restart on failure (for start operation)',
+      },
+      interval: {
+        type: 'number' as const,
+        description:
+          'Monitoring interval in milliseconds (for monitor operation)',
+      },
+      duration: {
+        type: 'number' as const,
+        description:
+          'Monitoring duration in milliseconds (for monitor operation)',
+      },
+      useCache: {
+        type: 'boolean' as const,
+        description: 'Use cache for status and tree operations (default: true)',
+      },
+      ttl: {
+        type: 'number' as const,
+        description:
+          'Cache TTL in seconds (default: 30 for status, 60 for tree)',
+      },
+    },
+    required: ['operation'],
+  },
+};
