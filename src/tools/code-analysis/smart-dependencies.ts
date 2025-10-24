@@ -1346,4 +1346,3 @@ export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
     },
   },
 };
-

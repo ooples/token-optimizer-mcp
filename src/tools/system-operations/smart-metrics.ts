@@ -650,9 +650,7 @@ export class SmartMetrics {
     };
   }
 
-  private async monitor(
-    options: SmartMetricsOptions
-  ): Promise<MetricsResult> {
+  private async monitor(options: SmartMetricsOptions): Promise<MetricsResult> {
     const startTime = Date.now();
     const interval = options.interval || 1000; // 1 second default
     const duration = options.duration || 10000; // 10 seconds default

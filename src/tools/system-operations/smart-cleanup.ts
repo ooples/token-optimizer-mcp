@@ -370,10 +370,12 @@ export class SmartCleanup {
     return result;
   }
 
-  private async cleanTemp(options: SmartCleanupOptions): Promise<CleanupResult> {
+  private async cleanTemp(
+    options: SmartCleanupOptions
+  ): Promise<CleanupResult> {
     const tempDirs = [
       os.tmpdir(),
-      ...(process.platform === 'win32' 
+      ...(process.platform === 'win32'
         ? [path.join(os.homedir(), 'AppData', 'Local', 'Temp')]
         : []),
       '/tmp',
@@ -410,7 +412,9 @@ export class SmartCleanup {
     });
   }
 
-  private async cleanLogs(options: SmartCleanupOptions): Promise<CleanupResult> {
+  private async cleanLogs(
+    options: SmartCleanupOptions
+  ): Promise<CleanupResult> {
     return await this.executeCleanup({
       ...options,
       operation: 'execute',
