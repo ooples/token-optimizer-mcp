@@ -1,5 +1,5 @@
 /**
- * Smart Workflow Tool - 83% Token Reduction
+ * Smart Workflow Tool
  *
  * Provides intelligent CI/CD workflow file analysis:
  * - GitHub Actions (.github/workflows/*.yml)
@@ -160,7 +160,7 @@ export class SmartWorkflowTool {
 
     let fromCache = false;
     if (enableCache) {
-      const cachedData = this.cache.get(cacheKey);
+      const cachedData = await this.cache.get(cacheKey);
       if (cachedData) {
         fromCache = true;
         const decompressed = decompress(
@@ -237,7 +237,7 @@ export class SmartWorkflowTool {
       this.cache.set(
         cacheKey,
         compressResult.compressed.toString(),
-        result.metadata.tokensSaved,
+        compressResult.compressed.length,
         ttl
       );
       const compressedTokens = this.tokenCounter.count(
