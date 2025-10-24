@@ -254,7 +254,11 @@ const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
 // Code analysis tool instances
 const smartAstGrep = getSmartAstGrepTool(cache, tokenCounter, metrics);
 const smartComplexity = getSmartComplexityTool(cache, tokenCounter, metrics);
-const smartDependencies = getSmartDependenciesTool(cache, tokenCounter, metrics);
+const smartDependencies = getSmartDependenciesTool(
+  cache,
+  tokenCounter,
+  metrics
+);
 const smartExports = getSmartExportsTool(cache, tokenCounter, metrics);
 const smartImports = getSmartImportsTool(cache, tokenCounter, metrics);
 const smartRefactor = getSmartRefactorTool(cache, tokenCounter, metrics);
@@ -1439,7 +1443,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
-
 
       case 'cache_analytics': {
         const options = args as any;
