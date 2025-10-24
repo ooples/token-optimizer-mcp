@@ -1422,6 +1422,71 @@ export const healthMonitorTool = {
   },
 };
 
+// MCP Tool definition - Input schema for health_monitor tool
+export const HEALTH_MONITOR_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    operation: {
+      type: 'string',
+      enum: [
+        'register-endpoint',
+        'unregister-endpoint',
+        'check-health',
+        'list-endpoints',
+        'get-history',
+        'set-threshold',
+        'get-summary',
+        'run-diagnostic',
+      ],
+      description: 'Health monitoring operation',
+    },
+    endpointId: {
+      type: 'string',
+      description: 'Endpoint ID',
+    },
+    endpointName: {
+      type: 'string',
+      description: 'Endpoint name',
+    },
+    endpointType: {
+      type: 'string',
+      enum: ['http', 'tcp', 'database', 'service', 'custom'],
+      description: 'Type of endpoint to monitor',
+    },
+    config: {
+      type: 'object',
+      description: 'Endpoint configuration',
+    },
+    interval: {
+      type: 'number',
+      description: 'Check interval in seconds',
+    },
+    thresholds: {
+      type: 'object',
+      description: 'Health thresholds',
+    },
+    timeRange: {
+      type: 'object',
+      description: 'Time range for history',
+    },
+    diagnosticType: {
+      type: 'string',
+      enum: ['network', 'disk', 'memory', 'cpu', 'process'],
+      description: 'Type of diagnostic to run',
+    },
+    useCache: {
+      type: 'boolean',
+      description: 'Enable caching',
+      default: true,
+    },
+    cacheTTL: {
+      type: 'number',
+      description: 'Cache TTL in seconds',
+    },
+  },
+  required: ['operation'],
+};
+
 // Export singleton instance
 let healthMonitorInstance: HealthMonitor | null = null;
 
@@ -1445,67 +1510,5 @@ export const HEALTH_MONITOR_TOOL_DEFINITION = {
   name: 'health_monitor',
   description:
     'Monitor system and application health with 91% token reduction through health state compression and metric aggregation',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      operation: {
-        type: 'string',
-        enum: [
-          'register-endpoint',
-          'unregister-endpoint',
-          'check-health',
-          'list-endpoints',
-          'get-history',
-          'set-threshold',
-          'get-summary',
-          'run-diagnostic',
-        ],
-        description: 'Health monitoring operation',
-      },
-      endpointId: {
-        type: 'string',
-        description: 'Endpoint ID',
-      },
-      endpointName: {
-        type: 'string',
-        description: 'Endpoint name',
-      },
-      endpointType: {
-        type: 'string',
-        enum: ['http', 'tcp', 'database', 'service', 'custom'],
-        description: 'Type of endpoint to monitor',
-      },
-      config: {
-        type: 'object',
-        description: 'Endpoint configuration',
-      },
-      interval: {
-        type: 'number',
-        description: 'Check interval in seconds',
-      },
-      thresholds: {
-        type: 'object',
-        description: 'Health thresholds',
-      },
-      timeRange: {
-        type: 'object',
-        description: 'Time range for history',
-      },
-      diagnosticType: {
-        type: 'string',
-        enum: ['network', 'disk', 'memory', 'cpu', 'process'],
-        description: 'Type of diagnostic to run',
-      },
-      useCache: {
-        type: 'boolean',
-        description: 'Enable caching',
-        default: true,
-      },
-      cacheTTL: {
-        type: 'number',
-        description: 'Cache TTL in seconds',
-      },
-    },
-    required: ['operation'],
-  },
+  inputSchema: HEALTH_MONITOR_INPUT_SCHEMA,
 };
