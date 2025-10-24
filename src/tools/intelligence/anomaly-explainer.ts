@@ -345,7 +345,7 @@ export class AnomalyExplainer {
     // Calculate tokens and cache result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
+    this.cache.set(cacheKey, dataStr, dataStr.length, tokensUsed);
 
     // Record metrics
     this.metricsCollector.record({
