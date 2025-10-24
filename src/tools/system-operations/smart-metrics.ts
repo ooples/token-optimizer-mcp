@@ -1,15 +1,15 @@
 ﻿/**
- * SmartMetrics - Intelligent Metrics Management
+ * SmartMetrics - Intelligent System Metrics Collection
  *
  * Track 2C - System Operations & Output
  * Target Token Reduction: 88%+
  *
  * Provides cross-platform system metrics collection with smart caching:
- * - CPU, memory, disk, and network statistics
- * - - Real-time performance monitoring
- * - - Historical metrics tracking
- * - - System health assessment
+ * - Collects system-wide CPU, memory, disk, and network usage
+ * - Supports periodic resource snapshots and historical analysis
+ * - Provides metrics tree for process and system resource usage
  * - Cross-platform support (Windows/Linux/macOS)
+ * - Optional caching for efficient repeated queries
  */
 
 import { spawn, ChildProcess } from 'child_process';
