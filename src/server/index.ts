@@ -1946,7 +1946,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-
       case 'knowledge_graph': {
         const options = args as unknown as KnowledgeGraphOptions;
         const result = await knowledgeGraph.run(options);
