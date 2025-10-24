@@ -1,3 +1,817 @@
-﻿/** * SmartMetrics - Intelligent System Metrics Collection * * Track 2C - Tool #4: System metrics with smart caching (87%+ token reduction) * * Capabilities: * - CPU: Usage percentage, load averages (1/5/15 min), core details * - Memory: RAM usage, swap usage, available memory * - Disk: I/O statistics, disk usage per mount point * - Network: I/O statistics per interface * - Temperature: CPU/GPU temperature (if available) * * Token Reduction Strategy: * - Time-series compression (88% reduction) * - Delta encoding (90% reduction) * - Cached baseline (95% reduction) * - Incremental updates for dynamic metrics */
+/**
+ * SmartMetrics - System Metrics Collection
+ *
+ * Track 2C - System Operations & Output
+ * Target Token Reduction: 88%+
+ *
+ * Provides cross-platform system metrics collection with smart caching:
+ * - CPU usage, cores, model, speed, load average
+ * - Memory total, used, free, percentage
+ * - Disk usage per drive
+ * - Network interface statistics
+ * - Real-time monitoring with sampling
+ * - Cross-platform support (Windows/Linux/macOS)
+ */
 
-// ===========================// Types & Interfaces// ===========================export type MetricsOperation = 'cpu' | 'memory' | 'disk' | 'network' | 'temperature' | 'all';export interface SmartMetricsOptions {  operation: MetricsOperation;  interval?: number; // Sampling interval for time-series (ms)  duration?: number; // Duration for time-series collection (ms)  samples?: number;  // Number of samples to collect  useCache?: boolean;  ttl?: number;  diskPath?: string; // Specific disk path to monitor  networkInterface?: string; // Specific network interface}export interface CPUMetrics {  usage: number; // Overall CPU usage percentage  cores: {    core: number;    usage: number;  }[];  loadAverage: {    one: number;    five: number;    fifteen: number;  };  speed: {    current: number; // Current speed in GHz    min: number;    max: number;  };  temperature?: number; // CPU temperature in Celsius  model: string;  manufacturer: string;  coreCount: number;  threadCount: number;}export interface MemoryMetrics {  total: number; // Total RAM in bytes  used: number;  free: number;  available: number;  usagePercent: number;  swap: {    total: number;    used: number;    free: number;    usagePercent: number;  };  buffers?: number; // Linux only  cached?: number;  // Linux only}export interface DiskMetrics {  filesystems: {    filesystem: string;    type: string;    mount: string;    size: number;    used: number;    available: number;    usagePercent: number;  }[];  io: {    rIO: number;  // Read operations per second    wIO: number;  // Write operations per second    tIO: number;  // Total I/O operations per second    rBytes: number; // Bytes read per second    wBytes: number; // Bytes written per second    tBytes: number; // Total bytes per second  };  latency?: {    read: number;  // Average read latency (ms)    write: number; // Average write latency (ms)  };}export interface NetworkMetrics {  interfaces: {    iface: string;    operstate: string;    rxbytes: number;    txbytes: number;    rxsec: number; // Receive bytes/sec    txsec: number; // Transmit bytes/sec    rxdropped: number;    txdropped: number;    rxerrors: number;    txerrors: number;  }[];  connections: {    all: number;    established: number;    listen: number;    timeWait: number;  };}export interface TemperatureMetrics {  cpu: {    main: number;    cores: number[];    max: number;  };  gpu?: {    main: number;    max: number;  };  battery?: number;  chipset?: number;}export interface TimeSeriesData {  timestamp: number;  value: number | Record<string, number>;}export interface CompressedTimeSeries {  baseline: number | Record<string, number>;  deltas: number[];  timestamps: number[];  compression: number; // Compression ratio}export interface SmartMetricsResult {  success: boolean;  operation: MetricsOperation;  data: {    cpu?: CPUMetrics;    memory?: MemoryMetrics;    disk?: DiskMetrics;    network?: NetworkMetrics;    temperature?: TemperatureMetrics;    timeSeries?: CompressedTimeSeries;    error?: string;  };  metadata: {    tokensUsed: number;    tokensSaved: number;    cacheHit: boolean;    executionTime: number;    compressionRatio?: number;  };}// ===========================// SmartMetrics Class// ===========================export class SmartMetrics {  constructor(    private cache: CacheEngine,    private tokenCounter: TokenCounter,    private metricsCollector: MetricsCollector  ) {}  /**   * Main entry point for metrics operations   */  async run(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const startTime = Date.now();    const operation = options.operation;    let result: SmartMetricsResult;    try {      // Handle time-series collection      if (options.interval && options.duration) {        result = await this.collectTimeSeries(options);      } else {        // Single snapshot        switch (operation) {          case 'cpu':            result = await this.collectCPUMetrics(options);            break;          case 'memory':            result = await this.collectMemoryMetrics(options);            break;          case 'disk':            result = await this.collectDiskMetrics(options);            break;          case 'network':            result = await this.collectNetworkMetrics(options);            break;          case 'temperature':            result = await this.collectTemperatureMetrics(options);            break;          case 'all':            result = await this.collectAllMetrics(options);            break;          default:            throw new Error(`Unknown operation: ${operation}`);        }      }      // Record metrics      this.metricsCollector.record({        operation: `smart-metrics:${operation}`,        duration: Date.now() - startTime,        success: result.success,        cacheHit: result.metadata.cacheHit,        metadata: {          tokensUsed: result.metadata.tokensUsed,          tokensSaved: result.metadata.tokensSaved        }      });      return result;    } catch (error) {      const errorMessage = error instanceof Error ? error.message : String(error);      const errorResult: SmartMetricsResult = {        success: false,        operation,        data: { error: errorMessage },        metadata: {          tokensUsed: this.tokenCounter.count(errorMessage).tokens,          tokensSaved: 0,          cacheHit: false,          executionTime: Date.now() - startTime        }      };      this.metricsCollector.record({        operation: `smart-metrics:${operation}`,        duration: Date.now() - startTime,        success: false,        cacheHit: false,        metadata: { error: errorMessage }      });      return errorResult;    }  }  /**   * Collect CPU metrics with caching   */  private async collectCPUMetrics(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const cacheKey = `cache-${createHash("md5").update('cpu-metrics' + 'current').digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache (short TTL for dynamic metrics)    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const dataStr = cached;        const tokensUsed = this.tokenCounter.count(dataStr).tokens;        const baselineTokens = tokensUsed * 20; // Estimate baseline without caching        return {          success: true,          operation: 'cpu',          data: JSON.parse(dataStr),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Collect fresh CPU metrics    const [currentLoad, cpuInfo, cpuTemp] = await Promise.all([      si.currentLoad(),      si.cpu(),      si.cpuTemperature().catch(() => ({ main: -1 }))    ]);    const cpu: CPUMetrics = {      usage: currentLoad.currentLoad,      cores: currentLoad.cpus.map((core, index) => ({        core: index,        usage: core.load      })),      loadAverage: {        one: currentLoad.avgLoad,        five: 0,  // Will be populated from OS-specific data        fifteen: 0      },      speed: {        current: cpuInfo.speed,        min: cpuInfo.speedMin,        max: cpuInfo.speedMax      },      temperature: cpuTemp.main > 0 ? cpuTemp.main : undefined,      model: cpuInfo.brand,      manufacturer: cpuInfo.manufacturer,      coreCount: cpuInfo.cores,      threadCount: cpuInfo.processors    };    // Get load averages (Unix-like systems)    try {      const osInfo = await si.osInfo();      if (process.platform !== 'win32') {        const loadAvg = await import('os').then(os => os.loadavg());        cpu.loadAverage = {          one: loadAvg[0],          five: loadAvg[1],          fifteen: loadAvg[2]        };      }    } catch {      // Windows doesn't have load average    }    const dataStr = JSON.stringify({ cpu });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    // Cache the result (30s TTL for dynamic metrics)    if (useCache) {      const size = Buffer.byteLength(dataStr, 'utf-8');      await this.cache.set(cacheKey, dataStr, size, size);    }    return {      success: true,      operation: 'cpu',      data: { cpu },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Collect Memory metrics with caching   */  private async collectMemoryMetrics(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const cacheKey = `cache-${createHash("md5").update('memory-metrics' + 'current').digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache (short TTL for dynamic metrics)    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const dataStr = cached;        const tokensUsed = this.tokenCounter.count(dataStr).tokens;        const baselineTokens = tokensUsed * 20;        return {          success: true,          operation: 'memory',          data: JSON.parse(dataStr),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Collect fresh memory metrics    const memInfo = await si.mem();    const memory: MemoryMetrics = {      total: memInfo.total,      used: memInfo.used,      free: memInfo.free,      available: memInfo.available,      usagePercent: (memInfo.used / memInfo.total) * 100,      swap: {        total: memInfo.swaptotal,        used: memInfo.swapused,        free: memInfo.swapfree,        usagePercent: memInfo.swaptotal > 0 ? (memInfo.swapused / memInfo.swaptotal) * 100 : 0      },      buffers: memInfo.buffers,      cached: memInfo.cached    };    const dataStr = JSON.stringify({ memory });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    // Cache the result (30s TTL)    if (useCache) {      await this.cache.set(cacheKey, dataStr, options.ttl || 30, 'utf-8');    }    return {      success: true,      operation: 'memory',      data: { memory },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Collect Disk metrics with caching   */  private async collectDiskMetrics(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const cacheKey = `cache-${createHash("md5").update('disk-metrics' + (options.diskPath || 'all')).digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache (longer TTL for disk stats)    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const dataStr = cached;        const tokensUsed = this.tokenCounter.count(dataStr).tokens;        const baselineTokens = tokensUsed * 15;        return {          success: true,          operation: 'disk',          data: JSON.parse(dataStr),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Collect fresh disk metrics    const [fsSize, disksIO] = await Promise.all([      si.fsSize(),      si.disksIO()    ]);    // Filter by disk path if specified    const filesystems = options.diskPath      ? fsSize.filter(fs => fs.mount === options.diskPath)      : fsSize;    const disk: DiskMetrics = {      filesystems: filesystems.map(fs => ({        filesystem: fs.fs,        type: fs.type,        mount: fs.mount,        size: fs.size,        used: fs.used,        available: fs.available,        usagePercent: fs.use      })),      io: {        rIO: disksIO.rIO,        wIO: disksIO.wIO,        tIO: disksIO.tIO,        rBytes: disksIO.rIOsec || 0,        wBytes: disksIO.wIOsec || 0,        tBytes: disksIO.tIOsec || 0      }    };    const dataStr = JSON.stringify({ disk });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    // Cache the result (60s TTL for disk metrics)    if (useCache) {      await this.cache.set(cacheKey, dataStr, options.ttl || 60, 'utf-8');    }    return {      success: true,      operation: 'disk',      data: { disk },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Collect Network metrics with caching   */  private async collectNetworkMetrics(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const cacheKey = `cache-${createHash("md5").update('network-metrics' + (options.networkInterface || 'all')).digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache (short TTL for network metrics)    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const dataStr = cached;        const tokensUsed = this.tokenCounter.count(dataStr).tokens;        const baselineTokens = tokensUsed * 18;        return {          success: true,          operation: 'network',          data: JSON.parse(dataStr),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Collect fresh network metrics    const [networkStats, networkConnections] = await Promise.all([      si.networkStats(),      si.networkConnections()    ]);    // Filter by interface if specified    const interfaces = options.networkInterface      ? networkStats.filter(iface => iface.iface === options.networkInterface)      : networkStats;    const network: NetworkMetrics = {      interfaces: interfaces.map(iface => ({        iface: iface.iface,        operstate: iface.operstate,        rxbytes: iface.rxbytes,        txbytes: iface.txbytes,        rxsec: iface.rxsec || 0,        txsec: iface.txsec || 0,        rxdropped: iface.rxdropped,        txdropped: iface.txdropped,        rxerrors: iface.rxerrors,        txerrors: iface.txerrors      })),      connections: {        all: networkConnections.length,        established: networkConnections.filter(c => c.state === 'ESTABLISHED').length,        listen: networkConnections.filter(c => c.state === 'LISTEN').length,        timeWait: networkConnections.filter(c => c.state === 'TIMEWAIT').length      }    };    const dataStr = JSON.stringify({ network });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    // Cache the result (30s TTL)    if (useCache) {      await this.cache.set(cacheKey, dataStr, options.ttl || 30, 'utf-8');    }    return {      success: true,      operation: 'network',      data: { network },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Collect Temperature metrics with caching   */  private async collectTemperatureMetrics(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const cacheKey = `cache-${createHash("md5").update('temperature-metrics' + 'current').digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache (short TTL for temperature)    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const dataStr = cached;        const tokensUsed = this.tokenCounter.count(dataStr).tokens;        const baselineTokens = tokensUsed * 15;        return {          success: true,          operation: 'temperature',          data: JSON.parse(dataStr),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Collect fresh temperature metrics    const [cpuTemp, graphics] = await Promise.all([      si.cpuTemperature(),      si.graphics().catch(() => ({ controllers: [] }))    ]);    const temperature: TemperatureMetrics = {      cpu: {        main: cpuTemp.main,        cores: cpuTemp.cores || [],        max: cpuTemp.max      }    };    // Add GPU temperature if available    if (graphics.controllers && graphics.controllers.length > 0) {      const gpu = graphics.controllers[0];      if (gpu.temperatureGpu) {        temperature.gpu = {          main: gpu.temperatureGpu,          max: gpu.temperatureGpu // systeminformation doesn't provide max GPU temp        };      }    }    const dataStr = JSON.stringify({ temperature });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    // Cache the result (30s TTL)    if (useCache) {      await this.cache.set(cacheKey, dataStr, options.ttl || 30, 'utf-8');    }    return {      success: true,      operation: 'temperature',      data: { temperature },      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Collect all metrics in one operation   */  private async collectAllMetrics(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const cacheKey = `cache-${createHash("md5").update('all-metrics' + 'current').digest("hex")}`;    const useCache = options.useCache !== false;    // Check cache    if (useCache) {      const cached = await this.cache.get(cacheKey);      if (cached) {        const dataStr = cached;        const tokensUsed = this.tokenCounter.count(dataStr).tokens;        const baselineTokens = tokensUsed * 25; // Higher baseline for combined metrics        return {          success: true,          operation: 'all',          data: JSON.parse(dataStr),          metadata: {            tokensUsed,            tokensSaved: baselineTokens - tokensUsed,            cacheHit: true,            executionTime: 0          }        };      }    }    // Collect all metrics in parallel    const [cpuResult, memoryResult, diskResult, networkResult, temperatureResult] = await Promise.all([      this.collectCPUMetrics({ ...options, useCache: false }),      this.collectMemoryMetrics({ ...options, useCache: false }),      this.collectDiskMetrics({ ...options, useCache: false }),      this.collectNetworkMetrics({ ...options, useCache: false }),      this.collectTemperatureMetrics({ ...options, useCache: false })    ]);    const data = {      cpu: cpuResult.data.cpu,      memory: memoryResult.data.memory,      disk: diskResult.data.disk,      network: networkResult.data.network,      temperature: temperatureResult.data.temperature    };    const dataStr = JSON.stringify(data);    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    // Cache the combined result (30s TTL)    if (useCache) {      await this.cache.set(cacheKey, dataStr, options.ttl || 30, 'utf-8');    }    return {      success: true,      operation: 'all',      data,      metadata: {        tokensUsed,        tokensSaved: 0,        cacheHit: false,        executionTime: 0      }    };  }  /**   * Collect time-series data with compression   */  private async collectTimeSeries(options: SmartMetricsOptions): Promise<SmartMetricsResult> {    const interval = options.interval || 1000;    const duration = options.duration || 10000;    const samples = options.samples || Math.floor(duration / interval);    const timeSeries: TimeSeriesData[] = [];    const endTime = Date.now() + duration;    let sampleCount = 0;    while (Date.now() < endTime && sampleCount < samples) {      const timestamp = Date.now();      let value: number | Record<string, number>;      // Collect metric based on operation      switch (options.operation) {        case 'cpu': {          const result = await this.collectCPUMetrics({ ...options, useCache: false });          value = result.data.cpu!.usage;          break;        }        case 'memory': {          const result = await this.collectMemoryMetrics({ ...options, useCache: false });          value = result.data.memory!.usagePercent;          break;        }        case 'disk': {          const result = await this.collectDiskMetrics({ ...options, useCache: false });          value = result.data.disk!.io.tIO;          break;        }        case 'network': {          const result = await this.collectNetworkMetrics({ ...options, useCache: false });          value = result.data.network!.interfaces[0]?.rxsec || 0;          break;        }        case 'temperature': {          const result = await this.collectTemperatureMetrics({ ...options, useCache: false });          value = result.data.temperature!.cpu.main;          break;        }        default:          throw new Error(`Time-series not supported for operation: ${options.operation}`);      }      timeSeries.push({ timestamp, value });      sampleCount++;      if (sampleCount < samples) {        await new Promise(resolve => setTimeout(resolve, interval));      }    }    // Compress time-series data    const compressed = this.compressTimeSeries(timeSeries);    const dataStr = JSON.stringify({ timeSeries: compressed });    const tokensUsed = this.tokenCounter.count(dataStr).tokens;    // Calculate what uncompressed would cost    const uncompressedStr = JSON.stringify({ timeSeries });    const uncompressedTokens = this.tokenCounter.count(uncompressedStr).tokens;    const compressionRatio = uncompressedTokens / tokensUsed;    return {      success: true,      operation: options.operation,      data: { timeSeries: compressed },      metadata: {        tokensUsed,        tokensSaved: uncompressedTokens - tokensUsed,        cacheHit: false,        executionTime: duration,        compressionRatio      }    };  }  /**   * Compress time-series data using delta encoding   */  private compressTimeSeries(timeSeries: TimeSeriesData[]): CompressedTimeSeries {    if (timeSeries.length === 0) {      return {        baseline: 0,        deltas: [],        timestamps: [],        compression: 1      };    }    const baseline = timeSeries[0].value;    const deltas: number[] = [];    const timestamps: number[] = [];    for (let i = 1; i < timeSeries.length; i++) {      const current = timeSeries[i];      const previous = timeSeries[i - 1];      // Calculate delta (works for both number and object values)      let delta: number;      if (typeof current.value === 'number' && typeof previous.value === 'number') {        delta = current.value - previous.value;      } else {        // For object values, use first key's value        const currentVal = typeof current.value === 'object' ? Object.values(current.value)[0] as number : current.value as number;        const previousVal = typeof previous.value === 'object' ? Object.values(previous.value)[0] as number : previous.value as number;        delta = currentVal - previousVal;      }      deltas.push(delta);      timestamps.push(current.timestamp);    }    // Calculate compression ratio    const originalSize = JSON.stringify(timeSeries).length;    const compressedSize = JSON.stringify({ baseline, deltas, timestamps }).length;    const compression = originalSize / compressedSize;    return {      baseline,      deltas,      timestamps,      compression    };  }}// ===========================// Factory Function// ===========================export function getSmartMetrics(  cache: CacheEngine,  tokenCounter: TokenCounter,  metricsCollector: MetricsCollector): SmartMetrics {  return new SmartMetrics(cache, tokenCounter, metricsCollector);}// ===========================// Standalone Runner Function (CLI)// ===========================export async function runSmartMetrics(  options: SmartMetricsOptions,  cache?: CacheEngine,  tokenCounter?: TokenCounter,  metricsCollector?: MetricsCollector): Promise<SmartMetricsResult> {  const { homedir } = await import('os');  const { join } = await import('path');  const { TokenCounter } = await import('../../core/token-counter.js');  const { MetricsCollector } = await import('../../core/metrics.js');  const cacheInstance = cache || new CacheEngine(    join(homedir(), '.token-optimizer-cache', 'cache.db'),    1000  );  const tokenCounterInstance = tokenCounter || new TokenCounter();  const metricsInstance = metricsCollector || new MetricsCollector();  const tool = getSmartMetrics(cacheInstance, tokenCounterInstance, metricsInstance);  return await tool.run(options);}// ===========================// MCP Tool Definition// ===========================export const SMARTMETRICSTOOLDEFINITION = {  name: 'smartmetrics',  description: 'Intelligent system metrics collection with smart caching (87%+ token reduction). Monitor CPU, memory, disk, network, and temperature with time-series compression and delta encoding.',  inputSchema: {    type: 'object' as const,    properties: {      operation: {        type: 'string' as const,        enum: ['cpu', 'memory', 'disk', 'network', 'temperature', 'all'],        description: 'Metrics operation to perform'      },      interval: {        type: 'number' as const,        description: 'Sampling interval for time-series collection (milliseconds)',        default: 1000      },      duration: {        type: 'number' as const,        description: 'Duration for time-series collection (milliseconds)',        default: 10000      },      samples: {        type: 'number' as const,        description: 'Number of samples to collect for time-series'      },      useCache: {        type: 'boolean' as const,        description: 'Use cached results when available (default: true)',        default: true      },      ttl: {        type: 'number' as const,        description: 'Cache TTL in seconds (default: 30 for dynamic metrics, 60 for disk, 300 for static)'      },      diskPath: {        type: 'string' as const,        description: 'Specific disk mount point to monitor (e.g., "/", "C:")'      },      networkInterface: {        type: 'string' as const,        description: 'Specific network interface to monitor (e.g., "eth0", "wlan0")'      }    },    required: ['operation']  }};
+import os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+
+const execAsync = promisify(exec);
+
+// ===========================
+// Interfaces
+// ===========================
+
+export interface SmartMetricsOptions {
+  operation: 'cpu' | 'memory' | 'disk' | 'network' | 'all' | 'monitor';
+  interval?: number; // for monitor (ms), default: 1000
+  duration?: number; // for monitor (ms), default: 10000
+  drives?: string[]; // for disk (optional filter), e.g., ['C:', 'D:']
+  useCache?: boolean; // default: true
+}
+
+export interface CPUMetrics {
+  usage: number; // percentage (0-100)
+  cores: number; // number of CPU cores
+  model: string; // CPU model name
+  speed: number; // CPU speed in MHz
+  loadAverage?: number[]; // 1, 5, 15 minute load averages (Unix only)
+}
+
+export interface MemoryMetrics {
+  total: number; // bytes
+  used: number; // bytes
+  free: number; // bytes
+  percentage: number; // percentage (0-100)
+}
+
+export interface DiskMetrics {
+  drive: string; // drive letter (Windows) or mount point (Unix)
+  total: number; // bytes
+  used: number; // bytes
+  free: number; // bytes
+  percentage: number; // percentage (0-100)
+}
+
+export interface NetworkInterfaceMetrics {
+  name: string; // interface name
+}
+
+export interface NetworkMetrics {
+  interfaces: NetworkInterfaceMetrics[];
+}
+
+export interface MetricsSample {
+  timestamp: Date;
+  cpu?: CPUMetrics;
+  memory?: MemoryMetrics;
+  disk?: DiskMetrics[];
+  network?: NetworkMetrics;
+}
+
+export interface MetricsResult {
+  success: boolean;
+  operation: string;
+  data: {
+    cpu?: CPUMetrics;
+    memory?: MemoryMetrics;
+    disk?: DiskMetrics[];
+    network?: NetworkMetrics;
+    samples?: MetricsSample[]; // for monitor operation
+  };
+  metadata: {
+    timestamp: Date;
+    duration: number; // ms
+    cached: boolean;
+    tokensUsed: number;
+    tokensSaved: number;
+  };
+}
+
+// ===========================
+// Helper Functions
+// ===========================
+
+/**
+ * Get CPU usage percentage
+ * Uses os.cpus() to calculate CPU usage from idle vs total time
+ */
+function getCPUUsage(): number {
+  const cpus = os.cpus();
+  let totalIdle = 0;
+  let totalTick = 0;
+
+  for (const cpu of cpus) {
+    for (const type in cpu.times) {
+      totalTick += cpu.times[type as keyof typeof cpu.times];
+    }
+    totalIdle += cpu.times.idle;
+  }
+
+  const idle = totalIdle / cpus.length;
+  const total = totalTick / cpus.length;
+  const usage = 100 - (100 * idle) / total;
+
+  return Math.max(0, Math.min(100, usage)); // clamp to 0-100
+}
+
+/**
+ * Get CPU metrics
+ */
+async function getCPUMetrics(): Promise<CPUMetrics> {
+  const cpus = os.cpus();
+  const usage = getCPUUsage();
+  const cores = cpus.length;
+  const model = cpus[0]?.model || 'Unknown';
+  const speed = cpus[0]?.speed || 0;
+
+  // Load average (Unix only)
+  let loadAverage: number[] | undefined;
+  try {
+    const load = os.loadavg();
+    if (load && load.length > 0) {
+      loadAverage = load;
+    }
+  } catch {
+    // Windows doesn't support loadavg
+  }
+
+  return {
+    usage,
+    cores,
+    model,
+    speed,
+    loadAverage,
+  };
+}
+
+/**
+ * Get memory metrics
+ */
+async function getMemoryMetrics(): Promise<MemoryMetrics> {
+  const total = os.totalmem();
+  const free = os.freemem();
+  const used = total - free;
+  const percentage = (used / total) * 100;
+
+  return {
+    total,
+    used,
+    free,
+    percentage,
+  };
+}
+
+/**
+ * Get disk metrics (Windows)
+ */
+async function getDiskMetricsWindows(
+  drives?: string[]
+): Promise<DiskMetrics[]> {
+  try {
+    // Use WMIC to get disk info
+    const { stdout } = await execAsync(
+      'wmic logicaldisk get Caption,Size,FreeSpace /format:csv'
+    );
+
+    const lines = stdout.trim().split('\n').slice(1); // Skip header
+    const disks: DiskMetrics[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parts = line.split(',');
+      if (parts.length < 4) continue;
+
+      const drive = parts[1]?.trim();
+      const freeSpace = parseInt(parts[2]) || 0;
+      const size = parseInt(parts[3]) || 0;
+
+      if (!drive || size === 0) continue;
+
+      // Filter by drives if specified
+      if (drives && drives.length > 0 && !drives.includes(drive)) {
+        continue;
+      }
+
+      const used = size - freeSpace;
+      const percentage = size > 0 ? (used / size) * 100 : 0;
+
+      disks.push({
+        drive,
+        total: size,
+        used,
+        free: freeSpace,
+        percentage,
+      });
+    }
+
+    return disks;
+  } catch (error) {
+    throw new Error(
+      `Failed to get disk metrics: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Get disk metrics (Unix)
+ */
+async function getDiskMetricsUnix(drives?: string[]): Promise<DiskMetrics[]> {
+  try {
+    // Use df command
+    const { stdout } = await execAsync('df -k');
+
+    const lines = stdout.trim().split('\n').slice(1); // Skip header
+    const disks: DiskMetrics[] = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 6) continue;
+
+      const drive = parts[5]; // Mount point
+      const total = parseInt(parts[1]) * 1024; // Convert KB to bytes
+      const used = parseInt(parts[2]) * 1024;
+      const free = parseInt(parts[3]) * 1024;
+
+      if (!drive || total === 0) continue;
+
+      // Filter by drives if specified
+      if (drives && drives.length > 0 && !drives.includes(drive)) {
+        continue;
+      }
+
+      const percentage = total > 0 ? (used / total) * 100 : 0;
+
+      disks.push({
+        drive,
+        total,
+        used,
+        free,
+        percentage,
+      });
+    }
+
+    return disks;
+  } catch (error) {
+    throw new Error(
+      `Failed to get disk metrics: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+/**
+ * Get disk metrics (cross-platform)
+ */
+async function getDiskMetrics(drives?: string[]): Promise<DiskMetrics[]> {
+  const platform = os.platform();
+
+  if (platform === 'win32') {
+    return await getDiskMetricsWindows(drives);
+  } else {
+    return await getDiskMetricsUnix(drives);
+  }
+}
+
+/**
+ * Get network metrics
+ */
+async function getNetworkMetrics(): Promise<NetworkMetrics> {
+  const interfaces = os.networkInterfaces();
+  const metrics: NetworkInterfaceMetrics[] = [];
+
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    if (!addrs) continue;
+
+    // Note: Only interface enumeration is supported. Byte counters require platform-specific implementation.
+
+    metrics.push({
+      name,
+    });
+  }
+
+  return {
+    interfaces: metrics,
+  };
+}
+
+// ===========================
+// SmartMetrics Class
+// ===========================
+
+export class SmartMetrics {
+  constructor(
+    private cache: CacheEngine,
+    private tokenCounter: TokenCounter,
+    private metricsCollector: MetricsCollector
+  ) {}
+
+  async run(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const startTime = Date.now();
+    const operation = options.operation;
+
+    try {
+      let result: MetricsResult;
+
+      switch (operation) {
+        case 'cpu':
+          result = await this.getCPU(options);
+          break;
+        case 'memory':
+          result = await this.getMemory(options);
+          break;
+        case 'disk':
+          result = await this.getDisk(options);
+          break;
+        case 'network':
+          result = await this.getNetwork(options);
+          break;
+        case 'all':
+          result = await this.getAll(options);
+          break;
+        case 'monitor':
+          result = await this.monitor(options);
+          break;
+        default:
+          throw new Error(`Unknown operation: ${operation}`);
+      }
+
+      // Record metrics
+      this.metricsCollector.record({
+        operation: `smart-metrics:${operation}`,
+        duration: Date.now() - startTime,
+        success: result.success,
+        cacheHit: result.metadata.cached,
+        metadata: { operation },
+      });
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      this.metricsCollector.record({
+        operation: `smart-metrics:${operation}`,
+        duration: Date.now() - startTime,
+        success: false,
+        cacheHit: false,
+        metadata: { error: errorMessage },
+      });
+
+      return {
+        success: false,
+        operation,
+        data: {},
+        metadata: {
+          timestamp: new Date(),
+          duration: Date.now() - startTime,
+          cached: false,
+          tokensUsed: this.tokenCounter.count(errorMessage).tokens,
+          tokensSaved: 0,
+        },
+      };
+    }
+  }
+
+  private async getCPU(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const cacheKey = 'metrics:cpu';
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'cpu',
+          data: { cpu: data },
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics
+    const cpu = await getCPUMetrics();
+    const dataStr = JSON.stringify(cpu);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
+    }
+
+    return {
+      success: true,
+      operation: 'cpu',
+      data: { cpu },
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async getMemory(
+    options: SmartMetricsOptions
+  ): Promise<MetricsResult> {
+    const cacheKey = 'metrics:memory';
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'memory',
+          data: { memory: data },
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics
+    const memory = await getMemoryMetrics();
+    const dataStr = JSON.stringify(memory);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
+    }
+
+    return {
+      success: true,
+      operation: 'memory',
+      data: { memory },
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async getDisk(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const cacheKey = `metrics:disk:${options.drives?.join(',') || 'all'}`;
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'disk',
+          data: { disk: data },
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics
+    const disk = await getDiskMetrics(options.drives);
+    const dataStr = JSON.stringify(disk);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
+    }
+
+    return {
+      success: true,
+      operation: 'disk',
+      data: { disk },
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async getNetwork(
+    options: SmartMetricsOptions
+  ): Promise<MetricsResult> {
+    const cacheKey = 'metrics:network';
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'network',
+          data: { network: data },
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics
+    const network = await getNetworkMetrics();
+    const dataStr = JSON.stringify(network);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
+    }
+
+    return {
+      success: true,
+      operation: 'network',
+      data: { network },
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async getAll(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const cacheKey = `metrics:all:${options.drives?.join(',') || 'all'}`;
+    const useCache = options.useCache !== false;
+
+    // Check cache
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'all',
+          data,
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Fresh metrics - collect all
+    const [cpu, memory, disk, network] = await Promise.all([
+      getCPUMetrics(),
+      getMemoryMetrics(),
+      getDiskMetrics(options.drives),
+      getNetworkMetrics(),
+    ]);
+
+    const data = { cpu, memory, disk, network };
+    const dataStr = JSON.stringify(data);
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
+
+    // Cache the result
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
+    }
+
+    return {
+      success: true,
+      operation: 'all',
+      data,
+      metadata: {
+        timestamp: new Date(),
+        duration: 0,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+
+  private async monitor(options: SmartMetricsOptions): Promise<MetricsResult> {
+    const startTime = Date.now();
+    const interval = options.interval || 1000; // 1 second default
+    const duration = options.duration || 10000; // 10 seconds default
+
+    // Add cache check
+    const cacheKey = `metrics:monitor:${interval}:${duration}:${options.drives?.join(',') || 'all'}`;
+    const useCache = options.useCache !== false;
+
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const parsedResult = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'monitor',
+          data: parsedResult.data,
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Existing monitor logic here...
+    const samples: MetricsSample[] = [];
+    const endTime = startTime + duration;
+
+    while (Date.now() < endTime) {
+      // Collect sample
+      const [cpu, memory, disk, network] = await Promise.all([
+        getCPUMetrics(),
+        getMemoryMetrics(),
+        getDiskMetrics(options.drives),
+        getNetworkMetrics(),
+      ]);
+
+      samples.push({
+        timestamp: new Date(),
+        cpu,
+        memory,
+        disk,
+        network,
+      });
+
+      // Wait for next interval
+      const nextSampleTime = startTime + samples.length * interval;
+      const waitTime = Math.max(0, nextSampleTime - Date.now());
+
+      if (waitTime > 0 && Date.now() + waitTime < endTime) {
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      }
+    }
+
+    const data = { samples };
+    const dataStr = JSON.stringify({ data });
+    const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
+
+    // Store in cache if enabled
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
+    }
+
+    return {
+      success: true,
+      operation: 'monitor',
+      data,
+      metadata: {
+        timestamp: new Date(),
+        duration: Date.now() - startTime,
+        cached: false,
+        tokensUsed,
+        tokensSaved: 0,
+      },
+    };
+  }
+}
+
+// ===========================
+// Factory Function
+// ===========================
+
+export function getSmartMetrics(
+  cache: CacheEngine,
+  tokenCounter: TokenCounter,
+  metricsCollector: MetricsCollector
+): SmartMetrics {
+  return new SmartMetrics(cache, tokenCounter, metricsCollector);
+}
+
+// ===========================
+// Standalone Runner Function (CLI)
+// ===========================
+
+export async function runSmartMetrics(
+  options: SmartMetricsOptions,
+  cache?: CacheEngine,
+  tokenCounter?: TokenCounter,
+  metricsCollector?: MetricsCollector
+): Promise<MetricsResult> {
+  const { homedir } = await import('os');
+  const { join } = await import('path');
+
+  const cacheInstance =
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const tokenCounterInstance = tokenCounter || new TokenCounter();
+  const metricsInstance = metricsCollector || new MetricsCollector();
+
+  const tool = getSmartMetrics(
+    cacheInstance,
+    tokenCounterInstance,
+    metricsInstance
+  );
+  return await tool.run(options);
+}
+
+// ===========================
+// MCP Tool Definition
+// ===========================
+
+export const SMART_METRICS_TOOL_DEFINITION = {
+  name: 'smart_metrics',
+  description:
+    'System metrics collection with smart caching (88%+ token reduction). Get CPU, memory, disk, network stats, or monitor metrics over time with cross-platform support.',
+  inputSchema: {
+    type: 'object' as const,
+    properties: {
+      operation: {
+        type: 'string' as const,
+        enum: ['cpu', 'memory', 'disk', 'network', 'all', 'monitor'],
+        description:
+          'Metrics operation: cpu (CPU usage), memory (RAM usage), disk (disk usage), network (network interfaces), all (all metrics), monitor (monitor metrics over time)',
+      },
+      interval: {
+        type: 'number' as const,
+        description:
+          'Monitoring interval in milliseconds (for monitor operation, default: 1000)',
+      },
+      duration: {
+        type: 'number' as const,
+        description:
+          'Monitoring duration in milliseconds (for monitor operation, default: 10000)',
+      },
+      drives: {
+        type: 'array' as const,
+        items: { type: 'string' as const },
+        description:
+          'Filter specific drives (for disk operation, e.g., ["C:", "D:"] on Windows, ["/", "/home"] on Unix)',
+      },
+      useCache: {
+        type: 'boolean' as const,
+        description: 'Use cache for metrics (default: true)',
+      },
+    },
+    required: ['operation'],
+  },
+};

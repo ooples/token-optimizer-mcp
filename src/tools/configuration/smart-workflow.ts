@@ -122,6 +122,13 @@ export class SmartWorkflowTool {
   private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
 
+  // Secret detection patterns used in security analysis
+  private static readonly SECRET_PATTERNS = {
+    password: /password\s*=\s*["'](?!\s*\${{).*?["']/i,
+    apiKey: /api[_-]?key\s*=\s*["'](?!\s*\${{).*?["']/i,
+    token: /token\s*=\s*["'](?!\s*\${{).*?["']/i,
+  };
+
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
@@ -466,13 +473,20 @@ export class SmartWorkflowTool {
           suggestion: 'Add at least one step to the job',
         });
       }
-      if (job.needs && job.needs.includes(job.id)) {
-        errors.push({
+      if (job.needs) {
+        const needsArr = Array.isArray(job.needs)
+          ? job.needs
+          : job.needs
+            ? [job.needs]
+            : [];
+        if (needsArr.includes(job.id)) {
+          errors.push({
           path: `jobs.${job.id}.needs`,
           message: `Job "${job.id}" cannot depend on itself`,
           severity: 'error',
           suggestion: 'Remove self-reference from needs array',
-        });
+          });
+        }
       }
     }
     return errors;
@@ -486,9 +500,9 @@ export class SmartWorkflowTool {
       for (const step of job.steps) {
         if (step.run) {
           const suspiciousPatterns = [
-            /password\s*=\s*["'](?!\${).*["']/i,
-            /api[_-]?key\s*=\s*["'](?!\${).*["']/i,
-            /token\s*=\s*["'](?!\${).*["']/i,
+            SmartWorkflowTool.SECRET_PATTERNS.password,
+            SmartWorkflowTool.SECRET_PATTERNS.apiKey,
+            SmartWorkflowTool.SECRET_PATTERNS.token,
           ];
           for (const pattern of suspiciousPatterns) {
             if (pattern.test(step.run)) {
