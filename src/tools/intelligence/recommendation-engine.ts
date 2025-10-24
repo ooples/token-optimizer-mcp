@@ -8,7 +8,15 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 
 export interface RecommendationEngineOptions {
-  operation: 'recommend' | 'train' | 'find-similar' | 'personalize' | 'optimize-workflow' | 'allocate-resources' | 'tune-config' | 'explain-recommendation';
+  operation:
+    | 'recommend'
+    | 'train'
+    | 'find-similar'
+    | 'personalize'
+    | 'optimize-workflow'
+    | 'allocate-resources'
+    | 'tune-config'
+    | 'explain-recommendation';
   query?: string;
   data?: any;
   useCache?: boolean;
@@ -33,49 +41,106 @@ export class RecommendationEngine {
   private tokenCounter: TokenCounter;
   private metricsCollector: MetricsCollector;
 
-  constructor(cache: CacheEngine, tokenCounter: TokenCounter, metricsCollector: MetricsCollector) {
+  constructor(
+    cache: CacheEngine,
+    tokenCounter: TokenCounter,
+    metricsCollector: MetricsCollector
+  ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
     this.metricsCollector = metricsCollector;
   }
 
-  async run(options: RecommendationEngineOptions): Promise<RecommendationEngineResult> {
+  async run(
+    options: RecommendationEngineOptions
+  ): Promise<RecommendationEngineResult> {
     const startTime = Date.now();
-    const cacheKey = generateCacheKey('recommendation-engine', { op: options.operation });
+    const cacheKey = generateCacheKey('recommendation-engine', {
+      op: options.operation,
+    });
 
     if (options.useCache !== false) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
         try {
           const data = JSON.parse(cached.toString());
-          const tokensSaved = this.tokenCounter.count(JSON.stringify(data)).tokens;
-          return { success: true, operation: options.operation, data, metadata: { tokensUsed: 0, tokensSaved, cacheHit: true, processingTime: Date.now() - startTime, confidence: 0.85 } };
+          const tokensSaved = this.tokenCounter.count(
+            JSON.stringify(data)
+          ).tokens;
+          return {
+            success: true,
+            operation: options.operation,
+            data,
+            metadata: {
+              tokensUsed: 0,
+              tokensSaved,
+              cacheHit: true,
+              processingTime: Date.now() - startTime,
+              confidence: 0.85,
+            },
+          };
         } catch (error) {
           // Continue with fresh execution
         }
       }
     }
 
-    const data: Record<string, any> = { result: `${options.operation} completed successfully` };
+    const data: Record<string, any> = {
+      result: `${options.operation} completed successfully`,
+    };
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
     this.cache.set(cacheKey, dataStr, dataStr.length, tokensUsed);
-    this.metricsCollector.record({ operation: `recommendation-engine:${options.operation}`, duration: Date.now() - startTime, success: true, cacheHit: false });
+    this.metricsCollector.record({
+      operation: `recommendation-engine:${options.operation}`,
+      duration: Date.now() - startTime,
+      success: true,
+      cacheHit: false,
+    });
 
-    return { success: true, operation: options.operation, data, metadata: { tokensUsed, tokensSaved: 0, cacheHit: false, processingTime: Date.now() - startTime, confidence: 0.85 } };
+    return {
+      success: true,
+      operation: options.operation,
+      data,
+      metadata: {
+        tokensUsed,
+        tokensSaved: 0,
+        cacheHit: false,
+        processingTime: Date.now() - startTime,
+        confidence: 0.85,
+      },
+    };
   }
 }
 
 export const RECOMMENDATIONENGINETOOL = {
   name: 'recommendation-engine',
-  description: 'Intelligent recommendations for optimization and resource allocation',
+  description:
+    'Intelligent recommendations for optimization and resource allocation',
   inputSchema: {
     type: 'object',
     properties: {
-      operation: { type: 'string', enum: ['recommend', 'train', 'find-similar', 'personalize', 'optimize-workflow', 'allocate-resources', 'tune-config', 'explain-recommendation'], description: 'Operation to perform' },
+      operation: {
+        type: 'string',
+        enum: [
+          'recommend',
+          'train',
+          'find-similar',
+          'personalize',
+          'optimize-workflow',
+          'allocate-resources',
+          'tune-config',
+          'explain-recommendation',
+        ],
+        description: 'Operation to perform',
+      },
       query: { type: 'string', description: 'Query or input data' },
       data: { type: 'object', description: 'Additional data' },
-      useCache: { type: 'boolean', default: true, description: 'Enable caching' },
+      useCache: {
+        type: 'boolean',
+        default: true,
+        description: 'Enable caching',
+      },
       cacheTTL: { type: 'number', description: 'Cache TTL in seconds' },
     },
     required: ['operation'],
@@ -87,7 +152,13 @@ const sharedCache = new CacheEngine();
 const sharedTokenCounter = new TokenCounter();
 const sharedMetricsCollector = new MetricsCollector();
 
-export async function runRecommendationEngine(options: RecommendationEngineOptions): Promise<RecommendationEngineResult> {
-  const tool = new RecommendationEngine(sharedCache, sharedTokenCounter, sharedMetricsCollector);
+export async function runRecommendationEngine(
+  options: RecommendationEngineOptions
+): Promise<RecommendationEngineResult> {
+  const tool = new RecommendationEngine(
+    sharedCache,
+    sharedTokenCounter,
+    sharedMetricsCollector
+  );
   return await tool.run(options);
 }
