@@ -4,11 +4,11 @@
  * Track 2C - System Operations & Output
  * Target Token Reduction: 88%+
  *
- * Provides cross-platform process management with smart caching:
- * - Start, stop, monitor processes
- * - Resource usage tracking (CPU, memory, handles)
- * - Cleanup tree analysis
- * - Automatic restart on failure
+ * Provides cross-platform filesystem cleanup operations with smart caching:
+ * - Analyze, preview, and clean temporary files
+ * - - Cache and log file management
+ * - - Build artifact cleanup
+ * - - Safe deletion with preview mode
  * - Cross-platform support (Windows/Linux/macOS)
  */
 

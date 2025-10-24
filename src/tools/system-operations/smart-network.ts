@@ -4,11 +4,11 @@
  * Track 2C - System Operations & Output
  * Target Token Reduction: 88%+
  *
- * Provides cross-platform process management with smart caching:
- * - Start, stop, monitor processes
- * - Resource usage tracking (CPU, memory, handles)
- * - Network tree analysis
- * - Automatic restart on failure
+ * Provides cross-platform network operations with smart caching:
+ * - Ping, traceroute, DNS lookups, port scanning
+ * - - Connection testing and latency measurement
+ * - - DNS resolution and reverse lookups
+ * - - Port scanning and connectivity checks
  * - Cross-platform support (Windows/Linux/macOS)
  */
 
