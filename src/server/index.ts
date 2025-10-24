@@ -74,10 +74,12 @@ import {
 import {
   getKnowledgeGraphTool,
   KNOWLEDGE_GRAPH_TOOL_DEFINITION,
+  KnowledgeGraphOptions,
 } from '../tools/intelligence/knowledge-graph.js';
 import {
   getSentimentAnalysisTool,
   SENTIMENT_ANALYSIS_TOOL_DEFINITION,
+  SentimentAnalysisOptions,
 } from '../tools/intelligence/sentiment-analysis.js';
 
 // API & Database tools
@@ -1946,7 +1948,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 
       case 'knowledge_graph': {
-        const options = args as KnowledgeGraphOptions;
+        const options = args as unknown as KnowledgeGraphOptions;
         const result = await knowledgeGraph.run(options);
         return {
           content: [
@@ -1959,7 +1961,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'sentiment_analysis': {
-        const options = args as any;
+        const options = args as unknown as SentimentAnalysisOptions;
         const result = await sentimentAnalysis.run(options);
         return {
           content: [
