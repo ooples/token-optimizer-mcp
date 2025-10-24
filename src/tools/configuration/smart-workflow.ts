@@ -164,7 +164,7 @@ export class SmartWorkflowTool {
       if (cachedData) {
         fromCache = true;
         const decompressed = decompress(
-          Buffer.from(cachedData, 'utf-8'),
+          Buffer.from(cachedData, 'base64'),
           'gzip'
         );
         const cached = JSON.parse(
@@ -236,16 +236,15 @@ export class SmartWorkflowTool {
       const compressResult = compress(JSON.stringify(result), 'gzip');
       this.cache.set(
         cacheKey,
-        compressResult.compressed.toString(),
+        compressResult.compressed.toString('base64'),
         result.metadata.tokensSaved,
         ttl
       );
-      const compressedTokens = this.tokenCounter.count(
-        compressResult.compressed.toString()
-      ).tokens;
-      result.metadata.tokenCount = compressedTokens;
-      result.metadata.tokensSaved = originalTokens - compressedTokens;
-      result.metadata.compressionRatio = compressedTokens / originalTokens;
+      const uncompressedJson = JSON.stringify(result);
+      const uncompressedTokens = this.tokenCounter.count(uncompressedJson).tokens;
+      result.metadata.tokenCount = uncompressedTokens;
+      result.metadata.tokensSaved = originalTokens - uncompressedTokens;
+      result.metadata.compressionRatio = uncompressedTokens / originalTokens;
     }
 
     this.metrics.record({
@@ -315,7 +314,7 @@ export class SmartWorkflowTool {
   visualize(parsedWorkflow: ParsedWorkflow): Record<string, string[]> {
     const graph: Record<string, string[]> = {};
     for (const job of parsedWorkflow.jobs) {
-      graph[job.id] = job.needs || job.requires || [];
+      graph[job.id] = job.needs || [];
     }
     return graph;
   }
@@ -325,10 +324,10 @@ export class SmartWorkflowTool {
     for (const job of parsedWorkflow.jobs) {
       if (job.env) {
         for (const value of Object.values(job.env)) {
-          const matches = value.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+          const matches = value.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
           if (matches) {
             for (const match of matches) {
-              const secretName = match.replace(/\$\{\{\s*secrets\.|[}\s]/g, '');
+              const secretName = match.replace(/${{\s*secrets\.|[}\s]/g, '');
               secrets.add(secretName);
             }
           }
@@ -338,11 +337,11 @@ export class SmartWorkflowTool {
         if (step.with) {
           for (const value of Object.values(step.with)) {
             if (typeof value === 'string') {
-              const matches = value.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+              const matches = value.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
               if (matches) {
                 for (const match of matches) {
                   const secretName = match.replace(
-                    /\$\{\{\s*secrets\.|[}\s]/g,
+                    /${{\s*secrets\.|[}\s]/g,
                     ''
                   );
                   secrets.add(secretName);
@@ -353,11 +352,11 @@ export class SmartWorkflowTool {
         }
         if (step.env) {
           for (const value of Object.values(step.env)) {
-            const matches = value.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+            const matches = value.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
             if (matches) {
               for (const match of matches) {
                 const secretName = match.replace(
-                  /\$\{\{\s*secrets\.|[}\s]/g,
+                  /${{\s*secrets\.|[}\s]/g,
                   ''
                 );
                 secrets.add(secretName);
@@ -366,10 +365,10 @@ export class SmartWorkflowTool {
           }
         }
         if (step.run) {
-          const matches = step.run.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+          const matches = step.run.match(/${{\s*secrets\.(\w+)\s*\}\}/g);
           if (matches) {
             for (const match of matches) {
-              const secretName = match.replace(/\$\{\{\s*secrets\.|[}\s]/g, '');
+              const secretName = match.replace(/${{\s*secrets\.|[}\s]/g, '');
               secrets.add(secretName);
             }
           }
@@ -504,9 +503,9 @@ export class SmartWorkflowTool {
       for (const step of job.steps) {
         if (step.run) {
           const suspiciousPatterns = [
-            /password\s*=\s*["'](?!\\$\{).*["']/i,
-            /api[_-]?key\s*=\s*["'](?!\\$\{).*["']/i,
-            /token\s*=\s*["'](?!\\$\{).*["']/i,
+            /password\s*=\s*["'](?!\${).*["']/i,
+            /api[_-]?key\s*=\s*["'](?!\${).*["']/i,
+            /token\s*=\s*["'](?!\${).*["']/i,
           ];
           for (const pattern of suspiciousPatterns) {
             if (pattern.test(step.run)) {
