@@ -59,8 +59,6 @@ export interface DiskMetrics {
 
 export interface NetworkInterfaceMetrics {
   name: string; // interface name
-  bytesReceived: number; // total bytes received
-  bytesSent: number; // total bytes sent
 }
 
 export interface NetworkMetrics {
@@ -291,16 +289,10 @@ async function getNetworkMetrics(): Promise<NetworkMetrics> {
   for (const [name, addrs] of Object.entries(interfaces)) {
     if (!addrs) continue;
 
-    // Note: os.networkInterfaces() doesn't provide byte counts
-    // This is a basic implementation that returns interface names
-    // For actual byte counts, would need to read from /proc/net/dev (Linux)
-    // or use platform-specific commands
-    // Note: bytesReceived and bytesSent return 0 - implement platform-specific byte counter retrieval for actual values
+    // Note: Only interface enumeration is supported. Byte counters require platform-specific implementation.
 
     metrics.push({
       name,
-      bytesReceived: 0, // Would need platform-specific implementation
-      bytesSent: 0, // Would need platform-specific implementation
     });
   }
 
@@ -661,11 +653,38 @@ export class SmartMetrics {
   private async monitor(
     options: SmartMetricsOptions
   ): Promise<MetricsResult> {
+    const startTime = Date.now();
     const interval = options.interval || 1000; // 1 second default
     const duration = options.duration || 10000; // 10 seconds default
-    const samples: MetricsSample[] = [];
 
-    const startTime = Date.now();
+    // Add cache check
+    const cacheKey = `metrics:monitor:${interval}:${duration}:${options.drives?.join(',') || 'all'}`;
+    const useCache = options.useCache !== false;
+
+    if (useCache) {
+      const cached = await this.cache.get(cacheKey);
+      if (cached) {
+        const parsedResult = JSON.parse(cached);
+        const tokensUsed = this.tokenCounter.count(cached).tokens;
+        const baselineTokens = tokensUsed * 20; // Estimate baseline
+
+        return {
+          success: true,
+          operation: 'monitor',
+          data: parsedResult.data,
+          metadata: {
+            timestamp: new Date(),
+            duration: 0,
+            cached: true,
+            tokensUsed,
+            tokensSaved: baselineTokens - tokensUsed,
+          },
+        };
+      }
+    }
+
+    // Existing monitor logic here...
+    const samples: MetricsSample[] = [];
     const endTime = startTime + duration;
 
     while (Date.now() < endTime) {
@@ -695,8 +714,14 @@ export class SmartMetrics {
     }
 
     const data = { samples };
-    const dataStr = JSON.stringify(data);
+    const dataStr = JSON.stringify({ data });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
+
+    // Store in cache if enabled
+    if (useCache) {
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
+    }
 
     return {
       success: true,

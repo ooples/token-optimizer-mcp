@@ -373,7 +373,9 @@ export class SmartCleanup {
   private async cleanTemp(options: SmartCleanupOptions): Promise<CleanupResult> {
     const tempDirs = [
       os.tmpdir(),
-      path.join(os.homedir(), 'AppData', 'Local', 'Temp'),
+      ...(process.platform === 'win32' 
+        ? [path.join(os.homedir(), 'AppData', 'Local', 'Temp')]
+        : []),
       '/tmp',
       '/var/tmp',
     ];
