@@ -23,7 +23,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 const readdir = promisify(fs.readdir);
 const stat = promisify(fs.stat);
 const unlink = promisify(fs.unlink);
-const rmdir = promisify(fs.rmdir);
+const rm = promisify(fs.rm);
 
 export interface SmartCleanupOptions {
   operation:
@@ -593,7 +593,7 @@ export class SmartCleanup {
       }
     }
 
-    await rmdir(dirPath);
+    await rm(dirPath, { recursive: true, force: true });
   }
 }
 

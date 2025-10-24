@@ -32,7 +32,6 @@ export interface SmartMetricsOptions {
   duration?: number; // for monitor (ms), default: 10000
   drives?: string[]; // for disk (optional filter), e.g., ['C:', 'D:']
   useCache?: boolean; // default: true
-  ttl?: number; // cache TTL in seconds, default: 5
 }
 
 export interface CPUMetrics {
@@ -296,6 +295,7 @@ async function getNetworkMetrics(): Promise<NetworkMetrics> {
     // This is a basic implementation that returns interface names
     // For actual byte counts, would need to read from /proc/net/dev (Linux)
     // or use platform-specific commands
+    // Note: bytesReceived and bytesSent return 0 - implement platform-specific byte counter retrieval for actual values
 
     metrics.push({
       name,
@@ -418,10 +418,11 @@ export class SmartMetrics {
     const cpu = await getCPUMetrics();
     const dataStr = JSON.stringify(cpu);
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
 
     // Cache the result
     if (useCache) {
-      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
     }
 
     return {
@@ -471,10 +472,11 @@ export class SmartMetrics {
     const memory = await getMemoryMetrics();
     const dataStr = JSON.stringify(memory);
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
 
     // Cache the result
     if (useCache) {
-      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
     }
 
     return {
@@ -522,10 +524,11 @@ export class SmartMetrics {
     const disk = await getDiskMetrics(options.drives);
     const dataStr = JSON.stringify(disk);
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
 
     // Cache the result
     if (useCache) {
-      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
     }
 
     return {
@@ -575,10 +578,11 @@ export class SmartMetrics {
     const network = await getNetworkMetrics();
     const dataStr = JSON.stringify(network);
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
 
     // Cache the result
     if (useCache) {
-      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
     }
 
     return {
@@ -633,10 +637,11 @@ export class SmartMetrics {
     const data = { cpu, memory, disk, network };
     const dataStr = JSON.stringify(data);
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+    const dataBytes = Buffer.byteLength(dataStr, 'utf8');
 
     // Cache the result
     if (useCache) {
-      this.cache.set(cacheKey, dataStr, tokensUsed, tokensUsed);
+      this.cache.set(cacheKey, dataStr, dataBytes, dataBytes);
     }
 
     return {
@@ -782,10 +787,6 @@ export const SMART_METRICS_TOOL_DEFINITION = {
       useCache: {
         type: 'boolean' as const,
         description: 'Use cache for metrics (default: true)',
-      },
-      ttl: {
-        type: 'number' as const,
-        description: 'Cache TTL in seconds (default: 5 for most metrics, 10 for disk)',
       },
     },
     required: ['operation'],
