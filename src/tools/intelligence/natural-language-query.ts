@@ -59,7 +59,7 @@ export class NaturalLanguageQuery {
     const data: Record<string, any> = { result: `${options.operation} completed successfully` };
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
+    this.cache.set(cacheKey, dataStr, dataStr.length, tokensUsed);
     this.metricsCollector.record({ operation: `natural-language-query:${options.operation}`, duration: Date.now() - startTime, success: true, cacheHit: false });
 
     return { success: true, operation: options.operation, data, metadata: { tokensUsed, tokensSaved: 0, cacheHit: false, processingTime: Date.now() - startTime, confidence: 0.85 } };
@@ -82,10 +82,12 @@ export const NATURALLANGUAGEQUERYTOOL = {
   },
 } as const;
 
+// Shared instances for singleton pattern
+const sharedCache = new CacheEngine();
+const sharedTokenCounter = new TokenCounter();
+const sharedMetricsCollector = new MetricsCollector();
+
 export async function runNaturalLanguageQuery(options: NaturalLanguageQueryOptions): Promise<NaturalLanguageQueryResult> {
-  const cache = new CacheEngine();
-  const tokenCounter = new TokenCounter();
-  const metricsCollector = new MetricsCollector();
-  const tool = new NaturalLanguageQuery(cache, tokenCounter, metricsCollector);
+  const tool = new NaturalLanguageQuery(sharedCache, sharedTokenCounter, sharedMetricsCollector);
   return await tool.run(options);
 }
