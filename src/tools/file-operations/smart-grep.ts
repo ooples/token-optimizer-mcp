@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Grep Tool - 80% Token Reduction
  *
  * Achieves token reduction through:
@@ -12,8 +12,7 @@
  */
 
 import { readFileSync, statSync } from 'fs';
-import glob from 'glob';
-const { globSync } = glob;
+import { globSync } from 'glob';
 import { relative, join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
