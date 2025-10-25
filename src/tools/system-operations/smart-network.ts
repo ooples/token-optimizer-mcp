@@ -91,7 +91,7 @@ export interface SmartNetworkResult {
 }
 
 export class SmartNetwork {
-  private runningNetworkes = new Map<number, ChildProcess>();
+  private runningProcesses = new Map<number, ChildProcess>();
 
   constructor(
     private cache: CacheEngine,
@@ -180,7 +180,7 @@ export class SmartNetwork {
     });
 
     const pid = child.pid!;
-    this.runningNetworkes.set(pid, child);
+    this.runningProcesses.set(pid, child);
 
     const processInfo: NetworkInfo = {
       pid,
@@ -241,7 +241,7 @@ export class SmartNetwork {
       );
     }
 
-    this.runningNetworkes.delete(pid);
+    this.runningProcesses.delete(pid);
 
     const result = { pid, stopped: true };
     const dataStr = JSON.stringify(result);
@@ -444,10 +444,10 @@ export class SmartNetwork {
   ): Promise<NetworkInfo[]> {
     // Use WMIC on Windows
     const query = pid
-      ? `wmic process where "NetworkId=${pid}" get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+      ? `wmic process where "ProcessId=${pid}" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
       : name
-        ? `wmic process where "Name='${name}'" get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-        : `wmic process get NetworkId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
+        ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+        : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
 
     const { stdout } = await execAsync(query);
 
@@ -536,7 +536,7 @@ export class SmartNetwork {
   ): Promise<NetworkTreeNode> {
     // Use WMIC to get parent-child relationships
     const { stdout } = await execAsync(
-      'wmic process get NetworkId,ParentNetworkId,Name /format:csv'
+      'wmic process get ProcessId,ParentProcessId,Name /format:csv'
     );
 
     const lines = stdout.trim().split('\n').slice(1);

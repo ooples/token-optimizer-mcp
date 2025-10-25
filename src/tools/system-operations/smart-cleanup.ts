@@ -91,7 +91,7 @@ export interface SmartCleanupResult {
 }
 
 export class SmartCleanup {
-  private runningCleanupes = new Map<number, ChildProcess>();
+  private runningProcesses = new Map<number, ChildProcess>();
 
   constructor(
     private cache: CacheEngine,
@@ -180,7 +180,7 @@ export class SmartCleanup {
     });
 
     const pid = child.pid!;
-    this.runningCleanupes.set(pid, child);
+    this.runningProcesses.set(pid, child);
 
     const processInfo: CleanupInfo = {
       pid,
@@ -241,7 +241,7 @@ export class SmartCleanup {
       );
     }
 
-    this.runningCleanupes.delete(pid);
+    this.runningProcesses.delete(pid);
 
     const result = { pid, stopped: true };
     const dataStr = JSON.stringify(result);
@@ -444,10 +444,10 @@ export class SmartCleanup {
   ): Promise<CleanupInfo[]> {
     // Use WMIC on Windows
     const query = pid
-      ? `wmic process where "CleanupId=${pid}" get CleanupId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+      ? `wmic process where "ProcessId=${pid}" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
       : name
-        ? `wmic process where "Name='${name}'" get CleanupId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-        : `wmic process get CleanupId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
+        ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+        : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
 
     const { stdout } = await execAsync(query);
 
@@ -536,7 +536,7 @@ export class SmartCleanup {
   ): Promise<CleanupTreeNode> {
     // Use WMIC to get parent-child relationships
     const { stdout } = await execAsync(
-      'wmic process get CleanupId,ParentCleanupId,Name /format:csv'
+      'wmic process get ProcessId,ParentProcessId,Name /format:csv'
     );
 
     const lines = stdout.trim().split('\n').slice(1);

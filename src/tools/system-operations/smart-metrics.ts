@@ -91,7 +91,7 @@ export interface SmartMetricsResult {
 }
 
 export class SmartMetrics {
-  private runningMetricses = new Map<number, ChildProcess>();
+  private runningProcesses = new Map<number, ChildProcess>();
 
   constructor(
     private cache: CacheEngine,
@@ -180,7 +180,7 @@ export class SmartMetrics {
     });
 
     const pid = child.pid!;
-    this.runningMetricses.set(pid, child);
+    this.runningProcesses.set(pid, child);
 
     const processInfo: MetricsInfo = {
       pid,
@@ -241,7 +241,7 @@ export class SmartMetrics {
       );
     }
 
-    this.runningMetricses.delete(pid);
+    this.runningProcesses.delete(pid);
 
     const result = { pid, stopped: true };
     const dataStr = JSON.stringify(result);
@@ -444,10 +444,10 @@ export class SmartMetrics {
   ): Promise<MetricsInfo[]> {
     // Use WMIC on Windows
     const query = pid
-      ? `wmic process where "MetricsId=${pid}" get MetricsId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+      ? `wmic process where "ProcessId=${pid}" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
       : name
-        ? `wmic process where "Name='${name}'" get MetricsId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-        : `wmic process get MetricsId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
+        ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
+        : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
 
     const { stdout } = await execAsync(query);
 
@@ -536,7 +536,7 @@ export class SmartMetrics {
   ): Promise<MetricsTreeNode> {
     // Use WMIC to get parent-child relationships
     const { stdout } = await execAsync(
-      'wmic process get MetricsId,ParentMetricsId,Name /format:csv'
+      'wmic process get ProcessId,ParentProcessId,Name /format:csv'
     );
 
     const lines = stdout.trim().split('\n').slice(1);

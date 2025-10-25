@@ -90,7 +90,7 @@ export class PredictiveAnalytics {
     };
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, tokensUsed);
+    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     this.metricsCollector.record({
       operation: `predictive-analytics:${options.operation}`,
       duration: Date.now() - startTime,

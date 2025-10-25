@@ -90,7 +90,7 @@ export class NaturalLanguageQuery {
     };
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, tokensUsed);
+    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     this.metricsCollector.record({
       operation: `natural-language-query:${options.operation}`,
       duration: Date.now() - startTime,
