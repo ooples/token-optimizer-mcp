@@ -315,7 +315,8 @@ export class SmartWorkflowTool {
   visualize(parsedWorkflow: ParsedWorkflow): Record<string, string[]> {
     const graph: Record<string, string[]> = {};
     for (const job of parsedWorkflow.jobs) {
-      graph[job.id] = job.needs || job.requires || [];
+      const needs = job.needs || job.requires || [];
+      graph[job.id] = Array.isArray(needs) ? needs : [needs];
     }
     return graph;
   }
