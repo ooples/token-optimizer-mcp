@@ -316,7 +316,11 @@ export class SmartWorkflowTool {
     const graph: Record<string, string[]> = {};
     for (const job of parsedWorkflow.jobs) {
       const rawNeeds = job.needs || job.requires;
-      const needs = rawNeeds ? (Array.isArray(rawNeeds) ? rawNeeds : [rawNeeds]) : [];
+      const needs = rawNeeds
+        ? Array.isArray(rawNeeds)
+          ? rawNeeds
+          : [rawNeeds]
+        : [];
       graph[job.id] = needs;
     }
     return graph;
