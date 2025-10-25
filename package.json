@@ -121,6 +121,7 @@
     "better-sqlite3": "^12.4.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "glob": "^11.0.3",
     "lru-cache": "^11.2.2",
     "tiktoken": "^1.0.22"
   }
