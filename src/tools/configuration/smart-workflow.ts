@@ -488,12 +488,12 @@ export class SmartWorkflowTool {
       if (job.needs) {
         const needsArr = Array.isArray(job.needs) ? job.needs : [job.needs];
         if (needsArr.includes(job.id)) {
-        errors.push({
-          path: `jobs.${job.id}.needs`,
-          message: `Job "${job.id}" cannot depend on itself`,
-          severity: 'error',
-          suggestion: 'Remove self-reference from needs array',
-        });
+          errors.push({
+            path: `jobs.${job.id}.needs`,
+            message: `Job "${job.id}" cannot depend on itself`,
+            severity: 'error',
+            suggestion: 'Remove self-reference from needs array',
+          });
         }
       }
     }
