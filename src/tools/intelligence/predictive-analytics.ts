@@ -59,10 +59,6 @@ export class PredictiveAnalytics {
       op: options.operation,
       query: options.query,
       data: JSON.stringify(options.data || {}),
-      query: options.query,
-      data: JSON.stringify(options.data || {}),
-    });
-      op: options.operation,
     });
 
     if (options.useCache !== false) {
