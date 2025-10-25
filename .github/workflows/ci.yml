@@ -170,7 +170,7 @@ jobs:
         id: benchmark
         run: |
           if [ -f "package.json" ] && npm run --silent test:benchmark 2>/dev/null; then
-            npm run test:benchmark | tee benchmark-results.txt
+            npm run --silent test:benchmark | tee benchmark-results.txt
           else
             echo "Benchmark suite not yet implemented, creating placeholder results"
             echo '{"status": "not_implemented", "message": "Benchmark suite to be implemented"}' > benchmark-results.txt

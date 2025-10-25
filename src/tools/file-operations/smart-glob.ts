@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Glob Tool - 75% Token Reduction
  *
  * Achieves token reduction through:
@@ -11,8 +11,7 @@
  * Target: 75% reduction vs listing all files with content
  */
 
-import glob from 'glob';
-const { globSync } = glob;
+import { globSync } from 'glob';
 import { statSync, readFileSync } from 'fs';
 import { relative, basename, extname, join } from 'path';
 import { homedir } from 'os';

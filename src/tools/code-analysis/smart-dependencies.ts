@@ -147,6 +147,16 @@ export class SmartDependenciesTool {
 
   /**
    * Main entry point for dependency analysis
+   * Alias for analyze() to maintain API consistency with other tools
+   */
+  async run(
+    options: SmartDependenciesOptions = {}
+  ): Promise<SmartDependenciesResult> {
+    return this.analyze(options);
+  }
+
+  /**
+   * Core dependency analysis implementation
    */
   async analyze(
     options: SmartDependenciesOptions = {}
