@@ -139,7 +139,7 @@ export class SmartWorkflowTool {
     const startTime = Date.now();
     const {
       enableCache = true,
-      ttl = 86400,
+
       format = 'auto',
       validateSyntax = true,
       includeSecurityAnalysis = true,
@@ -160,11 +160,11 @@ export class SmartWorkflowTool {
 
     let fromCache = false;
     if (enableCache) {
-      const cachedData = await this.cache.get(cacheKey);
+      const cachedData = this.cache.get(cacheKey);
       if (cachedData) {
         fromCache = true;
         const decompressed = decompress(
-          Buffer.from(cachedData, 'utf-8'),
+          Buffer.from(cachedData, 'base64'),
           'gzip'
         );
         const cached = JSON.parse(
@@ -233,16 +233,16 @@ export class SmartWorkflowTool {
     };
 
     if (enableCache) {
-      const compressResult = compress(JSON.stringify(result), 'gzip');
+      const resultStr = JSON.stringify(result);
+      const compressResult = compress(resultStr, 'gzip');
+      const compressedBase64 = compressResult.compressed.toString('base64');
       this.cache.set(
         cacheKey,
-        compressResult.compressed.toString(),
-        compressResult.compressed.length,
-        ttl
+        compressedBase64,
+        Buffer.byteLength(resultStr, 'utf-8'),
+        Buffer.byteLength(compressedBase64, 'utf-8')
       );
-      const compressedTokens = this.tokenCounter.count(
-        compressResult.compressed.toString()
-      ).tokens;
+      const compressedTokens = this.tokenCounter.count(compressedBase64).tokens;
       result.metadata.tokenCount = compressedTokens;
       result.metadata.tokensSaved = originalTokens - compressedTokens;
       result.metadata.compressionRatio = compressedTokens / originalTokens;
@@ -572,7 +572,7 @@ export class SmartWorkflowTool {
       });
     }
     const independentJobs = workflow.jobs.filter(
-      (j) => !j.needs || j.needs.length === 0
+      (j) => !j.needs || (Array.isArray(j.needs) ? j.needs.length === 0 : false)
     );
     if (independentJobs.length > 1) {
       recommendations.push({
