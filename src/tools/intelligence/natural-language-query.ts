@@ -57,6 +57,8 @@ export class NaturalLanguageQuery {
     const startTime = Date.now();
     const cacheKey = generateCacheKey('natural-language-query', {
       op: options.operation,
+      query: options.query,
+      data: JSON.stringify(options.data || {}),
     });
 
     if (options.useCache !== false) {

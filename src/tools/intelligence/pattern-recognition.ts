@@ -57,6 +57,8 @@ export class PatternRecognition {
     const startTime = Date.now();
     const cacheKey = generateCacheKey('pattern-recognition', {
       op: options.operation,
+      query: options.query,
+      data: JSON.stringify(options.data || {}),
     });
 
     if (options.useCache !== false) {

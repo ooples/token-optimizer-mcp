@@ -57,6 +57,8 @@ export class RecommendationEngine {
     const startTime = Date.now();
     const cacheKey = generateCacheKey('recommendation-engine', {
       op: options.operation,
+      query: options.query,
+      data: JSON.stringify(options.data || {}),
     });
 
     if (options.useCache !== false) {

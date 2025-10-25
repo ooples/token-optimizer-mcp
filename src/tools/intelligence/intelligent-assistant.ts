@@ -57,6 +57,8 @@ export class IntelligentAssistant {
     const startTime = Date.now();
     const cacheKey = generateCacheKey('intelligent-assistant', {
       op: options.operation,
+      query: options.query,
+      data: JSON.stringify(options.data || {}),
     });
 
     if (options.useCache !== false) {

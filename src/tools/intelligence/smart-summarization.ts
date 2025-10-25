@@ -57,6 +57,8 @@ export class SmartSummarization {
     const startTime = Date.now();
     const cacheKey = generateCacheKey('smart-summarization', {
       op: options.operation,
+      query: options.query,
+      data: JSON.stringify(options.data || {}),
     });
 
     if (options.useCache !== false) {
