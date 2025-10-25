@@ -59,7 +59,7 @@ export interface WorkflowJob {
   'runs-on'?: string | string[];
   steps: WorkflowStep[];
   env?: Record<string, string>;
-  needs?: string[];
+  needs?: string | string[];
   outputs?: Record<string, string>;
   if?: string;
   strategy?: { matrix?: Record<string, unknown> };
@@ -484,13 +484,16 @@ export class SmartWorkflowTool {
           suggestion: 'Add at least one step to the job',
         });
       }
-      if (job.needs && job.needs.includes(job.id)) {
+      if (job.needs) {
+        const needsArr = Array.isArray(job.needs) ? job.needs : [job.needs];
+        if (needsArr.includes(job.id)) {
         errors.push({
           path: `jobs.${job.id}.needs`,
           message: `Job "${job.id}" cannot depend on itself`,
           severity: 'error',
           suggestion: 'Remove self-reference from needs array',
         });
+        }
       }
     }
     return errors;
