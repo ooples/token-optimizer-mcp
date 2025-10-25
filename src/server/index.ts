@@ -86,6 +86,32 @@ import {
   LOG_DASHBOARD_TOOL_DEFINITION,
 } from '../tools/dashboard-monitoring/log-dashboard.js';
 
+// Intelligence tools
+import {
+  runIntelligentAssistant,
+  INTELLIGENTASSISTANTTOOL,
+} from '../tools/intelligence/intelligent-assistant.js';
+import {
+  runNaturalLanguageQuery,
+  NATURALLANGUAGEQUERYTOOL,
+} from '../tools/intelligence/natural-language-query.js';
+import {
+  runPatternRecognition,
+  PATTERNRECOGNITIONTOOL,
+} from '../tools/intelligence/pattern-recognition.js';
+import {
+  runPredictiveAnalytics,
+  PREDICTIVEANALYTICSTOOL,
+} from '../tools/intelligence/predictive-analytics.js';
+import {
+  runRecommendationEngine,
+  RECOMMENDATIONENGINETOOL,
+} from '../tools/intelligence/recommendation-engine.js';
+import {
+  runSmartSummarization,
+  SMARTSUMMARIZATIONTOOL,
+} from '../tools/intelligence/smart-summarization.js';
+
 // API & Database tools
 import {
   getSmartSql,
@@ -542,6 +568,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       DATA_VISUALIZER_TOOL_DEFINITION,
       HEALTH_MONITOR_TOOL_DEFINITION,
       LOG_DASHBOARD_TOOL_DEFINITION,
+      // Intelligence tools
+      INTELLIGENTASSISTANTTOOL,
+      NATURALLANGUAGEQUERYTOOL,
+      PATTERNRECOGNITIONTOOL,
+      PREDICTIVEANALYTICSTOOL,
+      RECOMMENDATIONENGINETOOL,
+      SMARTSUMMARIZATIONTOOL,
       // Build Systems tools
       SMART_PROCESSES_TOOL_DEFINITION,
       SMART_NETWORK_TOOL_DEFINITION,
@@ -1883,6 +1916,84 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+
+      case 'intelligent-assistant': {
+        const options = args as any;
+        const result = await runIntelligentAssistant(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'natural-language-query': {
+        const options = args as any;
+        const result = await runNaturalLanguageQuery(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'pattern-recognition': {
+        const options = args as any;
+        const result = await runPatternRecognition(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'predictive-analytics': {
+        const options = args as any;
+        const result = await runPredictiveAnalytics(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'recommendation-engine': {
+        const options = args as any;
+        const result = await runRecommendationEngine(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart-summarization': {
+        const options = args as any;
+        const result = await runSmartSummarization(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
