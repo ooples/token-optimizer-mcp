@@ -1,5 +1,5 @@
 /**
- * Smart Workflow Tool - 83% Token Reduction
+ * Smart Workflow Tool
  *
  * Provides intelligent CI/CD workflow file analysis:
  * - GitHub Actions (.github/workflows/*.yml)
@@ -59,7 +59,7 @@ export interface WorkflowJob {
   'runs-on'?: string | string[];
   steps: WorkflowStep[];
   env?: Record<string, string>;
-  needs?: string[];
+  needs?: string | string[];
   outputs?: Record<string, string>;
   if?: string;
   strategy?: { matrix?: Record<string, unknown> };
@@ -122,13 +122,6 @@ export class SmartWorkflowTool {
   private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
 
-  // Secret detection patterns used in security analysis
-  private static readonly SECRET_PATTERNS = {
-    password: /password\s*=\s*["'](?!\s*\${{).*?["']/i,
-    apiKey: /api[_-]?key\s*=\s*["'](?!\s*\${{).*?["']/i,
-    token: /token\s*=\s*["'](?!\s*\${{).*?["']/i,
-  };
-
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
@@ -146,7 +139,7 @@ export class SmartWorkflowTool {
     const startTime = Date.now();
     const {
       enableCache = true,
-      ttl = 86400,
+
       format = 'auto',
       validateSyntax = true,
       includeSecurityAnalysis = true,
@@ -240,19 +233,19 @@ export class SmartWorkflowTool {
     };
 
     if (enableCache) {
-      const compressResult = compress(JSON.stringify(result), 'gzip');
+      const resultStr = JSON.stringify(result);
+      const compressResult = compress(resultStr, 'gzip');
+      const compressedBase64 = compressResult.compressed.toString('base64');
       this.cache.set(
         cacheKey,
-        compressResult.compressed.toString('base64'),
-        result.metadata.tokensSaved,
-        ttl
+        compressedBase64,
+        Buffer.byteLength(resultStr, 'utf-8'),
+        Buffer.byteLength(compressedBase64, 'utf-8')
       );
-      const uncompressedJson = JSON.stringify(result);
-      const uncompressedTokens =
-        this.tokenCounter.count(uncompressedJson).tokens;
-      result.metadata.tokenCount = uncompressedTokens;
-      result.metadata.tokensSaved = originalTokens - uncompressedTokens;
-      result.metadata.compressionRatio = uncompressedTokens / originalTokens;
+      const compressedTokens = this.tokenCounter.count(compressedBase64).tokens;
+      result.metadata.tokenCount = compressedTokens;
+      result.metadata.tokensSaved = originalTokens - compressedTokens;
+      result.metadata.compressionRatio = compressedTokens / originalTokens;
     }
 
     this.metrics.record({
@@ -322,46 +315,70 @@ export class SmartWorkflowTool {
   visualize(parsedWorkflow: ParsedWorkflow): Record<string, string[]> {
     const graph: Record<string, string[]> = {};
     for (const job of parsedWorkflow.jobs) {
-      graph[job.id] = job.needs || [];
+      const rawNeeds = job.needs || job.requires;
+      const needs = rawNeeds
+        ? Array.isArray(rawNeeds)
+          ? rawNeeds
+          : [rawNeeds]
+        : [];
+      graph[job.id] = needs;
     }
     return graph;
   }
 
   getSecrets(parsedWorkflow: ParsedWorkflow): string[] {
     const secrets = new Set<string>();
-    const SECRET_PATTERN = /${{\s*secrets\.(\w+)\s*\}\}/g;
-
-    const extractSecretsFromString = (value: string): void => {
-      const matches = value.match(SECRET_PATTERN);
-      if (matches) {
-        for (const match of matches) {
-          const secretName = match.replace(/${{\s*secrets\.|[}\s]/g, '');
-          secrets.add(secretName);
-        }
-      }
-    };
-
     for (const job of parsedWorkflow.jobs) {
       if (job.env) {
         for (const value of Object.values(job.env)) {
-          extractSecretsFromString(value);
+          const matches = value.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+          if (matches) {
+            for (const match of matches) {
+              const secretName = match.replace(/\$\{\{\s*secrets\.|[}\s]/g, '');
+              secrets.add(secretName);
+            }
+          }
         }
       }
       for (const step of job.steps) {
         if (step.with) {
           for (const value of Object.values(step.with)) {
             if (typeof value === 'string') {
-              extractSecretsFromString(value);
+              const matches = value.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+              if (matches) {
+                for (const match of matches) {
+                  const secretName = match.replace(
+                    /\$\{\{\s*secrets\.|[}\s]/g,
+                    ''
+                  );
+                  secrets.add(secretName);
+                }
+              }
             }
           }
         }
         if (step.env) {
           for (const value of Object.values(step.env)) {
-            extractSecretsFromString(value);
+            const matches = value.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+            if (matches) {
+              for (const match of matches) {
+                const secretName = match.replace(
+                  /\$\{\{\s*secrets\.|[}\s]/g,
+                  ''
+                );
+                secrets.add(secretName);
+              }
+            }
           }
         }
         if (step.run) {
-          extractSecretsFromString(step.run);
+          const matches = step.run.match(/\$\{\{\s*secrets\.(\w+)\s*\}\}/g);
+          if (matches) {
+            for (const match of matches) {
+              const secretName = match.replace(/\$\{\{\s*secrets\.|[}\s]/g, '');
+              secrets.add(secretName);
+            }
+          }
         }
       }
     }
@@ -474,17 +491,13 @@ export class SmartWorkflowTool {
         });
       }
       if (job.needs) {
-        const needsArr = Array.isArray(job.needs)
-          ? job.needs
-          : job.needs
-            ? [job.needs]
-            : [];
+        const needsArr = Array.isArray(job.needs) ? job.needs : [job.needs];
         if (needsArr.includes(job.id)) {
           errors.push({
-          path: `jobs.${job.id}.needs`,
-          message: `Job "${job.id}" cannot depend on itself`,
-          severity: 'error',
-          suggestion: 'Remove self-reference from needs array',
+            path: `jobs.${job.id}.needs`,
+            message: `Job "${job.id}" cannot depend on itself`,
+            severity: 'error',
+            suggestion: 'Remove self-reference from needs array',
           });
         }
       }
@@ -500,9 +513,9 @@ export class SmartWorkflowTool {
       for (const step of job.steps) {
         if (step.run) {
           const suspiciousPatterns = [
-            SmartWorkflowTool.SECRET_PATTERNS.password,
-            SmartWorkflowTool.SECRET_PATTERNS.apiKey,
-            SmartWorkflowTool.SECRET_PATTERNS.token,
+            /password\s*=\s*["'](?!\\$\{).*["']/i,
+            /api[_-]?key\s*=\s*["'](?!\\$\{).*["']/i,
+            /token\s*=\s*["'](?!\\$\{).*["']/i,
           ];
           for (const pattern of suspiciousPatterns) {
             if (pattern.test(step.run)) {
@@ -564,7 +577,7 @@ export class SmartWorkflowTool {
       });
     }
     const independentJobs = workflow.jobs.filter(
-      (j) => !j.needs || j.needs.length === 0
+      (j) => !j.needs || (Array.isArray(j.needs) ? j.needs.length === 0 : false)
     );
     if (independentJobs.length > 1) {
       recommendations.push({

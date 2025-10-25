@@ -1,6 +1,6 @@
 {
   "name": "token-optimizer-mcp",
-  "version": "2.4.0",
+  "version": "2.12.0",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
   "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
   "main": "dist/server/index.js",
@@ -121,6 +121,7 @@
     "better-sqlite3": "^12.4.1",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "glob": "^11.0.3",
     "lru-cache": "^11.2.2",
     "tiktoken": "^1.0.22"
   }

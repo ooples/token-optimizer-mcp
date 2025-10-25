@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Dependencies Tool - 83% Token Reduction
  *
  * Achieves token reduction through:
@@ -16,7 +16,8 @@
 import { readFileSync, existsSync } from 'fs';
 import { parse as parseTypescript } from '@typescript-eslint/typescript-estree';
 import { parse as parseBabel } from '@babel/parser';
-import { globSync } from 'glob';
+import pkg from 'glob';
+const { globSync } = pkg;
 import { relative, resolve, dirname, extname, join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -146,6 +147,16 @@ export class SmartDependenciesTool {
 
   /**
    * Main entry point for dependency analysis
+   * Alias for analyze() to maintain API consistency with other tools
+   */
+  async run(
+    options: SmartDependenciesOptions = {}
+  ): Promise<SmartDependenciesResult> {
+    return this.analyze(options);
+  }
+
+  /**
+   * Core dependency analysis implementation
    */
   async analyze(
     options: SmartDependenciesOptions = {}

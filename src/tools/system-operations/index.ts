@@ -28,14 +28,6 @@ export {
   type DependencyGraph,
 } from './smart-service.js';
 
-export {
-  SmartCleanup,
-  runSmartCleanup,
-  SMART_CLEANUP_TOOL_DEFINITION,
-  type SmartCleanupOptions,
-  type CleanupResult,
-  type CleanableFile,
-} from './smart-cleanup.js';
 
 // SmartNetwork - Implementation pending
 // SmartMetrics - Implementation pending

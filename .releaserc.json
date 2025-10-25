@@ -1,5 +1,7 @@
 {
-  "branches": ["master"],
+  "branches": [
+    "master"
+  ],
   "repositoryUrl": "https://github.com/ooples/token-optimizer-mcp",
   "tagFormat": "v${version}",
   "plugins": [
@@ -8,21 +10,61 @@
       {
         "preset": "conventionalcommits",
         "releaseRules": [
-          { "type": "feat", "release": "minor" },
-          { "type": "fix", "release": "patch" },
-          { "type": "perf", "release": "patch" },
-          { "type": "revert", "release": "patch" },
-          { "type": "docs", "release": false },
-          { "type": "style", "release": false },
-          { "type": "chore", "release": false },
-          { "type": "refactor", "release": "patch" },
-          { "type": "test", "release": false },
-          { "type": "build", "release": false },
-          { "type": "ci", "release": false },
-          { "breaking": true, "release": "major" }
+          {
+            "type": "feat",
+            "release": "minor"
+          },
+          {
+            "type": "fix",
+            "release": "patch"
+          },
+          {
+            "type": "perf",
+            "release": "patch"
+          },
+          {
+            "type": "revert",
+            "release": "patch"
+          },
+          {
+            "type": "docs",
+            "release": false
+          },
+          {
+            "type": "style",
+            "release": false
+          },
+          {
+            "type": "chore",
+            "release": false
+          },
+          {
+            "type": "refactor",
+            "release": "patch"
+          },
+          {
+            "type": "test",
+            "release": false
+          },
+          {
+            "type": "build",
+            "release": false
+          },
+          {
+            "type": "ci",
+            "release": false
+          },
+          {
+            "breaking": true,
+            "release": "major"
+          }
         ],
         "parserOpts": {
-          "noteKeywords": ["BREAKING CHANGE", "BREAKING CHANGES", "BREAKING"]
+          "noteKeywords": [
+            "BREAKING CHANGE",
+            "BREAKING CHANGES",
+            "BREAKING"
+          ]
         }
       }
     ],
@@ -32,17 +74,61 @@
         "preset": "conventionalcommits",
         "presetConfig": {
           "types": [
-            { "type": "feat", "section": "Features", "hidden": false },
-            { "type": "fix", "section": "Bug Fixes", "hidden": false },
-            { "type": "perf", "section": "Performance Improvements", "hidden": false },
-            { "type": "revert", "section": "Reverts", "hidden": false },
-            { "type": "docs", "section": "Documentation", "hidden": false },
-            { "type": "style", "section": "Styles", "hidden": true },
-            { "type": "chore", "section": "Miscellaneous Chores", "hidden": true },
-            { "type": "refactor", "section": "Code Refactoring", "hidden": false },
-            { "type": "test", "section": "Tests", "hidden": true },
-            { "type": "build", "section": "Build System", "hidden": true },
-            { "type": "ci", "section": "Continuous Integration", "hidden": true }
+            {
+              "type": "feat",
+              "section": "Features",
+              "hidden": false
+            },
+            {
+              "type": "fix",
+              "section": "Bug Fixes",
+              "hidden": false
+            },
+            {
+              "type": "perf",
+              "section": "Performance Improvements",
+              "hidden": false
+            },
+            {
+              "type": "revert",
+              "section": "Reverts",
+              "hidden": false
+            },
+            {
+              "type": "docs",
+              "section": "Documentation",
+              "hidden": false
+            },
+            {
+              "type": "style",
+              "section": "Styles",
+              "hidden": true
+            },
+            {
+              "type": "chore",
+              "section": "Miscellaneous Chores",
+              "hidden": true
+            },
+            {
+              "type": "refactor",
+              "section": "Code Refactoring",
+              "hidden": false
+            },
+            {
+              "type": "test",
+              "section": "Tests",
+              "hidden": true
+            },
+            {
+              "type": "build",
+              "section": "Build System",
+              "hidden": true
+            },
+            {
+              "type": "ci",
+              "section": "Continuous Integration",
+              "hidden": true
+            }
           ]
         }
       }
@@ -56,17 +142,18 @@
     [
       "@semantic-release/github",
       {
-        "assets": [
-          { "path": "dist/**", "label": "Distribution files" }
-        ],
+        "assets": [],
         "draftRelease": false,
         "successComment": "This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version}. :tada:\n\nThe release is available on:\n- [GitHub release](${releaseUrl})\n- [npm package (@latest dist-tag)](https://www.npmjs.com/package/token-optimizer-mcp/v/${nextRelease.version})\n\nYour **semantic-release** bot :package::rocket:",
         "failComment": false,
         "failTitle": false,
-        "labels": ["released"],
-        "releasedLabels": ["released<%= nextRelease.channel ? `-${nextRelease.channel}` : '' %>"]
+        "labels": [
+          "released"
+        ],
+        "releasedLabels": [
+          "released<%= nextRelease.channel ? `-${nextRelease.channel}` : '' %>"
+        ]
       }
     ]
   ]
 }
-
