@@ -311,22 +311,27 @@ configure_workspace_trust() {
 }
 
 configure_mcp_server() {
-    write_status "Configuring MCP server..." "INFO"
-
-    # Create MCP config directory
-    mkdir -p "$(dirname "$MCP_CONFIG")"
+    write_status "Detecting installed AI tools and configuring MCP server..." "INFO"
 
     local mcp_path="$MCP_GLOBAL_PATH/dist/index.js"
+    local tools_configured=0
 
-    local mcp_settings=$(cat <<EOF
+    # Helper function to configure a tool
+    configure_tool() {
+        local config_file="$1"
+        local tool_name="$2"
+
+        if [[ -f "$config_file" ]] || [[ "$tool_name" == "Claude Desktop" ]]; then
+            # Create directory if needed
+            mkdir -p "$(dirname "$config_file")"
+
+            local mcp_entry=$(cat <<EOF
 {
   "mcpServers": {
     "token-optimizer": {
       "type": "stdio",
       "command": "node",
-      "args": [
-        "$mcp_path"
-      ],
+      "args": ["$mcp_path"],
       "env": {}
     }
   }
@@ -334,21 +339,63 @@ configure_mcp_server() {
 EOF
 )
 
-    if [[ "$DRY_RUN" == "true" ]]; then
-        write_status "[DRY RUN] Would configure MCP server in: $MCP_CONFIG" "INFO"
-        echo "$mcp_settings"
-        return
-    fi
+            if [[ "$DRY_RUN" == "true" ]]; then
+                write_status "[DRY RUN] Would configure $tool_name" "INFO"
+                return 0
+            fi
 
-    # Merge with existing config if it exists and jq is available
-    if [[ -f "$MCP_CONFIG" ]] && command -v jq &> /dev/null; then
-        local merged=$(jq -s '.[0] * .[1]' "$MCP_CONFIG" <(echo "$mcp_settings"))
-        echo "$merged" > "$MCP_CONFIG"
+            # Merge with existing config if jq is available
+            if [[ -f "$config_file" ]] && command -v jq &> /dev/null; then
+                local merged=$(jq -s '.[0] * .[1]' "$config_file" <(echo "$mcp_entry"))
+                echo "$merged" > "$config_file"
+            else
+                echo "$mcp_entry" > "$config_file"
+            fi
+
+            write_status "✓ Configured token-optimizer for $tool_name" "SUCCESS"
+            return 1
+        fi
+        return 0
+    }
+
+    # 1. Claude Desktop
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        claude_config="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
     else
-        echo "$mcp_settings" > "$MCP_CONFIG"
+        claude_config="$HOME/.config/Claude/claude_desktop_config.json"
     fi
+    configure_tool "$claude_config" "Claude Desktop" && ((tools_configured++)) || true
 
-    write_status "✓ Configured token-optimizer MCP server" "SUCCESS"
+    # 2. Cursor IDE
+    cursor_config="$HOME/.cursor/mcp.json"
+    configure_tool "$cursor_config" "Cursor IDE" && ((tools_configured++)) || true
+
+    # 3. Cline (VS Code)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        cline_config="$HOME/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/cline_mcp_settings.json"
+    else
+        cline_config="$HOME/.config/Code/User/globalStorage/saoudrizwan.claude-dev/cline_mcp_settings.json"
+    fi
+    configure_tool "$cline_config" "Cline (VS Code)" && ((tools_configured++)) || true
+
+    # 4. VS Code Copilot (workspace)
+    vscode_config=".vscode/mcp.json"
+    configure_tool "$vscode_config" "VS Code Copilot (workspace)" && ((tools_configured++)) || true
+
+    # 5. Windsurf IDE
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        windsurf_config="$HOME/Library/Application Support/Windsurf/mcp.json"
+    else
+        windsurf_config="$HOME/.config/Windsurf/mcp.json"
+    fi
+    configure_tool "$windsurf_config" "Windsurf IDE" && ((tools_configured++)) || true
+
+    if [[ $tools_configured -eq 0 ]]; then
+        write_status "No AI tools detected. MCP server not configured." "WARN"
+        write_status "Supported tools: Claude Desktop, Cursor IDE, Cline (VS Code), GitHub Copilot (VS Code), Windsurf" "INFO"
+    else
+        write_status "✓ Configured token-optimizer MCP server for $tools_configured AI tool(s)" "SUCCESS"
+    fi
 }
 
 test_installation() {
@@ -378,13 +425,61 @@ test_installation() {
         issues+=("Settings.json not found")
     fi
 
-    # Check MCP server configured
-    if [[ -f "$MCP_CONFIG" ]]; then
-        if ! grep -q '"token-optimizer"' "$MCP_CONFIG"; then
-            issues+=("token-optimizer MCP server not configured")
-        fi
+    # Check MCP server configured in at least one AI tool
+    local mcp_configured=false
+    local checked_configs=()
+
+    # Claude Desktop
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        claude_config="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
     else
-        issues+=("MCP config not found")
+        claude_config="$HOME/.config/Claude/claude_desktop_config.json"
+    fi
+    if [[ -f "$claude_config" ]] && grep -q '"token-optimizer"' "$claude_config"; then
+        mcp_configured=true
+        checked_configs+=("Claude Desktop")
+    fi
+
+    # Cursor IDE
+    cursor_config="$HOME/.cursor/mcp.json"
+    if [[ -f "$cursor_config" ]] && grep -q '"token-optimizer"' "$cursor_config"; then
+        mcp_configured=true
+        checked_configs+=("Cursor IDE")
+    fi
+
+    # Cline (VS Code)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        cline_config="$HOME/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/cline_mcp_settings.json"
+    else
+        cline_config="$HOME/.config/Code/User/globalStorage/saoudrizwan.claude-dev/cline_mcp_settings.json"
+    fi
+    if [[ -f "$cline_config" ]] && grep -q '"token-optimizer"' "$cline_config"; then
+        mcp_configured=true
+        checked_configs+=("Cline (VS Code)")
+    fi
+
+    # VS Code Copilot
+    vscode_config=".vscode/mcp.json"
+    if [[ -f "$vscode_config" ]] && grep -q '"token-optimizer"' "$vscode_config"; then
+        mcp_configured=true
+        checked_configs+=("VS Code Copilot")
+    fi
+
+    # Windsurf IDE
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        windsurf_config="$HOME/Library/Application Support/Windsurf/mcp.json"
+    else
+        windsurf_config="$HOME/.config/Windsurf/mcp.json"
+    fi
+    if [[ -f "$windsurf_config" ]] && grep -q '"token-optimizer"' "$windsurf_config"; then
+        mcp_configured=true
+        checked_configs+=("Windsurf IDE")
+    fi
+
+    if [[ "$mcp_configured" == "false" ]]; then
+        issues+=("token-optimizer MCP server not configured in any AI tool")
+    else
+        write_status "✓ MCP server configured in: ${checked_configs[*]}" "SUCCESS"
     fi
 
     if [[ ${#issues[@]} -gt 0 ]]; then

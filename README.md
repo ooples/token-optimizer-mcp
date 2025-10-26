@@ -15,6 +15,20 @@ Token Optimizer MCP is a Model Context Protocol (MCP) server that reduces contex
 - **Smart Analysis**: Analyze text to determine optimal caching strategy
 - **Zero External Dependencies**: Completely offline operation
 - **Production Ready**: Built with TypeScript for reliability
+- **Multi-Tool Support**: Auto-detects and configures ALL installed AI tools
+
+## Supported AI Tools
+
+The automated installer detects and configures token-optimizer-mcp for:
+
+- ✅ **Claude Code** - CLI with global hooks integration
+- ✅ **Claude Desktop** - Native desktop application
+- ✅ **Cursor IDE** - AI-first code editor
+- ✅ **Cline** - VS Code extension (formerly Claude Dev)
+- ✅ **GitHub Copilot** - VS Code with MCP support
+- ✅ **Windsurf IDE** - AI-powered development environment
+
+**No manual configuration needed** - the installer automatically detects which tools you have installed and configures them all!
 
 ## Implemented Features
 
@@ -68,11 +82,17 @@ curl -fsSL https://raw.githubusercontent.com/ooples/token-optimizer-mcp/main/ins
 This will:
 1. ✅ Install token-optimizer-mcp globally via npm
 2. ✅ Download and configure global Claude Code hooks
-3. ✅ Set up automatic token optimization on every tool call
-4. ✅ Configure workspace trust and execution permissions
-5. ✅ Verify the installation
+3. ✅ **Auto-detect and configure ALL installed AI tools:**
+   - Claude Desktop
+   - Cursor IDE
+   - Cline (VS Code extension)
+   - GitHub Copilot (VS Code)
+   - Windsurf IDE
+4. ✅ Set up automatic token optimization on every tool call
+5. ✅ Configure workspace trust and execution permissions
+6. ✅ Verify the installation
 
-**Token Reduction**: 60-90% average across all operations!
+**Token Reduction**: 60-90% average across all operations on **all supported AI tools**!
 
 ### Manual Installation
 

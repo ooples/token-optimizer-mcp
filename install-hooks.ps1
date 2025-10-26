@@ -253,41 +253,140 @@ function Configure-WorkspaceTrust {
 }
 
 function Configure-MCPServer {
-    Write-Status "Configuring MCP server..." "INFO"
+    Write-Status "Detecting installed AI tools and configuring MCP server..." "INFO"
 
-    if (-not (Test-Path $MCP_CONFIG)) {
-        Write-Status "Creating MCP server configuration..." "INFO"
-        $mcpSettings = @{
-            mcpServers = @{}
-        }
-    } else {
-        $mcpSettings = Get-Content $MCP_CONFIG -Raw | ConvertFrom-Json
-    }
-
-    # Add token-optimizer MCP server
     $mcpPath = "$env:APPDATA\npm\node_modules\@ooples\token-optimizer-mcp\dist\index.js"
-
-    $mcpSettings.mcpServers."token-optimizer" = @{
+    $mcpServerConfig = @{
         type = "stdio"
         command = "node"
         args = @($mcpPath)
         env = @{}
     }
 
-    if ($DryRun) {
-        Write-Status "[DRY RUN] Would configure MCP server in: $MCP_CONFIG" "INFO"
-        return
+    $toolsConfigured = 0
+
+    # 1. Claude Desktop
+    $claudeDesktopConfig = "$env:APPDATA\Claude\claude_desktop_config.json"
+    if (Test-Path $claudeDesktopConfig) {
+        try {
+            $settings = Get-Content $claudeDesktopConfig -Raw | ConvertFrom-Json
+            if (-not $settings.mcpServers) {
+                $settings | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue @{} -Force
+            }
+            $settings.mcpServers."token-optimizer" = $mcpServerConfig
+
+            if (-not $DryRun) {
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $claudeDesktopConfig -Encoding UTF8
+                Write-Status "✓ Configured token-optimizer for Claude Desktop" "SUCCESS"
+                $toolsConfigured++
+            } else {
+                Write-Status "[DRY RUN] Would configure Claude Desktop" "INFO"
+            }
+        } catch {
+            Write-Status "⚠ Failed to configure Claude Desktop: $($_.Exception.Message)" "WARN"
+        }
     }
 
-    # Ensure directory exists
-    $mcpDir = Split-Path $MCP_CONFIG
-    if (-not (Test-Path $mcpDir)) {
-        New-Item -ItemType Directory -Path $mcpDir -Force | Out-Null
+    # 2. Cursor IDE
+    $cursorConfig = "$env:USERPROFILE\.cursor\mcp.json"
+    if (Test-Path $cursorConfig) {
+        try {
+            $settings = Get-Content $cursorConfig -Raw | ConvertFrom-Json
+            if (-not $settings.mcpServers) {
+                $settings | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue @{} -Force
+            }
+            $settings.mcpServers."token-optimizer" = $mcpServerConfig
+
+            if (-not $DryRun) {
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $cursorConfig -Encoding UTF8
+                Write-Status "✓ Configured token-optimizer for Cursor IDE" "SUCCESS"
+                $toolsConfigured++
+            } else {
+                Write-Status "[DRY RUN] Would configure Cursor IDE" "INFO"
+            }
+        } catch {
+            Write-Status "⚠ Failed to configure Cursor IDE: $($_.Exception.Message)" "WARN"
+        }
     }
 
-    # Save MCP config
-    $mcpSettings | ConvertTo-Json -Depth 10 | Set-Content $MCP_CONFIG -Encoding UTF8
-    Write-Status "✓ Configured token-optimizer MCP server" "SUCCESS"
+    # 3. VS Code with Cline extension
+    $vscodeConfigDir = "$env:APPDATA\Code\User\globalStorage\saoudrizwan.claude-dev"
+    if (Test-Path $vscodeConfigDir) {
+        $clineConfig = "$vscodeConfigDir\cline_mcp_settings.json"
+        try {
+            if (Test-Path $clineConfig) {
+                $settings = Get-Content $clineConfig -Raw | ConvertFrom-Json
+            } else {
+                $settings = @{ mcpServers = @{} }
+            }
+
+            if (-not $settings.mcpServers) {
+                $settings | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue @{} -Force
+            }
+            $settings.mcpServers."token-optimizer" = $mcpServerConfig
+
+            if (-not $DryRun) {
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $clineConfig -Encoding UTF8
+                Write-Status "✓ Configured token-optimizer for Cline (VS Code)" "SUCCESS"
+                $toolsConfigured++
+            } else {
+                Write-Status "[DRY RUN] Would configure Cline (VS Code)" "INFO"
+            }
+        } catch {
+            Write-Status "⚠ Failed to configure Cline: $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    # 4. VS Code with GitHub Copilot
+    $vscodeWorkspaceConfig = ".vscode\mcp.json"
+    if (Test-Path $vscodeWorkspaceConfig) {
+        try {
+            $settings = Get-Content $vscodeWorkspaceConfig -Raw | ConvertFrom-Json
+            if (-not $settings.mcpServers) {
+                $settings | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue @{} -Force
+            }
+            $settings.mcpServers."token-optimizer" = $mcpServerConfig
+
+            if (-not $DryRun) {
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $vscodeWorkspaceConfig -Encoding UTF8
+                Write-Status "✓ Configured token-optimizer for VS Code Copilot (workspace)" "SUCCESS"
+                $toolsConfigured++
+            } else {
+                Write-Status "[DRY RUN] Would configure VS Code Copilot" "INFO"
+            }
+        } catch {
+            Write-Status "⚠ Failed to configure VS Code Copilot: $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    # 5. Windsurf IDE
+    $windsurfConfig = "$env:APPDATA\Windsurf\mcp.json"
+    if (Test-Path $windsurfConfig) {
+        try {
+            $settings = Get-Content $windsurfConfig -Raw | ConvertFrom-Json
+            if (-not $settings.mcpServers) {
+                $settings | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue @{} -Force
+            }
+            $settings.mcpServers."token-optimizer" = $mcpServerConfig
+
+            if (-not $DryRun) {
+                $settings | ConvertTo-Json -Depth 10 | Set-Content $windsurfConfig -Encoding UTF8
+                Write-Status "✓ Configured token-optimizer for Windsurf IDE" "SUCCESS"
+                $toolsConfigured++
+            } else {
+                Write-Status "[DRY RUN] Would configure Windsurf IDE" "INFO"
+            }
+        } catch {
+            Write-Status "⚠ Failed to configure Windsurf IDE: $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    if ($toolsConfigured -eq 0) {
+        Write-Status "No AI tools detected. MCP server not configured." "WARN"
+        Write-Status "Supported tools: Claude Desktop, Cursor IDE, Cline (VS Code), GitHub Copilot (VS Code), Windsurf" "INFO"
+    } else {
+        Write-Status "✓ Configured token-optimizer MCP server for $toolsConfigured AI tool(s)" "SUCCESS"
+    }
 }
 
 function Test-Installation {
@@ -318,14 +417,64 @@ function Test-Installation {
         $issues += "Settings.json not found"
     }
 
-    # Check MCP server configured
-    if (Test-Path $MCP_CONFIG) {
-        $mcpSettings = Get-Content $MCP_CONFIG -Raw | ConvertFrom-Json
-        if (-not $mcpSettings.mcpServers."token-optimizer") {
-            $issues += "token-optimizer MCP server not configured"
+    # Check MCP server configured in at least one AI tool
+    $mcpConfigured = $false
+    $checkedConfigs = @()
+
+    # Claude Desktop
+    $claudeDesktopConfig = "$env:APPDATA\Claude\claude_desktop_config.json"
+    if (Test-Path $claudeDesktopConfig) {
+        $settings = Get-Content $claudeDesktopConfig -Raw | ConvertFrom-Json
+        if ($settings.mcpServers."token-optimizer") {
+            $mcpConfigured = $true
+            $checkedConfigs += "Claude Desktop"
         }
+    }
+
+    # Cursor IDE
+    $cursorConfig = "$env:USERPROFILE\.cursor\mcp.json"
+    if (Test-Path $cursorConfig) {
+        $settings = Get-Content $cursorConfig -Raw | ConvertFrom-Json
+        if ($settings.mcpServers."token-optimizer") {
+            $mcpConfigured = $true
+            $checkedConfigs += "Cursor IDE"
+        }
+    }
+
+    # Cline (VS Code)
+    $clineConfig = "$env:APPDATA\Code\User\globalStorage\saoudrizwan.claude-dev\cline_mcp_settings.json"
+    if (Test-Path $clineConfig) {
+        $settings = Get-Content $clineConfig -Raw | ConvertFrom-Json
+        if ($settings.mcpServers."token-optimizer") {
+            $mcpConfigured = $true
+            $checkedConfigs += "Cline (VS Code)"
+        }
+    }
+
+    # VS Code Copilot
+    $vscodeConfig = ".vscode\mcp.json"
+    if (Test-Path $vscodeConfig) {
+        $settings = Get-Content $vscodeConfig -Raw | ConvertFrom-Json
+        if ($settings.mcpServers."token-optimizer") {
+            $mcpConfigured = $true
+            $checkedConfigs += "VS Code Copilot"
+        }
+    }
+
+    # Windsurf IDE
+    $windsurfConfig = "$env:APPDATA\Windsurf\mcp.json"
+    if (Test-Path $windsurfConfig) {
+        $settings = Get-Content $windsurfConfig -Raw | ConvertFrom-Json
+        if ($settings.mcpServers."token-optimizer") {
+            $mcpConfigured = $true
+            $checkedConfigs += "Windsurf IDE"
+        }
+    }
+
+    if (-not $mcpConfigured) {
+        $issues += "token-optimizer MCP server not configured in any AI tool"
     } else {
-        $issues += "MCP config not found"
+        Write-Status "✓ MCP server configured in: $($checkedConfigs -join ', ')" "SUCCESS"
     }
 
     if ($issues.Count -gt 0) {

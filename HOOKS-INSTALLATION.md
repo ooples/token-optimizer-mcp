@@ -2,6 +2,19 @@
 
 This guide explains how to install and configure the global Claude Code hooks system that integrates with token-optimizer-mcp for automatic token optimization.
 
+## Supported AI Tools
+
+The automated installers detect and configure token-optimizer-mcp for **ALL** installed AI tools:
+
+- ✅ **Claude Code** - CLI with global hooks integration (7-phase optimization)
+- ✅ **Claude Desktop** - Native desktop application (MCP server only)
+- ✅ **Cursor IDE** - AI-first code editor (MCP server only)
+- ✅ **Cline** - VS Code extension (MCP server only)
+- ✅ **GitHub Copilot** - VS Code with MCP support (MCP server only)
+- ✅ **Windsurf IDE** - AI-powered development environment (MCP server only)
+
+**Note**: Only Claude Code supports the global hooks system. Other tools use the MCP server directly without hooks.
+
 ## Overview
 
 The global hooks system provides **7-phase token optimization** that runs automatically on every tool call:
