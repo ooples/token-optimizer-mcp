@@ -28,7 +28,6 @@ export {
   type DependencyGraph,
 } from './smart-service.js';
 
-
 // SmartNetwork - Implementation pending
 // SmartMetrics - Implementation pending
 // Note: Exports temporarily removed until implementation is complete

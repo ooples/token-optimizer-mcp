@@ -2006,7 +2006,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-
       case 'intelligent-assistant': {
         const options = args as any;
         const result = await runIntelligentAssistant(options);
