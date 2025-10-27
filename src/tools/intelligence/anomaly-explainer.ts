@@ -16,6 +16,11 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
+import {
+  sharedCache,
+  sharedTokenCounter,
+  sharedMetricsCollector,
+} from './shared-instances.js';
 
 /**
  * Note on removed code: A _calculateAnomalyScore method using Z-score and IQR
@@ -1707,10 +1712,10 @@ export const ANOMALYEXPLAINERTOOL = {
 export async function runAnomalyExplainer(
   options: AnomalyExplainerOptions
 ): Promise<AnomalyExplainerResult> {
-  const cache = new CacheEngine();
-  const tokenCounter = new TokenCounter();
-  const metricsCollector = new MetricsCollector();
-
-  const tool = new AnomalyExplainer(cache, tokenCounter, metricsCollector);
+  const tool = new AnomalyExplainer(
+    sharedCache,
+    sharedTokenCounter,
+    sharedMetricsCollector
+  );
   return await tool.run(options);
 }

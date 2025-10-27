@@ -97,7 +97,8 @@ export class RecommendationEngine {
     };
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
+    const ttl = options.cacheTTL || 3600; // Default 1 hour
+    this.cache.set(cacheKey, dataStr, dataStr.length, ttl);
     this.metricsCollector.record({
       operation: `recommendation-engine:${options.operation}`,
       duration: Date.now() - startTime,

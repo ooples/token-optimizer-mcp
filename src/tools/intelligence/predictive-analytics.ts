@@ -97,7 +97,8 @@ export class PredictiveAnalytics {
     };
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
+    const ttl = options.cacheTTL || 3600; // Default 1 hour
+    this.cache.set(cacheKey, dataStr, dataStr.length, ttl);
     this.metricsCollector.record({
       operation: `predictive-analytics:${options.operation}`,
       duration: Date.now() - startTime,
