@@ -97,8 +97,7 @@ export class NaturalLanguageQuery {
     };
     const tokensUsed = this.tokenCounter.count(JSON.stringify(data)).tokens;
     const dataStr = JSON.stringify(data);
-    const ttl = options.cacheTTL || 3600; // Default 1 hour
-    this.cache.set(cacheKey, dataStr, dataStr.length, ttl);
+    this.cache.set(cacheKey, dataStr, dataStr.length, dataStr.length);
     this.metricsCollector.record({
       operation: `natural-language-query:${options.operation}`,
       duration: Date.now() - startTime,
