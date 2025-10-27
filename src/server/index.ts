@@ -226,6 +226,26 @@ import {
   getSmartLogTool,
   SMART_LOG_TOOL_DEFINITION,
 } from '../tools/file-operations/smart-log.js';
+import {
+  runSmartRead,
+  SMART_READ_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-read.js';
+import {
+  runSmartWrite,
+  SMART_WRITE_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-write.js';
+import {
+  runSmartEdit,
+  SMART_EDIT_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-edit.js';
+import {
+  runSmartGlob,
+  SMART_GLOB_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-glob.js';
+import {
+  runSmartGrep,
+  SMART_GREP_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-grep.js';
 import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
 import path from 'path';
@@ -596,6 +616,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       SMART_MERGE_TOOL_DEFINITION,
       SMART_STATUS_TOOL_DEFINITION,
       SMART_LOG_TOOL_DEFINITION,
+      SMART_READ_TOOL_DEFINITION,
+      SMART_WRITE_TOOL_DEFINITION,
+      SMART_EDIT_TOOL_DEFINITION,
+      SMART_GLOB_TOOL_DEFINITION,
+      SMART_GREP_TOOL_DEFINITION,
     ],
   };
 });
@@ -1815,6 +1840,71 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_log': {
         const options = args as SmartLogOptions;
         const result = await smartLog.log(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_read': {
+        const { path, ...options } = args as any;
+        const result = await runSmartRead(path, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_write': {
+        const { path, content, ...options } = args as any;
+        const result = await runSmartWrite(path, content, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_edit': {
+        const { path, operations, ...options } = args as any;
+        const result = await runSmartEdit(path, operations, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_glob': {
+        const { pattern, ...options } = args as any;
+        const result = await runSmartGlob(pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_grep': {
+        const { pattern, ...options } = args as any;
+        const result = await runSmartGrep(pattern, options);
         return {
           content: [
             {
