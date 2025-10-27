@@ -138,6 +138,13 @@ function Install-HooksFiles {
 function Configure-ClaudeSettings {
     Write-Status "Configuring Claude Code settings..." "INFO"
 
+    # Ensure settings directory exists
+    $settingsDir = Split-Path $CLAUDE_SETTINGS
+    if (-not (Test-Path $settingsDir)) {
+        New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+        Write-Status "✓ Created settings directory: $settingsDir" "SUCCESS"
+    }
+
     # Backup existing settings
     if (Test-Path $CLAUDE_SETTINGS) {
         $backup = "$CLAUDE_SETTINGS.backup.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
@@ -541,7 +548,7 @@ try {
             Write-Status "2. Run any command (e.g., claude 'help')" "INFO"
             Write-Status "3. Check logs: Get-Content '$HOOKS_DIR\logs\dispatcher.log' -Tail 20" "INFO"
             Write-Host ""
-            Write-Status "Documentation: $env:USERPROFILE\source\repos\token-optimizer-mcp\HOOKS-INSTALLATION.md" "INFO"
+            Write-Status "Documentation: https://github.com/ooples/token-optimizer-mcp/blob/main/HOOKS-INSTALLATION.md" "INFO"
         } else {
             throw "Installation verification failed"
         }

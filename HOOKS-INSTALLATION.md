@@ -33,7 +33,7 @@ The global hooks system provides **7-phase token optimization** that runs automa
 
 ### All Platforms
 - **Claude Code** CLI installed globally
-- **Node.js** 20+ and npm
+- **Node.js** 18+ and npm
 - **token-optimizer-mcp** package (will be installed by installer)
 
 ### Platform-Specific
@@ -146,7 +146,7 @@ Edit `$env:APPDATA\Claude\claude_desktop_config.json`:
       "type": "stdio",
       "command": "node",
       "args": [
-        "C:\\Users\\YOUR_USERNAME\\AppData\\Roaming\\npm\\node_modules\\@ooples\\token-optimizer-mcp\\dist\\index.js"
+        "C:\\Users\\YOUR_USERNAME\\AppData\\Roaming\\npm\\node_modules\\@ooples\\token-optimizer-mcp\\dist\\server\\index.js"
       ],
       "env": {}
     }
@@ -266,7 +266,7 @@ cat > "$HOME/Library/Application Support/Claude/claude_desktop_config.json" <<EO
       "type": "stdio",
       "command": "node",
       "args": [
-        "$NPM_PREFIX/lib/node_modules/@ooples/token-optimizer-mcp/dist/index.js"
+        "$NPM_PREFIX/lib/node_modules/@ooples/token-optimizer-mcp/dist/server/index.js"
       ],
       "env": {}
     }
@@ -394,7 +394,7 @@ cat > "$HOME/.config/Claude/claude_desktop_config.json" <<EOF
       "type": "stdio",
       "command": "node",
       "args": [
-        "$NPM_PREFIX/lib/node_modules/@ooples/token-optimizer-mcp/dist/index.js"
+        "$NPM_PREFIX/lib/node_modules/@ooples/token-optimizer-mcp/dist/server/index.js"
       ],
       "env": {}
     }

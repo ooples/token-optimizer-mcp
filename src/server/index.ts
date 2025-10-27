@@ -1851,8 +1851,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_read': {
-        const { filePath, ...options } = args as any;
-        const result = await runSmartRead(filePath, options);
+        const { path, ...options } = args as any;
+        const result = await runSmartRead(path, options);
         return {
           content: [
             {
@@ -1864,8 +1864,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_write': {
-        const { filePath, content, ...options } = args as any;
-        const result = await runSmartWrite(filePath, content, options);
+        const { path, content, ...options } = args as any;
+        const result = await runSmartWrite(path, content, options);
         return {
           content: [
             {
@@ -1877,8 +1877,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'smart_edit': {
-        const { filePath, edits, ...options } = args as any;
-        const result = await runSmartEdit(filePath, edits, options);
+        const { path, operations, ...options } = args as any;
+        const result = await runSmartEdit(path, operations, options);
         return {
           content: [
             {

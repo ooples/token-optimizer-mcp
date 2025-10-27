@@ -372,7 +372,7 @@ npm test
 npm run benchmark
 ```
 
-## How It Works
+## Core Compression & Caching Mechanism
 
 1. **Compression**: Uses Brotli compression (quality 11) to reduce text size
 2. **Token Counting**: Uses tiktoken with GPT-4 tokenizer for accurate counts

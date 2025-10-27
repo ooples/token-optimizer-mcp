@@ -183,7 +183,7 @@ install_hooks_files() {
             local npm_hooks="$MCP_GLOBAL_PATH/hooks"
             if [[ -d "$npm_hooks" ]]; then
                 cp -r "$npm_hooks"/* "$HOOKS_DIR/"
-                chmod +x "$HOOKS_DIR"/*.sh
+                find "$HOOKS_DIR" -type f -name "*.sh" -print0 | xargs -0 chmod +x
                 write_status "✓ Copied hooks from npm package" "SUCCESS"
             else
                 echo "Could not download hooks and npm package not found"
