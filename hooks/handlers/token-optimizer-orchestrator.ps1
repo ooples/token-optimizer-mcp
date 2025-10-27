@@ -15,7 +15,8 @@ $OPERATIONS_DIR = "C:\Users\cheat\.claude-global\hooks\data"
 
 # PERFORMANCE FIX: Prefer local dev path if not already set
 if (-not $env:TOKEN_OPTIMIZER_DEV_PATH) {
-  $env:TOKEN_OPTIMIZER_DEV_PATH = "C:\Users\cheat\source\repos\token-optimizer-mcp"
+  $home = $env:USERPROFILE; if (-not $home) { $home = (Get-Item "~").FullName }
+  $env:TOKEN_OPTIMIZER_DEV_PATH = (Join-Path $home "source\repos\token-optimizer-mcp")
 }
 
 # Token budget configuration
@@ -214,7 +215,19 @@ function Handle-ContextGuard {
                 $session.lastOptimized = $session.totalOperations
                 $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
             } else {
-                # BLOCK operation if optimization failed - return 2 to signal blocking
+                # BLOCK with standard response so dispatcher exits with 2
+                $blockResponse = @{
+                    continue = $false
+                    stopReason = "context guard block"
+                    hookSpecificOutput = @{
+                        hookEventName = "PreToolUse"
+                        reason = "optimize_session failed at FORCE_THRESHOLD"
+                        sessionId = $session.sessionId
+                        usagePercent = [Math]::Round($percentage * 100, 1)
+                    }
+                } | ConvertTo-Json -Depth 10 -Compress
+                Write-Output $blockResponse
+                [Console]::Out.Flush(); [Console]::Error.Flush()
                 return 2
             }
 
@@ -1167,14 +1180,20 @@ function Handle-PreToolUseOptimization {
                 $cachedData = $cachedResult | ConvertFrom-Json
                 if ($cachedData -and $cachedData.content) {
                     Write-Log "Cache HIT for $toolName - avoiding redundant tool call" "INFO"
-                    # Output cached result so tool execution can be skipped
-                    $result = @{
-                        cached = $true
-                        toolName = $toolName
-                        cachedOutput = $cachedData.content[0].text
+                    # Return standard block response so dispatcher can exit 2
+                    $blockResponse = @{
+                        continue = $false
+                        stopReason = "cache hit"
+                        hookSpecificOutput = @{
+                            hookEventName = "PreToolUse"
+                            cached = $true
+                            toolName = $toolName
+                            cachedOutput = $cachedData.content[0].text
+                        }
                     } | ConvertTo-Json -Depth 10 -Compress
-                    Write-Output $result
-                    return
+                    Write-Output $blockResponse
+                    [Console]::Out.Flush(); [Console]::Error.Flush()
+                    return 2
                 }
             }
         } catch {
@@ -1234,7 +1253,9 @@ function Handle-PreToolUseOptimization {
 
     } catch {
         Write-Log "PreToolUse optimization failed: $($_.Exception.Message)" "ERROR"
+        return 1
     }
+    return 0
 }
 
 function Handle-OptimizeToolOutput {

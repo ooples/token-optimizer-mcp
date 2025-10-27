@@ -10,7 +10,8 @@ $ORCHESTRATOR = "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
 
 # PERFORMANCE FIX: Prefer local dev path if not already set
 if (-not $env:TOKEN_OPTIMIZER_DEV_PATH) {
-  $env:TOKEN_OPTIMIZER_DEV_PATH = "C:\Users\cheat\source\repos\token-optimizer-mcp"
+  $home = $env:USERPROFILE; if (-not $home) { $home = (Get-Item "~").FullName }
+  $env:TOKEN_OPTIMIZER_DEV_PATH = (Join-Path $home "source\repos\token-optimizer-mcp")
 }
 
 # CRITICAL PERFORMANCE FIX: Dot-source orchestrator to avoid creating new PowerShell process for every action
@@ -55,8 +56,9 @@ try {
     try { [Console]::InputEncoding = [System.Text.Encoding]::UTF8 } catch {}
     $input_json = [Console]::In.ReadToEnd()
 
-    # DEBUG: Log raw JSON to see what we're receiving
-    "[DEBUG] [$timestamp] RAW JSON: $($input_json.Substring(0, [Math]::Min(200, $input_json.Length)))" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
+    # DEBUG: Log raw JSON to see what we're receiving (redact paths to prevent PII leakage)
+    $redactedJson = $input_json -replace '\\\\Users\\\\[^\\\\]+', '\\Users\***' -replace '/Users/[^/]+', '/Users/***'
+    "[DEBUG] [$timestamp] RAW JSON: $($redactedJson.Substring(0, [Math]::Min(200, $redactedJson.Length)))" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
 
     if (-not $input_json) {
         Write-Log "No JSON input"
@@ -143,7 +145,9 @@ try {
             }
 
             if ($isLocalOp) {
-                Write-Log "[ALLOW] Local git operation: $($data.tool_input.command)"
+                # Redact paths to prevent PII leakage
+                $redactedCmd = $data.tool_input.command -replace '\\Users\\[^\\]+', '\Users\***' -replace '/Users/[^/]+', '/Users/***'
+                Write-Log "[ALLOW] Local git operation: $redactedCmd"
                 exit 0
             }
 
@@ -163,9 +167,10 @@ try {
 
         # PHASE 3: Check cache, optimize inputs, avoid redundant tool calls
         $startTime = Get-Date
-        Handle-PreToolUseOptimization -InputJson $input_json
+        $preResult = Handle-PreToolUseOptimization -InputJson $input_json
         $duration = ((Get-Date) - $startTime).TotalMilliseconds
         Write-Log "[PERF] pretooluse-optimize took $([math]::Round($duration, 2))ms" "DEBUG"
+        if ($preResult -eq 2) { exit 2 }
 
         Write-Log "[ALLOW] $toolName"
         exit 0
