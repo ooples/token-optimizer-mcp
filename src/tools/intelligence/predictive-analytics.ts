@@ -55,7 +55,7 @@ export class PredictiveAnalytics {
     options: PredictiveAnalyticsOptions
   ): Promise<PredictiveAnalyticsResult> {
     const startTime = Date.now();
-    const cacheKey = generateCacheKey("predictive-analytics", {
+    const cacheKey = generateCacheKey('predictive-analytics', {
       op: options.operation,
       query: options.query,
       data: JSON.stringify(options.data || {}),
