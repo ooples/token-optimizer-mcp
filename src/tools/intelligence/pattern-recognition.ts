@@ -2,10 +2,15 @@
  * PatternRecognition Tool - 85%+ Token Reduction
  */
 
-import { CacheEngine } from '../../core/cache-engine.js';
-import { TokenCounter } from '../../core/token-counter.js';
-import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
+import {
+  sharedCache,
+  sharedTokenCounter,
+  sharedMetricsCollector,
+} from './shared-instances.js';
+import type { CacheEngine } from '../../core/cache-engine.js';
+import type { TokenCounter } from '../../core/token-counter.js';
+import type { MetricsCollector } from '../../core/metrics.js';
 
 export interface PatternRecognitionOptions {
   operation:
@@ -147,11 +152,6 @@ export const PATTERNRECOGNITIONTOOL = {
     required: ['operation'],
   },
 } as const;
-
-// Shared instances for singleton pattern
-const sharedCache = new CacheEngine();
-const sharedTokenCounter = new TokenCounter();
-const sharedMetricsCollector = new MetricsCollector();
 
 export async function runPatternRecognition(
   options: PatternRecognitionOptions
