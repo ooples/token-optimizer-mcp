@@ -25,7 +25,6 @@ export interface PredictiveAnalyticsOptions {
   query?: string;
   data?: any;
   useCache?: boolean;
-  cacheTTL?: number;
 }
 
 export interface PredictiveAnalyticsResult {
@@ -147,7 +146,6 @@ export const PREDICTIVEANALYTICSTOOL = {
         default: true,
         description: 'Enable caching',
       },
-      cacheTTL: { type: 'number', description: 'Cache TTL in seconds' },
     },
     required: ['operation'],
   },

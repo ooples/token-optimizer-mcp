@@ -25,7 +25,6 @@ export interface SmartSummarizationOptions {
   query?: string;
   data?: any;
   useCache?: boolean;
-  cacheTTL?: number;
 }
 
 export interface SmartSummarizationResult {
@@ -147,7 +146,6 @@ export const SMARTSUMMARIZATIONTOOL = {
         default: true,
         description: 'Enable caching',
       },
-      cacheTTL: { type: 'number', description: 'Cache TTL in seconds' },
     },
     required: ['operation'],
   },

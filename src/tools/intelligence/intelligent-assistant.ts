@@ -25,7 +25,6 @@ export interface IntelligentAssistantOptions {
   query?: string;
   data?: any;
   useCache?: boolean;
-  cacheTTL?: number;
 }
 
 export interface IntelligentAssistantResult {
@@ -148,7 +147,6 @@ export const INTELLIGENTASSISTANTTOOL = {
         default: true,
         description: 'Enable caching',
       },
-      cacheTTL: { type: 'number', description: 'Cache TTL in seconds' },
     },
     required: ['operation'],
   },

@@ -25,7 +25,6 @@ export interface PatternRecognitionOptions {
   query?: string;
   data?: any;
   useCache?: boolean;
-  cacheTTL?: number;
 }
 
 export interface PatternRecognitionResult {
@@ -147,7 +146,6 @@ export const PATTERNRECOGNITIONTOOL = {
         default: true,
         description: 'Enable caching',
       },
-      cacheTTL: { type: 'number', description: 'Cache TTL in seconds' },
     },
     required: ['operation'],
   },

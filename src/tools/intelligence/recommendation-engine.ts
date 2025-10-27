@@ -25,7 +25,6 @@ export interface RecommendationEngineOptions {
   query?: string;
   data?: any;
   useCache?: boolean;
-  cacheTTL?: number;
 }
 
 export interface RecommendationEngineResult {
@@ -148,7 +147,6 @@ export const RECOMMENDATIONENGINETOOL = {
         default: true,
         description: 'Enable caching',
       },
-      cacheTTL: { type: 'number', description: 'Cache TTL in seconds' },
     },
     required: ['operation'],
   },
