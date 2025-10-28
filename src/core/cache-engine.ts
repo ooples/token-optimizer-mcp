@@ -99,7 +99,7 @@ export class CacheEngine {
             const shmPath = `${finalDbPath}-shm`;
             if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
             if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-          } catch (cleanupError) {
+          } catch {
             // If we can't clean up, we'll try temp directory on next attempt
           }
         }
@@ -135,7 +135,7 @@ export class CacheEngine {
           if (this.db) {
             this.db.close();
           }
-        } catch (closeError) {
+        } catch {
           // Ignore close errors
         }
 

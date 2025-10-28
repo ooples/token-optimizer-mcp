@@ -747,11 +747,7 @@ export async function runSmartGraphQL(
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const graphql = getSmartGraphQL(
-    cache,
-    tokenCounter,
-    metrics
-  );
+  const graphql = getSmartGraphQL(cache, tokenCounter, metrics);
 
   const result = await graphql.run(options);
 

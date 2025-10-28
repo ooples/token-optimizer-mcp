@@ -79,7 +79,9 @@ async function discoverSessionFiles(hooksDataPath: string): Promise<string[]> {
 
   const files = await fs.readdir(hooksDataPath);
   return files
-    .filter((file) => file.startsWith('session-log-') && file.endsWith('.jsonl'))
+    .filter(
+      (file) => file.startsWith('session-log-') && file.endsWith('.jsonl')
+    )
     .map((file) => path.join(hooksDataPath, file))
     .sort();
 }
@@ -114,7 +116,11 @@ async function parseJsonlFile(filePath: string): Promise<TurnData[]> {
                 : '',
         });
       }
+<<<<<<< HEAD
     } catch (parseError) {
+=======
+    } catch {
+>>>>>>> origin/master
       // Skip malformed JSONL lines
       continue;
     }
@@ -414,7 +420,7 @@ export async function analyzeProjectTokens(
                 mtime.getDate().toString().padStart(2, '0'),
               ].join('');
               fileDate = mtimeStr;
-            } catch (e) {
+            } catch {
               // If we can't get mtime, exclude the file when date filter is active
               return null;
             }

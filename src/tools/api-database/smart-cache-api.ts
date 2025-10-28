@@ -887,11 +887,7 @@ export async function runSmartCacheApi(
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const tool = getSmartCacheApi(
-    cache,
-    tokenCounter,
-    metrics
-  );
+  const tool = getSmartCacheApi(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
   return JSON.stringify(result, null, 2);

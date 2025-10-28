@@ -504,7 +504,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'optimize_session',
         description:
-          'Analyzes operations in the current session from the operations CSV, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
+          'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -543,6 +543,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             endDate: {
               type: 'string',
+              format: 'date',
               pattern: '^\\d{4}-\\d{2}-\\d{2}$',
               description: 'Optional end date filter (YYYY-MM-DD format).',
             },
@@ -551,7 +552,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description:
                 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
-              minimum: 0,
               exclusiveMinimum: 0,
             },
           },
@@ -998,8 +998,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             { count: number; tokens: number }
           > = {};
           for (const op of operations) {
-            if (op.toolName === 'SYSTEM_REMINDERS') continue;
-
             if (!toolBreakdown[op.toolName]) {
               toolBreakdown[op.toolName] = { count: 0, tokens: 0 };
             }
@@ -1018,7 +1016,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     sessionInfo: {
                       startTime: sessionData.startTime,
                       lastActivity: sessionData.lastActivity,
-                      totalOperations: sessionData.totalOperations,
+                      totalOperations: operations.length,
                     },
                     tokens: {
                       total: totalTokens,
@@ -1098,11 +1096,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             targetSessionId = sessionData.sessionId;
           }
 
-          // --- 2. Read JSONL Log ---
+          // --- 2. Read JSONL Log (validated) ---
+          // SECURITY: Reject IDs with path separators; allow simple [A-Za-z0-9._-]
+          if (!/^[A-Za-z0-9._-]+$/.test(targetSessionId)) {
+            throw new Error('Invalid sessionId format.');
+          }
           const jsonlFilePath = path.join(
             hooksDataPath,
             `session-log-${targetSessionId}.jsonl`
           );
+          // SECURITY: Ensure file path is contained within hooksDataPath
+          const baseReal = fs.realpathSync(hooksDataPath);
+          const fileReal = fs.existsSync(jsonlFilePath)
+            ? fs.realpathSync(jsonlFilePath)
+            : path.resolve(jsonlFilePath);
+          const rel0 = path.relative(baseReal, fileReal);
+          if (rel0.startsWith('..') || path.isAbsolute(rel0)) {
+            throw new Error('Resolved JSONL path escapes hooks data directory.');
+          }
           if (!fs.existsSync(jsonlFilePath)) {
             throw new Error(
               `JSONL log not found for session ${targetSessionId}`
@@ -1147,8 +1158,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               // Resolve the file path to absolute path
               const resolvedFilePath = path.resolve(metadata);
 
-              // Check if the resolved path is within the secure base directory
-              if (!resolvedFilePath.startsWith(secureBaseDir)) {
+              // Check if the resolved path is within the secure base directory using path.relative
+              const rel = path.relative(secureBaseDir, resolvedFilePath);
+              if (rel.startsWith('..') || path.isAbsolute(rel)) {
                 // Log security event for rejected access attempt
                 console.error(
                   `[SECURITY] Path traversal attempt detected and blocked: ${metadata}`
@@ -1169,15 +1181,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           for (const filePath of fileOpsToCompress) {
             // Additional security check before file access
             const resolvedPath = path.resolve(filePath);
-            if (!resolvedPath.startsWith(secureBaseDir)) {
+            // Use realpath when file exists to defeat symlink escapes
+            const baseReal = fs.realpathSync(secureBaseDir);
+            if (!fs.existsSync(resolvedPath)) continue;
+            const fileReal = fs.realpathSync(resolvedPath);
+            const rel = path.relative(baseReal, fileReal);
+            if (rel.startsWith('..') || path.isAbsolute(rel)) {
               console.error(
                 `[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`
               );
               debugInfo.securityRejected++;
               continue;
             }
-
-            if (!fs.existsSync(filePath)) continue;
 
             const fileContent = fs.readFileSync(filePath, 'utf-8');
             if (!fileContent) continue;
@@ -1186,18 +1201,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             originalTokens += originalCount.tokens;
 
             const compressionResult = compression.compressToBase64(fileContent);
-            cache.set(
-              filePath,
-              compressionResult.compressed,
-              compressionResult.compressedSize,
-              compressionResult.originalSize
-            );
-
             const compressedCount = tokenCounter.count(
               compressionResult.compressed
             );
-            compressedTokens += compressedCount.tokens;
-            operationsCompressed++;
+
+            // Only cache if compression actually reduces tokens
+            if (compressedCount.tokens < originalCount.tokens) {
+              cache.set(
+                filePath,
+                compressionResult.compressed,
+                compressionResult.compressedSize,
+                compressionResult.originalSize
+              );
+              compressedTokens += compressedCount.tokens;
+              operationsCompressed++;
+            } else {
+              // Compression increased tokens, skip caching
+              compressedTokens += originalCount.tokens;
+            }
           }
 
           // --- 5. Return Summary with Debug Info ---
