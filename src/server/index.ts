@@ -1112,7 +1112,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             : path.resolve(jsonlFilePath);
           const rel0 = path.relative(baseReal, fileReal);
           if (rel0.startsWith('..') || path.isAbsolute(rel0)) {
-            throw new Error('Resolved JSONL path escapes hooks data directory.');
+            throw new Error(
+              'Resolved JSONL path escapes hooks data directory.'
+            );
           }
           if (!fs.existsSync(jsonlFilePath)) {
             throw new Error(

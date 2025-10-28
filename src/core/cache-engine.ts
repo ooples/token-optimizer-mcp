@@ -175,7 +175,9 @@ export class CacheEngine {
     this.semanticConfig = {
       similarityThreshold: semanticConfig?.similarityThreshold ?? 0.85,
       topK: semanticConfig?.topK ?? 5,
-      enabled: semanticConfig?.enabled ?? (embeddingGenerator !== undefined && vectorStore !== undefined),
+      enabled:
+        semanticConfig?.enabled ??
+        (embeddingGenerator !== undefined && vectorStore !== undefined),
     };
   }
 
@@ -200,7 +202,11 @@ export class CacheEngine {
     }
 
     // If semantic caching is enabled, try similarity search
-    if (this.semanticConfig.enabled && this.embeddingGenerator && this.vectorStore) {
+    if (
+      this.semanticConfig.enabled &&
+      this.embeddingGenerator &&
+      this.vectorStore
+    ) {
       try {
         const semanticMatch = await this.getSemanticMatch(key);
         if (semanticMatch !== null) {
@@ -262,7 +268,8 @@ export class CacheEngine {
     }
 
     // Generate embedding for the query
-    const queryEmbedding = await this.embeddingGenerator.generateEmbedding(query);
+    const queryEmbedding =
+      await this.embeddingGenerator.generateEmbedding(query);
 
     // Search for similar vectors in the store
     const results = await this.vectorStore.search(
@@ -282,7 +289,9 @@ export class CacheEngine {
     const cachedValue = this.getExact(bestMatch.id);
     if (cachedValue !== null) {
       // Log semantic hit for debugging
-      console.log(`Semantic cache hit: query="${query}" matched key="${bestMatch.id}" (similarity: ${bestMatch.similarity.toFixed(3)})`);
+      console.log(
+        `Semantic cache hit: query="${query}" matched key="${bestMatch.id}" (similarity: ${bestMatch.similarity.toFixed(3)})`
+      );
     }
 
     return cachedValue;
@@ -370,13 +379,20 @@ export class CacheEngine {
     this.set(key, value, originalSize, compressedSize);
 
     // Generate and store embedding if semantic caching is enabled
-    if (this.semanticConfig.enabled && this.embeddingGenerator && this.vectorStore) {
+    if (
+      this.semanticConfig.enabled &&
+      this.embeddingGenerator &&
+      this.vectorStore
+    ) {
       try {
         const embedding = await this.embeddingGenerator.generateEmbedding(key);
         await this.vectorStore.add(key, embedding);
       } catch (error) {
         // Log error but don't fail the cache set operation
-        console.warn('Failed to generate/store embedding for cache key:', error);
+        console.warn(
+          'Failed to generate/store embedding for cache key:',
+          error
+        );
       }
     }
   }
@@ -464,7 +480,8 @@ export class CacheEngine {
       row.total_original > 0 ? row.total_compressed / row.total_original : 0;
 
     const totalHits = this.stats.hits + this.stats.semanticHits;
-    const semanticHitRate = totalHits > 0 ? this.stats.semanticHits / totalHits : 0;
+    const semanticHitRate =
+      totalHits > 0 ? this.stats.semanticHits / totalHits : 0;
 
     return {
       totalEntries: row.total_entries,

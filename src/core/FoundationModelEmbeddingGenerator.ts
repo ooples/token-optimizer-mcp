@@ -36,7 +36,7 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
         .update(normalized + i.toString())
         .digest();
       // Convert hash bytes to normalized values [-1, 1]
-      embedding[i] = (hash[i % hash.length] / 127.5) - 1;
+      embedding[i] = hash[i % hash.length] / 127.5 - 1;
     }
 
     // Part 2: Statistical features (middle 1/3)
@@ -106,8 +106,9 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
     stats.push(digits / Math.max(text.length, 1));
 
     // Average word length
-    const words = text.split(' ').filter(w => w.length > 0);
-    const avgWordLen = words.reduce((sum, w) => sum + w.length, 0) / Math.max(words.length, 1);
+    const words = text.split(' ').filter((w) => w.length > 0);
+    const avgWordLen =
+      words.reduce((sum, w) => sum + w.length, 0) / Math.max(words.length, 1);
     stats.push(Math.tanh(avgWordLen / 10));
 
     // Repeat pattern to fill space if needed
@@ -147,7 +148,7 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
     }
 
     // Clip values to [-1, 1] range
-    return features.map(v => Math.tanh(v * 10));
+    return features.map((v) => Math.tanh(v * 10));
   }
 
   /**
@@ -162,6 +163,6 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
       return vector; // Avoid division by zero
     }
 
-    return vector.map(val => val / magnitude);
+    return vector.map((val) => val / magnitude);
   }
 }

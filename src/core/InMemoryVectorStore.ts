@@ -71,9 +71,7 @@ export class InMemoryVectorStore implements IVectorStore {
    */
   private cosineSimilarity(a: number[], b: number[]): number {
     if (a.length !== b.length) {
-      throw new Error(
-        `Vector dimension mismatch: ${a.length} vs ${b.length}`
-      );
+      throw new Error(`Vector dimension mismatch: ${a.length} vs ${b.length}`);
     }
 
     let dotProduct = 0;
