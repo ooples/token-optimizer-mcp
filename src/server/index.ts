@@ -1094,6 +1094,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
+
+            if (!targetSessionId || typeof targetSessionId !== 'string') {
+              throw new Error('Invalid sessionId in current-session.txt');
+            }
           }
 
           // --- 2. Read JSONL Log (validated) ---
@@ -1112,7 +1116,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             : path.resolve(jsonlFilePath);
           const rel0 = path.relative(baseReal, fileReal);
           if (rel0.startsWith('..') || path.isAbsolute(rel0)) {
-            throw new Error('Resolved JSONL path escapes hooks data directory.');
+            throw new Error(
+              'Resolved JSONL path escapes hooks data directory.'
+            );
           }
           if (!fs.existsSync(jsonlFilePath)) {
             throw new Error(
