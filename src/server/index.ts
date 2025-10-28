@@ -1096,11 +1096,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             targetSessionId = sessionData.sessionId;
           }
 
-          // --- 2. Read JSONL Log ---
+          // --- 2. Read JSONL Log (validated) ---
+          // SECURITY: Reject IDs with path separators; allow simple [A-Za-z0-9._-]
+          if (!/^[A-Za-z0-9._-]+$/.test(targetSessionId)) {
+            throw new Error('Invalid sessionId format.');
+          }
           const jsonlFilePath = path.join(
             hooksDataPath,
             `session-log-${targetSessionId}.jsonl`
           );
+          // SECURITY: Ensure file path is contained within hooksDataPath
+          const baseReal = fs.realpathSync(hooksDataPath);
+          const fileReal = fs.existsSync(jsonlFilePath)
+            ? fs.realpathSync(jsonlFilePath)
+            : path.resolve(jsonlFilePath);
+          const rel0 = path.relative(baseReal, fileReal);
+          if (rel0.startsWith('..') || path.isAbsolute(rel0)) {
+            throw new Error('Resolved JSONL path escapes hooks data directory.');
+          }
           if (!fs.existsSync(jsonlFilePath)) {
             throw new Error(
               `JSONL log not found for session ${targetSessionId}`
@@ -1145,8 +1158,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               // Resolve the file path to absolute path
               const resolvedFilePath = path.resolve(metadata);
 
-              // Check if the resolved path is within the secure base directory
-              if (!resolvedFilePath.startsWith(secureBaseDir)) {
+              // Check if the resolved path is within the secure base directory using path.relative
+              const rel = path.relative(secureBaseDir, resolvedFilePath);
+              if (rel.startsWith('..') || path.isAbsolute(rel)) {
                 // Log security event for rejected access attempt
                 console.error(
                   `[SECURITY] Path traversal attempt detected and blocked: ${metadata}`
@@ -1167,15 +1181,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           for (const filePath of fileOpsToCompress) {
             // Additional security check before file access
             const resolvedPath = path.resolve(filePath);
-            if (!resolvedPath.startsWith(secureBaseDir)) {
+            // Use realpath when file exists to defeat symlink escapes
+            const baseReal = fs.realpathSync(secureBaseDir);
+            if (!fs.existsSync(resolvedPath)) continue;
+            const fileReal = fs.realpathSync(resolvedPath);
+            const rel = path.relative(baseReal, fileReal);
+            if (rel.startsWith('..') || path.isAbsolute(rel)) {
               console.error(
                 `[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`
               );
               debugInfo.securityRejected++;
               continue;
             }
-
-            if (!fs.existsSync(filePath)) continue;
 
             const fileContent = fs.readFileSync(filePath, 'utf-8');
             if (!fileContent) continue;
