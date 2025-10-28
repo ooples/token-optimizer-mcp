@@ -878,18 +878,19 @@ export async function runSmartCacheApi(
   const { CacheEngine: CacheEngineClass } = await import(
     '../../core/cache-engine'
   );
-  const { globalTokenCounter, globalMetricsCollector } = await import(
-    '../../core/globals'
-  );
+  const { TokenCounter } = await import('../../core/token-counter');
+  const { MetricsCollector } = await import('../../core/metrics');
 
   const cache = new CacheEngineClass(
     join(homedir(), '.hypercontext', 'cache'),
     100
   );
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const tool = getSmartCacheApi(
     cache,
-    globalTokenCounter,
-    globalMetricsCollector
+    tokenCounter,
+    metrics
   );
   const result = await tool.run(options);
 
