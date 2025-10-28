@@ -68,7 +68,7 @@ export interface ProjectAnalysisResult {
 const DEFAULT_COST_PER_MILLION = 30; // GPT-4 Turbo pricing (USD)
 
 /**
- * Discover all session operation CSV files in the hooks data directory
+ * Discover all session JSONL log files in the hooks data directory
  */
 async function discoverSessionFiles(hooksDataPath: string): Promise<string[]> {
   try {
@@ -79,15 +79,17 @@ async function discoverSessionFiles(hooksDataPath: string): Promise<string[]> {
 
   const files = await fs.readdir(hooksDataPath);
   return files
-    .filter((file) => file.startsWith('operations-') && file.endsWith('.csv'))
+    .filter(
+      (file) => file.startsWith('session-log-') && file.endsWith('.jsonl')
+    )
     .map((file) => path.join(hooksDataPath, file))
     .sort();
 }
 
 /**
- * Parse a CSV operations file
+ * Parse a JSONL session log file
  */
-async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
+async function parseJsonlFile(filePath: string): Promise<TurnData[]> {
   const content = (await fs.readFile(filePath, 'utf-8')).replace(/^\uFEFF/, ''); // Strip BOM
   const lines = content.trim().split('\n');
   const operations: TurnData[] = [];
@@ -95,45 +97,40 @@ async function parseOperationsFile(filePath: string): Promise<TurnData[]> {
   for (const line of lines) {
     if (!line.trim()) continue;
 
-    // WARNING: This is a simplified CSV parser that handles basic cases only.
-    // LIMITATION: Manual splitting is brittle for quoted fields (e.g., commas or quotes inside metadata)
-    // and can misparse lines, leading to incorrect tokens/tool attribution.
-    // RECOMMENDATION: For production use with complex quoted fields, use a robust CSV parsing library
-    // (e.g., csv-parse) that properly handles quotes, escapes, and headers.
-    // Current implementation handles: timestamp,toolname,tokens,metadata
-    const parts = line.split(',');
-    if (parts.length < 3) continue;
+    try {
+      const event = JSON.parse(line);
 
-    const timestamp = parts[0].trim();
-    const toolName = parts[1].trim();
-    const tokens = parseInt(parts[2].trim(), 10) || 0;
-    const metadata =
-      parts.length > 3
-        ? parts
-            .slice(3)
-            .join(',')
-            .trim()
-            .replace(/^"(.*)"$/, '$1')
-            .replace(/\r$/, '')
-        : '';
-
-    operations.push({
-      timestamp,
-      toolName,
-      tokens,
-      metadata,
-    });
+      // Process tool calls
+      if (event.type === 'tool_call') {
+        const tokens = event.estimatedTokens || 0;
+        operations.push({
+          timestamp: event.timestamp,
+          toolName: event.toolName,
+          tokens,
+          // Normalize metadata to string
+          metadata:
+            typeof event.metadata === 'string'
+              ? event.metadata
+              : event.metadata !== undefined
+                ? JSON.stringify(event.metadata)
+                : '',
+        });
+      }
+    } catch {
+      // Skip malformed JSONL lines
+      continue;
+    }
   }
 
   return operations;
 }
 
 /**
- * Extract session ID from operations filename
+ * Extract session ID from session log filename
  */
 function extractSessionId(filePath: string): string {
   const filename = path.basename(filePath);
-  const match = filename.match(/operations-(.+)\.csv$/);
+  const match = filename.match(/session-log-(.+)\.jsonl$/);
   return match ? match[1] : filename;
 }
 
@@ -419,7 +416,7 @@ export async function analyzeProjectTokens(
                 mtime.getDate().toString().padStart(2, '0'),
               ].join('');
               fileDate = mtimeStr;
-            } catch (e) {
+            } catch {
               // If we can't get mtime, exclude the file when date filter is active
               return null;
             }
@@ -444,11 +441,11 @@ export async function analyzeProjectTokens(
       batch.map(async (filePath) => {
         try {
           const sessionId = extractSessionId(filePath);
-          const operations = await parseOperationsFile(filePath);
+          const operations = await parseJsonlFile(filePath);
           parsedSessions.set(sessionId, operations);
         } catch (error) {
           console.warn(
-            `Skipping corrupt/unreadable CSV file: ${filePath}`,
+            `Skipping corrupt/unreadable JSONL file: ${filePath}`,
             error
           );
         }
