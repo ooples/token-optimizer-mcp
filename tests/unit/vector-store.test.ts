@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach } from 'vitest';
 import { InMemoryVectorStore } from '../../src/core/InMemoryVectorStore.js';
 
 describe('InMemoryVectorStore', () => {

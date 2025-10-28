@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { FoundationModelEmbeddingGenerator } from '../../src/core/FoundationModelEmbeddingGenerator.js';
 
 describe('FoundationModelEmbeddingGenerator', () => {
