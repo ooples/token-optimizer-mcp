@@ -114,7 +114,7 @@ async function parseJsonlFile(filePath: string): Promise<TurnData[]> {
                 : '',
         });
       }
-    } catch (parseError) {
+    } catch {
       // Skip malformed JSONL lines
       continue;
     }
@@ -414,7 +414,7 @@ export async function analyzeProjectTokens(
                 mtime.getDate().toString().padStart(2, '0'),
               ].join('');
               fileDate = mtimeStr;
-            } catch (e) {
+            } catch {
               // If we can't get mtime, exclude the file when date filter is active
               return null;
             }

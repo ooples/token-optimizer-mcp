@@ -504,7 +504,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'optimize_session',
         description:
-          'Analyzes operations in the current session from the operations CSV, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
+          'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -543,6 +543,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             endDate: {
               type: 'string',
+              format: 'date',
               pattern: '^\\d{4}-\\d{2}-\\d{2}$',
               description: 'Optional end date filter (YYYY-MM-DD format).',
             },
@@ -551,7 +552,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description:
                 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
-              minimum: 0,
               exclusiveMinimum: 0,
             },
           },
@@ -998,8 +998,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             { count: number; tokens: number }
           > = {};
           for (const op of operations) {
-            if (op.toolName === 'SYSTEM_REMINDERS') continue;
-
             if (!toolBreakdown[op.toolName]) {
               toolBreakdown[op.toolName] = { count: 0, tokens: 0 };
             }
@@ -1018,7 +1016,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     sessionInfo: {
                       startTime: sessionData.startTime,
                       lastActivity: sessionData.lastActivity,
-                      totalOperations: sessionData.totalOperations,
+                      totalOperations: operations.length,
                     },
                     tokens: {
                       total: totalTokens,
@@ -1186,18 +1184,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             originalTokens += originalCount.tokens;
 
             const compressionResult = compression.compressToBase64(fileContent);
-            cache.set(
-              filePath,
-              compressionResult.compressed,
-              compressionResult.compressedSize,
-              compressionResult.originalSize
-            );
-
             const compressedCount = tokenCounter.count(
               compressionResult.compressed
             );
-            compressedTokens += compressedCount.tokens;
-            operationsCompressed++;
+
+            // Only cache if compression actually reduces tokens
+            if (compressedCount.tokens < originalCount.tokens) {
+              cache.set(
+                filePath,
+                compressionResult.compressed,
+                compressionResult.compressedSize,
+                compressionResult.originalSize
+              );
+              compressedTokens += compressedCount.tokens;
+              operationsCompressed++;
+            } else {
+              // Compression increased tokens, skip caching
+              compressedTokens += originalCount.tokens;
+            }
           }
 
           // --- 5. Return Summary with Debug Info ---
