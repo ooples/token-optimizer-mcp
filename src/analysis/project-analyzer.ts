@@ -100,8 +100,13 @@ async function parseJsonlFile(filePath: string): Promise<TurnData[]> {
     try {
       const event = JSON.parse(line);
 
+      // Validate required fields
+      if (!event.type || typeof event.type !== 'string') continue;
+
       // Process tool calls
       if (event.type === 'tool_call') {
+        if (!event.timestamp || !event.toolName) continue;
+
         const tokens = event.estimatedTokens || 0;
         operations.push({
           timestamp: event.timestamp,

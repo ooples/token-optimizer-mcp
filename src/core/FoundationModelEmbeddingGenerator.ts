@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import { createHash } from 'node:crypto';
 import { IEmbeddingGenerator } from '../interfaces/IEmbeddingGenerator.js';
 
 /**
@@ -31,8 +31,7 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
     // Use multiple hash functions to create diverse features
     const hashSection = Math.floor(this.dimensions / 3);
     for (let i = 0; i < hashSection; i++) {
-      const hash = crypto
-        .createHash('sha256')
+      const hash = createHash('sha256')
         .update(normalized + i.toString())
         .digest();
       // Convert hash bytes to normalized values [-1, 1]
@@ -142,7 +141,7 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
 
     // Hash n-grams to feature indices
     for (const [ngram, count] of ngrams.entries()) {
-      const hash = crypto.createHash('md5').update(ngram).digest();
+      const hash = createHash('md5').update(ngram).digest();
       const idx = hash[0] % numFeatures;
       features[idx] += count / text.length; // Normalized count
     }

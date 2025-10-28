@@ -187,7 +187,11 @@ export class CacheEngine {
    * Use getWithSemantic() for semantic similarity search
    */
   get(key: string): string | null {
-    return this.getExact(key);
+    const result = this.getExact(key);
+    if (result === null) {
+      this.stats.misses++;
+    }
+    return result;
   }
 
   /**
