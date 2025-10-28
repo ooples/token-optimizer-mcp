@@ -116,11 +116,7 @@ async function parseJsonlFile(filePath: string): Promise<TurnData[]> {
                 : '',
         });
       }
-<<<<<<< HEAD
-    } catch (parseError) {
-=======
     } catch {
->>>>>>> origin/master
       // Skip malformed JSONL lines
       continue;
     }
