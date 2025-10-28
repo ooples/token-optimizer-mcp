@@ -79,7 +79,9 @@ async function discoverSessionFiles(hooksDataPath: string): Promise<string[]> {
 
   const files = await fs.readdir(hooksDataPath);
   return files
-    .filter((file) => file.startsWith('session-log-') && file.endsWith('.jsonl'))
+    .filter(
+      (file) => file.startsWith('session-log-') && file.endsWith('.jsonl')
+    )
     .map((file) => path.join(hooksDataPath, file))
     .sort();
 }
