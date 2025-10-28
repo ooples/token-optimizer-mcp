@@ -12,12 +12,8 @@
  */
 
 import { CacheEngine } from '../../core/cache-engine.js';
-import {
-  globalTokenCounter,
-  globalMetricsCollector,
-} from '../../core/globals.js';
-import type { TokenCounter } from '../../core/token-counter.js';
-import type { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
 
 interface SmartGraphQLOptions {
@@ -749,10 +745,12 @@ export async function runSmartGraphQL(
   const { join } = await import('path');
 
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const graphql = getSmartGraphQL(
     cache,
-    globalTokenCounter,
-    globalMetricsCollector
+    tokenCounter,
+    metrics
   );
 
   const result = await graphql.run(options);
