@@ -79,7 +79,7 @@ export async function parseSessionLog(
         const tokens = event.tokens || 0;
         systemReminderTokens += tokens;
       }
-    } catch (parseError) {
+    } catch {
       // Skip malformed JSONL lines
       continue;
     }

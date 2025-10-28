@@ -3,6 +3,8 @@ import { LRUCache } from 'lru-cache';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { IEmbeddingGenerator } from '../interfaces/IEmbeddingGenerator.js';
+import { IVectorStore } from '../interfaces/IVectorStore.js';
 
 export interface CacheEntry {
   key: string;
@@ -22,6 +24,14 @@ export interface CacheStats {
   totalCompressedSize: number;
   totalOriginalSize: number;
   compressionRatio: number;
+  semanticHits?: number; // Number of cache hits via semantic matching
+  semanticHitRate?: number; // Semantic hits as percentage of total hits
+}
+
+export interface SemanticCachingConfig {
+  similarityThreshold?: number; // Minimum cosine similarity for a match (0-1, default: 0.85)
+  topK?: number; // Number of similar entries to search (default: 5)
+  enabled?: boolean; // Enable semantic caching (default: true if generators provided)
 }
 
 export class CacheEngine {
@@ -34,9 +44,21 @@ export class CacheEngine {
   private stats = {
     hits: 0,
     misses: 0,
+    semanticHits: 0, // Track semantic cache hits separately
   };
 
-  constructor(dbPath?: string, maxMemoryItems: number = 1000) {
+  // Semantic caching components (optional)
+  private embeddingGenerator?: IEmbeddingGenerator;
+  private vectorStore?: IVectorStore;
+  private semanticConfig: SemanticCachingConfig;
+
+  constructor(
+    dbPath?: string,
+    maxMemoryItems: number = 1000,
+    embeddingGenerator?: IEmbeddingGenerator,
+    vectorStore?: IVectorStore,
+    semanticConfig?: SemanticCachingConfig
+  ) {
     // Use user-provided path, environment variable, or default to ~/.token-optimizer-cache
     const defaultCacheDir =
       process.env.TOKEN_OPTIMIZER_CACHE_DIR ||
@@ -77,7 +99,7 @@ export class CacheEngine {
             const shmPath = `${finalDbPath}-shm`;
             if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
             if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-          } catch (cleanupError) {
+          } catch {
             // If we can't clean up, we'll try temp directory on next attempt
           }
         }
@@ -113,7 +135,7 @@ export class CacheEngine {
           if (this.db) {
             this.db.close();
           }
-        } catch (closeError) {
+        } catch {
           // Ignore close errors
         }
 
@@ -146,12 +168,69 @@ export class CacheEngine {
       max: maxMemoryItems,
       ttl: 1000 * 60 * 60, // 1 hour TTL
     });
+
+    // Initialize semantic caching components (optional)
+    this.embeddingGenerator = embeddingGenerator;
+    this.vectorStore = vectorStore;
+    this.semanticConfig = {
+      similarityThreshold: semanticConfig?.similarityThreshold ?? 0.85,
+      topK: semanticConfig?.topK ?? 5,
+      enabled:
+        semanticConfig?.enabled ??
+        (embeddingGenerator !== undefined && vectorStore !== undefined),
+    };
   }
 
   /**
-   * Get a value from cache
+   * Get a value from cache (synchronous, exact match only)
+   * For backward compatibility, this method only performs exact key matching
+   * Use getWithSemantic() for semantic similarity search
    */
   get(key: string): string | null {
+    const result = this.getExact(key);
+    if (result === null) {
+      this.stats.misses++;
+    }
+    return result;
+  }
+
+  /**
+   * Get a value from cache with semantic matching enabled
+   * First tries exact key match, then semantic similarity if enabled
+   */
+  async getWithSemantic(key: string): Promise<string | null> {
+    // Try exact key match first (fast path)
+    const exactMatch = this.getExact(key);
+    if (exactMatch !== null) {
+      return exactMatch;
+    }
+
+    // If semantic caching is enabled, try similarity search
+    if (
+      this.semanticConfig.enabled &&
+      this.embeddingGenerator &&
+      this.vectorStore
+    ) {
+      try {
+        const semanticMatch = await this.getSemanticMatch(key);
+        if (semanticMatch !== null) {
+          this.stats.semanticHits++;
+          return semanticMatch;
+        }
+      } catch (error) {
+        // Log error but don't fail - fall back to cache miss
+        console.warn('Semantic cache lookup failed:', error);
+      }
+    }
+
+    this.stats.misses++;
+    return null;
+  }
+
+  /**
+   * Get a value from cache using exact key match (synchronous)
+   */
+  private getExact(key: string): string | null {
     // Check memory cache first
     const memValue = this.memoryCache.get(key);
     if (memValue !== undefined) {
@@ -180,8 +259,46 @@ export class CacheEngine {
       return row.value;
     }
 
-    this.stats.misses++;
     return null;
+  }
+
+  /**
+   * Get a value from cache using semantic similarity matching
+   * Searches for similar queries and returns the closest match above threshold
+   */
+  private async getSemanticMatch(query: string): Promise<string | null> {
+    if (!this.embeddingGenerator || !this.vectorStore) {
+      return null;
+    }
+
+    // Generate embedding for the query
+    const queryEmbedding =
+      await this.embeddingGenerator.generateEmbedding(query);
+
+    // Search for similar vectors in the store
+    const results = await this.vectorStore.search(
+      queryEmbedding,
+      this.semanticConfig.topK || 5,
+      this.semanticConfig.similarityThreshold || 0.85
+    );
+
+    if (results.length === 0) {
+      return null;
+    }
+
+    // Get the most similar result
+    const bestMatch = results[0];
+
+    // Retrieve the cached value using the matched key
+    const cachedValue = this.getExact(bestMatch.id);
+    if (cachedValue !== null) {
+      // Log semantic hit for debugging
+      console.log(
+        `Semantic cache hit: query="${query}" matched key="${bestMatch.id}" (similarity: ${bestMatch.similarity.toFixed(3)})`
+      );
+    }
+
+    return cachedValue;
   }
 
   /**
@@ -226,7 +343,8 @@ export class CacheEngine {
   }
 
   /**
-   * Set a value in cache
+   * Set a value in cache (synchronous, without semantic embedding)
+   * For backward compatibility
    */
   set(
     key: string,
@@ -252,7 +370,39 @@ export class CacheEngine {
   }
 
   /**
-   * Delete a value from cache
+   * Set a value in cache with semantic embedding
+   * Also generates and stores embedding if semantic caching is enabled
+   */
+  async setWithSemantic(
+    key: string,
+    value: string,
+    originalSize: number,
+    compressedSize: number
+  ): Promise<void> {
+    // First do the regular set
+    this.set(key, value, originalSize, compressedSize);
+
+    // Generate and store embedding if semantic caching is enabled
+    if (
+      this.semanticConfig.enabled &&
+      this.embeddingGenerator &&
+      this.vectorStore
+    ) {
+      try {
+        const embedding = await this.embeddingGenerator.generateEmbedding(key);
+        await this.vectorStore.add(key, embedding);
+      } catch (error) {
+        // Log error but don't fail the cache set operation
+        console.warn(
+          'Failed to generate/store embedding for cache key:',
+          error
+        );
+      }
+    }
+  }
+
+  /**
+   * Delete a value from cache (synchronous)
    */
   delete(key: string): boolean {
     this.memoryCache.delete(key);
@@ -262,13 +412,50 @@ export class CacheEngine {
   }
 
   /**
-   * Clear all cache
+   * Delete a value from cache with semantic embedding removal
+   * Also removes the embedding if semantic caching is enabled
+   */
+  async deleteWithSemantic(key: string): Promise<boolean> {
+    const result = this.delete(key);
+
+    // Remove embedding if semantic caching is enabled
+    if (this.semanticConfig.enabled && this.vectorStore) {
+      try {
+        await this.vectorStore.delete(key);
+      } catch (error) {
+        console.warn('Failed to delete embedding from vector store:', error);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Clear all cache (synchronous)
    */
   clear(): void {
     this.memoryCache.clear();
     this.db.exec('DELETE FROM cache');
     this.stats.hits = 0;
     this.stats.misses = 0;
+    this.stats.semanticHits = 0;
+  }
+
+  /**
+   * Clear all cache including vector store
+   * Also clears the vector store if semantic caching is enabled
+   */
+  async clearWithSemantic(): Promise<void> {
+    this.clear();
+
+    // Clear vector store if semantic caching is enabled
+    if (this.semanticConfig.enabled && this.vectorStore) {
+      try {
+        await this.vectorStore.clear();
+      } catch (error) {
+        console.warn('Failed to clear vector store:', error);
+      }
+    }
   }
 
   /**
@@ -296,6 +483,10 @@ export class CacheEngine {
     const compressionRatio =
       row.total_original > 0 ? row.total_compressed / row.total_original : 0;
 
+    const totalHits = this.stats.hits + this.stats.semanticHits;
+    const semanticHitRate =
+      totalHits > 0 ? this.stats.semanticHits / totalHits : 0;
+
     return {
       totalEntries: row.total_entries,
       totalHits: row.total_hits || 0,
@@ -304,6 +495,8 @@ export class CacheEngine {
       totalCompressedSize: row.total_compressed || 0,
       totalOriginalSize: row.total_original || 0,
       compressionRatio,
+      semanticHits: this.stats.semanticHits,
+      semanticHitRate,
     };
   }
 

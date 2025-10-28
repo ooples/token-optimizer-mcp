@@ -669,11 +669,7 @@ export async function runSmartApiFetch(
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
-  const smartFetch = getSmartApiFetch(
-    cache,
-    tokenCounter,
-    metrics
-  );
+  const smartFetch = getSmartApiFetch(cache, tokenCounter, metrics);
 
   const output = await smartFetch.run(options);
 
