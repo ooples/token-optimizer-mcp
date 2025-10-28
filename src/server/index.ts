@@ -1094,6 +1094,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
+
+            if (!targetSessionId || typeof targetSessionId !== 'string') {
+              throw new Error('Invalid sessionId in current-session.txt');
+            }
           }
 
           // --- 2. Read JSONL Log (validated) ---
