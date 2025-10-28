@@ -4,10 +4,14 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { SmartMigration, getSmartMigration, runSmartMigration } from './smart-migration';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
+import {
+  SmartMigration,
+  getSmartMigration,
+  runSmartMigration,
+} from './smart-migration.js';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -19,10 +23,19 @@ describe('Smart Migration - Import Type Corrections', () => {
 
   beforeEach(() => {
     // Initialize dependencies - verifying that imports work as values
-    cacheEngine = new CacheEngine(join(tmpdir(), '.test-cache', 'test.db'), 100);
+    cacheEngine = new CacheEngine(
+      join(tmpdir(), '.test-cache', 'test.db'),
+      100
+    );
+    // Clear cache before each test to ensure fresh results
+    cacheEngine.clear();
     tokenCounter = new TokenCounter();
     metricsCollector = new MetricsCollector();
-    smartMigration = new SmartMigration(cacheEngine, tokenCounter, metricsCollector);
+    smartMigration = new SmartMigration(
+      cacheEngine,
+      tokenCounter,
+      metricsCollector
+    );
   });
 
   describe('Class Instantiation', () => {
@@ -42,7 +55,11 @@ describe('Smart Migration - Import Type Corrections', () => {
 
   describe('Factory Function', () => {
     it('should create SmartMigration instance via factory function', () => {
-      const instance = getSmartMigration(cacheEngine, tokenCounter, metricsCollector);
+      const instance = getSmartMigration(
+        cacheEngine,
+        tokenCounter,
+        metricsCollector
+      );
       expect(instance).toBeInstanceOf(SmartMigration);
     });
   });
@@ -90,7 +107,7 @@ describe('Smart Migration - Import Type Corrections', () => {
     it('should generate migration file', async () => {
       const result = await smartMigration.run({
         action: 'generate',
-        migrationId: 'test_migration'
+        migrationId: 'test_migration',
       });
 
       expect(result).toBeDefined();
@@ -103,7 +120,7 @@ describe('Smart Migration - Import Type Corrections', () => {
       const result = await smartMigration.run({
         action: 'rollback',
         migrationId: 'test_rollback',
-        direction: 'down'
+        direction: 'down',
       });
 
       expect(result).toBeDefined();
@@ -122,7 +139,10 @@ describe('Smart Migration - Import Type Corrections', () => {
     });
 
     it('should respect force flag to bypass cache', async () => {
-      const result1 = await smartMigration.run({ action: 'list', force: false });
+      const result1 = await smartMigration.run({
+        action: 'list',
+        force: false,
+      });
       const result2 = await smartMigration.run({ action: 'list', force: true });
 
       expect(result1).toBeDefined();
@@ -139,21 +159,21 @@ describe('Smart Migration - Import Type Corrections', () => {
     });
 
     it('should throw error when migrationId missing for rollback', async () => {
-      await expect(
-        smartMigration.run({ action: 'rollback' })
-      ).rejects.toThrow('migrationId is required');
+      await expect(smartMigration.run({ action: 'rollback' })).rejects.toThrow(
+        'migrationId is required'
+      );
     });
 
     it('should throw error when migrationId missing for generate', async () => {
-      await expect(
-        smartMigration.run({ action: 'generate' })
-      ).rejects.toThrow('migrationId is required');
+      await expect(smartMigration.run({ action: 'generate' })).rejects.toThrow(
+        'migrationId is required'
+      );
     });
   });
 
   describe('CLI Function', () => {
     it('should run migration via CLI function', async () => {
-      const result = await runSmartMigration({ action: 'status' });
+      const result = await runSmartMigration({ action: 'status', force: true });
 
       expect(result).toBeDefined();
       expect(typeof result).toBe('string');
@@ -183,12 +203,15 @@ describe('Import Type Verification', () => {
       cacheHit: false,
       inputTokens: 10,
       outputTokens: 5,
-      savedTokens: 0
+      savedTokens: 0,
     });
   });
 
   it('should verify CacheEngine can be instantiated', () => {
-    const cache = new CacheEngine(join(tmpdir(), '.test-cache-verify', 'test.db'), 100);
+    const cache = new CacheEngine(
+      join(tmpdir(), '.test-cache-verify', 'test.db'),
+      100
+    );
     expect(cache).toBeInstanceOf(CacheEngine);
   });
 });

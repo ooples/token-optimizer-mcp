@@ -11,13 +11,13 @@
  * Target: 75% reduction vs full git log output
  */
 
-import { execSync } from "child_process";
-import { join } from "path";
-import { homedir } from "os";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
+import { execSync } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
 
 export interface CommitInfo {
   hash: string;
@@ -49,7 +49,7 @@ export interface SmartLogOptions {
   filePath?: string; // Only show commits affecting this file/directory
 
   // Output format
-  format?: "oneline" | "short" | "full"; // Output detail level (default: short)
+  format?: 'oneline' | 'short' | 'full'; // Output detail level (default: short)
   includeFiles?: boolean; // Include list of changed files (default: false)
   includeStats?: boolean; // Include addition/deletion stats (default: false)
   includeRefs?: boolean; // Include branch/tag references (default: false)
@@ -92,7 +92,7 @@ export class SmartLogTool {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   /**
@@ -104,13 +104,13 @@ export class SmartLogTool {
     // Default options
     const opts: Required<SmartLogOptions> = {
       cwd: options.cwd ?? process.cwd(),
-      since: options.since ?? "",
-      until: options.until ?? "",
-      branch: options.branch ?? "",
-      author: options.author ?? "",
-      grep: options.grep ?? "",
-      filePath: options.filePath ?? "",
-      format: options.format ?? "short",
+      since: options.since ?? '',
+      until: options.until ?? '',
+      branch: options.branch ?? '',
+      author: options.author ?? '',
+      grep: options.grep ?? '',
+      filePath: options.filePath ?? '',
+      format: options.format ?? 'short',
       includeFiles: options.includeFiles ?? false,
       includeStats: options.includeStats ?? false,
       includeRefs: options.includeRefs ?? false,
@@ -143,7 +143,7 @@ export class SmartLogTool {
 
           const duration = Date.now() - startTime;
           this.metrics.record({
-            operation: "smart_log",
+            operation: 'smart_log',
             duration,
             inputTokens: result.metadata.tokenCount,
             outputTokens: 0,
@@ -164,7 +164,7 @@ export class SmartLogTool {
       const totalCommits = commits.length;
       const paginatedCommits = commits.slice(
         opts.offset,
-        opts.offset + opts.limit,
+        opts.offset + opts.limit
       );
       const truncated = totalCommits > paginatedCommits.length + opts.offset;
 
@@ -176,15 +176,15 @@ export class SmartLogTool {
 
       // Calculate tokens
       const resultTokens = this.tokenCounter.count(
-        JSON.stringify(resultCommits),
+        JSON.stringify(resultCommits)
       ).tokens;
 
       // Estimate original tokens (if we had returned full git log text)
       let originalTokens: number;
-      if (opts.format === "oneline") {
+      if (opts.format === 'oneline') {
         // Oneline format: estimate full log would be 10x more tokens
         originalTokens = resultTokens * 10;
-      } else if (opts.format === "short") {
+      } else if (opts.format === 'short') {
         // Short format: estimate full log would be 5x more tokens
         originalTokens = resultTokens * 5;
       } else {
@@ -217,7 +217,7 @@ export class SmartLogTool {
       // Cache result
       if (opts.useCache) {
         const resultString = JSON.stringify(result);
-        const resultSize = Buffer.from(resultString, "utf-8").length;
+        const resultSize = Buffer.from(resultString, 'utf-8').length;
         this.cache.set(cacheKey, resultString, resultSize, resultSize);
       }
 
@@ -226,7 +226,7 @@ export class SmartLogTool {
       result.metadata.duration = duration;
 
       this.metrics.record({
-        operation: "smart_log",
+        operation: 'smart_log',
         duration,
         inputTokens: resultTokens,
         outputTokens: 0,
@@ -241,7 +241,7 @@ export class SmartLogTool {
       const duration = Date.now() - startTime;
 
       this.metrics.record({
-        operation: "smart_log",
+        operation: 'smart_log',
         duration,
         inputTokens: 0,
         outputTokens: 0,
@@ -258,7 +258,7 @@ export class SmartLogTool {
           returnedCount: 0,
           truncated: false,
           repository: opts.cwd,
-          currentBranch: "",
+          currentBranch: '',
           tokensSaved: 0,
           tokenCount: 0,
           originalTokenCount: 0,
@@ -276,7 +276,7 @@ export class SmartLogTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync("git rev-parse --git-dir", { cwd, stdio: "pipe" });
+      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
       return true;
     } catch {
       return false;
@@ -288,12 +288,12 @@ export class SmartLogTool {
    */
   private getCurrentBranch(cwd: string): string {
     try {
-      return execSync("git branch --show-current", {
+      return execSync('git branch --show-current', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
     } catch {
-      return "HEAD";
+      return 'HEAD';
     }
   }
 
@@ -302,9 +302,9 @@ export class SmartLogTool {
    */
   private getLatestCommitHash(cwd: string): string {
     try {
-      return execSync("git rev-parse HEAD", { cwd, encoding: "utf-8" }).trim();
+      return execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
     } catch {
-      return "unknown";
+      return 'unknown';
     }
   }
 
@@ -314,7 +314,7 @@ export class SmartLogTool {
   private buildCacheKey(opts: Required<SmartLogOptions>): string {
     const latestHash = this.getLatestCommitHash(opts.cwd);
 
-    return generateCacheKey("git-log", {
+    return generateCacheKey('git-log', {
       latest: latestHash,
       since: opts.since,
       until: opts.until,
@@ -337,16 +337,16 @@ export class SmartLogTool {
     try {
       // Build git log command with custom format
       const formatParts = [
-        "%H", // Full hash
-        "%h", // Short hash
-        "%an", // Author name
-        "%ae", // Author email
-        "%aI", // Author date (ISO 8601)
-        "%s", // Subject
-        "%b", // Body
-        "%D", // Refs (branches, tags)
+        '%H', // Full hash
+        '%h', // Short hash
+        '%an', // Author name
+        '%ae', // Author email
+        '%aI', // Author date (ISO 8601)
+        '%s', // Subject
+        '%b', // Body
+        '%D', // Refs (branches, tags)
       ];
-      const format = formatParts.join("%x1F"); // Use ASCII Unit Separator
+      const format = formatParts.join('%x1F'); // Use ASCII Unit Separator
 
       let command = `git log --format="${format}%x1E"`; // Use ASCII Record Separator
 
@@ -371,7 +371,7 @@ export class SmartLogTool {
 
       // Add reverse order if requested
       if (opts.reverse) {
-        command += " --reverse";
+        command += ' --reverse';
       }
 
       // Add file path if specified
@@ -381,7 +381,7 @@ export class SmartLogTool {
 
       const output = execSync(command, {
         cwd: opts.cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
         maxBuffer: 50 * 1024 * 1024, // 50MB
       });
 
@@ -397,13 +397,13 @@ export class SmartLogTool {
    */
   private parseGitLog(
     output: string,
-    opts: Required<SmartLogOptions>,
+    opts: Required<SmartLogOptions>
   ): CommitInfo[] {
     const commits: CommitInfo[] = [];
-    const records = output.split("\x1E").filter((r) => r.trim());
+    const records = output.split('\x1E').filter((r) => r.trim());
 
     for (const record of records) {
-      const fields = record.split("\x1F");
+      const fields = record.split('\x1F');
       if (fields.length < 8) continue;
 
       const [hash, shortHash, author, email, dateStr, subject, body, refs] =
@@ -415,19 +415,19 @@ export class SmartLogTool {
         author,
         email,
         date: new Date(dateStr),
-        message: subject + (body ? "\n\n" + body.trim() : ""),
+        message: subject + (body ? '\n\n' + body.trim() : ''),
         subject,
       };
 
       // Add body if format is not oneline
-      if (opts.format !== "oneline" && body.trim()) {
+      if (opts.format !== 'oneline' && body.trim()) {
         commit.body = body.trim();
       }
 
       // Add refs if requested and available
       if (opts.includeRefs && refs.trim()) {
         commit.refs = refs
-          .split(", ")
+          .split(', ')
           .map((r) => r.trim())
           .filter((r) => r);
       }
@@ -459,10 +459,10 @@ export class SmartLogTool {
         `git diff-tree --no-commit-id --name-only -r ${hash}`,
         {
           cwd,
-          encoding: "utf-8",
-        },
+          encoding: 'utf-8',
+        }
       );
-      return output.split("\n").filter((f) => f.trim());
+      return output.split('\n').filter((f) => f.trim());
     } catch {
       return [];
     }
@@ -473,12 +473,12 @@ export class SmartLogTool {
    */
   private getCommitStats(
     hash: string,
-    cwd: string,
+    cwd: string
   ): { additions: number; deletions: number } {
     try {
       const output = execSync(`git show --shortstat --format="" ${hash}`, {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
 
       const addMatch = output.match(/(\d+) insertion/);
@@ -498,7 +498,7 @@ export class SmartLogTool {
    */
   private filterFields(
     commits: CommitInfo[],
-    fields: Array<keyof CommitInfo>,
+    fields: Array<keyof CommitInfo>
   ): CommitInfo[] {
     return commits.map((commit) => {
       const filtered: Partial<CommitInfo> = {};
@@ -520,17 +520,17 @@ export class SmartLogTool {
     totalTokensSaved: number;
     averageReduction: number;
   } {
-    const logMetrics = this.metrics.getOperations(0, "smart_log");
+    const logMetrics = this.metrics.getOperations(0, 'smart_log');
 
     const totalLogs = logMetrics.length;
     const cacheHits = logMetrics.filter((m) => m.cacheHit).length;
     const totalTokensSaved = logMetrics.reduce(
       (sum, m) => sum + (m.savedTokens || 0),
-      0,
+      0
     );
     const totalInputTokens = logMetrics.reduce(
       (sum, m) => sum + (m.inputTokens || 0),
-      0,
+      0
     );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
@@ -554,7 +554,7 @@ export class SmartLogTool {
 export function getSmartLogTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartLogTool {
   return new SmartLogTool(cache, tokenCounter, metrics);
 }
@@ -563,9 +563,9 @@ export function getSmartLogTool(
  * CLI function - Creates resources and uses factory
  */
 export async function runSmartLog(
-  options: SmartLogOptions = {},
+  options: SmartLogOptions = {}
 ): Promise<SmartLogResult> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -577,65 +577,65 @@ export async function runSmartLog(
  * MCP Tool Definition
  */
 export const SMART_LOG_TOOL_DEFINITION = {
-  name: "smart_log",
+  name: 'smart_log',
   description:
-    "Get git commit history with 75% token reduction through structured JSON output and smart filtering",
+    'Get git commit history with 75% token reduction through structured JSON output and smart filtering',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       cwd: {
-        type: "string",
-        description: "Working directory for git operations",
+        type: 'string',
+        description: 'Working directory for git operations',
       },
       since: {
-        type: "string",
+        type: 'string',
         description:
           'Show commits since ref/date (e.g., "HEAD~10", "2024-01-01")',
       },
       until: {
-        type: "string",
-        description: "Show commits until ref/date",
+        type: 'string',
+        description: 'Show commits until ref/date',
       },
       branch: {
-        type: "string",
-        description: "Specific branch to query (default: current branch)",
+        type: 'string',
+        description: 'Specific branch to query (default: current branch)',
       },
       author: {
-        type: "string",
-        description: "Filter by author name or email",
+        type: 'string',
+        description: 'Filter by author name or email',
       },
       grep: {
-        type: "string",
-        description: "Filter by commit message pattern",
+        type: 'string',
+        description: 'Filter by commit message pattern',
       },
       filePath: {
-        type: "string",
-        description: "Only show commits affecting this file/directory",
+        type: 'string',
+        description: 'Only show commits affecting this file/directory',
       },
       format: {
-        type: "string",
-        enum: ["oneline", "short", "full"],
-        description: "Output detail level",
-        default: "short",
+        type: 'string',
+        enum: ['oneline', 'short', 'full'],
+        description: 'Output detail level',
+        default: 'short',
       },
       includeFiles: {
-        type: "boolean",
-        description: "Include list of changed files",
+        type: 'boolean',
+        description: 'Include list of changed files',
         default: false,
       },
       includeStats: {
-        type: "boolean",
-        description: "Include addition/deletion statistics",
+        type: 'boolean',
+        description: 'Include addition/deletion statistics',
         default: false,
       },
       limit: {
-        type: "number",
-        description: "Maximum commits to return",
+        type: 'number',
+        description: 'Maximum commits to return',
         default: 50,
       },
       offset: {
-        type: "number",
-        description: "Skip first N commits",
+        type: 'number',
+        description: 'Skip first N commits',
         default: 0,
       },
     },

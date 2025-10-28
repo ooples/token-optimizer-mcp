@@ -11,10 +11,10 @@
  * - Token-optimized output
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { createHash } from 'crypto';
 
 interface SmartGraphQLOptions {
   /**
@@ -80,7 +80,7 @@ interface FragmentSuggestion {
 interface FieldReduction {
   field: string;
   reason: string;
-  impact: "high" | "medium" | "low";
+  impact: 'high' | 'medium' | 'low';
 }
 
 interface BatchOpportunity {
@@ -92,12 +92,12 @@ interface BatchOpportunity {
 interface N1Problem {
   field: string;
   location: string;
-  severity: "high" | "medium" | "low";
+  severity: 'high' | 'medium' | 'low';
   suggestion: string;
 }
 
 interface QueryAnalysis {
-  operation: "query" | "mutation" | "subscription";
+  operation: 'query' | 'mutation' | 'subscription';
   name?: string;
   fields: string[];
   complexity: ComplexityMetrics;
@@ -130,7 +130,7 @@ interface SmartGraphQLResult {
 }
 
 interface ParsedQuery {
-  operation: "query" | "mutation" | "subscription";
+  operation: 'query' | 'mutation' | 'subscription';
   name?: string;
   selections: Selection[];
   fragments: Fragment[];
@@ -152,7 +152,7 @@ export class SmartGraphQL {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   async run(options: SmartGraphQLOptions): Promise<SmartGraphQLResult> {
@@ -165,7 +165,7 @@ export class SmartGraphQL {
       if (cached) {
         const duration = Date.now() - startTime;
         this.metrics.record({
-          operation: "smart_graphql",
+          operation: 'smart_graphql',
           duration,
           cacheHit: true,
           success: true,
@@ -186,7 +186,7 @@ export class SmartGraphQL {
 
     const duration = Date.now() - startTime;
     this.metrics.record({
-      operation: "smart_graphql",
+      operation: 'smart_graphql',
       duration,
       cacheHit: false,
       success: true,
@@ -248,11 +248,11 @@ export class SmartGraphQL {
     const trimmed = query.trim();
 
     // Detect operation type
-    let operation: "query" | "mutation" | "subscription" = "query";
-    if (trimmed.startsWith("mutation")) {
-      operation = "mutation";
-    } else if (trimmed.startsWith("subscription")) {
-      operation = "subscription";
+    let operation: 'query' | 'mutation' | 'subscription' = 'query';
+    if (trimmed.startsWith('mutation')) {
+      operation = 'mutation';
+    } else if (trimmed.startsWith('subscription')) {
+      operation = 'subscription';
     }
 
     // Extract operation name (if present)
@@ -282,7 +282,7 @@ export class SmartGraphQL {
       const [, name, type, body] = match;
       const fields = body
         .split(/\s+/)
-        .filter((f) => f && !f.includes("{") && !f.includes("}"))
+        .filter((f) => f && !f.includes('{') && !f.includes('}'))
         .map((f) => f.trim());
 
       fragments.push({ name, type, fields });
@@ -305,8 +305,8 @@ export class SmartGraphQL {
 
       // Skip GraphQL keywords
       if (
-        ["query", "mutation", "subscription", "fragment", "on"].includes(
-          fieldName,
+        ['query', 'mutation', 'subscription', 'fragment', 'on'].includes(
+          fieldName
         )
       ) {
         continue;
@@ -323,7 +323,7 @@ export class SmartGraphQL {
       const nestedFields = this.findNestedSelections(
         query,
         fieldStart,
-        depth + 1,
+        depth + 1
       );
 
       selections.push({
@@ -339,9 +339,9 @@ export class SmartGraphQL {
   private findNestedSelections(
     query: string,
     startIndex: number,
-    depth: number,
+    depth: number
   ): Selection[] {
-    const openBrace = query.indexOf("{", startIndex);
+    const openBrace = query.indexOf('{', startIndex);
     if (openBrace === -1) {
       return [];
     }
@@ -350,8 +350,8 @@ export class SmartGraphQL {
     let braceCount = 1;
     let i = openBrace + 1;
     while (i < query.length && braceCount > 0) {
-      if (query[i] === "{") braceCount++;
-      if (query[i] === "}") braceCount--;
+      if (query[i] === '{') braceCount++;
+      if (query[i] === '}') braceCount--;
       i++;
     }
 
@@ -386,7 +386,7 @@ export class SmartGraphQL {
     const score = Math.round(
       maxDepth *
         (totalBreadth / Math.max(maxDepth, 1)) *
-        Math.log10(Math.max(fieldCount, 1) + 1),
+        Math.log10(Math.max(fieldCount, 1) + 1)
     );
 
     return {
@@ -416,7 +416,7 @@ export class SmartGraphQL {
   }
 
   private detectFragmentOpportunities(
-    parsed: ParsedQuery,
+    parsed: ParsedQuery
   ): FragmentSuggestion[] {
     const suggestions: FragmentSuggestion[] = [];
     const fieldGroups = new Map<string, string[]>();
@@ -424,13 +424,13 @@ export class SmartGraphQL {
     // Group repeated field patterns
     const traverse = (selections: Selection[], path: string[] = []) => {
       for (const selection of selections) {
-        const fieldPath = [...path, selection.name].join(".");
+        const fieldPath = [...path, selection.name].join('.');
 
         if (selection.fields.length > 0) {
           const fieldNames = selection.fields
             .map((f) => f.name)
             .sort()
-            .join(",");
+            .join(',');
           const key = `${selection.name}:${fieldNames}`;
 
           if (!fieldGroups.has(key)) {
@@ -448,8 +448,8 @@ export class SmartGraphQL {
     // Create suggestions for repeated patterns
     for (const [key, paths] of fieldGroups) {
       if (paths.length >= 2) {
-        const [typeName, fieldNames] = key.split(":");
-        const fields = fieldNames.split(",");
+        const [typeName, fieldNames] = key.split(':');
+        const fields = fieldNames.split(',');
 
         suggestions.push({
           name: `${typeName}Fragment`,
@@ -465,19 +465,19 @@ export class SmartGraphQL {
 
   private detectFieldReductions(parsed: ParsedQuery): FieldReduction[] {
     const reductions: FieldReduction[] = [];
-    const commonFields = ["id", "__typename", "createdAt", "updatedAt"];
+    const commonFields = ['id', '__typename', 'createdAt', 'updatedAt'];
 
     // Check for overfetching common metadata fields
     const allFields = this.extractFields(parsed);
     const metadataCount = allFields.filter((f) =>
-      commonFields.includes(f),
+      commonFields.includes(f)
     ).length;
 
     if (metadataCount > 5) {
       reductions.push({
-        field: "metadata fields",
+        field: 'metadata fields',
         reason: `Query includes ${metadataCount} metadata fields - consider if all are needed`,
-        impact: "medium",
+        impact: 'medium',
       });
     }
 
@@ -488,9 +488,9 @@ export class SmartGraphQL {
       );
       if (maxDepth > 4) {
         reductions.push({
-          field: "nested depth",
+          field: 'nested depth',
           reason: `Query depth of ${maxDepth} may indicate overfetching`,
-          impact: "high",
+          impact: 'high',
         });
       }
     }
@@ -511,11 +511,11 @@ export class SmartGraphQL {
     const opportunities: BatchOpportunity[] = [];
 
     // Check for multiple root-level queries
-    if (parsed.selections.length > 3 && parsed.operation === "query") {
+    if (parsed.selections.length > 3 && parsed.operation === 'query') {
       opportunities.push({
         queries: parsed.selections.slice(0, 3).map((s) => s.name),
         reason: `${parsed.selections.length} separate queries could be batched`,
-        estimatedSavings: "Reduce network round trips by ~50%",
+        estimatedSavings: 'Reduce network round trips by ~50%',
       });
     }
 
@@ -526,29 +526,29 @@ export class SmartGraphQL {
     const problems: N1Problem[] = [];
 
     // Detect list fields with nested object selections (potential N+1)
-    const checkSelection = (selection: Selection, path: string = "") => {
+    const checkSelection = (selection: Selection, path: string = '') => {
       const currentPath = path ? `${path}.${selection.name}` : selection.name;
 
       // Check if field name suggests it's a list (plural or common list names)
       const isLikelyList =
-        selection.name.endsWith("s") ||
-        ["items", "edges", "nodes", "list"].includes(
-          selection.name.toLowerCase(),
+        selection.name.endsWith('s') ||
+        ['items', 'edges', 'nodes', 'list'].includes(
+          selection.name.toLowerCase()
         );
 
       if (isLikelyList && selection.fields.length > 0) {
         // Check if nested fields have further nesting (classic N+1 indicator)
         const hasNestedObjects = selection.fields.some(
-          (f) => f.fields.length > 0,
+          (f) => f.fields.length > 0
         );
 
         if (hasNestedObjects) {
           problems.push({
             field: currentPath,
-            location: `${selection.name} -> ${selection.fields.map((f) => f.name).join(", ")}`,
-            severity: "high",
+            location: `${selection.name} -> ${selection.fields.map((f) => f.name).join(', ')}`,
+            severity: 'high',
             suggestion:
-              "Consider using DataLoader or batching to prevent N+1 queries",
+              'Consider using DataLoader or batching to prevent N+1 queries',
           });
         }
       }
@@ -569,8 +569,10 @@ export class SmartGraphQL {
   private async introspectSchema(endpoint: string): Promise<SchemaInfo> {
     // Placeholder for Phase 3 - return cached mock data
     // In production, this would execute an introspection query
-    const cacheKey = `cache-${createHash("md5").update("graphql_schema:" + endpoint).digest("hex")}`;
-    const cached = await this.cache.get(cacheKey);
+    const cacheKey = `cache-${createHash('md5')
+      .update('graphql_schema:' + endpoint)
+      .digest('hex')}`;
+    const cached = this.cache.get(cacheKey);
 
     if (cached) {
       return JSON.parse(cached.toString());
@@ -585,12 +587,7 @@ export class SmartGraphQL {
     };
 
     // Cache for 1 hour
-    await this.cache.set(
-      cacheKey,
-      JSON.stringify(schemaInfo),
-      0,
-      3600,
-    );
+    await this.cache.set(cacheKey, JSON.stringify(schemaInfo), 0, 3600);
 
     return schemaInfo;
   }
@@ -601,7 +598,7 @@ export class SmartGraphQL {
       optimizations?: Optimizations;
       schema?: SchemaInfo;
     },
-    fromCache: boolean,
+    fromCache: boolean
   ): SmartGraphQLResult {
     const fullOutput = JSON.stringify(result);
     const originalTokens = this.tokenCounter.count(fullOutput).tokens;
@@ -629,7 +626,7 @@ export class SmartGraphQL {
         optimizations: {
           fragmentSuggestions: result.optimizations.fragmentSuggestions.slice(
             0,
-            3,
+            3
           ),
           n1Problems: result.optimizations.n1Problems.slice(0, 2),
         },
@@ -670,17 +667,17 @@ export class SmartGraphQL {
       suggestOptimizations: options.suggestOptimizations,
     };
 
-    const hash = createHash("sha256")
+    const hash = createHash('sha256')
       .update(JSON.stringify(keyData))
-      .digest("hex")
+      .digest('hex')
       .substring(0, 16);
 
-    return `cache-${createHash("md5").update("smart_graphql").update(hash).digest("hex")}`;
+    return `cache-${createHash('md5').update('smart_graphql').update(hash).digest('hex')}`;
   }
 
   private async getCachedResult(
     key: string,
-    ttl: number,
+    ttl: number
   ): Promise<{
     query: QueryAnalysis;
     optimizations?: Optimizations;
@@ -709,7 +706,7 @@ export class SmartGraphQL {
       optimizations?: Optimizations;
       schema?: SchemaInfo;
     },
-    ttl: number,
+    ttl: number
   ): Promise<void> {
     const cacheData = {
       ...result,
@@ -717,16 +714,11 @@ export class SmartGraphQL {
     };
 
     const tokensSavedResult = this.tokenCounter.count(
-      JSON.stringify(cacheData),
+      JSON.stringify(cacheData)
     );
     const tokensSaved = tokensSavedResult.tokens;
 
-    await this.cache.set(
-      key,
-      JSON.stringify(cacheData),
-      tokensSaved,
-      ttl,
-    );
+    this.cache.set(key, JSON.stringify(cacheData), tokensSaved, ttl);
   }
 }
 
@@ -737,7 +729,7 @@ export class SmartGraphQL {
 export function getSmartGraphQL(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartGraphQL {
   return new SmartGraphQL(cache, tokenCounter, metrics);
 }
@@ -747,16 +739,18 @@ export function getSmartGraphQL(
 // ============================================================================
 
 export async function runSmartGraphQL(
-  options: SmartGraphQLOptions,
+  options: SmartGraphQLOptions
 ): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const graphql = getSmartGraphQL(
     cache,
-    new TokenCounter(),
-    new MetricsCollector(),
+    tokenCounter,
+    metrics
   );
 
   const result = await graphql.run(options);
@@ -766,50 +760,50 @@ export async function runSmartGraphQL(
 
 // MCP tool definition
 export const SMART_GRAPHQL_TOOL_DEFINITION = {
-  name: "smart_graphql",
+  name: 'smart_graphql',
   description:
-    "GraphQL query optimizer with complexity analysis and caching (83% token reduction)",
+    'GraphQL query optimizer with complexity analysis and caching (83% token reduction)',
   inputSchema: {
-    type: "object" as const,
+    type: 'object' as const,
     properties: {
       query: {
-        type: "string" as const,
-        description: "GraphQL query to analyze",
+        type: 'string' as const,
+        description: 'GraphQL query to analyze',
       },
       variables: {
-        type: "object" as const,
-        description: "Query variables (optional)",
+        type: 'object' as const,
+        description: 'Query variables (optional)',
       },
       operationName: {
-        type: "string" as const,
-        description: "Operation name (optional)",
+        type: 'string' as const,
+        description: 'Operation name (optional)',
       },
       endpoint: {
-        type: "string" as const,
-        description: "GraphQL endpoint for schema introspection (optional)",
+        type: 'string' as const,
+        description: 'GraphQL endpoint for schema introspection (optional)',
       },
       analyzeComplexity: {
-        type: "boolean" as const,
-        description: "Enable complexity analysis (default: true)",
+        type: 'boolean' as const,
+        description: 'Enable complexity analysis (default: true)',
       },
       detectN1: {
-        type: "boolean" as const,
-        description: "Detect N+1 query problems (default: true)",
+        type: 'boolean' as const,
+        description: 'Detect N+1 query problems (default: true)',
       },
       suggestOptimizations: {
-        type: "boolean" as const,
-        description: "Suggest query optimizations (default: true)",
+        type: 'boolean' as const,
+        description: 'Suggest query optimizations (default: true)',
       },
       force: {
-        type: "boolean" as const,
-        description: "Force fresh analysis (bypass cache)",
+        type: 'boolean' as const,
+        description: 'Force fresh analysis (bypass cache)',
       },
       ttl: {
-        type: "number" as const,
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number' as const,
+        description: 'Cache TTL in seconds (default: 300)',
       },
     },
-    required: ["query"],
+    required: ['query'],
   },
 };
 

@@ -8,14 +8,14 @@
  * - Ignore previously acknowledged issues
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface LintMessage {
   ruleId: string;
@@ -105,7 +105,7 @@ interface SmartLintOutput {
    * Issues grouped by severity and rule
    */
   issues: Array<{
-    severity: "error" | "warning";
+    severity: 'error' | 'warning';
     ruleId: string;
     count: number;
     fixable: boolean;
@@ -125,7 +125,7 @@ interface SmartLintOutput {
   autoFixSuggestions: Array<{
     ruleId: string;
     count: number;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }>;
 
   /**
@@ -150,15 +150,15 @@ interface SmartLintOutput {
 
 export class SmartLint {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_lint";
+  private cacheNamespace = 'smart_lint';
   private projectRoot: string;
-  private ignoredIssuesKey = "ignored_issues";
+  private ignoredIssuesKey = 'ignored_issues';
 
   constructor(
     cache: CacheEngine,
     _tokenCounter: TokenCounter,
     _metrics: MetricsCollector,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.projectRoot = projectRoot || process.cwd();
@@ -169,7 +169,7 @@ export class SmartLint {
    */
   async run(options: SmartLintOptions = {}): Promise<SmartLintOutput> {
     const {
-      files = "src",
+      files = 'src',
       force = false,
       fix = false,
       onlyNew = true,
@@ -209,30 +209,30 @@ export class SmartLint {
     files: string[];
     fix: boolean;
   }): Promise<LintOutput> {
-    const args = [...options.files, "--format=json"];
+    const args = [...options.files, '--format=json'];
 
     if (options.fix) {
-      args.push("--fix");
+      args.push('--fix');
     }
 
     return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
+      let stdout = '';
+      let stderr = '';
 
-      const eslint = spawn("npx", ["eslint", ...args], {
+      const eslint = spawn('npx', ['eslint', ...args], {
         cwd: this.projectRoot,
         shell: true,
       });
 
-      eslint.stdout.on("data", (data) => {
+      eslint.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      eslint.stderr.on("data", (data) => {
+      eslint.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      eslint.on("close", (_code) => {
+      eslint.on('close', (_code) => {
         try {
           // ESLint outputs JSON even on errors
           const result = JSON.parse(stdout) as LintResult[];
@@ -243,23 +243,23 @@ export class SmartLint {
             warningCount: result.reduce((sum, r) => sum + r.warningCount, 0),
             fixableErrorCount: result.reduce(
               (sum, r) => sum + r.fixableErrorCount,
-              0,
+              0
             ),
             fixableWarningCount: result.reduce(
               (sum, r) => sum + r.fixableWarningCount,
-              0,
+              0
             ),
           };
 
           resolve(output);
         } catch (err) {
           reject(
-            new Error(`Failed to parse ESLint output: ${stderr || stdout}`),
+            new Error(`Failed to parse ESLint output: ${stderr || stdout}`)
           );
         }
       });
 
-      eslint.on("error", (err) => {
+      eslint.on('error', (err) => {
         reject(err);
       });
     });
@@ -269,32 +269,32 @@ export class SmartLint {
    * Generate cache key based on source files
    */
   private async generateCacheKey(files: string[]): Promise<string> {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(this.cacheNamespace);
-    hash.update(files.join(":"));
+    hash.update(files.join(':'));
 
     // Hash eslint config
-    const eslintConfigPath = join(this.projectRoot, "eslint.config.js");
+    const eslintConfigPath = join(this.projectRoot, 'eslint.config.js');
     if (existsSync(eslintConfigPath)) {
-      const content = readFileSync(eslintConfigPath, "utf-8");
+      const content = readFileSync(eslintConfigPath, 'utf-8');
       hash.update(content);
     }
 
     // Hash package.json for dependency changes
-    const packageJsonPath = join(this.projectRoot, "package.json");
+    const packageJsonPath = join(this.projectRoot, 'package.json');
     if (existsSync(packageJsonPath)) {
-      const packageJson = readFileSync(packageJsonPath, "utf-8");
+      const packageJson = readFileSync(packageJsonPath, 'utf-8');
       // Only hash eslint-related dependencies
       const pkg = JSON.parse(packageJson);
       const eslintDeps = Object.keys(pkg.devDependencies || {})
-        .filter((dep) => dep.includes("eslint"))
+        .filter((dep) => dep.includes('eslint'))
         .sort()
         .map((dep) => `${dep}:${pkg.devDependencies[dep]}`)
-        .join(",");
+        .join(',');
       hash.update(eslintDeps);
     }
 
-    return `${this.cacheNamespace}:${hash.digest("hex")}`;
+    return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
   /**
@@ -331,9 +331,9 @@ export class SmartLint {
 
     const dataToCache = JSON.stringify(toCache);
     const originalSize = this.estimateOriginalOutputSize(result);
-    const compressedSize = dataToCache.length;
+    const compactSize = dataToCache.length;
 
-    this.cache.set(key, dataToCache, originalSize, compressedSize);
+    this.cache.set(key, dataToCache, originalSize, compactSize);
   }
 
   /**
@@ -381,7 +381,7 @@ export class SmartLint {
     result: LintOutput,
     _onlyNew: boolean,
     includeIgnored: boolean,
-    fromCache = false,
+    fromCache = false
   ): SmartLintOutput {
     // Get ignored issues
     const ignoredSet = this.getIgnoredIssues();
@@ -390,7 +390,7 @@ export class SmartLint {
     const issuesByRule = new Map<
       string,
       {
-        severity: "error" | "warning";
+        severity: 'error' | 'warning';
         fixable: boolean;
         occurrences: Array<{
           file: string;
@@ -406,7 +406,7 @@ export class SmartLint {
         const key = this.generateIssueKey(
           fileResult.filePath,
           message.line,
-          message.ruleId,
+          message.ruleId
         );
 
         // Skip ignored issues unless requested
@@ -416,7 +416,7 @@ export class SmartLint {
 
         if (!issuesByRule.has(message.ruleId)) {
           issuesByRule.set(message.ruleId, {
-            severity: message.severity === 2 ? "error" : "warning",
+            severity: message.severity === 2 ? 'error' : 'warning',
             fixable: !!message.fix,
             occurrences: [],
           });
@@ -500,7 +500,7 @@ export class SmartLint {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -511,15 +511,15 @@ export class SmartLint {
    */
   private estimateFixImpact(
     count: number,
-    severity: "error" | "warning",
-  ): "high" | "medium" | "low" {
-    if (severity === "error" || count > 20) {
-      return "high";
+    severity: 'error' | 'warning'
+  ): 'high' | 'medium' | 'low' {
+    if (severity === 'error' || count > 20) {
+      return 'high';
     }
     if (count > 5) {
-      return "medium";
+      return 'medium';
     }
-    return "low";
+    return 'low';
   }
 
   /**
@@ -527,7 +527,7 @@ export class SmartLint {
    */
   private formatCachedOutput(
     result: LintOutput,
-    onlyNew: boolean,
+    onlyNew: boolean
   ): SmartLintOutput {
     return this.transformOutput(result, onlyNew, false, true);
   }
@@ -539,7 +539,7 @@ export class SmartLint {
     // Estimate: each message is ~150 chars in full output
     const messageCount = result.results.reduce(
       (sum, r) => sum + r.messages.length,
-      0,
+      0
     );
     return messageCount * 150 + 500; // Plus header/footer
   }
@@ -577,7 +577,7 @@ export function getSmartLintTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartLint {
   return new SmartLint(cache, tokenCounter, metrics, projectRoot);
 }
@@ -586,9 +586,9 @@ export function getSmartLintTool(
  * CLI-friendly function for running smart lint
  */
 export async function runSmartLint(
-  options: SmartLintOptions = {},
+  options: SmartLintOptions = {}
 ): Promise<string> {
-  const cacheDir = join(homedir(), ".hypercontext", "cache");
+  const cacheDir = join(homedir(), '.hypercontext', 'cache');
   const cache = new CacheEngine(cacheDir, 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
@@ -596,13 +596,13 @@ export async function runSmartLint(
     cache,
     tokenCounter,
     metrics,
-    options.projectRoot,
+    options.projectRoot
   );
   try {
     const result = await smartLint.run(options);
 
-    let output = `\nðŸ” Smart Lint Results ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\nðŸ” Smart Lint Results ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
@@ -613,14 +613,14 @@ export async function runSmartLint(
     if (result.summary.newIssuesCount > 0) {
       output += `  New Issues: ${result.summary.newIssuesCount}\n`;
     }
-    output += "\n";
+    output += '\n';
 
     // Issues by rule (top 10)
     if (result.issues.length > 0) {
       output += `Issues by Rule:\n`;
       for (const issue of result.issues.slice(0, 10)) {
-        const icon = issue.severity === "error" ? "âœ—" : "âš ";
-        const fixIcon = issue.fixable ? "ðŸ”§" : "";
+        const icon = issue.severity === 'error' ? 'âœ—' : 'âš ';
+        const fixIcon = issue.fixable ? 'ðŸ”§' : '';
         output += `  ${icon} ${issue.ruleId} (${issue.count}) ${fixIcon}\n`;
 
         // Show first file as example
@@ -633,7 +633,7 @@ export async function runSmartLint(
           if (issue.files.length > 1 || firstFile.locations.length > 1) {
             const totalOccurrences = issue.files.reduce(
               (sum, f) => sum + f.locations.length,
-              0,
+              0
             );
             output += `    ... ${totalOccurrences - 1} more occurrences\n`;
           }
@@ -643,7 +643,7 @@ export async function runSmartLint(
       if (result.issues.length > 10) {
         output += `  ... and ${result.issues.length - 10} more rules\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Auto-fix suggestions
@@ -651,15 +651,15 @@ export async function runSmartLint(
       output += `Auto-Fix Suggestions:\n`;
       for (const suggestion of result.autoFixSuggestions.slice(0, 5)) {
         const icon =
-          suggestion.impact === "high"
-            ? "ðŸ”´"
-            : suggestion.impact === "medium"
-              ? "ðŸŸ¡"
-              : "ðŸŸ¢";
+          suggestion.impact === 'high'
+            ? 'ðŸ”´'
+            : suggestion.impact === 'medium'
+              ? 'ðŸŸ¡'
+              : 'ðŸŸ¢';
         output += `  ${icon} ${suggestion.ruleId} (${suggestion.count} occurrences)\n`;
         output += `    Run: npx eslint --fix --rule "${suggestion.ruleId}"\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // New issues
@@ -672,7 +672,7 @@ export async function runSmartLint(
       if (result.newIssues.length > 5) {
         output += `  ... and ${result.newIssues.length - 5} more\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // _metrics
@@ -689,44 +689,44 @@ export async function runSmartLint(
 
 // MCP Tool definition
 export const SMART_LINT_TOOL_DEFINITION = {
-  name: "smart_lint",
+  name: 'smart_lint',
   description:
-    "Run ESLint with intelligent caching, incremental analysis, and auto-fix suggestions",
+    'Run ESLint with intelligent caching, incremental analysis, and auto-fix suggestions',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       files: {
-        type: ["string", "array"],
-        description: "Files or pattern to lint",
-        items: { type: "string" },
+        type: ['string', 'array'],
+        description: 'Files or pattern to lint',
+        items: { type: 'string' },
       },
       force: {
-        type: "boolean",
-        description: "Force full lint (ignore cache)",
+        type: 'boolean',
+        description: 'Force full lint (ignore cache)',
         default: false,
       },
       fix: {
-        type: "boolean",
-        description: "Auto-fix issues",
+        type: 'boolean',
+        description: 'Auto-fix issues',
         default: false,
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       onlyNew: {
-        type: "boolean",
-        description: "Show only new issues since last run",
+        type: 'boolean',
+        description: 'Show only new issues since last run',
         default: false,
       },
       includeIgnored: {
-        type: "boolean",
-        description: "Include previously ignored issues",
+        type: 'boolean',
+        description: 'Include previously ignored issues',
         default: false,
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 3600)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 3600)',
         default: 3600,
       },
     },

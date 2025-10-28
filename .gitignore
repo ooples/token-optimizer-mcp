@@ -35,3 +35,11 @@ coverage/
 
 # Claude configuration (contains secrets)
 .claude/
+
+# MCP registry tokens (secrets)
+.mcpregistry_github_token
+worktrees/
+ 
+# Local development configs and logs
+.codex/
+logs/

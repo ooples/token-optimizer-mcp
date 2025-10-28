@@ -10,22 +10,22 @@
  * - 7-day TTL with change detection
  */
 
-import { readFileSync, existsSync, statSync } from "fs";
-import { parse as parseYAML } from "yaml";
-import { parse as parseTOML } from "@iarna/toml";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { hashFile, generateCacheKey } from "../shared/hash-utils";
-import { compress, decompress } from "../shared/compression-utils";
-import { homedir } from "os";
-import { join } from "path";
+import { readFileSync, existsSync, statSync } from 'fs';
+import { parse as parseYAML } from 'yaml';
+import { parse as parseTOML } from '@iarna/toml';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
+import { compress, decompress } from '../shared/compression-utils.js';
+import { homedir } from 'os';
+import { join } from 'path';
 
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
 
-export type ConfigFormat = "json" | "yaml" | "yml" | "toml" | "auto";
+export type ConfigFormat = 'json' | 'yaml' | 'yml' | 'toml' | 'auto';
 
 export interface SmartConfigReadOptions {
   // Cache options
@@ -68,7 +68,7 @@ export interface ConfigSchemaProperty {
 export interface ConfigValidationError {
   path: string;
   message: string;
-  severity: "error" | "warning" | "info";
+  severity: 'error' | 'warning' | 'info';
   suggestion?: string;
 }
 
@@ -113,7 +113,11 @@ export class SmartConfigReadTool {
   private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
 
-  constructor(cache: CacheEngine, tokenCounter: TokenCounter, metrics: MetricsCollector) {
+  constructor(
+    cache: CacheEngine,
+    tokenCounter: TokenCounter,
+    metrics: MetricsCollector
+  ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
     this.metrics = metrics;
@@ -131,7 +135,7 @@ export class SmartConfigReadTool {
     const {
       enableCache = true,
       ttl = 604800, // 7 days default
-      format = "auto",
+      format = 'auto',
       validateSchema = true,
       inferSchema = true,
       diffMode = true,
@@ -152,12 +156,12 @@ export class SmartConfigReadTool {
     const detectedFormat = this.detectFormat(filePath, format);
 
     // Generate cache keys
-    const configCacheKey = generateCacheKey("smart-config", {
+    const configCacheKey = generateCacheKey('smart-config', {
       path: filePath,
       hash: fileHash,
     });
 
-    const schemaCacheKey = generateCacheKey("config-schema", {
+    const schemaCacheKey = generateCacheKey('config-schema', {
       path: filePath,
       hash: fileHash,
     });
@@ -177,13 +181,15 @@ export class SmartConfigReadTool {
     }
 
     // Read and parse config file
-    const rawContent = readFileSync(filePath, "utf-8");
+    const rawContent = readFileSync(filePath, 'utf-8');
     const parseStartTime = Date.now();
     const parsedConfig = this.parseConfig(rawContent, detectedFormat);
     const parseTime = Date.now() - parseStartTime;
 
     // Calculate original tokens
-    const originalTokens = this.tokenCounter.count(JSON.stringify(parsedConfig, null, 2)).tokens;
+    const originalTokens = this.tokenCounter.count(
+      JSON.stringify(parsedConfig, null, 2)
+    ).tokens;
 
     let finalOutput: Record<string, unknown> = parsedConfig;
     let isDiff = false;
@@ -200,32 +206,48 @@ export class SmartConfigReadTool {
       // Check schema cache
       if (cachedSchema) {
         const cachedSchemaObj = JSON.parse(
-          decompress(Buffer.from(cachedSchema, 'utf-8'), "gzip").toString()
+          decompress(Buffer.from(cachedSchema, 'utf-8'), 'gzip').toString()
         ) as ConfigSchema;
 
         // Compare schemas to detect structural changes
         if (!this.schemasMatch(cachedSchemaObj, inferredSchema)) {
-          suggestions.push("Configuration schema has changed - review new/removed properties");
+          suggestions.push(
+            'Configuration schema has changed - review new/removed properties'
+          );
         }
       }
     }
 
     // Validate against provided or inferred schema
     if (validateSchema && (schema || inferredSchema)) {
-      const schemaToValidate = (schema as unknown as ConfigSchema) || inferredSchema!;
-      validationErrors = this.validateConfig(parsedConfig, schemaToValidate, strictMode);
+      const schemaToValidate =
+        (schema as unknown as ConfigSchema) || inferredSchema!;
+      validationErrors = this.validateConfig(
+        parsedConfig,
+        schemaToValidate,
+        strictMode
+      );
     }
 
     // Generate improvement suggestions
     if (includeSuggestions) {
-      suggestions = [...suggestions, ...this.generateSuggestions(parsedConfig, validationErrors)];
+      suggestions = [
+        ...suggestions,
+        ...this.generateSuggestions(parsedConfig, validationErrors),
+      ];
     }
 
     // Handle diff mode if we have cached data
     if (cachedData && diffMode) {
       try {
-        const decompressed = decompress(Buffer.from(cachedData, 'utf-8'), "gzip");
-        const cachedConfig = JSON.parse(decompressed.toString()) as Record<string, unknown>;
+        const decompressed = decompress(
+          Buffer.from(cachedData, 'utf-8'),
+          'gzip'
+        );
+        const cachedConfig = JSON.parse(decompressed.toString()) as Record<
+          string,
+          unknown
+        >;
 
         // Calculate diff
         diffData = this.calculateDiff(cachedConfig, parsedConfig);
@@ -236,22 +258,25 @@ export class SmartConfigReadTool {
           isDiff = true;
           finalOutput = this.transformOutput(diffData, validateOnly);
 
-          const diffTokens = this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
+          const diffTokens = this.tokenCounter.count(
+            JSON.stringify(finalOutput, null, 2)
+          ).tokens;
           tokensSaved = Math.max(0, originalTokens - diffTokens);
         } else {
           // No changes - return minimal response
           isDiff = true;
           finalOutput = {
-            _status: "unchanged",
-            _message: "No configuration changes detected",
+            _status: 'unchanged',
+            _message: 'No configuration changes detected',
           };
           tokensSaved = Math.max(
             0,
-            originalTokens - this.tokenCounter.count(JSON.stringify(finalOutput)).tokens
+            originalTokens -
+              this.tokenCounter.count(JSON.stringify(finalOutput)).tokens
           );
         }
       } catch (error) {
-        console.error("Cache decompression failed:", error);
+        console.error('Cache decompression failed:', error);
         // Fall through to return full config
       }
     }
@@ -259,33 +284,46 @@ export class SmartConfigReadTool {
     // If validateOnly mode, return minimal output
     if (validateOnly && !isDiff) {
       finalOutput = {
-        valid: validationErrors.filter((e) => e.severity === "error").length === 0,
+        valid:
+          validationErrors.filter((e) => e.severity === 'error').length === 0,
         errors: validationErrors.length,
-        warnings: validationErrors.filter((e) => e.severity === "warning").length,
+        warnings: validationErrors.filter((e) => e.severity === 'warning')
+          .length,
       };
 
       tokensSaved =
-        originalTokens - this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
+        originalTokens -
+        this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
     }
 
     // Cache the parsed config and schema
     if (enableCache && !fromCache) {
-      const configCompressed = compress(JSON.stringify(parsedConfig), "gzip");
-      this.cache.set(configCacheKey, configCompressed.toString(), tokensSaved, ttl);
+      const configCompressed = compress(JSON.stringify(parsedConfig), 'gzip');
+      this.cache.set(
+        configCacheKey,
+        configCompressed.toString(),
+        tokensSaved,
+        ttl
+      );
 
       if (inferredSchema) {
-        const schemaCompressed = compress(JSON.stringify(inferredSchema), "gzip");
+        const schemaCompressed = compress(
+          JSON.stringify(inferredSchema),
+          'gzip'
+        );
         this.cache.set(schemaCacheKey, schemaCompressed.toString(), 0, ttl);
       }
     }
 
     // Calculate final metrics
-    const finalTokens = this.tokenCounter.count(JSON.stringify(finalOutput, null, 2)).tokens;
+    const finalTokens = this.tokenCounter.count(
+      JSON.stringify(finalOutput, null, 2)
+    ).tokens;
     const compressionRatio = finalTokens / originalTokens;
 
     // Record metrics
     this.metrics.record({
-      operation: "smart_config_read",
+      operation: 'smart_config_read',
       duration: Date.now() - startTime,
       success: true,
       cacheHit: fromCache,
@@ -331,36 +369,39 @@ export class SmartConfigReadTool {
   // ============================================================================
 
   private detectFormat(filePath: string, format: ConfigFormat): ConfigFormat {
-    if (format !== "auto") {
+    if (format !== 'auto') {
       return format;
     }
 
-    const ext = filePath.split(".").pop()?.toLowerCase();
+    const ext = filePath.split('.').pop()?.toLowerCase();
 
     switch (ext) {
-      case "json":
-        return "json";
-      case "yaml":
-      case "yml":
-        return "yaml";
-      case "toml":
-        return "toml";
+      case 'json':
+        return 'json';
+      case 'yaml':
+      case 'yml':
+        return 'yaml';
+      case 'toml':
+        return 'toml';
       default:
         throw new Error(`Cannot auto-detect format for file: ${filePath}`);
     }
   }
 
-  private parseConfig(content: string, format: ConfigFormat): Record<string, unknown> {
+  private parseConfig(
+    content: string,
+    format: ConfigFormat
+  ): Record<string, unknown> {
     try {
       switch (format) {
-        case "json":
+        case 'json':
           return JSON.parse(content) as Record<string, unknown>;
 
-        case "yaml":
-        case "yml":
+        case 'yaml':
+        case 'yml':
           return parseYAML(content) as Record<string, unknown>;
 
-        case "toml":
+        case 'toml':
           return parseTOML(content) as unknown as Record<string, unknown>;
 
         default:
@@ -389,7 +430,7 @@ export class SmartConfigReadTool {
     }
 
     return {
-      type: "object",
+      type: 'object',
       properties,
       required,
       additionalProperties: false,
@@ -398,21 +439,22 @@ export class SmartConfigReadTool {
 
   private inferPropertySchema(value: unknown): ConfigSchemaProperty {
     if (value === null || value === undefined) {
-      return { type: "null" };
+      return { type: 'null' };
     }
 
     if (Array.isArray(value)) {
-      const itemType = value.length > 0 ? this.inferPropertySchema(value[0]) : { type: "any" };
+      const itemType =
+        value.length > 0 ? this.inferPropertySchema(value[0]) : { type: 'any' };
       return {
-        type: "array",
+        type: 'array',
         items: itemType,
       };
     }
 
-    if (typeof value === "object") {
+    if (typeof value === 'object') {
       const nested = this.inferSchema(value as Record<string, unknown>);
       return {
-        type: "object",
+        type: 'object',
         properties: nested.properties,
         required: nested.required,
       };
@@ -435,7 +477,7 @@ export class SmartConfigReadTool {
           errors.push({
             path: requiredKey,
             message: `Missing required property: ${requiredKey}`,
-            severity: "error",
+            severity: 'error',
             suggestion: `Add the required property "${requiredKey}" to your configuration`,
           });
         }
@@ -449,7 +491,7 @@ export class SmartConfigReadTool {
           errors.push({
             path: key,
             message: `Unexpected property: ${key}`,
-            severity: "warning",
+            severity: 'warning',
             suggestion: `Remove "${key}" or update the schema to allow it`,
           });
         }
@@ -474,14 +516,16 @@ export class SmartConfigReadTool {
     property: ConfigSchemaProperty
   ): ConfigValidationError[] {
     const errors: ConfigValidationError[] = [];
-    const actualType = Array.isArray(value) ? "array" : typeof value;
-    const expectedTypes = Array.isArray(property.type) ? property.type : [property.type];
+    const actualType = Array.isArray(value) ? 'array' : typeof value;
+    const expectedTypes = Array.isArray(property.type)
+      ? property.type
+      : [property.type];
 
     if (!expectedTypes.includes(actualType)) {
       errors.push({
         path,
-        message: `Type mismatch: expected ${expectedTypes.join(" | ")}, got ${actualType}`,
-        severity: "error",
+        message: `Type mismatch: expected ${expectedTypes.join(' | ')}, got ${actualType}`,
+        severity: 'error',
         suggestion: `Change "${path}" to type ${expectedTypes[0]}`,
       });
     }
@@ -490,22 +534,26 @@ export class SmartConfigReadTool {
     if (property.enum && !property.enum.includes(value)) {
       errors.push({
         path,
-        message: `Invalid value: must be one of ${property.enum.join(", ")}`,
-        severity: "error",
-        suggestion: `Set "${path}" to one of: ${property.enum.join(", ")}`,
+        message: `Invalid value: must be one of ${property.enum.join(', ')}`,
+        severity: 'error',
+        suggestion: `Set "${path}" to one of: ${property.enum.join(', ')}`,
       });
     }
 
     // Validate nested objects
-    if (actualType === "object" && property.properties) {
+    if (actualType === 'object' && property.properties) {
       const nestedConfig = value as Record<string, unknown>;
       const nestedSchema: ConfigSchema = {
-        type: "object",
+        type: 'object',
         properties: property.properties,
         required: property.required,
       };
 
-      const nestedErrors = this.validateConfig(nestedConfig, nestedSchema, false);
+      const nestedErrors = this.validateConfig(
+        nestedConfig,
+        nestedSchema,
+        false
+      );
       errors.push(
         ...nestedErrors.map((err) => ({
           ...err,
@@ -592,7 +640,7 @@ export class SmartConfigReadTool {
       return val1.every((item, index) => this.deepEqual(item, val2[index]));
     }
 
-    if (typeof val1 === "object" && typeof val2 === "object") {
+    if (typeof val1 === 'object' && typeof val2 === 'object') {
       const keys1 = Object.keys(val1 as object);
       const keys2 = Object.keys(val2 as object);
 
@@ -621,7 +669,10 @@ export class SmartConfigReadTool {
   // Private Methods - Output Transformation
   // ============================================================================
 
-  private transformOutput(diff: ConfigDiff, validateOnly: boolean): Record<string, unknown> {
+  private transformOutput(
+    diff: ConfigDiff,
+    validateOnly: boolean
+  ): Record<string, unknown> {
     if (validateOnly) {
       return {
         hasChanges: this.hasMeaningfulChanges(diff),
@@ -653,30 +704,30 @@ export class SmartConfigReadTool {
     const suggestions: string[] = [];
 
     // Suggest based on validation errors
-    const errorCount = errors.filter((e) => e.severity === "error").length;
+    const errorCount = errors.filter((e) => e.severity === 'error').length;
     if (errorCount > 0) {
       suggestions.push(
-        `Fix ${errorCount} validation error${errorCount > 1 ? "s" : ""} before deployment`
+        `Fix ${errorCount} validation error${errorCount > 1 ? 's' : ''} before deployment`
       );
     }
 
     // Check for common patterns
-    if ("version" in config && typeof config.version === "string") {
+    if ('version' in config && typeof config.version === 'string') {
       const version = config.version as string;
       if (!version.match(/^\d+\.\d+\.\d+$/)) {
-        suggestions.push("Consider using semantic versioning (e.g., 1.0.0)");
+        suggestions.push('Consider using semantic versioning (e.g., 1.0.0)');
       }
     }
 
     // Check for sensitive data patterns (basic check)
     const configStr = JSON.stringify(config).toLowerCase();
     if (
-      configStr.includes("password") ||
-      configStr.includes("secret") ||
-      configStr.includes("apikey")
+      configStr.includes('password') ||
+      configStr.includes('secret') ||
+      configStr.includes('apikey')
     ) {
       suggestions.push(
-        "WARNING: Configuration may contain sensitive data - use environment variables instead"
+        'WARNING: Configuration may contain sensitive data - use environment variables instead'
       );
     }
 
@@ -684,7 +735,7 @@ export class SmartConfigReadTool {
     const configSize = JSON.stringify(config).length;
     if (configSize > 50000) {
       suggestions.push(
-        "Large configuration file - consider splitting into multiple files or using external references"
+        'Large configuration file - consider splitting into multiple files or using external references'
       );
     }
 
@@ -714,7 +765,7 @@ export async function runSmartConfigRead(
   filePath: string,
   options: SmartConfigReadOptions = {}
 ): Promise<SmartConfigReadResult> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
   const tool = getSmartConfigReadTool(cache, tokenCounter, metrics);
@@ -723,62 +774,65 @@ export async function runSmartConfigRead(
 
 // MCP Tool definition
 export const SMART_CONFIG_READ_TOOL_DEFINITION = {
-  name: "smart_config_read",
+  name: 'smart_config_read',
   description:
-    "Read and parse configuration files (JSON, YAML, TOML) with 83% token reduction through schema-aware caching and intelligent diffing",
+    'Read and parse configuration files (JSON, YAML, TOML) with 83% token reduction through schema-aware caching and intelligent diffing',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       path: {
-        type: "string",
-        description: "Path to the configuration file",
+        type: 'string',
+        description: 'Path to the configuration file',
       },
       format: {
-        type: "string",
-        enum: ["json", "yaml", "yml", "toml", "auto"],
-        description: "Configuration file format (default: auto-detect)",
-        default: "auto",
+        type: 'string',
+        enum: ['json', 'yaml', 'yml', 'toml', 'auto'],
+        description: 'Configuration file format (default: auto-detect)',
+        default: 'auto',
       },
       diffMode: {
-        type: "boolean",
-        description: "Return only diff if configuration changed (default: true)",
+        type: 'boolean',
+        description:
+          'Return only diff if configuration changed (default: true)',
         default: true,
       },
       validateSchema: {
-        type: "boolean",
-        description: "Validate configuration against inferred or provided schema (default: true)",
+        type: 'boolean',
+        description:
+          'Validate configuration against inferred or provided schema (default: true)',
         default: true,
       },
       inferSchema: {
-        type: "boolean",
-        description: "Automatically infer configuration schema (default: true)",
+        type: 'boolean',
+        description: 'Automatically infer configuration schema (default: true)',
         default: true,
       },
       includeSuggestions: {
-        type: "boolean",
-        description: "Include improvement suggestions (default: true)",
+        type: 'boolean',
+        description: 'Include improvement suggestions (default: true)',
         default: true,
       },
       validateOnly: {
-        type: "boolean",
-        description: "Only validate configuration without returning full content (default: false)",
+        type: 'boolean',
+        description:
+          'Only validate configuration without returning full content (default: false)',
         default: false,
       },
       schema: {
-        type: "object",
-        description: "Optional JSON Schema to validate against",
+        type: 'object',
+        description: 'Optional JSON Schema to validate against',
       },
       strictMode: {
-        type: "boolean",
-        description: "Enforce strict schema validation (default: false)",
+        type: 'boolean',
+        description: 'Enforce strict schema validation (default: false)',
         default: false,
       },
       ttl: {
-        type: "number",
-        description: "Cache time-to-live in seconds (default: 604800 = 7 days)",
+        type: 'number',
+        description: 'Cache time-to-live in seconds (default: 604800 = 7 days)',
         default: 604800,
       },
     },
-    required: ["path"],
+    required: ['path'],
   },
 };

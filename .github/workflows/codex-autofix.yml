@@ -1,0 +1,72 @@
+name: Codex Auto-Fix on Failure
+
+on:
+  workflow_run:
+    # Trigger on core validation workflows; exclude Release to avoid branch-protected pushes
+    workflows: ["CI", "Quality Gates"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    # Only run when the referenced workflow failed and head branch is not master
+    # Secret presence is checked at step-level (secrets are not reliably accessible in job-level if)
+    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch != 'master' }}
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      FAILED_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+      FAILED_RUN_URL: ${{ github.event.workflow_run.html_url }}
+      FAILED_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      FAILED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Skip if missing OpenAI API key
+        if: ${{ env.OPENAI_API_KEY == '' }}
+        run: echo "OPENAI_API_KEY secret not set; skipping auto-fix."
+      - name: Checkout Failing Ref
+        if: ${{ env.OPENAI_API_KEY != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FAILED_HEAD_SHA }}
+          fetch-depth: 0
+      - name: Setup Node.js
+        if: ${{ env.OPENAI_API_KEY != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        if: ${{ env.OPENAI_API_KEY != '' }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm i; fi
+      - name: Run Codex
+        if: ${{ env.OPENAI_API_KEY != '' }}
+        uses: openai/codex-action@main
+        id: codex
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: >-
+            You are working in a Node.js monorepo with Jest tests and GitHub Actions. Read the repository,
+            run the test suite, identify the minimal change needed to make all tests pass, implement only that change,
+            and stop. Do not refactor unrelated code or files. Keep changes small and surgical.
+          sandbox: workspace-write
+      - name: Verify tests
+        if: ${{ env.OPENAI_API_KEY != '' }}
+        run: npm test --silent
+      - name: Create pull request with fixes
+        if: ${{ success() && env.OPENAI_API_KEY != '' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "fix(ci): auto-fix failing tests via Codex"
+          branch: codex/auto-fix-${{ github.event.workflow_run.run_id }}
+          base: ${{ env.FAILED_HEAD_BRANCH }}
+          title: "Auto-fix failing CI via Codex"
+          body: |
+            Codex automatically generated this PR in response to a CI failure on workflow `${{ env.FAILED_WORKFLOW_NAME }}`.
+            Failed run: ${{ env.FAILED_RUN_URL }}
+            Head branch: `${{ env.FAILED_HEAD_BRANCH }}`
+            This PR contains minimal changes intended solely to make the CI pass.
+

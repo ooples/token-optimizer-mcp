@@ -12,11 +12,256 @@ import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import { MetricsCollector } from '../core/metrics.js';
-import { getPredictiveCacheTool, PREDICTIVE_CACHE_TOOL_DEFINITION } from '../tools/advanced-caching/predictive-cache.js';
-import { getCacheWarmupTool, CACHE_WARMUP_TOOL_DEFINITION } from '../tools/advanced-caching/cache-warmup.js';
+import {
+  getPredictiveCacheTool,
+  PREDICTIVE_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/predictive-cache.js';
+import {
+  getCacheWarmupTool,
+  CACHE_WARMUP_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-warmup.js';
+// Code analysis tools
+import {
+  getSmartAstGrepTool,
+  SMART_AST_GREP_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-ast-grep.js';
+import {
+  getCacheAnalyticsTool,
+  CACHE_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-analytics.js';
+import {
+  runCacheBenchmark,
+  CACHE_BENCHMARK_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-benchmark.js';
+import {
+  runCacheCompression,
+  CACHE_COMPRESSION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-compression.js';
+import {
+  getCacheInvalidationTool,
+  CACHE_INVALIDATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-invalidation.js';
+import {
+  getCacheOptimizerTool,
+  CACHE_OPTIMIZER_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-optimizer.js';
+import {
+  getCachePartitionTool,
+  CACHE_PARTITION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-partition.js';
+import {
+  getCacheReplicationTool,
+  CACHE_REPLICATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-replication.js';
+import {
+  getSmartCacheTool,
+  SMART_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/smart-cache.js';
+import {
+  getAlertManager,
+  ALERT_MANAGER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/alert-manager.js';
+import {
+  getMetricCollector,
+  METRIC_COLLECTOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/metric-collector.js';
+import {
+  getMonitoringIntegration,
+  MONITORING_INTEGRATION_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/monitoring-integration.js';
+import {
+  getCustomWidget,
+  CUSTOM_WIDGET_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/custom-widget.js';
+import {
+  getDataVisualizer,
+  DATA_VISUALIZER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/data-visualizer.js';
+import {
+  getHealthMonitor,
+  HEALTH_MONITOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/health-monitor.js';
+import {
+  getLogDashboard,
+  LOG_DASHBOARD_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/log-dashboard.js';
+
+// Intelligence tools
+import {
+  runIntelligentAssistant,
+  INTELLIGENTASSISTANTTOOL,
+} from '../tools/intelligence/intelligent-assistant.js';
+import {
+  runNaturalLanguageQuery,
+  NATURALLANGUAGEQUERYTOOL,
+} from '../tools/intelligence/natural-language-query.js';
+import {
+  runPatternRecognition,
+  PATTERNRECOGNITIONTOOL,
+} from '../tools/intelligence/pattern-recognition.js';
+import {
+  runPredictiveAnalytics,
+  PREDICTIVEANALYTICSTOOL,
+} from '../tools/intelligence/predictive-analytics.js';
+import {
+  runRecommendationEngine,
+  RECOMMENDATIONENGINETOOL,
+} from '../tools/intelligence/recommendation-engine.js';
+import {
+  runSmartSummarization,
+  SMARTSUMMARIZATIONTOOL,
+} from '../tools/intelligence/smart-summarization.js';
+
+// API & Database tools
+import {
+  getSmartSql,
+  SMART_SQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-sql.js';
+import {
+  getSmartSchema,
+  SMART_SCHEMA_TOOL_DEFINITION,
+} from '../tools/api-database/smart-schema.js';
+import {
+  getSmartApiFetch,
+  SMART_API_FETCH_TOOL_DEFINITION,
+} from '../tools/api-database/smart-api-fetch.js';
+import {
+  getSmartCacheApi,
+  SMART_CACHE_API_TOOL_DEFINITION,
+} from '../tools/api-database/smart-cache-api.js';
+import {
+  getSmartDatabase,
+  SMART_DATABASE_TOOL_DEFINITION,
+} from '../tools/api-database/smart-database.js';
+import {
+  getSmartGraphQL,
+  SMART_GRAPHQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-graphql.js';
+import {
+  getSmartMigration,
+  SMART_MIGRATION_TOOL_DEFINITION,
+} from '../tools/api-database/smart-migration.js';
+import {
+  getSmartOrm,
+  SMART_ORM_TOOL_DEFINITION,
+} from '../tools/api-database/smart-orm.js';
+import {
+  getSmartRest,
+  SMART_REST_TOOL_DEFINITION,
+} from '../tools/api-database/smart-rest.js';
+import {
+  getSmartWebSocket,
+  SMART_WEBSOCKET_TOOL_DEFINITION,
+} from '../tools/api-database/smart-websocket.js';
+
+// Build Systems tools
+import {
+  getSmartProcessesTool,
+  SMART_PROCESSES_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-processes.js';
+import {
+  getSmartNetwork,
+  SMART_NETWORK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-network.js';
+import {
+  getSmartLogs,
+  SMART_LOGS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-logs.js';
+import {
+  getSmartLintTool,
+  SMART_LINT_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-lint.js';
+import {
+  getSmartInstall,
+  SMART_INSTALL_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-install.js';
+import {
+  getSmartDocker,
+  SMART_DOCKER_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-docker.js';
+import {
+  getSmartBuildTool,
+  SMART_BUILD_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-build.js';
+import {
+  getSmartSystemMetrics,
+  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-system-metrics.js';
+import {
+  getSmartTestTool,
+  SMART_TEST_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-test.js';
+import {
+  getSmartTypeCheckTool,
+  SMART_TYPECHECK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-typecheck.js';
+// System Operations tools
+import {
+  getSmartCron,
+  SMART_CRON_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-cron.js';
+import {
+  getSmartUser,
+  SMART_USER_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-user.js';
+
+// File operations tools
+import {
+  getSmartDiffTool,
+  SMART_DIFF_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-diff.js';
+import {
+  getSmartBranchTool,
+  SMART_BRANCH_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-branch.js';
+import {
+  getSmartMergeTool,
+  SMART_MERGE_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-merge.js';
+import {
+  getSmartStatusTool,
+  SMART_STATUS_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-status.js';
+import {
+  getSmartLogTool,
+  SMART_LOG_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-log.js';
+import {
+  runSmartRead,
+  SMART_READ_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-read.js';
+import {
+  runSmartWrite,
+  SMART_WRITE_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-write.js';
+import {
+  runSmartEdit,
+  SMART_EDIT_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-edit.js';
+import {
+  runSmartGlob,
+  SMART_GLOB_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-glob.js';
+import {
+  runSmartGrep,
+  SMART_GREP_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-grep.js';
+import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+
+// Type imports for file-operations tools
+import type { SmartDiffOptions } from '../tools/file-operations/smart-diff.js';
+import type { SmartBranchOptions } from '../tools/file-operations/smart-branch.js';
+import type { SmartMergeOptions } from '../tools/file-operations/smart-merge.js';
+import type { SmartStatusOptions } from '../tools/file-operations/smart-status.js';
+import type { SmartLogOptions } from '../tools/file-operations/smart-log.js';
+
+// Configuration constants
+const COMPRESSION_CONFIG = {
+  MIN_SIZE_THRESHOLD: 500, // bytes - minimum size before attempting compression
+} as const;
 
 // Initialize core modules
 const cache = new CacheEngine();
@@ -24,15 +269,83 @@ const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
 const metrics = new MetricsCollector();
 
+/**
+ * Helper function to cache uncompressed text
+ * Used when compression is skipped (file too small or compression doesn't help)
+ */
+function cacheUncompressed(key: string, text: string, size: number): void {
+  // Store uncompressed text with size=0 for compressedSize to indicate no compression
+  cache.set(key, text, size, 0);
+}
+
 // Initialize advanced caching tools
 const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
 const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
+// Code analysis tool instances
+const smartAstGrep = getSmartAstGrepTool(cache, tokenCounter, metrics);
+const cacheAnalytics = getCacheAnalyticsTool(cache, tokenCounter, metrics);
+const cacheInvalidation = getCacheInvalidationTool(
+  cache,
+  tokenCounter,
+  metrics
+);
+const cacheOptimizer = getCacheOptimizerTool(cache, tokenCounter, metrics);
+const cachePartition = getCachePartitionTool(cache, tokenCounter, metrics);
+const cacheReplication = getCacheReplicationTool(cache, tokenCounter, metrics);
+const smartCache = getSmartCacheTool(cache, tokenCounter, metrics);
+
+// Initialize API & Database tools
+const smartSql = getSmartSql(cache, tokenCounter, metrics);
+const smartSchema = getSmartSchema(cache, tokenCounter, metrics);
+const smartApiFetch = getSmartApiFetch(cache, tokenCounter, metrics);
+const smartCacheApi = getSmartCacheApi(cache, tokenCounter, metrics);
+const smartDatabase = getSmartDatabase(cache, tokenCounter, metrics);
+const smartGraphQL = getSmartGraphQL(cache, tokenCounter, metrics);
+const smartMigration = getSmartMigration(cache, tokenCounter, metrics);
+const smartOrm = getSmartOrm(cache, tokenCounter, metrics);
+const smartRest = getSmartRest(cache, tokenCounter, metrics);
+const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
+
+// Initialize monitoring tools
+const alertManager = getAlertManager(cache, tokenCounter, metrics);
+const metricCollectorTool = getMetricCollector(cache, tokenCounter, metrics);
+const monitoringIntegration = getMonitoringIntegration(
+  cache,
+  tokenCounter,
+  metrics
+);
+const customWidget = getCustomWidget(cache, tokenCounter, metrics);
+const dataVisualizer = getDataVisualizer(cache, tokenCounter, metrics);
+const healthMonitor = getHealthMonitor(cache, tokenCounter, metrics);
+const logDashboard = getLogDashboard(cache, tokenCounter, metrics);
+
+// Initialize Build Systems tools
+const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
+const smartNetwork = getSmartNetwork(cache);
+const smartLogs = getSmartLogs(cache);
+const smartLint = getSmartLintTool(cache, tokenCounter, metrics);
+const smartInstall = getSmartInstall(cache);
+const smartDocker = getSmartDocker(cache);
+const smartBuild = getSmartBuildTool(cache, tokenCounter, metrics);
+const smartSystemMetrics = getSmartSystemMetrics(cache);
+const smartTest = getSmartTestTool(cache, tokenCounter, metrics);
+const smartTypeCheck = getSmartTypeCheckTool(cache, tokenCounter, metrics);
+
+// Initialize System Operations tools
+const smartCron = getSmartCron(cache, tokenCounter, metrics);
+const smartUser = getSmartUser(cache, tokenCounter, metrics);
+
+const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
+const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
+const smartMerge = getSmartMergeTool(cache, tokenCounter, metrics);
+const smartStatus = getSmartStatusTool(cache, tokenCounter, metrics);
+const smartLog = getSmartLogTool(cache, tokenCounter, metrics);
 
 // Create MCP server
 const server = new Server(
   {
     name: 'token-optimizer-mcp',
-    version: '0.1.0',
+    version: '0.2.0',
   },
   {
     capabilities: {
@@ -182,7 +495,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to query. If not provided, uses current session.',
+              description:
+                'Optional session ID to query. If not provided, uses current session.',
             },
           },
         },
@@ -196,11 +510,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             sessionId: {
               type: 'string',
-              description: 'Optional session ID to optimize. If not provided, uses the current active session.',
+              description:
+                'Optional session ID to optimize. If not provided, uses the current active session.',
             },
             min_token_threshold: {
               type: 'number',
-              description: 'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+              description:
+                'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
             },
           },
         },
@@ -216,12 +532,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             projectPath: {
               type: 'string',
-              description: 'Path to the project directory. If not provided, uses the hooks data directory.',
+              description:
+                'Path to the project directory. If not provided, uses the hooks data directory.',
             },
             startDate: {
               type: 'string',
               format: 'date',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
               pattern: '^\\d{4}-\\d{2}-\\d{2}$',
               description: 'Optional start date filter (YYYY-MM-DD format).',
             },
@@ -232,10 +548,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             costPerMillionTokens: {
               type: 'number',
-              description: 'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
+              description:
+                'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
               default: 30,
               minimum: 0,
-              default: 30,
               exclusiveMinimum: 0,
             },
           },
@@ -243,6 +559,68 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       PREDICTIVE_CACHE_TOOL_DEFINITION,
       CACHE_WARMUP_TOOL_DEFINITION,
+      // Code analysis tools
+      SMART_AST_GREP_TOOL_DEFINITION,
+      CACHE_ANALYTICS_TOOL_DEFINITION,
+      CACHE_BENCHMARK_TOOL_DEFINITION,
+      CACHE_COMPRESSION_TOOL_DEFINITION,
+      CACHE_INVALIDATION_TOOL_DEFINITION,
+      CACHE_OPTIMIZER_TOOL_DEFINITION,
+      CACHE_PARTITION_TOOL_DEFINITION,
+      CACHE_REPLICATION_TOOL_DEFINITION,
+      SMART_CACHE_TOOL_DEFINITION,
+      // API & Database tools
+      SMART_SQL_TOOL_DEFINITION,
+      SMART_SCHEMA_TOOL_DEFINITION,
+      SMART_API_FETCH_TOOL_DEFINITION,
+      SMART_CACHE_API_TOOL_DEFINITION,
+      SMART_DATABASE_TOOL_DEFINITION,
+      SMART_GRAPHQL_TOOL_DEFINITION,
+      SMART_MIGRATION_TOOL_DEFINITION,
+      SMART_ORM_TOOL_DEFINITION,
+      SMART_REST_TOOL_DEFINITION,
+      SMART_WEBSOCKET_TOOL_DEFINITION,
+      // Dashboard & Monitoring tools
+      ALERT_MANAGER_TOOL_DEFINITION,
+      METRIC_COLLECTOR_TOOL_DEFINITION,
+      MONITORING_INTEGRATION_TOOL_DEFINITION,
+      CUSTOM_WIDGET_TOOL_DEFINITION,
+      DATA_VISUALIZER_TOOL_DEFINITION,
+      HEALTH_MONITOR_TOOL_DEFINITION,
+      LOG_DASHBOARD_TOOL_DEFINITION,
+      // Intelligence tools
+      INTELLIGENTASSISTANTTOOL,
+      NATURALLANGUAGEQUERYTOOL,
+      PATTERNRECOGNITIONTOOL,
+      PREDICTIVEANALYTICSTOOL,
+      RECOMMENDATIONENGINETOOL,
+      SMARTSUMMARIZATIONTOOL,
+      // Build Systems tools
+      SMART_PROCESSES_TOOL_DEFINITION,
+      SMART_NETWORK_TOOL_DEFINITION,
+      SMART_LOGS_TOOL_DEFINITION,
+      SMART_LINT_TOOL_DEFINITION,
+      SMART_INSTALL_TOOL_DEFINITION,
+      SMART_DOCKER_TOOL_DEFINITION,
+      SMART_BUILD_TOOL_DEFINITION,
+      SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+      SMART_TEST_TOOL_DEFINITION,
+      SMART_TYPECHECK_TOOL_DEFINITION,
+      // System Operations tools
+      SMART_CRON_TOOL_DEFINITION,
+      SMART_USER_TOOL_DEFINITION,
+      // File operations tools
+
+      SMART_DIFF_TOOL_DEFINITION,
+      SMART_BRANCH_TOOL_DEFINITION,
+      SMART_MERGE_TOOL_DEFINITION,
+      SMART_STATUS_TOOL_DEFINITION,
+      SMART_LOG_TOOL_DEFINITION,
+      SMART_READ_TOOL_DEFINITION,
+      SMART_WRITE_TOOL_DEFINITION,
+      SMART_EDIT_TOOL_DEFINITION,
+      SMART_GLOB_TOOL_DEFINITION,
+      SMART_GREP_TOOL_DEFINITION,
     ],
   };
 });
@@ -262,20 +640,87 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         // Count original tokens
         const originalCount = tokenCounter.count(text);
+        const originalSize = Buffer.byteLength(text, 'utf8');
+
+        // Minimum size threshold: don't compress small files
+        if (originalSize < COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD) {
+          // Cache uncompressed for small files
+          cacheUncompressed(key, text, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
 
         // Compress text
-        const compressionResult = compression.compressToBase64(text, { quality });
+        const compressionResult = compression.compressToBase64(text, {
+          quality,
+        });
 
-        // Cache the compressed text
+        // Count compressed tokens
+        const compressedCount = tokenCounter.count(
+          compressionResult.compressed
+        );
+
+        // Check if compression actually reduces tokens
+        if (compressedCount.tokens >= originalCount.tokens) {
+          // Compression doesn't help with tokens, cache uncompressed
+          cacheUncompressed(key, text, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
+        // Compression helps! Cache the compressed version
         cache.set(
           key,
           compressionResult.compressed,
           compressionResult.compressedSize,
           compressionResult.originalSize
         );
-
-        // Count compressed tokens
-        const compressedCount = tokenCounter.count(compressionResult.compressed);
 
         return {
           content: [
@@ -292,6 +737,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   originalSize: compressionResult.originalSize,
                   compressedSize: compressionResult.compressedSize,
                   cached: true,
+                  compressionUsed: true,
                 },
                 null,
                 2
@@ -304,8 +750,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_cached': {
         const { key } = args as { key: string };
 
-        const cached = cache.get(key);
-        if (!cached) {
+        const cachedEntry = cache.getWithMetadata(key);
+        if (!cachedEntry) {
           return {
             content: [
               {
@@ -320,8 +766,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
 
-        // Decompress
-        const decompressed = compression.decompressFromBase64(cached);
+        let text: string;
+        // Check if the item was stored uncompressed (indicated by compressedSize === 0)
+        if (cachedEntry.compressedSize === 0) {
+          text = cachedEntry.content;
+        } else {
+          // Otherwise, it was compressed, so decompress it
+          text = compression.decompressFromBase64(cachedEntry.content);
+        }
 
         return {
           content: [
@@ -330,7 +782,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify({
                 success: true,
                 key,
-                text: decompressed,
+                text,
                 fromCache: true,
               }),
             },
@@ -450,7 +902,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     afterCompression: compressedTokens.tokens,
                     saved: tokenResult.tokens - compressedTokens.tokens,
                     percentSaved:
-                      ((tokenResult.tokens - compressedTokens.tokens) / tokenResult.tokens) *
+                      ((tokenResult.tokens - compressedTokens.tokens) /
+                        tokenResult.tokens) *
                       100,
                   },
                   size: {
@@ -487,7 +940,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           );
 
           // Read current session file
-          const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+          const sessionFilePath = path.join(
+            hooksDataPath,
+            'current-session.txt'
+          );
 
           if (!fs.existsSync(sessionFilePath)) {
             return {
@@ -505,83 +961,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // Strip BOM and parse JSON
-          const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+          const sessionContent = fs
+            .readFileSync(sessionFilePath, 'utf-8')
+            .replace(/^\uFEFF/, '');
           const sessionData = JSON.parse(sessionContent);
 
           const targetSessionId = sessionId || sessionData.sessionId;
 
-          // Read operations CSV
-          const csvFilePath = path.join(
+          // Read JSONL log
+          const jsonlFilePath = path.join(
             hooksDataPath,
-            `operations-${targetSessionId}.csv`
+            `session-log-${targetSessionId}.jsonl`
           );
 
-          if (!fs.existsSync(csvFilePath)) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: false,
-                    error: `Operations file not found for session ${targetSessionId}`,
-                    csvFilePath,
-                  }),
-                },
-              ],
-            };
+          // Error handling: Throw to let MCP wrap errors consistently
+          if (!fs.existsSync(jsonlFilePath)) {
+            throw new Error(
+              `JSONL log not found for session ${targetSessionId}`
+            );
           }
 
-          // Parse CSV
-          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
-          const lines = csvContent.trim().split('\n');
-
-          interface Operation {
-            timestamp: string;
-            toolName: string;
-            tokens: number;
-            metadata: string;
-          }
-
-          const operations: Operation[] = [];
-          let systemReminderTokens = 0;
-          let toolTokens = 0;
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            const parts = line.split(',');
-            if (parts.length < 3) continue;
-
-            const timestamp = parts[0];
-            const toolName = parts[1];
-            const tokens = parseInt(parts[2], 10) || 0;
-            const metadata = parts[3] || '';
-
-            operations.push({
-              timestamp,
-              toolName,
-              tokens,
-              metadata,
-            });
-
-            if (toolName === 'SYSTEM_REMINDERS') {
-              systemReminderTokens = tokens;
-            } else {
-              toolTokens += tokens;
-            }
-          }
+          // Parse JSONL using shared utility (now async with streaming)
+          const { operations, toolTokens, systemReminderTokens } =
+            await parseSessionLog(jsonlFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
-          const systemReminderPercent = totalTokens > 0
-            ? (systemReminderTokens / totalTokens) * 100
-            : 0;
-          const toolPercent = totalTokens > 0
-            ? (toolTokens / totalTokens) * 100
-            : 0;
+          const systemReminderPercent =
+            totalTokens > 0 ? (systemReminderTokens / totalTokens) * 100 : 0;
+          const toolPercent =
+            totalTokens > 0 ? (toolTokens / totalTokens) * 100 : 0;
 
           // Group operations by tool
-          const toolBreakdown: Record<string, { count: number; tokens: number }> = {};
+          const toolBreakdown: Record<
+            string,
+            { count: number; tokens: number }
+          > = {};
           for (const op of operations) {
             if (op.toolName === 'SYSTEM_REMINDERS') continue;
 
@@ -659,24 +1074,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         try {
           // --- 1. Identify Target Session ---
-          const hooksDataPath = path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
           let targetSessionId = sessionId;
 
           if (!targetSessionId) {
-            const sessionFilePath = path.join(hooksDataPath, 'current-session.txt');
+            const sessionFilePath = path.join(
+              hooksDataPath,
+              'current-session.txt'
+            );
             if (!fs.existsSync(sessionFilePath)) {
               throw new Error('No active session found to optimize.');
             }
             // Strip BOM and parse JSON
-            const sessionContent = fs.readFileSync(sessionFilePath, 'utf-8').replace(/^\uFEFF/, '');
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^\uFEFF/, '');
             const sessionData = JSON.parse(sessionContent);
             targetSessionId = sessionData.sessionId;
           }
 
           // --- 2. Read Operations CSV ---
-          const csvFilePath = path.join(hooksDataPath, `operations-${targetSessionId}.csv`);
+          const csvFilePath = path.join(
+            hooksDataPath,
+            `operations-${targetSessionId}.csv`
+          );
           if (!fs.existsSync(csvFilePath)) {
-            throw new Error(`Operations file not found for session ${targetSessionId}`);
+            throw new Error(
+              `Operations file not found for session ${targetSessionId}`
+            );
           }
 
           const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
@@ -712,7 +1142,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             // Strip surrounding quotes from file path
             metadata = metadata.trim().replace(/^"(.*)"$/, '$1');
 
-            if (fileToolNames.includes(toolName) && tokens > min_token_threshold && metadata) {
+            if (
+              fileToolNames.includes(toolName) &&
+              tokens > min_token_threshold &&
+              metadata
+            ) {
               // SECURITY FIX: Validate file path to prevent path traversal
               // Resolve the file path to absolute path
               const resolvedFilePath = path.resolve(metadata);
@@ -720,9 +1154,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               // Check if the resolved path is within the secure base directory
               if (!resolvedFilePath.startsWith(secureBaseDir)) {
                 // Log security event for rejected access attempt
-                console.error(`[SECURITY] Path traversal attempt detected and blocked: ${metadata}`);
+                console.error(
+                  `[SECURITY] Path traversal attempt detected and blocked: ${metadata}`
+                );
                 console.error(`[SECURITY] Resolved path: ${resolvedFilePath}`);
-                console.error(`[SECURITY] Secure base directory: ${secureBaseDir}`);
+                console.error(
+                  `[SECURITY] Secure base directory: ${secureBaseDir}`
+                );
                 debugInfo.securityRejected++;
                 continue;
               }
@@ -736,7 +1174,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             // Additional security check before file access
             const resolvedPath = path.resolve(filePath);
             if (!resolvedPath.startsWith(secureBaseDir)) {
-              console.error(`[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`);
+              console.error(
+                `[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`
+              );
               debugInfo.securityRejected++;
               continue;
             }
@@ -757,14 +1197,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               compressionResult.originalSize
             );
 
-            const compressedCount = tokenCounter.count(compressionResult.compressed);
+            const compressedCount = tokenCounter.count(
+              compressionResult.compressed
+            );
             compressedTokens += compressedCount.tokens;
             operationsCompressed++;
           }
 
           // --- 5. Return Summary with Debug Info ---
           const tokensSaved = originalTokens - compressedTokens;
-          const percentSaved = originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
+          const percentSaved =
+            originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
 
           return {
             content: [
@@ -810,12 +1253,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'analyze_project_tokens': {
-        const { projectPath, startDate, endDate, costPerMillionTokens } = args as {
-          projectPath?: string;
-          startDate?: string;
-          endDate?: string;
-          costPerMillionTokens?: number;
-        };
+        const { projectPath, startDate, endDate, costPerMillionTokens } =
+          args as {
+            projectPath?: string;
+            startDate?: string;
+            endDate?: string;
+            costPerMillionTokens?: number;
+          };
 
         try {
           // Validate costPerMillionTokens input
@@ -843,12 +1287,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             analysisTimestamp: result.analysisTimestamp,
             dateRange: result.dateRange,
             summary: result.summary,
-            topContributingSessions: result.topContributingSessions.slice(0, 5).map((s) => ({
-              sessionId: s.sessionId,
-              totalTokens: s.totalTokens,
-              duration: s.duration,
-              topTool: s.topTools[0]?.toolName || 'N/A',
-            })),
+            topContributingSessions: result.topContributingSessions
+              .slice(0, 5)
+              .map((s) => ({
+                sessionId: s.sessionId,
+                totalTokens: s.totalTokens,
+                duration: s.duration,
+                topTool: s.topTools[0]?.toolName || 'N/A',
+              })),
             topTools: result.topTools.slice(0, 10).map((t) => ({
               toolName: t.toolName,
               totalTokens: t.totalTokens,
@@ -911,6 +1357,732 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // Code analysis tools
+      case 'smart_ast_grep': {
+        const options = args as any;
+        const result = await smartAstGrep.grep(options.pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_analytics': {
+        const options = args as any;
+        const result = await cacheAnalytics.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_benchmark': {
+        const options = args as any;
+        const result = await runCacheBenchmark(
+          options,
+          cache,
+          tokenCounter,
+          metrics
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_compression': {
+        const options = args as any;
+        const result = await runCacheCompression(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_invalidation': {
+        const options = args as any;
+        const result = await cacheInvalidation.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_optimizer': {
+        const options = args as any;
+        const result = await cacheOptimizer.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_partition': {
+        const options = args as any;
+        const result = await cachePartition.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_replication': {
+        const options = args as any;
+        const result = await cacheReplication.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache': {
+        const options = args as any;
+        const result = await smartCache.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_sql': {
+        const options = args as any;
+        const result = await smartSql.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_schema': {
+        const options = args as any;
+        const result = await smartSchema.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_api_fetch': {
+        const options = args as any;
+        const result = await smartApiFetch.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache_api': {
+        const options = args as any;
+        const result = await smartCacheApi.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_database': {
+        const options = args as any;
+        const result = await smartDatabase.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_graphql': {
+        const options = args as any;
+        const result = await smartGraphQL.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_migration': {
+        const options = args as any;
+        const result = await smartMigration.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_orm': {
+        const options = args as any;
+        const result = await smartOrm.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_rest': {
+        const options = args as any;
+        const result = await smartRest.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_websocket': {
+        const options = args as any;
+        const result = await smartWebSocket.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_processes': {
+        const options = args as any;
+        const result = await smartProcesses.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_network': {
+        const options = args as any;
+        const result = await smartNetwork.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_logs': {
+        const options = args as any;
+        const result = await smartLogs.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_lint': {
+        const options = args as any;
+        const result = await smartLint.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_install': {
+        const options = args as any;
+        const result = await smartInstall.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_docker': {
+        const options = args as any;
+        const result = await smartDocker.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_build': {
+        const options = args as any;
+        const result = await smartBuild.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_system_metrics': {
+        const options = args as any;
+        const result = await smartSystemMetrics.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_test': {
+        const options = args as any;
+        const result = await smartTest.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_typecheck': {
+        const options = args as any;
+        const result = await smartTypeCheck.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cron': {
+        const options = args as any;
+        const result = await smartCron.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_user': {
+        const options = args as any;
+        const result = await smartUser.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_diff': {
+        const options = args as SmartDiffOptions;
+        const result = await smartDiff.diff(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_branch': {
+        const options = args as SmartBranchOptions;
+        const result = await smartBranch.branch(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_merge': {
+        const options = args as SmartMergeOptions;
+        const result = await smartMerge.merge(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_status': {
+        const options = args as SmartStatusOptions;
+        const result = await smartStatus.status(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_log': {
+        const options = args as SmartLogOptions;
+        const result = await smartLog.log(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_read': {
+        const { path, ...options } = args as any;
+        const result = await runSmartRead(path, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_write': {
+        const { path, content, ...options } = args as any;
+        const result = await runSmartWrite(path, content, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_edit': {
+        const { path, operations, ...options } = args as any;
+        const result = await runSmartEdit(path, operations, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_glob': {
+        const { pattern, ...options } = args as any;
+        const result = await runSmartGlob(pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_grep': {
+        const { pattern, ...options } = args as any;
+        const result = await runSmartGrep(pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'alert_manager': {
+        const options = args as any;
+        const result = await alertManager.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'metric_collector': {
+        const options = args as any;
+        const result = await metricCollectorTool.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'monitoring_integration': {
+        const options = args as any;
+        const result = await monitoringIntegration.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'custom_widget': {
+        const options = args as any;
+        const result = await customWidget.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'data_visualizer': {
+        const options = args as any;
+        const result = await dataVisualizer.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'health_monitor': {
+        const options = args as any;
+        const result = await healthMonitor.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'log_dashboard': {
+        const options = args as any;
+        const result = await logDashboard.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'intelligent-assistant': {
+        const options = args as any;
+        const result = await runIntelligentAssistant(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'natural-language-query': {
+        const options = args as any;
+        const result = await runNaturalLanguageQuery(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'pattern-recognition': {
+        const options = args as any;
+        const result = await runPatternRecognition(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'predictive-analytics': {
+        const options = args as any;
+        const result = await runPredictiveAnalytics(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'recommendation-engine': {
+        const options = args as any;
+        const result = await runRecommendationEngine(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart-summarization': {
+        const options = args as any;
+        const result = await runSmartSummarization(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
       default:
         throw new Error(`Unknown tool: ${name}`);
     }

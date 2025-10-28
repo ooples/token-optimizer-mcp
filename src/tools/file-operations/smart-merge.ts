@@ -11,13 +11,13 @@
  * Target: 80% reduction vs full git merge/status output
  */
 
-import { execSync } from "child_process";
-import { join } from "path";
-import { homedir } from "os";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
+import { execSync } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
 
 export interface ConflictInfo {
   file: string; // File path
@@ -52,7 +52,7 @@ export interface SmartMergeOptions {
   cwd?: string; // Working directory (default: process.cwd())
 
   // Operation mode
-  mode?: "status" | "merge" | "abort" | "continue"; // Operation to perform
+  mode?: 'status' | 'merge' | 'abort' | 'continue'; // Operation to perform
 
   // Merge options (for 'merge' mode)
   branch?: string; // Branch to merge from
@@ -61,7 +61,7 @@ export interface SmartMergeOptions {
   noFf?: boolean; // No fast-forward (default: false)
   ffOnly?: boolean; // Fast-forward only (default: false)
   squash?: boolean; // Squash commits (default: false)
-  strategy?: "recursive" | "ours" | "theirs" | "octopus" | "subtree";
+  strategy?: 'recursive' | 'ours' | 'theirs' | 'octopus' | 'subtree';
   strategyOption?: string[]; // Strategy-specific options
 
   // Output options
@@ -71,7 +71,7 @@ export interface SmartMergeOptions {
   maxConflicts?: number; // Maximum conflicts to return
 
   // Resolution helpers
-  resolveUsing?: "ours" | "theirs"; // Auto-resolve conflicts using strategy
+  resolveUsing?: 'ours' | 'theirs'; // Auto-resolve conflicts using strategy
 
   // Cache options
   useCache?: boolean; // Use cached results (default: true)
@@ -104,7 +104,7 @@ export class SmartMergeTool {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   /**
@@ -116,20 +116,20 @@ export class SmartMergeTool {
     // Default options
     const opts: Required<SmartMergeOptions> = {
       cwd: options.cwd ?? process.cwd(),
-      mode: options.mode ?? "status",
-      branch: options.branch ?? "",
-      commit: options.commit ?? "",
+      mode: options.mode ?? 'status',
+      branch: options.branch ?? '',
+      commit: options.commit ?? '',
       noCommit: options.noCommit ?? false,
       noFf: options.noFf ?? false,
       ffOnly: options.ffOnly ?? false,
       squash: options.squash ?? false,
-      strategy: options.strategy ?? "recursive",
+      strategy: options.strategy ?? 'recursive',
       strategyOption: options.strategyOption ?? [],
       conflictsOnly: options.conflictsOnly ?? false,
       includeContent: options.includeContent ?? false,
       summaryOnly: options.summaryOnly ?? false,
       maxConflicts: options.maxConflicts ?? Infinity,
-      resolveUsing: options.resolveUsing ?? ("ours" as "ours" | "theirs"),
+      resolveUsing: options.resolveUsing ?? ('ours' as 'ours' | 'theirs'),
       useCache: options.useCache ?? true,
       ttl: options.ttl ?? 60,
     };
@@ -147,7 +147,7 @@ export class SmartMergeTool {
       const cacheKey = this.buildCacheKey(opts);
 
       // Check cache (only for status mode)
-      if (opts.useCache && opts.mode === "status") {
+      if (opts.useCache && opts.mode === 'status') {
         const cached = this.cache.get(cacheKey);
         if (cached) {
           const result = JSON.parse(cached) as SmartMergeResult;
@@ -155,7 +155,7 @@ export class SmartMergeTool {
 
           const duration = Date.now() - startTime;
           this.metrics.record({
-            operation: "smart_merge",
+            operation: 'smart_merge',
             duration,
             inputTokens: result.metadata.tokenCount,
             outputTokens: 0,
@@ -176,7 +176,7 @@ export class SmartMergeTool {
       let originalTokens: number;
 
       switch (opts.mode) {
-        case "status":
+        case 'status':
           status = this.getMergeStatus(opts);
           resultTokens = this.tokenCounter.count(JSON.stringify(status)).tokens;
 
@@ -190,36 +190,36 @@ export class SmartMergeTool {
           }
           break;
 
-        case "merge":
+        case 'merge':
           if (!opts.branch && !opts.commit) {
-            throw new Error("branch or commit required for merge operation");
+            throw new Error('branch or commit required for merge operation');
           }
           mergeResult = this.performMerge(opts);
           resultTokens = this.tokenCounter.count(
-            JSON.stringify(mergeResult),
+            JSON.stringify(mergeResult)
           ).tokens;
           originalTokens = resultTokens * 8; // Structured result vs full merge output
           break;
 
-        case "abort":
+        case 'abort':
           this.abortMerge(opts.cwd);
           mergeResult = {
             success: true,
             merged: false,
             fastForward: false,
             conflicts: [],
-            message: "Merge aborted",
+            message: 'Merge aborted',
           };
           resultTokens = this.tokenCounter.count(
-            JSON.stringify(mergeResult),
+            JSON.stringify(mergeResult)
           ).tokens;
           originalTokens = resultTokens * 5;
           break;
 
-        case "continue":
+        case 'continue':
           mergeResult = this.continueMerge(opts.cwd);
           resultTokens = this.tokenCounter.count(
-            JSON.stringify(mergeResult),
+            JSON.stringify(mergeResult)
           ).tokens;
           originalTokens = resultTokens * 8;
           break;
@@ -256,9 +256,9 @@ export class SmartMergeTool {
       };
 
       // Cache result (only for status mode)
-      if (opts.useCache && opts.mode === "status") {
+      if (opts.useCache && opts.mode === 'status') {
         const resultString = JSON.stringify(result);
-        const resultSize = Buffer.from(resultString, "utf-8").length;
+        const resultSize = Buffer.from(resultString, 'utf-8').length;
         this.cache.set(cacheKey, resultString, resultSize, resultSize);
       }
 
@@ -267,7 +267,7 @@ export class SmartMergeTool {
       result.metadata.duration = duration;
 
       this.metrics.record({
-        operation: "smart_merge",
+        operation: 'smart_merge',
         duration,
         inputTokens: resultTokens,
         outputTokens: 0,
@@ -282,7 +282,7 @@ export class SmartMergeTool {
       const duration = Date.now() - startTime;
 
       this.metrics.record({
-        operation: "smart_merge",
+        operation: 'smart_merge',
         duration,
         inputTokens: 0,
         outputTokens: 0,
@@ -297,7 +297,7 @@ export class SmartMergeTool {
         mode: opts.mode,
         metadata: {
           repository: opts.cwd,
-          currentBranch: "",
+          currentBranch: '',
           mergeInProgress: false,
           hasConflicts: false,
           conflictCount: 0,
@@ -319,7 +319,7 @@ export class SmartMergeTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync("git rev-parse --git-dir", { cwd, stdio: "pipe" });
+      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
       return true;
     } catch {
       return false;
@@ -331,12 +331,12 @@ export class SmartMergeTool {
    */
   private getCurrentBranch(cwd: string): string {
     try {
-      return execSync("git branch --show-current", {
+      return execSync('git branch --show-current', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
     } catch {
-      return "HEAD";
+      return 'HEAD';
     }
   }
 
@@ -347,7 +347,7 @@ export class SmartMergeTool {
     try {
       return execSync(`git rev-parse ${ref}`, {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
     } catch {
       return ref;
@@ -358,9 +358,9 @@ export class SmartMergeTool {
    * Build cache key from options
    */
   private buildCacheKey(opts: Required<SmartMergeOptions>): string {
-    const headHash = this.getGitHash(opts.cwd, "HEAD");
+    const headHash = this.getGitHash(opts.cwd, 'HEAD');
 
-    return generateCacheKey("git-merge", {
+    return generateCacheKey('git-merge', {
       head: headHash,
       mode: opts.mode,
       conflictsOnly: opts.conflictsOnly,
@@ -425,7 +425,7 @@ export class SmartMergeTool {
    */
   private isMergeInProgress(cwd: string): boolean {
     try {
-      execSync("git rev-parse MERGE_HEAD", { cwd, stdio: "pipe" });
+      execSync('git rev-parse MERGE_HEAD', { cwd, stdio: 'pipe' });
       return true;
     } catch {
       return false;
@@ -437,12 +437,12 @@ export class SmartMergeTool {
    */
   private getMergeHead(cwd: string): string | undefined {
     try {
-      const mergeMsg = execSync("cat .git/MERGE_MSG", {
+      const mergeMsg = execSync('cat .git/MERGE_MSG', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
       const match = mergeMsg.match(/Merge branch '([^']+)'/);
-      return match ? match[1] : "unknown";
+      return match ? match[1] : 'unknown';
     } catch {
       return undefined;
     }
@@ -454,12 +454,12 @@ export class SmartMergeTool {
   private getConflicts(cwd: string, includeContent: boolean): ConflictInfo[] {
     try {
       // Get unmerged files from git status
-      const output = execSync("git diff --name-only --diff-filter=U", {
+      const output = execSync('git diff --name-only --diff-filter=U', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
 
-      const files = output.split("\n").filter((f) => f.trim());
+      const files = output.split('\n').filter((f) => f.trim());
       const conflicts: ConflictInfo[] = [];
 
       for (const file of files) {
@@ -496,26 +496,26 @@ export class SmartMergeTool {
     try {
       const output = execSync(`git ls-files -u "${file}"`, {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
 
-      if (!output) return "content";
+      if (!output) return 'content';
 
-      const lines = output.split("\n").filter((l) => l.trim());
+      const lines = output.split('\n').filter((l) => l.trim());
 
       // Check if file was deleted in one branch
-      if (lines.some((l) => l.includes("000000"))) {
-        return "delete";
+      if (lines.some((l) => l.includes('000000'))) {
+        return 'delete';
       }
 
       // Check for rename conflicts
       if (lines.length > 3) {
-        return "rename";
+        return 'rename';
       }
 
-      return "content";
+      return 'content';
     } catch {
-      return "content";
+      return 'content';
     }
   }
 
@@ -524,7 +524,7 @@ export class SmartMergeTool {
    */
   private getConflictStages(
     file: string,
-    cwd: string,
+    cwd: string
   ): {
     base?: string;
     ours?: string;
@@ -537,8 +537,8 @@ export class SmartMergeTool {
       try {
         stages.base = execSync(`git show :1:"${file}"`, {
           cwd,
-          encoding: "utf-8",
-          stdio: "pipe",
+          encoding: 'utf-8',
+          stdio: 'pipe',
         });
       } catch {}
 
@@ -546,8 +546,8 @@ export class SmartMergeTool {
       try {
         stages.ours = execSync(`git show :2:"${file}"`, {
           cwd,
-          encoding: "utf-8",
-          stdio: "pipe",
+          encoding: 'utf-8',
+          stdio: 'pipe',
         });
       } catch {}
 
@@ -555,8 +555,8 @@ export class SmartMergeTool {
       try {
         stages.theirs = execSync(`git show :3:"${file}"`, {
           cwd,
-          encoding: "utf-8",
-          stdio: "pipe",
+          encoding: 'utf-8',
+          stdio: 'pipe',
         });
       } catch {}
     } catch {}
@@ -569,12 +569,12 @@ export class SmartMergeTool {
    */
   private getMergedFiles(cwd: string): string[] {
     try {
-      const output = execSync("git diff --name-only --diff-filter=M --cached", {
+      const output = execSync('git diff --name-only --diff-filter=M --cached', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
 
-      return output.split("\n").filter((f) => f.trim());
+      return output.split('\n').filter((f) => f.trim());
     } catch {
       return [];
     }
@@ -589,12 +589,12 @@ export class SmartMergeTool {
 
     try {
       // Build merge command
-      let command = "git merge";
+      let command = 'git merge';
 
-      if (opts.noCommit) command += " --no-commit";
-      if (opts.noFf) command += " --no-ff";
-      if (opts.ffOnly) command += " --ff-only";
-      if (opts.squash) command += " --squash";
+      if (opts.noCommit) command += ' --no-commit';
+      if (opts.noFf) command += ' --no-ff';
+      if (opts.ffOnly) command += ' --ff-only';
+      if (opts.squash) command += ' --squash';
       if (opts.strategy) command += ` --strategy=${opts.strategy}`;
 
       for (const option of opts.strategyOption) {
@@ -606,12 +606,12 @@ export class SmartMergeTool {
       // Execute merge
       const output = execSync(command, {
         cwd,
-        encoding: "utf-8",
-        stdio: "pipe",
+        encoding: 'utf-8',
+        stdio: 'pipe',
       });
 
       // Check if fast-forward
-      const fastForward = output.includes("Fast-forward");
+      const fastForward = output.includes('Fast-forward');
 
       // Get merge commit info
       let hash: string | undefined;
@@ -619,13 +619,13 @@ export class SmartMergeTool {
 
       if (!opts.noCommit && !opts.squash) {
         try {
-          hash = execSync("git rev-parse HEAD", {
+          hash = execSync('git rev-parse HEAD', {
             cwd,
-            encoding: "utf-8",
+            encoding: 'utf-8',
           }).trim();
-          message = execSync("git log -1 --format=%s", {
+          message = execSync('git log -1 --format=%s', {
             cwd,
-            encoding: "utf-8",
+            encoding: 'utf-8',
           }).trim();
         } catch {}
       }
@@ -657,11 +657,11 @@ export class SmartMergeTool {
    */
   private abortMerge(cwd: string): void {
     try {
-      execSync("git merge --abort", { cwd, stdio: "pipe" });
+      execSync('git merge --abort', { cwd, stdio: 'pipe' });
     } catch (error) {
       throw new Error(
-        "Failed to abort merge: " +
-          (error instanceof Error ? error.message : String(error)),
+        'Failed to abort merge: ' +
+          (error instanceof Error ? error.message : String(error))
       );
     }
   }
@@ -679,21 +679,21 @@ export class SmartMergeTool {
           merged: false,
           fastForward: false,
           conflicts: conflicts.map((c) => c.file),
-          message: "Unresolved conflicts remain",
+          message: 'Unresolved conflicts remain',
         };
       }
 
       // Commit the merge
-      execSync("git commit --no-edit", { cwd, stdio: "pipe" });
+      execSync('git commit --no-edit', { cwd, stdio: 'pipe' });
 
       // Get merge commit info
-      const hash = execSync("git rev-parse HEAD", {
+      const hash = execSync('git rev-parse HEAD', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
-      const message = execSync("git log -1 --format=%s", {
+      const message = execSync('git log -1 --format=%s', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
 
       return {
@@ -724,17 +724,17 @@ export class SmartMergeTool {
     totalTokensSaved: number;
     averageReduction: number;
   } {
-    const mergeMetrics = this.metrics.getOperations(0, "smart_merge");
+    const mergeMetrics = this.metrics.getOperations(0, 'smart_merge');
 
     const totalMerges = mergeMetrics.length;
     const cacheHits = mergeMetrics.filter((m) => m.cacheHit).length;
     const totalTokensSaved = mergeMetrics.reduce(
       (sum, m) => sum + (m.savedTokens || 0),
-      0,
+      0
     );
     const totalInputTokens = mergeMetrics.reduce(
       (sum, m) => sum + (m.inputTokens || 0),
-      0,
+      0
     );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
@@ -758,7 +758,7 @@ export class SmartMergeTool {
 export function getSmartMergeTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartMergeTool {
   return new SmartMergeTool(cache, tokenCounter, metrics);
 }
@@ -767,9 +767,9 @@ export function getSmartMergeTool(
  * CLI function - Creates resources and uses factory
  */
 export async function runSmartMerge(
-  options: SmartMergeOptions = {},
+  options: SmartMergeOptions = {}
 ): Promise<SmartMergeResult> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -781,74 +781,74 @@ export async function runSmartMerge(
  * MCP Tool Definition
  */
 export const SMART_MERGE_TOOL_DEFINITION = {
-  name: "smart_merge",
+  name: 'smart_merge',
   description:
-    "Manage git merges with 80% token reduction through structured status and conflict management",
+    'Manage git merges with 80% token reduction through structured status and conflict management',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       cwd: {
-        type: "string",
-        description: "Working directory for git operations",
+        type: 'string',
+        description: 'Working directory for git operations',
       },
       mode: {
-        type: "string",
-        enum: ["status", "merge", "abort", "continue"],
-        description: "Operation to perform",
-        default: "status",
+        type: 'string',
+        enum: ['status', 'merge', 'abort', 'continue'],
+        description: 'Operation to perform',
+        default: 'status',
       },
       branch: {
-        type: "string",
-        description: "Branch to merge from (for merge mode)",
+        type: 'string',
+        description: 'Branch to merge from (for merge mode)',
       },
       commit: {
-        type: "string",
-        description: "Specific commit to merge (for merge mode)",
+        type: 'string',
+        description: 'Specific commit to merge (for merge mode)',
       },
       noCommit: {
-        type: "boolean",
-        description: "Do not create merge commit",
+        type: 'boolean',
+        description: 'Do not create merge commit',
         default: false,
       },
       noFf: {
-        type: "boolean",
-        description: "No fast-forward merge",
+        type: 'boolean',
+        description: 'No fast-forward merge',
         default: false,
       },
       ffOnly: {
-        type: "boolean",
-        description: "Fast-forward only",
+        type: 'boolean',
+        description: 'Fast-forward only',
         default: false,
       },
       squash: {
-        type: "boolean",
-        description: "Squash commits",
+        type: 'boolean',
+        description: 'Squash commits',
         default: false,
       },
       strategy: {
-        type: "string",
-        enum: ["recursive", "ours", "theirs", "octopus", "subtree"],
-        description: "Merge strategy",
-        default: "recursive",
+        type: 'string',
+        enum: ['recursive', 'ours', 'theirs', 'octopus', 'subtree'],
+        description: 'Merge strategy',
+        default: 'recursive',
       },
       conflictsOnly: {
-        type: "boolean",
-        description: "Only return conflict information",
+        type: 'boolean',
+        description: 'Only return conflict information',
         default: false,
       },
       includeContent: {
-        type: "boolean",
-        description: "Include file content for conflicts",
+        type: 'boolean',
+        description: 'Include file content for conflicts',
         default: false,
       },
       summaryOnly: {
-        type: "boolean",
-        description: "Only return counts and status",
+        type: 'boolean',
+        description: 'Only return counts and status',
         default: false,
       },
       maxConflicts: {
-        type: "number",
-        description: "Maximum conflicts to return",
+        type: 'number',
+        description: 'Maximum conflicts to return',
       },
     },
   },

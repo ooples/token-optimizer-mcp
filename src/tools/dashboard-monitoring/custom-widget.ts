@@ -11,23 +11,23 @@
  * - Aggressive caching for templates and configurations
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { compress, decompress } from "../shared/compression-utils";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { compress, decompress } from '../shared/compression-utils.js';
+import { createHash } from 'crypto';
 
 // Type definitions
 export interface CustomWidgetOptions {
   operation:
-    | "create"
-    | "update"
-    | "delete"
-    | "list"
-    | "render"
-    | "create-template"
-    | "validate"
-    | "get-schema";
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'list'
+    | 'render'
+    | 'create-template'
+    | 'validate'
+    | 'get-schema';
 
   // Widget identification
   widgetId?: string;
@@ -35,14 +35,14 @@ export interface CustomWidgetOptions {
 
   // Widget configuration
   type?:
-    | "chart"
-    | "metric"
-    | "table"
-    | "gauge"
-    | "status"
-    | "timeline"
-    | "heatmap"
-    | "custom";
+    | 'chart'
+    | 'metric'
+    | 'table'
+    | 'gauge'
+    | 'status'
+    | 'timeline'
+    | 'heatmap'
+    | 'custom';
   config?: WidgetConfig;
 
   // Data source
@@ -54,7 +54,7 @@ export interface CustomWidgetOptions {
   templateConfig?: any;
 
   // Render options
-  renderFormat?: "html" | "json" | "react";
+  renderFormat?: 'html' | 'json' | 'react';
   includeData?: boolean;
 
   // Cache options
@@ -64,7 +64,7 @@ export interface CustomWidgetOptions {
 
 export interface WidgetConfig {
   // Chart config
-  chartType?: "line" | "bar" | "pie" | "scatter" | "area" | "radar";
+  chartType?: 'line' | 'bar' | 'pie' | 'scatter' | 'area' | 'radar';
   xAxis?: AxisConfig;
   yAxis?: AxisConfig;
   series?: SeriesConfig[];
@@ -134,7 +134,7 @@ export interface RangeConfig {
 }
 
 export interface DataSourceConfig {
-  type: "static" | "api" | "query" | "mcp-tool";
+  type: 'static' | 'api' | 'query' | 'mcp-tool';
   data?: any;
   url?: string;
   query?: string;
@@ -201,7 +201,7 @@ export class CustomWidget {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metricsCollector: MetricsCollector,
+    metricsCollector: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -225,13 +225,16 @@ export class CustomWidget {
       ) {
         const cached = this.cache.get(cacheKey);
         if (cached) {
-          const decompressed = decompress(cached, "gzip");
+          const decompressed = decompress(
+            Buffer.from(cached, 'base64'),
+            'gzip'
+          );
           const cachedResult = JSON.parse(
-            decompressed.toString(),
+            decompressed.toString()
           ) as CustomWidgetResult;
 
           const tokensSaved = this.tokenCounter.count(
-            JSON.stringify(cachedResult),
+            JSON.stringify(cachedResult)
           ).tokens;
 
           this.metricsCollector.record({
@@ -260,28 +263,28 @@ export class CustomWidget {
       let result: CustomWidgetResult;
 
       switch (options.operation) {
-        case "create":
+        case 'create':
           result = await this.createWidget(options);
           break;
-        case "update":
+        case 'update':
           result = await this.updateWidget(options);
           break;
-        case "delete":
+        case 'delete':
           result = await this.deleteWidget(options);
           break;
-        case "list":
+        case 'list':
           result = await this.listWidgets(options);
           break;
-        case "render":
+        case 'render':
           result = await this.renderWidget(options);
           break;
-        case "create-template":
+        case 'create-template':
           result = await this.createTemplate(options);
           break;
-        case "validate":
+        case 'validate':
           result = await this.validateWidget(options);
           break;
-        case "get-schema":
+        case 'get-schema':
           result = await this.getSchema(options);
           break;
         default:
@@ -296,13 +299,13 @@ export class CustomWidget {
         options.useCache !== false &&
         this.isReadOnlyOperation(options.operation)
       ) {
-        const compressed = compress(JSON.stringify(result), "gzip");
-        const ttl = this.getCacheTTL(options);
+        const compressed = compress(JSON.stringify(result), 'gzip');
+        // Store as base64 to preserve binary data integrity
         this.cache.set(
           cacheKey,
-          compressed.toString(),
-          tokensUsed,
-          ttl,
+          compressed.compressed.toString('base64'),
+          compressed.originalSize,
+          compressed.compressedSize
         );
       }
 
@@ -357,10 +360,10 @@ export class CustomWidget {
    * Create a new widget
    */
   private async createWidget(
-    options: CustomWidgetOptions,
+    options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
     if (!options.widgetName || !options.type || !options.config) {
-      throw new Error("Widget name, type, and config are required");
+      throw new Error('Widget name, type, and config are required');
     }
 
     const widgetId = this.generateWidgetId(options.widgetName);
@@ -396,10 +399,10 @@ export class CustomWidget {
    * Update an existing widget
    */
   private async updateWidget(
-    options: CustomWidgetOptions,
+    options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
     if (!options.widgetId) {
-      throw new Error("Widget ID is required");
+      throw new Error('Widget ID is required');
     }
 
     const widget = this.widgets.get(options.widgetId);
@@ -436,10 +439,10 @@ export class CustomWidget {
    * Delete a widget
    */
   private async deleteWidget(
-    options: CustomWidgetOptions,
+    options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
     if (!options.widgetId) {
-      throw new Error("Widget ID is required");
+      throw new Error('Widget ID is required');
     }
 
     const deleted = this.widgets.delete(options.widgetId);
@@ -465,13 +468,13 @@ export class CustomWidget {
    * List all widgets
    */
   private async listWidgets(
-    _options: CustomWidgetOptions,
+    _options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
     const widgets = Array.from(this.widgets.values());
 
     // Calculate token savings from compression
     const uncompressedSize = this.tokenCounter.count(
-      JSON.stringify(widgets),
+      JSON.stringify(widgets)
     ).tokens;
     const compressedSize = this.estimateCompressedSize(widgets);
     const tokensSaved = Math.max(0, uncompressedSize - compressedSize);
@@ -493,10 +496,10 @@ export class CustomWidget {
    * Render a widget to specified format
    */
   private async renderWidget(
-    _options: CustomWidgetOptions,
+    _options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
     if (!_options.widgetId) {
-      throw new Error("Widget ID is required");
+      throw new Error('Widget ID is required');
     }
 
     const widget = this.widgets.get(_options.widgetId);
@@ -504,17 +507,17 @@ export class CustomWidget {
       throw new Error(`Widget not found: ${_options.widgetId}`);
     }
 
-    const format = _options.renderFormat || "html";
+    const format = _options.renderFormat || 'html';
     let rendered: string | any;
 
     switch (format) {
-      case "html":
+      case 'html':
         rendered = this.renderToHTML(widget, _options.includeData);
         break;
-      case "json":
+      case 'json':
         rendered = this.renderToJSON(widget, _options.includeData);
         break;
-      case "react":
+      case 'react':
         rendered = this.renderToReact(widget, _options.includeData);
         break;
       default:
@@ -524,10 +527,10 @@ export class CustomWidget {
     // Calculate token savings from cached rendering
     const originalSize = this.tokenCounter.count(JSON.stringify(widget)).tokens;
     const renderedSize = this.tokenCounter.count(
-      typeof rendered === "string" ? rendered : JSON.stringify(rendered),
+      typeof rendered === 'string' ? rendered : JSON.stringify(rendered)
     ).tokens;
     const tokensSaved =
-      format === "html" ? Math.max(0, originalSize - renderedSize * 0.3) : 0;
+      format === 'html' ? Math.max(0, originalSize - renderedSize * 0.3) : 0;
 
     return {
       success: true,
@@ -543,16 +546,16 @@ export class CustomWidget {
    * Create a reusable widget template
    */
   private async createTemplate(
-    options: CustomWidgetOptions,
+    options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
     if (!options.templateName || !options.templateConfig) {
-      throw new Error("Template name and config are required");
+      throw new Error('Template name and config are required');
     }
 
     const template: WidgetTemplate = {
       name: options.templateName,
-      description: options.templateDescription || "",
-      type: options.type || "custom",
+      description: options.templateDescription || '',
+      type: options.type || 'custom',
       config: options.templateConfig,
       createdAt: Date.now(),
       version: 1,
@@ -574,38 +577,38 @@ export class CustomWidget {
    * Validate widget configuration
    */
   private async validateWidget(
-    options: CustomWidgetOptions,
+    options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
     if (!options.type || !options.config) {
-      throw new Error("Widget type and config are required for validation");
+      throw new Error('Widget type and config are required for validation');
     }
 
     const errors: string[] = [];
 
     // Validate based on widget type
     switch (options.type) {
-      case "chart":
+      case 'chart':
         this.validateChartWidget(options.config, errors);
         break;
-      case "metric":
+      case 'metric':
         this.validateMetricWidget(options.config, errors);
         break;
-      case "table":
+      case 'table':
         this.validateTableWidget(options.config, errors);
         break;
-      case "gauge":
+      case 'gauge':
         this.validateGaugeWidget(options.config, errors);
         break;
-      case "status":
+      case 'status':
         this.validateStatusWidget(options.config, errors);
         break;
-      case "timeline":
+      case 'timeline':
         this.validateTimelineWidget(options.config, errors);
         break;
-      case "heatmap":
+      case 'heatmap':
         this.validateHeatmapWidget(options.config, errors);
         break;
-      case "custom":
+      case 'custom':
         this.validateCustomWidget(options.config, errors);
         break;
       default:
@@ -631,12 +634,12 @@ export class CustomWidget {
    * Get widget configuration schema
    */
   private async getSchema(
-    options: CustomWidgetOptions,
+    options: CustomWidgetOptions
   ): Promise<CustomWidgetResult> {
-    const type = options.type || "all";
+    const type = options.type || 'all';
 
     const schema =
-      type === "all" ? this.getAllSchemas() : this.getSchemaForType(type);
+      type === 'all' ? this.getAllSchemas() : this.getSchemaForType(type);
 
     // Schema is static and highly cacheable (98% reduction)
     const originalSize = this.tokenCounter.count(JSON.stringify(schema)).tokens;
@@ -659,33 +662,33 @@ export class CustomWidget {
     const dataAttr =
       includeData && widget.dataSource
         ? ` data-source='${JSON.stringify(widget.dataSource)}'`
-        : "";
+        : '';
 
-    let widgetHTML = "";
+    let widgetHTML = '';
 
     switch (widget.type) {
-      case "chart":
+      case 'chart':
         widgetHTML = this.renderChartHTML(widget);
         break;
-      case "metric":
+      case 'metric':
         widgetHTML = this.renderMetricHTML(widget);
         break;
-      case "table":
+      case 'table':
         widgetHTML = this.renderTableHTML(widget);
         break;
-      case "gauge":
+      case 'gauge':
         widgetHTML = this.renderGaugeHTML(widget);
         break;
-      case "status":
+      case 'status':
         widgetHTML = this.renderStatusHTML(widget);
         break;
-      case "timeline":
+      case 'timeline':
         widgetHTML = this.renderTimelineHTML(widget);
         break;
-      case "heatmap":
+      case 'heatmap':
         widgetHTML = this.renderHeatmapHTML(widget);
         break;
-      case "custom":
+      case 'custom':
         widgetHTML = this.renderCustomHTML(widget);
         break;
       default:
@@ -694,8 +697,8 @@ export class CustomWidget {
 
     return `
 <div class="widget widget-${widget.type}" id="${widget.id}"${dataAttr}>
-  ${widget.config.title ? `<h3 class="widget-title">${widget.config.title}</h3>` : ""}
-  ${widget.config.description ? `<p class="widget-description">${widget.config.description}</p>` : ""}
+  ${widget.config.title ? `<h3 class="widget-title">${widget.config.title}</h3>` : ''}
+  ${widget.config.description ? `<p class="widget-description">${widget.config.description}</p>` : ''}
   <div class="widget-content">
     ${widgetHTML}
   </div>
@@ -706,7 +709,7 @@ export class CustomWidget {
    * Render chart widget HTML
    */
   private renderChartHTML(widget: Widget): string {
-    const { chartType = "line", width = 400, height = 300 } = widget.config;
+    const { chartType = 'line', width = 400, height = 300 } = widget.config;
     return `<canvas class="chart-canvas" data-chart-type="${chartType}" width="${width}" height="${height}"></canvas>`;
   }
 
@@ -715,20 +718,20 @@ export class CustomWidget {
    */
   private renderMetricHTML(widget: Widget): string {
     const {
-      metric = "N/A",
-      format = "",
+      metric = 'N/A',
+      format = '',
       sparkline = false,
       threshold,
     } = widget.config;
     const thresholdClass = threshold
       ? this.getThresholdClass(0, threshold)
-      : "";
+      : '';
 
     return `
 <div class="metric-widget ${thresholdClass}">
   <div class="metric-value">${metric}</div>
-  ${format ? `<div class="metric-format">${format}</div>` : ""}
-  ${sparkline ? '<div class="metric-sparkline"></div>' : ""}
+  ${format ? `<div class="metric-format">${format}</div>` : ''}
+  ${sparkline ? '<div class="metric-sparkline"></div>' : ''}
 </div>`;
   }
 
@@ -741,9 +744,9 @@ export class CustomWidget {
     const headers = columns
       .map(
         (col) =>
-          `<th${col.sortable ? ' class="sortable"' : ""}>${col.label}</th>`,
+          `<th${col.sortable ? ' class="sortable"' : ''}>${col.label}</th>`
       )
-      .join("");
+      .join('');
 
     const paginationHTML = pagination
       ? `
@@ -752,7 +755,7 @@ export class CustomWidget {
   <span class="pagination-info">Page 1</span>
   <button class="pagination-btn">Next</button>
 </div>`
-      : "";
+      : '';
 
     return `
 <div class="table-widget">
@@ -777,9 +780,9 @@ export class CustomWidget {
     const rangesHTML = ranges
       .map(
         (range) =>
-          `<div class="gauge-range" style="background-color: ${range.color}" data-min="${range.min}" data-max="${range.max}"></div>`,
+          `<div class="gauge-range" style="background-color: ${range.color}" data-min="${range.min}" data-max="${range.max}"></div>`
       )
-      .join("");
+      .join('');
 
     return `
 <div class="gauge-widget" data-min="${min}" data-max="${max}">
@@ -823,14 +826,14 @@ export class CustomWidget {
    * Render custom widget HTML
    */
   private renderCustomHTML(widget: Widget): string {
-    const { html = "", css = "", javascript = "" } = widget.config;
+    const { html = '', css = '', javascript = '' } = widget.config;
 
     return `
-${css ? `<style>${css}</style>` : ""}
+${css ? `<style>${css}</style>` : ''}
 <div class="custom-widget-content">
   ${html}
 </div>
-${javascript ? `<script>${javascript}</script>` : ""}`;
+${javascript ? `<script>${javascript}</script>` : ''}`;
   }
 
   /**
@@ -858,7 +861,7 @@ ${javascript ? `<script>${javascript}</script>` : ""}`;
     const dataProps =
       _includeData && widget.dataSource
         ? `, dataSource={${JSON.stringify(widget.dataSource)}}`
-        : "";
+        : '';
 
     return `
 import React from 'react';
@@ -866,8 +869,8 @@ import React from 'react';
 export const ${this.toPascalCase(widget.name)}Widget = () => {
   return (
     <div className="widget widget-${widget.type}" id="${widget.id}"${dataProps}>
-      ${widget.config.title ? `<h3 className="widget-title">${widget.config.title}</h3>` : ""}
-      ${widget.config.description ? `<p className="widget-description">${widget.config.description}</p>` : ""}
+      ${widget.config.title ? `<h3 className="widget-title">${widget.config.title}</h3>` : ''}
+      ${widget.config.description ? `<p className="widget-description">${widget.config.description}</p>` : ''}
       <div className="widget-content">
         {/* Widget implementation */}
       </div>
@@ -881,35 +884,35 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
    */
   private validateChartWidget(config: WidgetConfig, errors: string[]): void {
     if (!config.chartType) {
-      errors.push("Chart type is required");
+      errors.push('Chart type is required');
     }
     if (!config.series || config.series.length === 0) {
-      errors.push("At least one series is required");
+      errors.push('At least one series is required');
     }
   }
 
   private validateMetricWidget(config: WidgetConfig, errors: string[]): void {
     if (!config.metric) {
-      errors.push("Metric field is required");
+      errors.push('Metric field is required');
     }
   }
 
   private validateTableWidget(config: WidgetConfig, errors: string[]): void {
     if (!config.columns || config.columns.length === 0) {
-      errors.push("At least one column is required");
+      errors.push('At least one column is required');
     }
   }
 
   private validateGaugeWidget(config: WidgetConfig, errors: string[]): void {
     if (config.min === undefined || config.max === undefined) {
-      errors.push("Min and max values are required");
+      errors.push('Min and max values are required');
     }
     if (
       config.min !== undefined &&
       config.max !== undefined &&
       config.min >= config.max
     ) {
-      errors.push("Min value must be less than max value");
+      errors.push('Min value must be less than max value');
     }
   }
 
@@ -919,21 +922,21 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
 
   private validateTimelineWidget(
     _config: WidgetConfig,
-    _errors: string[],
+    _errors: string[]
   ): void {
     // Timeline widget has minimal requirements
   }
 
   private validateHeatmapWidget(
     _config: WidgetConfig,
-    _errors: string[],
+    _errors: string[]
   ): void {
     // Heatmap widget has minimal requirements
   }
 
   private validateCustomWidget(config: WidgetConfig, errors: string[]): void {
     if (!config.html && !config.javascript) {
-      errors.push("Custom widgets must have HTML or JavaScript");
+      errors.push('Custom widgets must have HTML or JavaScript');
     }
   }
 
@@ -942,14 +945,14 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
    */
   private getAllSchemas(): any {
     return {
-      chart: this.getSchemaForType("chart"),
-      metric: this.getSchemaForType("metric"),
-      table: this.getSchemaForType("table"),
-      gauge: this.getSchemaForType("gauge"),
-      status: this.getSchemaForType("status"),
-      timeline: this.getSchemaForType("timeline"),
-      heatmap: this.getSchemaForType("heatmap"),
-      custom: this.getSchemaForType("custom"),
+      chart: this.getSchemaForType('chart'),
+      metric: this.getSchemaForType('metric'),
+      table: this.getSchemaForType('table'),
+      gauge: this.getSchemaForType('gauge'),
+      status: this.getSchemaForType('status'),
+      timeline: this.getSchemaForType('timeline'),
+      heatmap: this.getSchemaForType('heatmap'),
+      custom: this.getSchemaForType('custom'),
     };
   }
 
@@ -959,105 +962,105 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
   private getSchemaForType(type: string): any {
     const schemas: Record<string, any> = {
       chart: {
-        type: "object",
+        type: 'object',
         properties: {
           chartType: {
-            type: "string",
-            enum: ["line", "bar", "pie", "scatter", "area", "radar"],
+            type: 'string',
+            enum: ['line', 'bar', 'pie', 'scatter', 'area', 'radar'],
           },
           xAxis: {
-            type: "object",
+            type: 'object',
             properties: {
-              field: { type: "string" },
-              label: { type: "string" },
-              format: { type: "string" },
+              field: { type: 'string' },
+              label: { type: 'string' },
+              format: { type: 'string' },
             },
           },
           yAxis: {
-            type: "object",
+            type: 'object',
             properties: {
-              field: { type: "string" },
-              label: { type: "string" },
-              format: { type: "string" },
+              field: { type: 'string' },
+              label: { type: 'string' },
+              format: { type: 'string' },
             },
           },
-          series: { type: "array", items: { type: "object" } },
-          title: { type: "string" },
-          description: { type: "string" },
+          series: { type: 'array', items: { type: 'object' } },
+          title: { type: 'string' },
+          description: { type: 'string' },
         },
-        required: ["chartType", "series"],
+        required: ['chartType', 'series'],
       },
       metric: {
-        type: "object",
+        type: 'object',
         properties: {
-          metric: { type: "string" },
+          metric: { type: 'string' },
           threshold: {
-            type: "object",
+            type: 'object',
             properties: {
-              warning: { type: "number" },
-              critical: { type: "number" },
+              warning: { type: 'number' },
+              critical: { type: 'number' },
             },
           },
-          format: { type: "string" },
-          sparkline: { type: "boolean" },
-          title: { type: "string" },
+          format: { type: 'string' },
+          sparkline: { type: 'boolean' },
+          title: { type: 'string' },
         },
-        required: ["metric"],
+        required: ['metric'],
       },
       table: {
-        type: "object",
+        type: 'object',
         properties: {
-          columns: { type: "array", items: { type: "object" } },
+          columns: { type: 'array', items: { type: 'object' } },
           pagination: {
-            type: "object",
+            type: 'object',
             properties: {
-              pageSize: { type: "number" },
-              showSizeChanger: { type: "boolean" },
+              pageSize: { type: 'number' },
+              showSizeChanger: { type: 'boolean' },
             },
           },
-          title: { type: "string" },
+          title: { type: 'string' },
         },
-        required: ["columns"],
+        required: ['columns'],
       },
       gauge: {
-        type: "object",
+        type: 'object',
         properties: {
-          min: { type: "number" },
-          max: { type: "number" },
-          ranges: { type: "array", items: { type: "object" } },
-          title: { type: "string" },
+          min: { type: 'number' },
+          max: { type: 'number' },
+          ranges: { type: 'array', items: { type: 'object' } },
+          title: { type: 'string' },
         },
-        required: ["min", "max"],
+        required: ['min', 'max'],
       },
       status: {
-        type: "object",
+        type: 'object',
         properties: {
-          title: { type: "string" },
-          description: { type: "string" },
+          title: { type: 'string' },
+          description: { type: 'string' },
         },
       },
       timeline: {
-        type: "object",
+        type: 'object',
         properties: {
-          title: { type: "string" },
-          description: { type: "string" },
+          title: { type: 'string' },
+          description: { type: 'string' },
         },
       },
       heatmap: {
-        type: "object",
+        type: 'object',
         properties: {
-          width: { type: "number" },
-          height: { type: "number" },
-          title: { type: "string" },
+          width: { type: 'number' },
+          height: { type: 'number' },
+          title: { type: 'string' },
         },
       },
       custom: {
-        type: "object",
+        type: 'object',
         properties: {
-          html: { type: "string" },
-          css: { type: "string" },
-          javascript: { type: "string" },
-          title: { type: "string" },
+          html: { type: 'string' },
+          css: { type: 'string' },
+          javascript: { type: 'string' },
+          title: { type: 'string' },
         },
       },
     };
@@ -1075,31 +1078,17 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
       type: options.type,
       renderFormat: options.renderFormat,
     };
-    return `cache-${createHash("md5").update(JSON.stringify(keyData)).digest("hex")}`;
+    return `cache-${createHash('md5').update(JSON.stringify(keyData)).digest('hex')}`;
   }
 
   private isReadOnlyOperation(operation: string): boolean {
-    return ["list", "render", "validate", "get-schema"].includes(operation);
-  }
-
-  private getCacheTTL(options: CustomWidgetOptions): number {
-    if (options.cacheTTL) return options.cacheTTL;
-
-    // Different TTLs based on operation
-    const ttlMap: Record<string, number> = {
-      list: 3600, // 1 hour
-      render: 300, // 5 minutes (based on refresh interval)
-      "get-schema": 86400, // 24 hours (schema rarely changes)
-      validate: 3600, // 1 hour
-    };
-
-    return ttlMap[options.operation] || 300;
+    return ['list', 'render', 'validate', 'get-schema'].includes(operation);
   }
 
   private generateWidgetId(name: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(name + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private invalidateWidgetCache(widgetId: string): void {
@@ -1110,7 +1099,7 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
 
   private invalidateListCache(): void {
     // In production, would invalidate list cache
-    console.log("Invalidating list cache");
+    console.log('Invalidating list cache');
   }
 
   private estimateCompressedSize(widgets: Widget[]): number {
@@ -1122,17 +1111,17 @@ export const ${this.toPascalCase(widget.name)}Widget = () => {
 
   private getThresholdClass(value: number, threshold: ThresholdConfig): string {
     if (threshold.critical !== undefined && value >= threshold.critical)
-      return "threshold-critical";
+      return 'threshold-critical';
     if (threshold.warning !== undefined && value >= threshold.warning)
-      return "threshold-warning";
-    return "threshold-normal";
+      return 'threshold-warning';
+    return 'threshold-normal';
   }
 
   private toPascalCase(str: string): string {
     return str
       .split(/[\s-_]+/)
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join("");
+      .join('');
   }
 }
 
@@ -1142,13 +1131,13 @@ let customWidgetInstance: CustomWidget | null = null;
 export function getCustomWidget(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metricsCollector: MetricsCollector,
+  metricsCollector: MetricsCollector
 ): CustomWidget {
   if (!customWidgetInstance) {
     customWidgetInstance = new CustomWidget(
       cache,
       tokenCounter,
-      metricsCollector,
+      metricsCollector
     );
   }
   return customWidgetInstance;
@@ -1156,89 +1145,89 @@ export function getCustomWidget(
 
 // MCP Tool definition
 export const CUSTOM_WIDGET_TOOL_DEFINITION = {
-  name: "custom_widget",
+  name: 'custom_widget',
   description:
-    "Create and manage custom dashboard widgets with 88% token reduction through template caching and configuration compression",
+    'Create and manage custom dashboard widgets with 88% token reduction through template caching and configuration compression',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "create",
-          "update",
-          "delete",
-          "list",
-          "render",
-          "create-template",
-          "validate",
-          "get-schema",
+          'create',
+          'update',
+          'delete',
+          'list',
+          'render',
+          'create-template',
+          'validate',
+          'get-schema',
         ],
-        description: "Widget operation to perform",
+        description: 'Widget operation to perform',
       },
       widgetId: {
-        type: "string",
-        description: "Widget ID (required for update, delete, render)",
+        type: 'string',
+        description: 'Widget ID (required for update, delete, render)',
       },
       widgetName: {
-        type: "string",
-        description: "Widget name (required for create)",
+        type: 'string',
+        description: 'Widget name (required for create)',
       },
       type: {
-        type: "string",
+        type: 'string',
         enum: [
-          "chart",
-          "metric",
-          "table",
-          "gauge",
-          "status",
-          "timeline",
-          "heatmap",
-          "custom",
+          'chart',
+          'metric',
+          'table',
+          'gauge',
+          'status',
+          'timeline',
+          'heatmap',
+          'custom',
         ],
-        description: "Widget type",
+        description: 'Widget type',
       },
       config: {
-        type: "object",
-        description: "Widget configuration",
+        type: 'object',
+        description: 'Widget configuration',
       },
       dataSource: {
-        type: "object",
-        description: "Data source configuration",
+        type: 'object',
+        description: 'Data source configuration',
       },
       templateName: {
-        type: "string",
-        description: "Template name (for create-template)",
+        type: 'string',
+        description: 'Template name (for create-template)',
       },
       templateDescription: {
-        type: "string",
-        description: "Template description (for create-template)",
+        type: 'string',
+        description: 'Template description (for create-template)',
       },
       templateConfig: {
-        type: "object",
-        description: "Template configuration (for create-template)",
+        type: 'object',
+        description: 'Template configuration (for create-template)',
       },
       renderFormat: {
-        type: "string",
-        enum: ["html", "json", "react"],
-        description: "Render format (default: html)",
-        default: "html",
+        type: 'string',
+        enum: ['html', 'json', 'react'],
+        description: 'Render format (default: html)',
+        default: 'html',
       },
       includeData: {
-        type: "boolean",
-        description: "Include data source in render output",
+        type: 'boolean',
+        description: 'Include data source in render output',
         default: false,
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching",
+        type: 'boolean',
+        description: 'Enable caching',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds",
+        type: 'number',
+        description: 'Cache TTL in seconds',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

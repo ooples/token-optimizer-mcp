@@ -12,9 +12,9 @@ import { createHash } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync } from 'fs';
-import { CacheEngine } from '../../core/cache-engine';
-import { MetricsCollector } from '../../core/metrics';
-import { TokenCounter } from '../../core/token-counter';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
 
 /**
  * Import statement information
@@ -47,7 +47,12 @@ export interface ImportInfo {
  */
 export interface ImportOptimization {
   /** Type of optimization */
-  type: 'remove-unused' | 'combine-imports' | 'reorder-imports' | 'convert-require' | 'add-missing';
+  type:
+    | 'remove-unused'
+    | 'combine-imports'
+    | 'reorder-imports'
+    | 'convert-require'
+    | 'add-missing';
   /** Severity level */
   severity: 'info' | 'warning' | 'error';
   /** Human-readable message */
@@ -181,7 +186,7 @@ export class SmartImportsTool {
       force = false,
       maxCacheAge = 300,
       checkCircular = true,
-      suggestMissing = true
+      suggestMissing = true,
     } = options;
 
     // Get file content
@@ -205,7 +210,7 @@ export class SmartImportsTool {
     const cacheKey = await this.generateCacheKey(content, {
       checkCircular,
       suggestMissing,
-      projectRoot
+      projectRoot,
     });
 
     // Check cache
@@ -218,12 +223,12 @@ export class SmartImportsTool {
           duration,
           cacheHit: true,
           savedTokens: cached.originalTokens || 0,
-          success: true
+          success: true,
         });
         return {
           ...cached.result,
           cached: true,
-          cacheAge: Date.now() - cached.timestamp
+          cacheAge: Date.now() - cached.timestamp,
         };
       }
     }
@@ -243,9 +248,10 @@ export class SmartImportsTool {
       ? this.detectMissingImports(sourceFile, imports)
       : [];
     const optimizations = this.generateOptimizations(imports);
-    const circularDependencies = checkCircular && filePath
-      ? this.detectCircularDependencies(filePath, imports)
-      : [];
+    const circularDependencies =
+      checkCircular && filePath
+        ? this.detectCircularDependencies(filePath, imports)
+        : [];
 
     // Build result
     const result: SmartImportsResult = {
@@ -259,9 +265,9 @@ export class SmartImportsTool {
         unusedCount: unusedImports.length,
         missingCount: missingImports.length,
         optimizationCount: optimizations.length,
-        circularCount: circularDependencies.length
+        circularCount: circularDependencies.length,
       },
-      cached: false
+      cached: false,
     };
 
     // Calculate token metrics
@@ -282,7 +288,7 @@ export class SmartImportsTool {
       inputTokens: originalTokens,
       cachedTokens: compactedTokens,
       savedTokens: originalTokens - compactedTokens,
-      success: true
+      success: true,
     });
 
     return result;
@@ -312,7 +318,7 @@ export class SmartImportsTool {
           if (importClause.name) {
             importList.push({
               name: importClause.name.text,
-              isDefault: true
+              isDefault: true,
             });
           }
 
@@ -322,14 +328,14 @@ export class SmartImportsTool {
               // import * as name
               importList.push({
                 name: importClause.namedBindings.name.text,
-                isNamespace: true
+                isNamespace: true,
               });
             } else if (ts.isNamedImports(importClause.namedBindings)) {
               // import { a, b as c }
-              importClause.namedBindings.elements.forEach(element => {
+              importClause.namedBindings.elements.forEach((element) => {
                 importList.push({
                   name: element.name.text,
-                  alias: element.propertyName?.text
+                  alias: element.propertyName?.text,
                 });
               });
             }
@@ -343,15 +349,15 @@ export class SmartImportsTool {
           imports: importList,
           location: {
             line: pos.line + 1,
-            column: pos.character
+            column: pos.character,
           },
-          used: false
+          used: false,
         });
       }
 
       // CommonJS require
       if (ts.isVariableStatement(node)) {
-        node.declarationList.declarations.forEach(decl => {
+        node.declarationList.declarations.forEach((decl) => {
           if (decl.initializer && ts.isCallExpression(decl.initializer)) {
             const expr = decl.initializer.expression;
             if (ts.isIdentifier(expr) && expr.text === 'require') {
@@ -363,31 +369,38 @@ export class SmartImportsTool {
                 if (ts.isIdentifier(decl.name)) {
                   importList.push({
                     name: decl.name.text,
-                    isDefault: true
+                    isDefault: true,
                   });
                 } else if (ts.isObjectBindingPattern(decl.name)) {
-                  decl.name.elements.forEach(element => {
-                    if (ts.isBindingElement(element) && ts.isIdentifier(element.name)) {
+                  decl.name.elements.forEach((element) => {
+                    if (
+                      ts.isBindingElement(element) &&
+                      ts.isIdentifier(element.name)
+                    ) {
                       importList.push({
                         name: element.name.text,
-                        alias: element.propertyName && ts.isIdentifier(element.propertyName)
-                          ? element.propertyName.text
-                          : undefined
+                        alias:
+                          element.propertyName &&
+                          ts.isIdentifier(element.propertyName)
+                            ? element.propertyName.text
+                            : undefined,
                       });
                     }
                   });
                 }
 
-                const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+                const pos = sourceFile.getLineAndCharacterOfPosition(
+                  node.getStart()
+                );
                 imports.push({
                   type: 'require',
                   module,
                   imports: importList,
                   location: {
                     line: pos.line + 1,
-                    column: pos.character
+                    column: pos.character,
                   },
-                  used: false
+                  used: false,
                 });
               }
             }
@@ -401,16 +414,18 @@ export class SmartImportsTool {
         if (expr.kind === ts.SyntaxKind.ImportKeyword) {
           const arg = node.arguments[0];
           if (ts.isStringLiteral(arg)) {
-            const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+            const pos = sourceFile.getLineAndCharacterOfPosition(
+              node.getStart()
+            );
             imports.push({
               type: 'dynamic',
               module: arg.text,
               imports: [],
               location: {
                 line: pos.line + 1,
-                column: pos.character
+                column: pos.character,
               },
-              used: true // Dynamic imports are always considered used
+              used: true, // Dynamic imports are always considered used
             });
           }
         }
@@ -527,7 +542,7 @@ export class SmartImportsTool {
       ['describe', ['jest', '@jest/globals']],
       ['it', ['jest', '@jest/globals']],
       ['expect', ['jest', '@jest/globals']],
-      ['test', ['jest', '@jest/globals']]
+      ['test', ['jest', '@jest/globals']],
     ]);
 
     // Check for potential missing imports
@@ -538,7 +553,7 @@ export class SmartImportsTool {
           missing.push({
             symbol,
             suggestedModules: commonSymbols.get(symbol)!,
-            location: pos
+            location: pos,
           });
         }
       }
@@ -563,7 +578,7 @@ export class SmartImportsTool {
         const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
         result = {
           line: pos.line + 1,
-          column: pos.character
+          column: pos.character,
         };
         return;
       }
@@ -578,9 +593,7 @@ export class SmartImportsTool {
   /**
    * Generate optimization suggestions
    */
-  private generateOptimizations(
-    imports: ImportInfo[]
-  ): ImportOptimization[] {
+  private generateOptimizations(imports: ImportInfo[]): ImportOptimization[] {
     const optimizations: ImportOptimization[] = [];
 
     // Remove unused imports
@@ -600,8 +613,8 @@ export class SmartImportsTool {
           impact: {
             readability: 'medium',
             maintainability: 'medium',
-            bundleSize: 'low'
-          }
+            bundleSize: 'low',
+          },
         });
       }
     }
@@ -626,13 +639,18 @@ export class SmartImportsTool {
           suggestion: `Combine ${imps.length} import statements into one`,
           location: imps[0].location,
           codeExample: {
-            before: imps.map(i => `import { ${i.imports.map(x => x.name).join(', ')} } from '${module}';`).join('\n'),
-            after: `import { ${imps.flatMap(i => i.imports.map(x => x.name)).join(', ')} } from '${module}';`
+            before: imps
+              .map(
+                (i) =>
+                  `import { ${i.imports.map((x) => x.name).join(', ')} } from '${module}';`
+              )
+              .join('\n'),
+            after: `import { ${imps.flatMap((i) => i.imports.map((x) => x.name)).join(', ')} } from '${module}';`,
           },
           impact: {
             readability: 'medium',
-            maintainability: 'low'
-          }
+            maintainability: 'low',
+          },
         });
       }
     }
@@ -648,12 +666,12 @@ export class SmartImportsTool {
           location: imp.location,
           codeExample: {
             before: `const ${imp.imports[0]?.name || 'module'} = require('${imp.module}');`,
-            after: `import ${imp.imports[0]?.name || 'module'} from '${imp.module}';`
+            after: `import ${imp.imports[0]?.name || 'module'} from '${imp.module}';`,
           },
           impact: {
             readability: 'low',
-            maintainability: 'low'
-          }
+            maintainability: 'low',
+          },
         });
       }
     }
@@ -664,12 +682,14 @@ export class SmartImportsTool {
       optimizations.push({
         type: 'reorder-imports',
         severity: 'info',
-        message: 'Imports should be ordered: external modules first, then internal modules',
-        suggestion: 'Reorder imports to follow convention: external → internal → relative',
+        message:
+          'Imports should be ordered: external modules first, then internal modules',
+        suggestion:
+          'Reorder imports to follow convention: external → internal → relative',
         impact: {
           readability: 'medium',
-          maintainability: 'low'
-        }
+          maintainability: 'low',
+        },
       });
     }
 
@@ -688,7 +708,11 @@ export class SmartImportsTool {
       if (lastType) {
         // External should come before internal and relative
         if (lastType === 'internal' && type === 'external') return true;
-        if (lastType === 'relative' && (type === 'external' || type === 'internal')) return true;
+        if (
+          lastType === 'relative' &&
+          (type === 'external' || type === 'internal')
+        )
+          return true;
       }
 
       lastType = type;
@@ -725,7 +749,7 @@ export class SmartImportsTool {
         cycles.push({
           cycle,
           severity: 'warning',
-          message: `Circular dependency detected: ${cycle.join(' → ')}`
+          message: `Circular dependency detected: ${cycle.join(' → ')}`,
         });
         return;
       }
@@ -738,9 +762,10 @@ export class SmartImportsTool {
       recursionStack.add(currentFile);
 
       // Get imports for current file
-      const fileImports = currentFile === filePath
-        ? imports
-        : this.getImportsForFile(currentFile);
+      const fileImports =
+        currentFile === filePath
+          ? imports
+          : this.getImportsForFile(currentFile);
 
       for (const imp of fileImports) {
         if (imp.module.startsWith('.')) {
@@ -793,7 +818,16 @@ export class SmartImportsTool {
       let resolved = join(dir, importPath);
 
       // Try different extensions
-      const extensions = ['.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
+      const extensions = [
+        '.ts',
+        '.tsx',
+        '.js',
+        '.jsx',
+        '/index.ts',
+        '/index.tsx',
+        '/index.js',
+        '/index.jsx',
+      ];
       for (const ext of extensions) {
         const withExt = resolved + ext;
         if (existsSync(withExt)) {
@@ -829,7 +863,11 @@ export class SmartImportsTool {
   private getCachedResult(
     cacheKey: string,
     maxAge: number
-  ): { result: SmartImportsResult; timestamp: number; originalTokens?: number } | null {
+  ): {
+    result: SmartImportsResult;
+    timestamp: number;
+    originalTokens?: number;
+  } | null {
     const cached = this.cache.get(cacheKey);
     if (!cached) return null;
 
@@ -860,10 +898,11 @@ export class SmartImportsTool {
       result,
       timestamp: Date.now(),
       originalTokens,
-      compactedTokens
+      compactedTokens,
     };
     const buffer = JSON.stringify(toCache);
-    const tokensSaved = originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
+    const tokensSaved =
+      originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
     this.cache.set(cacheKey, buffer, 300, tokensSaved);
   }
 
@@ -872,29 +911,29 @@ export class SmartImportsTool {
    */
   private compactResult(result: SmartImportsResult): string {
     const compact = {
-      imp: result.imports.map(i => ({
+      imp: result.imports.map((i) => ({
         t: i.type[0], // First letter: i/r/d
         m: i.module,
-        i: i.imports.map(x => x.name),
+        i: i.imports.map((x) => x.name),
         u: i.used,
-        l: i.location.line
+        l: i.location.line,
       })),
-      unu: result.unusedImports.map(i => ({
+      unu: result.unusedImports.map((i) => ({
         m: i.module,
-        i: i.unusedImports
+        i: i.unusedImports,
       })),
-      mis: result.missingImports.map(m => ({
+      mis: result.missingImports.map((m) => ({
         s: m.symbol,
-        l: m.location.line
+        l: m.location.line,
       })),
-      opt: result.optimizations.map(o => ({
+      opt: result.optimizations.map((o) => ({
         t: o.type,
-        m: o.message
+        m: o.message,
       })),
-      circ: result.circularDependencies.map(c => ({
-        c: c.cycle
+      circ: result.circularDependencies.map((c) => ({
+        c: c.cycle,
       })),
-      sum: result.summary
+      sum: result.summary,
     };
 
     return JSON.stringify(compact);
@@ -922,7 +961,12 @@ export async function runSmartImports(
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const tool = getSmartImportsTool(cache, tokenCounter, metrics, options.projectRoot);
+  const tool = getSmartImportsTool(
+    cache,
+    tokenCounter,
+    metrics,
+    options.projectRoot
+  );
   return tool.run(options);
 }
 
@@ -931,42 +975,45 @@ export async function runSmartImports(
  */
 export const SMART_IMPORTS_TOOL_DEFINITION = {
   name: 'smart_imports',
-  description: 'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Achieves 75-85% token reduction through import analysis summarization.',
+  description:
+    'Analyze TypeScript/JavaScript import statements with intelligent caching. Detects unused imports, missing imports, and provides optimization suggestions. Achieves 75-85% token reduction through import analysis summarization.',
   inputSchema: {
     type: 'object',
     properties: {
       filePath: {
         type: 'string',
-        description: 'Path to the TypeScript/JavaScript file to analyze'
+        description: 'Path to the TypeScript/JavaScript file to analyze',
       },
       fileContent: {
         type: 'string',
-        description: 'File content (alternative to filePath)'
+        description: 'File content (alternative to filePath)',
       },
       projectRoot: {
         type: 'string',
-        description: 'Project root directory (default: current working directory)'
+        description:
+          'Project root directory (default: current working directory)',
       },
       force: {
         type: 'boolean',
-        description: 'Force analysis even if cached result exists (default: false)',
-        default: false
+        description:
+          'Force analysis even if cached result exists (default: false)',
+        default: false,
       },
       maxCacheAge: {
         type: 'number',
         description: 'Maximum cache age in seconds (default: 300)',
-        default: 300
+        default: 300,
       },
       checkCircular: {
         type: 'boolean',
         description: 'Check for circular dependencies (default: true)',
-        default: true
+        default: true,
       },
       suggestMissing: {
         type: 'boolean',
         description: 'Suggest missing imports (default: true)',
-        default: true
-      }
-    }
-  }
+        default: true,
+      },
+    },
+  },
 };

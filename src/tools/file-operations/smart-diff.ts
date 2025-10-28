@@ -11,13 +11,13 @@
  * Target: 85% reduction vs full file content for changed files
  */
 
-import { execSync } from "child_process";
-import { join } from "path";
-import { homedir } from "os";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
+import { execSync } from 'child_process';
+import { join } from 'path';
+import { homedir } from 'os';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
 
 export interface DiffStats {
   file: string;
@@ -88,7 +88,7 @@ export class SmartDiffTool {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   /**
@@ -100,11 +100,11 @@ export class SmartDiffTool {
     // Default options
     const opts: Required<SmartDiffOptions> = {
       cwd: options.cwd ?? process.cwd(),
-      source: options.source ?? "HEAD",
-      target: options.target ?? "", // Empty means working directory
+      source: options.source ?? 'HEAD',
+      target: options.target ?? '', // Empty means working directory
       staged: options.staged ?? false,
       files: options.files ?? [],
-      filePattern: options.filePattern ?? "",
+      filePattern: options.filePattern ?? '',
       summaryOnly: options.summaryOnly ?? false,
       contextLines: options.contextLines ?? 3,
       unified: options.unified ?? true,
@@ -135,7 +135,7 @@ export class SmartDiffTool {
 
           const duration = Date.now() - startTime;
           this.metrics.record({
-            operation: "smart_diff",
+            operation: 'smart_diff',
             duration,
             inputTokens: result.metadata.tokenCount,
             outputTokens: 0,
@@ -165,14 +165,14 @@ export class SmartDiffTool {
       if (opts.summaryOnly) {
         // Summary mode: return stats only
         resultTokens = this.tokenCounter.count(
-          JSON.stringify(paginatedStats),
+          JSON.stringify(paginatedStats)
         ).tokens;
         originalTokens = resultTokens * 100; // Estimate full diff would be 100x larger
       } else {
         // Full mode: get actual diffs
         diffs = this.getDiffs(
           paginatedStats.map((s) => s.file),
-          opts,
+          opts
         );
         resultTokens = this.tokenCounter.count(JSON.stringify(diffs)).tokens;
         originalTokens = resultTokens * 10; // Estimate full files would be 10x larger
@@ -184,11 +184,11 @@ export class SmartDiffTool {
       // Calculate total additions/deletions
       const totalAdditions = paginatedStats.reduce(
         (sum, s) => sum + s.additions,
-        0,
+        0
       );
       const totalDeletions = paginatedStats.reduce(
         (sum, s) => sum + s.deletions,
-        0,
+        0
       );
 
       // Build result
@@ -218,12 +218,9 @@ export class SmartDiffTool {
 
       // Cache result
       if (opts.useCache) {
-        this.cache.set(
-          cacheKey,
-          JSON.stringify(result) as any,
-          originalTokens,
-          resultTokens,
-        );
+        const resultString = JSON.stringify(result);
+        const resultSize = Buffer.from(resultString, 'utf-8').length;
+        this.cache.set(cacheKey, resultString, resultSize, resultSize);
       }
 
       // Record metrics
@@ -231,7 +228,7 @@ export class SmartDiffTool {
       result.metadata.duration = duration;
 
       this.metrics.record({
-        operation: "smart_diff",
+        operation: 'smart_diff',
         duration,
         inputTokens: resultTokens,
         outputTokens: 0,
@@ -246,7 +243,7 @@ export class SmartDiffTool {
       const duration = Date.now() - startTime;
 
       this.metrics.record({
-        operation: "smart_diff",
+        operation: 'smart_diff',
         duration,
         inputTokens: 0,
         outputTokens: 0,
@@ -286,7 +283,7 @@ export class SmartDiffTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync("git rev-parse --git-dir", { cwd, stdio: "pipe" });
+      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
       return true;
     } catch {
       return false;
@@ -300,7 +297,7 @@ export class SmartDiffTool {
     try {
       return execSync(`git rev-parse ${ref}`, {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
     } catch {
       return ref;
@@ -314,9 +311,9 @@ export class SmartDiffTool {
     const sourceHash = this.getGitHash(opts.cwd, opts.source);
     const targetHash = opts.target
       ? this.getGitHash(opts.cwd, opts.target)
-      : "working";
+      : 'working';
 
-    return generateCacheKey("git-diff", {
+    return generateCacheKey('git-diff', {
       source: sourceHash,
       target: targetHash,
       staged: opts.staged,
@@ -331,8 +328,8 @@ export class SmartDiffTool {
    * Format comparison target for display
    */
   private formatComparison(ref: string, staged: boolean): string {
-    if (!ref && staged) return "staged changes";
-    if (!ref) return "working directory";
+    if (!ref && staged) return 'staged changes';
+    if (!ref) return 'working directory';
     return ref;
   }
 
@@ -342,33 +339,33 @@ export class SmartDiffTool {
   private getDiffStats(opts: Required<SmartDiffOptions>): DiffStats[] {
     try {
       // Build diff command
-      let command = "git diff --numstat";
+      let command = 'git diff --numstat';
 
       if (opts.staged) {
-        command += " --cached";
+        command += ' --cached';
       }
 
       if (opts.showRenames) {
-        command += " -M";
+        command += ' -M';
       }
 
       // Add comparison targets
       if (opts.target) {
         command += ` ${opts.source}...${opts.target}`;
-      } else if (opts.source !== "HEAD" || opts.staged) {
+      } else if (opts.source !== 'HEAD' || opts.staged) {
         command += ` ${opts.source}`;
       }
 
       // Add file filters
       if (opts.files.length > 0) {
-        command += " -- " + opts.files.join(" ");
+        command += ' -- ' + opts.files.join(' ');
       } else if (opts.filePattern) {
         command += ` -- '${opts.filePattern}'`;
       }
 
       const output = execSync(command, {
         cwd: opts.cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024, // 10MB
       });
 
@@ -384,13 +381,13 @@ export class SmartDiffTool {
    */
   private parseNumstat(output: string): DiffStats[] {
     const stats: DiffStats[] = [];
-    const lines = output.split("\n").filter((line) => line.trim());
+    const lines = output.split('\n').filter((line) => line.trim());
 
     for (const line of lines) {
-      const parts = line.split("\t");
+      const parts = line.split('\t');
       if (parts.length >= 3) {
-        const additions = parts[0] === "-" ? 0 : parseInt(parts[0], 10);
-        const deletions = parts[1] === "-" ? 0 : parseInt(parts[1], 10);
+        const additions = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
+        const deletions = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
         const file = parts[2];
 
         stats.push({
@@ -410,35 +407,35 @@ export class SmartDiffTool {
    */
   private getDiffs(
     files: string[],
-    opts: Required<SmartDiffOptions>,
+    opts: Required<SmartDiffOptions>
   ): { file: string; diff: string }[] {
     const diffs: { file: string; diff: string }[] = [];
 
     for (const file of files) {
       try {
         // Build diff command for single file
-        let command = "git diff";
+        let command = 'git diff';
 
         if (opts.unified) {
           command += ` -U${opts.contextLines}`;
         }
 
         if (opts.staged) {
-          command += " --cached";
+          command += ' --cached';
         }
 
         if (opts.showRenames) {
-          command += " -M";
+          command += ' -M';
         }
 
         if (!opts.includeBinary) {
-          command += " --no-binary";
+          command += ' --no-binary';
         }
 
         // Add comparison targets
         if (opts.target) {
           command += ` ${opts.source}...${opts.target}`;
-        } else if (opts.source !== "HEAD" || opts.staged) {
+        } else if (opts.source !== 'HEAD' || opts.staged) {
           command += ` ${opts.source}`;
         }
 
@@ -446,7 +443,7 @@ export class SmartDiffTool {
 
         const diff = execSync(command, {
           cwd: opts.cwd,
-          encoding: "utf-8",
+          encoding: 'utf-8',
           maxBuffer: 10 * 1024 * 1024, // 10MB
         });
 
@@ -471,17 +468,17 @@ export class SmartDiffTool {
     totalTokensSaved: number;
     averageReduction: number;
   } {
-    const diffMetrics = this.metrics.getOperations(0, "smart_diff");
+    const diffMetrics = this.metrics.getOperations(0, 'smart_diff');
 
     const totalDiffs = diffMetrics.length;
     const cacheHits = diffMetrics.filter((m) => m.cacheHit).length;
     const totalTokensSaved = diffMetrics.reduce(
       (sum, m) => sum + (m.savedTokens || 0),
-      0,
+      0
     );
     const totalInputTokens = diffMetrics.reduce(
       (sum, m) => sum + (m.inputTokens || 0),
-      0,
+      0
     );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
@@ -505,7 +502,7 @@ export class SmartDiffTool {
 export function getSmartDiffTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartDiffTool {
   return new SmartDiffTool(cache, tokenCounter, metrics);
 }
@@ -514,11 +511,11 @@ export function getSmartDiffTool(
  * CLI function - Creates resources and uses factory
  */
 export async function runSmartDiff(
-  options: SmartDiffOptions = {},
+  options: SmartDiffOptions = {}
 ): Promise<SmartDiffResult> {
   const cache = new CacheEngine(
-    join(homedir(), ".hypercontext", "cache", "cache.db"),
-    100,
+    join(homedir(), '.hypercontext', 'cache', 'cache.db'),
+    100
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
@@ -531,53 +528,53 @@ export async function runSmartDiff(
  * MCP Tool Definition
  */
 export const SMART_DIFF_TOOL_DEFINITION = {
-  name: "smart_diff",
+  name: 'smart_diff',
   description:
-    "Get git diffs with 85% token reduction through diff-only output and smart filtering",
+    'Get git diffs with 85% token reduction through diff-only output and smart filtering',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       cwd: {
-        type: "string",
-        description: "Working directory for git operations",
+        type: 'string',
+        description: 'Working directory for git operations',
       },
       source: {
-        type: "string",
-        description: "Source commit/branch to compare from (default: HEAD)",
-        default: "HEAD",
+        type: 'string',
+        description: 'Source commit/branch to compare from (default: HEAD)',
+        default: 'HEAD',
       },
       target: {
-        type: "string",
+        type: 'string',
         description:
-          "Target commit/branch to compare to (default: working directory)",
+          'Target commit/branch to compare to (default: working directory)',
       },
       staged: {
-        type: "boolean",
-        description: "Diff staged changes only",
+        type: 'boolean',
+        description: 'Diff staged changes only',
         default: false,
       },
       files: {
-        type: "array",
-        items: { type: "string" },
-        description: "Specific files to diff",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Specific files to diff',
       },
       filePattern: {
-        type: "string",
+        type: 'string',
         description: 'Pattern to filter files (e.g., "*.ts")',
       },
       summaryOnly: {
-        type: "boolean",
-        description: "Only return statistics, not diff content",
+        type: 'boolean',
+        description: 'Only return statistics, not diff content',
         default: false,
       },
       contextLines: {
-        type: "number",
-        description: "Lines of context around changes",
+        type: 'number',
+        description: 'Lines of context around changes',
         default: 3,
       },
       limit: {
-        type: "number",
-        description: "Maximum number of files to diff",
+        type: 'number',
+        description: 'Maximum number of files to diff',
       },
     },
   },

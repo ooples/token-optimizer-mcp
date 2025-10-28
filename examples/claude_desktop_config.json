@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "token-optimizer": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\YOUR_USERNAME\\source\\repos\\token-optimizer-mcp\\dist\\index.js"
+      ],
+      "env": {
+        "TOKEN_OPTIMIZER_CACHE_DIR": "C:\\Users\\YOUR_USERNAME\\.token-optimizer-cache"
+      }
+    }
+  }
+}

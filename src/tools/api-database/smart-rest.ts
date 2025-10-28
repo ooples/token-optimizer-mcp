@@ -9,12 +9,12 @@
  * - Token-optimized output with intelligent caching
  */
 
-import { createHash } from "crypto";
+import { createHash } from 'crypto';
 
 // Core imports
-import { CacheEngine } from "../../core/cache-engine";
-import type { TokenCounter } from "../../core/token-counter";
-import type { MetricsCollector } from "../../core/metrics";
+import { CacheEngine } from '../../core/cache-engine.js';
+import type { TokenCounter } from '../../core/token-counter.js';
+import type { MetricsCollector } from '../../core/metrics.js';
 
 export interface SmartRESTOptions {
   // API specification
@@ -29,7 +29,7 @@ export interface SmartRESTOptions {
   detectPatterns?: boolean;
 
   // Filtering
-  methods?: Array<"GET" | "POST" | "PUT" | "DELETE" | "PATCH">;
+  methods?: Array<'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'>;
   resourceFilter?: string; // Filter by resource path
 
   // Caching
@@ -45,7 +45,7 @@ export interface EndpointInfo {
   authenticated: boolean;
   parameters?: Array<{
     name: string;
-    in: "query" | "header" | "path" | "body";
+    in: 'query' | 'header' | 'path' | 'body';
     required: boolean;
     type: string;
   }>;
@@ -73,7 +73,7 @@ export interface ResourceGroup {
 }
 
 export interface HealthIssue {
-  severity: "high" | "medium" | "low";
+  severity: 'high' | 'medium' | 'low';
   type: string;
   message: string;
   endpoint?: string;
@@ -83,7 +83,7 @@ export interface RateLimit {
   endpoint?: string;
   limit: number;
   period: string;
-  scope: "global" | "endpoint" | "user";
+  scope: 'global' | 'endpoint' | 'user';
 }
 
 export interface SmartRESTResult {
@@ -114,7 +114,7 @@ export interface SmartRESTResult {
     authMethods: string[];
     commonHeaders: string[];
     rateLimits: RateLimit[];
-    versioning?: "url" | "header" | "query" | "none";
+    versioning?: 'url' | 'header' | 'query' | 'none';
   };
 
   // Standard metadata
@@ -176,7 +176,7 @@ export class SmartREST {
       if (cached) {
         const duration = Date.now() - startTime;
         this.metrics.record({
-          operation: "smart_rest",
+          operation: 'smart_rest',
           duration,
           cacheHit: true,
           success: true,
@@ -194,7 +194,7 @@ export class SmartREST {
 
     const duration = Date.now() - startTime;
     this.metrics.record({
-      operation: "smart_rest",
+      operation: 'smart_rest',
       duration,
       cacheHit: false,
       success: true,
@@ -213,13 +213,17 @@ export class SmartREST {
 
     // Analyze endpoints
     const endpoints =
-      options.analyzeEndpoints !== false ? this.analyzeEndpoints(spec, options) : undefined;
+      options.analyzeEndpoints !== false
+        ? this.analyzeEndpoints(spec, options)
+        : undefined;
 
     // Group by resource
     const resources = endpoints ? this.groupByResource(endpoints) : undefined;
 
     // Health check
-    const health = options.checkHealth ? this.checkAPIHealth(spec, endpoints || []) : undefined;
+    const health = options.checkHealth
+      ? this.checkAPIHealth(spec, endpoints || [])
+      : undefined;
 
     // Detect patterns
     const patterns = options.detectPatterns
@@ -242,9 +246,11 @@ export class SmartREST {
     } else if (options.specUrl) {
       // In real implementation, fetch from URL
       // For now, throw error requiring specContent
-      throw new Error("specUrl fetching not yet implemented. Please provide specContent directly.");
+      throw new Error(
+        'specUrl fetching not yet implemented. Please provide specContent directly.'
+      );
     } else {
-      throw new Error("Either specUrl or specContent must be provided");
+      throw new Error('Either specUrl or specContent must be provided');
     }
 
     try {
@@ -252,24 +258,26 @@ export class SmartREST {
 
       // Validate it's an OpenAPI/Swagger spec
       if (!spec.openapi && !spec.swagger) {
-        throw new Error("Invalid OpenAPI/Swagger specification: missing version field");
+        throw new Error(
+          'Invalid OpenAPI/Swagger specification: missing version field'
+        );
       }
 
       if (!spec.paths) {
-        throw new Error("Invalid OpenAPI/Swagger specification: missing paths");
+        throw new Error('Invalid OpenAPI/Swagger specification: missing paths');
       }
 
       return spec as OpenAPISpec;
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error("Invalid JSON in OpenAPI specification");
+        throw new Error('Invalid JSON in OpenAPI specification');
       }
       throw error;
     }
   }
 
   private extractAPIInfo(spec: OpenAPISpec, baseUrl?: string): any {
-    let url = baseUrl || "";
+    let url = baseUrl || '';
 
     // OpenAPI 3.0
     if (spec.servers && spec.servers.length > 0) {
@@ -277,8 +285,8 @@ export class SmartREST {
     }
     // Swagger 2.0
     else if (spec.host) {
-      const scheme = spec.schemes?.[0] || "https";
-      const basePath = spec.basePath || "";
+      const scheme = spec.schemes?.[0] || 'https';
+      const basePath = spec.basePath || '';
       url = `${scheme}://${spec.host}${basePath}`;
     }
 
@@ -287,12 +295,16 @@ export class SmartREST {
       return (
         count +
         Object.keys(spec.paths[path]).filter((key) =>
-          ["get", "post", "put", "delete", "patch", "options", "head"].includes(key.toLowerCase())
+          ['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(
+            key.toLowerCase()
+          )
         ).length
       );
     }, 0);
 
-    const resources = new Set(paths.map((path) => this.extractResourceName(path))).size;
+    const resources = new Set(
+      paths.map((path) => this.extractResourceName(path))
+    ).size;
 
     return {
       title: spec.info.title,
@@ -303,7 +315,10 @@ export class SmartREST {
     };
   }
 
-  private analyzeEndpoints(spec: OpenAPISpec, options: SmartRESTOptions): EndpointInfo[] {
+  private analyzeEndpoints(
+    spec: OpenAPISpec,
+    options: SmartRESTOptions
+  ): EndpointInfo[] {
     const endpoints: EndpointInfo[] = [];
     const methodFilter = options.methods?.map((m) => m.toLowerCase());
 
@@ -317,7 +332,7 @@ export class SmartREST {
         const methodLower = method.toLowerCase();
 
         // Skip non-HTTP methods
-        if (!["get", "post", "put", "delete", "patch"].includes(methodLower)) {
+        if (!['get', 'post', 'put', 'delete', 'patch'].includes(methodLower)) {
           continue;
         }
 
@@ -342,14 +357,16 @@ export class SmartREST {
             name: param.name,
             in: param.in,
             required: param.required || false,
-            type: param.type || param.schema?.type || "string",
+            type: param.type || param.schema?.type || 'string',
           }));
         }
 
         // Extract request body (OpenAPI 3.0)
         if (operation.requestBody) {
           const content = operation.requestBody.content;
-          const contentType = content ? Object.keys(content)[0] : "application/json";
+          const contentType = content
+            ? Object.keys(content)[0]
+            : 'application/json';
           endpoint.requestBody = {
             required: operation.requestBody.required || false,
             contentType,
@@ -370,7 +387,7 @@ export class SmartREST {
     const result: any = {};
     for (const [code, response] of Object.entries(responses)) {
       result[code] = {
-        description: (response as any).description || "",
+        description: (response as any).description || '',
         schema: (response as any).schema || (response as any).content,
       };
     }
@@ -389,7 +406,9 @@ export class SmartREST {
     }
 
     // Check if security schemes are defined
-    const hasSecuritySchemes = !!(spec.components?.securitySchemes || spec.securityDefinitions);
+    const hasSecuritySchemes = !!(
+      spec.components?.securitySchemes || spec.securityDefinitions
+    );
 
     return hasSecuritySchemes;
   }
@@ -412,7 +431,7 @@ export class SmartREST {
 
       resources.push({
         name,
-        path: endpointList[0].path.split("/").slice(0, 2).join("/"),
+        path: endpointList[0].path.split('/').slice(0, 2).join('/'),
         endpoints: endpointList.length,
         methods,
         authenticated,
@@ -424,8 +443,8 @@ export class SmartREST {
   }
 
   private extractResourceName(path: string): string {
-    const parts = path.split("/").filter((p) => p && !p.startsWith("{"));
-    return parts[0] || "root";
+    const parts = path.split('/').filter((p) => p && !p.startsWith('{'));
+    return parts[0] || 'root';
   }
 
   private checkAPIHealth(spec: OpenAPISpec, endpoints: EndpointInfo[]): any {
@@ -438,8 +457,8 @@ export class SmartREST {
       if (!endpoint.responses || Object.keys(endpoint.responses).length === 0) {
         undocumentedResponses++;
         issues.push({
-          severity: "medium",
-          type: "missing_documentation",
+          severity: 'medium',
+          type: 'missing_documentation',
           message: `No response documentation for ${endpoint.method} ${endpoint.path}`,
           endpoint: `${endpoint.method} ${endpoint.path}`,
         });
@@ -451,32 +470,38 @@ export class SmartREST {
     }
 
     // Check for authentication
-    const hasAuth = !!(spec.components?.securitySchemes || spec.securityDefinitions);
+    const hasAuth = !!(
+      spec.components?.securitySchemes || spec.securityDefinitions
+    );
     if (!hasAuth) {
       score -= 15;
       issues.push({
-        severity: "high",
-        type: "missing_authentication",
-        message: "No authentication schemes defined",
+        severity: 'high',
+        type: 'missing_authentication',
+        message: 'No authentication schemes defined',
       });
     }
 
     // Check for versioning
     const hasVersioning = this.detectVersioning(spec, endpoints);
-    if (hasVersioning === "none") {
+    if (hasVersioning === 'none') {
       score -= 10;
       issues.push({
-        severity: "low",
-        type: "missing_versioning",
-        message: "No API versioning detected",
+        severity: 'low',
+        type: 'missing_versioning',
+        message: 'No API versioning detected',
       });
     }
 
     // Check for error responses
     let missingErrorHandling = 0;
     for (const endpoint of endpoints) {
-      const has4xx = Object.keys(endpoint.responses).some((code) => code.startsWith("4"));
-      const has5xx = Object.keys(endpoint.responses).some((code) => code.startsWith("5"));
+      const has4xx = Object.keys(endpoint.responses).some((code) =>
+        code.startsWith('4')
+      );
+      const has5xx = Object.keys(endpoint.responses).some((code) =>
+        code.startsWith('5')
+      );
       if (!has4xx || !has5xx) {
         missingErrorHandling++;
       }
@@ -485,8 +510,8 @@ export class SmartREST {
     if (missingErrorHandling > endpoints.length * 0.5) {
       score -= 15;
       issues.push({
-        severity: "medium",
-        type: "incomplete_error_handling",
+        severity: 'medium',
+        type: 'incomplete_error_handling',
         message: `${missingErrorHandling} endpoints missing error response documentation`,
       });
     }
@@ -494,16 +519,20 @@ export class SmartREST {
     // Generate recommendations
     const recommendations: string[] = [];
     if (undocumentedResponses > 0) {
-      recommendations.push("Add response documentation for all endpoints");
+      recommendations.push('Add response documentation for all endpoints');
     }
     if (!hasAuth) {
-      recommendations.push("Implement authentication (OAuth2, API Key, or JWT)");
+      recommendations.push(
+        'Implement authentication (OAuth2, API Key, or JWT)'
+      );
     }
-    if (hasVersioning === "none") {
-      recommendations.push("Add API versioning (URL path or header-based)");
+    if (hasVersioning === 'none') {
+      recommendations.push('Add API versioning (URL path or header-based)');
     }
     if (missingErrorHandling > 0) {
-      recommendations.push("Document error responses (4xx, 5xx) for all endpoints");
+      recommendations.push(
+        'Document error responses (4xx, 5xx) for all endpoints'
+      );
     }
 
     return {
@@ -516,30 +545,37 @@ export class SmartREST {
   private detectVersioning(
     _spec: OpenAPISpec,
     endpoints: EndpointInfo[]
-  ): "url" | "header" | "query" | "none" {
+  ): 'url' | 'header' | 'query' | 'none' {
     // Check URL-based versioning
-    const hasUrlVersion = endpoints.some((e) => /\/v\d+\//.test(e.path) || e.path.startsWith("/v"));
-    if (hasUrlVersion) return "url";
+    const hasUrlVersion = endpoints.some(
+      (e) => /\/v\d+\//.test(e.path) || e.path.startsWith('/v')
+    );
+    if (hasUrlVersion) return 'url';
 
     // Check header-based versioning
     const hasHeaderVersion = endpoints.some((e) =>
-      e.parameters?.some((p) => p.in === "header" && /version|api-version/i.test(p.name))
+      e.parameters?.some(
+        (p) => p.in === 'header' && /version|api-version/i.test(p.name)
+      )
     );
-    if (hasHeaderVersion) return "header";
+    if (hasHeaderVersion) return 'header';
 
     // Check query-based versioning
     const hasQueryVersion = endpoints.some((e) =>
-      e.parameters?.some((p) => p.in === "query" && /version|api-version/i.test(p.name))
+      e.parameters?.some(
+        (p) => p.in === 'query' && /version|api-version/i.test(p.name)
+      )
     );
-    if (hasQueryVersion) return "query";
+    if (hasQueryVersion) return 'query';
 
-    return "none";
+    return 'none';
   }
 
   private detectPatterns(spec: OpenAPISpec, endpoints: EndpointInfo[]): any {
     // Detect auth methods
     const authMethods: string[] = [];
-    const securitySchemes = spec.components?.securitySchemes || spec.securityDefinitions;
+    const securitySchemes =
+      spec.components?.securitySchemes || spec.securityDefinitions;
     if (securitySchemes) {
       for (const [name, scheme] of Object.entries(securitySchemes)) {
         const schemeType = (scheme as any).type;
@@ -554,8 +590,11 @@ export class SmartREST {
     for (const endpoint of endpoints) {
       if (endpoint.parameters) {
         for (const param of endpoint.parameters) {
-          if (param.in === "header") {
-            headerCounts.set(param.name, (headerCounts.get(param.name) || 0) + 1);
+          if (param.in === 'header') {
+            headerCounts.set(
+              param.name,
+              (headerCounts.get(param.name) || 0) + 1
+            );
           }
         }
       }
@@ -578,7 +617,7 @@ export class SmartREST {
       authMethods,
       commonHeaders,
       rateLimits,
-      versioning: versioning !== "none" ? versioning : undefined,
+      versioning: versioning !== 'none' ? versioning : undefined,
     };
   }
 
@@ -642,16 +681,16 @@ export class SmartREST {
     const keyData = {
       specUrl: options.specUrl,
       specHash: options.specContent
-        ? createHash("sha256").update(options.specContent).digest("hex")
+        ? createHash('sha256').update(options.specContent).digest('hex')
         : null,
       baseUrl: options.baseUrl,
       methods: options.methods,
       resourceFilter: options.resourceFilter,
     };
 
-    const hash = createHash("md5")
-      .update("smart_rest" + JSON.stringify(keyData))
-      .digest("hex");
+    const hash = createHash('md5')
+      .update('smart_rest' + JSON.stringify(keyData))
+      .digest('hex');
     return `cache-${hash}`;
   }
 
@@ -670,13 +709,17 @@ export class SmartREST {
     return result;
   }
 
-  private async cacheResult(key: string, result: any, _ttl: number): Promise<void> {
+  private async cacheResult(
+    key: string,
+    result: any,
+    _ttl: number
+  ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
     const serialized = JSON.stringify(cacheData);
-    const originalSize = Buffer.byteLength(serialized, "utf-8");
+    const originalSize = Buffer.byteLength(serialized, 'utf-8');
     const compressedSize = originalSize;
 
-    await this.cache.set(key, serialized, originalSize, compressedSize);
+    this.cache.set(key, serialized, originalSize, compressedSize);
   }
 }
 
@@ -697,71 +740,83 @@ export function getSmartRest(
  * CLI Function - Create Resources and Use Factory
  */
 export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
-  const { CacheEngine: CacheEngineClass } = await import("../../core/cache-engine");
-  const { globalTokenCounter, globalMetricsCollector } = await import("../../core/globals");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
+  const { CacheEngine: CacheEngineClass } = await import(
+    '../../core/cache-engine'
+  );
+  const { TokenCounter } = await import('../../core/token-counter');
+  const { MetricsCollector } = await import('../../core/metrics');
 
-  const cache = new CacheEngineClass(join(homedir(), ".hypercontext", "cache"), 100);
-  const rest = getSmartRest(cache, globalTokenCounter, globalMetricsCollector);
+  const cache = new CacheEngineClass(
+    join(homedir(), '.hypercontext', 'cache'),
+    100
+  );
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
+  const rest = getSmartRest(cache, tokenCounter, metrics);
   const result = await rest.run(options);
 
   return JSON.stringify(result, null, 2);
 }
 
 export const SMART_REST_TOOL_DEFINITION = {
-  name: "smart_rest",
-  description: "REST API analyzer with endpoint discovery and health scoring (83% token reduction)",
+  name: 'smart_rest',
+  description:
+    'REST API analyzer with endpoint discovery and health scoring (83% token reduction)',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       specUrl: {
-        type: "string",
-        description: "OpenAPI/Swagger spec URL (not yet supported, use specContent)",
+        type: 'string',
+        description:
+          'OpenAPI/Swagger spec URL (not yet supported, use specContent)',
       },
       specContent: {
-        type: "string",
-        description: "OpenAPI/Swagger spec content (JSON string)",
+        type: 'string',
+        description: 'OpenAPI/Swagger spec content (JSON string)',
       },
       baseUrl: {
-        type: "string",
-        description: "Base API URL (optional, extracted from spec if not provided)",
+        type: 'string',
+        description:
+          'Base API URL (optional, extracted from spec if not provided)',
       },
       analyzeEndpoints: {
-        type: "boolean",
-        description: "Analyze all endpoints (default: true)",
+        type: 'boolean',
+        description: 'Analyze all endpoints (default: true)',
       },
       checkHealth: {
-        type: "boolean",
-        description: "Check API health and generate score (default: false)",
+        type: 'boolean',
+        description: 'Check API health and generate score (default: false)',
       },
       generateDocs: {
-        type: "boolean",
-        description: "Generate documentation (default: false)",
+        type: 'boolean',
+        description: 'Generate documentation (default: false)',
       },
       detectPatterns: {
-        type: "boolean",
-        description: "Detect API patterns (auth, versioning, etc.) (default: false)",
+        type: 'boolean',
+        description:
+          'Detect API patterns (auth, versioning, etc.) (default: false)',
       },
       methods: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "string",
-          enum: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+          type: 'string',
+          enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         },
-        description: "Filter by HTTP methods",
+        description: 'Filter by HTTP methods',
       },
       resourceFilter: {
-        type: "string",
+        type: 'string',
         description: 'Filter by resource path (e.g., "users")',
       },
       force: {
-        type: "boolean",
-        description: "Force fresh analysis, bypass cache (default: false)",
+        type: 'boolean',
+        description: 'Force fresh analysis, bypass cache (default: false)',
       },
       ttl: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 3600)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 3600)',
       },
     },
   },

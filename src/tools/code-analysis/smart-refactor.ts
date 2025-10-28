@@ -11,10 +11,13 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-import { CacheEngine } from '../../core/cache-engine';
-import { MetricsCollector } from '../../core/metrics';
-import { TokenCounter } from '../../core/token-counter';
-import { SmartComplexityTool, getSmartComplexityTool } from './smart-complexity';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import {
+  SmartComplexityTool,
+  getSmartComplexityTool,
+} from './smart-complexity.js';
 
 export interface SmartRefactorOptions {
   filePath?: string;
@@ -36,7 +39,12 @@ export interface SmartRefactorOptions {
 export interface RefactorSuggestion {
   type: string;
   severity: 'info' | 'warning' | 'error';
-  location: { line: number; column: number; endLine?: number; endColumn?: number };
+  location: {
+    line: number;
+    column: number;
+    endLine?: number;
+    endColumn?: number;
+  };
   message: string;
   suggestion: string;
   codeExample?: {
@@ -101,11 +109,11 @@ export class SmartRefactorTool {
         'remove-duplication',
         'improve-naming',
         'reduce-complexity',
-        'extract-constant'
+        'extract-constant',
       ],
       minComplexityForExtraction = 10,
       force = false,
-      maxCacheAge = 300
+      maxCacheAge = 300,
     } = options;
 
     if (!filePath && !fileContent) {
@@ -129,7 +137,11 @@ export class SmartRefactorTool {
     }
 
     // Generate cache key
-    const cacheKey = await this.generateCacheKey(content, refactorTypes, minComplexityForExtraction);
+    const cacheKey = await this.generateCacheKey(
+      content,
+      refactorTypes,
+      minComplexityForExtraction
+    );
 
     // Check cache
     if (!force) {
@@ -141,7 +153,7 @@ export class SmartRefactorTool {
           cacheHit: true,
           inputTokens: cached.metrics.originalTokens,
           cachedTokens: cached.metrics.compactedTokens,
-          success: true
+          success: true,
         });
         return cached;
       }
@@ -159,7 +171,7 @@ export class SmartRefactorTool {
     const complexityResult = await this.complexityTool.run({
       fileContent: content,
       projectRoot,
-      force: true
+      force: true,
     });
 
     // Analyze and generate suggestions
@@ -168,7 +180,12 @@ export class SmartRefactorTool {
     for (const type of refactorTypes) {
       switch (type) {
         case 'extract-method':
-          suggestions.push(...this.suggestExtractMethod(complexityResult, minComplexityForExtraction));
+          suggestions.push(
+            ...this.suggestExtractMethod(
+              complexityResult,
+              minComplexityForExtraction
+            )
+          );
           break;
         case 'simplify-conditional':
           suggestions.push(...this.suggestSimplifyConditional(sourceFile));
@@ -190,9 +207,9 @@ export class SmartRefactorTool {
 
     // Calculate summary statistics
     const bySeverity: Record<string, number> = {
-      info: suggestions.filter(s => s.severity === 'info').length,
-      warning: suggestions.filter(s => s.severity === 'warning').length,
-      error: suggestions.filter(s => s.severity === 'error').length
+      info: suggestions.filter((s) => s.severity === 'info').length,
+      warning: suggestions.filter((s) => s.severity === 'warning').length,
+      error: suggestions.filter((s) => s.severity === 'error').length,
     };
 
     const byType: Record<string, number> = {};
@@ -211,22 +228,27 @@ export class SmartRefactorTool {
         byType,
         estimatedImpact,
         fromCache: false,
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       },
       suggestions,
       metrics: {
         originalTokens: 0,
         compactedTokens: 0,
-        reductionPercentage: 0
-      }
+        reductionPercentage: 0,
+      },
     };
 
     // Calculate token metrics
     const originalText = JSON.stringify(result, null, 2);
     const compactText = this.compactResult(result);
-    result.metrics.originalTokens = this.tokenCounter.count(originalText).tokens;
-    result.metrics.compactedTokens = this.tokenCounter.count(compactText).tokens;
-    result.metrics.reductionPercentage = ((result.metrics.originalTokens - result.metrics.compactedTokens) / result.metrics.originalTokens) * 100;
+    result.metrics.originalTokens =
+      this.tokenCounter.count(originalText).tokens;
+    result.metrics.compactedTokens =
+      this.tokenCounter.count(compactText).tokens;
+    result.metrics.reductionPercentage =
+      ((result.metrics.originalTokens - result.metrics.compactedTokens) /
+        result.metrics.originalTokens) *
+      100;
 
     // Cache result
     this.cacheResult(cacheKey, result);
@@ -238,7 +260,7 @@ export class SmartRefactorTool {
       cacheHit: false,
       inputTokens: result.metrics.originalTokens,
       cachedTokens: result.metrics.compactedTokens,
-      success: true
+      success: true,
     });
 
     return result;
@@ -266,15 +288,17 @@ export class SmartRefactorTool {
         impact: {
           complexity: func.complexity.cyclomatic - minComplexity,
           readability: 'high',
-          maintainability: 'high'
-        }
+          maintainability: 'high',
+        },
       });
     }
 
     return suggestions;
   }
 
-  private suggestSimplifyConditional(sourceFile: ts.SourceFile): RefactorSuggestion[] {
+  private suggestSimplifyConditional(
+    sourceFile: ts.SourceFile
+  ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
 
     const visit = (node: ts.Node) => {
@@ -288,15 +312,18 @@ export class SmartRefactorTool {
             severity: 'warning',
             location: { line: pos.line + 1, column: pos.character },
             message: `Deeply nested if statements (${nestedIfs} levels). Consider using early returns or guard clauses.`,
-            suggestion: 'Use early returns or extract conditions into well-named variables.',
+            suggestion:
+              'Use early returns or extract conditions into well-named variables.',
             codeExample: {
-              before: 'if (a) {\n  if (b) {\n    if (c) {\n      doSomething();\n    }\n  }\n}',
-              after: 'if (!a) return;\nif (!b) return;\nif (!c) return;\ndoSomething();'
+              before:
+                'if (a) {\n  if (b) {\n    if (c) {\n      doSomething();\n    }\n  }\n}',
+              after:
+                'if (!a) return;\nif (!b) return;\nif (!c) return;\ndoSomething();',
             },
             impact: {
               readability: 'high',
-              maintainability: 'high'
-            }
+              maintainability: 'high',
+            },
           });
         }
       }
@@ -311,15 +338,17 @@ export class SmartRefactorTool {
             severity: 'warning',
             location: { line: pos.line + 1, column: pos.character },
             message: `Complex boolean expression with ${complexity} logical operators. Consider extracting into well-named variables.`,
-            suggestion: 'Extract complex conditions into descriptively named boolean variables.',
+            suggestion:
+              'Extract complex conditions into descriptively named boolean variables.',
             codeExample: {
               before: 'if (a && b || c && d || e && f) { }',
-              after: 'const hasValidInput = a && b;\nconst hasSpecialCase = c && d;\nconst hasOverride = e && f;\nif (hasValidInput || hasSpecialCase || hasOverride) { }'
+              after:
+                'const hasValidInput = a && b;\nconst hasSpecialCase = c && d;\nconst hasOverride = e && f;\nif (hasValidInput || hasSpecialCase || hasOverride) { }',
             },
             impact: {
               readability: 'high',
-              maintainability: 'medium'
-            }
+              maintainability: 'medium',
+            },
           });
         }
       }
@@ -331,9 +360,14 @@ export class SmartRefactorTool {
     return suggestions;
   }
 
-  private suggestRemoveDuplication(sourceFile: ts.SourceFile): RefactorSuggestion[] {
+  private suggestRemoveDuplication(
+    sourceFile: ts.SourceFile
+  ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
-    const codeBlocks = new Map<string, Array<{ location: ts.TextRange; text: string }>>();
+    const codeBlocks = new Map<
+      string,
+      Array<{ location: ts.TextRange; text: string }>
+    >();
 
     const visit = (node: ts.Node) => {
       // Look for duplicate blocks (functions, if statements, etc.)
@@ -352,7 +386,7 @@ export class SmartRefactorTool {
           }
           codeBlocks.get(hash)!.push({
             location: { pos: node.getStart(), end: node.getEnd() },
-            text
+            text,
           });
         }
       }
@@ -366,17 +400,20 @@ export class SmartRefactorTool {
     for (const [_hash, blocks] of codeBlocks) {
       if (blocks.length > 1) {
         const firstBlock = blocks[0];
-        const pos = sourceFile.getLineAndCharacterOfPosition(firstBlock.location.pos);
+        const pos = sourceFile.getLineAndCharacterOfPosition(
+          firstBlock.location.pos
+        );
         suggestions.push({
           type: 'remove-duplication',
           severity: 'warning',
           location: { line: pos.line + 1, column: pos.character },
           message: `Found ${blocks.length} duplicate or very similar code blocks.`,
-          suggestion: 'Extract common logic into a reusable function or utility.',
+          suggestion:
+            'Extract common logic into a reusable function or utility.',
           impact: {
             maintainability: 'high',
-            readability: 'medium'
-            }
+            readability: 'medium',
+          },
         });
       }
     }
@@ -384,7 +421,9 @@ export class SmartRefactorTool {
     return suggestions;
   }
 
-  private suggestImproveNaming(sourceFile: ts.SourceFile): RefactorSuggestion[] {
+  private suggestImproveNaming(
+    sourceFile: ts.SourceFile
+  ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
 
     const visit = (node: ts.Node) => {
@@ -392,23 +431,36 @@ export class SmartRefactorTool {
         const name = node.text;
 
         // Check for single-letter variables (except common ones like i, j, k in loops)
-        if (name.length === 1 && !['i', 'j', 'k', 'x', 'y', 'z'].includes(name)) {
+        if (
+          name.length === 1 &&
+          !['i', 'j', 'k', 'x', 'y', 'z'].includes(name)
+        ) {
           const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
           suggestions.push({
             type: 'improve-naming',
             severity: 'info',
             location: { line: pos.line + 1, column: pos.character },
             message: `Single-letter variable '${name}' is not descriptive.`,
-            suggestion: 'Use a descriptive name that explains the variable\'s purpose.',
+            suggestion:
+              "Use a descriptive name that explains the variable's purpose.",
             impact: {
               readability: 'medium',
-              maintainability: 'low'
-            }
+              maintainability: 'low',
+            },
           });
         }
 
         // Check for generic names
-        const genericNames = ['data', 'temp', 'tmp', 'foo', 'bar', 'test', 'obj', 'arr'];
+        const genericNames = [
+          'data',
+          'temp',
+          'tmp',
+          'foo',
+          'bar',
+          'test',
+          'obj',
+          'arr',
+        ];
         if (genericNames.includes(name.toLowerCase())) {
           const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
           suggestions.push({
@@ -416,11 +468,12 @@ export class SmartRefactorTool {
             severity: 'info',
             location: { line: pos.line + 1, column: pos.character },
             message: `Generic variable name '${name}' lacks clarity.`,
-            suggestion: 'Use a more specific name that describes what this variable contains or represents.',
+            suggestion:
+              'Use a more specific name that describes what this variable contains or represents.',
             impact: {
               readability: 'medium',
-              maintainability: 'low'
-            }
+              maintainability: 'low',
+            },
           });
         }
 
@@ -433,11 +486,12 @@ export class SmartRefactorTool {
             severity: 'info',
             location: { line: pos.line + 1, column: pos.character },
             message: `Inconsistent naming convention in '${name}'.`,
-            suggestion: 'Use consistent naming: camelCase for variables/functions, PascalCase for classes, SCREAMING_CASE for constants.',
+            suggestion:
+              'Use consistent naming: camelCase for variables/functions, PascalCase for classes, SCREAMING_CASE for constants.',
             impact: {
               readability: 'low',
-              maintainability: 'low'
-            }
+              maintainability: 'low',
+            },
           });
         }
       }
@@ -461,16 +515,18 @@ export class SmartRefactorTool {
           severity: func.complexity.cognitive > 25 ? 'error' : 'warning',
           location,
           message: `Function '${func.name}' has high cognitive complexity (${func.complexity.cognitive}).`,
-          suggestion: 'Reduce nesting, extract helper functions, and simplify control flow.',
+          suggestion:
+            'Reduce nesting, extract helper functions, and simplify control flow.',
           codeExample: {
             before: 'Complex nested logic with multiple conditions',
-            after: 'Flat structure with early returns and extracted helper functions'
+            after:
+              'Flat structure with early returns and extracted helper functions',
           },
           impact: {
             complexity: func.complexity.cognitive - 15,
             readability: 'high',
-            maintainability: 'high'
-          }
+            maintainability: 'high',
+          },
         });
       }
     }
@@ -478,7 +534,9 @@ export class SmartRefactorTool {
     return suggestions;
   }
 
-  private suggestExtractConstant(sourceFile: ts.SourceFile): RefactorSuggestion[] {
+  private suggestExtractConstant(
+    sourceFile: ts.SourceFile
+  ): RefactorSuggestion[] {
     const suggestions: RefactorSuggestion[] = [];
     const magicNumbers = new Map<string, number>();
 
@@ -516,12 +574,12 @@ export class SmartRefactorTool {
           suggestion: `Extract '${value}' into a descriptively named constant to improve maintainability.`,
           codeExample: {
             before: `const x = ${value};\nconst y = ${value};`,
-            after: `const DESCRIPTIVE_NAME = ${value};\nconst x = DESCRIPTIVE_NAME;\nconst y = DESCRIPTIVE_NAME;`
+            after: `const DESCRIPTIVE_NAME = ${value};\nconst x = DESCRIPTIVE_NAME;\nconst y = DESCRIPTIVE_NAME;`,
           },
           impact: {
             maintainability: 'medium',
-            readability: 'low'
-          }
+            readability: 'low',
+          },
         });
       }
     }
@@ -531,7 +589,10 @@ export class SmartRefactorTool {
 
   private countNestedIfs(node: ts.IfStatement, depth = 1): number {
     if (ts.isIfStatement(node.thenStatement)) {
-      return this.countNestedIfs(node.thenStatement as ts.IfStatement, depth + 1);
+      return this.countNestedIfs(
+        node.thenStatement as ts.IfStatement,
+        depth + 1
+      );
     }
     if (ts.isBlock(node.thenStatement)) {
       for (const statement of node.thenStatement.statements) {
@@ -562,12 +623,15 @@ export class SmartRefactorTool {
     return count;
   }
 
-  private calculateEstimatedImpact(suggestions: RefactorSuggestion[]): 'low' | 'medium' | 'high' {
+  private calculateEstimatedImpact(
+    suggestions: RefactorSuggestion[]
+  ): 'low' | 'medium' | 'high' {
     const highImpact = suggestions.filter(
-      s => s.impact.readability === 'high' || s.impact.maintainability === 'high'
+      (s) =>
+        s.impact.readability === 'high' || s.impact.maintainability === 'high'
     ).length;
 
-    const errors = suggestions.filter(s => s.severity === 'error').length;
+    const errors = suggestions.filter((s) => s.severity === 'error').length;
 
     if (errors > 0 || highImpact > 5) return 'high';
     if (highImpact > 2) return 'medium';
@@ -580,12 +644,12 @@ export class SmartRefactorTool {
       file: result.summary.file,
       total: result.summary.totalSuggestions,
       impact: result.summary.estimatedImpact,
-      suggestions: result.suggestions.map(s => ({
+      suggestions: result.suggestions.map((s) => ({
         t: s.type,
         s: s.severity,
         l: s.location.line,
-        m: s.message.substring(0, 100)
-      }))
+        m: s.message.substring(0, 100),
+      })),
     };
 
     return JSON.stringify(compact);
@@ -603,11 +667,16 @@ export class SmartRefactorTool {
     return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
-  private getCachedResult(key: string, maxAge: number): SmartRefactorResult | null {
+  private getCachedResult(
+    key: string,
+    maxAge: number
+  ): SmartRefactorResult | null {
     const cached = this.cache.get(key);
     if (!cached) return null;
 
-    const result = JSON.parse(cached) as SmartRefactorResult & { cachedAt: number };
+    const result = JSON.parse(cached) as SmartRefactorResult & {
+      cachedAt: number;
+    };
     const age = (Date.now() - result.cachedAt) / 1000;
 
     if (age <= maxAge) {
@@ -621,7 +690,8 @@ export class SmartRefactorTool {
   private cacheResult(key: string, output: SmartRefactorResult): void {
     const toCache = { ...output, cachedAt: Date.now() };
     const buffer = JSON.stringify(toCache);
-    const tokensSaved = output.metrics.originalTokens - output.metrics.compactedTokens;
+    const tokensSaved =
+      output.metrics.originalTokens - output.metrics.compactedTokens;
     this.cache.set(key, buffer, 300, tokensSaved);
   }
 }
@@ -637,36 +707,45 @@ export function getSmartRefactorTool(
 }
 
 // Standalone function for CLI usage
-export async function runSmartRefactor(options: SmartRefactorOptions): Promise<SmartRefactorResult> {
+export async function runSmartRefactor(
+  options: SmartRefactorOptions
+): Promise<SmartRefactorResult> {
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const tool = getSmartRefactorTool(cache, tokenCounter, metrics, options.projectRoot);
+  const tool = getSmartRefactorTool(
+    cache,
+    tokenCounter,
+    metrics,
+    options.projectRoot
+  );
   return tool.run(options);
 }
 
 // MCP tool definition
 export const SMART_REFACTOR_TOOL_DEFINITION = {
   name: 'smart_refactor',
-  description: 'Provides intelligent refactoring suggestions with code examples and impact analysis (75-85% token reduction)',
+  description:
+    'Provides intelligent refactoring suggestions with code examples and impact analysis (75-85% token reduction)',
   inputSchema: {
     type: 'object',
     properties: {
       filePath: {
         type: 'string',
-        description: 'File path to analyze (relative to project root)'
+        description: 'File path to analyze (relative to project root)',
       },
       fileContent: {
         type: 'string',
-        description: 'File content to analyze (alternative to filePath)'
+        description: 'File content to analyze (alternative to filePath)',
       },
       projectRoot: {
         type: 'string',
-        description: 'Project root directory'
+        description: 'Project root directory',
       },
       refactorTypes: {
         type: 'array',
-        description: 'Types of refactoring suggestions to generate (default: all)',
+        description:
+          'Types of refactoring suggestions to generate (default: all)',
         items: {
           type: 'string',
           enum: [
@@ -675,25 +754,26 @@ export const SMART_REFACTOR_TOOL_DEFINITION = {
             'remove-duplication',
             'improve-naming',
             'reduce-complexity',
-            'extract-constant'
-          ]
-        }
+            'extract-constant',
+          ],
+        },
       },
       minComplexityForExtraction: {
         type: 'number',
-        description: 'Minimum cyclomatic complexity to suggest extraction (default: 10)',
-        default: 10
+        description:
+          'Minimum cyclomatic complexity to suggest extraction (default: 10)',
+        default: 10,
       },
       force: {
         type: 'boolean',
         description: 'Force re-analysis (ignore cache)',
-        default: false
+        default: false,
       },
       maxCacheAge: {
         type: 'number',
         description: 'Maximum cache age in seconds (default: 300)',
-        default: 300
-      }
-    }
-  }
+        default: 300,
+      },
+    },
+  },
 };

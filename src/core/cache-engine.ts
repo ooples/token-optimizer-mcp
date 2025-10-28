@@ -25,51 +25,124 @@ export interface CacheStats {
 }
 
 export class CacheEngine {
-  private db: Database.Database;
-  private memoryCache: LRUCache<string, string>;
+  private db!: Database.Database;
+  private memoryCache: LRUCache<
+    string,
+    { content: string; compressedSize: number }
+  >;
+  private dbPath!: string;
   private stats = {
     hits: 0,
     misses: 0,
   };
 
-  constructor(
-    dbPath?: string,
-    maxMemoryItems: number = 1000
-  ) {
-    // Use user-provided path or default to ~/.token-optimizer-cache
-    const cacheDir = dbPath
-      ? path.dirname(dbPath)
-      : path.join(os.homedir(), '.token-optimizer-cache');
+  constructor(dbPath?: string, maxMemoryItems: number = 1000) {
+    // Use user-provided path, environment variable, or default to ~/.token-optimizer-cache
+    const defaultCacheDir =
+      process.env.TOKEN_OPTIMIZER_CACHE_DIR ||
+      path.join(os.homedir(), '.token-optimizer-cache');
+    const cacheDir = dbPath ? path.dirname(dbPath) : defaultCacheDir;
 
     // Ensure cache directory exists
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true });
     }
 
-    const fullDbPath = dbPath || path.join(cacheDir, 'cache.db');
+    const finalDbPath = dbPath || path.join(cacheDir, 'cache.db');
 
-    // Initialize SQLite database
-    this.db = new Database(fullDbPath);
-    this.db.pragma('journal_mode = WAL'); // Write-Ahead Logging for better concurrency
+    // Retry logic with up to 3 attempts
+    let lastError = null;
+    const maxAttempts = 3;
+    let dbInitialized = false;
 
-    // Create cache table if it doesn't exist
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS cache (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        compressed_size INTEGER NOT NULL,
-        original_size INTEGER NOT NULL,
-        hit_count INTEGER DEFAULT 0,
-        created_at INTEGER NOT NULL,
-        last_accessed_at INTEGER NOT NULL
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        // First attempt: use requested path
+        // Second attempt: try cleaning up corrupted files and retry
+        // Third attempt: use backup location in temp directory
+        const dbPathToUse =
+          attempt === 3
+            ? path.join(
+                os.tmpdir(),
+                `token-optimizer-cache-backup-${Date.now()}.db`
+              )
+            : finalDbPath;
+
+        // If this is attempt 2, try to clean up corrupted files
+        if (attempt === 2 && fs.existsSync(finalDbPath)) {
+          try {
+            fs.unlinkSync(finalDbPath);
+            // Also remove WAL files
+            const walPath = `${finalDbPath}-wal`;
+            const shmPath = `${finalDbPath}-shm`;
+            if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+            if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+          } catch (cleanupError) {
+            // If we can't clean up, we'll try temp directory on next attempt
+          }
+        }
+
+        this.db = new Database(dbPathToUse);
+        this.db.pragma('journal_mode = WAL');
+
+        // Create cache table if it doesn't exist
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS cache (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            compressed_size INTEGER NOT NULL,
+            original_size INTEGER NOT NULL,
+            hit_count INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            last_accessed_at INTEGER NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
+          CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
+        `);
+
+        // Success! Store the path we used
+        this.dbPath = dbPathToUse;
+        dbInitialized = true;
+        break;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // Try to close the database if it was partially opened
+        try {
+          if (this.db) {
+            this.db.close();
+          }
+        } catch (closeError) {
+          // Ignore close errors
+        }
+
+        if (attempt < maxAttempts) {
+          // Log warning and try next attempt
+          console.warn(
+            `Cache database initialization attempt ${attempt}/${maxAttempts} failed:`,
+            error
+          );
+          console.warn(`Retrying... (attempt ${attempt + 1}/${maxAttempts})`);
+        }
+      }
+    }
+
+    // If all attempts failed, throw a comprehensive error
+    if (!dbInitialized) {
+      throw new Error(
+        `Failed to initialize cache database after ${maxAttempts} attempts. ` +
+          `Last error: ${lastError?.message || 'Unknown error'}. ` +
+          `Attempted paths: ${finalDbPath}, backup location. ` +
+          `Please check disk space and file permissions.`
       );
-
-      CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
-      CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
-    `);
+    }
 
     // Initialize in-memory LRU cache for frequently accessed items
-    this.memoryCache = new LRUCache<string, string>({
+    this.memoryCache = new LRUCache<
+      string,
+      { content: string; compressedSize: number }
+    >({
       max: maxMemoryItems,
       ttl: 1000 * 60 * 60, // 1 hour TTL
     });
@@ -84,22 +157,68 @@ export class CacheEngine {
     if (memValue !== undefined) {
       this.stats.hits++;
       this.updateHitCount(key);
-      return memValue;
+      return memValue.content;
     }
 
     // Check SQLite cache
     const stmt = this.db.prepare(`
-      SELECT value, hit_count FROM cache WHERE key = ?
+      SELECT value, compressed_size FROM cache WHERE key = ?
     `);
-    const row = stmt.get(key) as { value: string; hit_count: number } | undefined;
+    const row = stmt.get(key) as
+      | { value: string; compressed_size: number }
+      | undefined;
 
     if (row) {
       this.stats.hits++;
       // Update hit count and last accessed time
       this.updateHitCount(key);
       // Add to memory cache for faster access
-      this.memoryCache.set(key, row.value);
+      this.memoryCache.set(key, {
+        content: row.value,
+        compressedSize: row.compressed_size,
+      });
       return row.value;
+    }
+
+    this.stats.misses++;
+    return null;
+  }
+
+  /**
+   * Get a value from cache with metadata (including compression info)
+   */
+  getWithMetadata(
+    key: string
+  ): { content: string; compressedSize: number } | null {
+    // Check memory cache first
+    const memValue = this.memoryCache.get(key);
+    if (memValue !== undefined) {
+      this.stats.hits++;
+      this.updateHitCount(key);
+      return memValue;
+    }
+
+    // Check SQLite cache
+    const stmt = this.db.prepare(`
+      SELECT value, compressed_size FROM cache WHERE key = ?
+    `);
+    const row = stmt.get(key) as
+      | { value: string; compressed_size: number }
+      | undefined;
+
+    if (row) {
+      this.stats.hits++;
+      // Update hit count and last accessed time
+      this.updateHitCount(key);
+      // Add to memory cache for faster access
+      this.memoryCache.set(key, {
+        content: row.value,
+        compressedSize: row.compressed_size,
+      });
+      return {
+        content: row.value,
+        compressedSize: row.compressed_size,
+      };
     }
 
     this.stats.misses++;
@@ -109,7 +228,12 @@ export class CacheEngine {
   /**
    * Set a value in cache
    */
-  set(key: string, value: string, originalSize: number, compressedSize: number): void {
+  set(
+    key: string,
+    value: string,
+    originalSize: number,
+    compressedSize: number
+  ): void {
     const now = Date.now();
 
     const stmt = this.db.prepare(`
@@ -124,7 +248,7 @@ export class CacheEngine {
     stmt.run(key, value, compressedSize, originalSize, key, key, now, now);
 
     // Add to memory cache
-    this.memoryCache.set(key, value);
+    this.memoryCache.set(key, { content: value, compressedSize });
   }
 
   /**
@@ -187,24 +311,46 @@ export class CacheEngine {
    * Evict least recently used entries to stay under size limit
    */
   evictLRU(maxSizeBytes: number): number {
-    const stmt = this.db.prepare(`
-      DELETE FROM cache
-      WHERE key IN (
-        SELECT key FROM cache
-        ORDER BY last_accessed_at ASC
-        LIMIT (
-          SELECT COUNT(*) FROM cache
-        ) - (
-          SELECT COUNT(*) FROM (
-            SELECT key, SUM(compressed_size) OVER (ORDER BY last_accessed_at DESC) as running_total
-            FROM cache
-            WHERE running_total <= ?
-          )
-        )
+    // Get keys to keep (most recently used) using a running total
+    const keysToKeep = this.db
+      .prepare(
+        `
+      WITH ranked AS (
+        SELECT
+          key,
+          compressed_size,
+          SUM(compressed_size) OVER (ORDER BY last_accessed_at DESC, key ASC) as running_total
+        FROM cache
       )
+      SELECT key FROM ranked
+      WHERE running_total <= ?
+    `
+      )
+      .all(maxSizeBytes) as { key: string }[];
+
+    if (keysToKeep.length === 0) {
+      // If no keys fit in the limit, keep none and delete all
+      const result = this.db.prepare('DELETE FROM cache').run();
+      // Clear memory cache too
+      this.memoryCache.clear();
+      return result.changes;
+    }
+
+    // Delete entries not in the keep list
+    const placeholders = keysToKeep.map(() => '?').join(',');
+    const stmt = this.db.prepare(`
+      DELETE FROM cache WHERE key NOT IN (${placeholders})
     `);
 
-    const result = stmt.run(maxSizeBytes);
+    const result = stmt.run(...keysToKeep.map((k) => k.key));
+
+    // Remove deleted entries from memory cache
+    for (const key of Array.from(this.memoryCache.keys())) {
+      if (!keysToKeep.some((k) => k.key === key)) {
+        this.memoryCache.delete(key);
+      }
+    }
+
     return result.changes;
   }
 
@@ -238,6 +384,13 @@ export class CacheEngine {
       WHERE key = ?
     `);
     stmt.run(Date.now(), key);
+  }
+
+  /**
+   * Get the database path currently in use
+   */
+  getDatabasePath(): string {
+    return this.dbPath;
   }
 
   /**

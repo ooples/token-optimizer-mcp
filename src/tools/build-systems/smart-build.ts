@@ -8,14 +8,14 @@
  * - Build time optimization suggestions
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
-import { readFileSync, existsSync, readdirSync, statSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface BuildError {
   file: string;
@@ -23,7 +23,7 @@ interface BuildError {
   column: number;
   code: string;
   message: string;
-  severity: "error" | "warning";
+  severity: 'error' | 'warning';
 }
 
 interface BuildResult {
@@ -95,9 +95,9 @@ interface SmartBuildOutput {
    * Optimization suggestions
    */
   suggestions: Array<{
-    type: "performance" | "config" | "code";
+    type: 'performance' | 'config' | 'code';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }>;
 
   /**
@@ -117,14 +117,14 @@ interface SmartBuildOutput {
 
 export class SmartBuild {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_build";
+  private cacheNamespace = 'smart_build';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
     _tokenCounter: TokenCounter,
     _metrics: MetricsCollector,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.projectRoot = projectRoot || process.cwd();
@@ -137,7 +137,7 @@ export class SmartBuild {
     const {
       force = false,
       watch = false,
-      tsconfig = "tsconfig.json",
+      tsconfig = 'tsconfig.json',
       includeWarnings = false,
       maxCacheAge = 3600,
     } = options;
@@ -181,7 +181,7 @@ export class SmartBuild {
       result,
       changedFiles,
       suggestions,
-      includeWarnings,
+      includeWarnings
     );
   }
 
@@ -193,48 +193,48 @@ export class SmartBuild {
     watch: boolean;
     incremental: boolean;
   }): Promise<BuildResult> {
-    const args = ["--project", options.tsconfig];
+    const args = ['--project', options.tsconfig];
 
     if (options.watch) {
-      args.push("--watch");
+      args.push('--watch');
     }
 
     if (options.incremental) {
-      args.push("--incremental");
+      args.push('--incremental');
     }
 
     return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
+      let stdout = '';
+      let stderr = '';
 
-      const tsc = spawn("npx", ["tsc", ...args], {
+      const tsc = spawn('npx', ['tsc', ...args], {
         cwd: this.projectRoot,
         shell: true,
       });
 
-      tsc.stdout.on("data", (data) => {
+      tsc.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      tsc.stderr.on("data", (data) => {
+      tsc.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      tsc.on("close", (code) => {
+      tsc.on('close', (code) => {
         const output = stdout + stderr;
         const errors = this.parseCompilerOutput(output);
 
         resolve({
           success: code === 0,
-          errors: errors.filter((e) => e.severity === "error"),
-          warnings: errors.filter((e) => e.severity === "warning"),
+          errors: errors.filter((e) => e.severity === 'error'),
+          warnings: errors.filter((e) => e.severity === 'warning'),
           duration: 0, // Set by caller
           filesCompiled: this.countCompiledFiles(output),
           timestamp: Date.now(),
         });
       });
 
-      tsc.on("error", (err) => {
+      tsc.on('error', (err) => {
         reject(err);
       });
     });
@@ -245,19 +245,19 @@ export class SmartBuild {
    */
   private parseCompilerOutput(output: string): BuildError[] {
     const errors: BuildError[] = [];
-    const lines = output.split("\n");
+    const lines = output.split('\n');
 
     for (const line of lines) {
       // Match TypeScript error format: file.ts(line,col): error TSxxxx: message
       const match = line.match(
-        /^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.+)$/,
+        /^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.+)$/
       );
       if (match) {
         errors.push({
           file: match[1],
           line: parseInt(match[2], 10),
           column: parseInt(match[3], 10),
-          severity: match[4] as "error" | "warning",
+          severity: match[4] as 'error' | 'warning',
           code: match[5],
           message: match[6],
         });
@@ -276,7 +276,7 @@ export class SmartBuild {
     if (match) {
       // Count unique files in error messages
       const files = new Set<string>();
-      const lines = output.split("\n");
+      const lines = output.split('\n');
       for (const line of lines) {
         const fileMatch = line.match(/^(.+?)\(\d+,\d+\):/);
         if (fileMatch) {
@@ -294,7 +294,7 @@ export class SmartBuild {
    * Count TypeScript source files
    */
   private countSourceFiles(): number {
-    const srcDir = join(this.projectRoot, "src");
+    const srcDir = join(this.projectRoot, 'src');
     if (!existsSync(srcDir)) {
       return 0;
     }
@@ -307,7 +307,7 @@ export class SmartBuild {
         const stat = statSync(fullPath);
         if (stat.isDirectory()) {
           walk(fullPath);
-        } else if (file.endsWith(".ts")) {
+        } else if (file.endsWith('.ts')) {
           count++;
         }
       }
@@ -321,24 +321,24 @@ export class SmartBuild {
    * Generate cache key based on source files and config
    */
   private async generateCacheKey(tsconfig: string): Promise<string> {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(this.cacheNamespace);
 
     // Hash tsconfig
     const tsconfigPath = join(this.projectRoot, tsconfig);
     if (existsSync(tsconfigPath)) {
-      const content = readFileSync(tsconfigPath, "utf-8");
+      const content = readFileSync(tsconfigPath, 'utf-8');
       hash.update(content);
     }
 
     // Hash package.json for dependency changes
-    const packageJsonPath = join(this.projectRoot, "package.json");
+    const packageJsonPath = join(this.projectRoot, 'package.json');
     if (existsSync(packageJsonPath)) {
-      const content = readFileSync(packageJsonPath, "utf-8");
+      const content = readFileSync(packageJsonPath, 'utf-8');
       hash.update(content);
     }
 
-    return `${this.cacheNamespace}:${hash.digest("hex")}`;
+    return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
   /**
@@ -375,9 +375,9 @@ export class SmartBuild {
 
     const dataToCache = JSON.stringify(toCache);
     const originalSize = this.estimateOriginalOutputSize(result);
-    const compressedSize = dataToCache.length;
+    const compactSize = dataToCache.length;
 
-    this.cache.set(key, dataToCache, originalSize, compressedSize);
+    this.cache.set(key, dataToCache, originalSize, compactSize);
   }
 
   /**
@@ -394,45 +394,45 @@ export class SmartBuild {
    */
   private generateSuggestions(
     result: BuildResult,
-    changedFiles: string[],
+    changedFiles: string[]
   ): Array<{
-    type: "performance" | "config" | "code";
+    type: 'performance' | 'config' | 'code';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }> {
     const suggestions: Array<{
-      type: "performance" | "config" | "code";
+      type: 'performance' | 'config' | 'code';
       message: string;
-      impact: "high" | "medium" | "low";
+      impact: 'high' | 'medium' | 'low';
     }> = [];
 
     // Suggest incremental builds if many files
     if (result.filesCompiled > 50 && changedFiles.length < 10) {
       suggestions.push({
-        type: "performance",
-        message: "Consider using --incremental flag for faster rebuilds",
-        impact: "high",
+        type: 'performance',
+        message: 'Consider using --incremental flag for faster rebuilds',
+        impact: 'high',
       });
     }
 
     // Suggest build time optimization if slow
     if (result.duration > 30000) {
       suggestions.push({
-        type: "performance",
+        type: 'performance',
         message:
-          "Build is slow. Consider enabling skipLibCheck in tsconfig.json",
-        impact: "high",
+          'Build is slow. Consider enabling skipLibCheck in tsconfig.json',
+        impact: 'high',
       });
     }
 
     // Suggest fixing common error patterns
     const commonErrors = this.categorizeErrors(result.errors);
-    if (commonErrors["TS2307"] > 5) {
+    if (commonErrors['TS2307'] > 5) {
       suggestions.push({
-        type: "config",
+        type: 'config',
         message:
           'Many "Cannot find module" errors. Check your paths in tsconfig.json',
-        impact: "high",
+        impact: 'high',
       });
     }
 
@@ -457,12 +457,12 @@ export class SmartBuild {
     result: BuildResult,
     changedFiles: string[],
     suggestions: Array<{
-      type: "performance" | "config" | "code";
+      type: 'performance' | 'config' | 'code';
       message: string;
-      impact: "high" | "medium" | "low";
+      impact: 'high' | 'medium' | 'low';
     }>,
     includeWarnings: boolean,
-    fromCache = false,
+    fromCache = false
   ): SmartBuildOutput {
     // Categorize errors
     const categorizedErrors = this.categorizeAndFormatErrors(result.errors);
@@ -491,7 +491,7 @@ export class SmartBuild {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -521,17 +521,17 @@ export class SmartBuild {
    */
   private categorizeErrorCode(code: string): string {
     const categories: Record<string, string> = {
-      TS2307: "Module Resolution",
-      TS2304: "Type Errors",
-      TS2322: "Type Errors",
-      TS2345: "Type Errors",
-      TS2339: "Type Errors",
-      TS2551: "Type Errors",
-      TS7006: "Type Annotations",
-      TS7016: "Type Declarations",
+      TS2307: 'Module Resolution',
+      TS2304: 'Type Errors',
+      TS2322: 'Type Errors',
+      TS2345: 'Type Errors',
+      TS2339: 'Type Errors',
+      TS2551: 'Type Errors',
+      TS7006: 'Type Annotations',
+      TS7016: 'Type Declarations',
     };
 
-    return categories[code] || "Other";
+    return categories[code] || 'Other';
   }
 
   /**
@@ -582,7 +582,7 @@ export function getSmartBuildTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartBuild {
   return new SmartBuild(cache, tokenCounter, metrics, projectRoot);
 }
@@ -591,10 +591,10 @@ export function getSmartBuildTool(
  * CLI-friendly function for running smart build
  */
 export async function runSmartBuild(
-  options: SmartBuildOptions = {},
+  options: SmartBuildOptions = {}
 ): Promise<string> {
   // Create standalone resources for CLI usage
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -602,17 +602,17 @@ export async function runSmartBuild(
     cache,
     tokenCounter,
     metrics,
-    options.projectRoot,
+    options.projectRoot
   );
   try {
     const result = await smartBuild.run(options);
 
-    let output = `\nðŸ”¨ Smart Build Results ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\nðŸ”¨ Smart Build Results ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
-    output += `  Status: ${result.summary.success ? "âœ“ Success" : "âœ— Failed"}\n`;
+    output += `  Status: ${result.summary.success ? 'âœ“ Success' : 'âœ— Failed'}\n`;
     output += `  Files Compiled: ${result.summary.filesCompiled}\n`;
     output += `  Errors: ${result.summary.errorCount}\n`;
     output += `  Warnings: ${result.summary.warningCount}\n`;
@@ -627,7 +627,7 @@ export async function runSmartBuild(
           acc[error.category].push(error);
           return acc;
         },
-        {} as Record<string, typeof result.errors>,
+        {} as Record<string, typeof result.errors>
       );
 
       for (const [category, errors] of Object.entries(byCategory)) {
@@ -641,7 +641,7 @@ export async function runSmartBuild(
           output += `    ... and ${errors.length - 5} more\n`;
         }
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Suggestions
@@ -649,14 +649,14 @@ export async function runSmartBuild(
       output += `Optimization Suggestions:\n`;
       for (const suggestion of result.suggestions) {
         const icon =
-          suggestion.impact === "high"
-            ? "ðŸ”´"
-            : suggestion.impact === "medium"
-              ? "ðŸŸ¡"
-              : "ðŸŸ¢";
+          suggestion.impact === 'high'
+            ? 'ðŸ”´'
+            : suggestion.impact === 'medium'
+              ? 'ðŸŸ¡'
+              : 'ðŸŸ¢';
         output += `  ${icon} [${suggestion.type}] ${suggestion.message}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Changed files
@@ -668,7 +668,7 @@ export async function runSmartBuild(
       if (result.changedFiles.length > 10) {
         output += `  ... and ${result.changedFiles.length - 10} more\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // _metrics
@@ -685,38 +685,38 @@ export async function runSmartBuild(
 
 // MCP Tool definition
 export const SMART_BUILD_TOOL_DEFINITION = {
-  name: "smart_build",
+  name: 'smart_build',
   description:
-    "Run TypeScript build with intelligent caching, diff-based change detection, and token-optimized output",
+    'Run TypeScript build with intelligent caching, diff-based change detection, and token-optimized output',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       force: {
-        type: "boolean",
-        description: "Force full rebuild (ignore cache)",
+        type: 'boolean',
+        description: 'Force full rebuild (ignore cache)',
         default: false,
       },
       watch: {
-        type: "boolean",
-        description: "Watch mode for continuous builds",
+        type: 'boolean',
+        description: 'Watch mode for continuous builds',
         default: false,
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       tsconfig: {
-        type: "string",
-        description: "TypeScript config file path",
+        type: 'string',
+        description: 'TypeScript config file path',
       },
       includeWarnings: {
-        type: "boolean",
-        description: "Include warnings in output",
+        type: 'boolean',
+        description: 'Include warnings in output',
         default: true,
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 3600)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 3600)',
         default: 3600,
       },
     },

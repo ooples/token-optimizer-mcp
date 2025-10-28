@@ -17,35 +17,40 @@
  * Token Reduction Target: 88%+
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { EventEmitter } from "events";
-import { writeFileSync } from "fs";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { EventEmitter } from 'events';
+import { writeFileSync } from 'fs';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 export type AnalyticsOperation =
-  | "dashboard"
-  | "metrics"
-  | "trends"
-  | "alerts"
-  | "heatmap"
-  | "bottlenecks"
-  | "cost-analysis"
-  | "export-data";
+  | 'dashboard'
+  | 'metrics'
+  | 'trends'
+  | 'alerts'
+  | 'heatmap'
+  | 'bottlenecks'
+  | 'cost-analysis'
+  | 'export-data';
 
-export type TimeGranularity = "second" | "minute" | "hour" | "day";
+export type TimeGranularity = 'second' | 'minute' | 'hour' | 'day';
 
-export type MetricType = "performance" | "usage" | "efficiency" | "cost" | "health";
+export type MetricType =
+  | 'performance'
+  | 'usage'
+  | 'efficiency'
+  | 'cost'
+  | 'health';
 
-export type AggregationType = "sum" | "avg" | "min" | "max" | "p95" | "p99";
+export type AggregationType = 'sum' | 'avg' | 'min' | 'max' | 'p95' | 'p99';
 
-export type ExportFormat = "json" | "csv" | "prometheus";
+export type ExportFormat = 'json' | 'csv' | 'prometheus';
 
-export type HeatmapType = "temporal" | "key-correlation" | "memory";
+export type HeatmapType = 'temporal' | 'key-correlation' | 'memory';
 
 export interface CacheAnalyticsOptions {
   operation: AnalyticsOperation;
@@ -59,17 +64,17 @@ export interface CacheAnalyticsOptions {
   aggregation?: AggregationType;
 
   // Trends operation
-  compareWith?: "previous-period" | "last-week" | "last-month";
-  trendType?: "absolute" | "percentage" | "rate";
+  compareWith?: 'previous-period' | 'last-week' | 'last-month';
+  trendType?: 'absolute' | 'percentage' | 'rate';
 
   // Alerts operation
-  alertType?: "threshold" | "anomaly" | "trend";
+  alertType?: 'threshold' | 'anomaly' | 'trend';
   threshold?: number;
   alertConfig?: AlertConfiguration;
 
   // Heatmap operation
   heatmapType?: HeatmapType;
-  resolution?: "low" | "medium" | "high";
+  resolution?: 'low' | 'medium' | 'high';
 
   // Export operation
   format?: ExportFormat;
@@ -162,7 +167,7 @@ export interface ActivityLog {
   operation: string;
   key?: string;
   duration: number;
-  status: "success" | "error" | "timeout";
+  status: 'success' | 'error' | 'timeout';
 }
 
 export interface SizeDistribution {
@@ -176,7 +181,7 @@ export interface EvictionPattern {
   reason: string;
   count: number;
   percentage: number;
-  trend: "increasing" | "stable" | "decreasing";
+  trend: 'increasing' | 'stable' | 'decreasing';
 }
 
 // Metrics Types
@@ -219,7 +224,7 @@ export interface TrendMetric {
   previous: number;
   change: number;
   changePercent: number;
-  trend: "up" | "down" | "stable";
+  trend: 'up' | 'down' | 'stable';
   velocity: number;
 }
 
@@ -229,7 +234,7 @@ export interface Anomaly {
   value: number;
   expected: number;
   deviation: number;
-  severity: "low" | "medium" | "high";
+  severity: 'low' | 'medium' | 'high';
   confidence: number;
 }
 
@@ -259,9 +264,9 @@ export interface SeasonalityPattern {
 // Alert Types
 export interface Alert {
   id: string;
-  type: "threshold" | "anomaly" | "trend";
+  type: 'threshold' | 'anomaly' | 'trend';
   metric: string;
-  severity: "info" | "warning" | "critical";
+  severity: 'info' | 'warning' | 'critical';
   message: string;
   timestamp: number;
   value: number;
@@ -271,9 +276,9 @@ export interface Alert {
 
 export interface AlertConfiguration {
   metric: string;
-  condition: "gt" | "lt" | "eq" | "ne";
+  condition: 'gt' | 'lt' | 'eq' | 'ne';
   threshold: number;
-  severity: "info" | "warning" | "critical";
+  severity: 'info' | 'warning' | 'critical';
   enabled: boolean;
 }
 
@@ -293,8 +298,8 @@ export interface HeatmapData {
 
 // Bottleneck Types
 export interface Bottleneck {
-  type: "slow-operation" | "hot-key" | "memory-pressure" | "high-eviction";
-  severity: "low" | "medium" | "high";
+  type: 'slow-operation' | 'hot-key' | 'memory-pressure' | 'high-eviction';
+  severity: 'low' | 'medium' | 'high';
   description: string;
   impact: number;
   recommendation: string;
@@ -356,7 +361,7 @@ export interface CostProjection {
 export interface CostOptimization {
   category: string;
   potentialSavings: number;
-  effort: "low" | "medium" | "high";
+  effort: 'low' | 'medium' | 'high';
   recommendation: string;
 }
 
@@ -378,12 +383,16 @@ export class CacheAnalyticsTool extends EventEmitter {
   private readonly maxHistoricalEntries = 1000;
 
   // Time-series data for trends
-  private timeSeriesData: Map<string, Array<{ timestamp: number; value: number }>> =
-    new Map();
+  private timeSeriesData: Map<
+    string,
+    Array<{ timestamp: number; value: number }>
+  > = new Map();
 
   // Key access tracking
-  private keyAccessLog: Map<string, Array<{ timestamp: number; operation: string }>> =
-    new Map();
+  private keyAccessLog: Map<
+    string,
+    Array<{ timestamp: number; operation: string }>
+  > = new Map();
 
   constructor(
     cache: CacheEngine,
@@ -402,35 +411,35 @@ export class CacheAnalyticsTool extends EventEmitter {
    * Initialize default alert configurations
    */
   private initializeDefaults(): void {
-    this.alertConfigs.set("high-error-rate", {
-      metric: "errorRate",
-      condition: "gt",
+    this.alertConfigs.set('high-error-rate', {
+      metric: 'errorRate',
+      condition: 'gt',
       threshold: 5.0,
-      severity: "critical",
+      severity: 'critical',
       enabled: true,
     });
 
-    this.alertConfigs.set("low-hit-rate", {
-      metric: "hitRate",
-      condition: "lt",
+    this.alertConfigs.set('low-hit-rate', {
+      metric: 'hitRate',
+      condition: 'lt',
       threshold: 70.0,
-      severity: "warning",
+      severity: 'warning',
       enabled: true,
     });
 
-    this.alertConfigs.set("high-latency", {
-      metric: "latencyP95",
-      condition: "gt",
+    this.alertConfigs.set('high-latency', {
+      metric: 'latencyP95',
+      condition: 'gt',
       threshold: 100.0,
-      severity: "warning",
+      severity: 'warning',
       enabled: true,
     });
 
-    this.alertConfigs.set("memory-pressure", {
-      metric: "memoryUtilization",
-      condition: "gt",
+    this.alertConfigs.set('memory-pressure', {
+      metric: 'memoryUtilization',
+      condition: 'gt',
       threshold: 80.0,
-      severity: "warning",
+      severity: 'warning',
       enabled: true,
     });
   }
@@ -455,7 +464,9 @@ export class CacheAnalyticsTool extends EventEmitter {
       if (cached) {
         try {
           const data = JSON.parse(cached);
-          const tokensSaved = this.tokenCounter.count(JSON.stringify(data)).tokens;
+          const tokensSaved = this.tokenCounter.count(
+            JSON.stringify(data)
+          ).tokens;
 
           return {
             success: true,
@@ -475,32 +486,32 @@ export class CacheAnalyticsTool extends EventEmitter {
     }
 
     // Execute operation
-    let data: CacheAnalyticsResult["data"];
+    let data: CacheAnalyticsResult['data'];
 
     try {
       switch (operation) {
-        case "dashboard":
+        case 'dashboard':
           data = { dashboard: await this.getDashboard(options) };
           break;
-        case "metrics":
+        case 'metrics':
           data = { metrics: await this.getMetrics(options) };
           break;
-        case "trends":
+        case 'trends':
           data = { trends: await this.analyzeTrends(options) };
           break;
-        case "alerts":
+        case 'alerts':
           data = { alerts: await this.checkAlerts(options) };
           break;
-        case "heatmap":
+        case 'heatmap':
           data = { heatmap: await this.generateHeatmap(options) };
           break;
-        case "bottlenecks":
+        case 'bottlenecks':
           data = { bottlenecks: await this.identifyBottlenecks(options) };
           break;
-        case "cost-analysis":
+        case 'cost-analysis':
           data = { costAnalysis: await this.analyzeCosts(options) };
           break;
-        case "export-data":
+        case 'export-data':
           data = { exportData: await this.exportData(options) };
           break;
         default:
@@ -540,7 +551,8 @@ export class CacheAnalyticsTool extends EventEmitter {
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       this.metrics.record({
         operation: `analytics_${operation}`,
@@ -592,16 +604,18 @@ export class CacheAnalyticsTool extends EventEmitter {
     // Store for trend analysis
     this.historicalData.set(now, dashboard);
     if (this.historicalData.size > this.maxHistoricalEntries) {
-      const oldestKey = Array.from(this.historicalData.keys()).sort((a, b) => a - b)[0];
+      const oldestKey = Array.from(this.historicalData.keys()).sort(
+        (a, b) => a - b
+      )[0];
       this.historicalData.delete(oldestKey);
     }
 
     // Update time-series data
-    this.updateTimeSeries("hitRate", now, performance.hitRate);
-    this.updateTimeSeries("latency", now, performance.latencyP95);
-    this.updateTimeSeries("throughput", now, performance.throughput);
+    this.updateTimeSeries('hitRate', now, performance.hitRate);
+    this.updateTimeSeries('latency', now, performance.latencyP95);
+    this.updateTimeSeries('throughput', now, performance.throughput);
 
-    this.emit("dashboard-updated", dashboard);
+    this.emit('dashboard-updated', dashboard);
 
     return dashboard;
   }
@@ -663,10 +677,10 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Get recently added keys
     const recentlyAdded = operations
-      .filter((op) => op.operation.includes("set"))
+      .filter((op) => op.operation.includes('set'))
       .slice(-10)
       .map((op) => ({
-        key: this.extractKeyFromMetadata(op.metadata) || "unknown",
+        key: this.extractKeyFromMetadata(op.metadata) || 'unknown',
         timestamp: op.timestamp,
       }));
 
@@ -692,7 +706,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Calculate eviction rate
     const evictionOps = operations.filter((op) =>
-      op.operation.includes("evict")
+      op.operation.includes('evict')
     ).length;
     const totalOps = operations.length || 1;
     const evictionRate = (evictionOps / totalOps) * 100;
@@ -700,22 +714,22 @@ export class CacheAnalyticsTool extends EventEmitter {
     // Eviction patterns
     const evictionPatterns: EvictionPattern[] = [
       {
-        reason: "TTL Expired",
+        reason: 'TTL Expired',
         count: Math.floor(evictionOps * 0.5),
         percentage: 50,
-        trend: "stable",
+        trend: 'stable',
       },
       {
-        reason: "Size Limit",
+        reason: 'Size Limit',
         count: Math.floor(evictionOps * 0.3),
         percentage: 30,
-        trend: this.calculateEvictionTrend("size"),
+        trend: this.calculateEvictionTrend('size'),
       },
       {
-        reason: "Manual",
+        reason: 'Manual',
         count: Math.floor(evictionOps * 0.2),
         percentage: 20,
-        trend: "stable",
+        trend: 'stable',
       },
     ];
 
@@ -792,16 +806,15 @@ export class CacheAnalyticsTool extends EventEmitter {
       criticalIssues.push(`High timeout rate: ${timeoutRate.toFixed(2)}%`);
     }
     if (stats.cacheHitRate < 50) {
-      criticalIssues.push(`Low cache hit rate: ${stats.cacheHitRate.toFixed(2)}%`);
+      criticalIssues.push(
+        `Low cache hit rate: ${stats.cacheHitRate.toFixed(2)}%`
+      );
     }
 
     // Calculate health score (0-100)
     const healthScore = Math.max(
       0,
-      100 -
-        errorRate * 2 -
-        timeoutRate * 1.5 -
-        (100 - stats.cacheHitRate) * 0.5
+      100 - errorRate * 2 - timeoutRate * 1.5 - (100 - stats.cacheHitRate) * 0.5
     );
 
     return {
@@ -825,7 +838,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       operation: op.operation,
       key: this.extractKeyFromMetadata(op.metadata),
       duration: op.duration,
-      status: op.success ? "success" : "error",
+      status: op.success ? 'success' : 'error',
     }));
   }
 
@@ -844,11 +857,11 @@ export class CacheAnalyticsTool extends EventEmitter {
     const operations = this.metrics.getOperations(timeRange.start);
 
     const metricTypes = options.metricTypes || [
-      "performance",
-      "usage",
-      "efficiency",
-      "cost",
-      "health",
+      'performance',
+      'usage',
+      'efficiency',
+      'cost',
+      'health',
     ];
 
     const metrics: Partial<MetricCollection> = {
@@ -856,23 +869,23 @@ export class CacheAnalyticsTool extends EventEmitter {
       timeRange,
     };
 
-    if (metricTypes.includes("performance")) {
+    if (metricTypes.includes('performance')) {
       metrics.performance = this.getPerformanceMetrics(timeRange);
     }
 
-    if (metricTypes.includes("usage")) {
+    if (metricTypes.includes('usage')) {
       metrics.usage = this.getUsageMetrics(timeRange);
     }
 
-    if (metricTypes.includes("efficiency")) {
+    if (metricTypes.includes('efficiency')) {
       metrics.efficiency = this.getEfficiencyMetrics(timeRange);
     }
 
-    if (metricTypes.includes("cost")) {
+    if (metricTypes.includes('cost')) {
       metrics.cost = this.getCostMetrics(timeRange);
     }
 
-    if (metricTypes.includes("health")) {
+    if (metricTypes.includes('health')) {
       metrics.health = this.getHealthMetrics(timeRange);
     }
 
@@ -887,7 +900,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       0
     );
     const compressionSavings = operations.reduce(
-      (sum, op) => sum + (((op.outputTokens ?? 0) - (op.cachedTokens ?? 0)) || 0),
+      (sum, op) => sum + ((op.outputTokens ?? 0) - (op.cachedTokens ?? 0) || 0),
       0
     );
 
@@ -902,7 +915,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       compressionSavings,
     };
 
-    this.emit("metrics-collected", metrics);
+    this.emit('metrics-collected', metrics);
 
     return metrics as MetricCollection;
   }
@@ -925,7 +938,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     const previousRange = this.getPreviousTimeRange(
       timeRange,
-      options.compareWith || "previous-period"
+      options.compareWith || 'previous-period'
     );
     const previousMetrics = await this.getMetrics({
       ...options,
@@ -960,7 +973,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       seasonality,
     };
 
-    this.emit("trends-analyzed", analysis);
+    this.emit('trends-analyzed', analysis);
 
     return analysis;
   }
@@ -977,17 +990,17 @@ export class CacheAnalyticsTool extends EventEmitter {
     if (current.performance && previous.performance) {
       metrics.push(
         this.createTrendMetric(
-          "Hit Rate",
+          'Hit Rate',
           current.performance.hitRate,
           previous.performance.hitRate
         ),
         this.createTrendMetric(
-          "Latency P95",
+          'Latency P95',
           current.performance.latencyP95,
           previous.performance.latencyP95
         ),
         this.createTrendMetric(
-          "Throughput",
+          'Throughput',
           current.performance.throughput,
           previous.performance.throughput
         )
@@ -997,12 +1010,12 @@ export class CacheAnalyticsTool extends EventEmitter {
     if (current.health && previous.health) {
       metrics.push(
         this.createTrendMetric(
-          "Health Score",
+          'Health Score',
           current.health.healthScore,
           previous.health.healthScore
         ),
         this.createTrendMetric(
-          "Error Rate",
+          'Error Rate',
           current.health.errorRate,
           previous.health.errorRate
         )
@@ -1024,13 +1037,13 @@ export class CacheAnalyticsTool extends EventEmitter {
     const changePercent = previous !== 0 ? (change / previous) * 100 : 0;
     const velocity = change / (previous || 1);
 
-    let trend: "up" | "down" | "stable";
+    let trend: 'up' | 'down' | 'stable';
     if (Math.abs(changePercent) < 5) {
-      trend = "stable";
+      trend = 'stable';
     } else if (change > 0) {
-      trend = "up";
+      trend = 'up';
     } else {
-      trend = "down";
+      trend = 'down';
     }
 
     return {
@@ -1047,7 +1060,10 @@ export class CacheAnalyticsTool extends EventEmitter {
   /**
    * Detect anomalies
    */
-  private detectAnomalies(timeRange: { start: number; end: number }): Anomaly[] {
+  private detectAnomalies(timeRange: {
+    start: number;
+    end: number;
+  }): Anomaly[] {
     const anomalies: Anomaly[] = [];
     const operations = this.metrics.getOperations(timeRange.start);
 
@@ -1067,11 +1083,11 @@ export class CacheAnalyticsTool extends EventEmitter {
         // 3 sigma rule
         anomalies.push({
           timestamp: op.timestamp,
-          metric: "duration",
+          metric: 'duration',
           value: op.duration,
           expected: mean,
           deviation: zScore,
-          severity: Math.abs(zScore) > 4 ? "high" : "medium",
+          severity: Math.abs(zScore) > 4 ? 'high' : 'medium',
           confidence: 1 - 1 / Math.abs(zScore),
         });
       }
@@ -1079,7 +1095,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Detect hit rate anomalies
     const hitRateSeries = Array.from(
-      this.timeSeriesData.get("hitRate") || []
+      this.timeSeriesData.get('hitRate') || []
     ).slice(-20);
     if (hitRateSeries.length > 5) {
       const avgHitRate =
@@ -1090,11 +1106,11 @@ export class CacheAnalyticsTool extends EventEmitter {
       if (Math.abs(currentHitRate - avgHitRate) > 20) {
         anomalies.push({
           timestamp: Date.now(),
-          metric: "hitRate",
+          metric: 'hitRate',
           value: currentHitRate,
           expected: avgHitRate,
           deviation: (currentHitRate - avgHitRate) / avgHitRate,
-          severity: "medium",
+          severity: 'medium',
           confidence: 0.8,
         });
       }
@@ -1116,7 +1132,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Predict hit rate
     const hitRateSeries = Array.from(
-      this.timeSeriesData.get("hitRate") || []
+      this.timeSeriesData.get('hitRate') || []
     ).slice(-20);
     if (hitRateSeries.length > 5) {
       const trend = this.calculateSimpleTrend(
@@ -1126,7 +1142,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       const predicted = lastValue + trend;
 
       predictions.push({
-        metric: "hitRate",
+        metric: 'hitRate',
         timestamp: now + horizon,
         predictedValue: Math.max(0, Math.min(100, predicted)),
         confidenceInterval: {
@@ -1139,7 +1155,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Predict throughput
     const throughputSeries = Array.from(
-      this.timeSeriesData.get("throughput") || []
+      this.timeSeriesData.get('throughput') || []
     ).slice(-20);
     if (throughputSeries.length > 5) {
       const trend = this.calculateSimpleTrend(
@@ -1149,7 +1165,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       const predicted = Math.max(0, lastValue + trend);
 
       predictions.push({
-        metric: "throughput",
+        metric: 'throughput',
         timestamp: now + horizon,
         predictedValue: predicted,
         confidenceInterval: {
@@ -1192,7 +1208,7 @@ export class CacheAnalyticsTool extends EventEmitter {
     end: number;
   }): RegressionResult {
     const hitRateSeries = Array.from(
-      this.timeSeriesData.get("hitRate") || []
+      this.timeSeriesData.get('hitRate') || []
     ).slice(-50);
 
     if (hitRateSeries.length < 2) {
@@ -1200,7 +1216,7 @@ export class CacheAnalyticsTool extends EventEmitter {
         slope: 0,
         intercept: 0,
         rSquared: 0,
-        equation: "y = 0",
+        equation: 'y = 0',
       };
     }
 
@@ -1250,7 +1266,7 @@ export class CacheAnalyticsTool extends EventEmitter {
     end: number;
   }): SeasonalityPattern {
     const series = Array.from(
-      this.timeSeriesData.get("throughput") || []
+      this.timeSeriesData.get('throughput') || []
     ).slice(-100);
 
     if (series.length < 20) {
@@ -1281,8 +1297,7 @@ export class CacheAnalyticsTool extends EventEmitter {
     let avgPeriod = 0;
     if (peaks.length > 1) {
       const periods = peaks.slice(1).map((p, i) => p - peaks[i]);
-      avgPeriod =
-        periods.reduce((a, b) => a + b, 0) / periods.length;
+      avgPeriod = periods.reduce((a, b) => a + b, 0) / periods.length;
     }
 
     const detected = peaks.length > 2 && avgPeriod > 0;
@@ -1311,10 +1326,7 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Add custom alert config if provided
     if (options.alertConfig) {
-      this.alertConfigs.set(
-        `custom-${now}`,
-        options.alertConfig
-      );
+      this.alertConfigs.set(`custom-${now}`, options.alertConfig);
     }
 
     // Get current metrics
@@ -1334,7 +1346,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       if (triggered) {
         alerts.push({
           id,
-          type: options.alertType || "threshold",
+          type: options.alertType || 'threshold',
           metric: config.metric,
           severity: config.severity,
           message: `${config.metric} ${config.condition} ${config.threshold} (current: ${value.toFixed(2)})`,
@@ -1349,12 +1361,12 @@ export class CacheAnalyticsTool extends EventEmitter {
     // Check for anomaly alerts
     const anomalies = this.detectAnomalies(timeRange);
     for (const anomaly of anomalies) {
-      if (anomaly.severity === "high") {
+      if (anomaly.severity === 'high') {
         alerts.push({
           id: `anomaly-${anomaly.timestamp}`,
-          type: "anomaly",
+          type: 'anomaly',
           metric: anomaly.metric,
-          severity: "warning",
+          severity: 'warning',
           message: `Anomaly detected in ${anomaly.metric}: ${anomaly.value.toFixed(2)} (expected: ${anomaly.expected.toFixed(2)})`,
           timestamp: anomaly.timestamp,
           value: anomaly.value,
@@ -1363,7 +1375,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       }
     }
 
-    this.emit("alerts-checked", { count: alerts.length, alerts });
+    this.emit('alerts-checked', { count: alerts.length, alerts });
 
     return alerts;
   }
@@ -1375,16 +1387,16 @@ export class CacheAnalyticsTool extends EventEmitter {
     metricName: string,
     metrics: MetricCollection
   ): number {
-    if (metricName === "hitRate" && metrics.performance) {
+    if (metricName === 'hitRate' && metrics.performance) {
       return metrics.performance.hitRate;
     }
-    if (metricName === "errorRate" && metrics.health) {
+    if (metricName === 'errorRate' && metrics.health) {
       return metrics.health.errorRate;
     }
-    if (metricName === "latencyP95" && metrics.performance) {
+    if (metricName === 'latencyP95' && metrics.performance) {
       return metrics.performance.latencyP95;
     }
-    if (metricName === "memoryUtilization" && metrics.efficiency) {
+    if (metricName === 'memoryUtilization' && metrics.efficiency) {
       return metrics.efficiency.memoryUtilization;
     }
 
@@ -1396,17 +1408,17 @@ export class CacheAnalyticsTool extends EventEmitter {
    */
   private evaluateAlertCondition(
     value: number,
-    condition: "gt" | "lt" | "eq" | "ne",
+    condition: 'gt' | 'lt' | 'eq' | 'ne',
     threshold: number
   ): boolean {
     switch (condition) {
-      case "gt":
+      case 'gt':
         return value > threshold;
-      case "lt":
+      case 'lt':
         return value < threshold;
-      case "eq":
+      case 'eq':
         return Math.abs(value - threshold) < 0.01;
-      case "ne":
+      case 'ne':
         return Math.abs(value - threshold) >= 0.01;
       default:
         return false;
@@ -1423,28 +1435,28 @@ export class CacheAnalyticsTool extends EventEmitter {
   private async generateHeatmap(
     options: CacheAnalyticsOptions
   ): Promise<HeatmapData> {
-    const heatmapType = options.heatmapType || "temporal";
-    const resolution = options.resolution || "medium";
+    const heatmapType = options.heatmapType || 'temporal';
+    const resolution = options.resolution || 'medium';
     const now = Date.now();
     const timeRange = options.timeRange || { start: now - 86400000, end: now };
 
     let heatmap: HeatmapData;
 
     switch (heatmapType) {
-      case "temporal":
+      case 'temporal':
         heatmap = this.generateTemporalHeatmap(timeRange, resolution);
         break;
-      case "key-correlation":
+      case 'key-correlation':
         heatmap = this.generateKeyCorrelationHeatmap(timeRange, resolution);
         break;
-      case "memory":
+      case 'memory':
         heatmap = this.generateMemoryHeatmap(timeRange, resolution);
         break;
       default:
         throw new Error(`Unknown heatmap type: ${heatmapType}`);
     }
 
-    this.emit("heatmap-generated", heatmap);
+    this.emit('heatmap-generated', heatmap);
 
     return heatmap;
   }
@@ -1493,11 +1505,11 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     hotspots.sort((a, b) => b.value - a.value);
 
-    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const hours = Array.from({ length: 24 }, (_, i) => `${i}:00`);
 
     return {
-      type: "temporal",
+      type: 'temporal',
       dimensions: { width: 7, height: 24 },
       data,
       labels: { x: days, y: hours },
@@ -1591,7 +1603,7 @@ export class CacheAnalyticsTool extends EventEmitter {
     hotspots.sort((a, b) => b.value - a.value);
 
     return {
-      type: "key-correlation",
+      type: 'key-correlation',
       dimensions: { width: size, height: size },
       data,
       labels: { x: topKeys, y: topKeys },
@@ -1649,7 +1661,7 @@ export class CacheAnalyticsTool extends EventEmitter {
     hotspots.sort((a, b) => b.value - a.value);
 
     return {
-      type: "memory",
+      type: 'memory',
       dimensions: { width: size, height: size },
       data,
       labels: {
@@ -1686,12 +1698,12 @@ export class CacheAnalyticsTool extends EventEmitter {
     const slowOps = operations.filter((op) => op.duration > percentiles.p95);
     if (slowOps.length > operations.length * 0.05) {
       bottlenecks.push({
-        type: "slow-operation",
-        severity: "high",
+        type: 'slow-operation',
+        severity: 'high',
         description: `${slowOps.length} operations slower than P95 (${percentiles.p95}ms)`,
         impact: (slowOps.length / operations.length) * 100,
         recommendation:
-          "Consider optimizing slow operations or increasing cache size",
+          'Consider optimizing slow operations or increasing cache size',
         metrics: {
           current: slowOps.length,
           threshold: operations.length * 0.05,
@@ -1715,12 +1727,12 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     if (hotKeys.length > 0) {
       bottlenecks.push({
-        type: "hot-key",
-        severity: "medium",
+        type: 'hot-key',
+        severity: 'medium',
         description: `${hotKeys.length} keys accessed more than 10% of the time`,
         impact: 50,
         recommendation:
-          "Consider implementing read-through caching or sharding for hot keys",
+          'Consider implementing read-through caching or sharding for hot keys',
         affectedKeys: hotKeys,
         metrics: {
           current: hotKeys.length,
@@ -1737,12 +1749,12 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     if (memoryUtilization > 80) {
       bottlenecks.push({
-        type: "memory-pressure",
-        severity: "high",
+        type: 'memory-pressure',
+        severity: 'high',
         description: `Memory utilization at ${memoryUtilization.toFixed(1)}%`,
         impact: memoryUtilization,
         recommendation:
-          "Increase cache size or implement more aggressive eviction policies",
+          'Increase cache size or implement more aggressive eviction policies',
         metrics: {
           current: memoryUtilization,
           threshold: 80,
@@ -1753,18 +1765,18 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Check for high eviction rate
     const evictionOps = operations.filter((op) =>
-      op.operation.includes("evict")
+      op.operation.includes('evict')
     ).length;
     const evictionRate = (evictionOps / operations.length) * 100;
 
     if (evictionRate > 20) {
       bottlenecks.push({
-        type: "high-eviction",
-        severity: "medium",
+        type: 'high-eviction',
+        severity: 'medium',
         description: `High eviction rate: ${evictionRate.toFixed(1)}%`,
         impact: evictionRate,
         recommendation:
-          "Consider increasing TTL or cache size to reduce evictions",
+          'Consider increasing TTL or cache size to reduce evictions',
         metrics: {
           current: evictionRate,
           threshold: 20,
@@ -1773,7 +1785,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       });
     }
 
-    this.emit("bottlenecks-identified", { count: bottlenecks.length });
+    this.emit('bottlenecks-identified', { count: bottlenecks.length });
 
     return bottlenecks;
   }
@@ -1824,7 +1836,12 @@ export class CacheAnalyticsTool extends EventEmitter {
     };
 
     // Total costs
-    const currentCost = storage.memoryCost + storage.diskCost + network.ingressCost + network.egressCost + compute.cpuCost;
+    const currentCost =
+      storage.memoryCost +
+      storage.diskCost +
+      network.ingressCost +
+      network.egressCost +
+      compute.cpuCost;
     const projectedCost = currentCost * 1.1; // 10% growth
     const costTrend = this.calculateCostTrend(currentCost);
 
@@ -1838,9 +1855,9 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Projections
     const projections: CostProjection[] = [
-      { period: "1 week", estimatedCost: currentCost * 7, confidence: 0.9 },
-      { period: "1 month", estimatedCost: currentCost * 30, confidence: 0.7 },
-      { period: "3 months", estimatedCost: currentCost * 90, confidence: 0.5 },
+      { period: '1 week', estimatedCost: currentCost * 7, confidence: 0.9 },
+      { period: '1 month', estimatedCost: currentCost * 30, confidence: 0.7 },
+      { period: '3 months', estimatedCost: currentCost * 90, confidence: 0.5 },
     ];
 
     // Optimizations
@@ -1848,19 +1865,19 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     if (storage.utilizationPercent < 50) {
       optimizations.push({
-        category: "Storage",
+        category: 'Storage',
         potentialSavings: storage.memoryCost * 0.3,
-        effort: "low",
-        recommendation: "Reduce cache size to match actual usage",
+        effort: 'low',
+        recommendation: 'Reduce cache size to match actual usage',
       });
     }
 
     if (compute.efficiency < 0.8) {
       optimizations.push({
-        category: "Compute",
+        category: 'Compute',
         potentialSavings: compute.cpuCost * 0.2,
-        effort: "medium",
-        recommendation: "Optimize cache operations to reduce CPU usage",
+        effort: 'medium',
+        recommendation: 'Optimize cache operations to reduce CPU usage',
       });
     }
 
@@ -1875,7 +1892,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       optimizations,
     };
 
-    this.emit("costs-analyzed", costAnalysis);
+    this.emit('costs-analyzed', costAnalysis);
 
     return costAnalysis;
   }
@@ -1888,7 +1905,7 @@ export class CacheAnalyticsTool extends EventEmitter {
    * Export analytics data
    */
   private async exportData(options: CacheAnalyticsOptions): Promise<string> {
-    const format = options.format || "json";
+    const format = options.format || 'json';
     const now = Date.now();
     const timeRange = options.timeRange || { start: now - 86400000, end: now };
 
@@ -1897,7 +1914,10 @@ export class CacheAnalyticsTool extends EventEmitter {
     const metrics = await this.getMetrics({ ...options, timeRange });
     const trends = await this.analyzeTrends({ ...options, timeRange });
     const alerts = await this.checkAlerts({ ...options, timeRange });
-    const bottlenecks = await this.identifyBottlenecks({ ...options, timeRange });
+    const bottlenecks = await this.identifyBottlenecks({
+      ...options,
+      timeRange,
+    });
     const costs = await this.analyzeCosts({ ...options, timeRange });
 
     const exportData = {
@@ -1914,13 +1934,13 @@ export class CacheAnalyticsTool extends EventEmitter {
     let output: string;
 
     switch (format) {
-      case "json":
+      case 'json':
         output = JSON.stringify(exportData, null, 2);
         break;
-      case "csv":
+      case 'csv':
         output = this.convertToCSV(exportData);
         break;
-      case "prometheus":
+      case 'prometheus':
         output = this.convertToPrometheus(exportData);
         break;
       default:
@@ -1929,8 +1949,8 @@ export class CacheAnalyticsTool extends EventEmitter {
 
     // Write to file if path provided
     if (options.filePath) {
-      writeFileSync(options.filePath, output, "utf-8");
-      this.emit("data-exported", {
+      writeFileSync(options.filePath, output, 'utf-8');
+      this.emit('data-exported', {
         format,
         path: options.filePath,
         size: output.length,
@@ -1947,7 +1967,7 @@ export class CacheAnalyticsTool extends EventEmitter {
     const lines: string[] = [];
 
     // Header
-    lines.push("Metric,Value,Timestamp");
+    lines.push('Metric,Value,Timestamp');
 
     // Dashboard data
     if (data.dashboard) {
@@ -1960,7 +1980,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       lines.push(`Health Score,${d.health.healthScore},${d.timestamp}`);
     }
 
-    return lines.join("\n");
+    return lines.join('\n');
   }
 
   /**
@@ -1991,7 +2011,7 @@ export class CacheAnalyticsTool extends EventEmitter {
       );
     }
 
-    return lines.join("\n");
+    return lines.join('\n');
   }
 
   // ============================================================================
@@ -2001,17 +2021,23 @@ export class CacheAnalyticsTool extends EventEmitter {
   /**
    * Extract key from operation metadata
    */
-  private extractKeyFromMetadata(metadata?: Record<string, unknown>): string | undefined {
+  private extractKeyFromMetadata(
+    metadata?: Record<string, unknown>
+  ): string | undefined {
     if (!metadata) return undefined;
-    if (typeof metadata.key === "string") return metadata.key;
-    if (typeof metadata.cacheKey === "string") return metadata.cacheKey;
+    if (typeof metadata.key === 'string') return metadata.key;
+    if (typeof metadata.cacheKey === 'string') return metadata.cacheKey;
     return undefined;
   }
 
   /**
    * Update time-series data
    */
-  private updateTimeSeries(metric: string, timestamp: number, value: number): void {
+  private updateTimeSeries(
+    metric: string,
+    timestamp: number,
+    value: number
+  ): void {
     if (!this.timeSeriesData.has(metric)) {
       this.timeSeriesData.set(metric, []);
     }
@@ -2040,9 +2066,11 @@ export class CacheAnalyticsTool extends EventEmitter {
   /**
    * Calculate eviction trend
    */
-  private calculateEvictionTrend(_reason: string): "increasing" | "stable" | "decreasing" {
+  private calculateEvictionTrend(
+    _reason: string
+  ): 'increasing' | 'stable' | 'decreasing' {
     // Simplified trend calculation
-    return "stable";
+    return 'stable';
   }
 
   /**
@@ -2070,17 +2098,17 @@ export class CacheAnalyticsTool extends EventEmitter {
     const duration = timeRange.end - timeRange.start;
 
     switch (compareWith) {
-      case "previous-period":
+      case 'previous-period':
         return {
           start: timeRange.start - duration,
           end: timeRange.start,
         };
-      case "last-week":
+      case 'last-week':
         return {
           start: timeRange.start - 7 * 86400000,
           end: timeRange.end - 7 * 86400000,
         };
-      case "last-month":
+      case 'last-month':
         return {
           start: timeRange.start - 30 * 86400000,
           end: timeRange.end - 30 * 86400000,
@@ -2098,12 +2126,12 @@ export class CacheAnalyticsTool extends EventEmitter {
    */
   private isCacheableOperation(operation: AnalyticsOperation): boolean {
     return [
-      "dashboard",
-      "metrics",
-      "trends",
-      "heatmap",
-      "bottlenecks",
-      "cost-analysis",
+      'dashboard',
+      'metrics',
+      'trends',
+      'heatmap',
+      'bottlenecks',
+      'cost-analysis',
     ].includes(operation);
   }
 
@@ -2147,7 +2175,11 @@ export function getCacheAnalyticsTool(
   metrics: MetricsCollector
 ): CacheAnalyticsTool {
   if (!cacheAnalyticsInstance) {
-    cacheAnalyticsInstance = new CacheAnalyticsTool(cache, tokenCounter, metrics);
+    cacheAnalyticsInstance = new CacheAnalyticsTool(
+      cache,
+      tokenCounter,
+      metrics
+    );
   }
   return cacheAnalyticsInstance;
 }
@@ -2157,113 +2189,116 @@ export function getCacheAnalyticsTool(
 // ============================================================================
 
 export const CACHE_ANALYTICS_TOOL_DEFINITION = {
-  name: "cache_analytics",
+  name: 'cache_analytics',
   description:
-    "Comprehensive cache analytics with 88%+ token reduction. Real-time dashboards, trend analysis, alerting, heatmaps, bottleneck detection, and cost optimization.",
+    'Comprehensive cache analytics with 88%+ token reduction. Real-time dashboards, trend analysis, alerting, heatmaps, bottleneck detection, and cost optimization.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "dashboard",
-          "metrics",
-          "trends",
-          "alerts",
-          "heatmap",
-          "bottlenecks",
-          "cost-analysis",
-          "export-data",
+          'dashboard',
+          'metrics',
+          'trends',
+          'alerts',
+          'heatmap',
+          'bottlenecks',
+          'cost-analysis',
+          'export-data',
         ],
-        description: "Analytics operation to perform",
+        description: 'Analytics operation to perform',
       },
       timeRange: {
-        type: "object",
+        type: 'object',
         properties: {
-          start: { type: "number", description: "Start timestamp in milliseconds" },
-          end: { type: "number", description: "End timestamp in milliseconds" },
+          start: {
+            type: 'number',
+            description: 'Start timestamp in milliseconds',
+          },
+          end: { type: 'number', description: 'End timestamp in milliseconds' },
         },
-        description: "Time range for analysis",
+        description: 'Time range for analysis',
       },
       granularity: {
-        type: "string",
-        enum: ["second", "minute", "hour", "day"],
-        description: "Time granularity for aggregation",
+        type: 'string',
+        enum: ['second', 'minute', 'hour', 'day'],
+        description: 'Time granularity for aggregation',
       },
       metricTypes: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "string",
-          enum: ["performance", "usage", "efficiency", "cost", "health"],
+          type: 'string',
+          enum: ['performance', 'usage', 'efficiency', 'cost', 'health'],
         },
-        description: "Types of metrics to collect",
+        description: 'Types of metrics to collect',
       },
       aggregation: {
-        type: "string",
-        enum: ["sum", "avg", "min", "max", "p95", "p99"],
-        description: "Aggregation method for metrics",
+        type: 'string',
+        enum: ['sum', 'avg', 'min', 'max', 'p95', 'p99'],
+        description: 'Aggregation method for metrics',
       },
       compareWith: {
-        type: "string",
-        enum: ["previous-period", "last-week", "last-month"],
-        description: "Period to compare trends with",
+        type: 'string',
+        enum: ['previous-period', 'last-week', 'last-month'],
+        description: 'Period to compare trends with',
       },
       trendType: {
-        type: "string",
-        enum: ["absolute", "percentage", "rate"],
-        description: "Type of trend analysis",
+        type: 'string',
+        enum: ['absolute', 'percentage', 'rate'],
+        description: 'Type of trend analysis',
       },
       alertType: {
-        type: "string",
-        enum: ["threshold", "anomaly", "trend"],
-        description: "Type of alert to check",
+        type: 'string',
+        enum: ['threshold', 'anomaly', 'trend'],
+        description: 'Type of alert to check',
       },
       threshold: {
-        type: "number",
-        description: "Threshold value for alerts",
+        type: 'number',
+        description: 'Threshold value for alerts',
       },
       alertConfig: {
-        type: "object",
+        type: 'object',
         properties: {
-          metric: { type: "string" },
-          condition: { type: "string", enum: ["gt", "lt", "eq", "ne"] },
-          threshold: { type: "number" },
-          severity: { type: "string", enum: ["info", "warning", "critical"] },
-          enabled: { type: "boolean" },
+          metric: { type: 'string' },
+          condition: { type: 'string', enum: ['gt', 'lt', 'eq', 'ne'] },
+          threshold: { type: 'number' },
+          severity: { type: 'string', enum: ['info', 'warning', 'critical'] },
+          enabled: { type: 'boolean' },
         },
-        description: "Alert configuration",
+        description: 'Alert configuration',
       },
       heatmapType: {
-        type: "string",
-        enum: ["temporal", "key-correlation", "memory"],
-        description: "Type of heatmap to generate",
+        type: 'string',
+        enum: ['temporal', 'key-correlation', 'memory'],
+        description: 'Type of heatmap to generate',
       },
       resolution: {
-        type: "string",
-        enum: ["low", "medium", "high"],
-        description: "Heatmap resolution",
+        type: 'string',
+        enum: ['low', 'medium', 'high'],
+        description: 'Heatmap resolution',
       },
       format: {
-        type: "string",
-        enum: ["json", "csv", "prometheus"],
-        description: "Export data format",
+        type: 'string',
+        enum: ['json', 'csv', 'prometheus'],
+        description: 'Export data format',
       },
       filePath: {
-        type: "string",
-        description: "File path for data export",
+        type: 'string',
+        description: 'File path for data export',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching of analytics results (default: true)",
+        type: 'boolean',
+        description: 'Enable caching of analytics results (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 30)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 30)',
         default: 30,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 

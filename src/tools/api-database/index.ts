@@ -15,13 +15,13 @@ export {
   type CachingStrategy,
   type InvalidationPattern,
   type CacheAnalysis,
-} from "./smart-cache-api";
+} from './smart-cache-api.js';
 
 export {
   SmartApiFetch,
   runSmartApiFetch,
   SMART_API_FETCH_TOOL_DEFINITION,
-} from "./smart-api-fetch";
+} from './smart-api-fetch.js';
 
 export {
   SmartSchema,
@@ -43,7 +43,7 @@ export {
   type SchemaIssue,
   type MissingIndex as SchemaMissingIndex,
   type SchemaDiff,
-} from "./smart-schema";
+} from './smart-schema.js';
 
 export {
   SmartREST,
@@ -56,7 +56,7 @@ export {
   type ResourceGroup,
   type HealthIssue,
   type RateLimit,
-} from "./smart-rest";
+} from './smart-rest.js';
 
 export {
   SmartORM,
@@ -69,7 +69,7 @@ export {
   type EagerLoadingSuggestion,
   type QueryReduction,
   type IndexSuggestion,
-} from "./smart-orm";
+} from './smart-orm.js';
 
 export {
   SmartSql,
@@ -85,7 +85,7 @@ export {
   type ValidationError,
   type Validation,
   type HistoryEntry,
-} from "./smart-sql";
+} from './smart-sql.js';
 
 export {
   SmartDatabase,
@@ -109,7 +109,7 @@ export {
   type PoolInfo,
   type SlowQuery,
   type BatchResult,
-} from "./smart-database";
+} from './smart-database.js';
 
 export {
   SmartWebSocket,
@@ -119,7 +119,7 @@ export {
   type SmartWebSocketResult,
   type Message,
   type MessageType,
-} from "./smart-websocket";
+} from './smart-websocket.js';
 
 export {
   SmartGraphQL,
@@ -135,7 +135,7 @@ export {
   type QueryAnalysis as GraphQLQueryAnalysis,
   type Optimizations,
   type SchemaInfo,
-} from "./smart-graphql";
+} from './smart-graphql.js';
 
 export {
   SmartMigration,
@@ -148,4 +148,4 @@ export {
   type MigrationStatus,
   type MigrationHistoryEntry,
   type RollbackResult,
-} from "./smart-migration";
+} from './smart-migration.js';

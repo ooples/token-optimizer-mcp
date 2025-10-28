@@ -9,16 +9,21 @@
  * - Token tracking and metrics
  */
 
-import { readFileSync, existsSync, statSync } from "fs";
-import { homedir } from "os";
-import { join } from "path";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateDiff, hasMeaningfulChanges } from "../shared/diff-utils";
-import { hashFile, generateCacheKey } from "../shared/hash-utils";
-import { compress, decompress } from "../shared/compression-utils";
-import { chunkBySyntax, truncateContent, detectFileType, isMinified } from "../shared/syntax-utils";
+import { readFileSync, existsSync, statSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateDiff, hasMeaningfulChanges } from '../shared/diff-utils.js';
+import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
+import { cacheGet, cacheSet } from '../../utils/cache-helper.js';
+import {
+  chunkBySyntax,
+  truncateContent,
+  detectFileType,
+  isMinified,
+} from '../shared/syntax-utils.js';
 
 export interface SmartReadOptions {
   // Cache options
@@ -66,7 +71,11 @@ export class SmartReadTool {
   private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
 
-  constructor(cache: CacheEngine, tokenCounter: TokenCounter, metrics: MetricsCollector) {
+  constructor(
+    cache: CacheEngine,
+    tokenCounter: TokenCounter,
+    metrics: MetricsCollector
+  ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
     this.metrics = metrics;
@@ -75,18 +84,21 @@ export class SmartReadTool {
   /**
    * Smart read with aggressive token optimization
    */
-  async read(filePath: string, options: SmartReadOptions = {}): Promise<SmartReadResult> {
+  async read(
+    filePath: string,
+    options: SmartReadOptions = {}
+  ): Promise<SmartReadResult> {
     const startTime = Date.now();
 
     const {
       enableCache = true,
-      ttl = 3600,
+      ttl: _ttl = 3600,
       diffMode = true,
       maxSize = 100000, // 100KB default max
       chunkSize = 4000,
       preserveStructure = true,
       includeMetadata: _includeMetadata = true,
-      encoding = "utf-8",
+      encoding = 'utf-8',
     } = options;
 
     // Validate file exists
@@ -100,21 +112,14 @@ export class SmartReadTool {
     const fileType = detectFileType(filePath);
 
     // Generate cache key
-    const cacheKey = generateCacheKey("smart-read", {
+    const cacheKey = generateCacheKey('smart-read', {
       path: filePath,
       options: { maxSize, chunkSize, preserveStructure },
     });
 
     // Check cache
-    let cachedData: string | null = null;
-    let fromCache = false;
-
-    if (enableCache) {
-      cachedData = this.cache.get(cacheKey);
-      if (cachedData) {
-        fromCache = true;
-      }
-    }
+    const cachedData = enableCache ? cacheGet(this.cache, cacheKey) : null;
+    const fromCache = cachedData !== null;
 
     // Read file content
     const rawContent = readFileSync(filePath, encoding);
@@ -125,19 +130,18 @@ export class SmartReadTool {
     let truncated = false;
     let chunked = false;
     let chunks: string[] | undefined;
-    let diffData: { added: string[]; removed: string[]; unchanged: number } | undefined;
+    let diffData:
+      | { added: string[]; removed: string[]; unchanged: number }
+      | undefined;
     let tokensSaved = 0;
 
     // If we have cached data and diff mode is enabled
     if (cachedData && diffMode) {
       try {
-        const decompressed = decompress(Buffer.from(cachedData, 'utf-8'), "gzip");
-        const cachedContent = decompressed.toString();
-
         // Check if content has meaningful changes
-        if (hasMeaningfulChanges(cachedContent, rawContent)) {
+        if (hasMeaningfulChanges(cachedData, rawContent)) {
           // Generate diff
-          const diff = generateDiff(cachedContent, rawContent, {
+          const diff = generateDiff(cachedData, rawContent, {
             contextLines: 3,
             ignoreWhitespace: true,
           });
@@ -165,13 +169,16 @@ export class SmartReadTool {
           }
         } else {
           // No changes, return minimal response
-          finalContent = "// No changes";
+          finalContent = '// No changes';
           isDiff = true;
-          tokensSaved = Math.max(0, originalTokens - this.tokenCounter.count(finalContent).tokens);
+          tokensSaved = Math.max(
+            0,
+            originalTokens - this.tokenCounter.count(finalContent).tokens
+          );
         }
       } catch (error) {
         // If decompression fails, fall through to normal read
-        console.error("Cache decompression failed:", error);
+        console.error('Cache decompression failed:', error);
       }
     }
 
@@ -180,7 +187,7 @@ export class SmartReadTool {
       // Check if file is minified
       if (isMinified(rawContent)) {
         // For minified files, just truncate with a warning
-        const truncationMsg = "\n// [TRUNCATED: Minified file]";
+        const truncationMsg = '\n// [TRUNCATED: Minified file]';
         const actualMaxSize = maxSize - truncationMsg.length;
         finalContent = rawContent.substring(0, actualMaxSize) + truncationMsg;
         truncated = true;
@@ -197,7 +204,11 @@ export class SmartReadTool {
 
       const truncatedTokens = this.tokenCounter.count(finalContent).tokens;
       tokensSaved = originalTokens - truncatedTokens;
-    } else if (!isDiff && rawContent.length > chunkSize && rawContent.length <= maxSize) {
+    } else if (
+      !isDiff &&
+      rawContent.length > chunkSize &&
+      rawContent.length <= maxSize
+    ) {
       // Only chunk if file fits within maxSize but is larger than chunkSize
       // This allows for structured navigation of medium-sized files
       const chunkResult = chunkBySyntax(rawContent, chunkSize);
@@ -206,15 +217,15 @@ export class SmartReadTool {
 
       // Return first chunk with metadata about total chunks
       finalContent =
-        chunks[0] + `\n\n// [${chunks.length} chunks total, use chunk index to get more]`;
+        chunks[0] +
+        `\n\n// [${chunks.length} chunks total, use chunk index to get more]`;
 
       // Calculate token savings from chunking (only returning first chunk)
       const firstChunkTokens = this.tokenCounter.count(finalContent).tokens;
       tokensSaved = originalTokens - firstChunkTokens;
     }
     if (enableCache && !fromCache) {
-      const compressed = compress(rawContent, "gzip");
-      this.cache.set(cacheKey, compressed.toString(), tokensSaved, ttl);
+      cacheSet(this.cache, cacheKey, rawContent);
     }
 
     // Calculate final metrics
@@ -228,7 +239,7 @@ export class SmartReadTool {
 
     // Record metrics
     this.metrics.record({
-      operation: "smart_read",
+      operation: 'smart_read',
       duration: Date.now() - startTime,
       success: true,
       cacheHit: fromCache,
@@ -271,12 +282,16 @@ export class SmartReadTool {
   /**
    * Read a specific chunk from a chunked file
    */
-  async readChunk(filePath: string, chunkIndex: number, chunkSize: number = 4000): Promise<string> {
+  async readChunk(
+    filePath: string,
+    chunkIndex: number,
+    chunkSize: number = 4000
+  ): Promise<string> {
     if (!existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
     }
 
-    const content = readFileSync(filePath, "utf-8");
+    const content = readFileSync(filePath, 'utf-8');
     const chunkResult = chunkBySyntax(content, chunkSize);
 
     if (chunkIndex < 0 || chunkIndex >= chunkResult.chunks.length) {
@@ -291,7 +306,7 @@ export class SmartReadTool {
   /**
    * Get file metadata without reading content (minimal tokens)
    */
-  async getMetadata(filePath: string): Promise<SmartReadResult["metadata"]> {
+  async getMetadata(filePath: string): Promise<SmartReadResult['metadata']> {
     if (!existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
     }
@@ -303,7 +318,7 @@ export class SmartReadTool {
     return {
       path: filePath,
       size: stats.size,
-      encoding: "utf-8",
+      encoding: 'utf-8',
       fileType,
       hash: fileHash,
       fromCache: false,
@@ -339,7 +354,7 @@ export async function runSmartRead(
   filePath: string,
   options: SmartReadOptions = {}
 ): Promise<SmartReadResult> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -349,36 +364,38 @@ export async function runSmartRead(
 
 // MCP Tool definition
 export const SMART_READ_TOOL_DEFINITION = {
-  name: "smart_read",
+  name: 'smart_read',
   description:
-    "Read files with 80% token reduction through intelligent caching, diff-based updates, and syntax-aware optimization",
+    'Read files with 80% token reduction through intelligent caching, diff-based updates, and syntax-aware optimization',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       path: {
-        type: "string",
-        description: "Path to the file to read",
+        type: 'string',
+        description: 'Path to the file to read',
       },
       diffMode: {
-        type: "boolean",
-        description: "Return only diff if file was previously read (default: true)",
+        type: 'boolean',
+        description:
+          'Return only diff if file was previously read (default: true)',
         default: true,
       },
       maxSize: {
-        type: "number",
-        description: "Maximum content size to return in bytes (default: 100000)",
+        type: 'number',
+        description:
+          'Maximum content size to return in bytes (default: 100000)',
         default: 100000,
       },
       chunkSize: {
-        type: "number",
-        description: "Size of chunks for large files (default: 4000)",
+        type: 'number',
+        description: 'Size of chunks for large files (default: 4000)',
         default: 4000,
       },
       chunkIndex: {
-        type: "number",
-        description: "For chunked files, the chunk index to retrieve",
+        type: 'number',
+        description: 'For chunked files, the chunk index to retrieve',
       },
     },
-    required: ["path"],
+    required: ['path'],
   },
 };

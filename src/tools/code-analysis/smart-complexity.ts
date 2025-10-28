@@ -6,14 +6,14 @@
  * Target: 70-80% token reduction through metric summarization
  */
 
-import * as ts from "typescript";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
-import { createHash } from "crypto";
-import { CacheEngine } from "../../core/cache-engine";
-import { MetricsCollector } from "../../core/metrics";
-import { TokenCounter } from "../../core/token-counter";
+import * as ts from 'typescript';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import { createHash } from 'crypto';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
 
 export interface SmartComplexityOptions {
   filePath?: string;
@@ -68,7 +68,7 @@ export interface SmartComplexityResult {
     maxComplexity: number;
     functionsAboveThreshold: number;
     totalFunctions: number;
-    riskLevel: "low" | "medium" | "high" | "critical";
+    riskLevel: 'low' | 'medium' | 'high' | 'critical';
     fromCache: boolean;
     duration: number;
   };
@@ -86,14 +86,14 @@ export class SmartComplexityTool {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
   private tokenCounter: TokenCounter;
-  private cacheNamespace = "smart_complexity";
+  private cacheNamespace = 'smart_complexity';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
     metrics: MetricsCollector,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -102,7 +102,7 @@ export class SmartComplexityTool {
   }
 
   async run(
-    options: SmartComplexityOptions = {},
+    options: SmartComplexityOptions = {}
   ): Promise<SmartComplexityResult> {
     const startTime = Date.now();
     const {
@@ -117,7 +117,7 @@ export class SmartComplexityTool {
     } = options;
 
     if (!filePath && !fileContent) {
-      throw new Error("Either filePath or fileContent must be provided");
+      throw new Error('Either filePath or fileContent must be provided');
     }
 
     // Read file content
@@ -131,16 +131,16 @@ export class SmartComplexityTool {
       if (!existsSync(absolutePath)) {
         throw new Error(`File not found: ${absolutePath}`);
       }
-      content = readFileSync(absolutePath, "utf-8");
+      content = readFileSync(absolutePath, 'utf-8');
     } else {
-      throw new Error("No content provided");
+      throw new Error('No content provided');
     }
 
     // Generate cache key
     const cacheKey = await this.generateCacheKey(
       content,
       includeHalstead,
-      includeMaintainability,
+      includeMaintainability
     );
 
     // Check cache
@@ -148,7 +148,7 @@ export class SmartComplexityTool {
       const cached = this.getCachedResult(cacheKey, maxCacheAge);
       if (cached) {
         this.metrics.record({
-          operation: "smart_complexity",
+          operation: 'smart_complexity',
           duration: Date.now() - startTime,
           cacheHit: true,
           inputTokens: cached.metrics.originalTokens,
@@ -161,10 +161,10 @@ export class SmartComplexityTool {
 
     // Parse TypeScript/JavaScript
     const sourceFile = ts.createSourceFile(
-      filePath || "anonymous.ts",
+      filePath || 'anonymous.ts',
       content,
       ts.ScriptTarget.Latest,
-      true,
+      true
     );
 
     // Calculate metrics
@@ -172,25 +172,25 @@ export class SmartComplexityTool {
       sourceFile,
       threshold,
       includeHalstead,
-      includeMaintainability,
+      includeMaintainability
     );
     const fileMetrics = this.calculateFileMetrics(
       sourceFile,
       includeHalstead,
-      includeMaintainability,
+      includeMaintainability
     );
 
     // Generate recommendations
     const recommendations = this.generateRecommendations(
       functions,
       fileMetrics,
-      threshold,
+      threshold
     );
 
     // Calculate summary statistics
     const totalFunctions = functions.length;
     const functionsAboveThreshold = functions.filter(
-      (f) => f.aboveThreshold,
+      (f) => f.aboveThreshold
     ).length;
     const avgComplexity =
       totalFunctions > 0
@@ -208,7 +208,7 @@ export class SmartComplexityTool {
     // Build result
     const result: SmartComplexityResult = {
       summary: {
-        file: filePath || "anonymous",
+        file: filePath || 'anonymous',
         totalComplexity: fileMetrics,
         averageComplexity: avgComplexity,
         maxComplexity,
@@ -245,7 +245,7 @@ export class SmartComplexityTool {
 
     // Record metrics
     this.metrics.record({
-      operation: "smart_complexity",
+      operation: 'smart_complexity',
       duration: Date.now() - startTime,
       cacheHit: false,
       inputTokens: result.metrics.originalTokens,
@@ -260,7 +260,7 @@ export class SmartComplexityTool {
     sourceFile: ts.SourceFile,
     threshold: { cyclomatic?: number; cognitive?: number },
     includeHalstead: boolean,
-    includeMaintainability: boolean,
+    includeMaintainability: boolean
   ): FunctionComplexity[] {
     const functions: FunctionComplexity[] = [];
 
@@ -277,7 +277,7 @@ export class SmartComplexityTool {
           node,
           sourceFile,
           includeHalstead,
-          includeMaintainability,
+          includeMaintainability
         );
 
         const aboveThreshold =
@@ -311,14 +311,14 @@ export class SmartComplexityTool {
     if (ts.isFunctionExpression(node) && node.name) {
       return node.name.text;
     }
-    return "<anonymous>";
+    return '<anonymous>';
   }
 
   private calculateComplexity(
     node: ts.Node,
     sourceFile: ts.SourceFile,
     includeHalstead: boolean,
-    includeMaintainability: boolean,
+    includeMaintainability: boolean
   ): ComplexityMetrics {
     const cyclomatic = this.calculateCyclomaticComplexity(node);
     const cognitive = this.calculateCognitiveComplexity(node, 0);
@@ -339,7 +339,7 @@ export class SmartComplexityTool {
       metrics.maintainabilityIndex = this.calculateMaintainabilityIndex(
         metrics.halstead,
         cyclomatic,
-        lloc,
+        lloc
       );
     }
 
@@ -385,7 +385,7 @@ export class SmartComplexityTool {
 
   private calculateCognitiveComplexity(
     node: ts.Node,
-    nestingLevel: number,
+    nestingLevel: number
   ): number {
     let complexity = 0;
 
@@ -466,12 +466,12 @@ export class SmartComplexityTool {
       }
 
       if (ts.isCallExpression(n) || ts.isNewExpression(n)) {
-        operators.add("()");
+        operators.add('()');
         totalOperators++;
       }
 
       if (ts.isPropertyAccessExpression(n)) {
-        operators.add(".");
+        operators.add('.');
         totalOperators++;
       }
 
@@ -524,7 +524,7 @@ export class SmartComplexityTool {
   private calculateMaintainabilityIndex(
     halstead: HalsteadMetrics,
     cyclomatic: number,
-    lloc: number,
+    lloc: number
   ): number {
     // Microsoft's Maintainability Index formula
     // MI = 171 - 5.2 * ln(V) - 0.23 * G - 16.2 * ln(LOC)
@@ -543,10 +543,10 @@ export class SmartComplexityTool {
 
   private countLines(
     node: ts.Node,
-    sourceFile: ts.SourceFile,
+    sourceFile: ts.SourceFile
   ): { loc: number; lloc: number } {
     const text = node.getText(sourceFile);
-    const lines = text.split("\n");
+    const lines = text.split('\n');
     const loc = lines.length;
 
     // Count logical lines (non-empty, non-comment lines)
@@ -555,9 +555,9 @@ export class SmartComplexityTool {
       const trimmed = line.trim();
       if (
         trimmed &&
-        !trimmed.startsWith("//") &&
-        !trimmed.startsWith("/*") &&
-        !trimmed.startsWith("*")
+        !trimmed.startsWith('//') &&
+        !trimmed.startsWith('/*') &&
+        !trimmed.startsWith('*')
       ) {
         lloc++;
       }
@@ -569,46 +569,46 @@ export class SmartComplexityTool {
   private calculateFileMetrics(
     sourceFile: ts.SourceFile,
     includeHalstead: boolean,
-    includeMaintainability: boolean,
+    includeMaintainability: boolean
   ): ComplexityMetrics {
     return this.calculateComplexity(
       sourceFile,
       sourceFile,
       includeHalstead,
-      includeMaintainability,
+      includeMaintainability
     );
   }
 
   private generateRecommendations(
     functions: FunctionComplexity[],
     fileMetrics: ComplexityMetrics,
-    threshold: { cyclomatic?: number; cognitive?: number },
+    threshold: { cyclomatic?: number; cognitive?: number }
   ): string[] {
     const recommendations: string[] = [];
 
     // Check for high complexity functions
     const highComplexityFunctions = functions.filter(
-      (f) => f.complexity.cyclomatic > (threshold.cyclomatic || 10),
+      (f) => f.complexity.cyclomatic > (threshold.cyclomatic || 10)
     );
 
     if (highComplexityFunctions.length > 0) {
       recommendations.push(
         `Found ${highComplexityFunctions.length} function(s) with high cyclomatic complexity. Consider breaking down: ${highComplexityFunctions
           .map((f) => f.name)
-          .join(", ")}`,
+          .join(', ')}`
       );
     }
 
     // Check for high cognitive complexity
     const highCognitiveFunctions = functions.filter(
-      (f) => f.complexity.cognitive > (threshold.cognitive || 15),
+      (f) => f.complexity.cognitive > (threshold.cognitive || 15)
     );
 
     if (highCognitiveFunctions.length > 0) {
       recommendations.push(
         `Found ${highCognitiveFunctions.length} function(s) with high cognitive complexity. Simplify logic in: ${highCognitiveFunctions
           .map((f) => f.name)
-          .join(", ")}`,
+          .join(', ')}`
       );
     }
 
@@ -618,26 +618,26 @@ export class SmartComplexityTool {
       fileMetrics.maintainabilityIndex < 20
     ) {
       recommendations.push(
-        "File has low maintainability index (<20). Consider refactoring to improve code quality.",
+        'File has low maintainability index (<20). Consider refactoring to improve code quality.'
       );
     } else if (
       fileMetrics.maintainabilityIndex !== undefined &&
       fileMetrics.maintainabilityIndex < 50
     ) {
       recommendations.push(
-        "File maintainability could be improved. Consider reducing complexity and improving documentation.",
+        'File maintainability could be improved. Consider reducing complexity and improving documentation.'
       );
     }
 
     // Check for very long functions
     const longFunctions = functions.filter(
-      (f) => f.complexity.linesOfCode > 50,
+      (f) => f.complexity.linesOfCode > 50
     );
     if (longFunctions.length > 0) {
       recommendations.push(
         `Found ${longFunctions.length} function(s) with more than 50 lines. Consider splitting: ${longFunctions
           .map((f) => f.name)
-          .join(", ")}`,
+          .join(', ')}`
       );
     }
 
@@ -646,18 +646,18 @@ export class SmartComplexityTool {
 
   private calculateRiskLevel(
     avgComplexity: number,
-    maxComplexity: number,
-  ): "low" | "medium" | "high" | "critical" {
+    maxComplexity: number
+  ): 'low' | 'medium' | 'high' | 'critical' {
     if (maxComplexity > 30 || avgComplexity > 20) {
-      return "critical";
+      return 'critical';
     }
     if (maxComplexity > 20 || avgComplexity > 15) {
-      return "high";
+      return 'high';
     }
     if (maxComplexity > 10 || avgComplexity > 10) {
-      return "medium";
+      return 'medium';
     }
-    return "low";
+    return 'low';
   }
 
   private compactResult(result: SmartComplexityResult): string {
@@ -688,18 +688,18 @@ export class SmartComplexityTool {
   private async generateCacheKey(
     content: string,
     includeHalstead: boolean,
-    includeMaintainability: boolean,
+    includeMaintainability: boolean
   ): Promise<string> {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(this.cacheNamespace);
     hash.update(content);
     hash.update(JSON.stringify({ includeHalstead, includeMaintainability }));
-    return `${this.cacheNamespace}:${hash.digest("hex")}`;
+    return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
   private getCachedResult(
     key: string,
-    maxAge: number,
+    maxAge: number
   ): SmartComplexityResult | null {
     const cached = this.cache.get(key);
     if (!cached) return null;
@@ -720,7 +720,7 @@ export class SmartComplexityTool {
   private cacheResult(key: string, output: SmartComplexityResult): void {
     const toCache = { ...output, cachedAt: Date.now() };
     const json = JSON.stringify(toCache);
-    const originalSize = Buffer.byteLength(json, "utf-8");
+    const originalSize = Buffer.byteLength(json, 'utf-8');
     const compressedSize = Math.ceil(originalSize * 0.3); // Estimate compression
     this.cache.set(key, json, originalSize, compressedSize);
   }
@@ -730,7 +730,7 @@ export class SmartComplexityTool {
 export function getSmartComplexityTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartComplexityTool {
   return new SmartComplexityTool(cache, tokenCounter, metrics);
 }
@@ -740,67 +740,67 @@ export async function runSmartComplexity(
   options: SmartComplexityOptions,
   cache?: CacheEngine,
   tokenCounter?: TokenCounter,
-  metrics?: MetricsCollector,
+  metrics?: MetricsCollector
 ): Promise<SmartComplexityResult> {
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metrics || new MetricsCollector();
 
   const tool = getSmartComplexityTool(
     cacheInstance,
     tokenCounterInstance,
-    metricsInstance,
+    metricsInstance
   );
   return tool.run(options);
 }
 
 // MCP tool definition
 export const SMART_COMPLEXITY_TOOL_DEFINITION = {
-  name: "smart_complexity",
+  name: 'smart_complexity',
   description:
-    "Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index (70-80% token reduction)",
+    'Analyze code complexity metrics including cyclomatic, cognitive, Halstead, and maintainability index (70-80% token reduction)',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       filePath: {
-        type: "string",
-        description: "File path to analyze (relative to project root)",
+        type: 'string',
+        description: 'File path to analyze (relative to project root)',
       },
       fileContent: {
-        type: "string",
-        description: "File content to analyze (alternative to filePath)",
+        type: 'string',
+        description: 'File content to analyze (alternative to filePath)',
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       includeHalstead: {
-        type: "boolean",
-        description: "Include Halstead complexity metrics",
+        type: 'boolean',
+        description: 'Include Halstead complexity metrics',
         default: true,
       },
       includeMaintainability: {
-        type: "boolean",
-        description: "Include maintainability index calculation",
+        type: 'boolean',
+        description: 'Include maintainability index calculation',
         default: true,
       },
       threshold: {
-        type: "object",
-        description: "Complexity thresholds for warnings",
+        type: 'object',
+        description: 'Complexity thresholds for warnings',
         properties: {
-          cyclomatic: { type: "number", default: 10 },
-          cognitive: { type: "number", default: 15 },
+          cyclomatic: { type: 'number', default: 10 },
+          cognitive: { type: 'number', default: 15 },
         },
       },
       force: {
-        type: "boolean",
-        description: "Force re-analysis (ignore cache)",
+        type: 'boolean',
+        description: 'Force re-analysis (ignore cache)',
         default: false,
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 300)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 300)',
         default: 300,
       },
     },

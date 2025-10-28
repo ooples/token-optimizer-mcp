@@ -21,25 +21,25 @@
  * 7. stats - Get partition statistics
  */
 
-import { createHash } from "crypto";
-import { EventEmitter } from "events";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
+import { createHash } from 'crypto';
+import { EventEmitter } from 'events';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 
 export interface CachePartitionOptions {
   operation:
-    | "create-partition"
-    | "delete-partition"
-    | "list-partitions"
-    | "migrate"
-    | "rebalance"
-    | "configure-sharding"
-    | "stats";
+    | 'create-partition'
+    | 'delete-partition'
+    | 'list-partitions'
+    | 'migrate'
+    | 'rebalance'
+    | 'configure-sharding'
+    | 'stats';
 
   // Create/Delete
   partitionId?: string;
-  strategy?: "hash" | "range" | "category" | "geographic" | "custom";
+  strategy?: 'hash' | 'range' | 'category' | 'geographic' | 'custom';
 
   // Migration
   sourcePartition?: string;
@@ -47,11 +47,11 @@ export interface CachePartitionOptions {
   keyPattern?: string;
 
   // Rebalancing
-  targetDistribution?: "even" | "weighted" | "capacity-based";
+  targetDistribution?: 'even' | 'weighted' | 'capacity-based';
   maxMigrations?: number;
 
   // Sharding configuration
-  shardingStrategy?: "consistent-hash" | "range" | "custom";
+  shardingStrategy?: 'consistent-hash' | 'range' | 'custom';
   virtualNodes?: number;
   partitionFunction?: string; // JavaScript function
 
@@ -65,8 +65,8 @@ export interface CachePartitionOptions {
 
 export interface PartitionInfo {
   id: string;
-  strategy: "hash" | "range" | "category" | "geographic" | "custom";
-  status: "active" | "migrating" | "draining" | "inactive";
+  strategy: 'hash' | 'range' | 'category' | 'geographic' | 'custom';
+  status: 'active' | 'migrating' | 'draining' | 'inactive';
   keyCount: number;
   memoryUsage: number;
   virtualNodes: number[];
@@ -80,7 +80,7 @@ export interface MigrationPlan {
   targetPartition: string;
   keysToMigrate: string[];
   estimatedDuration: number;
-  status: "pending" | "in-progress" | "completed" | "failed";
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
 }
 
 export interface RebalanceResults {
@@ -91,7 +91,7 @@ export interface RebalanceResults {
 }
 
 export interface ShardingConfig {
-  strategy: "consistent-hash" | "range" | "custom";
+  strategy: 'consistent-hash' | 'range' | 'custom';
   virtualNodesPerPartition: number;
   hashFunction: string;
   partitionFunction?: string;
@@ -188,7 +188,7 @@ export class CachePartitionTool extends EventEmitter {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     super();
     this.cache = cache;
@@ -202,9 +202,9 @@ export class CachePartitionTool extends EventEmitter {
 
     // Default sharding configuration
     this.shardingConfig = {
-      strategy: "consistent-hash",
+      strategy: 'consistent-hash',
       virtualNodesPerPartition: 150,
-      hashFunction: "sha256",
+      hashFunction: 'sha256',
       replicationFactor: 3,
     };
 
@@ -235,7 +235,7 @@ export class CachePartitionTool extends EventEmitter {
       if (cached) {
         const cachedResult = JSON.parse(cached);
         const tokensSaved = this.tokenCounter.count(
-          JSON.stringify(cachedResult),
+          JSON.stringify(cachedResult)
         ).tokens;
 
         return {
@@ -253,29 +253,29 @@ export class CachePartitionTool extends EventEmitter {
     }
 
     // Execute operation
-    let data: CachePartitionResult["data"];
+    let data: CachePartitionResult['data'];
 
     try {
       switch (operation) {
-        case "create-partition":
+        case 'create-partition':
           data = await this.createPartition(options);
           break;
-        case "delete-partition":
+        case 'delete-partition':
           data = await this.deletePartition(options);
           break;
-        case "list-partitions":
+        case 'list-partitions':
           data = await this.listPartitions(options);
           break;
-        case "migrate":
+        case 'migrate':
           data = await this.migrate(options);
           break;
-        case "rebalance":
+        case 'rebalance':
           data = await this.rebalance(options);
           break;
-        case "configure-sharding":
+        case 'configure-sharding':
           data = await this.configureSharding(options);
           break;
-        case "stats":
+        case 'stats':
           data = await this.getStatistics(options);
           break;
         default:
@@ -286,12 +286,7 @@ export class CachePartitionTool extends EventEmitter {
       const tokensUsedResult = this.tokenCounter.count(JSON.stringify(data));
       const tokensUsed = tokensUsedResult.tokens;
       if (cacheKey && useCache) {
-        this.cache.set(
-          cacheKey,
-          JSON.stringify(data),
-          cacheTTL,
-          tokensUsed,
-        );
+        this.cache.set(cacheKey, JSON.stringify(data), cacheTTL, tokensUsed);
       }
 
       // Record metrics
@@ -342,12 +337,12 @@ export class CachePartitionTool extends EventEmitter {
    * Create a new cache partition
    */
   private async createPartition(
-    options: CachePartitionOptions,
-  ): Promise<CachePartitionResult["data"]> {
-    const { partitionId, strategy = "hash" } = options;
+    options: CachePartitionOptions
+  ): Promise<CachePartitionResult['data']> {
+    const { partitionId, strategy = 'hash' } = options;
 
     if (!partitionId) {
-      throw new Error("partitionId is required for create-partition operation");
+      throw new Error('partitionId is required for create-partition operation');
     }
 
     if (this.partitions.has(partitionId)) {
@@ -358,7 +353,7 @@ export class CachePartitionTool extends EventEmitter {
     const partition: PartitionInfo = {
       id: partitionId,
       strategy,
-      status: "active",
+      status: 'active',
       keyCount: 0,
       memoryUsage: 0,
       virtualNodes: [],
@@ -392,7 +387,7 @@ export class CachePartitionTool extends EventEmitter {
       evictions: 0,
     });
 
-    this.emit("partition-created", { partitionId, strategy });
+    this.emit('partition-created', { partitionId, strategy });
 
     return { partition };
   }
@@ -401,12 +396,12 @@ export class CachePartitionTool extends EventEmitter {
    * Delete a cache partition
    */
   private async deletePartition(
-    options: CachePartitionOptions,
-  ): Promise<CachePartitionResult["data"]> {
+    options: CachePartitionOptions
+  ): Promise<CachePartitionResult['data']> {
     const { partitionId } = options;
 
     if (!partitionId) {
-      throw new Error("partitionId is required for delete-partition operation");
+      throw new Error('partitionId is required for delete-partition operation');
     }
 
     const partition = this.partitions.get(partitionId);
@@ -415,7 +410,7 @@ export class CachePartitionTool extends EventEmitter {
     }
 
     // Mark partition as draining
-    partition.status = "draining";
+    partition.status = 'draining';
 
     // Remove virtual nodes from hash ring
     this.removeVirtualNodesFromRing(partitionId);
@@ -433,7 +428,7 @@ export class CachePartitionTool extends EventEmitter {
     this.hashRing.partitions.delete(partitionId);
     this.partitionMetrics.delete(partitionId);
 
-    this.emit("partition-deleted", { partitionId });
+    this.emit('partition-deleted', { partitionId });
 
     return { partition };
   }
@@ -442,8 +437,8 @@ export class CachePartitionTool extends EventEmitter {
    * List all partitions
    */
   private async listPartitions(
-    _options: CachePartitionOptions,
-  ): Promise<CachePartitionResult["data"]> {
+    _options: CachePartitionOptions
+  ): Promise<CachePartitionResult['data']> {
     const partitions = Array.from(this.partitions.values()).map((p) => ({
       ...p,
       virtualNodes: p.virtualNodes.slice(0, 10), // Truncate for token efficiency
@@ -456,13 +451,13 @@ export class CachePartitionTool extends EventEmitter {
    * Migrate keys between partitions
    */
   private async migrate(
-    options: CachePartitionOptions,
-  ): Promise<CachePartitionResult["data"]> {
+    options: CachePartitionOptions
+  ): Promise<CachePartitionResult['data']> {
     const { sourcePartition, targetPartition, keyPattern } = options;
 
     if (!sourcePartition || !targetPartition) {
       throw new Error(
-        "sourcePartition and targetPartition are required for migrate operation",
+        'sourcePartition and targetPartition are required for migrate operation'
       );
     }
 
@@ -470,7 +465,7 @@ export class CachePartitionTool extends EventEmitter {
     const targetStore = this.partitionStores.get(targetPartition);
 
     if (!sourceStore || !targetStore) {
-      throw new Error("Source or target partition not found");
+      throw new Error('Source or target partition not found');
     }
 
     // Determine keys to migrate
@@ -478,7 +473,7 @@ export class CachePartitionTool extends EventEmitter {
     if (keyPattern) {
       const pattern = new RegExp(keyPattern);
       keysToMigrate = Array.from(sourceStore.keys).filter((key) =>
-        pattern.test(key),
+        pattern.test(key)
       );
     } else {
       keysToMigrate = Array.from(sourceStore.keys);
@@ -491,15 +486,15 @@ export class CachePartitionTool extends EventEmitter {
       targetPartition,
       keysToMigrate,
       estimatedDuration: keysToMigrate.length * 10, // 10ms per key estimate
-      status: "pending",
+      status: 'pending',
     };
 
     this.activeMigrations.set(migrationId, migrationPlan);
 
     // Perform migration asynchronously
     this.performMigration(migrationId, migrationPlan).catch((error) => {
-      console.error("Migration failed:", error);
-      migrationPlan.status = "failed";
+      console.error('Migration failed:', error);
+      migrationPlan.status = 'failed';
     });
 
     return { migrationPlan };
@@ -509,9 +504,9 @@ export class CachePartitionTool extends EventEmitter {
    * Rebalance partitions
    */
   private async rebalance(
-    options: CachePartitionOptions,
-  ): Promise<CachePartitionResult["data"]> {
-    const { targetDistribution = "even", maxMigrations = 1000 } = options;
+    options: CachePartitionOptions
+  ): Promise<CachePartitionResult['data']> {
+    const { targetDistribution = 'even', maxMigrations = 1000 } = options;
 
     const startTime = Date.now();
     let migrationsPerformed = 0;
@@ -523,14 +518,14 @@ export class CachePartitionTool extends EventEmitter {
     // Determine target distribution
     const targetDist = this.calculateTargetDistribution(
       targetDistribution,
-      currentDistribution,
+      currentDistribution
     );
 
     // Plan migrations
     const migrations = this.planRebalanceMigrations(
       currentDistribution,
       targetDist,
-      maxMigrations,
+      maxMigrations
     );
 
     // Execute migrations
@@ -540,7 +535,7 @@ export class CachePartitionTool extends EventEmitter {
         migrationsPerformed++;
         keysMoved += migration.keyCount;
       } catch (error) {
-        console.error("Migration failed:", error);
+        console.error('Migration failed:', error);
       }
     }
 
@@ -554,7 +549,7 @@ export class CachePartitionTool extends EventEmitter {
       duration: Date.now() - startTime,
     };
 
-    this.emit("rebalance-completed", rebalanceResults);
+    this.emit('rebalance-completed', rebalanceResults);
 
     return { rebalanceResults };
   }
@@ -563,8 +558,8 @@ export class CachePartitionTool extends EventEmitter {
    * Configure sharding strategy
    */
   private async configureSharding(
-    options: CachePartitionOptions,
-  ): Promise<CachePartitionResult["data"]> {
+    options: CachePartitionOptions
+  ): Promise<CachePartitionResult['data']> {
     const { shardingStrategy, virtualNodes, partitionFunction } = options;
 
     if (shardingStrategy) {
@@ -581,7 +576,7 @@ export class CachePartitionTool extends EventEmitter {
       this.shardingConfig.partitionFunction = partitionFunction;
     }
 
-    this.emit("sharding-configured", this.shardingConfig);
+    this.emit('sharding-configured', this.shardingConfig);
 
     return { shardingConfig: { ...this.shardingConfig } };
   }
@@ -590,8 +585,8 @@ export class CachePartitionTool extends EventEmitter {
    * Get partition statistics
    */
   private async getStatistics(
-    options: CachePartitionOptions,
-  ): Promise<CachePartitionResult["data"]> {
+    options: CachePartitionOptions
+  ): Promise<CachePartitionResult['data']> {
     const { includeKeyDistribution = true, includeMemoryUsage = true } =
       options;
 
@@ -599,10 +594,10 @@ export class CachePartitionTool extends EventEmitter {
     let totalKeys = 0;
     let totalMemory = 0;
 
-    const partitionDetails: PartitionStatistics["partitionDetails"] = {};
+    const partitionDetails: PartitionStatistics['partitionDetails'] = {};
 
     for (const [partitionId, store] of Array.from(
-      this.partitionStores.entries(),
+      this.partitionStores.entries()
     )) {
       const metrics = this.partitionMetrics.get(partitionId);
       const totalAccesses = metrics ? metrics.hits + metrics.misses : 0;
@@ -629,11 +624,11 @@ export class CachePartitionTool extends EventEmitter {
 
     // Calculate load imbalance (coefficient of variation)
     const keyCounts = Array.from(this.partitionStores.values()).map(
-      (s) => s.keys.size,
+      (s) => s.keys.size
     );
     const loadImbalance = this.calculateLoadImbalance(
       keyCounts,
-      averageKeysPerPartition,
+      averageKeysPerPartition
     );
 
     // Detect hot partitions (>2x average load)
@@ -687,7 +682,7 @@ export class CachePartitionTool extends EventEmitter {
    */
   private removeVirtualNodesFromRing(partitionId: string): void {
     this.hashRing.nodes = this.hashRing.nodes.filter(
-      (node) => node.partitionId !== partitionId,
+      (node) => node.partitionId !== partitionId
     );
   }
 
@@ -698,7 +693,7 @@ export class CachePartitionTool extends EventEmitter {
     const hashFunction = this.shardingConfig.hashFunction;
     const input = `${partitionId}:vnode:${index}`;
 
-    const hash = createHash(hashFunction as "sha256")
+    const hash = createHash(hashFunction as 'sha256')
       .update(input)
       .digest();
 
@@ -712,7 +707,7 @@ export class CachePartitionTool extends EventEmitter {
   private hashKey(key: string): number {
     const hashFunction = this.shardingConfig.hashFunction;
 
-    const hash = createHash(hashFunction as "sha256")
+    const hash = createHash(hashFunction as 'sha256')
       .update(key)
       .digest();
 
@@ -752,15 +747,15 @@ export class CachePartitionTool extends EventEmitter {
    */
   private async performMigration(
     migrationId: string,
-    plan: MigrationPlan,
+    plan: MigrationPlan
   ): Promise<void> {
-    plan.status = "in-progress";
+    plan.status = 'in-progress';
 
     const sourceStore = this.partitionStores.get(plan.sourcePartition);
     const targetStore = this.partitionStores.get(plan.targetPartition);
 
     if (!sourceStore || !targetStore) {
-      throw new Error("Source or target partition store not found");
+      throw new Error('Source or target partition store not found');
     }
 
     for (const key of plan.keysToMigrate) {
@@ -792,7 +787,7 @@ export class CachePartitionTool extends EventEmitter {
       }
     }
 
-    plan.status = "completed";
+    plan.status = 'completed';
     this.activeMigrations.delete(migrationId);
   }
 
@@ -803,7 +798,7 @@ export class CachePartitionTool extends EventEmitter {
     const distribution: Record<string, number> = {};
 
     for (const [partitionId, store] of Array.from(
-      this.partitionStores.entries(),
+      this.partitionStores.entries()
     )) {
       distribution[partitionId] = store.keys.size;
     }
@@ -815,16 +810,16 @@ export class CachePartitionTool extends EventEmitter {
    * Calculate target distribution
    */
   private calculateTargetDistribution(
-    strategy: "even" | "weighted" | "capacity-based",
-    current: Record<string, number>,
+    strategy: 'even' | 'weighted' | 'capacity-based',
+    current: Record<string, number>
   ): Record<string, number> {
     const totalKeys = Object.values(current).reduce(
       (sum, count) => sum + count,
-      0,
+      0
     );
     const partitionCount = Object.keys(current).length;
 
-    if (strategy === "even") {
+    if (strategy === 'even') {
       const targetPerPartition = Math.floor(totalKeys / partitionCount);
       const target: Record<string, number> = {};
 
@@ -846,7 +841,7 @@ export class CachePartitionTool extends EventEmitter {
   private planRebalanceMigrations(
     current: Record<string, number>,
     target: Record<string, number>,
-    maxMigrations: number,
+    maxMigrations: number
   ): Array<{ source: string; target: string; keyCount: number }> {
     const migrations: Array<{
       source: string;
@@ -916,13 +911,13 @@ export class CachePartitionTool extends EventEmitter {
     const targetStore = this.partitionStores.get(migration.target);
 
     if (!sourceStore || !targetStore) {
-      throw new Error("Source or target partition not found");
+      throw new Error('Source or target partition not found');
     }
 
     // Move keys
     const keysToMove = Array.from(sourceStore.keys).slice(
       0,
-      migration.keyCount,
+      migration.keyCount
     );
 
     for (const key of keysToMove) {
@@ -980,7 +975,7 @@ export class CachePartitionTool extends EventEmitter {
 
     // Re-add all partitions
     for (const [partitionId, partition] of Array.from(
-      this.partitions.entries(),
+      this.partitions.entries()
     )) {
       const virtualNodeIds = this.addVirtualNodesToRing(partitionId);
       partition.virtualNodes = virtualNodeIds;
@@ -991,8 +986,8 @@ export class CachePartitionTool extends EventEmitter {
    * Determine if operation is cacheable
    */
   private isCacheableOperation(operation: string): boolean {
-    return ["list-partitions", "stats", "configure-sharding"].includes(
-      operation,
+    return ['list-partitions', 'stats', 'configure-sharding'].includes(
+      operation
     );
   }
 
@@ -1000,19 +995,19 @@ export class CachePartitionTool extends EventEmitter {
    * Get cache key parameters for operation
    */
   private getCacheKeyParams(
-    options: CachePartitionOptions,
+    options: CachePartitionOptions
   ): Record<string, unknown> {
     const { operation } = options;
 
     switch (operation) {
-      case "list-partitions":
+      case 'list-partitions':
         return {};
-      case "stats":
+      case 'stats':
         return {
           includeKeyDistribution: options.includeKeyDistribution,
           includeMemoryUsage: options.includeMemoryUsage,
         };
-      case "configure-sharding":
+      case 'configure-sharding':
         return {};
       default:
         return {};
@@ -1038,7 +1033,7 @@ export class CachePartitionTool extends EventEmitter {
    */
   async splitPartition(
     partitionId: string,
-    targetCount: number = 2,
+    targetCount: number = 2
   ): Promise<string[]> {
     const partition = this.partitions.get(partitionId);
     if (!partition) {
@@ -1055,7 +1050,7 @@ export class CachePartitionTool extends EventEmitter {
     for (let i = 0; i < targetCount; i++) {
       const newId = `${partitionId}-split-${i}`;
       await this.createPartition({
-        operation: "create-partition",
+        operation: 'create-partition',
         partitionId: newId,
         strategy: partition.strategy,
       });
@@ -1076,7 +1071,7 @@ export class CachePartitionTool extends EventEmitter {
         targetPartition: newPartitionIds[i],
         keysToMigrate,
         estimatedDuration: keysToMigrate.length * 10,
-        status: "pending",
+        status: 'pending',
       };
 
       await this.performMigration(`split-${i}`, migrationPlan);
@@ -1084,11 +1079,11 @@ export class CachePartitionTool extends EventEmitter {
 
     // Delete original partition
     await this.deletePartition({
-      operation: "delete-partition",
+      operation: 'delete-partition',
       partitionId,
     });
 
-    this.emit("partition-split", {
+    this.emit('partition-split', {
       original: partitionId,
       new: newPartitionIds,
     });
@@ -1111,7 +1106,7 @@ export class CachePartitionTool extends EventEmitter {
     if (!partition || !store || !metrics) {
       return {
         healthy: false,
-        issues: ["Partition not found"],
+        issues: ['Partition not found'],
         recommendations: [],
       };
     }
@@ -1126,8 +1121,8 @@ export class CachePartitionTool extends EventEmitter {
       Object.keys(stats).length;
 
     if (store.keys.size > average * 2) {
-      issues.push("Partition is overloaded (2x average)");
-      recommendations.push("Consider splitting this partition");
+      issues.push('Partition is overloaded (2x average)');
+      recommendations.push('Consider splitting this partition');
     }
 
     // Check hit rate
@@ -1135,8 +1130,8 @@ export class CachePartitionTool extends EventEmitter {
     const hitRate = totalAccesses > 0 ? metrics.hits / totalAccesses : 0;
 
     if (hitRate < 0.5 && totalAccesses > 100) {
-      issues.push("Low cache hit rate (<50%)");
-      recommendations.push("Review caching strategy or TTL settings");
+      issues.push('Low cache hit rate (<50%)');
+      recommendations.push('Review caching strategy or TTL settings');
     }
 
     // Check eviction rate
@@ -1144,9 +1139,9 @@ export class CachePartitionTool extends EventEmitter {
       store.keys.size > 0 ? metrics.evictions / store.keys.size : 0;
 
     if (evictionRate > 0.5) {
-      issues.push("High eviction rate (>50%)");
+      issues.push('High eviction rate (>50%)');
       recommendations.push(
-        "Increase partition capacity or review eviction policy",
+        'Increase partition capacity or review eviction policy'
       );
     }
 
@@ -1221,7 +1216,7 @@ export class CachePartitionTool extends EventEmitter {
       });
     }
 
-    this.emit("configuration-imported", {
+    this.emit('configuration-imported', {
       partitionCount: config.partitions.length,
     });
   }
@@ -1231,14 +1226,14 @@ export class CachePartitionTool extends EventEmitter {
    */
   async mergePartitions(
     partitionIds: string[],
-    targetId: string,
+    targetId: string
   ): Promise<{
     mergedPartition: PartitionInfo;
     keysMerged: number;
     deletedPartitions: string[];
   }> {
     if (partitionIds.length < 2) {
-      throw new Error("At least 2 partitions required for merge");
+      throw new Error('At least 2 partitions required for merge');
     }
 
     // Validate all partitions exist
@@ -1251,7 +1246,7 @@ export class CachePartitionTool extends EventEmitter {
     // Create target partition if it doesn't exist
     if (!this.partitions.has(targetId)) {
       await this.createPartition({
-        operation: "create-partition",
+        operation: 'create-partition',
         partitionId: targetId,
         strategy: this.partitions.get(partitionIds[0])!.strategy,
       });
@@ -1273,7 +1268,7 @@ export class CachePartitionTool extends EventEmitter {
         targetPartition: targetId,
         keysToMigrate: keys,
         estimatedDuration: keys.length * 10,
-        status: "pending",
+        status: 'pending',
       };
 
       await this.performMigration(`merge-${sourceId}`, migrationPlan);
@@ -1285,7 +1280,7 @@ export class CachePartitionTool extends EventEmitter {
     for (const sourceId of partitionIds) {
       if (sourceId !== targetId) {
         await this.deletePartition({
-          operation: "delete-partition",
+          operation: 'delete-partition',
           partitionId: sourceId,
         });
         deletedPartitions.push(sourceId);
@@ -1294,7 +1289,7 @@ export class CachePartitionTool extends EventEmitter {
 
     const mergedPartition = this.partitions.get(targetId)!;
 
-    this.emit("partitions-merged", {
+    this.emit('partitions-merged', {
       source: partitionIds,
       target: targetId,
       keysMerged,
@@ -1315,7 +1310,7 @@ export class CachePartitionTool extends EventEmitter {
     options?: {
       preferLocal?: boolean;
       replicationFactor?: number;
-    },
+    }
   ): {
     primaryPartition: string;
     replicaPartitions: string[];
@@ -1326,7 +1321,7 @@ export class CachePartitionTool extends EventEmitter {
     const primaryPartition = this.getPartitionForKey(key);
 
     if (!primaryPartition) {
-      throw new Error("No partitions available for routing");
+      throw new Error('No partitions available for routing');
     }
 
     // Find replica partitions using consistent hashing
@@ -1371,7 +1366,7 @@ export class CachePartitionTool extends EventEmitter {
       partitions?: string[];
       parallel?: boolean;
       timeout?: number;
-    },
+    }
   ): Promise<Map<string, T>> {
     const { partitions, parallel = true, timeout = 30000 } = options || {};
 
@@ -1388,7 +1383,7 @@ export class CachePartitionTool extends EventEmitter {
           const result = await Promise.race([
             operation(partitionId, store),
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("Timeout")), timeout),
+              setTimeout(() => reject(new Error('Timeout')), timeout)
             ),
           ]);
 
@@ -1396,7 +1391,7 @@ export class CachePartitionTool extends EventEmitter {
         } catch (error) {
           console.error(
             `Scatter-gather failed for partition ${partitionId}:`,
-            error,
+            error
           );
         }
       });
@@ -1414,7 +1409,7 @@ export class CachePartitionTool extends EventEmitter {
         } catch (error) {
           console.error(
             `Scatter-gather failed for partition ${partitionId}:`,
-            error,
+            error
           );
         }
       }
@@ -1487,11 +1482,11 @@ export class CachePartitionTool extends EventEmitter {
       // If keys are scattered across partitions, recommend co-location
       if (partitionAssignments.size > 1) {
         // Find partition with most keys in this group
-        let maxPartition = "";
+        let maxPartition = '';
         let maxCount = 0;
 
         for (const [partitionId, partitionKeys] of Array.from(
-          partitionAssignments.entries(),
+          partitionAssignments.entries()
         )) {
           if (partitionKeys.length > maxCount) {
             maxCount = partitionKeys.length;
@@ -1501,7 +1496,7 @@ export class CachePartitionTool extends EventEmitter {
 
         // Recommend migrating other keys to this partition
         for (const [partitionId, partitionKeys] of Array.from(
-          partitionAssignments.entries(),
+          partitionAssignments.entries()
         )) {
           if (partitionId !== maxPartition) {
             recommendedMigrations.push({
@@ -1518,7 +1513,7 @@ export class CachePartitionTool extends EventEmitter {
     // Estimate improvement (network calls saved)
     const estimatedImprovement = recommendedMigrations.reduce(
       (sum, m) => sum + m.keys.length,
-      0,
+      0
     );
 
     return {
@@ -1538,7 +1533,7 @@ export class CachePartitionTool extends EventEmitter {
 
     partition.metadata.ttl = ttl;
 
-    this.emit("partition-ttl-updated", { partitionId, ttl });
+    this.emit('partition-ttl-updated', { partitionId, ttl });
   }
 
   /**
@@ -1546,7 +1541,7 @@ export class CachePartitionTool extends EventEmitter {
    */
   setPartitionEvictionPolicy(
     partitionId: string,
-    policy: "LRU" | "LFU" | "FIFO" | "TTL",
+    policy: 'LRU' | 'LFU' | 'FIFO' | 'TTL'
   ): void {
     const partition = this.partitions.get(partitionId);
     if (!partition) {
@@ -1555,7 +1550,7 @@ export class CachePartitionTool extends EventEmitter {
 
     partition.metadata.evictionPolicy = policy;
 
-    this.emit("partition-eviction-policy-updated", { partitionId, policy });
+    this.emit('partition-eviction-policy-updated', { partitionId, policy });
   }
 
   /**
@@ -1564,7 +1559,7 @@ export class CachePartitionTool extends EventEmitter {
   getTopologyVisualization(): {
     nodes: Array<{
       id: string;
-      type: "partition" | "virtual-node";
+      type: 'partition' | 'virtual-node';
       partitionId: string;
       keyCount: number;
       memoryUsage: number;
@@ -1572,12 +1567,12 @@ export class CachePartitionTool extends EventEmitter {
     edges: Array<{
       from: string;
       to: string;
-      type: "virtual-node" | "migration" | "replication";
+      type: 'virtual-node' | 'migration' | 'replication';
     }>;
   } {
     const nodes: Array<{
       id: string;
-      type: "partition" | "virtual-node";
+      type: 'partition' | 'virtual-node';
       partitionId: string;
       keyCount: number;
       memoryUsage: number;
@@ -1586,16 +1581,16 @@ export class CachePartitionTool extends EventEmitter {
     const edges: Array<{
       from: string;
       to: string;
-      type: "virtual-node" | "migration" | "replication";
+      type: 'virtual-node' | 'migration' | 'replication';
     }> = [];
 
     // Add partition nodes
     for (const [partitionId, partition] of Array.from(
-      this.partitions.entries(),
+      this.partitions.entries()
     )) {
       nodes.push({
         id: partitionId,
-        type: "partition",
+        type: 'partition',
         partitionId,
         keyCount: partition.keyCount,
         memoryUsage: partition.memoryUsage,
@@ -1606,7 +1601,7 @@ export class CachePartitionTool extends EventEmitter {
         const vnodeId = `vnode-${partitionId}-${i}`;
         nodes.push({
           id: vnodeId,
-          type: "virtual-node",
+          type: 'virtual-node',
           partitionId,
           keyCount: 0,
           memoryUsage: 0,
@@ -1615,19 +1610,19 @@ export class CachePartitionTool extends EventEmitter {
         edges.push({
           from: partitionId,
           to: vnodeId,
-          type: "virtual-node",
+          type: 'virtual-node',
         });
       }
     }
 
     // Add active migration edges
     for (const [_migrationId, plan] of Array.from(
-      this.activeMigrations.entries(),
+      this.activeMigrations.entries()
     )) {
       edges.push({
         from: plan.sourcePartition,
         to: plan.targetPartition,
-        type: "migration",
+        type: 'migration',
       });
     }
 
@@ -1706,13 +1701,13 @@ let cachePartitionInstance: CachePartitionTool | null = null;
 export function getCachePartitionTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): CachePartitionTool {
   if (!cachePartitionInstance) {
     cachePartitionInstance = new CachePartitionTool(
       cache,
       tokenCounter,
-      metrics,
+      metrics
     );
   }
   return cachePartitionInstance;
@@ -1720,90 +1715,90 @@ export function getCachePartitionTool(
 
 // MCP Tool Definition
 export const CACHE_PARTITION_TOOL_DEFINITION = {
-  name: "cache_partition",
+  name: 'cache_partition',
   description:
-    "Advanced cache partitioning and sharding with 87%+ token reduction through consistent hashing, automatic rebalancing, and partition isolation",
+    'Advanced cache partitioning and sharding with 87%+ token reduction through consistent hashing, automatic rebalancing, and partition isolation',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "create-partition",
-          "delete-partition",
-          "list-partitions",
-          "migrate",
-          "rebalance",
-          "configure-sharding",
-          "stats",
+          'create-partition',
+          'delete-partition',
+          'list-partitions',
+          'migrate',
+          'rebalance',
+          'configure-sharding',
+          'stats',
         ],
-        description: "The partition operation to perform",
+        description: 'The partition operation to perform',
       },
       partitionId: {
-        type: "string",
+        type: 'string',
         description:
-          "Partition identifier (required for create/delete operations)",
+          'Partition identifier (required for create/delete operations)',
       },
       strategy: {
-        type: "string",
-        enum: ["hash", "range", "category", "geographic", "custom"],
-        description: "Partitioning strategy (default: hash)",
+        type: 'string',
+        enum: ['hash', 'range', 'category', 'geographic', 'custom'],
+        description: 'Partitioning strategy (default: hash)',
       },
       sourcePartition: {
-        type: "string",
-        description: "Source partition for migration",
+        type: 'string',
+        description: 'Source partition for migration',
       },
       targetPartition: {
-        type: "string",
-        description: "Target partition for migration",
+        type: 'string',
+        description: 'Target partition for migration',
       },
       keyPattern: {
-        type: "string",
-        description: "Regex pattern for keys to migrate",
+        type: 'string',
+        description: 'Regex pattern for keys to migrate',
       },
       targetDistribution: {
-        type: "string",
-        enum: ["even", "weighted", "capacity-based"],
+        type: 'string',
+        enum: ['even', 'weighted', 'capacity-based'],
         description:
-          "Target distribution strategy for rebalancing (default: even)",
+          'Target distribution strategy for rebalancing (default: even)',
       },
       maxMigrations: {
-        type: "number",
+        type: 'number',
         description:
-          "Maximum number of migrations during rebalance (default: 1000)",
+          'Maximum number of migrations during rebalance (default: 1000)',
       },
       shardingStrategy: {
-        type: "string",
-        enum: ["consistent-hash", "range", "custom"],
-        description: "Sharding strategy configuration",
+        type: 'string',
+        enum: ['consistent-hash', 'range', 'custom'],
+        description: 'Sharding strategy configuration',
       },
       virtualNodes: {
-        type: "number",
-        description: "Number of virtual nodes per partition (default: 150)",
+        type: 'number',
+        description: 'Number of virtual nodes per partition (default: 150)',
       },
       partitionFunction: {
-        type: "string",
-        description: "Custom partition function (JavaScript code)",
+        type: 'string',
+        description: 'Custom partition function (JavaScript code)',
       },
       includeKeyDistribution: {
-        type: "boolean",
-        description: "Include key distribution in statistics (default: true)",
+        type: 'boolean',
+        description: 'Include key distribution in statistics (default: true)',
       },
       includeMemoryUsage: {
-        type: "boolean",
-        description: "Include memory usage in statistics (default: true)",
+        type: 'boolean',
+        description: 'Include memory usage in statistics (default: true)',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable result caching (default: true)",
+        type: 'boolean',
+        description: 'Enable result caching (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;

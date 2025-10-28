@@ -8,13 +8,13 @@
  * - Anomaly detection
  */
 
-import { exec } from "child_process";
-import { promisify } from "util";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { join } from "path";
-import { homedir } from "os";
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { join } from 'path';
+import { homedir, cpus, totalmem } from 'os';
 
 const execAsync = promisify(exec);
 
@@ -115,8 +115,8 @@ interface SmartProcessesOutput {
    * Anomalies detected
    */
   anomalies: Array<{
-    type: "cpu_spike" | "memory_leak" | "zombie" | "duplicate";
-    severity: "high" | "medium" | "low";
+    type: 'cpu_spike' | 'memory_leak' | 'zombie' | 'duplicate';
+    severity: 'high' | 'medium' | 'low';
     message: string;
     processes: Array<{
       pid: number;
@@ -145,14 +145,14 @@ interface SmartProcessesOutput {
 
 export class SmartProcesses {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_processes";
+  private cacheNamespace = 'smart_processes';
   private platform: NodeJS.Platform;
 
   constructor(
     cache: CacheEngine,
     _tokenCounter: TokenCounter,
     _metrics: MetricsCollector,
-    _projectRoot?: string,
+    _projectRoot?: string
   ) {
     this.cache = cache;
     this.platform = process.platform;
@@ -162,7 +162,7 @@ export class SmartProcesses {
    * Get process information with smart filtering and caching
    */
   async run(
-    options: SmartProcessesOptions = {},
+    options: SmartProcessesOptions = {}
   ): Promise<SmartProcessesOutput> {
     const {
       filter,
@@ -214,8 +214,8 @@ export class SmartProcesses {
       totalMemory,
       systemInfo: {
         platform: this.platform,
-        cpuCount: require("os").cpus().length,
-        totalMemoryMB: Math.round(require("os").totalmem() / 1024 / 1024),
+        cpuCount: cpus().length,
+        totalMemoryMB: Math.round(totalmem() / 1024 / 1024),
       },
     };
   }
@@ -224,7 +224,7 @@ export class SmartProcesses {
    * Get list of running processes
    */
   private async getProcessList(): Promise<ProcessInfo[]> {
-    if (this.platform === "win32") {
+    if (this.platform === 'win32') {
       return this.getWindowsProcesses();
     } else {
       return this.getUnixProcesses();
@@ -237,17 +237,17 @@ export class SmartProcesses {
   private async getWindowsProcesses(): Promise<ProcessInfo[]> {
     try {
       const { stdout } = await execAsync(
-        "wmic process get ProcessId,Name,UserModeTime,WorkingSetSize,CommandLine /format:csv",
-        { maxBuffer: 10 * 1024 * 1024 },
+        'wmic process get ProcessId,Name,UserModeTime,WorkingSetSize,CommandLine /format:csv',
+        { maxBuffer: 10 * 1024 * 1024 }
       );
 
       const processes: ProcessInfo[] = [];
-      const lines = stdout.split("\n").slice(1); // Skip header
+      const lines = stdout.split('\n').slice(1); // Skip header
 
       for (const line of lines) {
         if (!line.trim()) continue;
 
-        const parts = line.split(",");
+        const parts = line.split(',');
         if (parts.length < 5) continue;
 
         const pid = parseInt(parts[3], 10);
@@ -259,17 +259,17 @@ export class SmartProcesses {
 
         processes.push({
           pid,
-          name: name || "Unknown",
+          name: name || 'Unknown',
           cpu: isNaN(cpu) ? 0 : cpu,
           memory,
           command: parts[0] || name,
-          user: "current", // Windows WMIC doesn't easily provide user
+          user: 'current', // Windows WMIC doesn't easily provide user
         });
       }
 
       return processes;
     } catch (err) {
-      console.error("Error getting Windows processes:", err);
+      console.error('Error getting Windows processes:', err);
       return [];
     }
   }
@@ -279,12 +279,12 @@ export class SmartProcesses {
    */
   private async getUnixProcesses(): Promise<ProcessInfo[]> {
     try {
-      const { stdout } = await execAsync("ps aux --no-headers", {
+      const { stdout } = await execAsync('ps aux --no-headers', {
         maxBuffer: 10 * 1024 * 1024,
       });
 
       const processes: ProcessInfo[] = [];
-      const lines = stdout.split("\n");
+      const lines = stdout.split('\n');
 
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -296,13 +296,13 @@ export class SmartProcesses {
         const pid = parseInt(parts[1], 10);
         const cpu = parseFloat(parts[2]);
         const memory = parseFloat(parts[3]);
-        const command = parts.slice(10).join(" ");
-        const name = parts[10].split("/").pop() || "Unknown";
+        const command = parts.slice(10).join(' ');
+        const name = parts[10].split('/').pop() || 'Unknown';
 
         if (isNaN(pid) || isNaN(cpu) || isNaN(memory)) continue;
 
         // Convert memory % to MB
-        const totalMemoryMB = require("os").totalmem() / 1024 / 1024;
+        const totalMemoryMB = totalmem() / 1024 / 1024;
         const memoryMB = (memory / 100) * totalMemoryMB;
 
         processes.push({
@@ -317,7 +317,7 @@ export class SmartProcesses {
 
       return processes;
     } catch (err) {
-      console.error("Error getting Unix processes:", err);
+      console.error('Error getting Unix processes:', err);
       return [];
     }
   }
@@ -332,15 +332,15 @@ export class SmartProcesses {
       cpuThreshold: number;
       memoryThreshold: number;
       includeSystem: boolean;
-    },
+    }
   ): ProcessInfo[] {
     let filtered = processes;
 
     // Filter by name pattern
     if (options.filter) {
-      const pattern = new RegExp(options.filter, "i");
+      const pattern = new RegExp(options.filter, 'i');
       filtered = filtered.filter(
-        (p) => pattern.test(p.name) || pattern.test(p.command),
+        (p) => pattern.test(p.name) || pattern.test(p.command)
       );
     }
 
@@ -354,10 +354,10 @@ export class SmartProcesses {
     if (!options.includeSystem) {
       filtered = filtered.filter(
         (p) =>
-          !p.name.startsWith("System") &&
-          !p.name.startsWith("kernel") &&
-          p.user !== "root" &&
-          p.user !== "SYSTEM",
+          !p.name.startsWith('System') &&
+          !p.name.startsWith('kernel') &&
+          p.user !== 'root' &&
+          p.user !== 'SYSTEM'
       );
     }
 
@@ -395,9 +395,10 @@ export class SmartProcesses {
   private cacheSnapshot(snapshot: ProcessSnapshot): void {
     const key = `${this.cacheNamespace}:snapshot`;
     const dataToCache = JSON.stringify(snapshot);
-    const dataSize = dataToCache.length;
+    const originalSize = this.estimateOriginalOutputSize(snapshot);
+    const compactSize = dataToCache.length;
 
-    this.cache.set(key, dataToCache, dataSize, dataSize);
+    this.cache.set(key, dataToCache, originalSize, compactSize);
   }
 
   /**
@@ -405,16 +406,16 @@ export class SmartProcesses {
    */
   private detectAnomalies(
     processes: ProcessInfo[],
-    previous: ProcessInfo[] | null,
+    previous: ProcessInfo[] | null
   ): Array<{
-    type: "cpu_spike" | "memory_leak" | "zombie" | "duplicate";
-    severity: "high" | "medium" | "low";
+    type: 'cpu_spike' | 'memory_leak' | 'zombie' | 'duplicate';
+    severity: 'high' | 'medium' | 'low';
     message: string;
     processes: Array<{ pid: number; name: string }>;
   }> {
     const anomalies: Array<{
-      type: "cpu_spike" | "memory_leak" | "zombie" | "duplicate";
-      severity: "high" | "medium" | "low";
+      type: 'cpu_spike' | 'memory_leak' | 'zombie' | 'duplicate';
+      severity: 'high' | 'medium' | 'low';
       message: string;
       processes: Array<{ pid: number; name: string }>;
     }> = [];
@@ -423,8 +424,8 @@ export class SmartProcesses {
     const highCpuProcesses = processes.filter((p) => p.cpu > 80);
     if (highCpuProcesses.length > 0) {
       anomalies.push({
-        type: "cpu_spike",
-        severity: "high",
+        type: 'cpu_spike',
+        severity: 'high',
         message: `${highCpuProcesses.length} process(es) consuming >80% CPU`,
         processes: highCpuProcesses.map((p) => ({ pid: p.pid, name: p.name })),
       });
@@ -436,8 +437,8 @@ export class SmartProcesses {
         const prev = previous.find((p) => p.pid === current.pid);
         if (prev && current.memory > prev.memory * 2) {
           anomalies.push({
-            type: "memory_leak",
-            severity: "medium",
+            type: 'memory_leak',
+            severity: 'medium',
             message: `Memory usage doubled for ${current.name}`,
             processes: [{ pid: current.pid, name: current.name }],
           });
@@ -455,8 +456,8 @@ export class SmartProcesses {
       if (count > 5) {
         const duplicates = processes.filter((p) => p.name === name);
         anomalies.push({
-          type: "duplicate",
-          severity: "low",
+          type: 'duplicate',
+          severity: 'low',
           message: `${count} instances of ${name} running`,
           processes: duplicates.map((p) => ({ pid: p.pid, name: p.name })),
         });
@@ -471,7 +472,7 @@ export class SmartProcesses {
    */
   private calculateTrends(
     current: ProcessSnapshot,
-    previous: ProcessSnapshot | null,
+    previous: ProcessSnapshot | null
   ):
     | {
         cpuDelta: number;
@@ -497,7 +498,7 @@ export class SmartProcesses {
     snapshot: ProcessSnapshot,
     filtered: ProcessInfo[],
     previous: ProcessSnapshot | null,
-    limit: number,
+    limit: number
   ): SmartProcessesOutput {
     // Sort by CPU and memory
     const byCpu = [...filtered].sort((a, b) => b.cpu - a.cpu).slice(0, limit);
@@ -508,7 +509,7 @@ export class SmartProcesses {
     // Detect anomalies
     const anomalies = this.detectAnomalies(
       filtered,
-      previous ? previous.processes : null,
+      previous ? previous.processes : null
     );
 
     // Calculate trends
@@ -549,7 +550,7 @@ export class SmartProcesses {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -572,7 +573,7 @@ export class SmartProcesses {
       type: string;
       message: string;
       processes: Array<{ pid: number; name: string }>;
-    }>,
+    }>
   ): number {
     const summary = {
       totalProcesses: filtered.length,
@@ -605,7 +606,7 @@ export function getSmartProcessesTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
   metrics: MetricsCollector,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartProcesses {
   return new SmartProcesses(cache, tokenCounter, metrics, projectRoot);
 }
@@ -614,10 +615,10 @@ export function getSmartProcessesTool(
  * CLI-friendly function for running smart processes
  */
 export async function runSmartProcesses(
-  options: SmartProcessesOptions = {},
+  options: SmartProcessesOptions = {}
 ): Promise<string> {
   const cache = new CacheEngine(
-    join(homedir(), ".token-optimizer-cache", "cache.db"),
+    join(homedir(), '.token-optimizer-cache', 'cache.db')
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
@@ -625,13 +626,13 @@ export async function runSmartProcesses(
     cache,
     tokenCounter,
     metrics,
-    options.projectRoot,
+    options.projectRoot
   );
   try {
     const result = await smartProcesses.run(options);
 
     let output = `\n⚙️  Smart Process Monitor\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
@@ -646,11 +647,11 @@ export async function runSmartProcesses(
       output += `🚨 Anomalies Detected:\n`;
       for (const anomaly of result.anomalies) {
         const severityIcon =
-          anomaly.severity === "high"
-            ? "🔴"
-            : anomaly.severity === "medium"
-              ? "🟡"
-              : "🟢";
+          anomaly.severity === 'high'
+            ? '🔴'
+            : anomaly.severity === 'medium'
+              ? '🟡'
+              : '🟢';
 
         output += `  ${severityIcon} [${anomaly.type}] ${anomaly.message}\n`;
         for (const proc of anomaly.processes.slice(0, 3)) {
@@ -660,7 +661,7 @@ export async function runSmartProcesses(
           output += `    ... and ${anomaly.processes.length - 3} more\n`;
         }
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Top processes by CPU
@@ -669,7 +670,7 @@ export async function runSmartProcesses(
       for (const proc of result.topProcesses.byCpu.slice(0, 5)) {
         output += `  ${proc.cpu.toFixed(1)}% | ${proc.memory.toFixed(0)}MB | ${proc.name} (PID ${proc.pid})\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Top processes by memory
@@ -678,15 +679,15 @@ export async function runSmartProcesses(
       for (const proc of result.topProcesses.byMemory.slice(0, 5)) {
         output += `  ${proc.memory.toFixed(0)}MB | ${proc.cpu.toFixed(1)}% | ${proc.name} (PID ${proc.pid})\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Trends
     if (result.trends) {
       output += `Resource Trends:\n`;
-      output += `  CPU: ${result.trends.cpuDelta > 0 ? "+" : ""}${result.trends.cpuDelta.toFixed(1)}%\n`;
-      output += `  Memory: ${result.trends.memoryDelta > 0 ? "+" : ""}${result.trends.memoryDelta.toFixed(0)}MB\n`;
-      output += `  Process Count: ${result.trends.processCountDelta > 0 ? "+" : ""}${result.trends.processCountDelta}\n\n`;
+      output += `  CPU: ${result.trends.cpuDelta > 0 ? '+' : ''}${result.trends.cpuDelta.toFixed(1)}%\n`;
+      output += `  Memory: ${result.trends.memoryDelta > 0 ? '+' : ''}${result.trends.memoryDelta.toFixed(0)}MB\n`;
+      output += `  Process Count: ${result.trends.processCountDelta > 0 ? '+' : ''}${result.trends.processCountDelta}\n\n`;
     }
 
     // Metrics
@@ -703,41 +704,41 @@ export async function runSmartProcesses(
 
 // MCP Tool definition
 export const SMART_PROCESSES_TOOL_DEFINITION = {
-  name: "smart_processes",
+  name: 'smart_processes',
   description:
-    "Monitor and analyze system processes with anomaly detection and resource tracking",
+    'Monitor and analyze system processes with anomaly detection and resource tracking',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       filter: {
-        type: "string",
-        description: "Filter processes by name pattern",
+        type: 'string',
+        description: 'Filter processes by name pattern',
       },
       cpuThreshold: {
-        type: "number",
-        description: "Show only high CPU usage processes (> threshold %)",
+        type: 'number',
+        description: 'Show only high CPU usage processes (> threshold %)',
       },
       memoryThreshold: {
-        type: "number",
-        description: "Show only high memory usage processes (> threshold MB)",
+        type: 'number',
+        description: 'Show only high memory usage processes (> threshold MB)',
       },
       includeSystem: {
-        type: "boolean",
-        description: "Include system processes",
+        type: 'boolean',
+        description: 'Include system processes',
         default: false,
       },
       limit: {
-        type: "number",
-        description: "Maximum number of processes to show",
+        type: 'number',
+        description: 'Maximum number of processes to show',
         default: 20,
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       compareWithPrevious: {
-        type: "boolean",
-        description: "Compare with previous snapshot",
+        type: 'boolean',
+        description: 'Compare with previous snapshot',
         default: true,
       },
     },

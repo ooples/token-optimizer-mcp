@@ -23,18 +23,18 @@
  * - custom: Domain-specific compression for structured data
  */
 
-import { promisify } from "util";
+import { promisify } from 'util';
 import {
   gzip,
   gunzip,
   brotliCompress,
   brotliDecompress,
   constants,
-} from "zlib";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { generateCacheKey } from "../shared/hash-utils";
-import { MetricsCollector } from "../../core/metrics";
+} from 'zlib';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
+import { MetricsCollector } from '../../core/metrics.js';
 
 // Promisify compression functions
 const gzipAsync = promisify(gzip);
@@ -46,12 +46,12 @@ const brotliDecompressAsync = promisify(brotliDecompress);
  * Compression algorithm types
  */
 export type CompressionAlgorithm =
-  | "gzip"
-  | "brotli"
-  | "lz4"
-  | "zstd"
-  | "snappy"
-  | "custom";
+  | 'gzip'
+  | 'brotli'
+  | 'lz4'
+  | 'zstd'
+  | 'snappy'
+  | 'custom';
 
 /**
  * Compression level (0-9, where 9 is maximum compression)
@@ -62,23 +62,23 @@ export type CompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
  * Data type hints for adaptive compression
  */
 export type DataType =
-  | "json"
-  | "text"
-  | "binary"
-  | "time-series"
-  | "structured"
-  | "auto";
+  | 'json'
+  | 'text'
+  | 'binary'
+  | 'time-series'
+  | 'structured'
+  | 'auto';
 
 /**
  * Compression operation types
  */
 export type CompressionOperation =
-  | "compress"
-  | "decompress"
-  | "analyze"
-  | "optimize"
-  | "benchmark"
-  | "configure";
+  | 'compress'
+  | 'decompress'
+  | 'analyze'
+  | 'optimize'
+  | 'benchmark'
+  | 'configure';
 
 /**
  * Options for cache compression operations
@@ -100,7 +100,7 @@ export interface CacheCompressionOptions {
   // Optimize operation
   targetRatio?: number; // Target compression ratio (0-1)
   maxLatency?: number; // Maximum acceptable latency in ms
-  workloadType?: "read-heavy" | "write-heavy" | "balanced";
+  workloadType?: 'read-heavy' | 'write-heavy' | 'balanced';
 
   // Benchmark operation
   algorithms?: CompressionAlgorithm[];
@@ -229,7 +229,7 @@ export class CacheCompressionTool {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metrics: MetricsCollector,
+    metrics: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -237,15 +237,15 @@ export class CacheCompressionTool {
 
     // Initialize default configuration
     this.config = {
-      defaultAlgorithm: "gzip",
+      defaultAlgorithm: 'gzip',
       defaultLevel: 6,
       autoSelect: true,
       enableDelta: true,
       algorithmOverrides: new Map([
-        ["json", "brotli"],
-        ["text", "gzip"],
-        ["binary", "lz4"],
-        ["time-series", "zstd"],
+        ['json', 'brotli'],
+        ['text', 'gzip'],
+        ['binary', 'lz4'],
+        ['time-series', 'zstd'],
       ]),
     };
   }
@@ -259,21 +259,21 @@ export class CacheCompressionTool {
     try {
       // Try to load optional compression packages
       try {
-        this.lz4Module = await import("lz4" as any);
+        this.lz4Module = await import('lz4' as any);
       } catch {
         // LZ4 not available - will use fallback
       }
 
       try {
         // zstd-codec exports as default
-        const zstdCodec = await import("zstd-codec" as any);
+        const zstdCodec = await import('zstd-codec' as any);
         this.zstdModule = zstdCodec.default || zstdCodec;
       } catch {
         // ZSTD not available - will use fallback
       }
 
       try {
-        this.snappyModule = await import("snappy" as any);
+        this.snappyModule = await import('snappy' as any);
       } catch {
         // Snappy not available - will use fallback
       }
@@ -281,8 +281,8 @@ export class CacheCompressionTool {
       this.packagesLoaded = true;
     } catch (error) {
       console.warn(
-        "[CacheCompression] Optional packages not available:",
-        error,
+        '[CacheCompression] Optional packages not available:',
+        error
       );
       this.packagesLoaded = true; // Mark as loaded even on error to avoid retry
     }
@@ -298,7 +298,7 @@ export class CacheCompressionTool {
     await this.loadPackages();
 
     // Generate cache key for operation
-    const cacheKey = generateCacheKey("compression", {
+    const cacheKey = generateCacheKey('compression', {
       operation: options.operation,
       algorithm: options.algorithm,
       level: options.level,
@@ -308,13 +308,13 @@ export class CacheCompressionTool {
     // Check cache for certain operations
     if (
       options.useCache &&
-      ["analyze", "benchmark", "optimize"].includes(options.operation)
+      ['analyze', 'benchmark', 'optimize'].includes(options.operation)
     ) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
         const cachedResult = JSON.parse(cached);
         const tokenCountResult = this.tokenCounter.count(
-          JSON.stringify(cachedResult),
+          JSON.stringify(cachedResult)
         );
         const tokensSaved = tokenCountResult.tokens;
 
@@ -336,22 +336,22 @@ export class CacheCompressionTool {
     let result: CacheCompressionResult;
 
     switch (options.operation) {
-      case "compress":
+      case 'compress':
         result = await this.compress(options);
         break;
-      case "decompress":
+      case 'decompress':
         result = await this.decompress(options);
         break;
-      case "analyze":
+      case 'analyze':
         result = await this.analyze(options);
         break;
-      case "optimize":
+      case 'optimize':
         result = await this.optimize(options);
         break;
-      case "benchmark":
+      case 'benchmark':
         result = await this.benchmark(options);
         break;
-      case "configure":
+      case 'configure':
         result = await this.configure(options);
         break;
       default:
@@ -361,15 +361,15 @@ export class CacheCompressionTool {
     // Cache result if applicable
     if (
       options.useCache &&
-      ["analyze", "benchmark", "optimize"].includes(options.operation)
+      ['analyze', 'benchmark', 'optimize'].includes(options.operation)
     ) {
       const serialized = JSON.stringify(result.data);
       const compressed = await gzipAsync(Buffer.from(serialized));
       this.cache.set(
         cacheKey,
-        compressed.toString("utf-8"),
+        compressed.toString('utf-8'),
         Buffer.byteLength(serialized),
-        compressed.length,
+        compressed.length
       );
     }
 
@@ -396,10 +396,10 @@ export class CacheCompressionTool {
    * Compress data using specified or auto-selected algorithm
    */
   private async compress(
-    options: CacheCompressionOptions,
+    options: CacheCompressionOptions
   ): Promise<CacheCompressionResult> {
     if (!options.data) {
-      throw new Error("Data is required for compress operation");
+      throw new Error('Data is required for compress operation');
     }
 
     const startTime = Date.now();
@@ -437,25 +437,25 @@ export class CacheCompressionTool {
         dataToCompress,
         algorithm,
         level,
-        options.dictionary,
+        options.dictionary
       );
     } catch (error) {
       // Fallback to gzip if algorithm fails
       console.warn(
         `[CacheCompression] ${algorithm} failed, falling back to gzip:`,
-        error,
+        error
       );
       compressed = await this.compressWithAlgorithm(
         dataToCompress,
-        "gzip",
-        level,
+        'gzip',
+        level
       );
-      algorithm = "gzip";
+      algorithm = 'gzip';
     }
 
     const compressionRatio = compressed.length / originalSize;
     const originalTokenCountResult = this.tokenCounter.count(
-      options.data.toString(),
+      options.data.toString()
     );
     const originalTokens = originalTokenCountResult.tokens;
     const compressedTokens = Math.ceil(originalTokens * compressionRatio);
@@ -470,7 +470,7 @@ export class CacheCompressionTool {
       timestamp: Date.now(),
     };
 
-    const metadataBuffer = Buffer.from(JSON.stringify(metadata), "utf-8");
+    const metadataBuffer = Buffer.from(JSON.stringify(metadata), 'utf-8');
     const metadataLength = Buffer.allocUnsafe(4);
     metadataLength.writeUInt32LE(metadataBuffer.length, 0);
 
@@ -478,7 +478,7 @@ export class CacheCompressionTool {
 
     return {
       success: true,
-      operation: "compress",
+      operation: 'compress',
       data: {
         compressed: result,
       },
@@ -498,11 +498,11 @@ export class CacheCompressionTool {
    * Decompress data
    */
   private async decompress(
-    options: CacheCompressionOptions,
+    options: CacheCompressionOptions
   ): Promise<CacheCompressionResult> {
     if (!options.data || !Buffer.isBuffer(options.data)) {
       throw new Error(
-        "Compressed data buffer is required for decompress operation",
+        'Compressed data buffer is required for decompress operation'
       );
     }
 
@@ -511,7 +511,7 @@ export class CacheCompressionTool {
     // Extract metadata from header
     const metadataLength = options.data.readUInt32LE(0);
     const metadataBuffer = options.data.subarray(4, 4 + metadataLength);
-    const metadata = JSON.parse(metadataBuffer.toString("utf-8"));
+    const metadata = JSON.parse(metadataBuffer.toString('utf-8'));
     const compressedData = options.data.subarray(4 + metadataLength);
 
     // Decompress using algorithm from metadata
@@ -521,7 +521,7 @@ export class CacheCompressionTool {
       decompressed = await this.decompressWithAlgorithm(
         compressedData,
         metadata.algorithm,
-        options.dictionary,
+        options.dictionary
       );
     } catch (error) {
       throw new Error(`Decompression failed: ${error}`);
@@ -532,18 +532,18 @@ export class CacheCompressionTool {
       // Delta decompression would require access to baseline
       // For now, return delta data with warning
       console.warn(
-        "[CacheCompression] Delta decompression requires baseline state",
+        '[CacheCompression] Delta decompression requires baseline state'
       );
     }
 
     const decompressedData = decompressed;
     const tokens = this.tokenCounter.count(
-      decompressedData.toString("utf-8"),
+      decompressedData.toString('utf-8')
     ).tokens;
 
     return {
       success: true,
-      operation: "decompress",
+      operation: 'decompress',
       data: {
         decompressed: decompressedData,
       },
@@ -562,10 +562,10 @@ export class CacheCompressionTool {
    * Analyze data compressibility and recommend algorithm
    */
   private async analyze(
-    options: CacheCompressionOptions,
+    options: CacheCompressionOptions
   ): Promise<CacheCompressionResult> {
     if (!options.data) {
-      throw new Error("Data is required for analyze operation");
+      throw new Error('Data is required for analyze operation');
     }
 
     const startTime = Date.now();
@@ -588,7 +588,7 @@ export class CacheCompressionTool {
     const patterns = this.detectPatterns(dataBuffer, options.sampleSize);
 
     // Check for time-series characteristics
-    let timeSeries: CompressionAnalysis["timeSeries"] | undefined;
+    let timeSeries: CompressionAnalysis['timeSeries'] | undefined;
     if (this.isTimeSeries(options.data)) {
       const deltaResult = this.applyDeltaCompression(options.data);
       timeSeries = {
@@ -604,19 +604,19 @@ export class CacheCompressionTool {
 
     if (compressibility > 0.7) {
       // Highly compressible - use high compression
-      recommendedAlgorithm = "brotli";
+      recommendedAlgorithm = 'brotli';
       recommendedLevel = 9;
     } else if (compressibility > 0.5) {
       // Moderately compressible - balance speed and ratio
-      recommendedAlgorithm = "zstd";
+      recommendedAlgorithm = 'zstd';
       recommendedLevel = 6;
     } else if (compressibility > 0.3) {
       // Low compressibility - prioritize speed
-      recommendedAlgorithm = "lz4";
+      recommendedAlgorithm = 'lz4';
       recommendedLevel = 3;
     } else {
       // Very low compressibility - use fast algorithm
-      recommendedAlgorithm = "snappy";
+      recommendedAlgorithm = 'snappy';
       recommendedLevel = 1;
     }
 
@@ -645,7 +645,7 @@ export class CacheCompressionTool {
 
     return {
       success: true,
-      operation: "analyze",
+      operation: 'analyze',
       data: {
         analysis,
       },
@@ -662,24 +662,24 @@ export class CacheCompressionTool {
    * Optimize compression settings for workload
    */
   private async optimize(
-    options: CacheCompressionOptions,
+    options: CacheCompressionOptions
   ): Promise<CacheCompressionResult> {
     const startTime = Date.now();
 
     const targetRatio = options.targetRatio || 0.3;
     const maxLatency = options.maxLatency || 50;
-    const workloadType = options.workloadType || "balanced";
+    const workloadType = options.workloadType || 'balanced';
 
     // Run quick benchmarks to find optimal settings
     const algorithms: CompressionAlgorithm[] = [
-      "gzip",
-      "brotli",
-      "lz4",
-      "zstd",
-      "snappy",
+      'gzip',
+      'brotli',
+      'lz4',
+      'zstd',
+      'snappy',
     ];
     const testData =
-      options.testData || this.generateTestData(options.dataType || "json");
+      options.testData || this.generateTestData(options.dataType || 'json');
     const recommendations: CompressionRecommendation[] = [];
 
     for (const algorithm of algorithms) {
@@ -689,13 +689,13 @@ export class CacheCompressionTool {
             algorithm,
             level,
             testData,
-            1,
+            1
           );
 
           const meetsLatency = benchmark.compressionTime <= maxLatency;
           const meetsRatio = benchmark.compressionRatio <= targetRatio;
 
-          if (workloadType === "read-heavy") {
+          if (workloadType === 'read-heavy') {
             // Prioritize decompression speed
             if (meetsRatio && benchmark.decompressionTime <= maxLatency * 0.5) {
               recommendations.push({
@@ -708,7 +708,7 @@ export class CacheCompressionTool {
                 reasoning: `Optimized for read-heavy workload: fast decompression (${benchmark.decompressionTime}ms) with ${(benchmark.compressionRatio * 100).toFixed(1)}% ratio`,
               });
             }
-          } else if (workloadType === "write-heavy") {
+          } else if (workloadType === 'write-heavy') {
             // Prioritize compression speed
             if (meetsLatency && meetsRatio) {
               recommendations.push({
@@ -748,13 +748,13 @@ export class CacheCompressionTool {
     recommendations.sort((a, b) => a.expectedRatio - b.expectedRatio);
 
     const tokenCountResult = this.tokenCounter.count(
-      JSON.stringify(recommendations),
+      JSON.stringify(recommendations)
     );
     const tokens = tokenCountResult.tokens;
 
     return {
       success: true,
-      operation: "optimize",
+      operation: 'optimize',
       data: {
         recommendations,
       },
@@ -771,19 +771,19 @@ export class CacheCompressionTool {
    * Benchmark compression algorithms
    */
   private async benchmark(
-    options: CacheCompressionOptions,
+    options: CacheCompressionOptions
   ): Promise<CacheCompressionResult> {
     const startTime = Date.now();
 
     const algorithms = options.algorithms || [
-      "gzip",
-      "brotli",
-      "lz4",
-      "zstd",
-      "snappy",
+      'gzip',
+      'brotli',
+      'lz4',
+      'zstd',
+      'snappy',
     ];
     const testData =
-      options.testData || this.generateTestData(options.dataType || "json");
+      options.testData || this.generateTestData(options.dataType || 'json');
     const iterations = options.iterations || 10;
     const results: BenchmarkResult[] = [];
 
@@ -794,13 +794,13 @@ export class CacheCompressionTool {
             algorithm,
             level,
             testData,
-            iterations,
+            iterations
           );
           results.push(result);
         } catch (error) {
           console.warn(
             `[CacheCompression] Benchmark failed for ${algorithm}:`,
-            error,
+            error
           );
         }
       }
@@ -814,7 +814,7 @@ export class CacheCompressionTool {
 
     return {
       success: true,
-      operation: "benchmark",
+      operation: 'benchmark',
       data: {
         benchmarkResults: results,
       },
@@ -831,7 +831,7 @@ export class CacheCompressionTool {
    * Configure compression settings
    */
   private async configure(
-    options: CacheCompressionOptions,
+    options: CacheCompressionOptions
   ): Promise<CacheCompressionResult> {
     const startTime = Date.now();
 
@@ -856,13 +856,13 @@ export class CacheCompressionTool {
     }
 
     const tokenCountResult = this.tokenCounter.count(
-      JSON.stringify(this.config),
+      JSON.stringify(this.config)
     );
     const tokens = tokenCountResult.tokens;
 
     return {
       success: true,
-      operation: "configure",
+      operation: 'configure',
       data: {
         configuration: this.config,
       },
@@ -882,31 +882,31 @@ export class CacheCompressionTool {
     data: Buffer,
     algorithm: CompressionAlgorithm,
     level: CompressionLevel,
-    dictionary?: Buffer,
+    dictionary?: Buffer
   ): Promise<Buffer> {
     switch (algorithm) {
-      case "gzip":
+      case 'gzip':
         return await gzipAsync(data, { level });
 
-      case "brotli":
+      case 'brotli':
         return await brotliCompressAsync(data, {
           params: {
             [constants.BROTLI_PARAM_QUALITY]: level,
           },
         });
 
-      case "lz4":
+      case 'lz4':
         if (!this.lz4Module) {
           // Fallback to gzip if lz4 not available
-          console.warn("[CacheCompression] LZ4 not available, using gzip");
+          console.warn('[CacheCompression] LZ4 not available, using gzip');
           return await gzipAsync(data, { level });
         }
         return Buffer.from(this.lz4Module.encode(data));
 
-      case "zstd":
+      case 'zstd':
         if (!this.zstdModule) {
           // Fallback to brotli if zstd not available
-          console.warn("[CacheCompression] ZSTD not available, using brotli");
+          console.warn('[CacheCompression] ZSTD not available, using brotli');
           return await brotliCompressAsync(data, {
             params: {
               [constants.BROTLI_PARAM_QUALITY]: level,
@@ -925,15 +925,15 @@ export class CacheCompressionTool {
           });
         });
 
-      case "snappy":
+      case 'snappy':
         if (!this.snappyModule) {
           // Fallback to gzip if snappy not available
-          console.warn("[CacheCompression] Snappy not available, using gzip");
+          console.warn('[CacheCompression] Snappy not available, using gzip');
           return await gzipAsync(data, { level: 1 }); // Snappy is fast, use level 1
         }
         return await this.snappyModule.compress(data);
 
-      case "custom":
+      case 'custom':
         // Custom compression for structured data (JSON, etc.)
         return this.customCompress(data, dictionary);
 
@@ -948,23 +948,23 @@ export class CacheCompressionTool {
   private async decompressWithAlgorithm(
     data: Buffer,
     algorithm: CompressionAlgorithm,
-    dictionary?: Buffer,
+    dictionary?: Buffer
   ): Promise<Buffer> {
     switch (algorithm) {
-      case "gzip":
+      case 'gzip':
         return await gunzipAsync(data);
 
-      case "brotli":
+      case 'brotli':
         return await brotliDecompressAsync(data);
 
-      case "lz4":
+      case 'lz4':
         if (!this.lz4Module) {
           // Assume it was compressed with gzip fallback
           return await gunzipAsync(data);
         }
         return Buffer.from(this.lz4Module.decode(data));
 
-      case "zstd":
+      case 'zstd':
         if (!this.zstdModule) {
           // Assume it was compressed with brotli fallback
           return await brotliDecompressAsync(data);
@@ -980,14 +980,14 @@ export class CacheCompressionTool {
           });
         });
 
-      case "snappy":
+      case 'snappy':
         if (!this.snappyModule) {
           // Assume it was compressed with gzip fallback
           return await gunzipAsync(data);
         }
         return await this.snappyModule.uncompress(data);
 
-      case "custom":
+      case 'custom':
         return this.customDecompress(data, dictionary);
 
       default:
@@ -1003,7 +1003,7 @@ export class CacheCompressionTool {
     const str = data;
 
     try {
-      const obj = JSON.parse(str.toString("utf-8"));
+      const obj = JSON.parse(str.toString('utf-8'));
 
       // Build or use existing dictionary
       const dict = dictionary || this.buildDictionary(obj);
@@ -1023,14 +1023,14 @@ export class CacheCompressionTool {
    */
   private customDecompress(data: Buffer, _dictionary?: Buffer): Buffer {
     try {
-      const compressed = JSON.parse(data.toString("utf-8"));
+      const compressed = JSON.parse(data.toString('utf-8'));
 
       if (compressed.__dict) {
         // Has dictionary, decompress
         const dict = compressed.__dict;
         const decompressed = this.decompressWithDictionary(
           compressed.data,
-          dict,
+          dict
         );
         return Buffer.from(JSON.stringify(decompressed), 'utf-8');
       }
@@ -1048,9 +1048,9 @@ export class CacheCompressionTool {
     const strings = new Map<string, number>();
 
     const traverse = (value: any): void => {
-      if (typeof value === "string" && value.length > 10) {
+      if (typeof value === 'string' && value.length > 10) {
         strings.set(value, (strings.get(value) || 0) + 1);
-      } else if (typeof value === "object" && value !== null) {
+      } else if (typeof value === 'object' && value !== null) {
         Object.values(value).forEach(traverse);
       }
     };
@@ -1077,17 +1077,17 @@ export class CacheCompressionTool {
    */
   private compressWithDictionary(
     obj: any,
-    dict: Record<string, number> | Buffer,
+    dict: Record<string, number> | Buffer
   ): any {
     // Handle Buffer dictionary case (convert to Record if needed)
     const dictMap = Buffer.isBuffer(dict) ? {} : dict;
 
     const traverse = (value: any): any => {
-      if (typeof value === "string" && dictMap[value] !== undefined) {
+      if (typeof value === 'string' && dictMap[value] !== undefined) {
         return { __ref: dictMap[value] };
       } else if (Array.isArray(value)) {
         return value.map(traverse);
-      } else if (typeof value === "object" && value !== null) {
+      } else if (typeof value === 'object' && value !== null) {
         const result: any = {};
         for (const [k, v] of Object.entries(value)) {
           result[k] = traverse(v);
@@ -1108,7 +1108,7 @@ export class CacheCompressionTool {
    */
   private decompressWithDictionary(
     data: any,
-    dict: Record<string, number>,
+    dict: Record<string, number>
   ): any {
     // Invert dictionary
     const invDict: Record<number, string> = {};
@@ -1119,11 +1119,11 @@ export class CacheCompressionTool {
     }
 
     const traverse = (value: any): any => {
-      if (value && typeof value === "object" && "__ref" in value) {
+      if (value && typeof value === 'object' && '__ref' in value) {
         return invDict[value.__ref];
       } else if (Array.isArray(value)) {
         return value.map(traverse);
-      } else if (typeof value === "object" && value !== null) {
+      } else if (typeof value === 'object' && value !== null) {
         const result: any = {};
         for (const [k, v] of Object.entries(value)) {
           result[k] = traverse(v);
@@ -1144,7 +1144,7 @@ export class CacheCompressionTool {
     patterns: string[];
   } {
     // For time-series data, compute delta from previous state
-    const dataStr = typeof data === "string" ? data : JSON.stringify(data);
+    const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
     const patterns: string[] = [];
 
     // Simple delta: store only differences
@@ -1187,7 +1187,7 @@ export class CacheCompressionTool {
     let repeated = 0;
 
     for (let i = 0; i <= data.length - windowSize; i++) {
-      const window = data.subarray(i, i + windowSize).toString("hex");
+      const window = data.subarray(i, i + windowSize).toString('hex');
       if (windows.has(window)) {
         repeated++;
       } else {
@@ -1207,17 +1207,17 @@ export class CacheCompressionTool {
 
     // Check for common patterns
     if (sample.includes(0x7b) && sample.includes(0x7d)) {
-      patterns.push("json-like");
+      patterns.push('json-like');
     }
 
     if (sample.includes(0x3c) && sample.includes(0x3e)) {
-      patterns.push("xml-like");
+      patterns.push('xml-like');
     }
 
     // Check for repeated sequences
-    const str = sample.toString("utf-8", 0, Math.min(100, sample.length));
+    const str = sample.toString('utf-8', 0, Math.min(100, sample.length));
     if (/(.{3,})\1{2,}/.test(str)) {
-      patterns.push("repeated-sequences");
+      patterns.push('repeated-sequences');
     }
 
     return patterns;
@@ -1227,20 +1227,20 @@ export class CacheCompressionTool {
    * Detect data type from content
    */
   private detectDataType(data: any): DataType {
-    if (typeof data === "string") {
+    if (typeof data === 'string') {
       try {
         JSON.parse(data);
-        return "json";
+        return 'json';
       } catch {
-        return "text";
+        return 'text';
       }
     } else if (Buffer.isBuffer(data)) {
-      return "binary";
-    } else if (typeof data === "object") {
-      return "structured";
+      return 'binary';
+    } else if (typeof data === 'object') {
+      return 'structured';
     }
 
-    return "auto";
+    return 'auto';
   }
 
   /**
@@ -1252,7 +1252,7 @@ export class CacheCompressionTool {
         // Check if array elements have timestamp-like properties
         const first = data[0];
         return (
-          typeof first === "object" &&
+          typeof first === 'object' &&
           (first.timestamp || first.time || first.date)
         );
       }
@@ -1269,10 +1269,10 @@ export class CacheCompressionTool {
   private toBuffer(data: any): Buffer {
     if (Buffer.isBuffer(data)) {
       return data;
-    } else if (typeof data === "string") {
-      return Buffer.from(data, "utf-8");
+    } else if (typeof data === 'string') {
+      return Buffer.from(data, 'utf-8');
     } else {
-      return Buffer.from(JSON.stringify(data), "utf-8");
+      return Buffer.from(JSON.stringify(data), 'utf-8');
     }
   }
 
@@ -1283,7 +1283,7 @@ export class CacheCompressionTool {
     const size = 10000; // 10KB test data
 
     switch (dataType) {
-      case "json": {
+      case 'json': {
         const obj = {
           users: Array.from({ length: 100 }, (_, i) => ({
             id: i,
@@ -1292,18 +1292,18 @@ export class CacheCompressionTool {
             active: i % 2 === 0,
           })),
         };
-        return Buffer.from(JSON.stringify(obj), "utf-8");
+        return Buffer.from(JSON.stringify(obj), 'utf-8');
       }
 
-      case "text": {
+      case 'text': {
         const text =
-          "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(
-            200,
+          'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(
+            200
           );
         return Buffer.from(text);
       }
 
-      case "binary": {
+      case 'binary': {
         const buffer = Buffer.allocUnsafe(size);
         for (let i = 0; i < size; i++) {
           buffer[i] = Math.floor(Math.random() * 256);
@@ -1324,7 +1324,7 @@ export class CacheCompressionTool {
     algorithm: CompressionAlgorithm,
     level: CompressionLevel,
     testData: Buffer,
-    iterations: number,
+    iterations: number
   ): Promise<BenchmarkResult> {
     const originalSize = testData.length;
     let totalCompressTime = 0;
@@ -1374,95 +1374,95 @@ export class CacheCompressionTool {
  * MCP Tool Definition
  */
 export const CACHE_COMPRESSION_TOOL_DEFINITION = {
-  name: "cache_compression",
+  name: 'cache_compression',
   description:
-    "Advanced compression strategies for cache optimization with 89%+ token reduction. Supports 6 algorithms (gzip, brotli, lz4, zstd, snappy, custom), adaptive selection, dictionary-based compression, and delta compression for time-series data.",
+    'Advanced compression strategies for cache optimization with 89%+ token reduction. Supports 6 algorithms (gzip, brotli, lz4, zstd, snappy, custom), adaptive selection, dictionary-based compression, and delta compression for time-series data.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "compress",
-          "decompress",
-          "analyze",
-          "optimize",
-          "benchmark",
-          "configure",
+          'compress',
+          'decompress',
+          'analyze',
+          'optimize',
+          'benchmark',
+          'configure',
         ],
-        description: "Compression operation to perform",
+        description: 'Compression operation to perform',
       },
       data: {
-        description: "Data to compress/decompress/analyze",
+        description: 'Data to compress/decompress/analyze',
       },
       algorithm: {
-        type: "string",
-        enum: ["gzip", "brotli", "lz4", "zstd", "snappy", "custom"],
-        description: "Compression algorithm (auto-selected if not specified)",
+        type: 'string',
+        enum: ['gzip', 'brotli', 'lz4', 'zstd', 'snappy', 'custom'],
+        description: 'Compression algorithm (auto-selected if not specified)',
       },
       level: {
-        type: "number",
+        type: 'number',
         minimum: 0,
         maximum: 9,
-        description: "Compression level (0-9, higher = better compression)",
+        description: 'Compression level (0-9, higher = better compression)',
       },
       dataType: {
-        type: "string",
-        enum: ["json", "text", "binary", "time-series", "structured", "auto"],
-        description: "Data type hint for adaptive compression",
+        type: 'string',
+        enum: ['json', 'text', 'binary', 'time-series', 'structured', 'auto'],
+        description: 'Data type hint for adaptive compression',
       },
       targetRatio: {
-        type: "number",
+        type: 'number',
         minimum: 0,
         maximum: 1,
-        description: "Target compression ratio for optimize operation (0-1)",
+        description: 'Target compression ratio for optimize operation (0-1)',
       },
       maxLatency: {
-        type: "number",
-        description: "Maximum acceptable latency in milliseconds",
+        type: 'number',
+        description: 'Maximum acceptable latency in milliseconds',
       },
       workloadType: {
-        type: "string",
-        enum: ["read-heavy", "write-heavy", "balanced"],
-        description: "Workload type for optimization",
+        type: 'string',
+        enum: ['read-heavy', 'write-heavy', 'balanced'],
+        description: 'Workload type for optimization',
       },
       algorithms: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "string",
-          enum: ["gzip", "brotli", "lz4", "zstd", "snappy"],
+          type: 'string',
+          enum: ['gzip', 'brotli', 'lz4', 'zstd', 'snappy'],
         },
-        description: "Algorithms to benchmark",
+        description: 'Algorithms to benchmark',
       },
       iterations: {
-        type: "number",
-        description: "Number of benchmark iterations",
+        type: 'number',
+        description: 'Number of benchmark iterations',
       },
       defaultAlgorithm: {
-        type: "string",
-        enum: ["gzip", "brotli", "lz4", "zstd", "snappy", "custom"],
-        description: "Default algorithm for configure operation",
+        type: 'string',
+        enum: ['gzip', 'brotli', 'lz4', 'zstd', 'snappy', 'custom'],
+        description: 'Default algorithm for configure operation',
       },
       autoSelect: {
-        type: "boolean",
-        description: "Enable auto-selection of algorithm based on data type",
+        type: 'boolean',
+        description: 'Enable auto-selection of algorithm based on data type',
       },
       enableDelta: {
-        type: "boolean",
-        description: "Enable delta compression for time-series data",
+        type: 'boolean',
+        description: 'Enable delta compression for time-series data',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching of analysis/benchmark results",
+        type: 'boolean',
+        description: 'Enable caching of analysis/benchmark results',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds",
+        type: 'number',
+        description: 'Cache TTL in seconds',
         default: 3600,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 
@@ -1473,7 +1473,7 @@ export const CACHE_COMPRESSION_TOOL_DEFINITION = {
 let toolInstance: CacheCompressionTool | null = null;
 
 export async function runCacheCompression(
-  options: CacheCompressionOptions,
+  options: CacheCompressionOptions
 ): Promise<CacheCompressionResult> {
   if (!toolInstance) {
     const cache = new CacheEngine();

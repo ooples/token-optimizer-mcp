@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "mcp__token-optimizer__smart_read",
+    "arguments": {
+      "path": "C:\\Users\\cheat\\source\\repos\\token-optimizer-mcp\\README.md",
+      "enableCache": true,
+      "diffMode": true,
+      "maxSize": 100000,
+      "includeMetadata": true
+    }
+  }
+}

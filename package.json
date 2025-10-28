@@ -1,48 +1,128 @@
 {
   "name": "token-optimizer-mcp",
-  "version": "0.1.0",
-  "description": "Intelligent token optimization for Claude Code - achieving 95%+ token reduction through caching, compression, and smart tool intelligence",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "version": "2.12.1",
+  "mcpName": "io.github.ooples/token-optimizer-mcp",
+  "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
+  "main": "dist/server/index.js",
+  "types": "dist/server/index.d.ts",
+  "bin": {
+    "token-optimizer-mcp": "./dist/server/index.js"
+  },
+  "files": [
+    "dist/**/*",
+    "cli-wrapper.mjs",
+    "hooks/**/*",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CLI_WRAPPER_README.md"
+  ],
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/server/index.js",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm test",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:ci": "node --experimental-vm-modules node_modules/jest/bin/jest.js --ci --coverage --maxWorkers=2",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/integration",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit",
+    "test:benchmark": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/benchmarks",
     "dashboard": "node dist/server/web-server.js",
     "dashboard:dev": "tsc -p tsconfig.dashboard.json && node dist/server/web-server.js",
-    "dashboard:build": "tsc -p tsconfig.dashboard.json"
+    "dashboard:build": "tsc -p tsconfig.dashboard.json",
+    "lint": "eslint src --ext .ts,.js",
+    "lint:fix": "eslint src --ext .ts,.js --fix",
+    "format": "prettier --write 'src/**/*.{ts,js,json}'",
+    "format:check": "prettier --check 'src/**/*.{ts,js,json}'",
+    "validate": "node scripts/validate-package.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ooples/token-optimizer-mcp.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "token-optimization",
+    "caching",
+    "compression",
+    "ai",
+    "llm",
+    "context-management",
+    "prompt-optimization"
+  ],
+  "author": "ooples",
+  "license": "MIT",
   "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "exports": {
+    ".": {
+      "require": "./dist/server/index.js",
+      "import": "./dist/server/index.js",
+      "types": "./dist/server/index.d.ts"
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "bugs": {
     "url": "https://github.com/ooples/token-optimizer-mcp/issues"
   },
   "homepage": "https://github.com/ooples/token-optimizer-mcp#readme",
   "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.0",
+    "@semantic-release/npm": "^12.0.1",
+    "@semantic-release/release-notes-generator": "^14.0.1",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/body-parser": "^1.19.6",
+    "@types/conventional-commits-parser": "^5.0.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/express-serve-static-core": "^5.1.0",
+    "@types/http-errors": "^2.0.5",
     "@types/jest": "^30.0.0",
+    "@types/json-schema": "^7.0.15",
+    "@types/mime": "^3.0.4",
     "@types/node": "^24.7.2",
+    "@types/normalize-package-data": "^2.4.4",
+    "@types/qs": "^6.14.0",
+    "@types/range-parser": "^1.2.7",
+    "@types/send": "^1.2.0",
+    "@types/serve-static": "^1.15.9",
     "@types/tar-stream": "^3.1.4",
+    "@typescript-eslint/eslint-plugin": "^8.46.1",
+    "@typescript-eslint/parser": "^8.46.1",
+    "conventional-changelog-conventionalcommits": "^8.0.0",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^10.1.8",
     "jest": "^30.2.0",
+    "prettier": "^3.6.2",
+    "semantic-release": "^24.2.0",
     "ts-jest": "^29.4.5",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "async-mutex": "^0.5.0",
     "better-sqlite3": "^12.4.1",
     "cors": "^2.8.5",
+    "diff": "^8.0.2",
     "express": "^5.1.0",
+    "glob": "^11.0.3",
     "lru-cache": "^11.2.2",
     "tiktoken": "^1.0.22"
   }

@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Error: dist directory not created"
+            exit 1
+          fi
+          echo "Build artifacts verified successfully"
+
+      - name: Run tests
+        run: npm run test:coverage
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+
+      - name: Semantic Release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
+
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.new_release_version }}
+
+      - name: Get release notes
+        id: release_notes
+        run: |
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.new_release_version }}"
+          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+
+      - name: Create notification message
+        id: notification
+        run: |
+          VERSION="${{ needs.release.outputs.new_release_version }}"
+          RELEASE_URL="${{ steps.release_notes.outputs.release_url }}"
+
+          MESSAGE="New release: token-optimizer-mcp v${VERSION}\n"
+          MESSAGE="${MESSAGE}Release notes: ${RELEASE_URL}\n"
+          MESSAGE="${MESSAGE}npm: https://www.npmjs.com/package/token-optimizer-mcp/v/${VERSION}"
+
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post to Discord (if configured)
+        if: vars.DISCORD_WEBHOOK_URL != ''
+        run: |
+          MESSAGE='${{ steps.notification.outputs.message }}'
+
+          curl -X POST "${{ vars.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"$MESSAGE\"}" \
+            || echo "Discord notification failed (optional)"
+
+      - name: Post to Slack (if configured)
+        if: vars.SLACK_WEBHOOK_URL != ''
+        run: |
+          MESSAGE='${{ steps.notification.outputs.message }}'
+
+          curl -X POST "${{ vars.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"$MESSAGE\"}" \
+            || echo "Slack notification failed (optional)"
+
+      - name: Comment on related issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ needs.release.outputs.new_release_version }}';
+            const releaseUrl = '${{ steps.release_notes.outputs.release_url }}';
+
+            // Get the release
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: `v${version}`
+            });
+
+            // Extract issue numbers from release body
+            const issueNumbers = [...new Set(
+              (release.body || '').match(/#(\d+)/g)?.map(m => parseInt(m.slice(1))) || []
+            )];
+
+            // Comment on each issue
+            for (const issueNumber of issueNumbers) {
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `This issue has been resolved in version ${version}.\n\nRelease notes: ${releaseUrl}`
+                });
+              } catch (error) {
+                console.log(`Failed to comment on issue #${issueNumber}:`, error.message);
+              }
+            }
+
+      - name: Update release summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version: ${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "Release URL: ${{ steps.release_notes.outputs.release_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "npm URL: https://www.npmjs.com/package/token-optimizer-mcp/v/${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY

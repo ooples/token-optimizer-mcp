@@ -19,52 +19,52 @@ import { parse as parseBabel } from '@babel/parser';
 import pkg from 'glob';
 const { globSync } = pkg;
 import { relative, resolve, dirname, extname, join } from 'path';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { hashFileMetadata, generateCacheKey } from '../shared/hash-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { hashFileMetadata, generateCacheKey } from '../shared/hash-utils.js';
 
 /**
  * Represents an import in a file
  */
 export interface DependencyImport {
-  source: string;          // Module/file being imported
-  specifiers: string[];    // Named imports/default import
-  isExternal: boolean;     // Is it external (node_modules) or internal
-  isDynamic: boolean;      // Is it a dynamic import()
-  line: number;            // Line number in file
+  source: string; // Module/file being imported
+  specifiers: string[]; // Named imports/default import
+  isExternal: boolean; // Is it external (node_modules) or internal
+  isDynamic: boolean; // Is it a dynamic import()
+  line: number; // Line number in file
 }
 
 /**
  * Represents an export in a file
  */
 export interface DependencyExport {
-  name: string;            // Export name
+  name: string; // Export name
   type: 'named' | 'default' | 'namespace';
-  isReexport: boolean;     // Re-exported from another module
-  source?: string;         // Source module if re-export
-  line: number;            // Line number in file
+  isReexport: boolean; // Re-exported from another module
+  source?: string; // Source module if re-export
+  line: number; // Line number in file
 }
 
 /**
  * Node in the dependency graph
  */
 export interface DependencyNode {
-  file: string;            // Relative file path
-  hash: string;            // File content hash
+  file: string; // Relative file path
+  hash: string; // File content hash
   imports: DependencyImport[];
   exports: DependencyExport[];
-  importedBy: string[];    // Files that import this one
+  importedBy: string[]; // Files that import this one
   importedByCount: number; // Quick count for sorting
-  lastAnalyzed: number;    // Timestamp
+  lastAnalyzed: number; // Timestamp
 }
 
 /**
  * Circular dependency chain
  */
 export interface CircularDependency {
-  cycle: string[];         // Files in the circular dependency
-  depth: number;           // Length of the cycle
+  cycle: string[]; // Files in the circular dependency
+  depth: number; // Length of the cycle
   severity: 'low' | 'medium' | 'high';
 }
 
@@ -84,35 +84,35 @@ export interface UnusedDependency {
  * Dependency impact analysis
  */
 export interface DependencyImpact {
-  file: string;            // File being analyzed
-  directDependents: string[];   // Files directly importing this
+  file: string; // File being analyzed
+  directDependents: string[]; // Files directly importing this
   indirectDependents: string[]; // Files indirectly importing this
-  totalImpact: number;     // Total files affected by changes
+  totalImpact: number; // Total files affected by changes
   criticalPath: string[][]; // Critical dependency chains
 }
 
 export interface SmartDependenciesOptions {
   // Scope
-  cwd?: string;                 // Working directory
-  files?: string[];             // Files to analyze (glob patterns)
-  exclude?: string[];           // Patterns to exclude
+  cwd?: string; // Working directory
+  files?: string[]; // Files to analyze (glob patterns)
+  exclude?: string[]; // Patterns to exclude
 
   // Analysis modes
   mode?: 'graph' | 'circular' | 'unused' | 'impact'; // What to analyze
-  targetFile?: string;          // For impact analysis
+  targetFile?: string; // For impact analysis
 
   // Graph options
-  includeExternal?: boolean;    // Include external dependencies (default: false)
-  maxDepth?: number;            // Max depth for impact analysis (default: unlimited)
+  includeExternal?: boolean; // Include external dependencies (default: false)
+  maxDepth?: number; // Max depth for impact analysis (default: unlimited)
 
   // Cache options
-  useCache?: boolean;           // Use cached graph (default: true)
-  incrementalUpdate?: boolean;  // Update only changed files (default: true)
-  ttl?: number;                 // Cache TTL in days (default: 7)
+  useCache?: boolean; // Use cached graph (default: true)
+  incrementalUpdate?: boolean; // Update only changed files (default: true)
+  ttl?: number; // Cache TTL in days (default: 7)
 
   // Output options
   format?: 'compact' | 'detailed'; // Output format
-  includeMetadata?: boolean;    // Include file metadata
+  includeMetadata?: boolean; // Include file metadata
 }
 
 export interface SmartDependenciesResult {
@@ -131,10 +131,10 @@ export interface SmartDependenciesResult {
     cacheHit: boolean;
     incrementalUpdate: boolean;
   };
-  graph?: Map<string, DependencyNode>;     // Full graph (graph mode)
-  circular?: CircularDependency[];         // Circular dependencies (circular mode)
-  unused?: UnusedDependency[];             // Unused imports/exports (unused mode)
-  impact?: DependencyImpact;               // Impact analysis (impact mode)
+  graph?: Map<string, DependencyNode>; // Full graph (graph mode)
+  circular?: CircularDependency[]; // Circular dependencies (circular mode)
+  unused?: UnusedDependency[]; // Unused imports/exports (unused mode)
+  impact?: DependencyImpact; // Impact analysis (impact mode)
   error?: string;
 }
 
@@ -147,6 +147,16 @@ export class SmartDependenciesTool {
 
   /**
    * Main entry point for dependency analysis
+   * Alias for analyze() to maintain API consistency with other tools
+   */
+  async run(
+    options: SmartDependenciesOptions = {}
+  ): Promise<SmartDependenciesResult> {
+    return this.analyze(options);
+  }
+
+  /**
+   * Core dependency analysis implementation
    */
   async analyze(
     options: SmartDependenciesOptions = {}
@@ -164,7 +174,7 @@ export class SmartDependenciesTool {
         '**/build/**',
         '**/*.min.js',
         '**/*.test.*',
-        '**/*.spec.*'
+        '**/*.spec.*',
       ],
       mode: options.mode ?? 'graph',
       targetFile: options.targetFile ?? '',
@@ -215,14 +225,15 @@ export class SmartDependenciesTool {
         duration,
         inputTokens: result.metadata.tokenCount,
         outputTokens: 0,
-        cachedTokens: result.metadata.cacheHit ? result.metadata.originalTokenCount : 0,
+        cachedTokens: result.metadata.cacheHit
+          ? result.metadata.originalTokenCount
+          : 0,
         savedTokens: result.metadata.tokensSaved,
         success: true,
         cacheHit: result.metadata.cacheHit,
       });
 
       return result;
-
     } catch (error) {
       const duration = Date.now() - startTime;
 
@@ -253,7 +264,7 @@ export class SmartDependenciesTool {
           cacheHit: false,
           incrementalUpdate: false,
         },
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -264,7 +275,9 @@ export class SmartDependenciesTool {
   private async buildOrLoadGraph(
     opts: Required<SmartDependenciesOptions>,
     _startTime: number
-  ): Promise<SmartDependenciesResult & { graph?: Map<string, DependencyNode> }> {
+  ): Promise<
+    SmartDependenciesResult & { graph?: Map<string, DependencyNode> }
+  > {
     const cacheKey = generateCacheKey('dependency_graph', { cwd: opts.cwd });
 
     // Try to load from cache
@@ -295,7 +308,7 @@ export class SmartDependenciesTool {
                 duration: 0,
                 cacheHit: true,
                 incrementalUpdate: false,
-              }
+              },
             };
           } else {
             // Incremental update - rebuild only changed files
@@ -328,7 +341,7 @@ export class SmartDependenciesTool {
                 duration: 0,
                 cacheHit: false,
                 incrementalUpdate: true,
-              }
+              },
             };
           }
         } else {
@@ -349,7 +362,7 @@ export class SmartDependenciesTool {
               duration: 0,
               cacheHit: true,
               incrementalUpdate: false,
-            }
+            },
           };
         }
       }
@@ -363,7 +376,9 @@ export class SmartDependenciesTool {
       this.cacheGraph(cacheKey, graph, opts.ttl);
     }
 
-    const originalTokens = this.estimateFullFileTokens(Array.from(graph.keys()));
+    const originalTokens = this.estimateFullFileTokens(
+      Array.from(graph.keys())
+    );
     const graphTokens = this.estimateGraphTokens(graph);
     const tokensSaved = originalTokens - graphTokens;
 
@@ -383,7 +398,7 @@ export class SmartDependenciesTool {
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
-      }
+      },
     };
   }
 
@@ -507,7 +522,9 @@ export class SmartDependenciesTool {
         });
 
         imports.push({
-          source: isExternal ? source : this.resolveRelativePath(source, fileDir, cwd),
+          source: isExternal
+            ? source
+            : this.resolveRelativePath(source, fileDir, cwd),
           specifiers,
           isExternal,
           isDynamic: false,
@@ -516,14 +533,18 @@ export class SmartDependenciesTool {
       }
 
       // Dynamic imports: import('...')
-      if (node.type === 'ExpressionStatement' &&
-          node.expression?.type === 'CallExpression' &&
-          node.expression?.callee?.type === 'Import') {
+      if (
+        node.type === 'ExpressionStatement' &&
+        node.expression?.type === 'CallExpression' &&
+        node.expression?.callee?.type === 'Import'
+      ) {
         const source = node.expression.arguments[0]?.value;
         if (source) {
           const isExternal = this.isExternalDependency(source);
           imports.push({
-            source: isExternal ? source : this.resolveRelativePath(source, fileDir, cwd),
+            source: isExternal
+              ? source
+              : this.resolveRelativePath(source, fileDir, cwd),
             specifiers: [],
             isExternal,
             isDynamic: true,
@@ -535,13 +556,17 @@ export class SmartDependenciesTool {
       // require() calls
       if (node.type === 'VariableDeclaration') {
         for (const decl of node.declarations) {
-          if (decl.init?.type === 'CallExpression' &&
-              decl.init?.callee?.name === 'require') {
+          if (
+            decl.init?.type === 'CallExpression' &&
+            decl.init?.callee?.name === 'require'
+          ) {
             const source = decl.init.arguments[0]?.value;
             if (source) {
               const isExternal = this.isExternalDependency(source);
               imports.push({
-                source: isExternal ? source : this.resolveRelativePath(source, fileDir, cwd),
+                source: isExternal
+                  ? source
+                  : this.resolveRelativePath(source, fileDir, cwd),
                 specifiers: [],
                 isExternal,
                 isDynamic: false,
@@ -622,7 +647,10 @@ export class SmartDependenciesTool {
   /**
    * Build reverse dependencies (which files import this file)
    */
-  private buildReverseDependencies(graph: Map<string, DependencyNode>, _cwd: string): void {
+  private buildReverseDependencies(
+    graph: Map<string, DependencyNode>,
+    _cwd: string
+  ): void {
     // Reset all importedBy arrays
     for (const node of Array.from(graph.values())) {
       node.importedBy = [];
@@ -765,8 +793,12 @@ export class SmartDependenciesTool {
 
     // Calculate tokens
     const resultData = { circular };
-    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
-    const originalTokens = this.estimateFullFileTokens(Array.from(graph.keys()));
+    const resultTokens = this.tokenCounter.count(
+      JSON.stringify(resultData)
+    ).tokens;
+    const originalTokens = this.estimateFullFileTokens(
+      Array.from(graph.keys())
+    );
     const tokensSaved = originalTokens - resultTokens;
 
     return {
@@ -785,7 +817,7 @@ export class SmartDependenciesTool {
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
-      }
+      },
     };
   }
 
@@ -812,7 +844,7 @@ export class SmartDependenciesTool {
               name: imp.specifiers.join(', '),
               source: imp.source,
               line: imp.line,
-              reason: 'Imported file not found in project'
+              reason: 'Imported file not found in project',
             });
           }
         }
@@ -827,7 +859,7 @@ export class SmartDependenciesTool {
               type: 'export',
               name: exp.name,
               line: exp.line,
-              reason: 'Export not imported by any file in project'
+              reason: 'Export not imported by any file in project',
             });
           }
         }
@@ -836,8 +868,12 @@ export class SmartDependenciesTool {
 
     // Calculate tokens
     const resultData = { unused };
-    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
-    const originalTokens = this.estimateFullFileTokens(Array.from(graph.keys()));
+    const resultTokens = this.tokenCounter.count(
+      JSON.stringify(resultData)
+    ).tokens;
+    const originalTokens = this.estimateFullFileTokens(
+      Array.from(graph.keys())
+    );
     const tokensSaved = originalTokens - resultTokens;
 
     return {
@@ -856,7 +892,7 @@ export class SmartDependenciesTool {
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
-      }
+      },
     };
   }
 
@@ -885,7 +921,7 @@ export class SmartDependenciesTool {
           cacheHit: false,
           incrementalUpdate: false,
         },
-        error: 'targetFile required for impact analysis'
+        error: 'targetFile required for impact analysis',
       };
     }
 
@@ -907,7 +943,7 @@ export class SmartDependenciesTool {
           cacheHit: false,
           incrementalUpdate: false,
         },
-        error: `File not found in graph: ${opts.targetFile}`
+        error: `File not found in graph: ${opts.targetFile}`,
       };
     }
 
@@ -918,7 +954,11 @@ export class SmartDependenciesTool {
 
     // BFS to find all indirect dependents
     const queue: Array<{ file: string; depth: number; path: string[] }> =
-      directDependents.map(f => ({ file: f, depth: 1, path: [opts.targetFile, f] }));
+      directDependents.map((f) => ({
+        file: f,
+        depth: 1,
+        path: [opts.targetFile, f],
+      }));
 
     while (queue.length > 0) {
       const { file, depth, path } = queue.shift()!;
@@ -942,7 +982,7 @@ export class SmartDependenciesTool {
             queue.push({
               file: dependent,
               depth: depth + 1,
-              path: [...path, dependent]
+              path: [...path, dependent],
             });
           }
         }
@@ -954,13 +994,19 @@ export class SmartDependenciesTool {
       directDependents,
       indirectDependents,
       totalImpact: directDependents.length + indirectDependents.length,
-      criticalPath: criticalPath.slice(0, 10) // Top 10 critical paths
+      criticalPath: criticalPath.slice(0, 10), // Top 10 critical paths
     };
 
     // Calculate tokens
     const resultData = { impact };
-    const resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
-    const originalTokens = this.estimateFullFileTokens([opts.targetFile, ...directDependents, ...indirectDependents]);
+    const resultTokens = this.tokenCounter.count(
+      JSON.stringify(resultData)
+    ).tokens;
+    const originalTokens = this.estimateFullFileTokens([
+      opts.targetFile,
+      ...directDependents,
+      ...indirectDependents,
+    ]);
     const tokensSaved = originalTokens - resultTokens;
 
     return {
@@ -979,7 +1025,7 @@ export class SmartDependenciesTool {
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
-      }
+      },
     };
   }
 
@@ -998,19 +1044,24 @@ export class SmartDependenciesTool {
       const filteredNode = { ...node };
 
       if (!opts.includeExternal) {
-        filteredNode.imports = node.imports.filter(imp => !imp.isExternal);
+        filteredNode.imports = node.imports.filter((imp) => !imp.isExternal);
       }
 
       filteredGraph.set(file, filteredNode);
     }
 
     // Calculate tokens
-    const graphData = opts.format === 'compact'
-      ? this.compactGraphRepresentation(filteredGraph)
-      : Array.from(filteredGraph.entries());
+    const graphData =
+      opts.format === 'compact'
+        ? this.compactGraphRepresentation(filteredGraph)
+        : Array.from(filteredGraph.entries());
 
-    const resultTokens = this.tokenCounter.count(JSON.stringify(graphData)).tokens;
-    const originalTokens = this.estimateFullFileTokens(Array.from(graph.keys()));
+    const resultTokens = this.tokenCounter.count(
+      JSON.stringify(graphData)
+    ).tokens;
+    const originalTokens = this.estimateFullFileTokens(
+      Array.from(graph.keys())
+    );
     const tokensSaved = originalTokens - resultTokens;
 
     return {
@@ -1029,7 +1080,7 @@ export class SmartDependenciesTool {
         duration: 0,
         cacheHit: false,
         incrementalUpdate: false,
-      }
+      },
     };
   }
 
@@ -1048,7 +1099,7 @@ export class SmartDependenciesTool {
           edges.push({
             from: file,
             to: imp.source,
-            type: imp.isDynamic ? 'dynamic' : 'static'
+            type: imp.isDynamic ? 'dynamic' : 'static',
           });
         }
       }
@@ -1057,7 +1108,7 @@ export class SmartDependenciesTool {
     return {
       nodes: Array.from(graph.keys()),
       edges,
-      externalDependencies: Array.from(externalDeps)
+      externalDependencies: Array.from(externalDeps),
     };
   }
 
@@ -1071,7 +1122,11 @@ export class SmartDependenciesTool {
   /**
    * Utility: Resolve relative path
    */
-  private resolveRelativePath(source: string, fileDir: string, cwd: string): string {
+  private resolveRelativePath(
+    source: string,
+    fileDir: string,
+    cwd: string
+  ): string {
     const resolved = resolve(fileDir, source);
     let relativePath = relative(cwd, resolved);
 
@@ -1087,7 +1142,7 @@ export class SmartDependenciesTool {
       }
 
       // Try index files
-      const indexFiles = extensions.map(ext => join(resolved, `index${ext}`));
+      const indexFiles = extensions.map((ext) => join(resolved, `index${ext}`));
       for (const indexFile of indexFiles) {
         if (existsSync(indexFile)) {
           relativePath = relative(cwd, indexFile);
@@ -1120,7 +1175,7 @@ export class SmartDependenciesTool {
   private countInternalDeps(graph: Map<string, DependencyNode>): number {
     let count = 0;
     for (const node of Array.from(graph.values())) {
-      count += node.imports.filter(imp => !imp.isExternal).length;
+      count += node.imports.filter((imp) => !imp.isExternal).length;
     }
     return count;
   }
@@ -1153,15 +1208,11 @@ export class SmartDependenciesTool {
   ): void {
     const serialized = this.serializeGraph(graph);
     const ttlSeconds = ttlDays * 24 * 60 * 60;
-    const tokensSaved = this.estimateFullFileTokens(Array.from(graph.keys())) -
-                        this.estimateGraphTokens(graph);
+    const tokensSaved =
+      this.estimateFullFileTokens(Array.from(graph.keys())) -
+      this.estimateGraphTokens(graph);
 
-    this.cache.set(
-      cacheKey,
-      serialized as any,
-      ttlSeconds,
-      tokensSaved
-    );
+    this.cache.set(cacheKey, serialized as any, ttlSeconds, tokensSaved);
   }
 
   /**
@@ -1193,24 +1244,31 @@ export class SmartDependenciesTool {
     const depMetrics = this.metrics.getOperations(0, 'smart_dependencies');
 
     const totalAnalyses = depMetrics.length;
-    const cacheHits = depMetrics.filter(m => m.cacheHit).length;
-    const incrementalUpdates = depMetrics.filter(m =>
-      m.metadata?.incrementalUpdate === true
+    const cacheHits = depMetrics.filter((m) => m.cacheHit).length;
+    const incrementalUpdates = depMetrics.filter(
+      (m) => m.metadata?.incrementalUpdate === true
     ).length;
-    const totalTokensSaved = depMetrics.reduce((sum, m) => sum + (m.savedTokens || 0), 0);
-    const totalInputTokens = depMetrics.reduce((sum, m) => sum + (m.inputTokens || 0), 0);
+    const totalTokensSaved = depMetrics.reduce(
+      (sum, m) => sum + (m.savedTokens || 0),
+      0
+    );
+    const totalInputTokens = depMetrics.reduce(
+      (sum, m) => sum + (m.inputTokens || 0),
+      0
+    );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
-    const averageReduction = totalOriginalTokens > 0
-      ? (totalTokensSaved / totalOriginalTokens) * 100
-      : 0;
+    const averageReduction =
+      totalOriginalTokens > 0
+        ? (totalTokensSaved / totalOriginalTokens) * 100
+        : 0;
 
     return {
       totalAnalyses,
       cacheHits,
       incrementalUpdates,
       totalTokensSaved,
-      averageReduction
+      averageReduction,
     };
   }
 }
@@ -1245,54 +1303,57 @@ export async function runSmartDependencies(
  */
 export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
   name: 'smart_dependencies',
-  description: 'Analyze project dependencies with 83% token reduction through graph caching and incremental updates',
+  description:
+    'Analyze project dependencies with 83% token reduction through graph caching and incremental updates',
   inputSchema: {
     type: 'object',
     properties: {
       cwd: {
         type: 'string',
-        description: 'Working directory for analysis'
+        description: 'Working directory for analysis',
       },
       files: {
         type: 'array',
         items: { type: 'string' },
-        description: 'File patterns to analyze (glob patterns)'
+        description: 'File patterns to analyze (glob patterns)',
       },
       mode: {
         type: 'string',
         enum: ['graph', 'circular', 'unused', 'impact'],
-        description: 'Analysis mode: graph (full dependency graph), circular (detect cycles), unused (find unused imports/exports), impact (analyze change impact)',
-        default: 'graph'
+        description:
+          'Analysis mode: graph (full dependency graph), circular (detect cycles), unused (find unused imports/exports), impact (analyze change impact)',
+        default: 'graph',
       },
       targetFile: {
         type: 'string',
-        description: 'Target file for impact analysis (required for impact mode)'
+        description:
+          'Target file for impact analysis (required for impact mode)',
       },
       includeExternal: {
         type: 'boolean',
         description: 'Include external dependencies (node_modules)',
-        default: false
+        default: false,
       },
       maxDepth: {
         type: 'number',
-        description: 'Maximum depth for impact analysis'
+        description: 'Maximum depth for impact analysis',
       },
       useCache: {
         type: 'boolean',
         description: 'Use cached dependency graph',
-        default: true
+        default: true,
       },
       incrementalUpdate: {
         type: 'boolean',
         description: 'Update only changed files (when cache exists)',
-        default: true
+        default: true,
       },
       format: {
         type: 'string',
         enum: ['compact', 'detailed'],
         description: 'Output format',
-        default: 'compact'
-      }
-    }
-  }
+        default: 'compact',
+      },
+    },
+  },
 };

@@ -17,12 +17,12 @@
  * Target Lines: 1,540
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
-import * as fs from "fs";
-import { EventEmitter } from "events";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { createHash } from 'crypto';
+import * as fs from 'fs';
+import { EventEmitter } from 'events';
 
 // ============================================================================
 // Interfaces
@@ -30,14 +30,14 @@ import { EventEmitter } from "events";
 
 export interface LogDashboardOptions {
   operation:
-    | "create"
-    | "update"
-    | "query"
-    | "aggregate"
-    | "detect-anomalies"
-    | "create-filter"
-    | "export"
-    | "tail";
+    | 'create'
+    | 'update'
+    | 'query'
+    | 'aggregate'
+    | 'detect-anomalies'
+    | 'create-filter'
+    | 'export'
+    | 'tail';
 
   // Dashboard identification
   dashboardId?: string;
@@ -66,18 +66,18 @@ export interface LogDashboardOptions {
   aggregation?: {
     groupBy?: string[]; // Fields to group by
     timeWindow?: number; // Time window in seconds
-    metrics?: Array<"count" | "rate" | "p50" | "p95" | "p99">;
+    metrics?: Array<'count' | 'rate' | 'p50' | 'p95' | 'p99'>;
   };
 
   // Anomaly detection options
   anomaly?: {
     sensitivity?: number; // 0-1, higher = more sensitive
-    method?: "statistical" | "ml" | "pattern";
+    method?: 'statistical' | 'ml' | 'pattern';
     baselinePeriod?: number; // seconds
   };
 
   // Export options
-  format?: "json" | "csv" | "txt";
+  format?: 'json' | 'csv' | 'txt';
   outputPath?: string;
 
   // Tail options
@@ -89,17 +89,17 @@ export interface LogDashboardOptions {
   cacheTTL?: number;
 }
 
-export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
 export interface LogSource {
   id: string;
   name: string;
-  type: "file" | "stream" | "api" | "database";
+  type: 'file' | 'stream' | 'api' | 'database';
   config: {
     path?: string;
     url?: string;
     query?: string;
-    format?: "json" | "text" | "syslog" | "custom";
+    format?: 'json' | 'text' | 'syslog' | 'custom';
     parser?: string; // Custom parser regex
   };
   enabled: boolean;
@@ -139,7 +139,7 @@ export interface LogDashboardData {
 
 export interface LogWidget {
   id: string;
-  type: "chart" | "table" | "timeline" | "stats" | "heatmap";
+  type: 'chart' | 'table' | 'timeline' | 'stats' | 'heatmap';
   title: string;
   query: string;
   aggregation?: any;
@@ -147,7 +147,7 @@ export interface LogWidget {
 }
 
 export interface DashboardLayout {
-  type: "grid" | "flex";
+  type: 'grid' | 'flex';
   columns: number;
   rowHeight: number;
 }
@@ -162,7 +162,7 @@ export interface LogAggregation {
 
 export interface LogAnomaly {
   timestamp: number;
-  severity: "low" | "medium" | "high" | "critical";
+  severity: 'low' | 'medium' | 'high' | 'critical';
   type: string;
   description: string;
   baseline: number;
@@ -235,28 +235,28 @@ export class LogDashboard {
       let result: LogDashboardResult;
 
       switch (options.operation) {
-        case "create":
+        case 'create':
           result = await this.createDashboard(options);
           break;
-        case "update":
+        case 'update':
           result = await this.updateDashboard(options);
           break;
-        case "query":
+        case 'query':
           result = await this.queryLogs(options);
           break;
-        case "aggregate":
+        case 'aggregate':
           result = await this.aggregateLogs(options);
           break;
-        case "detect-anomalies":
+        case 'detect-anomalies':
           result = await this.detectAnomalies(options);
           break;
-        case "create-filter":
+        case 'create-filter':
           result = await this.createFilter(options);
           break;
-        case "export":
+        case 'export':
           result = await this.exportLogs(options);
           break;
-        case "tail":
+        case 'tail':
           result = await this.tailLogs(options);
           break;
         default:
@@ -308,7 +308,7 @@ export class LogDashboard {
     options: LogDashboardOptions
   ): Promise<LogDashboardResult> {
     if (!options.dashboardName) {
-      throw new Error("dashboardName is required for create operation");
+      throw new Error('dashboardName is required for create operation');
     }
 
     const dashboardId = this.generateDashboardId(options.dashboardName);
@@ -324,7 +324,7 @@ export class LogDashboard {
       filters: [],
       widgets: [],
       layout: {
-        type: "grid",
+        type: 'grid',
         columns: 12,
         rowHeight: 100,
       },
@@ -335,14 +335,14 @@ export class LogDashboard {
     this.dashboards.set(dashboardId, dashboard);
 
     // Cache dashboard metadata (95% reduction, 1-hour TTL)
-    const cacheKey = this.getCacheKey("dashboard", dashboardId);
+    const cacheKey = this.getCacheKey('dashboard', dashboardId);
     const compressed = this.compressDashboardMetadata(dashboard);
     const cachedData = JSON.stringify(compressed);
 
-    const tokensUsed = this.tokenCounter.count(JSON.stringify(dashboard))
-      .tokens;
-    const tokensSaved =
-      tokensUsed - this.tokenCounter.count(cachedData).tokens;
+    const tokensUsed = this.tokenCounter.count(
+      JSON.stringify(dashboard)
+    ).tokens;
+    const tokensSaved = tokensUsed - this.tokenCounter.count(cachedData).tokens;
 
     this.cache.set(cacheKey, cachedData, tokensUsed, cachedData.length);
 
@@ -367,19 +367,18 @@ export class LogDashboard {
     options: LogDashboardOptions
   ): Promise<LogDashboardResult> {
     if (!options.dashboardId && !options.dashboardName) {
-      throw new Error("dashboardId or dashboardName is required");
+      throw new Error('dashboardId or dashboardName is required');
     }
 
     const dashboardId =
-      options.dashboardId ||
-      this.findDashboardIdByName(options.dashboardName!);
+      options.dashboardId || this.findDashboardIdByName(options.dashboardName!);
     if (!dashboardId) {
-      throw new Error("Dashboard not found");
+      throw new Error('Dashboard not found');
     }
 
     const dashboard = this.dashboards.get(dashboardId);
     if (!dashboard) {
-      throw new Error("Dashboard not found");
+      throw new Error('Dashboard not found');
     }
 
     // Update dashboard properties
@@ -387,14 +386,14 @@ export class LogDashboard {
     dashboard.updatedAt = Date.now();
 
     // Update cache
-    const cacheKey = this.getCacheKey("dashboard", dashboardId);
+    const cacheKey = this.getCacheKey('dashboard', dashboardId);
     const compressed = this.compressDashboardMetadata(dashboard);
     const cachedData = JSON.stringify(compressed);
 
-    const tokensUsed = this.tokenCounter.count(JSON.stringify(dashboard))
-      .tokens;
-    const tokensSaved =
-      tokensUsed - this.tokenCounter.count(cachedData).tokens;
+    const tokensUsed = this.tokenCounter.count(
+      JSON.stringify(dashboard)
+    ).tokens;
+    const tokensSaved = tokensUsed - this.tokenCounter.count(cachedData).tokens;
 
     this.cache.set(cacheKey, cachedData, tokensUsed, cachedData.length);
 
@@ -419,7 +418,7 @@ export class LogDashboard {
     options: LogDashboardOptions
   ): Promise<LogDashboardResult> {
     const query = options.query || {};
-    const cacheKey = this.getCacheKey("query", JSON.stringify(query));
+    const cacheKey = this.getCacheKey('query', JSON.stringify(query));
 
     // Check cache
     if (options.useCache !== false) {
@@ -472,20 +471,17 @@ export class LogDashboard {
     // Compress logs (90% reduction)
     const compressed = this.compressLogs(paginatedLogs);
 
-    const fullTokens = this.tokenCounter.count(JSON.stringify(paginatedLogs))
-      .tokens;
-    const compressedTokens = this.tokenCounter.count(JSON.stringify(compressed))
-      .tokens;
+    const fullTokens = this.tokenCounter.count(
+      JSON.stringify(paginatedLogs)
+    ).tokens;
+    const compressedTokens = this.tokenCounter.count(
+      JSON.stringify(compressed)
+    ).tokens;
     const tokensSaved = fullTokens - compressedTokens;
 
     // Cache results
     const cacheData = JSON.stringify({ logs: compressed, stats });
-    this.cache.set(
-      cacheKey,
-      cacheData,
-      fullTokens,
-      cacheData.length
-    );
+    this.cache.set(cacheKey, cacheData, fullTokens, cacheData.length);
 
     return {
       success: true,
@@ -510,7 +506,7 @@ export class LogDashboard {
     options: LogDashboardOptions
   ): Promise<LogDashboardResult> {
     const aggregation = options.aggregation || {};
-    const cacheKey = this.getCacheKey("aggregate", JSON.stringify(options));
+    const cacheKey = this.getCacheKey('aggregate', JSON.stringify(options));
 
     // Check cache
     if (options.useCache !== false) {
@@ -550,8 +546,9 @@ export class LogDashboard {
 
     // Calculate tokens
     const fullTokens = this.tokenCounter.count(JSON.stringify(logs)).tokens;
-    const aggTokens = this.tokenCounter.count(JSON.stringify(aggregations))
-      .tokens;
+    const aggTokens = this.tokenCounter.count(
+      JSON.stringify(aggregations)
+    ).tokens;
     const tokensSaved = fullTokens - aggTokens;
 
     // Cache results
@@ -577,8 +574,11 @@ export class LogDashboard {
   private async detectAnomalies(
     options: LogDashboardOptions
   ): Promise<LogDashboardResult> {
-    const anomaly = options.anomaly || { sensitivity: 0.5, method: "statistical" };
-    const cacheKey = this.getCacheKey("anomalies", JSON.stringify(options));
+    const anomaly = options.anomaly || {
+      sensitivity: 0.5,
+      method: 'statistical',
+    };
+    const cacheKey = this.getCacheKey('anomalies', JSON.stringify(options));
 
     // Check cache
     if (options.useCache !== false) {
@@ -618,8 +618,9 @@ export class LogDashboard {
 
     // Calculate tokens
     const fullTokens = this.tokenCounter.count(JSON.stringify(logs)).tokens;
-    const anomalyTokens = this.tokenCounter.count(JSON.stringify(anomalies))
-      .tokens;
+    const anomalyTokens = this.tokenCounter.count(
+      JSON.stringify(anomalies)
+    ).tokens;
     const tokensSaved = fullTokens - anomalyTokens;
 
     // Cache results (5-minute TTL for anomaly detection)
@@ -646,7 +647,7 @@ export class LogDashboard {
     options: LogDashboardOptions
   ): Promise<LogDashboardResult> {
     if (!options.filterName || !options.filter) {
-      throw new Error("filterName and filter are required");
+      throw new Error('filterName and filter are required');
     }
 
     const filterId = this.generateFilterId(options.filterName);
@@ -687,19 +688,20 @@ export class LogDashboard {
     }
 
     const logs = queryResult.data.logs;
-    const format = options.format || "json";
-    const outputPath = options.outputPath || `logs-export-${Date.now()}.${format}`;
+    const format = options.format || 'json';
+    const outputPath =
+      options.outputPath || `logs-export-${Date.now()}.${format}`;
 
     let content: string;
 
     switch (format) {
-      case "json":
+      case 'json':
         content = JSON.stringify(logs, null, 2);
         break;
-      case "csv":
+      case 'csv':
         content = this.logsToCSV(logs);
         break;
-      case "txt":
+      case 'txt':
         content = this.logsToText(logs);
         break;
       default:
@@ -707,7 +709,7 @@ export class LogDashboard {
     }
 
     // Write to file
-    await fs.promises.writeFile(outputPath, content, "utf-8");
+    await fs.promises.writeFile(outputPath, content, 'utf-8');
 
     return {
       success: true,
@@ -736,7 +738,7 @@ export class LogDashboard {
     options: LogDashboardOptions
   ): Promise<LogDashboardResult> {
     if (!options.logFiles || options.logFiles.length === 0) {
-      throw new Error("logFiles is required for tail operation");
+      throw new Error('logFiles is required for tail operation');
     }
 
     const lines = options.lines || 100;
@@ -755,7 +757,7 @@ export class LogDashboard {
 
     // If follow mode, set up watcher (simplified for this implementation)
     if (options.follow) {
-      this.eventEmitter.emit("tail-start", {
+      this.eventEmitter.emit('tail-start', {
         files: options.logFiles,
         lines,
       });
@@ -783,15 +785,15 @@ export class LogDashboard {
   // ============================================================================
 
   private generateDashboardId(name: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(name + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private generateFilterId(name: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(name + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private findDashboardIdByName(name: string): string | undefined {
@@ -805,9 +807,9 @@ export class LogDashboard {
 
   // NOTE: Cache key is the md5 hash of `log-dashboard:${prefix}:${suffix}`, prefixed with "cache-"
   private getCacheKey(prefix: string, suffix: string): string {
-    const hash = createHash("md5");
+    const hash = createHash('md5');
     hash.update(`log-dashboard:${prefix}:${suffix}`);
-    return `cache-${hash.digest("hex")}`;
+    return `cache-${hash.digest('hex')}`;
   }
 
   private compressDashboardMetadata(dashboard: LogDashboardData): any {
@@ -833,8 +835,8 @@ export class LogDashboard {
 
   private async readLogFile(filePath: string): Promise<LogEntry[]> {
     try {
-      const content = await fs.promises.readFile(filePath, "utf-8");
-      const lines = content.split("\n").filter((line) => line.trim());
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      const lines = content.split('\n').filter((line) => line.trim());
 
       return lines.map((line, index) => this.parseLogLine(line, index));
     } catch (error) {
@@ -849,7 +851,9 @@ export class LogDashboard {
       const parsed = JSON.parse(line);
       return {
         timestamp: parsed.timestamp || parsed.time || Date.now(),
-        level: this.normalizeLogLevel(parsed.level || parsed.severity || "info"),
+        level: this.normalizeLogLevel(
+          parsed.level || parsed.severity || 'info'
+        ),
         message: parsed.message || parsed.msg || line,
         source: parsed.source || parsed.logger,
         fields: parsed,
@@ -858,11 +862,11 @@ export class LogDashboard {
     } catch {
       // Fallback to simple text parsing
       const levelMatch = line.match(/\b(trace|debug|info|warn|error|fatal)\b/i);
-      const level = levelMatch
-        ? this.normalizeLogLevel(levelMatch[0])
-        : "info";
+      const level = levelMatch ? this.normalizeLogLevel(levelMatch[0]) : 'info';
 
-      const timestampMatch = line.match(/\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}/);
+      const timestampMatch = line.match(
+        /\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}/
+      );
       const timestamp = timestampMatch
         ? new Date(timestampMatch[0]).getTime()
         : Date.now() - index * 1000;
@@ -879,11 +883,11 @@ export class LogDashboard {
   private normalizeLogLevel(level: string): LogLevel {
     const normalized = level.toLowerCase();
     if (
-      ["trace", "debug", "info", "warn", "error", "fatal"].includes(normalized)
+      ['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(normalized)
     ) {
       return normalized as LogLevel;
     }
-    return "info";
+    return 'info';
   }
 
   private applyFilters(logs: LogEntry[], query: any): LogEntry[] {
@@ -891,7 +895,7 @@ export class LogDashboard {
 
     // Filter by pattern
     if (query.pattern) {
-      const regex = new RegExp(query.pattern, "i");
+      const regex = new RegExp(query.pattern, 'i');
       filtered = filtered.filter((log) => regex.test(log.message));
     }
 
@@ -942,8 +946,11 @@ export class LogDashboard {
     };
   }
 
-  private performAggregation(logs: LogEntry[], aggregation: any): LogAggregation[] {
-    const groupBy = aggregation.groupBy || ["level"];
+  private performAggregation(
+    logs: LogEntry[],
+    aggregation: any
+  ): LogAggregation[] {
+    const groupBy = aggregation.groupBy || ['level'];
     const timeWindow = aggregation.timeWindow || 3600; // 1 hour default
 
     const groups = new Map<string, LogEntry[]>();
@@ -952,18 +959,18 @@ export class LogDashboard {
       // Create group key
       const keyParts: string[] = [];
       for (const field of groupBy) {
-        if (field === "level") {
+        if (field === 'level') {
           keyParts.push(log.level);
-        } else if (field === "source") {
-          keyParts.push(log.source || "unknown");
-        } else if (field === "timeWindow") {
+        } else if (field === 'source') {
+          keyParts.push(log.source || 'unknown');
+        } else if (field === 'timeWindow') {
           const windowStart =
             Math.floor(log.timestamp / (timeWindow * 1000)) * timeWindow * 1000;
           keyParts.push(windowStart.toString());
         }
       }
 
-      const key = keyParts.join(":");
+      const key = keyParts.join(':');
 
       if (!groups.has(key)) {
         groups.set(key, []);
@@ -993,9 +1000,9 @@ export class LogDashboard {
   private detectLogAnomalies(logs: LogEntry[], config: any): LogAnomaly[] {
     const anomalies: LogAnomaly[] = [];
     const sensitivity = config.sensitivity || 0.5;
-    const method = config.method || "statistical";
+    const method = config.method || 'statistical';
 
-    if (method === "statistical") {
+    if (method === 'statistical') {
       // Detect anomalies based on log frequency
       const timeWindow = 300000; // 5 minutes
 
@@ -1003,7 +1010,8 @@ export class LogDashboard {
       const now = Date.now();
       const baselinePeriod = config.baselinePeriod || 3600000; // 1 hour
       const baselineLogs = logs.filter(
-        (l) => l.timestamp >= now - baselinePeriod && l.timestamp < now - timeWindow
+        (l) =>
+          l.timestamp >= now - baselinePeriod && l.timestamp < now - timeWindow
       );
 
       // Group baseline into windows
@@ -1031,8 +1039,9 @@ export class LogDashboard {
         const deviation = (recentCount - baselineMean) / baselineStdDev;
         anomalies.push({
           timestamp: now,
-          severity: deviation > 3 ? "critical" : deviation > 2 ? "high" : "medium",
-          type: "frequency_spike",
+          severity:
+            deviation > 3 ? 'critical' : deviation > 2 ? 'high' : 'medium',
+          type: 'frequency_spike',
           description: `Log frequency spike detected: ${recentCount} logs in ${timeWindow / 1000}s (baseline: ${baselineMean.toFixed(1)})`,
           baseline: baselineMean,
           actual: recentCount,
@@ -1043,11 +1052,11 @@ export class LogDashboard {
 
       // Detect error rate anomalies
       const errorLogs = recentLogs.filter((l) =>
-        ["error", "fatal"].includes(l.level)
+        ['error', 'fatal'].includes(l.level)
       );
       const errorRate = errorLogs.length / recentCount || 0;
       const baselineErrors = baselineLogs.filter((l) =>
-        ["error", "fatal"].includes(l.level)
+        ['error', 'fatal'].includes(l.level)
       );
       const baselineErrorRate =
         baselineErrors.length / baselineLogs.length || 0;
@@ -1055,8 +1064,8 @@ export class LogDashboard {
       if (errorRate > baselineErrorRate * 2 && errorRate > 0.1) {
         anomalies.push({
           timestamp: now,
-          severity: errorRate > 0.5 ? "critical" : "high",
-          type: "error_rate_spike",
+          severity: errorRate > 0.5 ? 'critical' : 'high',
+          type: 'error_rate_spike',
           description: `Error rate spike: ${(errorRate * 100).toFixed(1)}% (baseline: ${(baselineErrorRate * 100).toFixed(1)}%)`,
           baseline: baselineErrorRate,
           actual: errorRate,
@@ -1078,22 +1087,22 @@ export class LogDashboard {
   }
 
   private logsToCSV(logs: any[]): string {
-    if (logs.length === 0) return "";
+    if (logs.length === 0) return '';
 
-    const headers = ["timestamp", "level", "message", "source"];
+    const headers = ['timestamp', 'level', 'message', 'source'];
     const rows = logs.map((log) => [
       log.t || log.timestamp,
       log.l || log.level,
       (log.m || log.message).replace(/"/g, '""'),
-      log.s || log.source || "",
+      log.s || log.source || '',
     ]);
 
     const csvLines = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
     ];
 
-    return csvLines.join("\n");
+    return csvLines.join('\n');
   }
 
   private logsToText(logs: any[]): string {
@@ -1103,9 +1112,9 @@ export class LogDashboard {
         const level = (log.l || log.level).toUpperCase();
         const message = log.m || log.message;
         const source = log.s || log.source;
-        return `[${timestamp}] ${level} ${source ? `[${source}]` : ""} ${message}`;
+        return `[${timestamp}] ${level} ${source ? `[${source}]` : ''} ${message}`;
       })
-      .join("\n");
+      .join('\n');
   }
 
   private estimateQueryTokenSavings(cachedData: any): number {
@@ -1137,39 +1146,39 @@ export class LogDashboard {
   // ============================================================================
 
   private async persistDashboards(): Promise<void> {
-    const cacheKey = this.getCacheKey("persistence", "dashboards");
+    const cacheKey = this.getCacheKey('persistence', 'dashboards');
     const data = JSON.stringify(Array.from(this.dashboards.entries()));
     await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private async persistFilters(): Promise<void> {
-    const cacheKey = this.getCacheKey("persistence", "filters");
+    const cacheKey = this.getCacheKey('persistence', 'filters');
     const data = JSON.stringify(Array.from(this.filtersMap.entries()));
     await this.cache.set(cacheKey, data, data.length, data.length);
   }
 
   private loadPersistedData(): void {
     // Load dashboards
-    const dashboardsKey = this.getCacheKey("persistence", "dashboards");
+    const dashboardsKey = this.getCacheKey('persistence', 'dashboards');
     const dashboardsData = this.cache.get(dashboardsKey);
     if (dashboardsData) {
       try {
         const entries = JSON.parse(dashboardsData);
         this.dashboards = new Map(entries);
       } catch (error) {
-        console.error("[LogDashboard] Error loading dashboards:", error);
+        console.error('[LogDashboard] Error loading dashboards:', error);
       }
     }
 
     // Load filters
-    const filtersKey = this.getCacheKey("persistence", "filters");
+    const filtersKey = this.getCacheKey('persistence', 'filters');
     const filtersData = this.cache.get(filtersKey);
     if (filtersData) {
       try {
         const entries = JSON.parse(filtersData);
         this.filtersMap = new Map(entries);
       } catch (error) {
-        console.error("[LogDashboard] Error loading filters:", error);
+        console.error('[LogDashboard] Error loading filters:', error);
       }
     }
   }
@@ -1184,14 +1193,14 @@ export class LogDashboard {
       this.logBuffer = this.logBuffer.slice(-this.maxLogBuffer);
     }
 
-    this.eventEmitter.emit("log", log);
+    this.eventEmitter.emit('log', log);
   }
 
   /**
    * Subscribe to log events
    */
   onLog(callback: (log: LogEntry) => void): void {
-    this.eventEmitter.on("log", callback);
+    this.eventEmitter.on('log', callback);
   }
 }
 
@@ -1221,110 +1230,110 @@ export function getLogDashboard(
 // ============================================================================
 
 export const LOG_DASHBOARD_TOOL_DEFINITION = {
-  name: "log_dashboard",
+  name: 'log_dashboard',
   description:
-    "Interactive log analysis dashboard with filtering, searching, pattern detection, and 90% token reduction through intelligent caching and compression",
+    'Interactive log analysis dashboard with filtering, searching, pattern detection, and 90% token reduction through intelligent caching and compression',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "create",
-          "update",
-          "query",
-          "aggregate",
-          "detect-anomalies",
-          "create-filter",
-          "export",
-          "tail",
+          'create',
+          'update',
+          'query',
+          'aggregate',
+          'detect-anomalies',
+          'create-filter',
+          'export',
+          'tail',
         ],
-        description: "The log dashboard operation to perform",
+        description: 'The log dashboard operation to perform',
       },
       dashboardId: {
-        type: "string",
-        description: "Dashboard identifier",
+        type: 'string',
+        description: 'Dashboard identifier',
       },
       dashboardName: {
-        type: "string",
-        description: "Dashboard name (required for create)",
+        type: 'string',
+        description: 'Dashboard name (required for create)',
       },
       logFiles: {
-        type: "array",
-        items: { type: "string" },
-        description: "Paths to log files to analyze",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Paths to log files to analyze',
       },
       query: {
-        type: "object",
-        description: "Log query configuration",
+        type: 'object',
+        description: 'Log query configuration',
         properties: {
-          pattern: { type: "string" },
+          pattern: { type: 'string' },
           level: {
-            type: ["string", "array"],
-            items: { type: "string" },
+            type: ['string', 'array'],
+            items: { type: 'string' },
           },
           timeRange: {
-            type: "object",
+            type: 'object',
             properties: {
-              start: { type: "number" },
-              end: { type: "number" },
+              start: { type: 'number' },
+              end: { type: 'number' },
             },
           },
-          limit: { type: "number" },
-          offset: { type: "number" },
+          limit: { type: 'number' },
+          offset: { type: 'number' },
         },
       },
       aggregation: {
-        type: "object",
-        description: "Aggregation configuration",
+        type: 'object',
+        description: 'Aggregation configuration',
         properties: {
           groupBy: {
-            type: "array",
-            items: { type: "string" },
+            type: 'array',
+            items: { type: 'string' },
           },
-          timeWindow: { type: "number" },
+          timeWindow: { type: 'number' },
           metrics: {
-            type: "array",
-            items: { type: "string" },
+            type: 'array',
+            items: { type: 'string' },
           },
         },
       },
       anomaly: {
-        type: "object",
-        description: "Anomaly detection configuration",
+        type: 'object',
+        description: 'Anomaly detection configuration',
         properties: {
-          sensitivity: { type: "number" },
-          method: { type: "string" },
-          baselinePeriod: { type: "number" },
+          sensitivity: { type: 'number' },
+          method: { type: 'string' },
+          baselinePeriod: { type: 'number' },
         },
       },
       filterName: {
-        type: "string",
-        description: "Name for saved filter",
+        type: 'string',
+        description: 'Name for saved filter',
       },
       format: {
-        type: "string",
-        enum: ["json", "csv", "txt"],
-        description: "Export format",
+        type: 'string',
+        enum: ['json', 'csv', 'txt'],
+        description: 'Export format',
       },
       outputPath: {
-        type: "string",
-        description: "Path for exported file",
+        type: 'string',
+        description: 'Path for exported file',
       },
       follow: {
-        type: "boolean",
-        description: "Follow mode for tail operation",
+        type: 'boolean',
+        description: 'Follow mode for tail operation',
       },
       lines: {
-        type: "number",
-        description: "Number of lines to tail",
+        type: 'number',
+        description: 'Number of lines to tail',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching (default: true)",
+        type: 'boolean',
+        description: 'Enable caching (default: true)',
         default: true,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

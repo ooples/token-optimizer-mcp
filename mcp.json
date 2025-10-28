@@ -1,0 +1,36 @@
+{
+  "name": "io.github.ooples/token-optimizer-mcp",
+  "version": "0.2.0",
+  "description": "Intelligent token optimization for Claude Code - achieving 95%+ token reduction through caching, compression, and smart tool intelligence",
+  "author": {
+    "name": "ooples",
+    "url": "https://github.com/ooples"
+  },
+  "sourceRepository": "https://github.com/ooples/token-optimizer-mcp",
+  "license": "MIT",
+  "runtime": "node",
+  "homepage": "https://github.com/ooples/token-optimizer-mcp#readme",
+  "capabilities": {
+    "tools": {},
+    "resources": {}
+  },
+  "installation": {
+    "npm": {
+      "package": "token-optimizer-mcp",
+      "command": "npx token-optimizer-mcp"
+    }
+  },
+  "config": {
+    "mcpServers": {
+      "token-optimizer": {
+        "command": "node",
+        "args": [
+          "./dist/server/index.js"
+        ],
+        "env": {
+          "TOKEN_OPTIMIZER_CACHE_DIR": "${HOME}/.token-optimizer-cache"
+        }
+      }
+    }
+  }
+}

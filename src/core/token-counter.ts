@@ -55,24 +55,87 @@ export class TokenCounter {
   }
 
   /**
-   * Calculate token savings from compression
+   * Calculate token savings based on context window management
+   *
+   * @param originalText - The original text content
+   * @param contextTokens - Number of tokens remaining in LLM context (default: 0 for full caching)
+   * @returns Token savings calculation
+   *
+   * @remarks
+   * This method measures context window optimization, NOT compression ratio.
+   * When content is cached externally (SQLite, Redis, etc.), it's completely
+   * removed from the LLM's context window, resulting in 100% token savings.
+   *
+   * Use cases:
+   * - External caching: contextTokens = 0 (100% savings)
+   * - Metadata-only: contextTokens = tokens in metadata (e.g., 8)
+   * - Summarization: contextTokens = tokens in summary (e.g., 50)
    */
-  calculateSavings(originalText: string, compressedText: string): {
+  calculateSavings(
+    originalText: string,
+    contextTokens: number = 0
+  ): {
     originalTokens: number;
-    compressedTokens: number;
+    contextTokens: number;
     tokensSaved: number;
     percentSaved: number;
   } {
     const original = this.count(originalText);
-    const compressed = this.count(compressedText);
-    const saved = original.tokens - compressed.tokens;
-    const percentSaved = original.tokens > 0 ? (saved / original.tokens) * 100 : 0;
+    const saved = original.tokens - contextTokens;
+    const percentSaved =
+      original.tokens > 0 ? (saved / original.tokens) * 100 : 0;
 
     return {
       originalTokens: original.tokens,
-      compressedTokens: compressed.tokens,
+      contextTokens,
       tokensSaved: saved,
       percentSaved,
+    };
+  }
+
+  /**
+   * Calculate context window savings for externally cached content
+   *
+   * @param originalText - The original text content being cached
+   * @returns Token savings calculation with 100% savings
+   *
+   * @remarks
+   * When content is compressed and stored in an external cache (SQLite, Redis, etc.),
+   * it's completely removed from the LLM's context window. The compressed/encoded
+   * data is NEVER sent to the LLM, so we measure 100% token savings.
+   *
+   * Key insight: We're measuring CONTEXT WINDOW CLEARANCE, not compression ratio.
+   * - ✅ Content removed from LLM context (saves tokens)
+   * - ✅ Storage compressed (saves disk space)
+   * - ❌ Don't count tokens in compressed data (it's not sent to LLM!)
+   *
+   * @example
+   * ```typescript
+   * const tokenCounter = new TokenCounter();
+   * const content = "Large file content...";
+   * const compressed = compress(content);
+   *
+   * // Store in external cache
+   * await cache.set(key, compressed);
+   *
+   * // Calculate context window savings
+   * const savings = tokenCounter.calculateCacheSavings(content);
+   * // Returns: { originalTokens: 250, contextTokens: 0, tokensSaved: 250, percentSaved: 100 }
+   * ```
+   */
+  calculateCacheSavings(originalText: string): {
+    originalTokens: number;
+    contextTokens: number;
+    tokensSaved: number;
+    percentSaved: number;
+  } {
+    const original = this.count(originalText);
+
+    return {
+      originalTokens: original.tokens,
+      contextTokens: 0, // External cache - nothing in context
+      tokensSaved: original.tokens, // 100% of original tokens saved
+      percentSaved: 100, // Always 100% for external caching
     };
   }
 
@@ -98,7 +161,9 @@ export class TokenCounter {
     const decoded = this.encoder.decode(truncatedTokens);
 
     // Handle potential type issues with decode return value
-    return typeof decoded === 'string' ? decoded : new TextDecoder().decode(decoded);
+    return typeof decoded === 'string'
+      ? decoded
+      : new TextDecoder().decode(decoded);
   }
 
   /**

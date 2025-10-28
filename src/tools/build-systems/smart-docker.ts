@@ -8,12 +8,12 @@
  * - Token-optimized output
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface ContainerInfo {
   id: string;
@@ -33,7 +33,7 @@ interface DockerImage {
 
 interface DockerResult {
   success: boolean;
-  operation: "build" | "run" | "stop" | "logs" | "ps";
+  operation: 'build' | 'run' | 'stop' | 'logs' | 'ps';
   containers?: ContainerInfo[];
   images?: DockerImage[];
   logs?: string[];
@@ -46,7 +46,7 @@ interface SmartDockerOptions {
   /**
    * Docker operation to perform
    */
-  operation: "build" | "run" | "stop" | "logs" | "ps";
+  operation: 'build' | 'run' | 'stop' | 'logs' | 'ps';
 
   /**
    * Force operation (ignore cache)
@@ -158,9 +158,9 @@ interface SmartDockerOutput {
    * Optimization suggestions
    */
   suggestions: Array<{
-    type: "performance" | "security" | "size";
+    type: 'performance' | 'security' | 'size';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }>;
 
   /**
@@ -175,7 +175,7 @@ interface SmartDockerOutput {
 
 export class SmartDocker {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_docker";
+  private cacheNamespace = 'smart_docker';
   private projectRoot: string;
 
   constructor(cache: CacheEngine, projectRoot?: string) {
@@ -196,7 +196,7 @@ export class SmartDocker {
 
     // Check cache first (unless force mode or logs operations)
     // Note: ps operations are cached with shorter TTL since they can change
-    if (!force && operation !== "logs") {
+    if (!force && operation !== 'logs') {
       const cached = this.getCachedResult(cacheKey, maxCacheAge);
       if (cached) {
         return this.formatCachedOutput(cached);
@@ -211,8 +211,8 @@ export class SmartDocker {
 
     // Cache the result (except logs which are dynamic)
     // ps operations use shorter cache TTL (60 seconds) compared to builds (3600 seconds)
-    if (operation !== "logs") {
-      const cacheTTL = operation === "ps" ? 60 : 3600;
+    if (operation !== 'logs') {
+      const cacheTTL = operation === 'ps' ? 60 : 3600;
       this.cacheResult(cacheKey, result, cacheTTL);
     }
 
@@ -227,20 +227,20 @@ export class SmartDocker {
    * Run Docker operation
    */
   private async runDockerOperation(
-    options: SmartDockerOptions,
+    options: SmartDockerOptions
   ): Promise<DockerResult> {
     const { operation } = options;
 
     switch (operation) {
-      case "build":
+      case 'build':
         return this.dockerBuild(options);
-      case "run":
+      case 'run':
         return this.dockerRun(options);
-      case "stop":
+      case 'stop':
         return this.dockerStop(options);
-      case "logs":
+      case 'logs':
         return this.dockerLogs(options);
-      case "ps":
+      case 'ps':
         return this.dockerPs(options);
       default:
         throw new Error(`Unknown operation: ${operation}`);
@@ -251,17 +251,17 @@ export class SmartDocker {
    * Docker build operation
    */
   private async dockerBuild(
-    options: SmartDockerOptions,
+    options: SmartDockerOptions
   ): Promise<DockerResult> {
     const {
-      dockerfile = "Dockerfile",
-      imageName = "app:latest",
-      context = ".",
+      dockerfile = 'Dockerfile',
+      imageName = 'app:latest',
+      context = '.',
     } = options;
 
-    const args = ["build", "-f", dockerfile, "-t", imageName, context];
+    const args = ['build', '-f', dockerfile, '-t', imageName, context];
 
-    return this.execDocker(args, "build");
+    return this.execDocker(args, 'build');
   }
 
   /**
@@ -269,37 +269,37 @@ export class SmartDocker {
    */
   private async dockerRun(options: SmartDockerOptions): Promise<DockerResult> {
     const {
-      imageName = "app:latest",
-      containerName = "app-container",
+      imageName = 'app:latest',
+      containerName = 'app-container',
       ports = [],
       env = {},
     } = options;
 
-    const args = ["run", "-d", "--name", containerName];
+    const args = ['run', '-d', '--name', containerName];
 
     // Add port mappings
     for (const port of ports) {
-      args.push("-p", port);
+      args.push('-p', port);
     }
 
     // Add environment variables
     for (const [key, value] of Object.entries(env)) {
-      args.push("-e", `${key}=${value}`);
+      args.push('-e', `${key}=${value}`);
     }
 
     args.push(imageName);
 
-    return this.execDocker(args, "run");
+    return this.execDocker(args, 'run');
   }
 
   /**
    * Docker stop operation
    */
   private async dockerStop(options: SmartDockerOptions): Promise<DockerResult> {
-    const { containerName = "app-container" } = options;
-    const args = ["stop", containerName];
+    const { containerName = 'app-container' } = options;
+    const args = ['stop', containerName];
 
-    return this.execDocker(args, "stop");
+    return this.execDocker(args, 'stop');
   }
 
   /**
@@ -307,24 +307,24 @@ export class SmartDocker {
    */
   private async dockerLogs(options: SmartDockerOptions): Promise<DockerResult> {
     const {
-      containerName = "app-container",
+      containerName = 'app-container',
       follow = false,
       tail = 100,
     } = options;
 
-    const args = ["logs"];
+    const args = ['logs'];
 
     if (follow) {
-      args.push("-f");
+      args.push('-f');
     }
 
     if (tail) {
-      args.push("--tail", tail.toString());
+      args.push('--tail', tail.toString());
     }
 
     args.push(containerName);
 
-    return this.execDocker(args, "logs");
+    return this.execDocker(args, 'logs');
   }
 
   /**
@@ -332,13 +332,13 @@ export class SmartDocker {
    */
   private async dockerPs(_options: SmartDockerOptions): Promise<DockerResult> {
     const args = [
-      "ps",
-      "-a",
-      "--format",
-      "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}",
+      'ps',
+      '-a',
+      '--format',
+      '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}',
     ];
 
-    return this.execDocker(args, "ps");
+    return this.execDocker(args, 'ps');
   }
 
   /**
@@ -346,26 +346,26 @@ export class SmartDocker {
    */
   private async execDocker(
     args: string[],
-    operation: "build" | "run" | "stop" | "logs" | "ps",
+    operation: 'build' | 'run' | 'stop' | 'logs' | 'ps'
   ): Promise<DockerResult> {
     return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
+      let stdout = '';
+      let stderr = '';
 
-      const docker = spawn("docker", args, {
+      const docker = spawn('docker', args, {
         cwd: this.projectRoot,
         shell: true,
       });
 
-      docker.stdout.on("data", (data) => {
+      docker.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      docker.stderr.on("data", (data) => {
+      docker.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      docker.on("close", (code) => {
+      docker.on('close', (code) => {
         const output = stdout + stderr;
 
         const result: DockerResult = {
@@ -376,18 +376,18 @@ export class SmartDocker {
         };
 
         // Parse output based on operation
-        if (operation === "ps") {
+        if (operation === 'ps') {
           result.containers = this.parseContainers(stdout);
-        } else if (operation === "logs") {
+        } else if (operation === 'logs') {
           result.logs = this.parseLogs(stdout);
-        } else if (operation === "build") {
+        } else if (operation === 'build') {
           result.buildLayers = this.countBuildLayers(output);
         }
 
         resolve(result);
       });
 
-      docker.on("error", (err) => {
+      docker.on('error', (err) => {
         reject(err);
       });
     });
@@ -398,17 +398,17 @@ export class SmartDocker {
    */
   private parseContainers(output: string): ContainerInfo[] {
     const containers: ContainerInfo[] = [];
-    const lines = output.split("\n").filter((l) => l.trim());
+    const lines = output.split('\n').filter((l) => l.trim());
 
     for (const line of lines) {
-      const [id, name, image, status, ports] = line.split("|");
+      const [id, name, image, status, ports] = line.split('|');
       if (id && name) {
         containers.push({
           id: id.substring(0, 12),
           name,
           image,
           status,
-          ports: ports ? ports.split(",").map((p) => p.trim()) : [],
+          ports: ports ? ports.split(',').map((p) => p.trim()) : [],
         });
       }
     }
@@ -421,7 +421,7 @@ export class SmartDocker {
    */
   private parseLogs(output: string): string[] {
     return output
-      .split("\n")
+      .split('\n')
       .filter((l) => l.trim())
       .slice(-100); // Keep last 100 lines
   }
@@ -439,28 +439,28 @@ export class SmartDocker {
    */
   private generateSuggestions(
     result: DockerResult,
-    options: SmartDockerOptions,
+    options: SmartDockerOptions
   ): Array<{
-    type: "performance" | "security" | "size";
+    type: 'performance' | 'security' | 'size';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }> {
     const suggestions = [];
 
     // Check for Dockerfile best practices
     const dockerfilePath = join(
       this.projectRoot,
-      options.dockerfile || "Dockerfile",
+      options.dockerfile || 'Dockerfile'
     );
     if (existsSync(dockerfilePath)) {
-      const dockerfileContent = readFileSync(dockerfilePath, "utf-8");
+      const dockerfileContent = readFileSync(dockerfilePath, 'utf-8');
 
       // Check for .dockerignore
-      if (!existsSync(join(this.projectRoot, ".dockerignore"))) {
+      if (!existsSync(join(this.projectRoot, '.dockerignore'))) {
         suggestions.push({
-          type: "size" as const,
-          message: "Add .dockerignore to reduce build context size.",
-          impact: "medium" as const,
+          type: 'size' as const,
+          message: 'Add .dockerignore to reduce build context size.',
+          impact: 'medium' as const,
         });
       }
 
@@ -469,33 +469,33 @@ export class SmartDocker {
       const layerCount =
         result.buildLayers || this.countDockerfileLayers(dockerfileContent);
 
-      if (!dockerfileContent.includes("AS ") && layerCount > 10) {
+      if (!dockerfileContent.includes('AS ') && layerCount > 10) {
         suggestions.push({
-          type: "size" as const,
-          message: "Consider using multi-stage builds to reduce image size.",
-          impact: "high" as const,
+          type: 'size' as const,
+          message: 'Consider using multi-stage builds to reduce image size.',
+          impact: 'high' as const,
         });
       }
 
       // Check for latest tag
       if (
-        dockerfileContent.includes("FROM ") &&
-        dockerfileContent.includes(":latest")
+        dockerfileContent.includes('FROM ') &&
+        dockerfileContent.includes(':latest')
       ) {
         suggestions.push({
-          type: "security" as const,
+          type: 'security' as const,
           message:
-            "Avoid using :latest tag in FROM statements for reproducible builds.",
-          impact: "high" as const,
+            'Avoid using :latest tag in FROM statements for reproducible builds.',
+          impact: 'high' as const,
         });
       }
 
       // Check for root user
-      if (!dockerfileContent.includes("USER ")) {
+      if (!dockerfileContent.includes('USER ')) {
         suggestions.push({
-          type: "security" as const,
-          message: "Specify a non-root USER in Dockerfile for better security.",
-          impact: "medium" as const,
+          type: 'security' as const,
+          message: 'Specify a non-root USER in Dockerfile for better security.',
+          impact: 'medium' as const,
         });
       }
     }
@@ -508,42 +508,42 @@ export class SmartDocker {
    */
   private generateCacheKey(
     operation: string,
-    options: SmartDockerOptions,
+    options: SmartDockerOptions
   ): string {
     const keyParts = [
       operation,
-      options.imageName || "",
-      options.containerName || "",
-      options.dockerfile || "",
+      options.imageName || '',
+      options.containerName || '',
+      options.dockerfile || '',
     ];
 
     // Include Dockerfile hash for build operations
-    if (operation === "build") {
+    if (operation === 'build') {
       const dockerfilePath = join(
         this.projectRoot,
-        options.dockerfile || "Dockerfile",
+        options.dockerfile || 'Dockerfile'
       );
       if (existsSync(dockerfilePath)) {
-        const hash = createHash("md5")
+        const hash = createHash('md5')
           .update(readFileSync(dockerfilePath))
-          .digest("hex");
+          .digest('hex');
         keyParts.push(hash);
       }
     }
 
-    return createHash("md5").update(keyParts.join(":")).digest("hex");
+    return createHash('md5').update(keyParts.join(':')).digest('hex');
   }
 
   /**
    * Count layers in a Dockerfile
    */
   private countDockerfileLayers(content: string): number {
-    const layerCommands = ["RUN", "COPY", "ADD", "WORKDIR", "ENV"];
-    const lines = content.split("\n");
+    const layerCommands = ['RUN', 'COPY', 'ADD', 'WORKDIR', 'ENV'];
+    const lines = content.split('\n');
     let count = 0;
     for (const line of lines) {
       const trimmed = line.trim();
-      if (layerCommands.some((cmd) => trimmed.startsWith(cmd + " "))) {
+      if (layerCommands.some((cmd) => trimmed.startsWith(cmd + ' '))) {
         count++;
       }
     }
@@ -554,7 +554,7 @@ export class SmartDocker {
    * Get cached result
    */
   private getCachedResult(key: string, maxAge: number): DockerResult | null {
-    const cached = this.cache.get(this.cacheNamespace + ":" + key);
+    const cached = this.cache.get(this.cacheNamespace + ':' + key);
     if (!cached) return null;
 
     try {
@@ -579,14 +579,17 @@ export class SmartDocker {
   private cacheResult(
     key: string,
     result: DockerResult,
-    ttl: number = 3600,
+    _ttl: number = 3600
   ): void {
     const cacheData = { ...result, cachedAt: Date.now() };
+    const dataToCache = JSON.stringify(cacheData);
+    const originalSize = this.estimateOriginalOutputSize(result);
+    const compactSize = dataToCache.length;
     this.cache.set(
-      this.cacheNamespace + ":" + key,
-      JSON.stringify(cacheData),
-      ttl,
-      0,
+      this.cacheNamespace + ':' + key,
+      dataToCache,
+      originalSize,
+      compactSize
     );
   }
 
@@ -596,11 +599,11 @@ export class SmartDocker {
   private transformOutput(
     result: DockerResult,
     suggestions: Array<{
-      type: "performance" | "security" | "size";
+      type: 'performance' | 'security' | 'size';
       message: string;
-      impact: "high" | "medium" | "low";
+      impact: 'high' | 'medium' | 'low';
     }>,
-    fromCache = false,
+    fromCache = false
   ): SmartDockerOutput {
     const output: SmartDockerOutput = {
       summary: {
@@ -631,13 +634,13 @@ export class SmartDocker {
     if (result.logs) {
       output.logs = result.logs.map((line) => {
         const timestampMatch = line.match(
-          /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)/,
+          /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)/
         );
         const levelMatch = line.match(/\[(ERROR|WARN|INFO|DEBUG)\]/);
 
         return {
-          timestamp: timestampMatch ? timestampMatch[1] : "unknown",
-          level: levelMatch ? levelMatch[1] : "info",
+          timestamp: timestampMatch ? timestampMatch[1] : 'unknown',
+          level: levelMatch ? levelMatch[1] : 'info',
           message: line,
         };
       });
@@ -647,7 +650,7 @@ export class SmartDocker {
       output.buildInfo = {
         layers: result.buildLayers,
         cacheHits: 0, // TODO: Parse from build output
-        totalSize: "unknown", // TODO: Get from docker images
+        totalSize: 'unknown', // TODO: Get from docker images
       };
     }
 
@@ -659,7 +662,7 @@ export class SmartDocker {
       originalTokens: Math.ceil(originalSize / 4),
       compactedTokens: Math.ceil(compactSize / 4),
       reductionPercentage: Math.round(
-        ((originalSize - compactSize) / originalSize) * 100,
+        ((originalSize - compactSize) / originalSize) * 100
       ),
     };
 
@@ -715,7 +718,7 @@ export class SmartDocker {
  */
 export function getSmartDocker(
   cache: CacheEngine,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartDocker {
   return new SmartDocker(cache, projectRoot);
 }
@@ -724,20 +727,20 @@ export function getSmartDocker(
  * CLI-friendly function for running smart docker
  */
 export async function runSmartDocker(
-  options: SmartDockerOptions,
+  options: SmartDockerOptions
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const smartDocker = getSmartDocker(cache, options.projectRoot);
   try {
     const result = await smartDocker.run(options);
 
-    let output = `\n🐳 Smart Docker Results ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\n🐳 Smart Docker Results ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
     output += `  Operation: ${result.summary.operation}\n`;
-    output += `  Status: ${result.summary.success ? "✓ Success" : "✗ Failed"}\n`;
+    output += `  Status: ${result.summary.success ? '✓ Success' : '✗ Failed'}\n`;
     output += `  Duration: ${(result.summary.duration / 1000).toFixed(2)}s\n\n`;
 
     // Containers
@@ -748,10 +751,10 @@ export async function runSmartDocker(
         output += `    Image: ${container.image}\n`;
         output += `    Status: ${container.status}\n`;
         if (container.ports.length > 0) {
-          output += `    Ports: ${container.ports.join(", ")}\n`;
+          output += `    Ports: ${container.ports.join(', ')}\n`;
         }
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Build info
@@ -767,10 +770,10 @@ export async function runSmartDocker(
       output += `Recent Logs (${result.logs.length} entries):\n`;
       for (const log of result.logs.slice(-20)) {
         const icon =
-          log.level === "ERROR" ? "🔴" : log.level === "WARN" ? "⚠️" : "ℹ️";
+          log.level === 'ERROR' ? '🔴' : log.level === 'WARN' ? '⚠️' : 'ℹ️';
         output += `  ${icon} ${log.message}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Suggestions
@@ -778,14 +781,14 @@ export async function runSmartDocker(
       output += `Optimization Suggestions:\n`;
       for (const suggestion of result.suggestions) {
         const icon =
-          suggestion.impact === "high"
-            ? "🔴"
-            : suggestion.impact === "medium"
-              ? "🟡"
-              : "🟢";
+          suggestion.impact === 'high'
+            ? '🔴'
+            : suggestion.impact === 'medium'
+              ? '🟡'
+              : '🟢';
         output += `  ${icon} [${suggestion.type}] ${suggestion.message}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Metrics
@@ -799,3 +802,69 @@ export async function runSmartDocker(
     smartDocker.close();
   }
 }
+
+// MCP Tool definition
+export const SMART_DOCKER_TOOL_DEFINITION = {
+  name: 'smart_docker',
+  description:
+    'Docker operations with build/run/stop/logs support, image layer analysis, and optimization suggestions',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      operation: {
+        type: 'string',
+        enum: ['build', 'run', 'stop', 'logs', 'ps'],
+        description: 'Docker operation to perform',
+      },
+      force: {
+        type: 'boolean',
+        description: 'Force operation (ignore cache)',
+        default: false,
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory',
+      },
+      dockerfile: {
+        type: 'string',
+        description: 'Dockerfile path',
+      },
+      imageName: {
+        type: 'string',
+        description: 'Image name for build/run',
+      },
+      containerName: {
+        type: 'string',
+        description: 'Container name for run/stop/logs',
+      },
+      context: {
+        type: 'string',
+        description: 'Build context directory',
+      },
+      ports: {
+        type: 'array',
+        items: { type: 'string' },
+        description: "Port mappings for run (e.g., ['8080:80', '443:443'])",
+      },
+      env: {
+        type: 'object',
+        description: 'Environment variables for run',
+      },
+      follow: {
+        type: 'boolean',
+        description: 'Follow logs (tail mode)',
+        default: false,
+      },
+      tail: {
+        type: 'number',
+        description: 'Number of log lines to show',
+      },
+      maxCacheAge: {
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 3600)',
+        default: 3600,
+      },
+    },
+    required: ['operation'],
+  },
+};

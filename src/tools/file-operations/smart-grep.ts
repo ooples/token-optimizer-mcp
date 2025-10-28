@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Grep Tool - 80% Token Reduction
  *
  * Achieves token reduction through:
@@ -12,62 +12,61 @@
  */
 
 import { readFileSync, statSync } from 'fs';
-import glob from 'glob';
-const { globSync } = glob;
+import { globSync } from 'glob';
 import { relative, join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { generateCacheKey } from '../shared/hash-utils';
-import { detectFileType } from '../shared/syntax-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
+import { detectFileType } from '../shared/syntax-utils.js';
 
 export interface GrepMatch {
-  file: string;             // File path
-  lineNumber: number;       // 1-based line number
-  column?: number;          // 0-based column number (optional)
-  line: string;             // The matched line
-  match: string;            // The actual matched text
-  before?: string[];        // Context lines before match
-  after?: string[];         // Context lines after match
+  file: string; // File path
+  lineNumber: number; // 1-based line number
+  column?: number; // 0-based column number (optional)
+  line: string; // The matched line
+  match: string; // The actual matched text
+  before?: string[]; // Context lines before match
+  after?: string[]; // Context lines after match
 }
 
 export interface SmartGrepOptions {
   // Search scope
-  cwd?: string;                 // Working directory (default: process.cwd())
-  files?: string[];             // Specific files to search (glob patterns)
+  cwd?: string; // Working directory (default: process.cwd())
+  files?: string[]; // Specific files to search (glob patterns)
 
   // Pattern options
-  caseSensitive?: boolean;      // Case-sensitive search (default: false)
-  wholeWord?: boolean;          // Match whole words only (default: false)
-  regex?: boolean;              // Treat pattern as regex (default: false)
+  caseSensitive?: boolean; // Case-sensitive search (default: false)
+  wholeWord?: boolean; // Match whole words only (default: false)
+  regex?: boolean; // Treat pattern as regex (default: false)
 
   // File filtering
-  extensions?: string[];        // Search only these extensions
+  extensions?: string[]; // Search only these extensions
   excludeExtensions?: string[]; // Exclude these extensions
-  skipBinary?: boolean;         // Skip binary files (default: true)
-  ignore?: string[];            // Patterns to ignore (default: node_modules, .git)
+  skipBinary?: boolean; // Skip binary files (default: true)
+  ignore?: string[]; // Patterns to ignore (default: node_modules, .git)
 
   // Output options
-  includeContext?: boolean;     // Include before/after context (default: false)
-  contextBefore?: number;       // Lines before match (default: 0)
-  contextAfter?: number;        // Lines after match (default: 0)
-  includeColumn?: boolean;      // Include column number (default: false)
-  maxMatchesPerFile?: number;   // Max matches per file (default: unlimited)
+  includeContext?: boolean; // Include before/after context (default: false)
+  contextBefore?: number; // Lines before match (default: 0)
+  contextAfter?: number; // Lines after match (default: 0)
+  includeColumn?: boolean; // Include column number (default: false)
+  maxMatchesPerFile?: number; // Max matches per file (default: unlimited)
 
   // Result options
-  limit?: number;               // Maximum total matches to return
-  offset?: number;              // Skip first N matches (default: 0)
-  filesWithMatches?: boolean;   // Only return filenames, not matches (default: false)
-  count?: boolean;              // Only return match counts (default: false)
+  limit?: number; // Maximum total matches to return
+  offset?: number; // Skip first N matches (default: 0)
+  filesWithMatches?: boolean; // Only return filenames, not matches (default: false)
+  count?: boolean; // Only return match counts (default: false)
 
   // Cache options
-  useCache?: boolean;           // Use cached results (default: true)
-  ttl?: number;                 // Cache TTL in seconds (default: 300)
+  useCache?: boolean; // Use cached results (default: true)
+  ttl?: number; // Cache TTL in seconds (default: 300)
 
   // Performance options
-  maxFileSize?: number;         // Skip files larger than this (bytes)
-  encoding?: BufferEncoding;    // File encoding (default: utf-8)
+  maxFileSize?: number; // Skip files larger than this (bytes)
+  encoding?: BufferEncoding; // File encoding (default: utf-8)
 }
 
 export interface SmartGrepResult {
@@ -86,8 +85,8 @@ export interface SmartGrepResult {
     duration: number;
     cacheHit: boolean;
   };
-  matches?: GrepMatch[];        // Matches (if not filesWithMatches or count mode)
-  files?: string[];             // Files with matches (if filesWithMatches mode)
+  matches?: GrepMatch[]; // Matches (if not filesWithMatches or count mode)
+  files?: string[]; // Files with matches (if filesWithMatches mode)
   counts?: Map<string, number>; // Match counts per file (if count mode)
   error?: string;
 }
@@ -116,9 +115,18 @@ export class SmartGrepTool {
       wholeWord: options.wholeWord ?? false,
       regex: options.regex ?? false,
       extensions: options.extensions ?? [],
-      excludeExtensions: options.excludeExtensions ?? ['.min.js', '.map', '.lock'],
+      excludeExtensions: options.excludeExtensions ?? [
+        '.min.js',
+        '.map',
+        '.lock',
+      ],
       skipBinary: options.skipBinary ?? true,
-      ignore: options.ignore ?? ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'],
+      ignore: options.ignore ?? [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/dist/**',
+        '**/build/**',
+      ],
       includeContext: options.includeContext ?? false,
       contextBefore: options.contextBefore ?? 0,
       contextAfter: options.contextAfter ?? 0,
@@ -131,7 +139,7 @@ export class SmartGrepTool {
       useCache: options.useCache ?? true,
       ttl: options.ttl ?? 300,
       maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB default
-      encoding: options.encoding ?? 'utf-8'
+      encoding: options.encoding ?? 'utf-8',
     };
 
     try {
@@ -176,15 +184,19 @@ export class SmartGrepTool {
       }
 
       // Filter files by extension and size
-      filesToSearch = filesToSearch.filter(file => {
+      filesToSearch = filesToSearch.filter((file) => {
         try {
           // Extension filter
           if (opts.extensions.length > 0) {
-            const hasAllowedExt = opts.extensions.some(ext => file.endsWith(ext));
+            const hasAllowedExt = opts.extensions.some((ext) =>
+              file.endsWith(ext)
+            );
             if (!hasAllowedExt) return false;
           }
 
-          const hasExcludedExt = opts.excludeExtensions.some(ext => file.endsWith(ext));
+          const hasExcludedExt = opts.excludeExtensions.some((ext) =>
+            file.endsWith(ext)
+          );
           if (hasExcludedExt) return false;
 
           // Size filter
@@ -261,7 +273,10 @@ export class SmartGrepTool {
 
       // Apply pagination
       const totalMatches = allMatches.length;
-      const paginatedMatches = allMatches.slice(opts.offset, opts.offset + opts.limit);
+      const paginatedMatches = allMatches.slice(
+        opts.offset,
+        opts.offset + opts.limit
+      );
       const truncated = totalMatches > paginatedMatches.length + opts.offset;
 
       // Build result based on mode
@@ -271,15 +286,21 @@ export class SmartGrepTool {
       if (opts.count) {
         // Count mode: return counts only
         resultData = { counts: Object.fromEntries(matchCounts) };
-        resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
+        resultTokens = this.tokenCounter.count(
+          JSON.stringify(resultData)
+        ).tokens;
       } else if (opts.filesWithMatches) {
         // Files-with-matches mode: return filenames only
         resultData = { files: Array.from(filesWithMatches) };
-        resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
+        resultTokens = this.tokenCounter.count(
+          JSON.stringify(resultData)
+        ).tokens;
       } else {
         // Normal mode: return matches
         resultData = { matches: paginatedMatches };
-        resultTokens = this.tokenCounter.count(JSON.stringify(resultData)).tokens;
+        resultTokens = this.tokenCounter.count(
+          JSON.stringify(resultData)
+        ).tokens;
       }
 
       // Estimate original tokens (if we had returned all file contents)
@@ -306,28 +327,30 @@ export class SmartGrepTool {
           totalMatches,
           filesSearched,
           filesWithMatches: filesWithMatches.size,
-          returnedMatches: opts.count || opts.filesWithMatches ? 0 : paginatedMatches.length,
+          returnedMatches:
+            opts.count || opts.filesWithMatches ? 0 : paginatedMatches.length,
           truncated,
           tokensSaved,
           tokenCount: resultTokens,
           originalTokenCount: originalTokens,
           compressionRatio,
           duration: 0, // Will be set below
-          cacheHit: false
+          cacheHit: false,
         },
         ...(opts.count ? { counts: matchCounts } : {}),
-        ...(opts.filesWithMatches ? { files: Array.from(filesWithMatches) } : {}),
-        ...(!opts.count && !opts.filesWithMatches ? { matches: paginatedMatches } : {})
+        ...(opts.filesWithMatches
+          ? { files: Array.from(filesWithMatches) }
+          : {}),
+        ...(!opts.count && !opts.filesWithMatches
+          ? { matches: paginatedMatches }
+          : {}),
       };
 
       // Cache result
       if (opts.useCache) {
-        this.cache.set(
-          cacheKey,
-          JSON.stringify(result) as any,
-          opts.ttl,
-          tokensSaved
-        );
+        const resultString = JSON.stringify(result);
+        const resultSize = Buffer.from(resultString, 'utf-8').length;
+        this.cache.set(cacheKey, resultString, resultSize, resultSize);
       }
 
       // Record metrics
@@ -346,7 +369,6 @@ export class SmartGrepTool {
       });
 
       return result;
-
     } catch (error) {
       const duration = Date.now() - startTime;
 
@@ -375,9 +397,9 @@ export class SmartGrepTool {
           originalTokenCount: 0,
           compressionRatio: 0,
           duration,
-          cacheHit: false
+          cacheHit: false,
         },
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -385,7 +407,10 @@ export class SmartGrepTool {
   /**
    * Build search pattern from string
    */
-  private buildPattern(pattern: string, opts: Required<SmartGrepOptions>): RegExp {
+  private buildPattern(
+    pattern: string,
+    opts: Required<SmartGrepOptions>
+  ): RegExp {
     let regexPattern = pattern;
 
     // Escape regex special characters if not in regex mode
@@ -440,20 +465,27 @@ export class SmartGrepTool {
     const grepMetrics = this.metrics.getOperations(0, 'smart_grep');
 
     const totalSearches = grepMetrics.length;
-    const cacheHits = grepMetrics.filter(m => m.cacheHit).length;
-    const totalTokensSaved = grepMetrics.reduce((sum, m) => sum + (m.savedTokens || 0), 0);
-    const totalInputTokens = grepMetrics.reduce((sum, m) => sum + (m.inputTokens || 0), 0);
+    const cacheHits = grepMetrics.filter((m) => m.cacheHit).length;
+    const totalTokensSaved = grepMetrics.reduce(
+      (sum, m) => sum + (m.savedTokens || 0),
+      0
+    );
+    const totalInputTokens = grepMetrics.reduce(
+      (sum, m) => sum + (m.inputTokens || 0),
+      0
+    );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
-    const averageReduction = totalOriginalTokens > 0
-      ? (totalTokensSaved / totalOriginalTokens) * 100
-      : 0;
+    const averageReduction =
+      totalOriginalTokens > 0
+        ? (totalTokensSaved / totalOriginalTokens) * 100
+        : 0;
 
     return {
       totalSearches,
       cacheHits,
       totalTokensSaved,
-      averageReduction
+      averageReduction,
     };
   }
 }
@@ -489,68 +521,69 @@ export async function runSmartGrep(
  */
 export const SMART_GREP_TOOL_DEFINITION = {
   name: 'smart_grep',
-  description: 'Search file contents with 80% token reduction through match-only output and smart filtering',
+  description:
+    'Search file contents with 80% token reduction through match-only output and smart filtering',
   inputSchema: {
     type: 'object',
     properties: {
       pattern: {
         type: 'string',
-        description: 'Search pattern (string or regex)'
+        description: 'Search pattern (string or regex)',
       },
       cwd: {
         type: 'string',
-        description: 'Working directory for search'
+        description: 'Working directory for search',
       },
       files: {
         type: 'array',
         items: { type: 'string' },
-        description: 'File patterns to search (glob patterns)'
+        description: 'File patterns to search (glob patterns)',
       },
       caseSensitive: {
         type: 'boolean',
         description: 'Case-sensitive search',
-        default: false
+        default: false,
       },
       regex: {
         type: 'boolean',
         description: 'Treat pattern as regex',
-        default: false
+        default: false,
       },
       extensions: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Search only these file extensions'
+        description: 'Search only these file extensions',
       },
       includeContext: {
         type: 'boolean',
         description: 'Include context lines around matches',
-        default: false
+        default: false,
       },
       contextBefore: {
         type: 'number',
         description: 'Lines of context before match',
-        default: 0
+        default: 0,
       },
       contextAfter: {
         type: 'number',
         description: 'Lines of context after match',
-        default: 0
+        default: 0,
       },
       limit: {
         type: 'number',
-        description: 'Maximum matches to return'
+        description: 'Maximum matches to return',
       },
       filesWithMatches: {
         type: 'boolean',
         description: 'Only return filenames, not matches',
-        default: false
+        default: false,
       },
       count: {
         type: 'boolean',
         description: 'Only return match counts per file',
-        default: false
-      }
+        default: false,
+      },
     },
-    required: ['pattern']
-  }
+    required: ['pattern'],
+  },
 };

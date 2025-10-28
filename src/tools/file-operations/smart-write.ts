@@ -10,41 +10,48 @@
  * Target: 85% reduction vs standard write operations
  */
 
-import { readFileSync, writeFileSync, existsSync, renameSync, unlinkSync, mkdirSync } from 'fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  renameSync,
+  unlinkSync,
+  mkdirSync,
+} from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { generateCacheKey } from '../shared/hash-utils';
-import { generateUnifiedDiff } from '../shared/diff-utils';
-import { detectFileType } from '../shared/syntax-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
+import { generateUnifiedDiff } from '../shared/diff-utils.js';
+import { detectFileType } from '../shared/syntax-utils.js';
 
 export interface SmartWriteOptions {
   // Verification options
-  verifyBeforeWrite?: boolean;    // Skip write if content identical (default: true)
-  createBackup?: boolean;          // Create .bak file before overwrite (default: false)
+  verifyBeforeWrite?: boolean; // Skip write if content identical (default: true)
+  createBackup?: boolean; // Create .bak file before overwrite (default: false)
 
   // Atomic operation options
-  atomic?: boolean;                // Use atomic write with temp file (default: true)
-  tempDir?: string;                // Directory for temp files (default: same as target)
+  atomic?: boolean; // Use atomic write with temp file (default: true)
+  tempDir?: string; // Directory for temp files (default: same as target)
 
   // Formatting options
-  autoFormat?: boolean;            // Auto-format code (default: true)
-  formatType?: 'prettier' | 'eslint' | 'none';  // Format tool (default: auto-detect)
+  autoFormat?: boolean; // Auto-format code (default: true)
+  formatType?: 'prettier' | 'eslint' | 'none'; // Format tool (default: auto-detect)
 
   // Change tracking
-  trackChanges?: boolean;          // Track and report changes (default: true)
-  returnDiff?: boolean;            // Include diff in response (default: true)
+  trackChanges?: boolean; // Track and report changes (default: true)
+  returnDiff?: boolean; // Include diff in response (default: true)
 
   // Cache options
-  updateCache?: boolean;           // Update cache after write (default: true)
-  ttl?: number;                    // Cache TTL in seconds (default: 3600)
+  updateCache?: boolean; // Update cache after write (default: true)
+  ttl?: number; // Cache TTL in seconds (default: 3600)
 
   // File options
-  createDirectories?: boolean;     // Create parent directories (default: true)
-  encoding?: BufferEncoding;       // File encoding (default: utf-8)
-  mode?: number;                   // File permissions (default: 0o644)
+  createDirectories?: boolean; // Create parent directories (default: true)
+  encoding?: BufferEncoding; // File encoding (default: utf-8)
+  mode?: number; // File permissions (default: 0o644)
 }
 
 export interface SmartWriteResult {
@@ -104,7 +111,7 @@ export class SmartWriteTool {
       ttl: options.ttl ?? 3600,
       createDirectories: options.createDirectories ?? true,
       encoding: options.encoding ?? 'utf-8',
-      mode: options.mode ?? 0o644
+      mode: options.mode ?? 0o644,
     };
 
     try {
@@ -132,11 +139,12 @@ export class SmartWriteTool {
         // For very small files (1-5 tokens), use 0 overhead to ensure we show savings
         // For medium files (6-100 tokens), use minimal overhead (1-2 tokens)
         // For large files, use 2% overhead capped at 50 tokens
-        const overheadTokens = originalTokens <= 5
-          ? 0
-          : originalTokens <= 100
-            ? Math.min(2, Math.ceil(originalTokens * 0.05))
-            : Math.min(50, Math.ceil(originalTokens * 0.02));
+        const overheadTokens =
+          originalTokens <= 5
+            ? 0
+            : originalTokens <= 100
+              ? Math.min(2, Math.ceil(originalTokens * 0.05))
+              : Math.min(50, Math.ceil(originalTokens * 0.02));
         const actualTokens = overheadTokens; // Minimal tokens for "file unchanged" message
         const savedTokens = Math.max(0, originalTokens - actualTokens);
 
@@ -167,8 +175,8 @@ export class SmartWriteTool {
             compressionRatio: actualTokens / originalTokens,
             atomic: false,
             verified: true,
-            duration
-          }
+            duration,
+          },
         };
       }
 
@@ -178,7 +186,11 @@ export class SmartWriteTool {
 
       if (opts.autoFormat && opts.formatType !== 'none') {
         try {
-          finalContent = await this.formatContent(content, filePath, opts.formatType);
+          finalContent = await this.formatContent(
+            content,
+            filePath,
+            opts.formatType
+          );
           wasFormatted = finalContent !== content;
         } catch (error) {
           // Formatting failed, use original content
@@ -218,24 +230,27 @@ export class SmartWriteTool {
       const newTokens = this.tokenCounter.count(finalContent).tokens;
 
       // Only generate diff if there's original content AND options require it
-      const shouldGenerateDiff = (opts.trackChanges || opts.returnDiff) && originalContent;
+      const shouldGenerateDiff =
+        (opts.trackChanges || opts.returnDiff) && originalContent;
       const diff = shouldGenerateDiff
         ? this.calculateDiff(originalContent, finalContent, filePath)
         : undefined;
 
       // Token reduction: return only diff instead of full content (only if we have a meaningful diff)
-      const diffTokens = (diff && opts.returnDiff && originalContent)
-        ? this.tokenCounter.count(diff.unifiedDiff).tokens
-        : newTokens;
+      const diffTokens =
+        diff && opts.returnDiff && originalContent
+          ? this.tokenCounter.count(diff.unifiedDiff).tokens
+          : newTokens;
 
       // Only claim token savings if diff is actually smaller than full content
       // For small changes, diff overhead (headers, context) might exceed savings
-      const tokensSaved = (diffTokens < newTokens) ? (newTokens - diffTokens) : 0;
+      const tokensSaved = diffTokens < newTokens ? newTokens - diffTokens : 0;
 
       // Step 7: Update cache
       if (opts.updateCache) {
         const cacheKey = generateCacheKey('file-write', { path: filePath });
-        this.cache.set(cacheKey, finalContent as any, opts.ttl, tokensSaved);
+        const contentSize = Buffer.from(finalContent, 'utf-8').length;
+        this.cache.set(cacheKey, finalContent, contentSize, contentSize);
       }
 
       // Step 8: Record metrics
@@ -266,11 +281,10 @@ export class SmartWriteTool {
           compressionRatio: diffTokens / (originalTokens || newTokens),
           atomic: opts.atomic,
           verified: opts.verifyBeforeWrite,
-          duration
+          duration,
         },
-        diff: opts.returnDiff ? diff : undefined
+        diff: opts.returnDiff ? diff : undefined,
       };
-
     } catch (error) {
       const duration = Date.now() - startTime;
 
@@ -301,9 +315,9 @@ export class SmartWriteTool {
           compressionRatio: 0,
           atomic: opts.atomic,
           verified: opts.verifyBeforeWrite,
-          duration
+          duration,
         },
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -326,7 +340,10 @@ export class SmartWriteTool {
     }
 
     // Atomic write using temp file
-    const tempPath = join(tempDir, `.${Date.now()}.${Math.random().toString(36).substring(7)}.tmp`);
+    const tempPath = join(
+      tempDir,
+      `.${Date.now()}.${Math.random().toString(36).substring(7)}.tmp`
+    );
 
     try {
       // Write to temporary file
@@ -370,7 +387,6 @@ export class SmartWriteTool {
       1
     );
 
-
     const added: string[] = [];
     const removed: string[] = [];
     let unchanged = 0;
@@ -391,7 +407,7 @@ export class SmartWriteTool {
       added,
       removed,
       unchanged,
-      unifiedDiff
+      unifiedDiff,
     };
   }
 
@@ -429,9 +445,9 @@ export class SmartWriteTool {
     try {
       // Basic formatting: normalize line endings, trim trailing whitespace
       let formatted = content
-        .replace(/\r\n/g, '\n')  // Normalize line endings
+        .replace(/\r\n/g, '\n') // Normalize line endings
         .split('\n')
-        .map(line => line.trimEnd())  // Trim trailing whitespace
+        .map((line) => line.trimEnd()) // Trim trailing whitespace
         .join('\n');
 
       // Ensure file ends with newline
@@ -486,20 +502,31 @@ export class SmartWriteTool {
     const writeMetrics = this.metrics.getOperations(0, 'smart_write');
 
     const totalWrites = writeMetrics.length;
-    const totalTokensSaved = writeMetrics.reduce((sum, m) => sum + (m.savedTokens || 0), 0);
-    const totalInputTokens = writeMetrics.reduce((sum, m) => sum + (m.inputTokens || 0), 0);
+    const totalTokensSaved = writeMetrics.reduce(
+      (sum, m) => sum + (m.savedTokens || 0),
+      0
+    );
+    const totalInputTokens = writeMetrics.reduce(
+      (sum, m) => sum + (m.inputTokens || 0),
+      0
+    );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
-    const averageReduction = totalOriginalTokens > 0
-      ? (totalTokensSaved / totalOriginalTokens) * 100
-      : 0;
+    const averageReduction =
+      totalOriginalTokens > 0
+        ? (totalTokensSaved / totalOriginalTokens) * 100
+        : 0;
 
     return {
       totalWrites,
-      unchangedSkips: writeMetrics.filter(m => (m.savedTokens || 0) > 0 && (m.inputTokens || 0) < (m.savedTokens || 0)).length,
+      unchangedSkips: writeMetrics.filter(
+        (m) =>
+          (m.savedTokens || 0) > 0 &&
+          (m.inputTokens || 0) < (m.savedTokens || 0)
+      ).length,
       bytesWritten: 0, // Would need to track this separately
       totalTokensSaved,
-      averageReduction
+      averageReduction,
     };
   }
 }
@@ -536,39 +563,40 @@ export async function runSmartWrite(
  */
 export const SMART_WRITE_TOOL_DEFINITION = {
   name: 'smart_write',
-  description: 'Write files with 85% token reduction through verification, atomic operations, and change tracking',
+  description:
+    'Write files with 85% token reduction through verification, atomic operations, and change tracking',
   inputSchema: {
     type: 'object',
     properties: {
       path: {
         type: 'string',
-        description: 'Path to the file to write'
+        description: 'Path to the file to write',
       },
       content: {
         type: 'string',
-        description: 'Content to write to the file'
+        description: 'Content to write to the file',
       },
       verifyBeforeWrite: {
         type: 'boolean',
         description: 'Skip write if content is identical',
-        default: true
+        default: true,
       },
       atomic: {
         type: 'boolean',
         description: 'Use atomic write with temporary file',
-        default: true
+        default: true,
       },
       autoFormat: {
         type: 'boolean',
         description: 'Automatically format code before writing',
-        default: true
+        default: true,
       },
       returnDiff: {
         type: 'boolean',
         description: 'Return diff instead of full content',
-        default: true
-      }
+        default: true,
+      },
     },
-    required: ['path', 'content']
-  }
+    required: ['path', 'content'],
+  },
 };

@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\cheat\\source\\repos\\token-optimizer-mcp\\logs\\.3e63dc393889f8f3fafb8f51ce0890a12109189f-audit.json",
+    "files": [
+        {
+            "date": 1760925937192,
+            "name": "C:\\Users\\cheat\\source\\repos\\token-optimizer-mcp\\logs\\mcp-puppeteer-2025-10-19.log",
+            "hash": "3dabb9327a1a6f64a8a103c9b613a600d38b364117d5dd7f9aed74b94494a11e"
+        },
+        {
+            "date": 1760935834131,
+            "name": "C:\\Users\\cheat\\source\\repos\\token-optimizer-mcp\\logs\\mcp-puppeteer-2025-10-20.log",
+            "hash": "ff7662a3137b767ba01e4a5c50b4db111eb1842a7b3fdbc7981cb9a5572dee1e"
+        }
+    ],
+    "hashType": "sha256"
+}

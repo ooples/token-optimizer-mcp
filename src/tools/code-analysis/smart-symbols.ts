@@ -9,14 +9,14 @@
  * - 75-85% token reduction through summarization
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { MetricsCollector } from "../../core/metrics";
-import { TokenCounter } from "../../core/token-counter";
-import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
-import { join, relative } from "path";
-import { homedir } from "os";
-import * as ts from "typescript";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
+import { join, relative } from 'path';
+import { homedir } from 'os';
+import * as ts from 'typescript';
 
 export interface SmartSymbolsOptions {
   /**
@@ -28,7 +28,7 @@ export interface SmartSymbolsOptions {
    * Types of symbols to extract (default: all)
    */
   symbolTypes?: Array<
-    "variable" | "function" | "class" | "interface" | "type" | "enum"
+    'variable' | 'function' | 'class' | 'interface' | 'type' | 'enum'
   >;
 
   /**
@@ -60,17 +60,17 @@ export interface SmartSymbolsOptions {
 export interface SymbolInfo {
   name: string;
   kind:
-    | "variable"
-    | "function"
-    | "class"
-    | "interface"
-    | "type"
-    | "enum"
-    | "method"
-    | "property"
-    | "parameter";
+    | 'variable'
+    | 'function'
+    | 'class'
+    | 'interface'
+    | 'type'
+    | 'enum'
+    | 'method'
+    | 'property'
+    | 'parameter';
   location: { line: number; column: number };
-  scope: "global" | "module" | "block" | "function" | "class";
+  scope: 'global' | 'module' | 'block' | 'function' | 'class';
   exported: boolean;
   type?: string;
   documentation?: string;
@@ -116,14 +116,14 @@ export interface SmartSymbolsResult {
 export class SmartSymbolsTool {
   private cache: CacheEngine;
   private metrics: MetricsCollector;
-  private cacheNamespace = "smart_symbols";
+  private cacheNamespace = 'smart_symbols';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
     _tokenCounter: TokenCounter,
     metrics: MetricsCollector,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.metrics = metrics;
@@ -156,7 +156,7 @@ export class SmartSymbolsTool {
       absolutePath,
       symbolTypes,
       includeExported,
-      includeImported,
+      includeImported
     );
 
     // Check cache first (unless force mode)
@@ -164,7 +164,7 @@ export class SmartSymbolsTool {
       const cached = this.getCachedResult(cacheKey, maxCacheAge);
       if (cached) {
         this.metrics.record({
-          operation: "smart_symbols",
+          operation: 'smart_symbols',
           duration: Date.now() - startTime,
           success: true,
           cacheHit: true,
@@ -180,9 +180,9 @@ export class SmartSymbolsTool {
     // Parse file and extract symbols
     const sourceFile = ts.createSourceFile(
       absolutePath,
-      readFileSync(absolutePath, "utf-8"),
+      readFileSync(absolutePath, 'utf-8'),
       ts.ScriptTarget.Latest,
-      true,
+      true
     );
 
     // Create language service for reference counting
@@ -194,7 +194,7 @@ export class SmartSymbolsTool {
       sourceFile,
       languageService,
       symbolTypes,
-      includeExported,
+      includeExported
     );
 
     // Extract imports if requested
@@ -231,7 +231,7 @@ export class SmartSymbolsTool {
 
     // Record metrics
     this.metrics.record({
-      operation: "smart_symbols",
+      operation: 'smart_symbols',
       duration,
       success: true,
       cacheHit: false,
@@ -248,11 +248,11 @@ export class SmartSymbolsTool {
    */
   private createLanguageServiceHost(
     fileName: string,
-    sourceFile: ts.SourceFile,
+    sourceFile: ts.SourceFile
   ): ts.LanguageServiceHost {
     return {
       getScriptFileNames: () => [fileName],
-      getScriptVersion: () => "0",
+      getScriptVersion: () => '0',
       getScriptSnapshot: (name) => {
         if (name === fileName) {
           return ts.ScriptSnapshot.fromString(sourceFile.text);
@@ -280,23 +280,23 @@ export class SmartSymbolsTool {
     sourceFile: ts.SourceFile,
     languageService: ts.LanguageService,
     symbolTypes?: string[],
-    includeExported = false,
+    includeExported = false
   ): SymbolInfo[] {
     const symbols: SymbolInfo[] = [];
     const allTypes = new Set(
       symbolTypes || [
-        "variable",
-        "function",
-        "class",
-        "interface",
-        "type",
-        "enum",
-      ],
+        'variable',
+        'function',
+        'class',
+        'interface',
+        'type',
+        'enum',
+      ]
     );
 
-    const visit = (node: ts.Node, scope: SymbolInfo["scope"] = "module") => {
+    const visit = (node: ts.Node, scope: SymbolInfo['scope'] = 'module') => {
       // Variables
-      if (allTypes.has("variable") && ts.isVariableStatement(node)) {
+      if (allTypes.has('variable') && ts.isVariableStatement(node)) {
         const exported =
           node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ||
           false;
@@ -305,11 +305,11 @@ export class SmartSymbolsTool {
             if (ts.isIdentifier(decl.name)) {
               const symbol = this.createSymbolInfo(
                 decl.name,
-                "variable",
+                'variable',
                 sourceFile,
                 languageService,
                 scope,
-                exported,
+                exported
               );
               if (symbol) symbols.push(symbol);
             }
@@ -319,7 +319,7 @@ export class SmartSymbolsTool {
 
       // Functions
       if (
-        allTypes.has("function") &&
+        allTypes.has('function') &&
         ts.isFunctionDeclaration(node) &&
         node.name
       ) {
@@ -329,29 +329,29 @@ export class SmartSymbolsTool {
         if (!includeExported || exported) {
           const symbol = this.createSymbolInfo(
             node.name,
-            "function",
+            'function',
             sourceFile,
             languageService,
             scope,
-            exported,
+            exported
           );
           if (symbol) symbols.push(symbol);
         }
       }
 
       // Classes
-      if (allTypes.has("class") && ts.isClassDeclaration(node) && node.name) {
+      if (allTypes.has('class') && ts.isClassDeclaration(node) && node.name) {
         const exported =
           node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ||
           false;
         if (!includeExported || exported) {
           const symbol = this.createSymbolInfo(
             node.name,
-            "class",
+            'class',
             sourceFile,
             languageService,
             scope,
-            exported,
+            exported
           );
           if (symbol) symbols.push(symbol);
 
@@ -363,15 +363,15 @@ export class SmartSymbolsTool {
               ts.isIdentifier(member.name)
             ) {
               const kind = ts.isMethodDeclaration(member)
-                ? "method"
-                : "property";
+                ? 'method'
+                : 'property';
               const memberSymbol = this.createSymbolInfo(
                 member.name,
                 kind,
                 sourceFile,
                 languageService,
-                "class",
-                false,
+                'class',
+                false
               );
               if (memberSymbol) symbols.push(memberSymbol);
             }
@@ -380,54 +380,54 @@ export class SmartSymbolsTool {
       }
 
       // Interfaces
-      if (allTypes.has("interface") && ts.isInterfaceDeclaration(node)) {
+      if (allTypes.has('interface') && ts.isInterfaceDeclaration(node)) {
         const exported =
           node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ||
           false;
         if (!includeExported || exported) {
           const symbol = this.createSymbolInfo(
             node.name,
-            "interface",
+            'interface',
             sourceFile,
             languageService,
             scope,
-            exported,
+            exported
           );
           if (symbol) symbols.push(symbol);
         }
       }
 
       // Type Aliases
-      if (allTypes.has("type") && ts.isTypeAliasDeclaration(node)) {
+      if (allTypes.has('type') && ts.isTypeAliasDeclaration(node)) {
         const exported =
           node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ||
           false;
         if (!includeExported || exported) {
           const symbol = this.createSymbolInfo(
             node.name,
-            "type",
+            'type',
             sourceFile,
             languageService,
             scope,
-            exported,
+            exported
           );
           if (symbol) symbols.push(symbol);
         }
       }
 
       // Enums
-      if (allTypes.has("enum") && ts.isEnumDeclaration(node)) {
+      if (allTypes.has('enum') && ts.isEnumDeclaration(node)) {
         const exported =
           node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ||
           false;
         if (!includeExported || exported) {
           const symbol = this.createSymbolInfo(
             node.name,
-            "enum",
+            'enum',
             sourceFile,
             languageService,
             scope,
-            exported,
+            exported
           );
           if (symbol) symbols.push(symbol);
         }
@@ -440,11 +440,11 @@ export class SmartSymbolsTool {
         ts.isMethodDeclaration(node) ||
         ts.isArrowFunction(node)
       ) {
-        newScope = "function";
+        newScope = 'function';
       } else if (ts.isClassDeclaration(node)) {
-        newScope = "class";
+        newScope = 'class';
       } else if (ts.isBlock(node)) {
-        newScope = "block";
+        newScope = 'block';
       }
 
       ts.forEachChild(node, (child) => visit(child, newScope));
@@ -459,11 +459,11 @@ export class SmartSymbolsTool {
    */
   private createSymbolInfo(
     identifier: ts.Identifier,
-    kind: SymbolInfo["kind"],
+    kind: SymbolInfo['kind'],
     sourceFile: ts.SourceFile,
     languageService: ts.LanguageService,
-    scope: SymbolInfo["scope"],
-    exported: boolean,
+    scope: SymbolInfo['scope'],
+    exported: boolean
   ): SymbolInfo | null {
     const pos = sourceFile.getLineAndCharacterOfPosition(identifier.getStart());
 
@@ -481,7 +481,7 @@ export class SmartSymbolsTool {
         // Extract documentation
         const docs = symbol.getDocumentationComment(typeChecker);
         if (docs.length > 0) {
-          documentation = docs.map((d) => d.text).join("\n");
+          documentation = docs.map((d) => d.text).join('\n');
         }
       }
     }
@@ -489,7 +489,7 @@ export class SmartSymbolsTool {
     // Count references
     const references = languageService.findReferences(
       sourceFile.fileName,
-      identifier.getStart(),
+      identifier.getStart()
     );
     const referenceCount = references
       ? references.reduce((count, ref) => count + ref.references.length, 0)
@@ -514,7 +514,7 @@ export class SmartSymbolsTool {
    * Extract imports from source file
    */
   private extractImports(
-    sourceFile: ts.SourceFile,
+    sourceFile: ts.SourceFile
   ): Array<{ module: string; symbols: string[] }> {
     const imports: Array<{ module: string; symbols: string[] }> = [];
 
@@ -563,7 +563,7 @@ export class SmartSymbolsTool {
    */
   private calculateMetrics(
     symbols: SymbolInfo[],
-    imports?: Array<{ module: string; symbols: string[] }>,
+    imports?: Array<{ module: string; symbols: string[] }>
   ): {
     originalTokens: number;
     compactedTokens: number;
@@ -580,13 +580,13 @@ export class SmartSymbolsTool {
 
     if (imports) {
       imports.forEach((imp) => {
-        originalSize += 50 + imp.symbols.join(", ").length;
+        originalSize += 50 + imp.symbols.join(', ').length;
       });
     }
 
     // Compacted: Summary + symbol names only
     const summarySize = 200;
-    const symbolListSize = symbols.map((s) => s.name).join(", ").length;
+    const symbolListSize = symbols.map((s) => s.name).join(', ').length;
     const compactedSize = summarySize + symbolListSize;
 
     const originalTokens = Math.ceil(originalSize / 4);
@@ -596,7 +596,7 @@ export class SmartSymbolsTool {
       originalTokens,
       compactedTokens,
       reductionPercentage: Math.round(
-        ((originalTokens - compactedTokens) / originalTokens) * 100,
+        ((originalTokens - compactedTokens) / originalTokens) * 100
       ),
     };
   }
@@ -608,15 +608,15 @@ export class SmartSymbolsTool {
     filePath: string,
     symbolTypes?: string[],
     includeExported = false,
-    includeImported = false,
+    includeImported = false
   ): Promise<string> {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(this.cacheNamespace);
     hash.update(filePath);
 
     // Hash file content
     if (existsSync(filePath)) {
-      const content = readFileSync(filePath, "utf-8");
+      const content = readFileSync(filePath, 'utf-8');
       hash.update(content);
     }
 
@@ -626,10 +626,10 @@ export class SmartSymbolsTool {
         symbolTypes: symbolTypes?.sort(),
         includeExported,
         includeImported,
-      }),
+      })
     );
 
-    return `${this.cacheNamespace}:${hash.digest("hex")}`;
+    return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
   /**
@@ -637,7 +637,7 @@ export class SmartSymbolsTool {
    */
   private getCachedResult(
     key: string,
-    maxAge: number,
+    maxAge: number
   ): SmartSymbolsResult | null {
     const cached = this.cache.get(key);
     if (!cached) {
@@ -671,7 +671,7 @@ export class SmartSymbolsTool {
     };
 
     const json = JSON.stringify(toCache);
-    const originalSize = Buffer.byteLength(json, "utf-8");
+    const originalSize = Buffer.byteLength(json, 'utf-8');
     const compressedSize = Math.ceil(originalSize * 0.3);
 
     this.cache.set(key, json, originalSize, compressedSize);
@@ -691,7 +691,7 @@ export class SmartSymbolsTool {
 export function getSmartSymbolsTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartSymbolsTool {
   return new SmartSymbolsTool(cache, tokenCounter, metrics);
 }
@@ -703,23 +703,23 @@ export async function runSmartSymbols(
   options: SmartSymbolsOptions,
   cache?: CacheEngine,
   tokenCounter?: TokenCounter,
-  metrics?: MetricsCollector,
+  metrics?: MetricsCollector
 ): Promise<string> {
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metrics || new MetricsCollector();
 
   const tool = getSmartSymbolsTool(
     cacheInstance,
     tokenCounterInstance,
-    metricsInstance,
+    metricsInstance
   );
   try {
     const result = await tool.run(options);
 
-    let output = `\n🔍 Smart Symbols Analysis ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(60)}\n\n`;
+    let output = `\n🔍 Smart Symbols Analysis ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(60)}\n\n`;
 
     // Summary
     output += `File: ${result.summary.file}\n`;
@@ -732,31 +732,31 @@ export async function runSmartSymbols(
     Object.entries(result.summary.byKind).forEach(([kind, count]) => {
       output += `  ${kind}: ${count}\n`;
     });
-    output += "\n";
+    output += '\n';
 
     // Top symbols
     const topSymbols = result.symbols.slice(0, 10);
     if (topSymbols.length > 0) {
       output += `Top Symbols (showing ${topSymbols.length} of ${result.symbols.length}):\n`;
       topSymbols.forEach((sym) => {
-        const exportMark = sym.exported ? " [exported]" : "";
-        const refMark = sym.references > 0 ? ` (${sym.references} refs)` : "";
+        const exportMark = sym.exported ? ' [exported]' : '';
+        const refMark = sym.references > 0 ? ` (${sym.references} refs)` : '';
         output += `  ${sym.kind} ${sym.name}${exportMark}${refMark}\n`;
         output += `    Location: line ${sym.location.line}, scope: ${sym.scope}\n`;
         if (sym.type) {
-          output += `    Type: ${sym.type.slice(0, 60)}${sym.type.length > 60 ? "..." : ""}\n`;
+          output += `    Type: ${sym.type.slice(0, 60)}${sym.type.length > 60 ? '...' : ''}\n`;
         }
       });
-      output += "\n";
+      output += '\n';
     }
 
     // Imports
     if (result.imports && result.imports.length > 0) {
       output += `Imports:\n`;
       result.imports.forEach((imp) => {
-        output += `  from "${imp.module}": ${imp.symbols.join(", ")}\n`;
+        output += `  from "${imp.module}": ${imp.symbols.join(', ')}\n`;
       });
-      output += "\n";
+      output += '\n';
     }
 
     // Metrics
@@ -773,49 +773,49 @@ export async function runSmartSymbols(
 
 // MCP Tool definition
 export const SMART_SYMBOLS_TOOL_DEFINITION = {
-  name: "smart_symbols",
+  name: 'smart_symbols',
   description:
-    "Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information (75-85% token reduction)",
+    'Extract and analyze TypeScript/JavaScript symbols with scope, type, and reference information (75-85% token reduction)',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       filePath: {
-        type: "string",
-        description: "File path to analyze (relative to project root)",
+        type: 'string',
+        description: 'File path to analyze (relative to project root)',
       },
       symbolTypes: {
-        type: "array",
-        description: "Types of symbols to extract (default: all)",
+        type: 'array',
+        description: 'Types of symbols to extract (default: all)',
         items: {
-          type: "string",
-          enum: ["variable", "function", "class", "interface", "type", "enum"],
+          type: 'string',
+          enum: ['variable', 'function', 'class', 'interface', 'type', 'enum'],
         },
       },
       includeExported: {
-        type: "boolean",
-        description: "Include only exported symbols",
+        type: 'boolean',
+        description: 'Include only exported symbols',
         default: false,
       },
       includeImported: {
-        type: "boolean",
-        description: "Include import information",
+        type: 'boolean',
+        description: 'Include import information',
         default: false,
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       force: {
-        type: "boolean",
-        description: "Force re-extraction (ignore cache)",
+        type: 'boolean',
+        description: 'Force re-extraction (ignore cache)',
         default: false,
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 300)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 300)',
         default: 300,
       },
     },
-    required: ["filePath"],
+    required: ['filePath'],
   },
 };

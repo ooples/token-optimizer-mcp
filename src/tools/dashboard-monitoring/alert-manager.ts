@@ -19,10 +19,10 @@
  * - Silence state compression (90% reduction)
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { createHash } from 'crypto';
 
 // ============================================================================
 // Interfaces
@@ -30,14 +30,14 @@ import { createHash } from "crypto";
 
 export interface AlertManagerOptions {
   operation:
-    | "create-alert"
-    | "update-alert"
-    | "delete-alert"
-    | "list-alerts"
-    | "trigger"
-    | "get-history"
-    | "configure-channels"
-    | "silence";
+    | 'create-alert'
+    | 'update-alert'
+    | 'delete-alert'
+    | 'list-alerts'
+    | 'trigger'
+    | 'get-history'
+    | 'configure-channels'
+    | 'silence';
 
   // Alert identification
   alertId?: string;
@@ -45,15 +45,15 @@ export interface AlertManagerOptions {
 
   // Alert rule configuration
   condition?: AlertCondition;
-  severity?: "info" | "warning" | "error" | "critical";
+  severity?: 'info' | 'warning' | 'error' | 'critical';
   channels?: Array<
-    "email" | "slack" | "webhook" | "sms" | "pagerduty" | "custom"
+    'email' | 'slack' | 'webhook' | 'sms' | 'pagerduty' | 'custom'
   >;
 
   // Condition definition
   dataSource?: DataSource;
   threshold?: {
-    type: "above" | "below" | "equals" | "not-equals" | "change" | "anomaly";
+    type: 'above' | 'below' | 'equals' | 'not-equals' | 'change' | 'anomaly';
     value?: number;
     changePercent?: number;
     timeWindow?: number; // seconds
@@ -88,7 +88,7 @@ export interface AlertManagerOptions {
 
 export interface AlertCondition {
   metric: string;
-  aggregation?: "avg" | "sum" | "min" | "max" | "count" | "percentile";
+  aggregation?: 'avg' | 'sum' | 'min' | 'max' | 'count' | 'percentile';
   percentile?: number;
   groupBy?: string[];
   filters?: Array<{ field: string; operator: string; value: any }>;
@@ -96,7 +96,7 @@ export interface AlertCondition {
 
 export interface DataSource {
   id: string;
-  type: "api" | "database" | "file" | "mcp-tool" | "custom";
+  type: 'api' | 'database' | 'file' | 'mcp-tool' | 'custom';
   connection: {
     url?: string;
     method?: string;
@@ -113,7 +113,7 @@ export interface Alert {
   name: string;
   description?: string;
   condition: AlertCondition;
-  severity: "info" | "warning" | "error" | "critical";
+  severity: 'info' | 'warning' | 'error' | 'critical';
   channels: string[];
   dataSource: DataSource;
   threshold: {
@@ -127,7 +127,7 @@ export interface Alert {
   updatedAt: number;
   lastTriggered?: number;
   triggerCount: number;
-  status: "active" | "silenced" | "disabled";
+  status: 'active' | 'silenced' | 'disabled';
   silencedUntil?: number;
 }
 
@@ -135,7 +135,7 @@ export interface AlertEvent {
   id: string;
   alertId: string;
   alertName: string;
-  severity: "info" | "warning" | "error" | "critical";
+  severity: 'info' | 'warning' | 'error' | 'critical';
   triggeredAt: number;
   value: number;
   threshold: number;
@@ -149,7 +149,7 @@ export interface AlertEvent {
 export interface NotificationChannel {
   id: string;
   name: string;
-  type: "email" | "slack" | "webhook" | "sms" | "pagerduty" | "custom";
+  type: 'email' | 'slack' | 'webhook' | 'sms' | 'pagerduty' | 'custom';
   config: {
     email?: { to: string[]; subject?: string; template?: string };
     slack?: { webhook: string; channel?: string; mentionUsers?: string[] };
@@ -217,7 +217,7 @@ export class AlertManager {
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
-    metricsCollector: MetricsCollector,
+    metricsCollector: MetricsCollector
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
@@ -238,28 +238,28 @@ export class AlertManager {
       let result: AlertManagerResult;
 
       switch (options.operation) {
-        case "create-alert":
+        case 'create-alert':
           result = await this.createAlert(options);
           break;
-        case "update-alert":
+        case 'update-alert':
           result = await this.updateAlert(options);
           break;
-        case "delete-alert":
+        case 'delete-alert':
           result = await this.deleteAlert(options);
           break;
-        case "list-alerts":
+        case 'list-alerts':
           result = await this.listAlerts(options);
           break;
-        case "trigger":
+        case 'trigger':
           result = await this.triggerAlert(options);
           break;
-        case "get-history":
+        case 'get-history':
           result = await this.getHistory(options);
           break;
-        case "configure-channels":
+        case 'configure-channels':
           result = await this.configureChannels(options);
           break;
-        case "silence":
+        case 'silence':
           result = await this.silenceAlerts(options);
           break;
         default:
@@ -313,18 +313,18 @@ export class AlertManager {
   // ============================================================================
 
   private async createAlert(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     if (!options.alertName) {
-      throw new Error("alertName is required for create-alert operation");
+      throw new Error('alertName is required for create-alert operation');
     }
 
     if (!options.condition) {
-      throw new Error("condition is required for create-alert operation");
+      throw new Error('condition is required for create-alert operation');
     }
 
     if (!options.threshold) {
-      throw new Error("threshold is required for create-alert operation");
+      throw new Error('threshold is required for create-alert operation');
     }
 
     // Generate alert ID
@@ -340,11 +340,11 @@ export class AlertManager {
       id: alertId,
       name: options.alertName,
       condition: options.condition,
-      severity: options.severity || "warning",
-      channels: options.channels || ["email"],
+      severity: options.severity || 'warning',
+      channels: options.channels || ['email'],
       dataSource: options.dataSource || {
-        id: "default",
-        type: "custom",
+        id: 'default',
+        type: 'custom',
         connection: {},
       },
       threshold: options.threshold,
@@ -352,14 +352,14 @@ export class AlertManager {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       triggerCount: 0,
-      status: "active",
+      status: 'active',
     };
 
     // Store alert
     this.alerts.set(alertId, alert);
 
     // Cache alert metadata (92% reduction)
-    const cacheKey = `cache-${createHash("md5").update(`alert-manager:alert:${alertId}`).digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update(`alert-manager:alert:${alertId}`).digest('hex')}`;
     const alertMetadata = this.compressAlertMetadata(alert);
     const cachedData = JSON.stringify(alertMetadata);
 
@@ -367,12 +367,7 @@ export class AlertManager {
     const compressedTokens = this.tokenCounter.count(cachedData).tokens;
     const tokensSaved = tokensUsed - compressedTokens;
 
-    await this.cache.set(
-      cacheKey,
-      cachedData,
-      tokensUsed,
-      compressedTokens,
-    );
+    await this.cache.set(cacheKey, cachedData, tokensUsed, compressedTokens);
 
     // Persist to storage
     await this.persistAlerts();
@@ -393,11 +388,11 @@ export class AlertManager {
   // ============================================================================
 
   private async updateAlert(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     if (!options.alertId && !options.alertName) {
       throw new Error(
-        "alertId or alertName is required for update-alert operation",
+        'alertId or alertName is required for update-alert operation'
       );
     }
 
@@ -406,7 +401,7 @@ export class AlertManager {
       options.alertId || this.findAlertIdByName(options.alertName!);
     if (!alertId) {
       throw new Error(
-        `Alert not found: ${options.alertId || options.alertName}`,
+        `Alert not found: ${options.alertId || options.alertName}`
       );
     }
 
@@ -425,7 +420,7 @@ export class AlertManager {
     alert.updatedAt = Date.now();
 
     // Update cache
-    const cacheKey = `cache-${createHash("md5").update(`alert-manager:alert:${alertId}`).digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update(`alert-manager:alert:${alertId}`).digest('hex')}`;
     const alertMetadata = this.compressAlertMetadata(alert);
     const cachedData = JSON.stringify(alertMetadata);
 
@@ -433,12 +428,7 @@ export class AlertManager {
     const compressedTokens = this.tokenCounter.count(cachedData).tokens;
     const tokensSaved = tokensUsed - compressedTokens;
 
-    await this.cache.set(
-      cacheKey,
-      cachedData,
-      tokensUsed,
-      compressedTokens,
-    );
+    await this.cache.set(cacheKey, cachedData, tokensUsed, compressedTokens);
 
     // Persist to storage
     await this.persistAlerts();
@@ -459,11 +449,11 @@ export class AlertManager {
   // ============================================================================
 
   private async deleteAlert(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     if (!options.alertId && !options.alertName) {
       throw new Error(
-        "alertId or alertName is required for delete-alert operation",
+        'alertId or alertName is required for delete-alert operation'
       );
     }
 
@@ -472,7 +462,7 @@ export class AlertManager {
       options.alertId || this.findAlertIdByName(options.alertName!);
     if (!alertId) {
       throw new Error(
-        `Alert not found: ${options.alertId || options.alertName}`,
+        `Alert not found: ${options.alertId || options.alertName}`
       );
     }
 
@@ -485,7 +475,7 @@ export class AlertManager {
     this.alerts.delete(alertId);
 
     // Delete from cache
-    const cacheKey = `cache-${createHash("md5").update(`alert-manager:alert:${alertId}`).digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update(`alert-manager:alert:${alertId}`).digest('hex')}`;
     this.cache.delete(cacheKey);
 
     // Delete associated silence rules
@@ -514,10 +504,10 @@ export class AlertManager {
   // ============================================================================
 
   private async listAlerts(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     // Generate cache key
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:list-alerts:all").digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update('alert-manager:list-alerts:all').digest('hex')}`;
 
     // Check cache
     if (options.useCache !== false) {
@@ -540,7 +530,7 @@ export class AlertManager {
             tokensSaved,
             alertCount: cachedAlerts.length,
             firingCount: cachedAlerts.filter(
-              (a: Alert) => a.status === "active",
+              (a: Alert) => a.status === 'active'
             ).length,
           },
         };
@@ -552,24 +542,19 @@ export class AlertManager {
 
     // Compress alert list (return metadata only)
     const compressedAlerts = alerts.map((alert) =>
-      this.compressAlertMetadata(alert),
+      this.compressAlertMetadata(alert)
     );
 
     // Calculate tokens
     const fullTokens = this.tokenCounter.count(JSON.stringify(alerts)).tokens;
     const compressedTokens = this.tokenCounter.count(
-      JSON.stringify(compressedAlerts),
+      JSON.stringify(compressedAlerts)
     ).tokens;
     const tokensSaved = fullTokens - compressedTokens;
 
     // Cache compressed list (92% reduction, 6-hour TTL)
     const cachedData = JSON.stringify(compressedAlerts);
-    await this.cache.set(
-      cacheKey,
-      cachedData,
-      fullTokens,
-      compressedTokens,
-    );
+    await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
 
     return {
       success: true,
@@ -579,7 +564,7 @@ export class AlertManager {
         tokensUsed: compressedTokens,
         tokensSaved,
         alertCount: alerts.length,
-        firingCount: alerts.filter((a) => a.status === "active").length,
+        firingCount: alerts.filter((a) => a.status === 'active').length,
       },
     };
   }
@@ -589,10 +574,10 @@ export class AlertManager {
   // ============================================================================
 
   private async triggerAlert(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     if (!options.alertId && !options.alertName) {
-      throw new Error("alertId or alertName is required for trigger operation");
+      throw new Error('alertId or alertName is required for trigger operation');
     }
 
     // Find alert
@@ -600,7 +585,7 @@ export class AlertManager {
       options.alertId || this.findAlertIdByName(options.alertName!);
     if (!alertId) {
       throw new Error(
-        `Alert not found: ${options.alertId || options.alertName}`,
+        `Alert not found: ${options.alertId || options.alertName}`
       );
     }
 
@@ -672,13 +657,13 @@ export class AlertManager {
   // ============================================================================
 
   private async getHistory(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     // Generate cache key based on time range
     const timeRangeKey = options.timeRange
       ? `${options.timeRange.start}-${options.timeRange.end}`
-      : "all";
-    const cacheKey = `cache-${createHash("md5").update(`alert-manager:history:${timeRangeKey}`).digest("hex")}`;
+      : 'all';
+    const cacheKey = `cache-${createHash('md5').update(`alert-manager:history:${timeRangeKey}`).digest('hex')}`;
 
     // Check cache
     if (options.useCache !== false) {
@@ -706,7 +691,7 @@ export class AlertManager {
       events = events.filter(
         (e) =>
           e.triggeredAt >= options.timeRange!.start &&
-          e.triggeredAt <= options.timeRange!.end,
+          e.triggeredAt <= options.timeRange!.end
       );
     }
 
@@ -721,18 +706,13 @@ export class AlertManager {
     // Calculate token savings
     const fullTokens = this.tokenCounter.count(JSON.stringify(events)).tokens;
     const aggregatedTokens = this.tokenCounter.count(
-      JSON.stringify(aggregatedHistory),
+      JSON.stringify(aggregatedHistory)
     ).tokens;
     const tokensSaved = fullTokens - aggregatedTokens;
 
     // Cache aggregated history (88% reduction, 5-minute TTL)
     const cachedData = JSON.stringify(aggregatedHistory);
-    await this.cache.set(
-      cacheKey,
-      cachedData,
-      fullTokens,
-      aggregatedTokens,
-    );
+    await this.cache.set(cacheKey, cachedData, fullTokens, aggregatedTokens);
 
     return {
       success: true,
@@ -750,26 +730,26 @@ export class AlertManager {
   // ============================================================================
 
   private async configureChannels(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     if (!options.channelConfig) {
       throw new Error(
-        "channelConfig is required for configure-channels operation",
+        'channelConfig is required for configure-channels operation'
       );
     }
 
     // Generate cache key
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:channels:all").digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update('alert-manager:channels:all').digest('hex')}`;
 
     // Create or update notification channels
     const channels: NotificationChannel[] = [];
 
     if (options.channelConfig.email) {
-      const channelId = this.generateChannelId("email");
+      const channelId = this.generateChannelId('email');
       const channel: NotificationChannel = {
         id: channelId,
-        name: "Email",
-        type: "email",
+        name: 'Email',
+        type: 'email',
         config: { email: options.channelConfig.email },
         enabled: true,
         createdAt: Date.now(),
@@ -781,11 +761,11 @@ export class AlertManager {
     }
 
     if (options.channelConfig.slack) {
-      const channelId = this.generateChannelId("slack");
+      const channelId = this.generateChannelId('slack');
       const channel: NotificationChannel = {
         id: channelId,
-        name: "Slack",
-        type: "slack",
+        name: 'Slack',
+        type: 'slack',
         config: { slack: options.channelConfig.slack },
         enabled: true,
         createdAt: Date.now(),
@@ -797,11 +777,11 @@ export class AlertManager {
     }
 
     if (options.channelConfig.webhook) {
-      const channelId = this.generateChannelId("webhook");
+      const channelId = this.generateChannelId('webhook');
       const channel: NotificationChannel = {
         id: channelId,
-        name: "Webhook",
-        type: "webhook",
+        name: 'Webhook',
+        type: 'webhook',
         config: { webhook: options.channelConfig.webhook },
         enabled: true,
         createdAt: Date.now(),
@@ -813,11 +793,11 @@ export class AlertManager {
     }
 
     if (options.channelConfig.sms) {
-      const channelId = this.generateChannelId("sms");
+      const channelId = this.generateChannelId('sms');
       const channel: NotificationChannel = {
         id: channelId,
-        name: "SMS",
-        type: "sms",
+        name: 'SMS',
+        type: 'sms',
         config: { sms: options.channelConfig.sms },
         enabled: true,
         createdAt: Date.now(),
@@ -829,11 +809,11 @@ export class AlertManager {
     }
 
     if (options.channelConfig.pagerduty) {
-      const channelId = this.generateChannelId("pagerduty");
+      const channelId = this.generateChannelId('pagerduty');
       const channel: NotificationChannel = {
         id: channelId,
-        name: "PagerDuty",
-        type: "pagerduty",
+        name: 'PagerDuty',
+        type: 'pagerduty',
         config: { pagerduty: options.channelConfig.pagerduty },
         enabled: true,
         createdAt: Date.now(),
@@ -858,7 +838,7 @@ export class AlertManager {
 
     const fullTokens = this.tokenCounter.count(JSON.stringify(channels)).tokens;
     const compressedTokens = this.tokenCounter.count(
-      JSON.stringify(compressedChannels),
+      JSON.stringify(compressedChannels)
     ).tokens;
     const tokensSaved = fullTokens - compressedTokens;
 
@@ -885,10 +865,10 @@ export class AlertManager {
   // ============================================================================
 
   private async silenceAlerts(
-    options: AlertManagerOptions,
+    options: AlertManagerOptions
   ): Promise<AlertManagerResult> {
     if (!options.silenceDuration) {
-      throw new Error("silenceDuration is required for silence operation");
+      throw new Error('silenceDuration is required for silence operation');
     }
 
     // Generate silence ID
@@ -898,7 +878,7 @@ export class AlertManager {
     const silence: SilenceRule = {
       id: silenceId,
       alertId: options.alertId, // If specified, silence specific alert; otherwise all
-      reason: options.silenceReason || "Manual silence",
+      reason: options.silenceReason || 'Manual silence',
       createdAt: Date.now(),
       expiresAt: Date.now() + options.silenceDuration * 1000,
       active: true,
@@ -911,7 +891,7 @@ export class AlertManager {
     if (options.alertId) {
       const alert = this.alerts.get(options.alertId);
       if (alert) {
-        alert.status = "silenced";
+        alert.status = 'silenced';
         alert.silencedUntil = silence.expiresAt;
         alert.updatedAt = Date.now();
       }
@@ -928,12 +908,12 @@ export class AlertManager {
 
     const fullTokens = this.tokenCounter.count(JSON.stringify(silence)).tokens;
     const compressedTokens = this.tokenCounter.count(
-      JSON.stringify(compressedSilence),
+      JSON.stringify(compressedSilence)
     ).tokens;
     const tokensSaved = fullTokens - compressedTokens;
 
     // Cache silence state (90% reduction, based on duration)
-    const cacheKey = `cache-${createHash("md5").update(`alert-manager:silence:${silenceId}`).digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update(`alert-manager:silence:${silenceId}`).digest('hex')}`;
     const cachedData = JSON.stringify(compressedSilence);
     await this.cache.set(cacheKey, cachedData, fullTokens, compressedTokens);
 
@@ -944,7 +924,7 @@ export class AlertManager {
     // Auto-cleanup expired silences
     setTimeout(
       () => this.cleanupExpiredSilences() /* originalSize */,
-      options.silenceDuration /* compressedSize */,
+      options.silenceDuration /* compressedSize */
     );
 
     return {
@@ -963,27 +943,27 @@ export class AlertManager {
   // ============================================================================
 
   private generateAlertId(name: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(name + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private generateEventId(): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(Date.now().toString() + Math.random());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private generateChannelId(type: string): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(type + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    return hash.digest('hex').substring(0, 16);
   }
 
   private generateSilenceId(): string {
-    const hash = createHash("sha256");
-    hash.update("silence-" + Date.now());
-    return hash.digest("hex").substring(0, 16);
+    const hash = createHash('sha256');
+    hash.update('silence-' + Date.now());
+    return hash.digest('hex').substring(0, 16);
   }
 
   private findAlertIdByName(name: string): string | undefined {
@@ -1073,14 +1053,14 @@ export class AlertManager {
 
   private async sendNotifications(
     alert: Alert,
-    event: AlertEvent,
+    event: AlertEvent
   ): Promise<void> {
     // In production, implement actual notification sending
     // For now, just log
     console.log(
-      `[AlertManager] Would send notifications for alert: ${alert.name}`,
+      `[AlertManager] Would send notifications for alert: ${alert.name}`
     );
-    console.log(`  Channels: ${alert.channels.join(", ")}`);
+    console.log(`  Channels: ${alert.channels.join(', ')}`);
     console.log(`  Severity: ${alert.severity}`);
     console.log(`  Event: ${event.message}`);
 
@@ -1105,8 +1085,8 @@ export class AlertManager {
         // Update alert status
         if (silence.alertId) {
           const alert = this.alerts.get(silence.alertId);
-          if (alert && alert.status === "silenced") {
-            alert.status = "active";
+          if (alert && alert.status === 'silenced') {
+            alert.status = 'active';
             alert.silencedUntil = undefined;
             alert.updatedAt = Date.now();
           }
@@ -1125,28 +1105,30 @@ export class AlertManager {
   private async persistAlerts(): Promise<void> {
     // In production, persist to database
     // For now, use cache as simple persistence
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:alerts").digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update('alert-manager:persistence:alerts').digest('hex')}`;
     const data = JSON.stringify(Array.from(this.alerts.entries()));
     const dataSize = this.tokenCounter.count(data).tokens;
     await this.cache.set(cacheKey, data, dataSize, dataSize);
   }
 
   private async persistEvents(): Promise<void> {
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:events").digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update('alert-manager:persistence:events').digest('hex')}`;
     const data = JSON.stringify(this.alertEvents);
     const dataSize = this.tokenCounter.count(data).tokens;
     await this.cache.set(cacheKey, data, dataSize, dataSize);
   }
 
   private async persistChannels(): Promise<void> {
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:channels").digest("hex")}`;
-    const data = JSON.stringify(Array.from(this.notificationChannels.entries()));
+    const cacheKey = `cache-${createHash('md5').update('alert-manager:persistence:channels').digest('hex')}`;
+    const data = JSON.stringify(
+      Array.from(this.notificationChannels.entries())
+    );
     const dataSize = this.tokenCounter.count(data).tokens;
     await this.cache.set(cacheKey, data, dataSize, dataSize);
   }
 
   private async persistSilences(): Promise<void> {
-    const cacheKey = `cache-${createHash("md5").update("alert-manager:persistence:silences").digest("hex")}`;
+    const cacheKey = `cache-${createHash('md5').update('alert-manager:persistence:silences').digest('hex')}`;
     const data = JSON.stringify(Array.from(this.silenceRules.entries()));
     const dataSize = this.tokenCounter.count(data).tokens;
     await this.cache.set(cacheKey, data, dataSize, dataSize);
@@ -1154,30 +1136,30 @@ export class AlertManager {
 
   private loadPersistedData(): void {
     // Load alerts
-    const alertsKey = `cache-${createHash("md5").update("alert-manager:persistence:alerts").digest("hex")}`;
+    const alertsKey = `cache-${createHash('md5').update('alert-manager:persistence:alerts').digest('hex')}`;
     const alertsData = this.cache.get(alertsKey);
     if (alertsData) {
       try {
         const entries = JSON.parse(alertsData);
         this.alerts = new Map(entries);
       } catch (error) {
-        console.error("[AlertManager] Error loading persisted alerts:", error);
+        console.error('[AlertManager] Error loading persisted alerts:', error);
       }
     }
 
     // Load events
-    const eventsKey = `cache-${createHash("md5").update("alert-manager:persistence:events").digest("hex")}`;
+    const eventsKey = `cache-${createHash('md5').update('alert-manager:persistence:events').digest('hex')}`;
     const eventsData = this.cache.get(eventsKey);
     if (eventsData) {
       try {
         this.alertEvents = JSON.parse(eventsData);
       } catch (error) {
-        console.error("[AlertManager] Error loading persisted events:", error);
+        console.error('[AlertManager] Error loading persisted events:', error);
       }
     }
 
     // Load channels
-    const channelsKey = `cache-${createHash("md5").update("alert-manager:persistence:channels").digest("hex")}`;
+    const channelsKey = `cache-${createHash('md5').update('alert-manager:persistence:channels').digest('hex')}`;
     const channelsData = this.cache.get(channelsKey);
     if (channelsData) {
       try {
@@ -1185,14 +1167,14 @@ export class AlertManager {
         this.notificationChannels = new Map(entries);
       } catch (error) {
         console.error(
-          "[AlertManager] Error loading persisted channels:",
-          error,
+          '[AlertManager] Error loading persisted channels:',
+          error
         );
       }
     }
 
     // Load silences
-    const silencesKey = `cache-${createHash("md5").update("alert-manager:persistence:silences").digest("hex")}`;
+    const silencesKey = `cache-${createHash('md5').update('alert-manager:persistence:silences').digest('hex')}`;
     const silencesData = this.cache.get(silencesKey);
     if (silencesData) {
       try {
@@ -1200,8 +1182,8 @@ export class AlertManager {
         this.silenceRules = new Map(entries);
       } catch (error) {
         console.error(
-          "[AlertManager] Error loading persisted silences:",
-          error,
+          '[AlertManager] Error loading persisted silences:',
+          error
         );
       }
     }
@@ -1217,13 +1199,13 @@ let alertManagerInstance: AlertManager | null = null;
 export function getAlertManager(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metricsCollector: MetricsCollector,
+  metricsCollector: MetricsCollector
 ): AlertManager {
   if (!alertManagerInstance) {
     alertManagerInstance = new AlertManager(
       cache,
       tokenCounter,
-      metricsCollector,
+      metricsCollector
     );
   }
   return alertManagerInstance;
@@ -1234,58 +1216,58 @@ export function getAlertManager(
 // ============================================================================
 
 export const ALERT_MANAGER_TOOL_DEFINITION = {
-  name: "alert_manager",
+  name: 'alert_manager',
   description:
-    "Comprehensive alerting system with multi-channel notifications, intelligent routing, and 89% token reduction through aggressive caching and history aggregation",
+    'Comprehensive alerting system with multi-channel notifications, intelligent routing, and 89% token reduction through aggressive caching and history aggregation',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "create-alert",
-          "update-alert",
-          "delete-alert",
-          "list-alerts",
-          "trigger",
-          "get-history",
-          "configure-channels",
-          "silence",
+          'create-alert',
+          'update-alert',
+          'delete-alert',
+          'list-alerts',
+          'trigger',
+          'get-history',
+          'configure-channels',
+          'silence',
         ],
-        description: "The alert management operation to perform",
+        description: 'The alert management operation to perform',
       },
       alertId: {
-        type: "string",
+        type: 'string',
         description:
-          "Alert identifier (required for update, delete, trigger, silence operations)",
+          'Alert identifier (required for update, delete, trigger, silence operations)',
       },
       alertName: {
-        type: "string",
+        type: 'string',
         description:
-          "Alert name (required for create operation, optional for others)",
+          'Alert name (required for create operation, optional for others)',
       },
       condition: {
-        type: "object",
+        type: 'object',
         description:
-          "Alert condition configuration (required for create operation)",
+          'Alert condition configuration (required for create operation)',
         properties: {
-          metric: { type: "string" },
+          metric: { type: 'string' },
           aggregation: {
-            type: "string",
-            enum: ["avg", "sum", "min", "max", "count", "percentile"],
+            type: 'string',
+            enum: ['avg', 'sum', 'min', 'max', 'count', 'percentile'],
           },
-          percentile: { type: "number" },
+          percentile: { type: 'number' },
           groupBy: {
-            type: "array",
-            items: { type: "string" },
+            type: 'array',
+            items: { type: 'string' },
           },
           filters: {
-            type: "array",
+            type: 'array',
             items: {
-              type: "object",
+              type: 'object',
               properties: {
-                field: { type: "string" },
-                operator: { type: "string" },
+                field: { type: 'string' },
+                operator: { type: 'string' },
                 value: {},
               },
             },
@@ -1293,106 +1275,106 @@ export const ALERT_MANAGER_TOOL_DEFINITION = {
         },
       },
       severity: {
-        type: "string",
-        enum: ["info", "warning", "error", "critical"],
-        description: "Alert severity level",
+        type: 'string',
+        enum: ['info', 'warning', 'error', 'critical'],
+        description: 'Alert severity level',
       },
       channels: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "string",
-          enum: ["email", "slack", "webhook", "sms", "pagerduty", "custom"],
+          type: 'string',
+          enum: ['email', 'slack', 'webhook', 'sms', 'pagerduty', 'custom'],
         },
-        description: "Notification channels for the alert",
+        description: 'Notification channels for the alert',
       },
       threshold: {
-        type: "object",
-        description: "Threshold configuration (required for create operation)",
+        type: 'object',
+        description: 'Threshold configuration (required for create operation)',
         properties: {
           type: {
-            type: "string",
+            type: 'string',
             enum: [
-              "above",
-              "below",
-              "equals",
-              "not-equals",
-              "change",
-              "anomaly",
+              'above',
+              'below',
+              'equals',
+              'not-equals',
+              'change',
+              'anomaly',
             ],
           },
-          value: { type: "number" },
-          changePercent: { type: "number" },
-          timeWindow: { type: "number" },
+          value: { type: 'number' },
+          changePercent: { type: 'number' },
+          timeWindow: { type: 'number' },
         },
       },
       channelConfig: {
-        type: "object",
-        description: "Notification channel configuration",
+        type: 'object',
+        description: 'Notification channel configuration',
         properties: {
           email: {
-            type: "object",
+            type: 'object',
             properties: {
               to: {
-                type: "array",
-                items: { type: "string" },
+                type: 'array',
+                items: { type: 'string' },
               },
-              subject: { type: "string" },
-              template: { type: "string" },
+              subject: { type: 'string' },
+              template: { type: 'string' },
             },
           },
           slack: {
-            type: "object",
+            type: 'object',
             properties: {
-              webhook: { type: "string" },
-              channel: { type: "string" },
+              webhook: { type: 'string' },
+              channel: { type: 'string' },
               mentionUsers: {
-                type: "array",
-                items: { type: "string" },
+                type: 'array',
+                items: { type: 'string' },
               },
             },
           },
           webhook: {
-            type: "object",
+            type: 'object',
             properties: {
-              url: { type: "string" },
-              method: { type: "string" },
-              headers: { type: "object" },
+              url: { type: 'string' },
+              method: { type: 'string' },
+              headers: { type: 'object' },
             },
           },
         },
       },
       silenceDuration: {
-        type: "number",
+        type: 'number',
         description:
-          "Silence duration in seconds (required for silence operation)",
+          'Silence duration in seconds (required for silence operation)',
       },
       silenceReason: {
-        type: "string",
-        description: "Reason for silencing alerts",
+        type: 'string',
+        description: 'Reason for silencing alerts',
       },
       timeRange: {
-        type: "object",
-        description: "Time range filter for history operation",
+        type: 'object',
+        description: 'Time range filter for history operation',
         properties: {
-          start: { type: "number" },
-          end: { type: "number" },
+          start: { type: 'number' },
+          end: { type: 'number' },
         },
       },
       limit: {
-        type: "number",
-        description: "Maximum number of history events to return",
+        type: 'number',
+        description: 'Maximum number of history events to return',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable caching for this operation (default: true)",
+        type: 'boolean',
+        description: 'Enable caching for this operation (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
+        type: 'number',
         description:
-          "Cache TTL in seconds (optional, uses defaults if not specified)",
+          'Cache TTL in seconds (optional, uses defaults if not specified)',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

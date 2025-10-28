@@ -12,38 +12,38 @@
  * - Batch invalidation with atomic guarantees
  */
 
-import { createHash } from "crypto";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { EventEmitter } from "events";
-import { CacheInvalidationEvent } from "../../core/types";
+import { createHash } from 'crypto';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { EventEmitter } from 'events';
+import { CacheInvalidationEvent } from '../../core/types.js';
 
 export type InvalidationStrategy =
-  | "immediate"
-  | "lazy"
-  | "write-through"
-  | "ttl-based"
-  | "event-driven"
-  | "dependency-cascade";
+  | 'immediate'
+  | 'lazy'
+  | 'write-through'
+  | 'ttl-based'
+  | 'event-driven'
+  | 'dependency-cascade';
 
-export type InvalidationMode = "eager" | "lazy" | "scheduled";
+export type InvalidationMode = 'eager' | 'lazy' | 'scheduled';
 
 export interface CacheInvalidationOptions {
   operation:
-    | "invalidate"
-    | "invalidate-pattern"
-    | "invalidate-tag"
-    | "invalidate-dependency"
-    | "schedule-invalidation"
-    | "cancel-scheduled"
-    | "audit-log"
-    | "set-dependency"
-    | "remove-dependency"
-    | "validate"
-    | "configure"
-    | "stats"
-    | "clear-audit";
+    | 'invalidate'
+    | 'invalidate-pattern'
+    | 'invalidate-tag'
+    | 'invalidate-dependency'
+    | 'schedule-invalidation'
+    | 'cancel-scheduled'
+    | 'audit-log'
+    | 'set-dependency'
+    | 'remove-dependency'
+    | 'validate'
+    | 'configure'
+    | 'stats'
+    | 'clear-audit';
 
   // Basic invalidation
   key?: string;
@@ -163,12 +163,13 @@ export class CacheInvalidationTool extends EventEmitter {
   private enableAudit = true;
 
   // Scheduled invalidations
-  private scheduledInvalidations: Map<string, ScheduledInvalidation> = new Map();
+  private scheduledInvalidations: Map<string, ScheduledInvalidation> =
+    new Map();
   private schedulerTimer: NodeJS.Timeout | null = null;
 
   // Configuration
-  private strategy: InvalidationStrategy = "immediate";
-  private mode: InvalidationMode = "eager";
+  private strategy: InvalidationStrategy = 'immediate';
+  private mode: InvalidationMode = 'eager';
 
   // Statistics
   private stats = {
@@ -201,12 +202,12 @@ export class CacheInvalidationTool extends EventEmitter {
 
     // Initialize strategy counters
     const strategies: InvalidationStrategy[] = [
-      "immediate",
-      "lazy",
-      "write-through",
-      "ttl-based",
-      "event-driven",
-      "dependency-cascade",
+      'immediate',
+      'lazy',
+      'write-through',
+      'ttl-based',
+      'event-driven',
+      'dependency-cascade',
     ];
     for (const strategy of strategies) {
       this.stats.invalidationsByStrategy[strategy] = 0;
@@ -256,47 +257,47 @@ export class CacheInvalidationTool extends EventEmitter {
     }
 
     // Execute operation
-    let data: CacheInvalidationResult["data"];
+    let data: CacheInvalidationResult['data'];
 
     try {
       switch (operation) {
-        case "invalidate":
+        case 'invalidate':
           data = await this.invalidate(options);
           break;
-        case "invalidate-pattern":
+        case 'invalidate-pattern':
           data = await this.invalidatePattern(options);
           break;
-        case "invalidate-tag":
+        case 'invalidate-tag':
           data = await this.invalidateTag(options);
           break;
-        case "invalidate-dependency":
+        case 'invalidate-dependency':
           data = await this.invalidateDependency(options);
           break;
-        case "schedule-invalidation":
+        case 'schedule-invalidation':
           data = await this.scheduleInvalidation(options);
           break;
-        case "cancel-scheduled":
+        case 'cancel-scheduled':
           data = await this.cancelScheduled(options);
           break;
-        case "audit-log":
+        case 'audit-log':
           data = await this.getAuditLog(options);
           break;
-        case "set-dependency":
+        case 'set-dependency':
           data = await this.setDependency(options);
           break;
-        case "remove-dependency":
+        case 'remove-dependency':
           data = await this.removeDependency(options);
           break;
-        case "validate":
+        case 'validate':
           data = await this.validate(options);
           break;
-        case "configure":
+        case 'configure':
           data = await this.configure(options);
           break;
-        case "stats":
+        case 'stats':
           data = await this.getStats(options);
           break;
-        case "clear-audit":
+        case 'clear-audit':
           data = await this.clearAudit(options);
           break;
         default:
@@ -360,19 +361,19 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async invalidate(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { key, keys, revalidateOnInvalidate = false } = options;
     const startTime = Date.now();
 
     const keysToInvalidate = keys || (key ? [key] : []);
     if (keysToInvalidate.length === 0) {
-      throw new Error("key or keys is required for invalidate operation");
+      throw new Error('key or keys is required for invalidate operation');
     }
 
     const invalidatedKeys: string[] = [];
 
     for (const k of keysToInvalidate) {
-      if (this.mode === "lazy") {
+      if (this.mode === 'lazy') {
         // Add to lazy invalidation queue
         this.lazyInvalidationQueue.add(k);
         this.scheduleLazyProcessing();
@@ -391,7 +392,7 @@ export class CacheInvalidationTool extends EventEmitter {
 
           // Revalidate if requested
           if (revalidateOnInvalidate) {
-            this.emit("revalidate-required", { key: k });
+            this.emit('revalidate-required', { key: k });
           }
         }
       }
@@ -406,13 +407,13 @@ export class CacheInvalidationTool extends EventEmitter {
     const record = this.createAuditRecord(
       this.strategy,
       invalidatedKeys,
-      "Direct invalidation",
+      'Direct invalidation',
       { mode: this.mode },
       Date.now() - startTime
     );
 
-    this.emit("invalidated", {
-      type: "manual",
+    this.emit('invalidated', {
+      type: 'manual',
       affectedKeys: invalidatedKeys,
       timestamp: Date.now(),
     } as CacheInvalidationEvent);
@@ -425,10 +426,10 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async invalidatePattern(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { pattern } = options;
     if (!pattern) {
-      throw new Error("pattern is required for invalidate-pattern operation");
+      throw new Error('pattern is required for invalidate-pattern operation');
     }
 
     const startTime = Date.now();
@@ -451,14 +452,17 @@ export class CacheInvalidationTool extends EventEmitter {
 
     // Create audit record
     const record = this.createAuditRecord(
-      "event-driven",
+      'event-driven',
       invalidatedKeys,
       `Pattern match: ${pattern}`,
       { pattern },
       Date.now() - startTime
     );
 
-    this.emit("pattern-invalidated", { pattern, count: invalidatedKeys.length });
+    this.emit('pattern-invalidated', {
+      pattern,
+      count: invalidatedKeys.length,
+    });
 
     return { invalidatedKeys, invalidationRecord: record };
   }
@@ -468,12 +472,12 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async invalidateTag(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { tag, tags } = options;
     const tagsToInvalidate = tags || (tag ? [tag] : []);
 
     if (tagsToInvalidate.length === 0) {
-      throw new Error("tag or tags is required for invalidate-tag operation");
+      throw new Error('tag or tags is required for invalidate-tag operation');
     }
 
     const startTime = Date.now();
@@ -497,14 +501,17 @@ export class CacheInvalidationTool extends EventEmitter {
 
     // Create audit record
     const record = this.createAuditRecord(
-      "event-driven",
+      'event-driven',
       invalidatedKeys,
-      `Tag invalidation: ${tagsToInvalidate.join(", ")}`,
+      `Tag invalidation: ${tagsToInvalidate.join(', ')}`,
       { tags: tagsToInvalidate },
       Date.now() - startTime
     );
 
-    this.emit("tag-invalidated", { tags: tagsToInvalidate, count: invalidatedKeys.length });
+    this.emit('tag-invalidated', {
+      tags: tagsToInvalidate,
+      count: invalidatedKeys.length,
+    });
 
     return { invalidatedKeys, invalidationRecord: record };
   }
@@ -514,10 +521,10 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async invalidateDependency(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { key, cascadeDepth = 10 } = options;
     if (!key) {
-      throw new Error("key is required for invalidate-dependency operation");
+      throw new Error('key is required for invalidate-dependency operation');
     }
 
     const startTime = Date.now();
@@ -547,14 +554,14 @@ export class CacheInvalidationTool extends EventEmitter {
 
     const keys = Array.from(invalidatedKeys);
     const record = this.createAuditRecord(
-      "dependency-cascade",
+      'dependency-cascade',
       keys,
       `Dependency cascade from: ${key}`,
       { cascadeDepth, rootKey: key },
       Date.now() - startTime
     );
 
-    this.emit("dependency-invalidated", { rootKey: key, count: keys.length });
+    this.emit('dependency-invalidated', { rootKey: key, count: keys.length });
 
     return { invalidatedKeys: keys, invalidationRecord: record };
   }
@@ -564,19 +571,13 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async scheduleInvalidation(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
-    const {
-      keys,
-      pattern,
-      tags,
-      executeAt,
-      cronExpression,
-      repeatInterval,
-    } = options;
+  ): Promise<CacheInvalidationResult['data']> {
+    const { keys, pattern, tags, executeAt, cronExpression, repeatInterval } =
+      options;
 
     if (!keys && !pattern && !tags) {
       throw new Error(
-        "keys, pattern, or tags is required for schedule-invalidation operation"
+        'keys, pattern, or tags is required for schedule-invalidation operation'
       );
     }
 
@@ -596,7 +597,7 @@ export class CacheInvalidationTool extends EventEmitter {
 
     this.scheduledInvalidations.set(scheduleId, scheduled);
 
-    this.emit("invalidation-scheduled", { scheduleId, scheduled });
+    this.emit('invalidation-scheduled', { scheduleId, scheduled });
 
     return { scheduledInvalidation: scheduled };
   }
@@ -606,10 +607,10 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async cancelScheduled(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { scheduleId } = options;
     if (!scheduleId) {
-      throw new Error("scheduleId is required for cancel-scheduled operation");
+      throw new Error('scheduleId is required for cancel-scheduled operation');
     }
 
     const scheduled = this.scheduledInvalidations.get(scheduleId);
@@ -619,7 +620,7 @@ export class CacheInvalidationTool extends EventEmitter {
 
     this.scheduledInvalidations.delete(scheduleId);
 
-    this.emit("invalidation-cancelled", { scheduleId });
+    this.emit('invalidation-cancelled', { scheduleId });
 
     return { scheduledInvalidation: scheduled };
   }
@@ -629,7 +630,7 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async getAuditLog(
     _options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     return { auditLog: [...this.auditLog] };
   }
 
@@ -638,15 +639,15 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async setDependency(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { parentKey, childKey, childKeys, tag } = options;
     if (!parentKey) {
-      throw new Error("parentKey is required for set-dependency operation");
+      throw new Error('parentKey is required for set-dependency operation');
     }
 
     if (!childKey && !childKeys && !tag) {
       throw new Error(
-        "childKey, childKeys, or tag is required for set-dependency operation"
+        'childKey, childKeys, or tag is required for set-dependency operation'
       );
     }
 
@@ -693,7 +694,7 @@ export class CacheInvalidationTool extends EventEmitter {
       childNode.parents.add(parentKey);
     }
 
-    this.emit("dependency-set", { parentKey, children, tag });
+    this.emit('dependency-set', { parentKey, children, tag });
 
     return { dependency: parentNode };
   }
@@ -703,11 +704,11 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async removeDependency(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { parentKey, childKey } = options;
     if (!parentKey || !childKey) {
       throw new Error(
-        "parentKey and childKey are required for remove-dependency operation"
+        'parentKey and childKey are required for remove-dependency operation'
       );
     }
 
@@ -722,7 +723,7 @@ export class CacheInvalidationTool extends EventEmitter {
       childNode.parents.delete(parentKey);
     }
 
-    this.emit("dependency-removed", { parentKey, childKey });
+    this.emit('dependency-removed', { parentKey, childKey });
 
     return { dependency: parentNode };
   }
@@ -732,7 +733,7 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async validate(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const { keys, skipExpired = true } = options;
     const allEntries = this.cache.getAllEntries();
     const validationResults: Array<{
@@ -750,7 +751,7 @@ export class CacheInvalidationTool extends EventEmitter {
         validationResults.push({
           key,
           valid: false,
-          reason: "Entry not found",
+          reason: 'Entry not found',
         });
         continue;
       }
@@ -765,7 +766,7 @@ export class CacheInvalidationTool extends EventEmitter {
             validationResults.push({
               key,
               valid: false,
-              reason: "Expired (last invalidated > 1 hour ago)",
+              reason: 'Expired (last invalidated > 1 hour ago)',
             });
             continue;
           }
@@ -775,7 +776,7 @@ export class CacheInvalidationTool extends EventEmitter {
       validationResults.push({
         key,
         valid: true,
-        reason: "Valid",
+        reason: 'Valid',
       });
     }
 
@@ -787,7 +788,7 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async configure(
     options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     if (options.strategy) {
       this.strategy = options.strategy;
     }
@@ -805,7 +806,7 @@ export class CacheInvalidationTool extends EventEmitter {
       }
     }
 
-    this.emit("configuration-updated", {
+    this.emit('configuration-updated', {
       strategy: this.strategy,
       mode: this.mode,
       enableAudit: this.enableAudit,
@@ -837,7 +838,7 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async getStats(
     _options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const stats: InvalidationStats = {
       totalInvalidations: this.stats.totalInvalidations,
       invalidationsByStrategy: { ...this.stats.invalidationsByStrategy },
@@ -863,11 +864,11 @@ export class CacheInvalidationTool extends EventEmitter {
    */
   private async clearAudit(
     _options: CacheInvalidationOptions
-  ): Promise<CacheInvalidationResult["data"]> {
+  ): Promise<CacheInvalidationResult['data']> {
     const count = this.auditLog.length;
     this.auditLog = [];
 
-    this.emit("audit-cleared", { count });
+    this.emit('audit-cleared', { count });
 
     return { auditLog: [] };
   }
@@ -884,11 +885,11 @@ export class CacheInvalidationTool extends EventEmitter {
   ): InvalidationRecord {
     if (!this.enableAudit) {
       return {
-        id: "",
+        id: '',
         timestamp: Date.now(),
         strategy,
         affectedKeys: [],
-        reason: "",
+        reason: '',
         metadata: {},
         executionTime: 0,
       };
@@ -933,9 +934,9 @@ export class CacheInvalidationTool extends EventEmitter {
     // * matches any characters
     // ? matches single character
     let regexPattern = pattern
-      .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Escape special regex chars
-      .replace(/\*/g, ".*") // * -> .*
-      .replace(/\?/g, "."); // ? -> .
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special regex chars
+      .replace(/\*/g, '.*') // * -> .*
+      .replace(/\?/g, '.'); // ? -> .
 
     return new RegExp(`^${regexPattern}$`);
   }
@@ -974,7 +975,7 @@ export class CacheInvalidationTool extends EventEmitter {
           // Invalidate by pattern
           if (scheduled.pattern) {
             const result = await this.invalidatePattern({
-              operation: "invalidate-pattern",
+              operation: 'invalidate-pattern',
               pattern: scheduled.pattern,
             });
             invalidatedKeys.push(...(result.invalidatedKeys || []));
@@ -983,7 +984,7 @@ export class CacheInvalidationTool extends EventEmitter {
           // Invalidate by tags
           if (scheduled.tags && scheduled.tags.length > 0) {
             const result = await this.invalidateTag({
-              operation: "invalidate-tag",
+              operation: 'invalidate-tag',
               tags: scheduled.tags,
             });
             invalidatedKeys.push(...(result.invalidatedKeys || []));
@@ -1001,14 +1002,14 @@ export class CacheInvalidationTool extends EventEmitter {
             this.scheduledInvalidations.delete(id);
           }
 
-          this.emit("scheduled-invalidation-executed", {
+          this.emit('scheduled-invalidation-executed', {
             scheduleId: id,
             count: invalidatedKeys.length,
           });
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
-          this.emit("scheduled-invalidation-failed", {
+          this.emit('scheduled-invalidation-failed', {
             scheduleId: id,
             error: errorMessage,
           });
@@ -1046,7 +1047,7 @@ export class CacheInvalidationTool extends EventEmitter {
     }
 
     if (keys.length > 0) {
-      this.emit("lazy-invalidations-processed", { count: keys.length });
+      this.emit('lazy-invalidations-processed', { count: keys.length });
     }
   }
 
@@ -1056,7 +1057,7 @@ export class CacheInvalidationTool extends EventEmitter {
   private broadcastInvalidation(keys: string[]): void {
     // In a real distributed system, this would send messages to other nodes
     // For now, just emit an event
-    this.emit("broadcast-invalidation", {
+    this.emit('broadcast-invalidation', {
       nodeId: this.nodeId,
       keys,
       timestamp: Date.now(),
@@ -1067,9 +1068,9 @@ export class CacheInvalidationTool extends EventEmitter {
    * Generate unique node ID
    */
   private generateNodeId(): string {
-    return createHash("sha256")
+    return createHash('sha256')
       .update(`${Date.now()}-${Math.random()}`)
-      .digest("hex")
+      .digest('hex')
       .substring(0, 16);
   }
 
@@ -1077,9 +1078,9 @@ export class CacheInvalidationTool extends EventEmitter {
    * Generate unique record ID
    */
   private generateRecordId(): string {
-    return createHash("sha256")
+    return createHash('sha256')
       .update(`${Date.now()}-${this.stats.totalInvalidations}`)
-      .digest("hex")
+      .digest('hex')
       .substring(0, 16);
   }
 
@@ -1087,9 +1088,9 @@ export class CacheInvalidationTool extends EventEmitter {
    * Generate unique schedule ID
    */
   private generateScheduleId(): string {
-    return createHash("sha256")
+    return createHash('sha256')
       .update(`schedule-${Date.now()}-${Math.random()}`)
-      .digest("hex")
+      .digest('hex')
       .substring(0, 16);
   }
 
@@ -1097,7 +1098,7 @@ export class CacheInvalidationTool extends EventEmitter {
    * Determine if operation is cacheable
    */
   private isCacheableOperation(operation: string): boolean {
-    return ["stats", "audit-log", "validate"].includes(operation);
+    return ['stats', 'audit-log', 'validate'].includes(operation);
   }
 
   /**
@@ -1109,11 +1110,11 @@ export class CacheInvalidationTool extends EventEmitter {
     const { operation } = options;
 
     switch (operation) {
-      case "stats":
+      case 'stats':
         return {};
-      case "audit-log":
+      case 'audit-log':
         return {};
-      case "validate":
+      case 'validate':
         return { keys: options.keys };
       default:
         return {};
@@ -1126,7 +1127,7 @@ export class CacheInvalidationTool extends EventEmitter {
   handleExternalEvent(event: CacheInvalidationEvent): void {
     const { type, affectedKeys, metadata } = event;
 
-    if (this.strategy !== "event-driven") {
+    if (this.strategy !== 'event-driven') {
       return;
     }
 
@@ -1137,14 +1138,14 @@ export class CacheInvalidationTool extends EventEmitter {
 
     // Create audit record
     this.createAuditRecord(
-      "event-driven",
+      'event-driven',
       affectedKeys,
       `External event: ${type}`,
       metadata || {},
       0
     );
 
-    this.emit("external-event-processed", { type, count: affectedKeys.length });
+    this.emit('external-event-processed', { type, count: affectedKeys.length });
   }
 
   /**
@@ -1190,140 +1191,140 @@ export function getCacheInvalidationTool(
 
 // MCP Tool Definition
 export const CACHE_INVALIDATION_TOOL_DEFINITION = {
-  name: "cache_invalidation",
+  name: 'cache_invalidation',
   description:
-    "Comprehensive cache invalidation with 88%+ token reduction, dependency tracking, pattern matching, scheduled invalidation, and distributed coordination",
+    'Comprehensive cache invalidation with 88%+ token reduction, dependency tracking, pattern matching, scheduled invalidation, and distributed coordination',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "invalidate",
-          "invalidate-pattern",
-          "invalidate-tag",
-          "invalidate-dependency",
-          "schedule-invalidation",
-          "cancel-scheduled",
-          "audit-log",
-          "set-dependency",
-          "remove-dependency",
-          "validate",
-          "configure",
-          "stats",
-          "clear-audit",
+          'invalidate',
+          'invalidate-pattern',
+          'invalidate-tag',
+          'invalidate-dependency',
+          'schedule-invalidation',
+          'cancel-scheduled',
+          'audit-log',
+          'set-dependency',
+          'remove-dependency',
+          'validate',
+          'configure',
+          'stats',
+          'clear-audit',
         ],
-        description: "The cache invalidation operation to perform",
+        description: 'The cache invalidation operation to perform',
       },
       key: {
-        type: "string",
-        description: "Cache key to invalidate",
+        type: 'string',
+        description: 'Cache key to invalidate',
       },
       keys: {
-        type: "array",
-        items: { type: "string" },
-        description: "Array of cache keys to invalidate",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Array of cache keys to invalidate',
       },
       pattern: {
-        type: "string",
+        type: 'string',
         description:
-          "Pattern for matching keys (wildcards: * for any chars, ? for single char)",
+          'Pattern for matching keys (wildcards: * for any chars, ? for single char)',
       },
       tag: {
-        type: "string",
-        description: "Tag to invalidate all associated keys",
+        type: 'string',
+        description: 'Tag to invalidate all associated keys',
       },
       tags: {
-        type: "array",
-        items: { type: "string" },
-        description: "Array of tags to invalidate",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Array of tags to invalidate',
       },
       parentKey: {
-        type: "string",
-        description: "Parent key for dependency relationship",
+        type: 'string',
+        description: 'Parent key for dependency relationship',
       },
       childKey: {
-        type: "string",
-        description: "Child key for dependency relationship",
+        type: 'string',
+        description: 'Child key for dependency relationship',
       },
       childKeys: {
-        type: "array",
-        items: { type: "string" },
-        description: "Array of child keys for dependency relationship",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Array of child keys for dependency relationship',
       },
       cascadeDepth: {
-        type: "number",
-        description: "Maximum depth for dependency cascade (default: 10)",
+        type: 'number',
+        description: 'Maximum depth for dependency cascade (default: 10)',
       },
       scheduleId: {
-        type: "string",
-        description: "ID of scheduled invalidation",
+        type: 'string',
+        description: 'ID of scheduled invalidation',
       },
       cronExpression: {
-        type: "string",
-        description: "Cron expression for scheduled invalidation",
+        type: 'string',
+        description: 'Cron expression for scheduled invalidation',
       },
       executeAt: {
-        type: "number",
-        description: "Timestamp when to execute invalidation",
+        type: 'number',
+        description: 'Timestamp when to execute invalidation',
       },
       repeatInterval: {
-        type: "number",
-        description: "Interval in ms for repeating scheduled invalidation",
+        type: 'number',
+        description: 'Interval in ms for repeating scheduled invalidation',
       },
       strategy: {
-        type: "string",
+        type: 'string',
         enum: [
-          "immediate",
-          "lazy",
-          "write-through",
-          "ttl-based",
-          "event-driven",
-          "dependency-cascade",
+          'immediate',
+          'lazy',
+          'write-through',
+          'ttl-based',
+          'event-driven',
+          'dependency-cascade',
         ],
-        description: "Invalidation strategy",
+        description: 'Invalidation strategy',
       },
       mode: {
-        type: "string",
-        enum: ["eager", "lazy", "scheduled"],
-        description: "Invalidation mode",
+        type: 'string',
+        enum: ['eager', 'lazy', 'scheduled'],
+        description: 'Invalidation mode',
       },
       enableAudit: {
-        type: "boolean",
-        description: "Enable audit logging (default: true)",
+        type: 'boolean',
+        description: 'Enable audit logging (default: true)',
       },
       maxAuditEntries: {
-        type: "number",
-        description: "Maximum audit log entries to keep (default: 10000)",
+        type: 'number',
+        description: 'Maximum audit log entries to keep (default: 10000)',
       },
       revalidateOnInvalidate: {
-        type: "boolean",
-        description: "Trigger revalidation after invalidation",
+        type: 'boolean',
+        description: 'Trigger revalidation after invalidation',
       },
       skipExpired: {
-        type: "boolean",
-        description: "Skip expired entries during validation (default: true)",
+        type: 'boolean',
+        description: 'Skip expired entries during validation (default: true)',
       },
       broadcastToNodes: {
-        type: "boolean",
-        description: "Broadcast invalidation to distributed nodes",
+        type: 'boolean',
+        description: 'Broadcast invalidation to distributed nodes',
       },
       nodeId: {
-        type: "string",
-        description: "Node ID for distributed coordination",
+        type: 'string',
+        description: 'Node ID for distributed coordination',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable result caching (default: true)",
+        type: 'boolean',
+        description: 'Enable result caching (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 

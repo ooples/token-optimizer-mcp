@@ -12,9 +12,9 @@ import { createHash } from 'crypto';
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
-import { CacheEngine } from '../../core/cache-engine';
-import { MetricsCollector } from '../../core/metrics';
-import { TokenCounter } from '../../core/token-counter';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
 
 /**
  * Export statement information
@@ -46,7 +46,11 @@ export interface ExportInfo {
  */
 export interface ExportOptimization {
   /** Type of optimization */
-  type: 'remove-unused' | 'consolidate-exports' | 'barrel-file' | 'export-organization';
+  type:
+    | 'remove-unused'
+    | 'consolidate-exports'
+    | 'barrel-file'
+    | 'export-organization';
   /** Severity level */
   severity: 'info' | 'warning' | 'error';
   /** Human-readable message */
@@ -164,7 +168,7 @@ export class SmartExportsTool {
       force = false,
       maxCacheAge = 300,
       checkUsage = false,
-      scanDepth = 3
+      scanDepth = 3,
     } = options;
 
     // Get file content
@@ -188,7 +192,7 @@ export class SmartExportsTool {
     const cacheKey = await this.generateCacheKey(content, {
       checkUsage,
       scanDepth,
-      projectRoot
+      projectRoot,
     });
 
     // Check cache
@@ -201,12 +205,12 @@ export class SmartExportsTool {
           duration,
           cacheHit: true,
           savedTokens: cached.originalTokens || 0,
-          success: true
+          success: true,
         });
         return {
           ...cached.result,
           cached: true,
-          cacheAge: Date.now() - cached.timestamp
+          cacheAge: Date.now() - cached.timestamp,
         };
       }
     }
@@ -221,9 +225,10 @@ export class SmartExportsTool {
 
     // Analyze exports
     const exports = this.extractExports(sourceFile);
-    const dependencies = checkUsage && filePath
-      ? this.findExportDependencies(filePath, exports, projectRoot, scanDepth)
-      : [];
+    const dependencies =
+      checkUsage && filePath
+        ? this.findExportDependencies(filePath, exports, projectRoot, scanDepth)
+        : [];
     const unusedExports = checkUsage
       ? this.detectUnusedExports(exports, dependencies)
       : [];
@@ -237,13 +242,13 @@ export class SmartExportsTool {
       optimizations,
       summary: {
         totalExports: exports.length,
-        namedExports: exports.filter(e => e.type === 'named').length,
-        defaultExports: exports.filter(e => e.type === 'default').length,
-        reexports: exports.filter(e => e.type === 'reexport').length,
+        namedExports: exports.filter((e) => e.type === 'named').length,
+        defaultExports: exports.filter((e) => e.type === 'default').length,
+        reexports: exports.filter((e) => e.type === 'reexport').length,
         unusedCount: unusedExports.length,
-        dependencyCount: dependencies.length
+        dependencyCount: dependencies.length,
       },
-      cached: false
+      cached: false,
     };
 
     // Calculate token metrics
@@ -264,7 +269,7 @@ export class SmartExportsTool {
       inputTokens: originalTokens,
       cachedTokens: compactedTokens,
       savedTokens: originalTokens - compactedTokens,
-      success: true
+      success: true,
     });
 
     return result;
@@ -286,9 +291,9 @@ export class SmartExportsTool {
           name: 'default',
           location: {
             line: pos.line + 1,
-            column: pos.character
+            column: pos.character,
           },
-          kind: 'expression'
+          kind: 'expression',
         });
       }
 
@@ -302,12 +307,12 @@ export class SmartExportsTool {
         ts.isEnumDeclaration(node)
       ) {
         const hasExport = node.modifiers?.some(
-          m => m.kind === ts.SyntaxKind.ExportKeyword
+          (m) => m.kind === ts.SyntaxKind.ExportKeyword
         );
 
         if (hasExport) {
           const isDefault = node.modifiers?.some(
-            m => m.kind === ts.SyntaxKind.DefaultKeyword
+            (m) => m.kind === ts.SyntaxKind.DefaultKeyword
           );
 
           let name: string | undefined;
@@ -315,18 +320,20 @@ export class SmartExportsTool {
 
           if (ts.isVariableStatement(node)) {
             kind = 'variable';
-            node.declarationList.declarations.forEach(decl => {
+            node.declarationList.declarations.forEach((decl) => {
               if (ts.isIdentifier(decl.name)) {
                 name = decl.name.text;
-                const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+                const pos = sourceFile.getLineAndCharacterOfPosition(
+                  node.getStart()
+                );
                 exports.push({
                   type: isDefault ? 'default' : 'named',
                   name,
                   location: {
                     line: pos.line + 1,
-                    column: pos.character
+                    column: pos.character,
                   },
-                  kind
+                  kind,
                 });
               }
             });
@@ -349,15 +356,17 @@ export class SmartExportsTool {
           }
 
           if (name) {
-            const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+            const pos = sourceFile.getLineAndCharacterOfPosition(
+              node.getStart()
+            );
             exports.push({
               type: isDefault ? 'default' : 'named',
               name,
               location: {
                 line: pos.line + 1,
-                column: pos.character
+                column: pos.character,
               },
-              kind
+              kind,
             });
           }
         }
@@ -377,9 +386,9 @@ export class SmartExportsTool {
               fromModule: moduleSpecifier.text,
               location: {
                 line: pos.line + 1,
-                column: pos.character
+                column: pos.character,
               },
-              kind: 'reexport'
+              kind: 'reexport',
             });
           }
           return;
@@ -388,11 +397,12 @@ export class SmartExportsTool {
         // export { a, b as c } from 'module'
         if (ts.isNamedExports(node.exportClause)) {
           const moduleSpecifier = node.moduleSpecifier;
-          const fromModule = moduleSpecifier && ts.isStringLiteral(moduleSpecifier)
-            ? moduleSpecifier.text
-            : undefined;
+          const fromModule =
+            moduleSpecifier && ts.isStringLiteral(moduleSpecifier)
+              ? moduleSpecifier.text
+              : undefined;
 
-          node.exportClause.elements.forEach(element => {
+          node.exportClause.elements.forEach((element) => {
             const name = element.name.text;
             const originalName = element.propertyName?.text;
 
@@ -403,9 +413,9 @@ export class SmartExportsTool {
               fromModule,
               location: {
                 line: pos.line + 1,
-                column: pos.character
+                column: pos.character,
               },
-              kind: fromModule ? 'reexport' : 'named'
+              kind: fromModule ? 'reexport' : 'named',
             });
           });
         }
@@ -420,9 +430,9 @@ export class SmartExportsTool {
               fromModule: moduleSpecifier.text,
               location: {
                 line: pos.line + 1,
-                column: pos.character
+                column: pos.character,
               },
-              kind: 'reexport'
+              kind: 'reexport',
             });
           }
         }
@@ -471,7 +481,7 @@ export class SmartExportsTool {
               dependencies.push({
                 importingFile: file,
                 symbol: exportInfo.name,
-                importType: imp.type
+                importType: imp.type,
               });
             }
           }
@@ -487,7 +497,11 @@ export class SmartExportsTool {
   /**
    * Scan project files up to specified depth
    */
-  private scanProjectFiles(dir: string, depth: number, currentDepth = 0): string[] {
+  private scanProjectFiles(
+    dir: string,
+    depth: number,
+    currentDepth = 0
+  ): string[] {
     if (currentDepth >= depth) {
       return [];
     }
@@ -499,7 +513,11 @@ export class SmartExportsTool {
 
       for (const entry of entries) {
         // Skip node_modules, .git, etc.
-        if (entry === 'node_modules' || entry === '.git' || entry.startsWith('.')) {
+        if (
+          entry === 'node_modules' ||
+          entry === '.git' ||
+          entry.startsWith('.')
+        ) {
           continue;
         }
 
@@ -507,7 +525,9 @@ export class SmartExportsTool {
         const stat = statSync(fullPath);
 
         if (stat.isDirectory()) {
-          files.push(...this.scanProjectFiles(fullPath, depth, currentDepth + 1));
+          files.push(
+            ...this.scanProjectFiles(fullPath, depth, currentDepth + 1)
+          );
         } else if (stat.isFile()) {
           // Only TypeScript/JavaScript files
           if (/\.(ts|tsx|js|jsx)$/.test(entry)) {
@@ -529,7 +549,10 @@ export class SmartExportsTool {
     sourceFile: ts.SourceFile,
     targetFilePath: string
   ): Array<{ type: 'named' | 'default' | 'namespace'; symbols: string[] }> {
-    const imports: Array<{ type: 'named' | 'default' | 'namespace'; symbols: string[] }> = [];
+    const imports: Array<{
+      type: 'named' | 'default' | 'namespace';
+      symbols: string[];
+    }> = [];
 
     const visit = (node: ts.Node) => {
       if (ts.isImportDeclaration(node)) {
@@ -566,7 +589,7 @@ export class SmartExportsTool {
                 symbols.push(importClause.namedBindings.name.text);
                 type = 'namespace';
               } else if (ts.isNamedImports(importClause.namedBindings)) {
-                importClause.namedBindings.elements.forEach(element => {
+                importClause.namedBindings.elements.forEach((element) => {
                   symbols.push(element.propertyName?.text || element.name.text);
                 });
                 type = 'named';
@@ -604,10 +627,23 @@ export class SmartExportsTool {
       let resolved = join(importingDir, importPath);
 
       // Try different extensions
-      const extensions = ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
+      const extensions = [
+        '',
+        '.ts',
+        '.tsx',
+        '.js',
+        '.jsx',
+        '/index.ts',
+        '/index.tsx',
+        '/index.js',
+        '/index.jsx',
+      ];
       for (const ext of extensions) {
         const withExt = resolved + ext;
-        if (withExt === targetFilePath || withExt.replace(/\\/g, '/') === targetFilePath.replace(/\\/g, '/')) {
+        if (
+          withExt === targetFilePath ||
+          withExt.replace(/\\/g, '/') === targetFilePath.replace(/\\/g, '/')
+        ) {
           return true;
         }
       }
@@ -624,7 +660,7 @@ export class SmartExportsTool {
     dependencies: ExportDependency[]
   ): ExportInfo[] {
     const unused: ExportInfo[] = [];
-    const usedSymbols = new Set(dependencies.map(d => d.symbol));
+    const usedSymbols = new Set(dependencies.map((d) => d.symbol));
 
     for (const exp of exports) {
       if (!usedSymbols.has(exp.name) && exp.name !== 'default') {
@@ -641,68 +677,75 @@ export class SmartExportsTool {
   /**
    * Generate optimization suggestions
    */
-  private generateOptimizations(
-    exports: ExportInfo[]
-  ): ExportOptimization[] {
+  private generateOptimizations(exports: ExportInfo[]): ExportOptimization[] {
     const optimizations: ExportOptimization[] = [];
 
     // Suggest barrel file for many exports
     if (exports.length > 10) {
-      const namedExports = exports.filter(e => e.type === 'named');
+      const namedExports = exports.filter((e) => e.type === 'named');
       if (namedExports.length > 7) {
         optimizations.push({
           type: 'barrel-file',
           severity: 'info',
           message: `File has ${namedExports.length} named exports. Consider using a barrel file (index.ts) to organize exports.`,
-          suggestion: 'Create an index.ts file that re-exports public API, keeping implementation details private.',
+          suggestion:
+            'Create an index.ts file that re-exports public API, keeping implementation details private.',
           codeExample: {
-            before: 'export const a = ...\nexport const b = ...\nexport const c = ...',
-            after: '// In module.ts:\nconst a = ...\nconst b = ...\nexport { a, b };\n\n// In index.ts:\nexport { a, b } from \'./module\';'
+            before:
+              'export const a = ...\nexport const b = ...\nexport const c = ...',
+            after:
+              "// In module.ts:\nconst a = ...\nconst b = ...\nexport { a, b };\n\n// In index.ts:\nexport { a, b } from './module.js';",
           },
           impact: {
             readability: 'high',
             maintainability: 'high',
-            treeShaking: 'medium'
-          }
+            treeShaking: 'medium',
+          },
         });
       }
     }
 
     // Check for mixed export styles
-    const hasDefault = exports.some(e => e.type === 'default');
-    const hasNamed = exports.some(e => e.type === 'named');
+    const hasDefault = exports.some((e) => e.type === 'default');
+    const hasNamed = exports.some((e) => e.type === 'named');
 
     if (hasDefault && hasNamed) {
       optimizations.push({
         type: 'export-organization',
         severity: 'info',
-        message: 'File uses both default and named exports. Consider using consistent export style.',
-        suggestion: 'Prefer named exports for better tree-shaking and explicit imports. Use default exports sparingly for main module exports.',
+        message:
+          'File uses both default and named exports. Consider using consistent export style.',
+        suggestion:
+          'Prefer named exports for better tree-shaking and explicit imports. Use default exports sparingly for main module exports.',
         impact: {
           readability: 'medium',
-          treeShaking: 'medium'
-        }
+          treeShaking: 'medium',
+        },
       });
     }
 
     // Consolidate scattered exports
-    const exportLocations = exports.map(e => e.location.line);
+    const exportLocations = exports.map((e) => e.location.line);
     const spread = Math.max(...exportLocations) - Math.min(...exportLocations);
 
     if (spread > 50 && exports.length > 5) {
       optimizations.push({
         type: 'consolidate-exports',
         severity: 'info',
-        message: 'Exports are scattered across file. Consider consolidating exports at the end.',
-        suggestion: 'Move all export statements to the bottom of the file for better visibility.',
+        message:
+          'Exports are scattered across file. Consider consolidating exports at the end.',
+        suggestion:
+          'Move all export statements to the bottom of the file for better visibility.',
         codeExample: {
-          before: '// Scattered throughout file\nexport const a = ...\n// ... 50 lines ...\nexport const b = ...',
-          after: '// At bottom of file\nconst a = ...;\nconst b = ...;\n\nexport { a, b };'
+          before:
+            '// Scattered throughout file\nexport const a = ...\n// ... 50 lines ...\nexport const b = ...',
+          after:
+            '// At bottom of file\nconst a = ...;\nconst b = ...;\n\nexport { a, b };',
         },
         impact: {
           readability: 'high',
-          maintainability: 'medium'
-        }
+          maintainability: 'medium',
+        },
       });
     }
 
@@ -733,7 +776,11 @@ export class SmartExportsTool {
   private getCachedResult(
     cacheKey: string,
     maxAge: number
-  ): { result: SmartExportsResult; timestamp: number; originalTokens?: number } | null {
+  ): {
+    result: SmartExportsResult;
+    timestamp: number;
+    originalTokens?: number;
+  } | null {
     const cached = this.cache.get(cacheKey);
     if (!cached) return null;
 
@@ -764,10 +811,11 @@ export class SmartExportsTool {
       result,
       timestamp: Date.now(),
       originalTokens,
-      compactedTokens
+      compactedTokens,
     };
     const buffer = JSON.stringify(toCache);
-    const tokensSaved = originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
+    const tokensSaved =
+      originalTokens && compactedTokens ? originalTokens - compactedTokens : 0;
     this.cache.set(cacheKey, buffer, 300, tokensSaved);
   }
 
@@ -776,26 +824,26 @@ export class SmartExportsTool {
    */
   private compactResult(result: SmartExportsResult): string {
     const compact = {
-      exp: result.exports.map(e => ({
+      exp: result.exports.map((e) => ({
         t: e.type[0], // First letter: n/d/r
         n: e.name,
         k: e.kind,
         l: e.location.line,
-        u: e.used
+        u: e.used,
       })),
-      unu: result.unusedExports.map(e => ({
+      unu: result.unusedExports.map((e) => ({
         n: e.name,
-        k: e.kind
+        k: e.kind,
       })),
-      dep: result.dependencies.map(d => ({
+      dep: result.dependencies.map((d) => ({
         f: d.importingFile.split('/').pop(), // Just filename
-        s: d.symbol
+        s: d.symbol,
       })),
-      opt: result.optimizations.map(o => ({
+      opt: result.optimizations.map((o) => ({
         t: o.type,
-        m: o.message
+        m: o.message,
       })),
-      sum: result.summary
+      sum: result.summary,
     };
 
     return JSON.stringify(compact);
@@ -823,7 +871,12 @@ export async function runSmartExports(
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
-  const tool = getSmartExportsTool(cache, tokenCounter, metrics, options.projectRoot);
+  const tool = getSmartExportsTool(
+    cache,
+    tokenCounter,
+    metrics,
+    options.projectRoot
+  );
   return tool.run(options);
 }
 
@@ -832,42 +885,46 @@ export async function runSmartExports(
  */
 export const SMART_EXPORTS_TOOL_DEFINITION = {
   name: 'smart_exports',
-  description: 'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Achieves 75-85% token reduction through export analysis summarization.',
+  description:
+    'Analyze TypeScript/JavaScript export statements with intelligent caching. Tracks exports, detects unused exports, and provides optimization suggestions. Achieves 75-85% token reduction through export analysis summarization.',
   inputSchema: {
     type: 'object',
     properties: {
       filePath: {
         type: 'string',
-        description: 'Path to the TypeScript/JavaScript file to analyze'
+        description: 'Path to the TypeScript/JavaScript file to analyze',
       },
       fileContent: {
         type: 'string',
-        description: 'File content (alternative to filePath)'
+        description: 'File content (alternative to filePath)',
       },
       projectRoot: {
         type: 'string',
-        description: 'Project root directory (default: current working directory)'
+        description:
+          'Project root directory (default: current working directory)',
       },
       force: {
         type: 'boolean',
-        description: 'Force analysis even if cached result exists (default: false)',
-        default: false
+        description:
+          'Force analysis even if cached result exists (default: false)',
+        default: false,
       },
       maxCacheAge: {
         type: 'number',
         description: 'Maximum cache age in seconds (default: 300)',
-        default: 300
+        default: 300,
       },
       checkUsage: {
         type: 'boolean',
-        description: 'Check if exports are used across project (default: false)',
-        default: false
+        description:
+          'Check if exports are used across project (default: false)',
+        default: false,
       },
       scanDepth: {
         type: 'number',
         description: 'Directory depth to scan when checking usage (default: 3)',
-        default: 3
-      }
-    }
-  }
+        default: 3,
+      },
+    },
+  },
 };

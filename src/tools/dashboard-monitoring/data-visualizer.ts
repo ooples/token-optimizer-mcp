@@ -6,10 +6,10 @@
  * Operations: 8 (create-chart, update-chart, export-chart, create-heatmap, create-timeline, create-network-graph, create-sankey, animate)
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { createHash } from "crypto";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { createHash } from 'crypto';
 
 // ============================================================================
 // Type Definitions
@@ -17,14 +17,14 @@ import { createHash } from "crypto";
 
 export interface DataVisualizerOptions {
   operation:
-    | "create-chart"
-    | "update-chart"
-    | "export-chart"
-    | "create-heatmap"
-    | "create-timeline"
-    | "create-network-graph"
-    | "create-sankey"
-    | "animate";
+    | 'create-chart'
+    | 'update-chart'
+    | 'export-chart'
+    | 'create-heatmap'
+    | 'create-timeline'
+    | 'create-network-graph'
+    | 'create-sankey'
+    | 'animate';
 
   // Chart identification
   chartId?: string;
@@ -32,20 +32,20 @@ export interface DataVisualizerOptions {
 
   // Data
   data?: any[];
-  dataFormat?: "json" | "csv" | "array";
+  dataFormat?: 'json' | 'csv' | 'array';
 
   // Chart type and configuration
   chartType?:
-    | "line"
-    | "bar"
-    | "pie"
-    | "scatter"
-    | "area"
-    | "radar"
-    | "bubble"
-    | "candlestick"
-    | "waterfall"
-    | "funnel";
+    | 'line'
+    | 'bar'
+    | 'pie'
+    | 'scatter'
+    | 'area'
+    | 'radar'
+    | 'bubble'
+    | 'candlestick'
+    | 'waterfall'
+    | 'funnel';
 
   chartConfig?: {
     title?: string;
@@ -56,7 +56,7 @@ export interface DataVisualizerOptions {
     legend?: LegendConfig;
     tooltip?: TooltipConfig;
     colors?: string[];
-    theme?: "light" | "dark" | "custom";
+    theme?: 'light' | 'dark' | 'custom';
     responsive?: boolean;
     animations?: boolean;
   };
@@ -66,7 +66,7 @@ export interface DataVisualizerOptions {
     xLabels: string[];
     yLabels: string[];
     values: number[][];
-    colorScale?: "linear" | "logarithmic" | "threshold";
+    colorScale?: 'linear' | 'logarithmic' | 'threshold';
     colors?: { min: string; mid?: string; max: string };
   };
 
@@ -86,7 +86,7 @@ export interface DataVisualizerOptions {
   networkConfig?: {
     nodes: Array<{ id: string; label?: string; group?: string }>;
     edges: Array<{ source: string; target: string; weight?: number }>;
-    layout?: "force" | "circular" | "hierarchical" | "grid";
+    layout?: 'force' | 'circular' | 'hierarchical' | 'grid';
     physics?: boolean;
   };
 
@@ -100,11 +100,11 @@ export interface DataVisualizerOptions {
   animationConfig?: {
     frames: number;
     duration: number; // seconds
-    transition?: "linear" | "ease" | "ease-in" | "ease-out";
+    transition?: 'linear' | 'ease' | 'ease-in' | 'ease-out';
   };
 
   // Export options
-  exportFormat?: "png" | "svg" | "pdf" | "html" | "json";
+  exportFormat?: 'png' | 'svg' | 'pdf' | 'html' | 'json';
   exportWidth?: number;
   exportHeight?: number;
 
@@ -117,7 +117,7 @@ export interface AxisConfig {
   field?: string;
   label?: string;
   format?: string;
-  scale?: "linear" | "logarithmic" | "time" | "category";
+  scale?: 'linear' | 'logarithmic' | 'time' | 'category';
   min?: number;
   max?: number;
   gridLines?: boolean;
@@ -131,7 +131,7 @@ export interface SeriesConfig {
   field: string;
   label?: string;
   color?: string;
-  type?: "line" | "bar" | "area" | "scatter";
+  type?: 'line' | 'bar' | 'area' | 'scatter';
   fill?: boolean;
   borderWidth?: number;
   pointRadius?: number;
@@ -140,8 +140,8 @@ export interface SeriesConfig {
 
 export interface LegendConfig {
   display?: boolean;
-  position?: "top" | "bottom" | "left" | "right";
-  align?: "start" | "center" | "end";
+  position?: 'top' | 'bottom' | 'left' | 'right';
+  align?: 'start' | 'center' | 'end';
   labels?: {
     color?: string;
     font?: {
@@ -154,7 +154,7 @@ export interface LegendConfig {
 
 export interface TooltipConfig {
   enabled?: boolean;
-  mode?: "index" | "dataset" | "point" | "nearest";
+  mode?: 'index' | 'dataset' | 'point' | 'nearest';
   intersect?: boolean;
   callbacks?: {
     label?: string; // JavaScript function as string
@@ -200,7 +200,7 @@ export class DataVisualizer {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metricsCollector: MetricsCollector,
+    private metricsCollector: MetricsCollector
   ) {}
 
   /**
@@ -214,28 +214,28 @@ export class DataVisualizer {
       let result: DataVisualizerResult;
 
       switch (options.operation) {
-        case "create-chart":
+        case 'create-chart':
           result = await this.createChart(options);
           break;
-        case "update-chart":
+        case 'update-chart':
           result = await this.updateChart(options);
           break;
-        case "export-chart":
+        case 'export-chart':
           result = await this.exportChart(options);
           break;
-        case "create-heatmap":
+        case 'create-heatmap':
           result = await this.createHeatmap(options);
           break;
-        case "create-timeline":
+        case 'create-timeline':
           result = await this.createTimeline(options);
           break;
-        case "create-network-graph":
+        case 'create-network-graph':
           result = await this.createNetworkGraph(options);
           break;
-        case "create-sankey":
+        case 'create-sankey':
           result = await this.createSankey(options);
           break;
-        case "animate":
+        case 'animate':
           result = await this.animate(options);
           break;
         default:
@@ -276,16 +276,16 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createChart(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.data || !options.chartType) {
       throw new Error(
-        "Data and chart type are required for create-chart operation",
+        'Data and chart type are required for create-chart operation'
       );
     }
 
     // Generate cache key based on data and config
-    const cacheKey = this.generateCacheKey("create-chart", options);
+    const cacheKey = this.generateCacheKey('create-chart', options);
 
     // Check cache
     if (options.useCache !== false) {
@@ -293,7 +293,7 @@ export class DataVisualizer {
       if (cached) {
         const chart = JSON.parse(cached.toString()) as Chart;
         const tokensSaved = this.tokenCounter.count(
-          JSON.stringify(chart),
+          JSON.stringify(chart)
         ).tokens;
 
         return {
@@ -319,7 +319,7 @@ export class DataVisualizer {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       metadata: {
-        dataFormat: options.dataFormat || "json",
+        dataFormat: options.dataFormat || 'json',
         dataPoints: options.data.length,
       },
     };
@@ -330,12 +330,7 @@ export class DataVisualizer {
     // Cache the result
     const tokensUsed = this.tokenCounter.count(JSON.stringify(chart)).tokens;
     const cacheData = JSON.stringify(chart);
-    this.cache.set(
-      cacheKey,
-      cacheData,
-      tokensUsed,
-      options.cacheTTL || 3600,
-    );
+    this.cache.set(cacheKey, cacheData, tokensUsed, options.cacheTTL || 3600);
 
     return {
       success: true,
@@ -353,10 +348,10 @@ export class DataVisualizer {
   // ============================================================================
 
   private async updateChart(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.chartId) {
-      throw new Error("Chart ID is required for update-chart operation");
+      throw new Error('Chart ID is required for update-chart operation');
     }
 
     const existingChart = this.charts.get(options.chartId);
@@ -380,7 +375,7 @@ export class DataVisualizer {
     this.charts.set(options.chartId, updatedChart);
 
     // Invalidate cache for this chart
-    const cacheKey = this.generateCacheKey("create-chart", {
+    const cacheKey = this.generateCacheKey('create-chart', {
       ...options,
       data: updatedChart.data,
       chartType: updatedChart.type as any,
@@ -388,7 +383,7 @@ export class DataVisualizer {
     this.cache.delete(cacheKey);
 
     const tokensUsed = this.tokenCounter.count(
-      JSON.stringify(updatedChart),
+      JSON.stringify(updatedChart)
     ).tokens;
 
     return {
@@ -407,10 +402,10 @@ export class DataVisualizer {
   // ============================================================================
 
   private async exportChart(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.chartId) {
-      throw new Error("Chart ID is required for export-chart operation");
+      throw new Error('Chart ID is required for export-chart operation');
     }
 
     const chart = this.charts.get(options.chartId);
@@ -418,8 +413,8 @@ export class DataVisualizer {
       throw new Error(`Chart not found: ${options.chartId}`);
     }
 
-    const format = options.exportFormat || "svg";
-    const cacheKey = this.generateCacheKey("export-chart", options);
+    const format = options.exportFormat || 'svg';
+    const cacheKey = this.generateCacheKey('export-chart', options);
 
     // Check cache for rendered output
     if (options.useCache !== false) {
@@ -432,7 +427,7 @@ export class DataVisualizer {
           success: true,
           data: {
             rendered:
-              format === "svg" || format === "html"
+              format === 'svg' || format === 'html'
                 ? cached.toString()
                 : cachedBuffer,
             exported: { data: cachedBuffer },
@@ -450,19 +445,19 @@ export class DataVisualizer {
     let exported: Buffer;
 
     switch (format) {
-      case "svg":
+      case 'svg':
         exported = await this.exportToSVG(chart, options);
         break;
-      case "png":
+      case 'png':
         exported = await this.exportToPNG(chart, options);
         break;
-      case "pdf":
+      case 'pdf':
         exported = await this.exportToPDF(chart, options);
         break;
-      case "html":
+      case 'html':
         exported = await this.exportToHTML(chart, options);
         break;
-      case "json":
+      case 'json':
         exported = Buffer.from(JSON.stringify(chart, null, 2), 'utf-8');
         break;
       default:
@@ -473,16 +468,16 @@ export class DataVisualizer {
     const tokensUsed = this.tokenCounter.count(exported.toString()).tokens;
     this.cache.set(
       cacheKey,
-      exported.toString("utf-8"),
+      exported.toString('utf-8'),
       tokensUsed,
-      options.cacheTTL || 1800,
+      options.cacheTTL || 1800
     );
 
     return {
       success: true,
       data: {
         rendered:
-          format === "svg" || format === "html"
+          format === 'svg' || format === 'html'
             ? exported.toString()
             : exported,
         exported: { data: exported },
@@ -500,11 +495,11 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createHeatmap(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.heatmapConfig) {
       throw new Error(
-        "Heatmap configuration is required for create-heatmap operation",
+        'Heatmap configuration is required for create-heatmap operation'
       );
     }
 
@@ -512,23 +507,23 @@ export class DataVisualizer {
       xLabels,
       yLabels,
       values,
-      colorScale = "linear",
+      colorScale = 'linear',
       colors,
     } = options.heatmapConfig;
 
     if (!xLabels || !yLabels || !values) {
-      throw new Error("xLabels, yLabels, and values are required for heatmap");
+      throw new Error('xLabels, yLabels, and values are required for heatmap');
     }
 
     // Validate dimensions
     if (values.length !== yLabels.length) {
-      throw new Error("Number of rows in values must match yLabels length");
+      throw new Error('Number of rows in values must match yLabels length');
     }
     if (values[0].length !== xLabels.length) {
-      throw new Error("Number of columns in values must match xLabels length");
+      throw new Error('Number of columns in values must match xLabels length');
     }
 
-    const cacheKey = this.generateCacheKey("create-heatmap", options);
+    const cacheKey = this.generateCacheKey('create-heatmap', options);
 
     // Check cache
     if (options.useCache !== false) {
@@ -554,17 +549,12 @@ export class DataVisualizer {
       yLabels,
       values,
       colorScale,
-      colors,
+      colors
     );
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(
-      cacheKey,
-      svg,
-      tokensUsed,
-      options.cacheTTL || 3600,
-    );
+    this.cache.set(cacheKey, svg, tokensUsed, options.cacheTTL || 3600);
 
     return {
       success: true,
@@ -582,17 +572,17 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createTimeline(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.timelineConfig || !options.timelineConfig.events) {
       throw new Error(
-        "Timeline configuration with events is required for create-timeline operation",
+        'Timeline configuration with events is required for create-timeline operation'
       );
     }
 
     const { events, showMarkers = true, groupBy } = options.timelineConfig;
 
-    const cacheKey = this.generateCacheKey("create-timeline", options);
+    const cacheKey = this.generateCacheKey('create-timeline', options);
 
     // Check cache
     if (options.useCache !== false) {
@@ -617,12 +607,7 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(
-      cacheKey,
-      svg,
-      tokensUsed,
-      options.cacheTTL || 3600,
-    );
+    this.cache.set(cacheKey, svg, tokensUsed, options.cacheTTL || 3600);
 
     return {
       success: true,
@@ -640,26 +625,26 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createNetworkGraph(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.networkConfig) {
       throw new Error(
-        "Network configuration is required for create-network-graph operation",
+        'Network configuration is required for create-network-graph operation'
       );
     }
 
     const {
       nodes,
       edges,
-      layout = "force",
+      layout = 'force',
       physics = true,
     } = options.networkConfig;
 
     if (!nodes || !edges) {
-      throw new Error("Nodes and edges are required for network graph");
+      throw new Error('Nodes and edges are required for network graph');
     }
 
-    const cacheKey = this.generateCacheKey("create-network-graph", options);
+    const cacheKey = this.generateCacheKey('create-network-graph', options);
 
     // Check cache
     if (options.useCache !== false) {
@@ -684,12 +669,7 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(
-      cacheKey,
-      svg,
-      tokensUsed,
-      options.cacheTTL || 3600,
-    );
+    this.cache.set(cacheKey, svg, tokensUsed, options.cacheTTL || 3600);
 
     return {
       success: true,
@@ -707,21 +687,21 @@ export class DataVisualizer {
   // ============================================================================
 
   private async createSankey(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.sankeyConfig) {
       throw new Error(
-        "Sankey configuration is required for create-sankey operation",
+        'Sankey configuration is required for create-sankey operation'
       );
     }
 
     const { nodes, links } = options.sankeyConfig;
 
     if (!nodes || !links) {
-      throw new Error("Nodes and links are required for Sankey diagram");
+      throw new Error('Nodes and links are required for Sankey diagram');
     }
 
-    const cacheKey = this.generateCacheKey("create-sankey", options);
+    const cacheKey = this.generateCacheKey('create-sankey', options);
 
     // Check cache
     if (options.useCache !== false) {
@@ -746,12 +726,7 @@ export class DataVisualizer {
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(svg).tokens;
-    this.cache.set(
-      cacheKey,
-      svg,
-      tokensUsed,
-      options.cacheTTL || 3600,
-    );
+    this.cache.set(cacheKey, svg, tokensUsed, options.cacheTTL || 3600);
 
     return {
       success: true,
@@ -769,15 +744,15 @@ export class DataVisualizer {
   // ============================================================================
 
   private async animate(
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<DataVisualizerResult> {
     if (!options.chartId) {
-      throw new Error("Chart ID is required for animate operation");
+      throw new Error('Chart ID is required for animate operation');
     }
 
     if (!options.animationConfig) {
       throw new Error(
-        "Animation configuration is required for animate operation",
+        'Animation configuration is required for animate operation'
       );
     }
 
@@ -786,9 +761,9 @@ export class DataVisualizer {
       throw new Error(`Chart not found: ${options.chartId}`);
     }
 
-    const { frames, duration, transition = "ease" } = options.animationConfig;
+    const { frames, duration, transition = 'ease' } = options.animationConfig;
 
-    const cacheKey = this.generateCacheKey("animate", options);
+    const cacheKey = this.generateCacheKey('animate', options);
 
     // Check cache
     if (options.useCache !== false) {
@@ -813,17 +788,12 @@ export class DataVisualizer {
       chart,
       frames,
       duration,
-      transition,
+      transition
     );
 
     // Cache the result
     const tokensUsed = this.tokenCounter.count(animated).tokens;
-    this.cache.set(
-      cacheKey,
-      animated,
-      tokensUsed,
-      options.cacheTTL || 1800,
-    );
+    this.cache.set(cacheKey, animated, tokensUsed, options.cacheTTL || 1800);
 
     return {
       success: true,
@@ -847,8 +817,8 @@ export class DataVisualizer {
       type: options.chartType,
       data: this.formatChartData(
         options.data || [],
-        options.chartType || "line",
-        config.series,
+        options.chartType || 'line',
+        config.series
       ),
       options: {
         responsive: config.responsive !== false,
@@ -856,11 +826,11 @@ export class DataVisualizer {
         plugins: {
           title: {
             display: !!config.title,
-            text: config.title || "",
+            text: config.title || '',
           },
           subtitle: {
             display: !!config.subtitle,
-            text: config.subtitle || "",
+            text: config.subtitle || '',
           },
           legend: this.buildLegendConfig(config.legend),
           tooltip: this.buildTooltipConfig(config.tooltip),
@@ -874,7 +844,7 @@ export class DataVisualizer {
   private formatChartData(
     data: any[],
     chartType: string,
-    series?: SeriesConfig[],
+    series?: SeriesConfig[]
   ): any {
     if (!series || series.length === 0) {
       // Auto-detect data format
@@ -882,25 +852,25 @@ export class DataVisualizer {
         labels: data.map((_, i) => `Point ${i + 1}`),
         datasets: [
           {
-            label: "Data",
+            label: 'Data',
             data: data,
-            borderColor: "#4BC0C0",
-            backgroundColor: "rgba(75, 192, 192, 0.2)",
-            fill: chartType === "area",
+            borderColor: '#4BC0C0',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            fill: chartType === 'area',
           },
         ],
       };
     }
 
     // Extract labels from first data point
-    const labels = data.map((d) => d[series[0].field] || "");
+    const labels = data.map((d) => d[series[0].field] || '');
 
     const datasets = series.map((s, i) => ({
       label: s.label || s.field,
       data: data.map((d) => d[s.field]),
       type: s.type || chartType,
       borderColor: s.color || this.getDefaultColor(i),
-      backgroundColor: s.fill ? this.getDefaultColor(i, 0.2) : "transparent",
+      backgroundColor: s.fill ? this.getDefaultColor(i, 0.2) : 'transparent',
       borderWidth: s.borderWidth || 2,
       pointRadius: s.pointRadius || 3,
       tension: s.tension || 0.4,
@@ -917,14 +887,14 @@ export class DataVisualizer {
 
     return {
       display: legend.display !== false,
-      position: legend.position || "top",
-      align: legend.align || "center",
+      position: legend.position || 'top',
+      align: legend.align || 'center',
       labels: {
-        color: legend.labels?.color || "#666",
+        color: legend.labels?.color || '#666',
         font: {
           size: legend.labels?.font?.size || 12,
-          family: legend.labels?.font?.family || "Arial",
-          weight: legend.labels?.font?.weight || "normal",
+          family: legend.labels?.font?.family || 'Arial',
+          weight: legend.labels?.font?.weight || 'normal',
         },
       },
     };
@@ -937,7 +907,7 @@ export class DataVisualizer {
 
     return {
       enabled: tooltip.enabled !== false,
-      mode: tooltip.mode || "index",
+      mode: tooltip.mode || 'index',
       intersect: tooltip.intersect || false,
     };
   }
@@ -947,11 +917,11 @@ export class DataVisualizer {
 
     if (xAxis) {
       scales.x = {
-        type: xAxis.scale || "category",
+        type: xAxis.scale || 'category',
         display: true,
         title: {
           display: !!xAxis.label,
-          text: xAxis.label || "",
+          text: xAxis.label || '',
         },
         grid: {
           display: xAxis.gridLines !== false,
@@ -964,11 +934,11 @@ export class DataVisualizer {
 
     if (yAxis) {
       scales.y = {
-        type: yAxis.scale || "linear",
+        type: yAxis.scale || 'linear',
         display: true,
         title: {
           display: !!yAxis.label,
-          text: yAxis.label || "",
+          text: yAxis.label || '',
         },
         grid: {
           display: yAxis.gridLines !== false,
@@ -991,7 +961,7 @@ export class DataVisualizer {
     yLabels: string[],
     values: number[][],
     colorScale: string,
-    colors?: { min: string; mid?: string; max: string },
+    colors?: { min: string; mid?: string; max: string }
   ): string {
     const width = 800;
     const height = 600;
@@ -1003,7 +973,7 @@ export class DataVisualizer {
     const minValue = Math.min(...flatValues);
     const maxValue = Math.max(...flatValues);
 
-    const colorScheme = colors || { min: "#0000ff", max: "#ff0000" };
+    const colorScheme = colors || { min: '#0000ff', max: '#ff0000' };
 
     let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
     svg += `<style>.cell { stroke: #fff; stroke-width: 2; } .label { font-family: Arial; font-size: 12px; fill: #333; }</style>`;
@@ -1018,7 +988,7 @@ export class DataVisualizer {
           maxValue,
           colorScheme.min,
           colorScheme.max,
-          colorScale,
+          colorScale
         );
 
         const cx = 80 + x * cellWidth;
@@ -1048,7 +1018,7 @@ export class DataVisualizer {
       maxValue,
       colorScheme,
       width - 50,
-      50,
+      50
     );
 
     svg += `</svg>`;
@@ -1063,7 +1033,7 @@ export class DataVisualizer {
       category?: string;
     }>,
     _groupBy?: string,
-    showMarkers?: boolean,
+    showMarkers?: boolean
   ): string {
     const width = 1000;
     const height = 400;
@@ -1134,7 +1104,7 @@ export class DataVisualizer {
     nodes: Array<{ id: string; label?: string; group?: string }>,
     edges: Array<{ source: string; target: string; weight?: number }>,
     layout: string,
-    _physics: boolean,
+    _physics: boolean
   ): string {
     const width = 800;
     const height = 600;
@@ -1145,7 +1115,7 @@ export class DataVisualizer {
       edges,
       layout,
       width,
-      height,
+      height
     );
 
     let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
@@ -1164,7 +1134,7 @@ export class DataVisualizer {
       if (sourcePos && targetPos) {
         const strokeWidth = edge.weight ? Math.sqrt(edge.weight) : 1;
         svg += `<line class="edge" x1="${sourcePos.x}" y1="${sourcePos.y}" x2="${targetPos.x}" y2="${targetPos.y}" stroke-width="${strokeWidth}">`;
-        svg += `<title>${edge.source} → ${edge.target}${edge.weight ? `: ${edge.weight}` : ""}</title>`;
+        svg += `<title>${edge.source} → ${edge.target}${edge.weight ? `: ${edge.weight}` : ''}</title>`;
         svg += `</line>`;
       }
     }
@@ -1187,7 +1157,7 @@ export class DataVisualizer {
 
   private generateSankeySVG(
     nodes: Array<{ name: string; category?: string }>,
-    links: Array<{ source: string; target: string; value: number }>,
+    links: Array<{ source: string; target: string; value: number }>
   ): string {
     const width = 1000;
     const height = 600;
@@ -1228,7 +1198,7 @@ export class DataVisualizer {
     for (const [level, nodesInLevel] of levelGroups.entries()) {
       const totalValue = nodesInLevel.reduce(
         (sum, n) => sum + (nodeValues.get(n) || 0),
-        0,
+        0
       );
       const scale = (height - 100) / totalValue;
 
@@ -1263,7 +1233,7 @@ export class DataVisualizer {
         sourcePos.y + sourcePos.height / 2,
         targetPos.x,
         targetPos.y + targetPos.height / 2,
-        linkHeight,
+        linkHeight
       );
 
       const color = this.getDefaultColor(nodeIndex.get(link.source) || 0, 0.3);
@@ -1295,18 +1265,18 @@ export class DataVisualizer {
 
   private async exportToSVG(
     chart: Chart,
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<Buffer> {
     // Generate SVG based on chart type
     let svg: string;
 
     switch (chart.type) {
-      case "line":
-      case "bar":
-      case "area":
+      case 'line':
+      case 'bar':
+      case 'area':
         svg = this.generateBasicChartSVG(chart, options);
         break;
-      case "pie":
+      case 'pie':
         svg = this.generatePieChartSVG(chart, options);
         break;
       default:
@@ -1318,17 +1288,17 @@ export class DataVisualizer {
 
   private async exportToPNG(
     chart: Chart,
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<Buffer> {
     // For PNG export, we would typically use a library like canvas or puppeteer
     // For now, return SVG wrapped in data URI format that can be converted
     const svg = await this.exportToSVG(chart, options);
-    return Buffer.from(`data:image/svg+xml;base64,${svg.toString("base64")}`);
+    return Buffer.from(`data:image/svg+xml;base64,${svg.toString('base64')}`);
   }
 
   private async exportToPDF(
     chart: Chart,
-    _options: DataVisualizerOptions,
+    _options: DataVisualizerOptions
   ): Promise<Buffer> {
     // For PDF export, we would use a library like pdfkit or puppeteer
     // For now, return a simple PDF structure
@@ -1338,7 +1308,7 @@ export class DataVisualizer {
 
   private async exportToHTML(
     chart: Chart,
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): Promise<Buffer> {
     const svg = await this.exportToSVG(chart, options);
 
@@ -1380,7 +1350,7 @@ export class DataVisualizer {
 
   private generateBasicChartSVG(
     chart: Chart,
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): string {
     const width = options.exportWidth || 800;
     const height = options.exportHeight || 600;
@@ -1388,10 +1358,10 @@ export class DataVisualizer {
 
     const data = chart.data;
     const maxValue = Math.max(
-      ...data.map((d: any) => (typeof d === "number" ? d : d.value || 0)),
+      ...data.map((d: any) => (typeof d === 'number' ? d : d.value || 0))
     );
     const minValue = Math.min(
-      ...data.map((d: any) => (typeof d === "number" ? d : d.value || 0)),
+      ...data.map((d: any) => (typeof d === 'number' ? d : d.value || 0))
     );
 
     let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
@@ -1410,7 +1380,7 @@ export class DataVisualizer {
     const plotHeight = height - margin.top - margin.bottom;
 
     // Draw based on chart type
-    if (chart.type === "line" || chart.type === "area") {
+    if (chart.type === 'line' || chart.type === 'area') {
       svg += this.drawLineChart(
         data,
         margin,
@@ -1418,9 +1388,9 @@ export class DataVisualizer {
         plotHeight,
         minValue,
         maxValue,
-        chart.type === "area",
+        chart.type === 'area'
       );
-    } else if (chart.type === "bar") {
+    } else if (chart.type === 'bar') {
       svg += this.drawBarChart(data, margin, plotWidth, plotHeight, maxValue);
     }
 
@@ -1430,7 +1400,7 @@ export class DataVisualizer {
 
   private generatePieChartSVG(
     chart: Chart,
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): string {
     const width = options.exportWidth || 600;
     const height = options.exportHeight || 600;
@@ -1440,8 +1410,8 @@ export class DataVisualizer {
 
     const data = chart.data;
     const total = data.reduce(
-      (sum: number, d: any) => sum + (typeof d === "number" ? d : d.value || 0),
-      0,
+      (sum: number, d: any) => sum + (typeof d === 'number' ? d : d.value || 0),
+      0
     );
 
     let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
@@ -1454,7 +1424,7 @@ export class DataVisualizer {
     let currentAngle = 0;
 
     for (let i = 0; i < data.length; i++) {
-      const value = typeof data[i] === "number" ? data[i] : data[i].value || 0;
+      const value = typeof data[i] === 'number' ? data[i] : data[i].value || 0;
       const percentage = value / total;
       const angle = percentage * 2 * Math.PI;
 
@@ -1472,8 +1442,8 @@ export class DataVisualizer {
         `M ${centerX} ${centerY}`,
         `L ${x1} ${y1}`,
         `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-        "Z",
-      ].join(" ");
+        'Z',
+      ].join(' ');
 
       const color = this.getDefaultColor(i);
       svg += `<path class="pie-slice" d="${pathData}" fill="${color}">`;
@@ -1497,7 +1467,7 @@ export class DataVisualizer {
     chart: Chart,
     frames: number,
     duration: number,
-    transition: string,
+    transition: string
   ): string {
     const width = 800;
     const height = 600;
@@ -1510,11 +1480,11 @@ export class DataVisualizer {
     // Generate keyframe animation
     const data = chart.data;
     const maxValue = Math.max(
-      ...data.map((d: any) => (typeof d === "number" ? d : d.value || 0)),
+      ...data.map((d: any) => (typeof d === 'number' ? d : d.value || 0))
     );
 
     for (let i = 0; i < data.length; i++) {
-      const value = typeof data[i] === "number" ? data[i] : data[i].value || 0;
+      const value = typeof data[i] === 'number' ? data[i] : data[i].value || 0;
       const barHeight = (value / maxValue) * (height - 100);
       const x = 50 + (i * (width - 100)) / data.length;
       const y = height - 50 - barHeight;
@@ -1540,13 +1510,13 @@ export class DataVisualizer {
     plotHeight: number,
     minValue: number,
     maxValue: number,
-    fill: boolean,
+    fill: boolean
   ): string {
     const valueRange = maxValue - minValue;
     const points: string[] = [];
 
     for (let i = 0; i < data.length; i++) {
-      const value = typeof data[i] === "number" ? data[i] : data[i].value || 0;
+      const value = typeof data[i] === 'number' ? data[i] : data[i].value || 0;
       const x = margin.left + (i / (data.length - 1)) * plotWidth;
       const y =
         margin.top +
@@ -1555,7 +1525,7 @@ export class DataVisualizer {
       points.push(`${x},${y}`);
     }
 
-    let svg = "";
+    let svg = '';
 
     if (fill) {
       const fillPoints = [
@@ -1563,14 +1533,14 @@ export class DataVisualizer {
         `${margin.left + plotWidth},${margin.top + plotHeight}`,
         `${margin.left},${margin.top + plotHeight}`,
       ];
-      svg += `<polygon points="${fillPoints.join(" ")}" fill="rgba(75, 192, 192, 0.2)" stroke="none" />`;
+      svg += `<polygon points="${fillPoints.join(' ')}" fill="rgba(75, 192, 192, 0.2)" stroke="none" />`;
     }
 
-    svg += `<polyline points="${points.join(" ")}" fill="none" stroke="#4BC0C0" stroke-width="2" />`;
+    svg += `<polyline points="${points.join(' ')}" fill="none" stroke="#4BC0C0" stroke-width="2" />`;
 
     // Draw points
     for (const point of points) {
-      const [x, y] = point.split(",");
+      const [x, y] = point.split(',');
       svg += `<circle cx="${x}" cy="${y}" r="4" fill="#4BC0C0" stroke="#fff" stroke-width="2" />`;
     }
 
@@ -1582,13 +1552,13 @@ export class DataVisualizer {
     margin: any,
     plotWidth: number,
     plotHeight: number,
-    maxValue: number,
+    maxValue: number
   ): string {
     const barWidth = (plotWidth / data.length) * 0.8;
-    let svg = "";
+    let svg = '';
 
     for (let i = 0; i < data.length; i++) {
-      const value = typeof data[i] === "number" ? data[i] : data[i].value || 0;
+      const value = typeof data[i] === 'number' ? data[i] : data[i].value || 0;
       const barHeight = (value / maxValue) * plotHeight;
       const x = margin.left + (i + 0.1) * (plotWidth / data.length);
       const y = margin.top + plotHeight - barHeight;
@@ -1608,11 +1578,11 @@ export class DataVisualizer {
     _edges: Array<{ source: string; target: string; weight?: number }>,
     layout: string,
     width: number,
-    height: number,
+    height: number
   ): Map<string, { x: number; y: number }> {
     const positions = new Map<string, { x: number; y: number }>();
 
-    if (layout === "circular") {
+    if (layout === 'circular') {
       const radius = Math.min(width, height) / 2 - 50;
       const centerX = width / 2;
       const centerY = height / 2;
@@ -1625,7 +1595,7 @@ export class DataVisualizer {
           y: centerY + radius * Math.sin(angle),
         });
       }
-    } else if (layout === "grid") {
+    } else if (layout === 'grid') {
       const cols = Math.ceil(Math.sqrt(nodes.length));
       const cellWidth = (width - 100) / cols;
       const cellHeight = (height - 100) / Math.ceil(nodes.length / cols);
@@ -1653,7 +1623,7 @@ export class DataVisualizer {
 
   private calculateSankeyLevels(
     nodes: Array<{ name: string; category?: string }>,
-    links: Array<{ source: string; target: string; value: number }>,
+    links: Array<{ source: string; target: string; value: number }>
   ): Map<string, number> {
     const levels = new Map<string, number>();
     const inDegree = new Map<string, number>();
@@ -1699,7 +1669,7 @@ export class DataVisualizer {
 
   private calculateSankeyNodeValues(
     nodes: Array<{ name: string; category?: string }>,
-    links: Array<{ source: string; target: string; value: number }>,
+    links: Array<{ source: string; target: string; value: number }>
   ): Map<string, number> {
     const values = new Map<string, number>();
 
@@ -1721,7 +1691,7 @@ export class DataVisualizer {
     y1: number,
     x2: number,
     y2: number,
-    width: number,
+    width: number
   ): string {
     const midX = (x1 + x2) / 2;
     return (
@@ -1737,7 +1707,7 @@ export class DataVisualizer {
     maxValue: number,
     colors: { min: string; mid?: string; max: string },
     x: number,
-    y: number,
+    y: number
   ): string {
     const width = 20;
     const height = 200;
@@ -1753,7 +1723,7 @@ export class DataVisualizer {
         maxValue,
         colors.min,
         colors.max,
-        "linear",
+        'linear'
       );
       const rectY = y + (height * (steps - i - 1)) / steps;
       svg += `<rect x="${x}" y="${rectY}" width="${width}" height="${height / steps}" fill="${color}" />`;
@@ -1776,11 +1746,11 @@ export class DataVisualizer {
     max: number,
     colorMin: string,
     colorMax: string,
-    scale: string,
+    scale: string
   ): string {
     let t = (value - min) / (max - min);
 
-    if (scale === "logarithmic") {
+    if (scale === 'logarithmic') {
       t = Math.log(1 + t * (Math.E - 1)) / Math.log(Math.E);
     }
 
@@ -1809,28 +1779,28 @@ export class DataVisualizer {
 
   private rgbToHex(r: number, g: number, b: number): string {
     return (
-      "#" +
+      '#' +
       [r, g, b]
         .map((x) => {
           const hex = x.toString(16);
-          return hex.length === 1 ? "0" + hex : hex;
+          return hex.length === 1 ? '0' + hex : hex;
         })
-        .join("")
+        .join('')
     );
   }
 
   private getDefaultColor(index: number, alpha?: number): string {
     const colors = [
-      "#FF6384",
-      "#36A2EB",
-      "#FFCE56",
-      "#4BC0C0",
-      "#9966FF",
-      "#FF9F40",
-      "#FF6384",
-      "#C9CBCF",
-      "#4BC0C0",
-      "#FF6384",
+      '#FF6384',
+      '#36A2EB',
+      '#FFCE56',
+      '#4BC0C0',
+      '#9966FF',
+      '#FF9F40',
+      '#FF6384',
+      '#C9CBCF',
+      '#4BC0C0',
+      '#FF6384',
     ];
 
     const color = colors[index % colors.length];
@@ -1850,9 +1820,9 @@ export class DataVisualizer {
 
   private generateCacheKey(
     operation: string,
-    options: DataVisualizerOptions,
+    options: DataVisualizerOptions
   ): string {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(operation);
     hash.update(
       JSON.stringify({
@@ -1866,8 +1836,124 @@ export class DataVisualizer {
         sankeyConfig: options.sankeyConfig,
         animationConfig: options.animationConfig,
         exportFormat: options.exportFormat,
-      }),
+      })
     );
-    return `data-visualizer:${operation}:${hash.digest("hex")}`;
+    return `data-visualizer:${operation}:${hash.digest('hex')}`;
   }
 }
+
+// Export singleton instance
+let dataVisualizerInstance: DataVisualizer | null = null;
+
+export function getDataVisualizer(
+  cache: CacheEngine,
+  tokenCounter: TokenCounter,
+  metricsCollector: MetricsCollector
+): DataVisualizer {
+  if (!dataVisualizerInstance) {
+    dataVisualizerInstance = new DataVisualizer(
+      cache,
+      tokenCounter,
+      metricsCollector
+    );
+  }
+  return dataVisualizerInstance;
+}
+
+// MCP Tool definition - Input schema for data_visualizer tool
+export const DATA_VISUALIZER_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    operation: {
+      type: 'string',
+      enum: [
+        'create-chart',
+        'update-chart',
+        'delete-chart',
+        'list-charts',
+        'render',
+        'export',
+        'create-heatmap',
+        'create-timeline',
+        'create-network',
+        'create-sankey',
+        'create-animation',
+      ],
+      description: 'Visualization operation to perform',
+    },
+    chartId: {
+      type: 'string',
+      description: 'Chart ID (required for update, delete, render)',
+    },
+    chartType: {
+      type: 'string',
+      enum: ['line', 'bar', 'pie', 'scatter', 'area', 'radar', 'bubble'],
+      description: 'Chart type',
+    },
+    data: {
+      type: 'object',
+      description: 'Chart data with labels and datasets',
+    },
+    chartConfig: {
+      type: 'object',
+      description: 'Chart configuration',
+    },
+    heatmapConfig: {
+      type: 'object',
+      description: 'Heatmap configuration',
+    },
+    timelineConfig: {
+      type: 'object',
+      description: 'Timeline configuration',
+    },
+    networkConfig: {
+      type: 'object',
+      description: 'Network graph configuration',
+    },
+    sankeyConfig: {
+      type: 'object',
+      description: 'Sankey diagram configuration',
+    },
+    animationConfig: {
+      type: 'object',
+      description: 'Animation configuration',
+    },
+    renderFormat: {
+      type: 'string',
+      enum: ['svg', 'canvas', 'html', 'json'],
+      description: 'Rendering format (default: svg)',
+      default: 'svg',
+    },
+    exportFormat: {
+      type: 'string',
+      enum: ['svg', 'png', 'pdf', 'json'],
+      description: 'Export format (default: svg)',
+      default: 'svg',
+    },
+    exportWidth: {
+      type: 'number',
+      description: 'Export width in pixels',
+    },
+    exportHeight: {
+      type: 'number',
+      description: 'Export height in pixels',
+    },
+    useCache: {
+      type: 'boolean',
+      description: 'Enable caching',
+      default: true,
+    },
+    cacheTTL: {
+      type: 'number',
+      description: 'Cache TTL in seconds',
+    },
+  },
+  required: ['operation'],
+};
+
+export const DATA_VISUALIZER_TOOL_DEFINITION = {
+  name: 'data_visualizer',
+  description:
+    'Create and manage interactive data visualizations with 92% token reduction through SVG/Canvas optimization and configuration caching',
+  inputSchema: DATA_VISUALIZER_INPUT_SCHEMA,
+};

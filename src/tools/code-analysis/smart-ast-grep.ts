@@ -14,28 +14,38 @@
 import { execSync } from 'child_process';
 import { existsSync, statSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
-import { CacheEngine } from '../../core/cache-engine';
-import { TokenCounter } from '../../core/token-counter';
-import { MetricsCollector } from '../../core/metrics';
-import { hashFile } from '../shared/hash-utils';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { hashFile } from '../shared/hash-utils.js';
 
 export interface SmartAstGrepOptions {
   // Pattern options
   pattern: string;
-  language?: 'ts' | 'tsx' | 'js' | 'jsx' | 'py' | 'go' | 'rs' | 'java' | 'c' | 'cpp';
+  language?:
+    | 'ts'
+    | 'tsx'
+    | 'js'
+    | 'jsx'
+    | 'py'
+    | 'go'
+    | 'rs'
+    | 'java'
+    | 'c'
+    | 'cpp';
 
   // Search scope
   projectPath: string;
-  filePattern?: string;  // e.g., "src/**/*.ts"
+  filePattern?: string; // e.g., "src/**/*.ts"
   excludePatterns?: string[];
 
   // Cache options
   enableCache?: boolean;
-  ttl?: number;  // 7 days default for AST indexes
+  ttl?: number; // 7 days default for AST indexes
 
   // Output options
-  contextLines?: number;  // Lines of context around matches
-  maxMatches?: number;    // Limit results
+  contextLines?: number; // Lines of context around matches
+  maxMatches?: number; // Limit results
   includeContext?: boolean;
 
   // Performance options
@@ -92,7 +102,7 @@ interface AstIndex {
   version: string;
   projectPath: string;
   files: Map<string, FileIndexEntry>;
-  patterns: Map<string, Set<string>>;  // pattern -> file paths that match
+  patterns: Map<string, Set<string>>; // pattern -> file paths that match
   lastUpdated: number;
 }
 
@@ -128,7 +138,10 @@ export class SmartAstGrepTool {
   /**
    * Smart AST grep with pattern indexing
    */
-  async grep(pattern: string, options: SmartAstGrepOptions): Promise<SmartAstGrepResult> {
+  async grep(
+    pattern: string,
+    options: SmartAstGrepOptions
+  ): Promise<SmartAstGrepResult> {
     const startTime = Date.now();
 
     const {
@@ -151,7 +164,8 @@ export class SmartAstGrepTool {
     }
 
     // Auto-detect language if not provided
-    const detectedLanguage = language || this.detectLanguage(pattern, projectPath);
+    const detectedLanguage =
+      language || this.detectLanguage(pattern, projectPath);
 
     // Generate cache keys
     const indexKey = this.generateIndexKey(projectPath, detectedLanguage);
@@ -189,7 +203,13 @@ export class SmartAstGrepTool {
 
     if (!index || !enableCache) {
       // Create new index
-      index = await this.createIndex(projectPath, detectedLanguage, filePattern, excludePatterns, respectGitignore);
+      index = await this.createIndex(
+        projectPath,
+        detectedLanguage,
+        filePattern,
+        excludePatterns,
+        respectGitignore
+      );
       reindexedFiles = index.files.size;
 
       // Cache the index
@@ -198,7 +218,14 @@ export class SmartAstGrepTool {
       }
     } else if (incrementalIndexing) {
       // Incremental update: check for changed files
-      const updates = await this.updateIndex(index, projectPath, detectedLanguage, filePattern, excludePatterns, respectGitignore);
+      const updates = await this.updateIndex(
+        index,
+        projectPath,
+        detectedLanguage,
+        filePattern,
+        excludePatterns,
+        respectGitignore
+      );
       reindexedFiles = updates.reindexed;
       cachedFiles = updates.cached;
 
@@ -230,7 +257,8 @@ export class SmartAstGrepTool {
     const cachedTokensResult = this.tokenCounter.count(compactOutput);
     const cachedTokens = cachedTokensResult.tokens;
     const tokensSaved = Math.max(0, originalTokens - cachedTokens);
-    const compressionRatio = originalTokens > 0 ? cachedTokens / originalTokens : 1;
+    const compressionRatio =
+      originalTokens > 0 ? cachedTokens / originalTokens : 1;
 
     // Generate pattern suggestions
     const suggestions = this.generatePatternSuggestions(pattern);
@@ -281,7 +309,13 @@ export class SmartAstGrepTool {
     excludePatterns: string[] = [],
     respectGitignore: boolean = true
   ): Promise<AstIndex> {
-    const files = this.findSourceFiles(projectPath, language, filePattern, excludePatterns, respectGitignore);
+    const files = this.findSourceFiles(
+      projectPath,
+      language,
+      filePattern,
+      excludePatterns,
+      respectGitignore
+    );
 
     const index: AstIndex = {
       version: SmartAstGrepTool.INDEX_VERSION,
@@ -301,7 +335,7 @@ export class SmartAstGrepTool {
         hash,
         language,
         lastIndexed: stats.mtimeMs,
-        nodeCount: 0,  // Would require parsing, skip for now
+        nodeCount: 0, // Would require parsing, skip for now
         patterns: new Set(),
       };
 
@@ -322,7 +356,13 @@ export class SmartAstGrepTool {
     excludePatterns: string[] = [],
     respectGitignore: boolean = true
   ): Promise<{ reindexed: number; cached: number }> {
-    const files = this.findSourceFiles(projectPath, language, filePattern, excludePatterns, respectGitignore);
+    const files = this.findSourceFiles(
+      projectPath,
+      language,
+      filePattern,
+      excludePatterns,
+      respectGitignore
+    );
     let reindexed = 0;
     let cached = 0;
 
@@ -395,11 +435,7 @@ export class SmartAstGrepTool {
     }
 
     // Build ast-grep command
-    const args = [
-      '--pattern', pattern,
-      '--lang', language,
-      '--json=stream',
-    ];
+    const args = ['--pattern', pattern, '--lang', language, '--json=stream'];
 
     if (includeContext && contextLines > 0) {
       args.push('-C', contextLines.toString());
@@ -419,16 +455,19 @@ export class SmartAstGrepTool {
 
     // Execute ast-grep
     try {
-      const command = `npx ast-grep ${args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ')}`;
+      const command = `npx ast-grep ${args.map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`;
       const output = execSync(command, {
         cwd: index.projectPath,
         encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,  // 10MB buffer
-        timeout: 120000,  // 2 minutes timeout
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+        timeout: 120000, // 2 minutes timeout
       });
 
       // Parse JSON stream output
-      const lines = output.trim().split('\n').filter(line => line.trim());
+      const lines = output
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim());
 
       for (const line of lines) {
         try {
@@ -493,7 +532,9 @@ export class SmartAstGrepTool {
           const relativePath = relative(projectPath, fullPath);
 
           // Skip excluded patterns
-          if (this.shouldExclude(relativePath, excludePatterns, respectGitignore)) {
+          if (
+            this.shouldExclude(relativePath, excludePatterns, respectGitignore)
+          ) {
             continue;
           }
 
@@ -561,16 +602,16 @@ export class SmartAstGrepTool {
    */
   private getExtensionsForLanguage(language: string): string[] {
     const extensionMap: Record<string, string[]> = {
-      'ts': ['.ts', '.tsx'],
-      'tsx': ['.tsx', '.ts'],
-      'js': ['.js', '.jsx', '.mjs', '.cjs'],
-      'jsx': ['.jsx', '.js'],
-      'py': ['.py'],
-      'go': ['.go'],
-      'rs': ['.rs'],
-      'java': ['.java'],
-      'c': ['.c', '.h'],
-      'cpp': ['.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx'],
+      ts: ['.ts', '.tsx'],
+      tsx: ['.tsx', '.ts'],
+      js: ['.js', '.jsx', '.mjs', '.cjs'],
+      jsx: ['.jsx', '.js'],
+      py: ['.py'],
+      go: ['.go'],
+      rs: ['.rs'],
+      java: ['.java'],
+      c: ['.c', '.h'],
+      cpp: ['.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx'],
     };
 
     return extensionMap[language] || [`.${language}`];
@@ -581,7 +622,11 @@ export class SmartAstGrepTool {
    */
   private detectLanguage(pattern: string, projectPath: string): string {
     // Check for TypeScript/JavaScript keywords
-    if (pattern.includes('interface') || pattern.includes('type ') || pattern.includes('import')) {
+    if (
+      pattern.includes('interface') ||
+      pattern.includes('type ') ||
+      pattern.includes('import')
+    ) {
       if (existsSync(join(projectPath, 'tsconfig.json'))) {
         return 'ts';
       }
@@ -589,7 +634,11 @@ export class SmartAstGrepTool {
     }
 
     // Check for Python keywords
-    if (pattern.includes('def ') || pattern.includes('class ') || pattern.includes('import ')) {
+    if (
+      pattern.includes('def ') ||
+      pattern.includes('class ') ||
+      pattern.includes('import ')
+    ) {
       return 'py';
     }
 
@@ -607,7 +656,11 @@ export class SmartAstGrepTool {
   /**
    * Generate cache key for pattern search
    */
-  private generatePatternKey(pattern: string, projectPath: string, options: Partial<SmartAstGrepOptions>): string {
+  private generatePatternKey(
+    pattern: string,
+    projectPath: string,
+    options: Partial<SmartAstGrepOptions>
+  ): string {
     const keyContent = JSON.stringify({
       pattern,
       projectPath,
@@ -642,10 +695,9 @@ export class SmartAstGrepTool {
           ])
         ),
         patterns: new Map(
-          Object.entries(data.patterns || {}).map(([pattern, files]: [string, any]) => [
-            pattern,
-            new Set(files),
-          ])
+          Object.entries(data.patterns || {}).map(
+            ([pattern, files]: [string, any]) => [pattern, new Set(files)]
+          )
         ),
         lastUpdated: data.lastUpdated,
       };
@@ -663,18 +715,19 @@ export class SmartAstGrepTool {
   private cacheIndex(key: string, index: AstIndex, ttl: number): void {
     try {
       // Convert Maps to serializable objects
-      const filesArray = Array.from(index.files.entries()).map(([path, entry]) => [
-        path,
-        {
-          ...entry,
-          patterns: Array.from(entry.patterns),
-        },
-      ]);
+      const filesArray = Array.from(index.files.entries()).map(
+        ([path, entry]) => [
+          path,
+          {
+            ...entry,
+            patterns: Array.from(entry.patterns),
+          },
+        ]
+      );
 
-      const patternsArray = Array.from(index.patterns.entries()).map(([pattern, files]) => [
-        pattern,
-        Array.from(files),
-      ]);
+      const patternsArray = Array.from(index.patterns.entries()).map(
+        ([pattern, files]) => [pattern, Array.from(files)]
+      );
 
       const serializable = {
         version: index.version,
@@ -696,7 +749,11 @@ export class SmartAstGrepTool {
   /**
    * Cache pattern search result
    */
-  private cachePatternResult(key: string, result: SmartAstGrepResult, ttl: number): void {
+  private cachePatternResult(
+    key: string,
+    result: SmartAstGrepResult,
+    ttl: number
+  ): void {
     try {
       const data = JSON.stringify(result);
       this.cache.set(key, data, ttl, result.metadata.tokensSaved);
@@ -742,7 +799,9 @@ export class SmartAstGrepTool {
    */
   private formatCompactOutput(matches: AstMatch[]): string {
     // Compact format: file:line:column: match
-    return matches.map(m => `${m.file}:${m.line}:${m.column}: ${m.match.trim()}`).join('\n');
+    return matches
+      .map((m) => `${m.file}:${m.line}:${m.column}: ${m.match.trim()}`)
+      .join('\n');
   }
 
   /**
@@ -753,18 +812,25 @@ export class SmartAstGrepTool {
 
     // Suggest common patterns if this is a partial match
     for (const commonPattern of SmartAstGrepTool.COMMON_PATTERNS) {
-      if (commonPattern.includes(pattern) || pattern.includes(commonPattern.split(' ')[0])) {
+      if (
+        commonPattern.includes(pattern) ||
+        pattern.includes(commonPattern.split(' ')[0])
+      ) {
         suggestions.push(commonPattern);
       }
     }
 
-    return suggestions.slice(0, 5);  // Return top 5 suggestions
+    return suggestions.slice(0, 5); // Return top 5 suggestions
   }
 
   /**
    * Record metrics
    */
-  private recordMetrics(result: SmartAstGrepResult, startTime: number, cacheHit: boolean): void {
+  private recordMetrics(
+    result: SmartAstGrepResult,
+    startTime: number,
+    cacheHit: boolean
+  ): void {
     this.metrics.record({
       operation: 'smart-ast-grep',
       duration: Date.now() - startTime,
@@ -810,7 +876,11 @@ export async function runSmartAstGrep(
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metrics || new MetricsCollector();
 
-  const tool = getSmartAstGrepTool(cacheInstance, tokenCounterInstance, metricsInstance);
+  const tool = getSmartAstGrepTool(
+    cacheInstance,
+    tokenCounterInstance,
+    metricsInstance
+  );
   return tool.grep(pattern, options);
 }
 
@@ -819,13 +889,15 @@ export async function runSmartAstGrep(
  */
 export const SMART_AST_GREP_TOOL_DEFINITION = {
   name: 'smart_ast_grep',
-  description: 'Perform structural code search with 83% token reduction through AST indexing and caching',
+  description:
+    'Perform structural code search with 83% token reduction through AST indexing and caching',
   inputSchema: {
     type: 'object',
     properties: {
       pattern: {
         type: 'string',
-        description: 'AST pattern to search for (e.g., "function $NAME($ARGS) { $BODY }")',
+        description:
+          'AST pattern to search for (e.g., "function $NAME($ARGS) { $BODY }")',
       },
       projectPath: {
         type: 'string',
@@ -838,7 +910,8 @@ export const SMART_AST_GREP_TOOL_DEFINITION = {
       },
       filePattern: {
         type: 'string',
-        description: 'Specific directory or file pattern to search (e.g., "src/**/*.ts")',
+        description:
+          'Specific directory or file pattern to search (e.g., "src/**/*.ts")',
       },
       excludePatterns: {
         type: 'array',

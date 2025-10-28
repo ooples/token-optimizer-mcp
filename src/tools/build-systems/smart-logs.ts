@@ -8,16 +8,16 @@
  * - Token-optimized output
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { createHash } from "crypto";
-import { existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { createHash } from 'crypto';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface LogEntry {
   timestamp: string;
-  level: "error" | "warn" | "info" | "debug";
+  level: 'error' | 'warn' | 'info' | 'debug';
   source: string;
   message: string;
   metadata?: Record<string, unknown>;
@@ -48,7 +48,7 @@ interface SmartLogsOptions {
   /**
    * Filter by log level
    */
-  level?: "error" | "warn" | "info" | "debug" | "all";
+  level?: 'error' | 'warn' | 'info' | 'debug' | 'all';
 
   /**
    * Filter by pattern (regex)
@@ -119,16 +119,16 @@ interface SmartLogsOutput {
   patterns: Array<{
     pattern: string;
     count: number;
-    severity: "critical" | "high" | "medium" | "low";
+    severity: 'critical' | 'high' | 'medium' | 'low';
   }>;
 
   /**
    * Analysis insights
    */
   insights: Array<{
-    type: "error" | "warning" | "performance";
+    type: 'error' | 'warning' | 'performance';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }>;
 
   /**
@@ -143,7 +143,7 @@ interface SmartLogsOutput {
 
 export class SmartLogs {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_logs";
+  private cacheNamespace = 'smart_logs';
   private projectRoot: string;
 
   constructor(cache: CacheEngine, projectRoot?: string) {
@@ -157,7 +157,7 @@ export class SmartLogs {
   async run(options: SmartLogsOptions = {}): Promise<SmartLogsOutput> {
     const {
       sources = [],
-      level = "all",
+      level = 'all',
       pattern,
       tail = 100,
       follow = false,
@@ -173,7 +173,7 @@ export class SmartLogs {
       level,
       pattern,
       tail,
-      since,
+      since
     );
 
     // Check cache first (unless follow mode)
@@ -234,13 +234,13 @@ export class SmartLogs {
 
     // Filter by level
     let filtered =
-      level === "all"
+      level === 'all'
         ? allEntries
         : allEntries.filter((e) => e.level === level);
 
     // Filter by pattern
     if (pattern) {
-      const regex = new RegExp(pattern, "i");
+      const regex = new RegExp(pattern, 'i');
       filtered = filtered.filter((e) => regex.test(e.message));
     }
 
@@ -253,7 +253,7 @@ export class SmartLogs {
     // Sort by timestamp (newest first)
     filtered.sort(
       (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
 
     // Limit to tail count
@@ -282,23 +282,23 @@ export class SmartLogs {
     const sources: string[] = [];
 
     // Application logs
-    const appLogPath = join(this.projectRoot, "logs");
+    const appLogPath = join(this.projectRoot, 'logs');
     if (existsSync(appLogPath)) {
-      sources.push(join(appLogPath, "app.log"));
-      sources.push(join(appLogPath, "error.log"));
+      sources.push(join(appLogPath, 'app.log'));
+      sources.push(join(appLogPath, 'error.log'));
     }
 
     // System logs (platform-specific)
-    if (process.platform === "win32") {
+    if (process.platform === 'win32') {
       // Windows Event Logs would need PowerShell
-      sources.push("system:application");
-    } else if (process.platform === "darwin") {
-      sources.push("/var/log/system.log");
+      sources.push('system:application');
+    } else if (process.platform === 'darwin') {
+      sources.push('/var/log/system.log');
     } else {
-      sources.push("/var/log/syslog");
+      sources.push('/var/log/syslog');
     }
 
-    return sources.filter((s) => existsSync(s) || s.startsWith("system:"));
+    return sources.filter((s) => existsSync(s) || s.startsWith('system:'));
   }
 
   /**
@@ -306,10 +306,10 @@ export class SmartLogs {
    */
   private async readLogSource(
     source: string,
-    tail: number,
+    tail: number
   ): Promise<LogEntry[]> {
     // System logs vs file logs
-    if (source.startsWith("system:")) {
+    if (source.startsWith('system:')) {
       return this.readSystemLogs(source, tail);
     } else {
       return this.readFileLog(source, tail);
@@ -321,7 +321,7 @@ export class SmartLogs {
    */
   private async readFileLog(
     filePath: string,
-    tail: number,
+    tail: number
   ): Promise<LogEntry[]> {
     if (!existsSync(filePath)) {
       return [];
@@ -329,23 +329,23 @@ export class SmartLogs {
 
     return new Promise((resolve) => {
       const entries: LogEntry[] = [];
-      let output = "";
+      let output = '';
 
       // Use tail command on Unix, Get-Content on Windows
-      const command = process.platform === "win32" ? "powershell" : "tail";
+      const command = process.platform === 'win32' ? 'powershell' : 'tail';
       const args =
-        process.platform === "win32"
-          ? ["-Command", `Get-Content -Path "${filePath}" -Tail ${tail}`]
-          : ["-n", tail.toString(), filePath];
+        process.platform === 'win32'
+          ? ['-Command', `Get-Content -Path "${filePath}" -Tail ${tail}`]
+          : ['-n', tail.toString(), filePath];
 
       const child = spawn(command, args, { shell: true });
 
-      child.stdout.on("data", (data) => {
+      child.stdout.on('data', (data) => {
         output += data.toString();
       });
 
-      child.on("close", () => {
-        const lines = output.split("\n").filter((l) => l.trim());
+      child.on('close', () => {
+        const lines = output.split('\n').filter((l) => l.trim());
 
         for (const line of lines) {
           const entry = this.parseLogLine(line, filePath);
@@ -357,7 +357,7 @@ export class SmartLogs {
         resolve(entries);
       });
 
-      child.on("error", () => {
+      child.on('error', () => {
         resolve([]); // Return empty on error
       });
     });
@@ -368,41 +368,41 @@ export class SmartLogs {
    */
   private async readSystemLogs(
     source: string,
-    tail: number,
+    tail: number
   ): Promise<LogEntry[]> {
-    const logType = source.split(":")[1];
+    const logType = source.split(':')[1];
 
     return new Promise((resolve) => {
       const entries: LogEntry[] = [];
-      let output = "";
+      let output = '';
 
       let command: string;
       let args: string[];
 
-      if (process.platform === "win32") {
+      if (process.platform === 'win32') {
         // Windows Event Log
-        command = "powershell";
+        command = 'powershell';
         args = [
-          "-Command",
+          '-Command',
           `Get-EventLog -LogName ${logType} -Newest ${tail} | Select-Object TimeGenerated,EntryType,Message | ConvertTo-Json`,
         ];
-      } else if (process.platform === "darwin") {
+      } else if (process.platform === 'darwin') {
         // macOS - use log show
-        command = "log";
-        args = ["show", "--last", "1h", "--style", "json"];
+        command = 'log';
+        args = ['show', '--last', '1h', '--style', 'json'];
       } else {
         // Linux - use journalctl
-        command = "journalctl";
-        args = ["-n", tail.toString(), "-o", "json"];
+        command = 'journalctl';
+        args = ['-n', tail.toString(), '-o', 'json'];
       }
 
       const child = spawn(command, args, { shell: true });
 
-      child.stdout.on("data", (data) => {
+      child.stdout.on('data', (data) => {
         output += data.toString();
       });
 
-      child.on("close", () => {
+      child.on('close', () => {
         try {
           const parsed = JSON.parse(output);
           const items = Array.isArray(parsed) ? parsed : [parsed];
@@ -412,7 +412,7 @@ export class SmartLogs {
           }
         } catch {
           // Failed to parse JSON, try line-by-line
-          const lines = output.split("\n").filter((l) => l.trim());
+          const lines = output.split('\n').filter((l) => l.trim());
           for (const line of lines) {
             const entry = this.parseLogLine(line, source);
             if (entry) entries.push(entry);
@@ -422,7 +422,7 @@ export class SmartLogs {
         resolve(entries);
       });
 
-      child.on("error", () => {
+      child.on('error', () => {
         resolve([]);
       });
     });
@@ -435,12 +435,12 @@ export class SmartLogs {
     // Try common log formats
     // ISO timestamp format: 2024-01-01T12:00:00.000Z [ERROR] message
     const isoMatch = line.match(
-      /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+\[(ERROR|WARN|INFO|DEBUG)\]\s+(.+)$/,
+      /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+\[(ERROR|WARN|INFO|DEBUG)\]\s+(.+)$/
     );
     if (isoMatch) {
       return {
         timestamp: isoMatch[1],
-        level: isoMatch[2].toLowerCase() as LogEntry["level"],
+        level: isoMatch[2].toLowerCase() as LogEntry['level'],
         source,
         message: isoMatch[3],
       };
@@ -448,7 +448,7 @@ export class SmartLogs {
 
     // Syslog format: Jan 1 12:00:00 hostname message
     const syslogMatch = line.match(
-      /^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+\S+\s+(.+)$/,
+      /^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+\S+\s+(.+)$/
     );
     if (syslogMatch) {
       return {
@@ -479,7 +479,7 @@ export class SmartLogs {
         entry.TimeGenerated || entry.timestamp || new Date().toISOString(),
       level: this.mapSystemLogLevel(entry.EntryType || entry.level),
       source,
-      message: (entry.Message || entry.message || "") as string,
+      message: (entry.Message || entry.message || '') as string,
       metadata: entry,
     } as LogEntry;
   }
@@ -487,33 +487,33 @@ export class SmartLogs {
   /**
    * Detect log level from message
    */
-  private detectLogLevel(message: string): LogEntry["level"] {
+  private detectLogLevel(message: string): LogEntry['level'] {
     const lower = message.toLowerCase();
     if (
-      lower.includes("error") ||
-      lower.includes("fatal") ||
-      lower.includes("critical")
+      lower.includes('error') ||
+      lower.includes('fatal') ||
+      lower.includes('critical')
     ) {
-      return "error";
+      return 'error';
     }
-    if (lower.includes("warn") || lower.includes("warning")) {
-      return "warn";
+    if (lower.includes('warn') || lower.includes('warning')) {
+      return 'warn';
     }
-    if (lower.includes("debug") || lower.includes("trace")) {
-      return "debug";
+    if (lower.includes('debug') || lower.includes('trace')) {
+      return 'debug';
     }
-    return "info";
+    return 'info';
   }
 
   /**
    * Map system log level to our levels
    */
-  private mapSystemLogLevel(level: unknown): LogEntry["level"] {
+  private mapSystemLogLevel(level: unknown): LogEntry['level'] {
     const str = String(level).toLowerCase();
-    if (str.includes("error") || str === "1") return "error";
-    if (str.includes("warn") || str === "2" || str === "3") return "warn";
-    if (str.includes("debug") || str === "5") return "debug";
-    return "info";
+    if (str.includes('error') || str === '1') return 'error';
+    if (str.includes('warn') || str === '2' || str === '3') return 'warn';
+    if (str.includes('debug') || str === '5') return 'debug';
+    return 'info';
   }
 
   /**
@@ -576,7 +576,7 @@ export class SmartLogs {
    * Detect common patterns
    */
   private detectPatterns(
-    entries: LogEntry[],
+    entries: LogEntry[]
   ): Array<{ pattern: string; count: number }> {
     const patterns = new Map<string, number>();
 
@@ -606,9 +606,9 @@ export class SmartLogs {
    * Generate insights
    */
   private generateInsights(result: LogResult): Array<{
-    type: "error" | "warning" | "performance";
+    type: 'error' | 'warning' | 'performance';
     message: string;
-    impact: "high" | "medium" | "low";
+    impact: 'high' | 'medium' | 'low';
   }> {
     const insights = [];
 
@@ -616,9 +616,9 @@ export class SmartLogs {
     const errorRate = (result.stats.byLevel.error || 0) / result.stats.total;
     if (errorRate > 0.1) {
       insights.push({
-        type: "error" as const,
+        type: 'error' as const,
         message: `High error rate: ${(errorRate * 100).toFixed(1)}% of logs are errors`,
-        impact: "high" as const,
+        impact: 'high' as const,
       });
     }
 
@@ -626,9 +626,9 @@ export class SmartLogs {
     const topPattern = result.patterns[0];
     if (topPattern && topPattern.count > 10) {
       insights.push({
-        type: "error" as const,
+        type: 'error' as const,
         message: `Repeated error pattern: "${topPattern.pattern}" appears ${topPattern.count} times`,
-        impact: "high" as const,
+        impact: 'high' as const,
       });
     }
 
@@ -636,9 +636,9 @@ export class SmartLogs {
     const warnCount = result.stats.byLevel.warn || 0;
     if (warnCount > 50) {
       insights.push({
-        type: "warning" as const,
+        type: 'warning' as const,
         message: `High warning count: ${warnCount} warnings detected`,
-        impact: "medium" as const,
+        impact: 'medium' as const,
       });
     }
 
@@ -653,23 +653,23 @@ export class SmartLogs {
     level: string,
     pattern: string | undefined,
     tail: number,
-    since: string | undefined,
+    since: string | undefined
   ): string {
     const keyParts = [
-      sources.join(","),
+      sources.join(','),
       level,
-      pattern || "",
+      pattern || '',
       tail.toString(),
-      since || "",
+      since || '',
     ];
-    return createHash("md5").update(keyParts.join(":")).digest("hex");
+    return createHash('md5').update(keyParts.join(':')).digest('hex');
   }
 
   /**
    * Get cached result
    */
   private getCachedResult(key: string, maxAge: number): LogResult | null {
-    const cached = this.cache.get(this.cacheNamespace + ":" + key);
+    const cached = this.cache.get(this.cacheNamespace + ':' + key);
     if (!cached) return null;
 
     try {
@@ -693,11 +693,14 @@ export class SmartLogs {
    */
   private cacheResult(key: string, result: LogResult): void {
     const cacheData = { ...result, cachedAt: Date.now() };
+    const dataToCache = JSON.stringify(cacheData);
+    const originalSize = this.estimateOriginalOutputSize(result);
+    const compactSize = dataToCache.length;
     this.cache.set(
-      this.cacheNamespace + ":" + key,
-      JSON.stringify(cacheData),
-      3600,
-      0,
+      this.cacheNamespace + ':' + key,
+      dataToCache,
+      originalSize,
+      compactSize
     );
   }
 
@@ -707,11 +710,11 @@ export class SmartLogs {
   private transformOutput(
     result: LogResult,
     insights: Array<{
-      type: "error" | "warning" | "performance";
+      type: 'error' | 'warning' | 'performance';
       message: string;
-      impact: "high" | "medium" | "low";
+      impact: 'high' | 'medium' | 'low';
     }>,
-    fromCache = false,
+    fromCache = false
   ): SmartLogsOutput {
     // For small datasets (< 20 entries), skip smart processing overhead
     // This prevents negative reduction percentages for small logs
@@ -769,19 +772,19 @@ export class SmartLogs {
       count: p.count,
       severity:
         p.count > 50
-          ? ("critical" as const)
+          ? ('critical' as const)
           : p.count > 20
-            ? ("high" as const)
+            ? ('high' as const)
             : p.count > 10
-              ? ("medium" as const)
-              : ("low" as const),
+              ? ('medium' as const)
+              : ('low' as const),
     }));
 
     const originalSize = this.estimateOriginalOutputSize(result);
     const compactSize = this.estimateCompactSize(
       entries.slice(0, 50), // Only measure what we actually send
       patterns,
-      insights,
+      insights
     );
 
     const timeRangeDuration =
@@ -810,7 +813,7 @@ export class SmartLogs {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -842,7 +845,7 @@ export class SmartLogs {
       message: string;
     }>,
     patterns: Array<{ pattern: string; count: number; severity: string }>,
-    insights: Array<{ type: string; message: string; impact: string }>,
+    insights: Array<{ type: string; message: string; impact: string }>
   ): number {
     // Measure what IS sent WITH compaction (truncated entries + patterns + insights)
     return JSON.stringify({ entries, patterns, insights }).length;
@@ -861,7 +864,7 @@ export class SmartLogs {
  */
 export function getSmartLogs(
   cache: CacheEngine,
-  projectRoot?: string,
+  projectRoot?: string
 ): SmartLogs {
   return new SmartLogs(cache, projectRoot);
 }
@@ -870,15 +873,15 @@ export function getSmartLogs(
  * CLI-friendly function for running smart logs
  */
 export async function runSmartLogs(
-  options: SmartLogsOptions = {},
+  options: SmartLogsOptions = {}
 ): Promise<string> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const smartLogs = getSmartLogs(cache, options.projectRoot);
   try {
     const result = await smartLogs.run(options);
 
-    let output = `\n📋 Smart Logs Analysis ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\n📋 Smart Logs Analysis ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
@@ -891,24 +894,24 @@ export async function runSmartLogs(
     // Statistics
     output += `Statistics by Level:\n`;
     for (const [level, count] of Object.entries(result.stats.byLevel)) {
-      const icon = level === "error" ? "🔴" : level === "warn" ? "⚠️" : "ℹ️";
+      const icon = level === 'error' ? '🔴' : level === 'warn' ? '⚠️' : 'ℹ️';
       output += `  ${icon} ${level}: ${count}\n`;
     }
-    output += "\n";
+    output += '\n';
 
     // Patterns
     if (result.patterns.length > 0) {
       output += `Common Patterns:\n`;
       for (const pattern of result.patterns.slice(0, 5)) {
         const icon =
-          pattern.severity === "critical"
-            ? "🔴"
-            : pattern.severity === "high"
-              ? "🟡"
-              : "🟢";
+          pattern.severity === 'critical'
+            ? '🔴'
+            : pattern.severity === 'high'
+              ? '🟡'
+              : '🟢';
         output += `  ${icon} ${pattern.pattern} (${pattern.count} occurrences)\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Recent entries
@@ -916,11 +919,11 @@ export async function runSmartLogs(
       output += `Recent Log Entries (showing ${Math.min(result.entries.length, 10)}):\n`;
       for (const entry of result.entries.slice(0, 10)) {
         const icon =
-          entry.level === "error" ? "🔴" : entry.level === "warn" ? "⚠️" : "ℹ️";
+          entry.level === 'error' ? '🔴' : entry.level === 'warn' ? '⚠️' : 'ℹ️';
         const time = new Date(entry.timestamp).toLocaleTimeString();
         output += `  ${icon} [${time}] ${entry.message.substring(0, 80)}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Insights
@@ -928,14 +931,14 @@ export async function runSmartLogs(
       output += `Insights:\n`;
       for (const insight of result.insights) {
         const icon =
-          insight.impact === "high"
-            ? "🔴"
-            : insight.impact === "medium"
-              ? "🟡"
-              : "🟢";
+          insight.impact === 'high'
+            ? '🔴'
+            : insight.impact === 'medium'
+              ? '🟡'
+              : '🟢';
         output += `  ${icon} [${insight.type}] ${insight.message}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Metrics
@@ -949,3 +952,53 @@ export async function runSmartLogs(
     smartLogs.close();
   }
 }
+
+// MCP Tool definition
+export const SMART_LOGS_TOOL_DEFINITION = {
+  name: 'smart_logs',
+  description:
+    'System log aggregation and analysis with multi-source support, pattern filtering, error detection, and insights',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sources: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Log sources to aggregate (file paths or system logs)',
+      },
+      level: {
+        type: 'string',
+        enum: ['error', 'warn', 'info', 'debug', 'all'],
+        description: 'Filter by log level',
+        default: 'all',
+      },
+      pattern: {
+        type: 'string',
+        description: 'Filter by pattern (regex)',
+      },
+      tail: {
+        type: 'number',
+        description: 'Number of lines to tail',
+        default: 100,
+      },
+      follow: {
+        type: 'boolean',
+        description: 'Follow mode (watch for new entries)',
+        default: false,
+      },
+      since: {
+        type: 'string',
+        description: "Time range filter (e.g., '1h', '24h', '7d')",
+      },
+      projectRoot: {
+        type: 'string',
+        description: 'Project root directory',
+      },
+      maxCacheAge: {
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 300)',
+        default: 300,
+      },
+    },
+  },
+};

@@ -11,10 +11,10 @@
  * - Event stream summaries
  */
 
-import { createHash } from "crypto";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
+import { createHash } from 'crypto';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 
 // ============================================================================
 // Type Definitions
@@ -26,7 +26,7 @@ export interface SmartWebSocketOptions {
   protocols?: string[];
 
   // Actions
-  action: "connect" | "disconnect" | "send" | "history" | "analyze";
+  action: 'connect' | 'disconnect' | 'send' | 'history' | 'analyze';
   message?: string | object; // For 'send' action
 
   // Analysis
@@ -46,7 +46,7 @@ export interface SmartWebSocketOptions {
 export interface Message {
   id: string;
   timestamp: number;
-  direction: "sent" | "received";
+  direction: 'sent' | 'received';
   type: string;
   size: number;
   content?: any;
@@ -65,11 +65,11 @@ export interface SmartWebSocketResult {
   connection: {
     url: string;
     state:
-      | "connecting"
-      | "connected"
-      | "disconnecting"
-      | "disconnected"
-      | "error";
+      | 'connecting'
+      | 'connected'
+      | 'disconnecting'
+      | 'disconnected'
+      | 'error';
     protocol?: string;
     uptime?: number; // milliseconds
     reconnectAttempts?: number;
@@ -115,11 +115,11 @@ export interface SmartWebSocketResult {
 interface ConnectionState {
   url: string;
   state:
-    | "connecting"
-    | "connected"
-    | "disconnecting"
-    | "disconnected"
-    | "error";
+    | 'connecting'
+    | 'connected'
+    | 'disconnecting'
+    | 'disconnected'
+    | 'error';
   protocol?: string;
   connectedAt?: number;
   disconnectedAt?: number;
@@ -140,7 +140,7 @@ export class SmartWebSocket {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   async run(options: SmartWebSocketOptions): Promise<SmartWebSocketResult> {
@@ -148,11 +148,11 @@ export class SmartWebSocket {
     const cacheKey = this.generateCacheKey(options);
 
     // Check cache for analysis/history actions
-    if (!options.force && ["history", "analyze"].includes(options.action)) {
+    if (!options.force && ['history', 'analyze'].includes(options.action)) {
       const cached = await this.getCachedResult(cacheKey, options.ttl || 60);
       if (cached) {
         this.metrics.record({
-          operation: "smart_websocket",
+          operation: 'smart_websocket',
           duration: Date.now() - startTime,
           cacheHit: true,
           success: true,
@@ -169,12 +169,12 @@ export class SmartWebSocket {
     const result = await this.executeAction(options);
 
     // Cache analysis results
-    if (["history", "analyze"].includes(options.action)) {
+    if (['history', 'analyze'].includes(options.action)) {
       await this.cacheResult(cacheKey, result, options.ttl);
     }
 
     this.metrics.record({
-      operation: "smart_websocket",
+      operation: 'smart_websocket',
       duration: Date.now() - startTime,
       cacheHit: false,
       success: true,
@@ -186,15 +186,15 @@ export class SmartWebSocket {
 
   private async executeAction(options: SmartWebSocketOptions): Promise<any> {
     switch (options.action) {
-      case "connect":
+      case 'connect':
         return this.connect(options);
-      case "disconnect":
+      case 'disconnect':
         return this.disconnect(options);
-      case "send":
+      case 'send':
         return this.sendMessage(options);
-      case "history":
+      case 'history':
         return this.getHistory(options);
-      case "analyze":
+      case 'analyze':
         return this.analyzeConnection(options);
       default:
         throw new Error(`Unknown action: ${options.action}`);
@@ -210,7 +210,7 @@ export class SmartWebSocket {
     let state = this.connections.get(urlKey);
 
     // If already connected, return current state
-    if (state && state.state === "connected") {
+    if (state && state.state === 'connected') {
       return {
         connection: {
           url: options.url,
@@ -226,7 +226,7 @@ export class SmartWebSocket {
     if (!state) {
       state = {
         url: options.url,
-        state: "connecting" as const,
+        state: 'connecting' as const,
         reconnectAttempts: 0,
         messages: [],
         errors: [],
@@ -234,7 +234,7 @@ export class SmartWebSocket {
       };
       this.connections.set(urlKey, state);
     } else {
-      state.state = "connecting" as const;
+      state.state = 'connecting' as const;
       state.reconnectAttempts++;
     }
 
@@ -245,9 +245,9 @@ export class SmartWebSocket {
     await this.sleep(Math.min(backoffTime, 100)); // Cap at 100ms for testing
 
     // Simulate successful connection
-    state.state = "connected" as const;
+    state.state = 'connected' as const;
     state.connectedAt = Date.now();
-    state.protocol = options.protocols?.[0] || "websocket";
+    state.protocol = options.protocols?.[0] || 'websocket';
 
     return {
       connection: {
@@ -268,13 +268,13 @@ export class SmartWebSocket {
       throw new Error(`No connection found for ${options.url}`);
     }
 
-    state.state = "disconnecting" as const;
+    state.state = 'disconnecting' as const;
 
     // NOTE: Placeholder for Phase 3
     // Real implementation will close WebSocket connection
     await this.sleep(10);
 
-    state.state = "disconnected" as const;
+    state.state = 'disconnected' as const;
     state.disconnectedAt = Date.now();
 
     const uptime =
@@ -299,30 +299,30 @@ export class SmartWebSocket {
 
     if (!state) {
       throw new Error(
-        `No connection found for ${options.url}. Call connect first.`,
+        `No connection found for ${options.url}. Call connect first.`
       );
     }
 
-    if (state.state !== "connected") {
+    if (state.state !== 'connected') {
       throw new Error(`Connection is not in connected state: ${state.state}`);
     }
 
     if (!options.message) {
-      throw new Error("Message is required for send action");
+      throw new Error('Message is required for send action');
     }
 
     // Create message record
     const messageContent =
-      typeof options.message === "string"
+      typeof options.message === 'string'
         ? options.message
         : JSON.stringify(options.message);
 
     const message: Message = {
       id: `msg-${++this.messageIdCounter}`,
       timestamp: Date.now(),
-      direction: "sent" as const,
+      direction: 'sent' as const,
       type: this.detectMessageType(options.message),
-      size: Buffer.byteLength(messageContent, "utf8"),
+      size: Buffer.byteLength(messageContent, 'utf8'),
       content: options.trackMessages ? options.message : undefined,
       hash: this.hashMessage(messageContent),
     };
@@ -369,9 +369,9 @@ export class SmartWebSocket {
       throw new Error(`No connection found for ${options.url}`);
     }
 
-    const sentMessages = state.messages.filter((m) => m.direction === "sent");
+    const sentMessages = state.messages.filter((m) => m.direction === 'sent');
     const receivedMessages = state.messages.filter(
-      (m) => m.direction === "received",
+      (m) => m.direction === 'received'
     );
 
     return {
@@ -392,7 +392,7 @@ export class SmartWebSocket {
   }
 
   private async analyzeConnection(
-    options: SmartWebSocketOptions,
+    options: SmartWebSocketOptions
   ): Promise<any> {
     const urlKey = this.getUrlKey(options.url);
     const state = this.connections.get(urlKey);
@@ -499,7 +499,7 @@ export class SmartWebSocket {
     score -= Math.min(state.errors.length * 5, 30);
 
     // Penalize if disconnected
-    if (state.state === "disconnected" || state.state === "error") {
+    if (state.state === 'disconnected' || state.state === 'error') {
       score -= 20;
     }
 
@@ -531,7 +531,7 @@ export class SmartWebSocket {
 
   private transformOutput(
     result: any,
-    fromCache: boolean,
+    fromCache: boolean
   ): SmartWebSocketResult {
     const fullOutput = JSON.stringify(result);
     const originalTokens = this.tokenCounter.count(fullOutput).tokens;
@@ -617,7 +617,7 @@ export class SmartWebSocket {
       action: options.action,
       maxHistory: options.maxHistory,
     };
-    return `cache-${createHash("md5").update(JSON.stringify(keyData)).digest("hex")}`;
+    return `cache-${createHash('md5').update(JSON.stringify(keyData)).digest('hex')}`;
   }
 
   private async getCachedResult(key: string, ttl: number): Promise<any | null> {
@@ -638,42 +638,42 @@ export class SmartWebSocket {
   private async cacheResult(
     key: string,
     result: any,
-    ttl?: number,
+    ttl?: number
   ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
     await this.cache.set(
       key,
       JSON.stringify(cacheData),
       8 /* originalSize */,
-      ttl || 60,
+      ttl || 60
     );
   }
 
   private getUrlKey(url: string): string {
-    return createHash("md5").update(url).digest("hex");
+    return createHash('md5').update(url).digest('hex');
   }
 
   private detectMessageType(message: any): string {
-    if (typeof message === "string") {
+    if (typeof message === 'string') {
       try {
         const parsed = JSON.parse(message);
-        return parsed.type || parsed.event || "json";
+        return parsed.type || parsed.event || 'json';
       } catch {
-        return "text";
+        return 'text';
       }
     }
 
-    if (typeof message === "object" && message !== null) {
-      return message.type || message.event || "object";
+    if (typeof message === 'object' && message !== null) {
+      return message.type || message.event || 'object';
     }
 
-    return "unknown";
+    return 'unknown';
   }
 
   private hashMessage(content: string): string {
-    return createHash("md5")
+    return createHash('md5')
       .update(content)
-      .digest("hex")
+      .digest('hex')
       .substring(0 /* compressedSize */);
   }
 
@@ -694,7 +694,7 @@ export class SmartWebSocket {
 export function getSmartWebSocket(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartWebSocket {
   return new SmartWebSocket(cache, tokenCounter, metrics);
 }
@@ -704,16 +704,16 @@ export function getSmartWebSocket(
 // ============================================================================
 
 export async function runSmartWebSocket(
-  options: SmartWebSocketOptions,
+  options: SmartWebSocketOptions
 ): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const websocket = getSmartWebSocket(
     cache,
     new TokenCounter(),
-    new MetricsCollector(),
+    new MetricsCollector()
   );
 
   const result = await websocket.run(options);
@@ -722,58 +722,58 @@ export async function runSmartWebSocket(
 }
 
 export const SMART_WEBSOCKET_TOOL_DEFINITION = {
-  name: "smart_websocket",
+  name: 'smart_websocket',
   description:
-    "WebSocket connection manager with message tracking (83% token reduction)",
+    'WebSocket connection manager with message tracking (83% token reduction)',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       url: {
-        type: "string",
-        description: "WebSocket URL (ws:// or wss://)",
+        type: 'string',
+        description: 'WebSocket URL (ws:// or wss://)',
       },
       protocols: {
-        type: "array",
-        items: { type: "string" },
-        description: "WebSocket sub-protocols",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'WebSocket sub-protocols',
       },
       action: {
-        type: "string",
-        enum: ["connect", "disconnect", "send", "history", "analyze"],
-        description: "Action to perform",
+        type: 'string',
+        enum: ['connect', 'disconnect', 'send', 'history', 'analyze'],
+        description: 'Action to perform',
       },
       message: {
-        description: "Message to send (for send action)",
+        description: 'Message to send (for send action)',
       },
       trackMessages: {
-        type: "boolean",
-        description: "Track message history (default: true)",
+        type: 'boolean',
+        description: 'Track message history (default: true)',
       },
       detectPatterns: {
-        type: "boolean",
-        description: "Detect message patterns (default: true)",
+        type: 'boolean',
+        description: 'Detect message patterns (default: true)',
       },
       analyzeHealth: {
-        type: "boolean",
-        description: "Analyze connection health (default: true)",
+        type: 'boolean',
+        description: 'Analyze connection health (default: true)',
       },
       maxHistory: {
-        type: "number",
-        description: "Maximum messages to keep (default: 100)",
+        type: 'number',
+        description: 'Maximum messages to keep (default: 100)',
       },
       maxReconnectAttempts: {
-        type: "number",
-        description: "Maximum reconnection attempts (default: 5)",
+        type: 'number',
+        description: 'Maximum reconnection attempts (default: 5)',
       },
       force: {
-        type: "boolean",
-        description: "Force fresh analysis (bypass cache)",
+        type: 'boolean',
+        description: 'Force fresh analysis (bypass cache)',
       },
       ttl: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 60)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 60)',
       },
     },
-    required: ["url", "action"],
+    required: ['url', 'action'],
   },
 };

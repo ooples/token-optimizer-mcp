@@ -13,10 +13,10 @@ export {
   KnowledgeGraphTool,
   getKnowledgeGraphTool,
   KNOWLEDGE_GRAPH_TOOL_DEFINITION,
-} from "./knowledge-graph";
+} from './knowledge-graph.js';
 
 // Export types for incomplete tools - temporarily removed
 export type {
   KnowledgeGraphOptions,
   KnowledgeGraphResult,
-} from "./knowledge-graph";
+} from './knowledge-graph.js';

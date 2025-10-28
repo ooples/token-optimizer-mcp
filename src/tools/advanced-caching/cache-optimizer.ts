@@ -14,28 +14,45 @@
  * - Token reduction optimization (86%+ target)
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { EventEmitter } from "events";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { EventEmitter } from 'events';
 
-export type EvictionStrategy = "LRU" | "LFU" | "FIFO" | "TTL" | "SIZE" | "HYBRID";
-export type CacheTier = "L1" | "L2" | "L3";
-export type OptimizationObjective = "hit-rate" | "latency" | "memory" | "throughput" | "balanced";
-export type WorkloadPattern = "uniform" | "skewed" | "temporal" | "burst" | "predictable" | "unknown";
+export type EvictionStrategy =
+  | 'LRU'
+  | 'LFU'
+  | 'FIFO'
+  | 'TTL'
+  | 'SIZE'
+  | 'HYBRID';
+export type CacheTier = 'L1' | 'L2' | 'L3';
+export type OptimizationObjective =
+  | 'hit-rate'
+  | 'latency'
+  | 'memory'
+  | 'throughput'
+  | 'balanced';
+export type WorkloadPattern =
+  | 'uniform'
+  | 'skewed'
+  | 'temporal'
+  | 'burst'
+  | 'predictable'
+  | 'unknown';
 
 export interface CacheOptimizerOptions {
   operation:
-    | "analyze"
-    | "benchmark"
-    | "optimize"
-    | "recommend"
-    | "simulate"
-    | "tune"
-    | "detect-bottlenecks"
-    | "cost-benefit"
-    | "configure"
-    | "report";
+    | 'analyze'
+    | 'benchmark'
+    | 'optimize'
+    | 'recommend'
+    | 'simulate'
+    | 'tune'
+    | 'detect-bottlenecks'
+    | 'cost-benefit'
+    | 'configure'
+    | 'report';
 
   // Analysis options
   analysisWindow?: number; // Time window in ms for analysis
@@ -64,12 +81,16 @@ export interface CacheOptimizerOptions {
   simulationDuration?: number; // ms
 
   // Tuning options
-  tuningMethod?: "grid-search" | "gradient-descent" | "bayesian" | "evolutionary";
+  tuningMethod?:
+    | 'grid-search'
+    | 'gradient-descent'
+    | 'bayesian'
+    | 'evolutionary';
   epochs?: number;
   learningRate?: number;
 
   // Reporting options
-  reportFormat?: "json" | "markdown" | "html";
+  reportFormat?: 'json' | 'markdown' | 'html';
   includeCharts?: boolean;
   includeRecommendations?: boolean;
 
@@ -85,7 +106,7 @@ export interface CacheConfiguration {
   ttl: number;
   compressionEnabled: boolean;
   prefetchEnabled: boolean;
-  writeMode: "write-through" | "write-back";
+  writeMode: 'write-through' | 'write-back';
 }
 
 export interface PerformanceMetrics {
@@ -127,8 +148,8 @@ export interface OptimizationRecommendation {
 }
 
 export interface BottleneckAnalysis {
-  type: "memory" | "eviction" | "compression" | "io" | "contention";
-  severity: "low" | "medium" | "high" | "critical";
+  type: 'memory' | 'eviction' | 'compression' | 'io' | 'contention';
+  severity: 'low' | 'medium' | 'high' | 'critical';
   description: string;
   metrics: Record<string, number>;
   impact: string;
@@ -164,13 +185,13 @@ export interface SimulationResult {
     tokenDelta: number;
   };
   events: SimulationEvent[];
-  recommendation: "adopt" | "reject" | "test-further";
+  recommendation: 'adopt' | 'reject' | 'test-further';
   reasoning: string;
 }
 
 export interface SimulationEvent {
   timestamp: number;
-  type: "hit" | "miss" | "eviction" | "promotion" | "demotion";
+  type: 'hit' | 'miss' | 'eviction' | 'promotion' | 'demotion';
   key: string;
   tier: CacheTier;
   details: Record<string, unknown>;
@@ -210,10 +231,10 @@ export interface OptimizationReport {
   benchmarks: StrategyBenchmark[];
   costBenefit: CostBenefitAnalysis[];
   actionItems: Array<{
-    priority: "high" | "medium" | "low";
+    priority: 'high' | 'medium' | 'low';
     action: string;
     expectedImpact: string;
-    effort: "low" | "medium" | "high";
+    effort: 'low' | 'medium' | 'high';
   }>;
 }
 
@@ -279,7 +300,10 @@ export class CacheOptimizerTool extends EventEmitter {
   private maxHistorySize = 100000;
 
   // Performance tracking
-  private evictionEvents: Array<{ timestamp: number; strategy: EvictionStrategy }> = [];
+  private evictionEvents: Array<{
+    timestamp: number;
+    strategy: EvictionStrategy;
+  }> = [];
 
   // ML models for optimization
   private learningRate = 0.01;
@@ -333,38 +357,38 @@ export class CacheOptimizerTool extends EventEmitter {
     }
 
     // Execute operation
-    let data: CacheOptimizerResult["data"];
+    let data: CacheOptimizerResult['data'];
 
     try {
       switch (operation) {
-        case "analyze":
+        case 'analyze':
           data = await this.analyze(options);
           break;
-        case "benchmark":
+        case 'benchmark':
           data = await this.benchmark(options);
           break;
-        case "optimize":
+        case 'optimize':
           data = await this.optimize(options);
           break;
-        case "recommend":
+        case 'recommend':
           data = await this.recommend(options);
           break;
-        case "simulate":
+        case 'simulate':
           data = await this.simulate(options);
           break;
-        case "tune":
+        case 'tune':
           data = await this.tune(options);
           break;
-        case "detect-bottlenecks":
+        case 'detect-bottlenecks':
           data = await this.detectBottlenecks(options);
           break;
-        case "cost-benefit":
+        case 'cost-benefit':
           data = await this.analyzeCostBenefit(options);
           break;
-        case "configure":
+        case 'configure':
           data = await this.configure(options);
           break;
-        case "report":
+        case 'report':
           data = await this.generateReport(options);
           break;
         default:
@@ -403,7 +427,8 @@ export class CacheOptimizerTool extends EventEmitter {
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       this.metrics.record({
         operation: `cache_optimizer_${operation}`,
@@ -426,7 +451,7 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async analyze(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
+  ): Promise<CacheOptimizerResult['data']> {
     const window = options.analysisWindow || 3600000; // 1 hour default
     const now = Date.now();
 
@@ -443,12 +468,16 @@ export class CacheOptimizerTool extends EventEmitter {
 
     // Calculate hit rate
     const hits = recentAccesses.filter((r) => r.hit).length;
-    const hitRate = recentAccesses.length > 0 ? hits / recentAccesses.length : 0;
+    const hitRate =
+      recentAccesses.length > 0 ? hits / recentAccesses.length : 0;
     const missRate = 1 - hitRate;
 
     // Calculate latency metrics
-    const latencies = recentAccesses.map((r) => r.latency).sort((a, b) => a - b);
-    const averageLatency = latencies.reduce((sum, l) => sum + l, 0) / latencies.length || 0;
+    const latencies = recentAccesses
+      .map((r) => r.latency)
+      .sort((a, b) => a - b);
+    const averageLatency =
+      latencies.reduce((sum, l) => sum + l, 0) / latencies.length || 0;
     const p50Latency = this.percentile(latencies, 0.5);
     const p95Latency = this.percentile(latencies, 0.95);
     const p99Latency = this.percentile(latencies, 0.99);
@@ -494,7 +523,7 @@ export class CacheOptimizerTool extends EventEmitter {
       bottlenecks = bottleneckResult.bottlenecks;
     }
 
-    this.emit("analysis-complete", { metrics, bottlenecks });
+    this.emit('analysis-complete', { metrics, bottlenecks });
 
     return { metrics, bottlenecks };
   }
@@ -504,14 +533,14 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async benchmark(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
+  ): Promise<CacheOptimizerResult['data']> {
     const strategies = options.strategies || [
-      "LRU",
-      "LFU",
-      "FIFO",
-      "TTL",
-      "SIZE",
-      "HYBRID",
+      'LRU',
+      'LFU',
+      'FIFO',
+      'TTL',
+      'SIZE',
+      'HYBRID',
     ];
     const workloadSize = options.workloadSize || 10000;
     const iterations = options.iterations || 100;
@@ -525,10 +554,13 @@ export class CacheOptimizerTool extends EventEmitter {
         config,
         workloadSize,
         iterations,
-        options.workloadPattern || "uniform"
+        options.workloadPattern || 'uniform'
       );
 
-      const score = this.calculateStrategyScore(metrics, options.objective || "balanced");
+      const score = this.calculateStrategyScore(
+        metrics,
+        options.objective || 'balanced'
+      );
 
       const analysis = this.analyzeStrategyPerformance(strategy, metrics);
 
@@ -545,7 +577,7 @@ export class CacheOptimizerTool extends EventEmitter {
     // Sort by score
     benchmarks.sort((a, b) => b.score - a.score);
 
-    this.emit("benchmark-complete", { benchmarks });
+    this.emit('benchmark-complete', { benchmarks });
 
     return { benchmarks };
   }
@@ -555,7 +587,7 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async optimize(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
+  ): Promise<CacheOptimizerResult['data']> {
     const constraints = options.constraints || {};
 
     // Run benchmarks
@@ -568,7 +600,7 @@ export class CacheOptimizerTool extends EventEmitter {
     );
 
     if (feasibleBenchmarks.length === 0) {
-      throw new Error("No strategies meet the specified constraints");
+      throw new Error('No strategies meet the specified constraints');
     }
 
     // Generate recommendations
@@ -578,7 +610,7 @@ export class CacheOptimizerTool extends EventEmitter {
       options.currentConfig
     );
 
-    this.emit("optimization-complete", { recommendations });
+    this.emit('optimization-complete', { recommendations });
 
     return { recommendations, benchmarks: feasibleBenchmarks };
   }
@@ -588,7 +620,7 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async recommend(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
+  ): Promise<CacheOptimizerResult['data']> {
     // Analyze current performance
     const analysisResult = await this.analyze(options);
     const currentMetrics = analysisResult.metrics!;
@@ -613,9 +645,10 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async simulate(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
-    const targetStrategy = options.targetStrategy || "HYBRID";
-    const targetConfig = options.targetConfig || this.getDefaultConfig(targetStrategy);
+  ): Promise<CacheOptimizerResult['data']> {
+    const targetStrategy = options.targetStrategy || 'HYBRID';
+    const targetConfig =
+      options.targetConfig || this.getDefaultConfig(targetStrategy);
     const duration = options.simulationDuration || 60000; // 1 minute
 
     // Capture current state
@@ -629,7 +662,7 @@ export class CacheOptimizerTool extends EventEmitter {
       currentState
     );
 
-    this.emit("simulation-complete", { simulation });
+    this.emit('simulation-complete', { simulation });
 
     return { simulation };
   }
@@ -639,31 +672,31 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async tune(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
-    const method = options.tuningMethod || "bayesian";
+  ): Promise<CacheOptimizerResult['data']> {
+    const method = options.tuningMethod || 'bayesian';
     const epochs = options.epochs || 50;
     const learningRate = options.learningRate || this.learningRate;
 
     let tuningResult: TuningResult;
 
     switch (method) {
-      case "grid-search":
+      case 'grid-search':
         tuningResult = await this.gridSearchTuning(epochs);
         break;
-      case "gradient-descent":
+      case 'gradient-descent':
         tuningResult = await this.gradientDescentTuning(epochs, learningRate);
         break;
-      case "bayesian":
+      case 'bayesian':
         tuningResult = await this.bayesianTuning(epochs);
         break;
-      case "evolutionary":
+      case 'evolutionary':
         tuningResult = await this.evolutionaryTuning(epochs);
         break;
       default:
         throw new Error(`Unknown tuning method: ${method}`);
     }
 
-    this.emit("tuning-complete", { tuningResult });
+    this.emit('tuning-complete', { tuningResult });
 
     return { tuning: tuningResult };
   }
@@ -673,28 +706,28 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async detectBottlenecks(
     _options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
+  ): Promise<CacheOptimizerResult['data']> {
     const bottlenecks: BottleneckAnalysis[] = [];
 
     // Get current metrics
-    const analysisResult = await this.analyze({ operation: "analyze" });
+    const analysisResult = await this.analyze({ operation: 'analyze' });
     const metrics = analysisResult.metrics!;
 
     // Check for memory bottleneck
     if (metrics.evictionRate > 100) {
       bottlenecks.push({
-        type: "memory",
-        severity: "high",
-        description: "High eviction rate indicates insufficient cache capacity",
+        type: 'memory',
+        severity: 'high',
+        description: 'High eviction rate indicates insufficient cache capacity',
         metrics: {
           evictionRate: metrics.evictionRate,
           memoryUsage: metrics.memoryUsage,
         },
         impact: `${((metrics.evictionRate / 100) * 10).toFixed(1)}% potential hit rate loss`,
         recommendations: [
-          "Increase L1/L2 cache sizes",
-          "Enable compression to store more entries",
-          "Implement multi-tier caching to expand capacity",
+          'Increase L1/L2 cache sizes',
+          'Enable compression to store more entries',
+          'Implement multi-tier caching to expand capacity',
         ],
       });
     }
@@ -702,18 +735,18 @@ export class CacheOptimizerTool extends EventEmitter {
     // Check for eviction strategy bottleneck
     if (metrics.hitRate < 0.5) {
       bottlenecks.push({
-        type: "eviction",
-        severity: metrics.hitRate < 0.3 ? "critical" : "high",
-        description: "Low hit rate suggests suboptimal eviction strategy",
+        type: 'eviction',
+        severity: metrics.hitRate < 0.3 ? 'critical' : 'high',
+        description: 'Low hit rate suggests suboptimal eviction strategy',
         metrics: {
           hitRate: metrics.hitRate,
           missRate: metrics.missRate,
         },
         impact: `${((1 - metrics.hitRate) * 100).toFixed(1)}% of requests missing cache`,
         recommendations: [
-          "Switch to HYBRID eviction strategy for better adaptability",
-          "Analyze access patterns to select optimal strategy",
-          "Consider LFU for skewed workloads or LRU for temporal patterns",
+          'Switch to HYBRID eviction strategy for better adaptability',
+          'Analyze access patterns to select optimal strategy',
+          'Consider LFU for skewed workloads or LRU for temporal patterns',
         ],
       });
     }
@@ -721,18 +754,18 @@ export class CacheOptimizerTool extends EventEmitter {
     // Check for compression bottleneck
     if (metrics.compressionRatio > 0.8 && metrics.averageLatency > 10) {
       bottlenecks.push({
-        type: "compression",
-        severity: "medium",
-        description: "Poor compression ratio with high latency",
+        type: 'compression',
+        severity: 'medium',
+        description: 'Poor compression ratio with high latency',
         metrics: {
           compressionRatio: metrics.compressionRatio,
           averageLatency: metrics.averageLatency,
         },
-        impact: "Compression overhead not justified by space savings",
+        impact: 'Compression overhead not justified by space savings',
         recommendations: [
-          "Disable compression for small or incompressible data",
-          "Use faster compression algorithm (e.g., LZ4 instead of Brotli)",
-          "Implement selective compression based on data type",
+          'Disable compression for small or incompressible data',
+          'Use faster compression algorithm (e.g., LZ4 instead of Brotli)',
+          'Implement selective compression based on data type',
         ],
       });
     }
@@ -740,19 +773,19 @@ export class CacheOptimizerTool extends EventEmitter {
     // Check for I/O bottleneck
     if (metrics.p99Latency > metrics.p50Latency * 10) {
       bottlenecks.push({
-        type: "io",
-        severity: "medium",
-        description: "High latency variance suggests I/O contention",
+        type: 'io',
+        severity: 'medium',
+        description: 'High latency variance suggests I/O contention',
         metrics: {
           p50Latency: metrics.p50Latency,
           p99Latency: metrics.p99Latency,
           variance: metrics.p99Latency / metrics.p50Latency,
         },
-        impact: "Unpredictable performance affecting user experience",
+        impact: 'Unpredictable performance affecting user experience',
         recommendations: [
-          "Increase L1 cache to reduce disk access",
-          "Enable write-back mode to batch writes",
-          "Use connection pooling for database access",
+          'Increase L1 cache to reduce disk access',
+          'Enable write-back mode to batch writes',
+          'Use connection pooling for database access',
         ],
       });
     }
@@ -760,18 +793,19 @@ export class CacheOptimizerTool extends EventEmitter {
     // Check for contention bottleneck
     if (metrics.throughput < 1000 && metrics.averageLatency > 5) {
       bottlenecks.push({
-        type: "contention",
-        severity: "low",
-        description: "Low throughput with moderate latency suggests lock contention",
+        type: 'contention',
+        severity: 'low',
+        description:
+          'Low throughput with moderate latency suggests lock contention',
         metrics: {
           throughput: metrics.throughput,
           averageLatency: metrics.averageLatency,
         },
-        impact: "Concurrent access serialization reducing parallelism",
+        impact: 'Concurrent access serialization reducing parallelism',
         recommendations: [
-          "Implement lock-free data structures where possible",
-          "Use read-write locks to allow concurrent reads",
-          "Partition cache by key hash to reduce contention",
+          'Implement lock-free data structures where possible',
+          'Use read-write locks to allow concurrent reads',
+          'Partition cache by key hash to reduce contention',
         ],
       });
     }
@@ -784,8 +818,8 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async analyzeCostBenefit(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
-    const strategies = options.strategies || ["LRU", "LFU", "HYBRID"];
+  ): Promise<CacheOptimizerResult['data']> {
+    const strategies = options.strategies || ['LRU', 'LFU', 'HYBRID'];
     const costBenefit: CostBenefitAnalysis[] = [];
 
     for (const strategy of strategies) {
@@ -823,10 +857,10 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async configure(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
-    const config = options.targetConfig || this.getDefaultConfig("HYBRID");
+  ): Promise<CacheOptimizerResult['data']> {
+    const config = options.targetConfig || this.getDefaultConfig('HYBRID');
 
-    this.emit("configuration-updated", { config });
+    this.emit('configuration-updated', { config });
 
     return { config };
   }
@@ -836,36 +870,36 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async generateReport(
     options: CacheOptimizerOptions
-  ): Promise<CacheOptimizerResult["data"]> {
+  ): Promise<CacheOptimizerResult['data']> {
     // Gather all analysis data
     const analysisResult = await this.analyze({
       ...options,
-      operation: "analyze",
+      operation: 'analyze',
       includeBottlenecks: true,
     });
     const currentMetrics = analysisResult.metrics!;
 
     const benchmarkResult = await this.benchmark({
       ...options,
-      operation: "benchmark",
+      operation: 'benchmark',
     });
     const benchmarks = benchmarkResult.benchmarks!;
 
     const recommendResult = await this.recommend({
       ...options,
-      operation: "recommend",
+      operation: 'recommend',
     });
     const recommendations = recommendResult.recommendations!;
 
     const bottleneckResult = await this.detectBottlenecks({
       ...options,
-      operation: "detect-bottlenecks",
+      operation: 'detect-bottlenecks',
     });
     const bottlenecks = bottleneckResult.bottlenecks!;
 
     const costBenefitResult = await this.analyzeCostBenefit({
       ...options,
-      operation: "cost-benefit",
+      operation: 'cost-benefit',
     });
     const costBenefit = costBenefitResult.costBenefit!;
 
@@ -875,7 +909,9 @@ export class CacheOptimizerTool extends EventEmitter {
 
     // Calculate potential improvement
     const potentialImprovement =
-      ((optimalMetrics.hitRate - currentMetrics.hitRate) / currentMetrics.hitRate) * 100;
+      ((optimalMetrics.hitRate - currentMetrics.hitRate) /
+        currentMetrics.hitRate) *
+      100;
 
     // Analyze workload pattern
     const workloadPattern = this.detectWorkloadPattern();
@@ -909,7 +945,7 @@ export class CacheOptimizerTool extends EventEmitter {
       actionItems,
     };
 
-    this.emit("report-generated", { report });
+    this.emit('report-generated', { report });
 
     return { report };
   }
@@ -938,7 +974,8 @@ export class CacheOptimizerTool extends EventEmitter {
         const accessStart = Date.now();
 
         // Simulate cache access
-        const hit = Math.random() < this.predictHitProbability(strategy, pattern);
+        const hit =
+          Math.random() < this.predictHitProbability(strategy, pattern);
         if (hit) hits++;
 
         const latency = Date.now() - accessStart;
@@ -956,8 +993,12 @@ export class CacheOptimizerTool extends EventEmitter {
     return {
       hitRate: hits / totalRequests,
       missRate: 1 - hits / totalRequests,
-      averageLatency: latencies.reduce((sum, l) => sum + l, 0) / latencies.length,
-      p50Latency: this.percentile(latencies.sort((a, b) => a - b), 0.5),
+      averageLatency:
+        latencies.reduce((sum, l) => sum + l, 0) / latencies.length,
+      p50Latency: this.percentile(
+        latencies.sort((a, b) => a - b),
+        0.5
+      ),
       p95Latency: this.percentile(latencies, 0.95),
       p99Latency: this.percentile(latencies, 0.99),
       throughput: totalRequests / duration,
@@ -976,15 +1017,15 @@ export class CacheOptimizerTool extends EventEmitter {
     objective: OptimizationObjective
   ): number {
     switch (objective) {
-      case "hit-rate":
+      case 'hit-rate':
         return metrics.hitRate * 100;
-      case "latency":
+      case 'latency':
         return 100 - Math.min(100, metrics.averageLatency);
-      case "memory":
+      case 'memory':
         return 100 - (metrics.memoryUsage / 10000000) * 100;
-      case "throughput":
+      case 'throughput':
         return Math.min(100, metrics.throughput / 100);
-      case "balanced":
+      case 'balanced':
         return (
           metrics.hitRate * 40 +
           (100 - Math.min(100, metrics.averageLatency)) * 30 +
@@ -1007,15 +1048,21 @@ export class CacheOptimizerTool extends EventEmitter {
     const weaknesses: string[] = [];
 
     if (metrics.hitRate > 0.8) {
-      strengths.push(`Excellent hit rate: ${(metrics.hitRate * 100).toFixed(1)}%`);
+      strengths.push(
+        `Excellent hit rate: ${(metrics.hitRate * 100).toFixed(1)}%`
+      );
     } else if (metrics.hitRate < 0.5) {
       weaknesses.push(`Low hit rate: ${(metrics.hitRate * 100).toFixed(1)}%`);
     }
 
     if (metrics.averageLatency < 5) {
-      strengths.push(`Fast average latency: ${metrics.averageLatency.toFixed(2)}ms`);
+      strengths.push(
+        `Fast average latency: ${metrics.averageLatency.toFixed(2)}ms`
+      );
     } else if (metrics.averageLatency > 20) {
-      weaknesses.push(`High average latency: ${metrics.averageLatency.toFixed(2)}ms`);
+      weaknesses.push(
+        `High average latency: ${metrics.averageLatency.toFixed(2)}ms`
+      );
     }
 
     if (metrics.throughput > 10000) {
@@ -1031,15 +1078,15 @@ export class CacheOptimizerTool extends EventEmitter {
     }
 
     // Strategy-specific analysis
-    if (strategy === "LRU") {
-      strengths.push("Works well for temporal access patterns");
-      weaknesses.push("Vulnerable to scan-resistant workloads");
-    } else if (strategy === "LFU") {
-      strengths.push("Excellent for skewed access distributions");
-      weaknesses.push("Slow to adapt to changing patterns");
-    } else if (strategy === "HYBRID") {
-      strengths.push("Adapts to various workload patterns");
-      strengths.push("Balances recency and frequency");
+    if (strategy === 'LRU') {
+      strengths.push('Works well for temporal access patterns');
+      weaknesses.push('Vulnerable to scan-resistant workloads');
+    } else if (strategy === 'LFU') {
+      strengths.push('Excellent for skewed access distributions');
+      weaknesses.push('Slow to adapt to changing patterns');
+    } else if (strategy === 'HYBRID') {
+      strengths.push('Adapts to various workload patterns');
+      strengths.push('Balances recency and frequency');
     }
 
     return { strengths, weaknesses };
@@ -1050,7 +1097,7 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private meetsConstraints(
     metrics: PerformanceMetrics,
-    constraints: CacheOptimizerOptions["constraints"]
+    constraints: CacheOptimizerOptions['constraints']
   ): boolean {
     if (!constraints) return true;
 
@@ -1058,7 +1105,10 @@ export class CacheOptimizerTool extends EventEmitter {
       return false;
     }
 
-    if (constraints.maxLatency && metrics.averageLatency > constraints.maxLatency) {
+    if (
+      constraints.maxLatency &&
+      metrics.averageLatency > constraints.maxLatency
+    ) {
       return false;
     }
 
@@ -1094,7 +1144,8 @@ export class CacheOptimizerTool extends EventEmitter {
         expectedImprovement = {
           hitRate: (benchmark.metrics.hitRate - currentMetrics.hitRate) * 100,
           latency:
-            ((currentMetrics.averageLatency - benchmark.metrics.averageLatency) /
+            ((currentMetrics.averageLatency -
+              benchmark.metrics.averageLatency) /
               currentMetrics.averageLatency) *
             100,
           memory:
@@ -1102,7 +1153,9 @@ export class CacheOptimizerTool extends EventEmitter {
               currentMetrics.memoryUsage) *
             100,
           tokens:
-            (benchmark.metrics.tokenReductionRate - currentMetrics.tokenReductionRate) * 100,
+            (benchmark.metrics.tokenReductionRate -
+              currentMetrics.tokenReductionRate) *
+            100,
         };
       }
 
@@ -1157,7 +1210,8 @@ export class CacheOptimizerTool extends EventEmitter {
       const accessStart = Date.now();
 
       // Simulate cache lookup
-      const hit = Math.random() < this.predictHitProbability(strategy, "uniform");
+      const hit =
+        Math.random() < this.predictHitProbability(strategy, 'uniform');
       if (hit) hits++;
 
       const latency = Date.now() - accessStart;
@@ -1166,9 +1220,9 @@ export class CacheOptimizerTool extends EventEmitter {
 
       events.push({
         timestamp: Date.now(),
-        type: hit ? "hit" : "miss",
+        type: hit ? 'hit' : 'miss',
         key,
-        tier: "L1",
+        tier: 'L1',
         details: { latency },
       });
 
@@ -1176,9 +1230,9 @@ export class CacheOptimizerTool extends EventEmitter {
       if (Math.random() < 0.05) {
         events.push({
           timestamp: Date.now(),
-          type: "eviction",
+          type: 'eviction',
           key: this.generateRandomKey(),
-          tier: "L1",
+          tier: 'L1',
           details: { strategy },
         });
       }
@@ -1190,38 +1244,44 @@ export class CacheOptimizerTool extends EventEmitter {
     const simulatedMetrics: PerformanceMetrics = {
       hitRate: hits / totalRequests,
       missRate: 1 - hits / totalRequests,
-      averageLatency: latencies.reduce((sum, l) => sum + l, 0) / latencies.length,
-      p50Latency: this.percentile(latencies.sort((a, b) => a - b), 0.5),
+      averageLatency:
+        latencies.reduce((sum, l) => sum + l, 0) / latencies.length,
+      p50Latency: this.percentile(
+        latencies.sort((a, b) => a - b),
+        0.5
+      ),
       p95Latency: this.percentile(latencies, 0.95),
       p99Latency: this.percentile(latencies, 0.99),
       throughput: totalRequests / (duration / 1000),
       memoryUsage: config.l1MaxSize * 1024,
-      evictionRate: events.filter((e) => e.type === "eviction").length / (duration / 1000),
+      evictionRate:
+        events.filter((e) => e.type === 'eviction').length / (duration / 1000),
       compressionRatio: 0.35,
       tokenReductionRate: (hits / totalRequests) * 0.87,
     };
 
     // Compare to baseline (current state)
-    const baselineMetrics = await this.analyze({ operation: "analyze" });
+    const baselineMetrics = await this.analyze({ operation: 'analyze' });
     const baseline = baselineMetrics.metrics!;
 
     const comparisonToBaseline = {
       hitRateDelta: simulatedMetrics.hitRate - baseline.hitRate,
       latencyDelta: simulatedMetrics.averageLatency - baseline.averageLatency,
       memoryDelta: simulatedMetrics.memoryUsage - baseline.memoryUsage,
-      tokenDelta: simulatedMetrics.tokenReductionRate - baseline.tokenReductionRate,
+      tokenDelta:
+        simulatedMetrics.tokenReductionRate - baseline.tokenReductionRate,
     };
 
     // Make recommendation
-    let recommendation: "adopt" | "reject" | "test-further" = "test-further";
-    let reasoning = "Simulation results are inconclusive";
+    let recommendation: 'adopt' | 'reject' | 'test-further' = 'test-further';
+    let reasoning = 'Simulation results are inconclusive';
 
     if (comparisonToBaseline.hitRateDelta > 0.1) {
-      recommendation = "adopt";
-      reasoning = "Significant improvement in hit rate justifies adoption";
+      recommendation = 'adopt';
+      reasoning = 'Significant improvement in hit rate justifies adoption';
     } else if (comparisonToBaseline.hitRateDelta < -0.05) {
-      recommendation = "reject";
-      reasoning = "Degraded hit rate makes this change inadvisable";
+      recommendation = 'reject';
+      reasoning = 'Degraded hit rate makes this change inadvisable';
     }
 
     return {
@@ -1239,13 +1299,13 @@ export class CacheOptimizerTool extends EventEmitter {
    * Grid search tuning
    */
   private async gridSearchTuning(epochs: number): Promise<TuningResult> {
-    const improvementHistory: TuningResult["improvementHistory"] = [];
+    const improvementHistory: TuningResult['improvementHistory'] = [];
     let bestScore = 0;
-    let bestConfig: CacheConfiguration = this.getDefaultConfig("HYBRID");
+    let bestConfig: CacheConfiguration = this.getDefaultConfig('HYBRID');
 
     const l1Sizes = [50, 100, 200, 500];
     const l2Sizes = [500, 1000, 2000];
-    const strategies: EvictionStrategy[] = ["LRU", "LFU", "HYBRID"];
+    const strategies: EvictionStrategy[] = ['LRU', 'LFU', 'HYBRID'];
 
     let iteration = 0;
 
@@ -1263,10 +1323,10 @@ export class CacheOptimizerTool extends EventEmitter {
             config,
             1000,
             10,
-            "uniform"
+            'uniform'
           );
 
-          const score = this.calculateStrategyScore(metrics, "balanced");
+          const score = this.calculateStrategyScore(metrics, 'balanced');
 
           improvementHistory.push({ iteration, config, score });
 
@@ -1280,11 +1340,14 @@ export class CacheOptimizerTool extends EventEmitter {
       }
     }
 
-    const converged = improvementHistory.length > 10 &&
-      Math.abs(improvementHistory[improvementHistory.length - 1].score - bestScore) < 0.1;
+    const converged =
+      improvementHistory.length > 10 &&
+      Math.abs(
+        improvementHistory[improvementHistory.length - 1].score - bestScore
+      ) < 0.1;
 
     return {
-      method: "grid-search",
+      method: 'grid-search',
       iterations: iteration,
       bestConfig,
       bestScore,
@@ -1304,8 +1367,8 @@ export class CacheOptimizerTool extends EventEmitter {
     epochs: number,
     learningRate: number
   ): Promise<TuningResult> {
-    const improvementHistory: TuningResult["improvementHistory"] = [];
-    let currentConfig = this.getDefaultConfig("HYBRID");
+    const improvementHistory: TuningResult['improvementHistory'] = [];
+    let currentConfig = this.getDefaultConfig('HYBRID');
     let bestScore = 0;
     let bestConfig = { ...currentConfig };
 
@@ -1315,11 +1378,15 @@ export class CacheOptimizerTool extends EventEmitter {
         currentConfig,
         1000,
         10,
-        "uniform"
+        'uniform'
       );
 
-      const score = this.calculateStrategyScore(metrics, "balanced");
-      improvementHistory.push({ iteration, config: { ...currentConfig }, score });
+      const score = this.calculateStrategyScore(metrics, 'balanced');
+      improvementHistory.push({
+        iteration,
+        config: { ...currentConfig },
+        score,
+      });
 
       if (score > bestScore) {
         bestScore = score;
@@ -1341,12 +1408,15 @@ export class CacheOptimizerTool extends EventEmitter {
       );
     }
 
-    const converged = improvementHistory.length > 10 &&
-      Math.abs(improvementHistory[improvementHistory.length - 1].score -
-        improvementHistory[improvementHistory.length - 2].score) < 0.01;
+    const converged =
+      improvementHistory.length > 10 &&
+      Math.abs(
+        improvementHistory[improvementHistory.length - 1].score -
+          improvementHistory[improvementHistory.length - 2].score
+      ) < 0.01;
 
     return {
-      method: "gradient-descent",
+      method: 'gradient-descent',
       iterations: epochs,
       bestConfig,
       bestScore,
@@ -1363,9 +1433,9 @@ export class CacheOptimizerTool extends EventEmitter {
    * Bayesian optimization tuning
    */
   private async bayesianTuning(epochs: number): Promise<TuningResult> {
-    const improvementHistory: TuningResult["improvementHistory"] = [];
+    const improvementHistory: TuningResult['improvementHistory'] = [];
     let bestScore = 0;
-    let bestConfig = this.getDefaultConfig("HYBRID");
+    let bestConfig = this.getDefaultConfig('HYBRID');
 
     // Simplified Bayesian optimization using random sampling with exploitation/exploration
     for (let iteration = 0; iteration < epochs; iteration++) {
@@ -1373,8 +1443,9 @@ export class CacheOptimizerTool extends EventEmitter {
 
       if (iteration < 10 || Math.random() < 0.3) {
         // Exploration: random config
-        const strategies: EvictionStrategy[] = ["LRU", "LFU", "FIFO", "HYBRID"];
-        const strategy = strategies[Math.floor(Math.random() * strategies.length)];
+        const strategies: EvictionStrategy[] = ['LRU', 'LFU', 'FIFO', 'HYBRID'];
+        const strategy =
+          strategies[Math.floor(Math.random() * strategies.length)];
         config = this.getDefaultConfig(strategy);
         config.l1MaxSize = Math.floor(50 + Math.random() * 450);
         config.l2MaxSize = Math.floor(500 + Math.random() * 1500);
@@ -1396,10 +1467,10 @@ export class CacheOptimizerTool extends EventEmitter {
         config,
         1000,
         10,
-        "uniform"
+        'uniform'
       );
 
-      const score = this.calculateStrategyScore(metrics, "balanced");
+      const score = this.calculateStrategyScore(metrics, 'balanced');
       improvementHistory.push({ iteration, config: { ...config }, score });
 
       if (score > bestScore) {
@@ -1408,11 +1479,14 @@ export class CacheOptimizerTool extends EventEmitter {
       }
     }
 
-    const converged = improvementHistory.length > 10 &&
-      Math.abs(improvementHistory[improvementHistory.length - 1].score - bestScore) < 0.5;
+    const converged =
+      improvementHistory.length > 10 &&
+      Math.abs(
+        improvementHistory[improvementHistory.length - 1].score - bestScore
+      ) < 0.5;
 
     return {
-      method: "bayesian",
+      method: 'bayesian',
       iterations: epochs,
       bestConfig,
       bestScore,
@@ -1430,15 +1504,16 @@ export class CacheOptimizerTool extends EventEmitter {
    */
   private async evolutionaryTuning(epochs: number): Promise<TuningResult> {
     const populationSize = 20;
-    const improvementHistory: TuningResult["improvementHistory"] = [];
+    const improvementHistory: TuningResult['improvementHistory'] = [];
     let bestScore = 0;
-    let bestConfig = this.getDefaultConfig("HYBRID");
+    let bestConfig = this.getDefaultConfig('HYBRID');
 
     // Initialize population
     let population: CacheConfiguration[] = [];
     for (let i = 0; i < populationSize; i++) {
-      const strategies: EvictionStrategy[] = ["LRU", "LFU", "FIFO", "HYBRID"];
-      const strategy = strategies[Math.floor(Math.random() * strategies.length)];
+      const strategies: EvictionStrategy[] = ['LRU', 'LFU', 'FIFO', 'HYBRID'];
+      const strategy =
+        strategies[Math.floor(Math.random() * strategies.length)];
       const config = this.getDefaultConfig(strategy);
       config.l1MaxSize = Math.floor(50 + Math.random() * 450);
       config.l2MaxSize = Math.floor(500 + Math.random() * 1500);
@@ -1455,9 +1530,9 @@ export class CacheOptimizerTool extends EventEmitter {
           config,
           1000,
           5,
-          "uniform"
+          'uniform'
         );
-        const score = this.calculateStrategyScore(metrics, "balanced");
+        const score = this.calculateStrategyScore(metrics, 'balanced');
         fitness.push({ config, score });
 
         if (score > bestScore) {
@@ -1474,7 +1549,9 @@ export class CacheOptimizerTool extends EventEmitter {
 
       // Selection: keep top 50%
       fitness.sort((a, b) => b.score - a.score);
-      const survivors = fitness.slice(0, populationSize / 2).map((f) => f.config);
+      const survivors = fitness
+        .slice(0, populationSize / 2)
+        .map((f) => f.config);
 
       // Crossover and mutation
       const nextGeneration: CacheConfiguration[] = [...survivors];
@@ -1486,8 +1563,10 @@ export class CacheOptimizerTool extends EventEmitter {
         // Crossover
         const child: CacheConfiguration = {
           ...parent1,
-          l1MaxSize: Math.random() < 0.5 ? parent1.l1MaxSize : parent2.l1MaxSize,
-          l2MaxSize: Math.random() < 0.5 ? parent1.l2MaxSize : parent2.l2MaxSize,
+          l1MaxSize:
+            Math.random() < 0.5 ? parent1.l1MaxSize : parent2.l1MaxSize,
+          l2MaxSize:
+            Math.random() < 0.5 ? parent1.l2MaxSize : parent2.l2MaxSize,
         };
 
         // Mutation
@@ -1510,12 +1589,15 @@ export class CacheOptimizerTool extends EventEmitter {
       population = nextGeneration;
     }
 
-    const converged = improvementHistory.length > 10 &&
-      Math.abs(improvementHistory[improvementHistory.length - 1].score -
-        improvementHistory[improvementHistory.length - 2].score) < 0.1;
+    const converged =
+      improvementHistory.length > 10 &&
+      Math.abs(
+        improvementHistory[improvementHistory.length - 1].score -
+          improvementHistory[improvementHistory.length - 2].score
+      ) < 0.1;
 
     return {
-      method: "evolutionary",
+      method: 'evolutionary',
       iterations: epochs,
       bestConfig,
       bestScore,
@@ -1534,21 +1616,22 @@ export class CacheOptimizerTool extends EventEmitter {
   private estimateCosts(
     strategy: EvictionStrategy,
     config: CacheConfiguration
-  ): CostBenefitAnalysis["costs"] {
-    const memory = (config.l1MaxSize + config.l2MaxSize + config.l3MaxSize) * 1024;
+  ): CostBenefitAnalysis['costs'] {
+    const memory =
+      (config.l1MaxSize + config.l2MaxSize + config.l3MaxSize) * 1024;
 
     let cpu = 5; // baseline
-    if (strategy === "LFU") cpu += 10;
-    if (strategy === "HYBRID") cpu += 15;
+    if (strategy === 'LFU') cpu += 10;
+    if (strategy === 'HYBRID') cpu += 15;
     if (config.compressionEnabled) cpu += 20;
 
     let latency = 1; // baseline
-    if (strategy === "HYBRID") latency += 2;
+    if (strategy === 'HYBRID') latency += 2;
     if (config.compressionEnabled) latency += 5;
 
     let complexity = 3; // baseline
-    if (strategy === "HYBRID") complexity = 8;
-    if (strategy === "LFU") complexity = 6;
+    if (strategy === 'HYBRID') complexity = 8;
+    if (strategy === 'LFU') complexity = 6;
 
     return { memory, cpu, latency, complexity };
   }
@@ -1559,13 +1642,19 @@ export class CacheOptimizerTool extends EventEmitter {
   private async estimateBenefits(
     strategy: EvictionStrategy,
     config: CacheConfiguration
-  ): Promise<CostBenefitAnalysis["benefits"]> {
-    const metrics = await this.benchmarkStrategy(strategy, config, 1000, 10, "uniform");
+  ): Promise<CostBenefitAnalysis['benefits']> {
+    const metrics = await this.benchmarkStrategy(
+      strategy,
+      config,
+      1000,
+      10,
+      'uniform'
+    );
 
     const tokenSavings = metrics.hitRate * metrics.tokenReductionRate * 10000; // tokens per hour
 
     let reliability = 7; // baseline
-    if (strategy === "HYBRID") reliability = 9;
+    if (strategy === 'HYBRID') reliability = 9;
     if (metrics.hitRate > 0.8) reliability += 1;
 
     return {
@@ -1580,12 +1669,11 @@ export class CacheOptimizerTool extends EventEmitter {
    * Calculate ROI
    */
   private calculateROI(
-    costs: CostBenefitAnalysis["costs"],
-    benefits: CostBenefitAnalysis["benefits"]
+    costs: CostBenefitAnalysis['costs'],
+    benefits: CostBenefitAnalysis['benefits']
   ): number {
     // Normalize costs and benefits to 0-100 scale
-    const normalizedCost =
-      (costs.cpu + costs.latency + costs.complexity) / 3;
+    const normalizedCost = (costs.cpu + costs.latency + costs.complexity) / 3;
     const normalizedBenefit =
       (benefits.hitRate * 100 + benefits.reliability * 10) / 2;
 
@@ -1596,8 +1684,8 @@ export class CacheOptimizerTool extends EventEmitter {
    * Calculate break-even point
    */
   private calculateBreakEven(
-    costs: CostBenefitAnalysis["costs"],
-    benefits: CostBenefitAnalysis["benefits"]
+    costs: CostBenefitAnalysis['costs'],
+    benefits: CostBenefitAnalysis['benefits']
   ): number {
     // Simplified: hours until token savings offset implementation costs
     const implementationCost = costs.complexity * 100; // cost in tokens
@@ -1610,7 +1698,7 @@ export class CacheOptimizerTool extends EventEmitter {
   private generateRecommendationReasoning(
     benchmark: StrategyBenchmark,
     currentStrategy?: EvictionStrategy,
-    improvement?: OptimizationRecommendation["expectedImprovement"]
+    improvement?: OptimizationRecommendation['expectedImprovement']
   ): string {
     let reasoning = `${benchmark.strategy} strategy achieved a score of ${benchmark.score.toFixed(1)} `;
 
@@ -1626,7 +1714,7 @@ export class CacheOptimizerTool extends EventEmitter {
       }
     }
 
-    reasoning += `Key strengths: ${benchmark.strengths.join(", ")}.`;
+    reasoning += `Key strengths: ${benchmark.strengths.join(', ')}.`;
 
     return reasoning;
   }
@@ -1641,14 +1729,18 @@ export class CacheOptimizerTool extends EventEmitter {
     const steps: string[] = [];
 
     if (currentStrategy !== targetStrategy) {
-      steps.push(`Switch eviction strategy from ${currentStrategy || "current"} to ${targetStrategy}`);
+      steps.push(
+        `Switch eviction strategy from ${currentStrategy || 'current'} to ${targetStrategy}`
+      );
     }
 
-    steps.push("Run simulation with new configuration to validate improvements");
-    steps.push("Deploy to staging environment for real-world testing");
-    steps.push("Monitor hit rate, latency, and memory usage for 24 hours");
-    steps.push("Gradually roll out to production with canary deployment");
-    steps.push("Set up alerts for performance regressions");
+    steps.push(
+      'Run simulation with new configuration to validate improvements'
+    );
+    steps.push('Deploy to staging environment for real-world testing');
+    steps.push('Monitor hit rate, latency, and memory usage for 24 hours');
+    steps.push('Gradually roll out to production with canary deployment');
+    steps.push('Set up alerts for performance regressions');
 
     return steps;
   }
@@ -1663,20 +1755,22 @@ export class CacheOptimizerTool extends EventEmitter {
     const risks: string[] = [];
 
     if (!currentStrategy) {
-      risks.push("No baseline for comparison - monitor carefully during rollout");
+      risks.push(
+        'No baseline for comparison - monitor carefully during rollout'
+      );
     }
 
-    if (targetStrategy === "HYBRID") {
-      risks.push("Higher CPU overhead from adaptive algorithm");
+    if (targetStrategy === 'HYBRID') {
+      risks.push('Higher CPU overhead from adaptive algorithm');
     }
 
-    if (targetStrategy === "LFU") {
-      risks.push("Slow adaptation to changing access patterns");
+    if (targetStrategy === 'LFU') {
+      risks.push('Slow adaptation to changing access patterns');
     }
 
     if (targetStrategy !== currentStrategy) {
-      risks.push("Potential cache miss spike during transition");
-      risks.push("Need to retrain predictive models with new strategy");
+      risks.push('Potential cache miss spike during transition');
+      risks.push('Need to retrain predictive models with new strategy');
     }
 
     return risks;
@@ -1716,7 +1810,7 @@ export class CacheOptimizerTool extends EventEmitter {
       entries.set(entry.key, {
         key: entry.key,
         value: entry.value,
-        tier: "L1",
+        tier: 'L1',
         size: entry.originalSize,
         hits: entry.hitCount,
         lastAccess: entry.lastAccessedAt,
@@ -1728,8 +1822,8 @@ export class CacheOptimizerTool extends EventEmitter {
 
     return {
       entries,
-      strategy: "HYBRID",
-      config: this.getDefaultConfig("HYBRID"),
+      strategy: 'HYBRID',
+      config: this.getDefaultConfig('HYBRID'),
     };
   }
 
@@ -1737,7 +1831,7 @@ export class CacheOptimizerTool extends EventEmitter {
    * Detect workload pattern
    */
   private detectWorkloadPattern(): WorkloadPattern {
-    if (this.accessHistory.length < 100) return "unknown";
+    if (this.accessHistory.length < 100) return 'unknown';
 
     // Analyze access distribution
     const keyFrequency = new Map<string, number>();
@@ -1746,29 +1840,36 @@ export class CacheOptimizerTool extends EventEmitter {
     }
 
     const frequencies = Array.from(keyFrequency.values()).sort((a, b) => b - a);
-    const top10Percent = frequencies.slice(0, Math.ceil(frequencies.length * 0.1));
+    const top10Percent = frequencies.slice(
+      0,
+      Math.ceil(frequencies.length * 0.1)
+    );
     const top10Sum = top10Percent.reduce((sum, f) => sum + f, 0);
     const totalSum = frequencies.reduce((sum, f) => sum + f, 0);
 
     const concentration = top10Sum / totalSum;
 
-    if (concentration > 0.8) return "skewed";
-    if (concentration < 0.2) return "uniform";
+    if (concentration > 0.8) return 'skewed';
+    if (concentration < 0.2) return 'uniform';
 
     // Check temporal patterns
     const timeDeltas = [];
     for (let i = 1; i < this.accessHistory.length; i++) {
-      timeDeltas.push(this.accessHistory[i].timestamp - this.accessHistory[i - 1].timestamp);
+      timeDeltas.push(
+        this.accessHistory[i].timestamp - this.accessHistory[i - 1].timestamp
+      );
     }
 
-    const avgDelta = timeDeltas.reduce((sum, d) => sum + d, 0) / timeDeltas.length;
+    const avgDelta =
+      timeDeltas.reduce((sum, d) => sum + d, 0) / timeDeltas.length;
     const variance =
-      timeDeltas.reduce((sum, d) => sum + Math.pow(d - avgDelta, 2), 0) / timeDeltas.length;
+      timeDeltas.reduce((sum, d) => sum + Math.pow(d - avgDelta, 2), 0) /
+      timeDeltas.length;
 
-    if (variance / avgDelta < 0.1) return "predictable";
-    if (variance / avgDelta > 10) return "burst";
+    if (variance / avgDelta < 0.1) return 'predictable';
+    if (variance / avgDelta > 10) return 'burst';
 
-    return "temporal";
+    return 'temporal';
   }
 
   /**
@@ -1799,12 +1900,12 @@ export class CacheOptimizerTool extends EventEmitter {
       hotKeys: sortedByCount.map(([key, stats]) => ({
         key,
         accessCount: stats.count,
-        tier: "L1" as CacheTier,
+        tier: 'L1' as CacheTier,
       })),
       coldKeys: sortedByAge.map(([key, stats]) => ({
         key,
         lastAccess: stats.lastAccess,
-        tier: "L3" as CacheTier,
+        tier: 'L3' as CacheTier,
       })),
     };
   }
@@ -1816,27 +1917,30 @@ export class CacheOptimizerTool extends EventEmitter {
     recommendations: OptimizationRecommendation[],
     bottlenecks: BottleneckAnalysis[],
     costBenefit: CostBenefitAnalysis[]
-  ): OptimizationReport["actionItems"] {
-    const actionItems: OptimizationReport["actionItems"] = [];
+  ): OptimizationReport['actionItems'] {
+    const actionItems: OptimizationReport['actionItems'] = [];
 
     // From recommendations
     if (recommendations.length > 0 && recommendations[0].confidence > 0.7) {
       actionItems.push({
-        priority: "high",
+        priority: 'high',
         action: `Implement ${recommendations[0].recommendedStrategy} strategy`,
         expectedImpact: `${recommendations[0].expectedImprovement.hitRate.toFixed(1)}% hit rate improvement`,
-        effort: "medium",
+        effort: 'medium',
       });
     }
 
     // From bottlenecks
     for (const bottleneck of bottlenecks) {
-      if (bottleneck.severity === "critical" || bottleneck.severity === "high") {
+      if (
+        bottleneck.severity === 'critical' ||
+        bottleneck.severity === 'high'
+      ) {
         actionItems.push({
-          priority: bottleneck.severity === "critical" ? "high" : "medium",
+          priority: bottleneck.severity === 'critical' ? 'high' : 'medium',
           action: bottleneck.recommendations[0],
           expectedImpact: bottleneck.impact,
-          effort: "medium",
+          effort: 'medium',
         });
       }
     }
@@ -1844,10 +1948,10 @@ export class CacheOptimizerTool extends EventEmitter {
     // From cost-benefit
     if (costBenefit.length > 0 && costBenefit[0].roi > 20) {
       actionItems.push({
-        priority: "medium",
+        priority: 'medium',
         action: `Adopt ${costBenefit[0].strategy} for optimal ROI`,
         expectedImpact: `ROI score of ${costBenefit[0].roi.toFixed(1)}`,
-        effort: "low",
+        effort: 'low',
       });
     }
 
@@ -1866,7 +1970,7 @@ export class CacheOptimizerTool extends EventEmitter {
       ttl: 3600000,
       compressionEnabled: true,
       prefetchEnabled: false,
-      writeMode: "write-through",
+      writeMode: 'write-through',
     };
   }
 
@@ -1892,16 +1996,19 @@ export class CacheOptimizerTool extends EventEmitter {
   /**
    * Generate access pattern
    */
-  private generateAccessPattern(size: number, pattern: WorkloadPattern): string[] {
+  private generateAccessPattern(
+    size: number,
+    pattern: WorkloadPattern
+  ): string[] {
     const keys: string[] = [];
 
     switch (pattern) {
-      case "uniform":
+      case 'uniform':
         for (let i = 0; i < size; i++) {
           keys.push(`key-${Math.floor(Math.random() * 1000)}`);
         }
         break;
-      case "skewed":
+      case 'skewed':
         for (let i = 0; i < size; i++) {
           if (Math.random() < 0.8) {
             keys.push(`hot-key-${Math.floor(Math.random() * 10)}`);
@@ -1910,7 +2017,7 @@ export class CacheOptimizerTool extends EventEmitter {
           }
         }
         break;
-      case "temporal":
+      case 'temporal':
         for (let i = 0; i < size; i++) {
           const timeWindow = Math.floor(i / 100);
           keys.push(`key-${timeWindow}-${Math.floor(Math.random() * 10)}`);
@@ -1934,9 +2041,9 @@ export class CacheOptimizerTool extends EventEmitter {
   ): number {
     let base = 0.6;
 
-    if (strategy === "LRU" && pattern === "temporal") base = 0.8;
-    if (strategy === "LFU" && pattern === "skewed") base = 0.85;
-    if (strategy === "HYBRID") base = 0.75;
+    if (strategy === 'LRU' && pattern === 'temporal') base = 0.8;
+    if (strategy === 'LFU' && pattern === 'skewed') base = 0.85;
+    if (strategy === 'HYBRID') base = 0.75;
 
     return Math.min(0.95, base + Math.random() * 0.1);
   }
@@ -1996,7 +2103,7 @@ export class CacheOptimizerTool extends EventEmitter {
    * Determine if operation is cacheable
    */
   private isCacheableOperation(operation: string): boolean {
-    return ["analyze", "benchmark", "recommend", "detect-bottlenecks"].includes(
+    return ['analyze', 'benchmark', 'recommend', 'detect-bottlenecks'].includes(
       operation
     );
   }
@@ -2010,11 +2117,11 @@ export class CacheOptimizerTool extends EventEmitter {
     const { operation, objective, workloadPattern } = options;
 
     switch (operation) {
-      case "analyze":
+      case 'analyze':
         return { analysisWindow: options.analysisWindow };
-      case "benchmark":
+      case 'benchmark':
         return { strategies: options.strategies, workloadPattern };
-      case "recommend":
+      case 'recommend':
         return { objective, currentStrategy: options.currentStrategy };
       default:
         return {};
@@ -2041,78 +2148,90 @@ export function getCacheOptimizerTool(
   metrics: MetricsCollector
 ): CacheOptimizerTool {
   if (!cacheOptimizerInstance) {
-    cacheOptimizerInstance = new CacheOptimizerTool(cache, tokenCounter, metrics);
+    cacheOptimizerInstance = new CacheOptimizerTool(
+      cache,
+      tokenCounter,
+      metrics
+    );
   }
   return cacheOptimizerInstance;
 }
 
 // MCP Tool Definition
 export const CACHE_OPTIMIZER_TOOL_DEFINITION = {
-  name: "cache_optimizer",
+  name: 'cache_optimizer',
   description:
-    "Advanced cache optimization with 89%+ token reduction. Analyzes performance, benchmarks strategies, provides ML-based recommendations, detects bottlenecks, and performs cost-benefit analysis.",
+    'Advanced cache optimization with 89%+ token reduction. Analyzes performance, benchmarks strategies, provides ML-based recommendations, detects bottlenecks, and performs cost-benefit analysis.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       operation: {
-        type: "string",
+        type: 'string',
         enum: [
-          "analyze",
-          "benchmark",
-          "optimize",
-          "recommend",
-          "simulate",
-          "tune",
-          "detect-bottlenecks",
-          "cost-benefit",
-          "configure",
-          "report",
+          'analyze',
+          'benchmark',
+          'optimize',
+          'recommend',
+          'simulate',
+          'tune',
+          'detect-bottlenecks',
+          'cost-benefit',
+          'configure',
+          'report',
         ],
-        description: "The optimization operation to perform",
+        description: 'The optimization operation to perform',
       },
       analysisWindow: {
-        type: "number",
-        description: "Time window in milliseconds for analysis (default: 3600000)",
+        type: 'number',
+        description:
+          'Time window in milliseconds for analysis (default: 3600000)',
       },
       strategies: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "string",
-          enum: ["LRU", "LFU", "FIFO", "TTL", "SIZE", "HYBRID"],
+          type: 'string',
+          enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'SIZE', 'HYBRID'],
         },
-        description: "Eviction strategies to benchmark",
+        description: 'Eviction strategies to benchmark',
       },
       objective: {
-        type: "string",
-        enum: ["hit-rate", "latency", "memory", "throughput", "balanced"],
-        description: "Optimization objective (default: balanced)",
+        type: 'string',
+        enum: ['hit-rate', 'latency', 'memory', 'throughput', 'balanced'],
+        description: 'Optimization objective (default: balanced)',
       },
       workloadPattern: {
-        type: "string",
-        enum: ["uniform", "skewed", "temporal", "burst", "predictable", "unknown"],
-        description: "Workload pattern for benchmarking",
+        type: 'string',
+        enum: [
+          'uniform',
+          'skewed',
+          'temporal',
+          'burst',
+          'predictable',
+          'unknown',
+        ],
+        description: 'Workload pattern for benchmarking',
       },
       tuningMethod: {
-        type: "string",
-        enum: ["grid-search", "gradient-descent", "bayesian", "evolutionary"],
-        description: "ML tuning method (default: bayesian)",
+        type: 'string',
+        enum: ['grid-search', 'gradient-descent', 'bayesian', 'evolutionary'],
+        description: 'ML tuning method (default: bayesian)',
       },
       epochs: {
-        type: "number",
-        description: "Number of training epochs for tuning (default: 50)",
+        type: 'number',
+        description: 'Number of training epochs for tuning (default: 50)',
       },
       useCache: {
-        type: "boolean",
-        description: "Enable result caching (default: true)",
+        type: 'boolean',
+        description: 'Enable result caching (default: true)',
         default: true,
       },
       cacheTTL: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 } as const;
 

@@ -1,0 +1,75 @@
+version: 2
+
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+
+    # Group minor and patch updates together
+    groups:
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "patch"
+
+    # Customize commit messages
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+
+    # Automatically approve and merge patch updates (optional)
+    open-pull-requests-limit: 10
+
+    # Assignees and reviewers
+    reviewers:
+      - "ooples"
+
+    # Labels for PRs
+    labels:
+      - "dependencies"
+      - "automated"
+
+    # Versioning strategy
+    versioning-strategy: "increase"
+
+    # Ignore specific dependencies (if needed)
+    ignore:
+      # Ignore major version updates for critical dependencies
+      # - dependency-name: "typescript"
+      #   update-types: ["version-update:semver-major"]
+
+    # Allow dependencies to be updated
+    allow:
+      - dependency-type: "all"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+
+    labels:
+      - "github-actions"
+      - "automated"
+
+    reviewers:
+      - "ooples"

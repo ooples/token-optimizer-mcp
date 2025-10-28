@@ -11,24 +11,24 @@
  * Target: 70% reduction vs full git diff output
  */
 
-import { execSync } from "child_process";
-import { existsSync, statSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { generateCacheKey } from "../shared/hash-utils";
+import { execSync } from 'child_process';
+import { existsSync, statSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { generateCacheKey } from '../shared/hash-utils.js';
 
 export type FileStatus =
-  | "modified"
-  | "added"
-  | "deleted"
-  | "renamed"
-  | "copied"
-  | "untracked"
-  | "ignored"
-  | "unmerged";
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'untracked'
+  | 'ignored'
+  | 'unmerged';
 
 export interface FileStatusInfo {
   path: string;
@@ -107,7 +107,7 @@ export class SmartStatusTool {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metrics: MetricsCollector,
+    private metrics: MetricsCollector
   ) {}
 
   /**
@@ -120,7 +120,7 @@ export class SmartStatusTool {
     const opts: Required<SmartStatusOptions> = {
       cwd: options.cwd ?? process.cwd(),
       statuses: options.statuses ?? [],
-      filePattern: options.filePattern ?? "",
+      filePattern: options.filePattern ?? '',
       staged: options.staged ?? false,
       unstaged: options.unstaged ?? false,
       summaryOnly: options.summaryOnly ?? false,
@@ -143,7 +143,7 @@ export class SmartStatusTool {
 
       // Get current git hash for cache key
       const gitHash = this.getGitHash(opts.cwd);
-      const cacheKey = generateCacheKey("git-status", {
+      const cacheKey = generateCacheKey('git-status', {
         cwd: opts.cwd,
         hash: gitHash,
         options: opts,
@@ -158,7 +158,7 @@ export class SmartStatusTool {
 
           const duration = Date.now() - startTime;
           this.metrics.record({
-            operation: "smart_status",
+            operation: 'smart_status',
             duration,
             inputTokens: result.metadata.tokenCount,
             outputTokens: 0,
@@ -179,7 +179,7 @@ export class SmartStatusTool {
       const statusOutput = this.getGitStatus(
         opts.cwd,
         opts.includeUntracked,
-        opts.includeIgnored,
+        opts.includeIgnored
       );
 
       // Parse status output
@@ -192,7 +192,7 @@ export class SmartStatusTool {
       const totalFiles = filteredFiles.length;
       const paginatedFiles = filteredFiles.slice(
         opts.offset,
-        opts.offset + opts.limit,
+        opts.offset + opts.limit
       );
       const truncated = totalFiles > paginatedFiles.length + opts.offset;
 
@@ -201,7 +201,7 @@ export class SmartStatusTool {
         for (const file of paginatedFiles) {
           try {
             const filePath = join(opts.cwd, file.path);
-            if (existsSync(filePath) && file.status !== "deleted") {
+            if (existsSync(filePath) && file.status !== 'deleted') {
               const stats = statSync(filePath);
               file.size = stats.size;
             }
@@ -231,13 +231,13 @@ export class SmartStatusTool {
         // Summary mode: return counts only
         resultData = { summary };
         resultTokens = this.tokenCounter.count(
-          JSON.stringify(resultData),
+          JSON.stringify(resultData)
         ).tokens;
       } else {
         // Normal mode: return file lists
         resultData = { summary, files: paginatedFiles };
         resultTokens = this.tokenCounter.count(
-          JSON.stringify(resultData),
+          JSON.stringify(resultData)
         ).tokens;
       }
 
@@ -272,7 +272,7 @@ export class SmartStatusTool {
       // Cache result
       if (opts.useCache) {
         const resultString = JSON.stringify(result);
-        const resultSize = Buffer.from(resultString, "utf-8").length;
+        const resultSize = Buffer.from(resultString, 'utf-8').length;
         this.cache.set(cacheKey, resultString, resultSize, resultSize);
       }
 
@@ -281,7 +281,7 @@ export class SmartStatusTool {
       result.metadata.duration = duration;
 
       this.metrics.record({
-        operation: "smart_status",
+        operation: 'smart_status',
         duration,
         inputTokens: resultTokens,
         outputTokens: 0,
@@ -296,7 +296,7 @@ export class SmartStatusTool {
       const duration = Date.now() - startTime;
 
       this.metrics.record({
-        operation: "smart_status",
+        operation: 'smart_status',
         duration,
         inputTokens: 0,
         outputTokens: 0,
@@ -333,7 +333,7 @@ export class SmartStatusTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync("git rev-parse --git-dir", { cwd, stdio: "pipe" });
+      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
       return true;
     } catch {
       return false;
@@ -345,9 +345,9 @@ export class SmartStatusTool {
    */
   private getGitHash(cwd: string): string {
     try {
-      return execSync("git rev-parse HEAD", { cwd, encoding: "utf-8" }).trim();
+      return execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
     } catch {
-      return "no-commit";
+      return 'no-commit';
     }
   }
 
@@ -361,16 +361,16 @@ export class SmartStatusTool {
     clean: boolean;
   } {
     try {
-      const branch = execSync("git rev-parse --abbrev-ref HEAD", {
+      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       }).trim();
 
       const commit = this.getGitHash(cwd);
 
-      const statusOutput = execSync("git status --porcelain", {
+      const statusOutput = execSync('git status --porcelain', {
         cwd,
-        encoding: "utf-8",
+        encoding: 'utf-8',
       });
 
       return {
@@ -393,23 +393,23 @@ export class SmartStatusTool {
   private getGitStatus(
     cwd: string,
     includeUntracked: boolean,
-    includeIgnored: boolean,
+    includeIgnored: boolean
   ): string {
     try {
-      let command = "git status --porcelain";
+      let command = 'git status --porcelain';
 
       if (includeUntracked) {
-        command += " -u";
+        command += ' -u';
       }
 
       if (includeIgnored) {
-        command += " --ignored";
+        command += ' --ignored';
       }
 
-      return execSync(command, { cwd, encoding: "utf-8" });
+      return execSync(command, { cwd, encoding: 'utf-8' });
     } catch (error) {
       throw new Error(
-        `Failed to get git status: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to get git status: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -419,7 +419,7 @@ export class SmartStatusTool {
    */
   private parseGitStatus(output: string): FileStatusInfo[] {
     const files: FileStatusInfo[] = [];
-    const lines = output.split("\n").filter((line) => line.trim());
+    const lines = output.split('\n').filter((line) => line.trim());
 
     for (const line of lines) {
       if (line.length < 4) continue;
@@ -444,14 +444,14 @@ export class SmartStatusTool {
   private parseStatusCodes(
     index: string,
     workTree: string,
-    filePath: string,
+    filePath: string
   ): FileStatusInfo | null {
     // Handle renamed/copied files (format: "R  old.txt -> new.txt")
     let path = filePath;
     let oldPath: string | undefined;
 
-    if (filePath.includes(" -> ")) {
-      const parts = filePath.split(" -> ");
+    if (filePath.includes(' -> ')) {
+      const parts = filePath.split(' -> ');
       oldPath = parts[0].trim();
       path = parts[1].trim();
     }
@@ -460,29 +460,29 @@ export class SmartStatusTool {
     let status: FileStatus;
     let staged = false;
 
-    if (index === "M" || workTree === "M") {
-      status = "modified";
-      staged = index === "M";
-    } else if (index === "A" || workTree === "A") {
-      status = "added";
-      staged = index === "A";
-    } else if (index === "D" || workTree === "D") {
-      status = "deleted";
-      staged = index === "D";
-    } else if (index === "R" || workTree === "R") {
-      status = "renamed";
-      staged = index === "R";
-    } else if (index === "C" || workTree === "C") {
-      status = "copied";
-      staged = index === "C";
-    } else if (index === "?" && workTree === "?") {
-      status = "untracked";
+    if (index === 'M' || workTree === 'M') {
+      status = 'modified';
+      staged = index === 'M';
+    } else if (index === 'A' || workTree === 'A') {
+      status = 'added';
+      staged = index === 'A';
+    } else if (index === 'D' || workTree === 'D') {
+      status = 'deleted';
+      staged = index === 'D';
+    } else if (index === 'R' || workTree === 'R') {
+      status = 'renamed';
+      staged = index === 'R';
+    } else if (index === 'C' || workTree === 'C') {
+      status = 'copied';
+      staged = index === 'C';
+    } else if (index === '?' && workTree === '?') {
+      status = 'untracked';
       staged = false;
-    } else if (index === "!" && workTree === "!") {
-      status = "ignored";
+    } else if (index === '!' && workTree === '!') {
+      status = 'ignored';
       staged = false;
-    } else if (index === "U" || workTree === "U") {
-      status = "unmerged";
+    } else if (index === 'U' || workTree === 'U') {
+      status = 'unmerged';
       staged = false;
     } else {
       return null;
@@ -501,7 +501,7 @@ export class SmartStatusTool {
    */
   private applyFilters(
     files: FileStatusInfo[],
-    opts: Required<SmartStatusOptions>,
+    opts: Required<SmartStatusOptions>
   ): FileStatusInfo[] {
     let filtered = files;
 
@@ -561,7 +561,7 @@ export class SmartStatusTool {
       // Count staged/unstaged
       if (file.staged) {
         summary.staged++;
-      } else if (file.status !== "untracked" && file.status !== "ignored") {
+      } else if (file.status !== 'untracked' && file.status !== 'ignored') {
         summary.unstaged++;
       }
     }
@@ -578,9 +578,9 @@ export class SmartStatusTool {
         ? `git diff --cached -- "${filePath}"`
         : `git diff -- "${filePath}"`;
 
-      return execSync(command, { cwd, encoding: "utf-8" });
+      return execSync(command, { cwd, encoding: 'utf-8' });
     } catch {
-      return "";
+      return '';
     }
   }
 
@@ -593,17 +593,17 @@ export class SmartStatusTool {
     totalTokensSaved: number;
     averageReduction: number;
   } {
-    const statusMetrics = this.metrics.getOperations(0, "smart_status");
+    const statusMetrics = this.metrics.getOperations(0, 'smart_status');
 
     const totalCalls = statusMetrics.length;
     const cacheHits = statusMetrics.filter((m) => m.cacheHit).length;
     const totalTokensSaved = statusMetrics.reduce(
       (sum, m) => sum + (m.savedTokens || 0),
-      0,
+      0
     );
     const totalInputTokens = statusMetrics.reduce(
       (sum, m) => sum + (m.inputTokens || 0),
-      0,
+      0
     );
     const totalOriginalTokens = totalInputTokens + totalTokensSaved;
 
@@ -627,7 +627,7 @@ export class SmartStatusTool {
 export function getSmartStatusTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metrics: MetricsCollector,
+  metrics: MetricsCollector
 ): SmartStatusTool {
   return new SmartStatusTool(cache, tokenCounter, metrics);
 }
@@ -636,9 +636,9 @@ export function getSmartStatusTool(
  * CLI function - Creates resources and uses factory
  */
 export async function runSmartStatus(
-  options: SmartStatusOptions = {},
+  options: SmartStatusOptions = {}
 ): Promise<SmartStatusResult> {
-  const cache = new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
@@ -650,63 +650,63 @@ export async function runSmartStatus(
  * MCP Tool Definition
  */
 export const SMART_STATUS_TOOL_DEFINITION = {
-  name: "smart_status",
+  name: 'smart_status',
   description:
-    "Get git status with 70% token reduction through status-only output and smart filtering",
+    'Get git status with 70% token reduction through status-only output and smart filtering',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       cwd: {
-        type: "string",
-        description: "Repository directory",
+        type: 'string',
+        description: 'Repository directory',
       },
       statuses: {
-        type: "array",
+        type: 'array',
         items: {
-          type: "string",
+          type: 'string',
           enum: [
-            "modified",
-            "added",
-            "deleted",
-            "renamed",
-            "copied",
-            "untracked",
-            "ignored",
-            "unmerged",
+            'modified',
+            'added',
+            'deleted',
+            'renamed',
+            'copied',
+            'untracked',
+            'ignored',
+            'unmerged',
           ],
         },
-        description: "Filter by specific file statuses",
+        description: 'Filter by specific file statuses',
       },
       filePattern: {
-        type: "string",
-        description: "Filter files by regex pattern",
+        type: 'string',
+        description: 'Filter files by regex pattern',
       },
       summaryOnly: {
-        type: "boolean",
-        description: "Return counts only, not file lists",
+        type: 'boolean',
+        description: 'Return counts only, not file lists',
         default: false,
       },
       includeDetail: {
-        type: "boolean",
-        description: "Include diff output for specific files",
+        type: 'boolean',
+        description: 'Include diff output for specific files',
         default: false,
       },
       detailFiles: {
-        type: "array",
-        items: { type: "string" },
-        description: "Files to include diff for (requires includeDetail)",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Files to include diff for (requires includeDetail)',
       },
       staged: {
-        type: "boolean",
-        description: "Only staged files",
+        type: 'boolean',
+        description: 'Only staged files',
       },
       unstaged: {
-        type: "boolean",
-        description: "Only unstaged files",
+        type: 'boolean',
+        description: 'Only unstaged files',
       },
       limit: {
-        type: "number",
-        description: "Maximum files to return",
+        type: 'number',
+        description: 'Maximum files to return',
       },
     },
   },

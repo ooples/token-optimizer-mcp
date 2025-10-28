@@ -16,12 +16,12 @@
  * - Compressed ACL trees (88% reduction)
  */
 
-import { CacheEngine } from "../../core/cache-engine";
-import { TokenCounter } from "../../core/token-counter";
-import { MetricsCollector } from "../../core/metrics";
-import { exec } from "child_process";
-import { promisify } from "util";
-import * as crypto from "crypto";
+import { CacheEngine } from '../../core/cache-engine.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as crypto from 'crypto';
 
 const execAsync = promisify(exec);
 
@@ -30,14 +30,14 @@ const execAsync = promisify(exec);
 // ===========================
 
 export type UserOperation =
-  | "list-users"
-  | "list-groups"
-  | "check-permissions"
-  | "audit-security"
-  | "get-acl"
-  | "get-user-info"
-  | "get-group-info"
-  | "check-sudo";
+  | 'list-users'
+  | 'list-groups'
+  | 'check-permissions'
+  | 'audit-security'
+  | 'get-acl'
+  | 'get-user-info'
+  | 'get-group-info'
+  | 'check-sudo';
 
 export interface SmartUserOptions {
   operation: UserOperation;
@@ -90,21 +90,21 @@ export interface PermissionInfo {
 }
 
 export interface ACLEntry {
-  type: "user" | "group" | "mask" | "other";
+  type: 'user' | 'group' | 'mask' | 'other';
   name?: string;
   permissions: string;
   isDefault?: boolean;
 }
 
 export interface SecurityIssue {
-  severity: "critical" | "high" | "medium" | "low" | "info";
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
   category:
-    | "permission"
-    | "sudo"
-    | "password"
-    | "group"
-    | "file"
-    | "configuration";
+    | 'permission'
+    | 'sudo'
+    | 'password'
+    | 'group'
+    | 'file'
+    | 'configuration';
   description: string;
   recommendation: string;
   affectedEntity: string;
@@ -167,7 +167,7 @@ export class SmartUser {
   constructor(
     private cache: CacheEngine,
     private tokenCounter: TokenCounter,
-    private metricsCollector: MetricsCollector,
+    private metricsCollector: MetricsCollector
   ) {}
 
   /**
@@ -181,28 +181,28 @@ export class SmartUser {
 
     try {
       switch (operation) {
-        case "list-users":
+        case 'list-users':
           result = await this.listUsers(options);
           break;
-        case "list-groups":
+        case 'list-groups':
           result = await this.listGroups(options);
           break;
-        case "check-permissions":
+        case 'check-permissions':
           result = await this.checkPermissions(options);
           break;
-        case "audit-security":
+        case 'audit-security':
           result = await this.auditSecurity(options);
           break;
-        case "get-acl":
+        case 'get-acl':
           result = await this.getACL(options);
           break;
-        case "get-user-info":
+        case 'get-user-info':
           result = await this.getUserInfo(options);
           break;
-        case "get-group-info":
+        case 'get-group-info':
           result = await this.getGroupInfo(options);
           break;
-        case "check-sudo":
+        case 'check-sudo':
           result = await this.checkSudo(options);
           break;
         default:
@@ -261,7 +261,7 @@ export class SmartUser {
    * List all users with smart caching (95% reduction)
    */
   private async listUsers(options: SmartUserOptions): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash("md5").update(`users-list:include-system:${options.includeSystemUsers}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`users-list:include-system:${options.includeSystemUsers}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache - user list changes infrequently
@@ -273,7 +273,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "list-users",
+          operation: 'list-users',
           data: JSON.parse(cached),
           metadata: {
             tokensUsed,
@@ -298,7 +298,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "list-users",
+      operation: 'list-users',
       data: { users },
       metadata: {
         tokensUsed,
@@ -313,9 +313,9 @@ export class SmartUser {
    * List all groups with smart caching (95% reduction)
    */
   private async listGroups(
-    options: SmartUserOptions,
+    options: SmartUserOptions
   ): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash("md5").update(`groups-list:include-system:${options.includeSystemGroups}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`groups-list:include-system:${options.includeSystemGroups}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -327,7 +327,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "list-groups",
+          operation: 'list-groups',
           data: JSON.parse(cached),
           metadata: {
             tokensUsed,
@@ -341,7 +341,7 @@ export class SmartUser {
 
     // Fetch fresh group list
     const groups = await this.getAllGroups(
-      options.includeSystemGroups || false,
+      options.includeSystemGroups || false
     );
     const dataStr = JSON.stringify({ groups });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
@@ -354,7 +354,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "list-groups",
+      operation: 'list-groups',
       data: { groups },
       metadata: {
         tokensUsed,
@@ -369,13 +369,13 @@ export class SmartUser {
    * Get detailed user information with caching
    */
   private async getUserInfo(
-    options: SmartUserOptions,
+    options: SmartUserOptions
   ): Promise<SmartUserResult> {
     if (!options.username) {
-      throw new Error("Username is required for get-user-info operation");
+      throw new Error('Username is required for get-user-info operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash("md5").update(`user-info:${options.username}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`user-info:${options.username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -387,7 +387,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "get-user-info",
+          operation: 'get-user-info',
           data: JSON.parse(cached),
           metadata: {
             tokensUsed,
@@ -412,7 +412,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "get-user-info",
+      operation: 'get-user-info',
       data: { user },
       metadata: {
         tokensUsed,
@@ -427,13 +427,13 @@ export class SmartUser {
    * Get detailed group information with caching
    */
   private async getGroupInfo(
-    options: SmartUserOptions,
+    options: SmartUserOptions
   ): Promise<SmartUserResult> {
     if (!options.groupname) {
-      throw new Error("Groupname is required for get-group-info operation");
+      throw new Error('Groupname is required for get-group-info operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash("md5").update(`group-info:${options.groupname}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`group-info:${options.groupname}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -445,7 +445,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "get-group-info",
+          operation: 'get-group-info',
           data: JSON.parse(cached),
           metadata: {
             tokensUsed,
@@ -470,7 +470,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "get-group-info",
+      operation: 'get-group-info',
       data: { group },
       metadata: {
         tokensUsed,
@@ -485,14 +485,14 @@ export class SmartUser {
    * Check file/directory permissions with incremental caching (86% reduction)
    */
   private async checkPermissions(
-    options: SmartUserOptions,
+    options: SmartUserOptions
   ): Promise<SmartUserResult> {
     if (!options.path) {
-      throw new Error("Path is required for check-permissions operation");
+      throw new Error('Path is required for check-permissions operation');
     }
 
     const username = options.username || (await this.getCurrentUser());
-    const cacheKey = `cache-${crypto.createHash("md5").update(`permissions:${options.path}:${username}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`permissions:${options.path}:${username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -505,7 +505,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "check-permissions",
+          operation: 'check-permissions',
           data: JSON.parse(dataStr),
           metadata: {
             tokensUsed,
@@ -529,7 +529,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "check-permissions",
+      operation: 'check-permissions',
       data: { permissions },
       metadata: {
         tokensUsed,
@@ -545,10 +545,10 @@ export class SmartUser {
    */
   private async getACL(options: SmartUserOptions): Promise<SmartUserResult> {
     if (!options.path) {
-      throw new Error("Path is required for get-acl operation");
+      throw new Error('Path is required for get-acl operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash("md5").update(`acl:${options.path}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`acl:${options.path}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -561,7 +561,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "get-acl",
+          operation: 'get-acl',
           data: JSON.parse(dataStr),
           metadata: {
             tokensUsed,
@@ -585,7 +585,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "get-acl",
+      operation: 'get-acl',
       data: { acl },
       metadata: {
         tokensUsed,
@@ -601,7 +601,7 @@ export class SmartUser {
    */
   private async checkSudo(options: SmartUserOptions): Promise<SmartUserResult> {
     const username = options.username || (await this.getCurrentUser());
-    const cacheKey = `cache-${crypto.createHash("md5").update(`sudo-check:${username}`).digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update(`sudo-check:${username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -614,7 +614,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "check-sudo",
+          operation: 'check-sudo',
           data: JSON.parse(dataStr),
           metadata: {
             tokensUsed,
@@ -638,7 +638,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "check-sudo",
+      operation: 'check-sudo',
       data: { canSudo },
       metadata: {
         tokensUsed,
@@ -653,9 +653,9 @@ export class SmartUser {
    * Comprehensive security audit with smart caching
    */
   private async auditSecurity(
-    options: SmartUserOptions,
+    options: SmartUserOptions
   ): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash("md5").update("security-audit:full").digest("hex")}`;
+    const cacheKey = `cache-${crypto.createHash('md5').update('security-audit:full').digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache (audit results can be cached for a short period)
@@ -668,7 +668,7 @@ export class SmartUser {
 
         return {
           success: true,
-          operation: "audit-security",
+          operation: 'audit-security',
           data: JSON.parse(dataStr),
           metadata: {
             tokensUsed,
@@ -692,7 +692,7 @@ export class SmartUser {
 
     return {
       success: true,
-      operation: "audit-security",
+      operation: 'audit-security',
       data: { auditReport },
       metadata: {
         tokensUsed,
@@ -714,24 +714,24 @@ export class SmartUser {
     const platform = process.platform;
     const users: UserInfo[] = [];
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows: Use net user command
       try {
-        const { stdout } = await execAsync("net user");
-        const lines = stdout.split("\n");
+        const { stdout } = await execAsync('net user');
+        const lines = stdout.split('\n');
         let inUserSection = false;
 
         for (const line of lines) {
-          if (line.includes("---")) {
+          if (line.includes('---')) {
             inUserSection = true;
             continue;
           }
           if (inUserSection && line.trim()) {
             const usernames = line.trim().split(/\s+/);
             for (const username of usernames) {
-              if (username && !username.includes("command completed")) {
+              if (username && !username.includes('command completed')) {
                 const userInfo = await this.getUserDetails(username).catch(
-                  () => null,
+                  () => null
                 );
                 if (userInfo) {
                   users.push(userInfo);
@@ -742,19 +742,19 @@ export class SmartUser {
         }
       } catch (error) {
         throw new Error(
-          `Failed to list Windows users: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to list Windows users: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     } else {
       // Unix-like systems: Parse /etc/passwd
       try {
-        const { stdout } = await execAsync("getent passwd || cat /etc/passwd");
-        const lines = stdout.split("\n");
+        const { stdout } = await execAsync('getent passwd || cat /etc/passwd');
+        const lines = stdout.split('\n');
 
         for (const line of lines) {
           if (!line.trim()) continue;
 
-          const parts = line.split(":");
+          const parts = line.split(':');
           if (parts.length < 7) continue;
 
           const username = parts[0];
@@ -787,7 +787,7 @@ export class SmartUser {
         }
       } catch (error) {
         throw new Error(
-          `Failed to list Unix users: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to list Unix users: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -802,24 +802,24 @@ export class SmartUser {
     const platform = process.platform;
     const groups: GroupInfo[] = [];
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows: Use net localgroup command
       try {
-        const { stdout } = await execAsync("net localgroup");
-        const lines = stdout.split("\n");
+        const { stdout } = await execAsync('net localgroup');
+        const lines = stdout.split('\n');
         let inGroupSection = false;
 
         for (const line of lines) {
-          if (line.includes("---")) {
+          if (line.includes('---')) {
             inGroupSection = true;
             continue;
           }
           if (inGroupSection && line.trim()) {
             const groupnames = line.trim().split(/\s+/);
             for (const groupname of groupnames) {
-              if (groupname && !groupname.includes("command completed")) {
+              if (groupname && !groupname.includes('command completed')) {
                 const groupInfo = await this.getGroupDetails(groupname).catch(
-                  () => null,
+                  () => null
                 );
                 if (groupInfo) {
                   groups.push(groupInfo);
@@ -830,25 +830,25 @@ export class SmartUser {
         }
       } catch (error) {
         throw new Error(
-          `Failed to list Windows groups: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to list Windows groups: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     } else {
       // Unix-like systems: Parse /etc/group
       try {
-        const { stdout } = await execAsync("getent group || cat /etc/group");
-        const lines = stdout.split("\n");
+        const { stdout } = await execAsync('getent group || cat /etc/group');
+        const lines = stdout.split('\n');
 
         for (const line of lines) {
           if (!line.trim()) continue;
 
-          const parts = line.split(":");
+          const parts = line.split(':');
           if (parts.length < 4) continue;
 
           const groupname = parts[0];
           const gid = parseInt(parts[2]);
           const members = parts[3]
-            ? parts[3].split(",").filter((m) => m.trim())
+            ? parts[3].split(',').filter((m) => m.trim())
             : [];
 
           const isSystemGroup = gid < 1000;
@@ -866,7 +866,7 @@ export class SmartUser {
         }
       } catch (error) {
         throw new Error(
-          `Failed to list Unix groups: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to list Unix groups: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -880,21 +880,21 @@ export class SmartUser {
   private async getUserDetails(username: string): Promise<UserInfo> {
     const platform = process.platform;
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows user details
       try {
         const { stdout } = await execAsync(`net user "${username}"`);
-        const lines = stdout.split("\n");
+        const lines = stdout.split('\n');
 
-        let fullName = "";
+        let fullName = '';
         let accountActive = true;
 
         for (const line of lines) {
-          if (line.includes("Full Name")) {
-            fullName = line.split(/\s{2,}/)[1]?.trim() || "";
+          if (line.includes('Full Name')) {
+            fullName = line.split(/\s{2,}/)[1]?.trim() || '';
           }
-          if (line.includes("Account active")) {
-            accountActive = line.toLowerCase().includes("yes");
+          if (line.includes('Account active')) {
+            accountActive = line.toLowerCase().includes('yes');
           }
         }
 
@@ -908,16 +908,16 @@ export class SmartUser {
         };
       } catch (error) {
         throw new Error(
-          `Failed to get Windows user details: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to get Windows user details: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     } else {
       // Unix user details
       try {
         const { stdout: passwdOut } = await execAsync(
-          `getent passwd "${username}" || grep "^${username}:" /etc/passwd`,
+          `getent passwd "${username}" || grep "^${username}:" /etc/passwd`
         );
-        const parts = passwdOut.trim().split(":");
+        const parts = passwdOut.trim().split(':');
 
         if (parts.length < 7) {
           throw new Error(`Invalid passwd entry for user: ${username}`);
@@ -945,7 +945,7 @@ export class SmartUser {
         };
       } catch (error) {
         throw new Error(
-          `Failed to get Unix user details: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to get Unix user details: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -957,23 +957,23 @@ export class SmartUser {
   private async getGroupDetails(groupname: string): Promise<GroupInfo> {
     const platform = process.platform;
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows group details
       try {
         const { stdout } = await execAsync(`net localgroup "${groupname}"`);
-        const lines = stdout.split("\n");
+        const lines = stdout.split('\n');
         const members: string[] = [];
         let inMemberSection = false;
 
         for (const line of lines) {
-          if (line.includes("---")) {
+          if (line.includes('---')) {
             inMemberSection = true;
             continue;
           }
           if (
             inMemberSection &&
             line.trim() &&
-            !line.includes("command completed")
+            !line.includes('command completed')
           ) {
             const member = line.trim();
             if (member) {
@@ -989,16 +989,16 @@ export class SmartUser {
         };
       } catch (error) {
         throw new Error(
-          `Failed to get Windows group details: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to get Windows group details: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     } else {
       // Unix group details
       try {
         const { stdout } = await execAsync(
-          `getent group "${groupname}" || grep "^${groupname}:" /etc/group`,
+          `getent group "${groupname}" || grep "^${groupname}:" /etc/group`
         );
-        const parts = stdout.trim().split(":");
+        const parts = stdout.trim().split(':');
 
         if (parts.length < 4) {
           throw new Error(`Invalid group entry for: ${groupname}`);
@@ -1006,7 +1006,7 @@ export class SmartUser {
 
         const gid = parseInt(parts[2]);
         const members = parts[3]
-          ? parts[3].split(",").filter((m) => m.trim())
+          ? parts[3].split(',').filter((m) => m.trim())
           : [];
 
         return {
@@ -1017,7 +1017,7 @@ export class SmartUser {
         };
       } catch (error) {
         throw new Error(
-          `Failed to get Unix group details: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to get Unix group details: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -1029,37 +1029,37 @@ export class SmartUser {
   private async getUserGroups(username: string): Promise<string[]> {
     const platform = process.platform;
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows: Extract groups from net user output
       try {
         const { stdout } = await execAsync(`net user "${username}"`);
-        const lines = stdout.split("\n");
+        const lines = stdout.split('\n');
         const groups: string[] = [];
         let inGroupSection = false;
 
         for (const line of lines) {
           if (
-            line.includes("Local Group Memberships") ||
-            line.includes("Global Group memberships")
+            line.includes('Local Group Memberships') ||
+            line.includes('Global Group memberships')
           ) {
             inGroupSection = true;
             const groupMatch = line.match(/\*(.+)/);
             if (groupMatch) {
               groups.push(
                 ...groupMatch[1]
-                  .split("*")
+                  .split('*')
                   .map((g) => g.trim())
-                  .filter((g) => g),
+                  .filter((g) => g)
               );
             }
             continue;
           }
-          if (inGroupSection && line.includes("*")) {
+          if (inGroupSection && line.includes('*')) {
             groups.push(
               ...line
-                .split("*")
+                .split('*')
                 .map((g) => g.trim())
-                .filter((g) => g),
+                .filter((g) => g)
             );
           }
         }
@@ -1084,21 +1084,21 @@ export class SmartUser {
    */
   private async getPermissionInfo(
     path: string,
-    username: string,
+    username: string
   ): Promise<PermissionInfo> {
     const platform = process.platform;
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows permissions (using icacls)
       try {
         const { stdout } = await execAsync(`icacls "${path}"`);
-        const lines = stdout.split("\n");
+        const lines = stdout.split('\n');
 
         return {
           path,
-          owner: "N/A",
-          group: "N/A",
-          permissions: lines[1] || "N/A",
+          owner: 'N/A',
+          group: 'N/A',
+          permissions: lines[1] || 'N/A',
           numericMode: 0,
           canRead: true, // Simplified for Windows
           canWrite: true,
@@ -1106,7 +1106,7 @@ export class SmartUser {
         };
       } catch (error) {
         throw new Error(
-          `Failed to get Windows permissions: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to get Windows permissions: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     } else {
@@ -1124,25 +1124,25 @@ export class SmartUser {
         const permStr = permissions.substring(1); // Remove file type character
 
         // Owner permissions
-        if (permStr[0] === "r") numericMode += 400;
-        if (permStr[1] === "w") numericMode += 200;
-        if (permStr[2] === "x" || permStr[2] === "s") numericMode += 100;
+        if (permStr[0] === 'r') numericMode += 400;
+        if (permStr[1] === 'w') numericMode += 200;
+        if (permStr[2] === 'x' || permStr[2] === 's') numericMode += 100;
 
         // Group permissions
-        if (permStr[3] === "r") numericMode += 40;
-        if (permStr[4] === "w") numericMode += 20;
-        if (permStr[5] === "x" || permStr[5] === "s") numericMode += 10;
+        if (permStr[3] === 'r') numericMode += 40;
+        if (permStr[4] === 'w') numericMode += 20;
+        if (permStr[5] === 'x' || permStr[5] === 's') numericMode += 10;
 
         // Other permissions
-        if (permStr[6] === "r") numericMode += 4;
-        if (permStr[7] === "w") numericMode += 2;
-        if (permStr[8] === "x" || permStr[8] === "t") numericMode += 1;
+        if (permStr[6] === 'r') numericMode += 4;
+        if (permStr[7] === 'w') numericMode += 2;
+        if (permStr[8] === 'x' || permStr[8] === 't') numericMode += 1;
 
         // Check special bits
         const specialBits = {
-          setuid: permStr[2] === "s" || permStr[2] === "S",
-          setgid: permStr[5] === "s" || permStr[5] === "S",
-          sticky: permStr[8] === "t" || permStr[8] === "T",
+          setuid: permStr[2] === 's' || permStr[2] === 'S',
+          setgid: permStr[5] === 's' || permStr[5] === 'S',
+          sticky: permStr[8] === 't' || permStr[8] === 'T',
         };
 
         // Check user's access
@@ -1152,17 +1152,17 @@ export class SmartUser {
         let canExecute = false;
 
         if (username === owner) {
-          canRead = permStr[0] === "r";
-          canWrite = permStr[1] === "w";
-          canExecute = permStr[2] === "x" || permStr[2] === "s";
+          canRead = permStr[0] === 'r';
+          canWrite = permStr[1] === 'w';
+          canExecute = permStr[2] === 'x' || permStr[2] === 's';
         } else if (userGroups.includes(group)) {
-          canRead = permStr[3] === "r";
-          canWrite = permStr[4] === "w";
-          canExecute = permStr[5] === "x" || permStr[5] === "s";
+          canRead = permStr[3] === 'r';
+          canWrite = permStr[4] === 'w';
+          canExecute = permStr[5] === 'x' || permStr[5] === 's';
         } else {
-          canRead = permStr[6] === "r";
-          canWrite = permStr[7] === "w";
-          canExecute = permStr[8] === "x" || permStr[8] === "t";
+          canRead = permStr[6] === 'r';
+          canWrite = permStr[7] === 'w';
+          canExecute = permStr[8] === 'x' || permStr[8] === 't';
         }
 
         return {
@@ -1178,7 +1178,7 @@ export class SmartUser {
         };
       } catch (error) {
         throw new Error(
-          `Failed to get Unix permissions: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to get Unix permissions: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     }
@@ -1190,32 +1190,32 @@ export class SmartUser {
   private async getACLEntries(path: string): Promise<ACLEntry[]> {
     const platform = process.platform;
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows doesn't have traditional ACLs in the same way
       return [];
     }
 
     try {
       const { stdout } = await execAsync(`getfacl "${path}" 2>/dev/null`);
-      const lines = stdout.split("\n");
+      const lines = stdout.split('\n');
       const entries: ACLEntry[] = [];
 
       for (const line of lines) {
-        if (!line.trim() || line.startsWith("#")) continue;
+        if (!line.trim() || line.startsWith('#')) continue;
 
-        const parts = line.split(":");
+        const parts = line.split(':');
         if (parts.length < 3) continue;
 
-        const isDefault = parts[0] === "default";
+        const isDefault = parts[0] === 'default';
         const typeStr = isDefault ? parts[1] : parts[0];
         const name = isDefault ? parts[2] : parts[1];
         const permissions = isDefault ? parts[3] : parts[2];
 
-        let type: "user" | "group" | "mask" | "other";
-        if (typeStr === "user") type = "user";
-        else if (typeStr === "group") type = "group";
-        else if (typeStr === "mask") type = "mask";
-        else type = "other";
+        let type: 'user' | 'group' | 'mask' | 'other';
+        if (typeStr === 'user') type = 'user';
+        else if (typeStr === 'group') type = 'group';
+        else if (typeStr === 'mask') type = 'mask';
+        else type = 'other';
 
         entries.push({
           type,
@@ -1238,11 +1238,11 @@ export class SmartUser {
   private async canUserSudo(username: string): Promise<boolean> {
     const platform = process.platform;
 
-    if (platform === "win32") {
+    if (platform === 'win32') {
       // Windows: Check if user is in Administrators group
       try {
         const { stdout } = await execAsync(`net user "${username}"`);
-        return stdout.toLowerCase().includes("administrators");
+        return stdout.toLowerCase().includes('administrators');
       } catch {
         return false;
       }
@@ -1253,9 +1253,9 @@ export class SmartUser {
 
         // Check for common sudo groups
         if (
-          groups.includes("sudo") ||
-          groups.includes("wheel") ||
-          groups.includes("admin")
+          groups.includes('sudo') ||
+          groups.includes('wheel') ||
+          groups.includes('admin')
         ) {
           return true;
         }
@@ -1263,9 +1263,9 @@ export class SmartUser {
         // Check sudoers file (requires sudo access)
         try {
           const { stdout } = await execAsync(
-            `sudo -l -U "${username}" 2>/dev/null`,
+            `sudo -l -U "${username}" 2>/dev/null`
           );
-          return !stdout.includes("not allowed");
+          return !stdout.includes('not allowed');
         } catch {
           return false;
         }
@@ -1281,11 +1281,11 @@ export class SmartUser {
   private async getCurrentUser(): Promise<string> {
     const platform = process.platform;
 
-    if (platform === "win32") {
-      const { stdout } = await execAsync("echo %USERNAME%");
+    if (platform === 'win32') {
+      const { stdout } = await execAsync('echo %USERNAME%');
       return stdout.trim();
     } else {
-      const { stdout } = await execAsync("whoami");
+      const { stdout } = await execAsync('whoami');
       return stdout.trim();
     }
   }
@@ -1315,27 +1315,27 @@ export class SmartUser {
       // Check for sudo users
       if (user.isSudoer && !user.isSystemUser) {
         issues.push({
-          severity: "medium",
-          category: "sudo",
+          severity: 'medium',
+          category: 'sudo',
           description: `User ${user.username} has sudo privileges`,
-          recommendation: "Review sudo access and ensure it is necessary",
+          recommendation: 'Review sudo access and ensure it is necessary',
           affectedEntity: user.username,
         });
       }
 
       // Check for users with no password (Unix only)
-      if (process.platform !== "win32") {
+      if (process.platform !== 'win32') {
         try {
           const { stdout } = await execAsync(
-            `passwd -S "${user.username}" 2>/dev/null`,
+            `passwd -S "${user.username}" 2>/dev/null`
           );
-          if (stdout.includes("NP")) {
+          if (stdout.includes('NP')) {
             noPasswordCount++;
             issues.push({
-              severity: "critical",
-              category: "password",
+              severity: 'critical',
+              category: 'password',
               description: `User ${user.username} has no password set`,
-              recommendation: "Set a strong password for this user account",
+              recommendation: 'Set a strong password for this user account',
               affectedEntity: user.username,
             });
           }
@@ -1356,19 +1356,19 @@ export class SmartUser {
 
       // Check privileged groups
       if (
-        ["sudo", "wheel", "admin", "root", "administrators"].includes(
-          group.groupname.toLowerCase(),
+        ['sudo', 'wheel', 'admin', 'root', 'administrators'].includes(
+          group.groupname.toLowerCase()
         )
       ) {
         privilegedGroupCount++;
 
         if (group.members.length > 3) {
           issues.push({
-            severity: "medium",
-            category: "group",
+            severity: 'medium',
+            category: 'group',
             description: `Privileged group ${group.groupname} has ${group.members.length} members`,
             recommendation:
-              "Review group membership and remove unnecessary users",
+              'Review group membership and remove unnecessary users',
             affectedEntity: group.groupname,
             details: { members: group.members },
           });
@@ -1377,24 +1377,24 @@ export class SmartUser {
     }
 
     // Check for world-writable directories (Unix only)
-    if (process.platform !== "win32") {
+    if (process.platform !== 'win32') {
       try {
         const { stdout } = await execAsync(
-          "find /tmp /var/tmp -type d -perm -002 -ls 2>/dev/null | head -20",
+          'find /tmp /var/tmp -type d -perm -002 -ls 2>/dev/null | head -20'
         );
         const worldWritableDirs = stdout
           .trim()
-          .split("\n")
+          .split('\n')
           .filter((l) => l.trim());
 
         if (worldWritableDirs.length > 0) {
           issues.push({
-            severity: "medium",
-            category: "file",
+            severity: 'medium',
+            category: 'file',
             description: `Found ${worldWritableDirs.length} world-writable directories`,
             recommendation:
-              "Review and restrict permissions on world-writable directories",
-            affectedEntity: "filesystem",
+              'Review and restrict permissions on world-writable directories',
+            affectedEntity: 'filesystem',
             details: { count: worldWritableDirs.length },
           });
         }
@@ -1406,35 +1406,35 @@ export class SmartUser {
     // Generate recommendations
     if (sudoerCount > users.length * 0.2) {
       recommendations.push(
-        "Consider reducing the number of users with sudo access",
+        'Consider reducing the number of users with sudo access'
       );
     }
 
     if (noPasswordCount > 0) {
-      recommendations.push("Ensure all user accounts have strong passwords");
+      recommendations.push('Ensure all user accounts have strong passwords');
     }
 
     if (emptyGroupCount > groups.length * 0.3) {
-      recommendations.push("Clean up empty groups to reduce attack surface");
+      recommendations.push('Clean up empty groups to reduce attack surface');
     }
 
     recommendations.push(
-      "Regularly review user permissions and group memberships",
+      'Regularly review user permissions and group memberships'
     );
     recommendations.push(
-      "Enable and monitor audit logging for security events",
+      'Enable and monitor audit logging for security events'
     );
-    recommendations.push("Implement password complexity requirements");
-    recommendations.push("Use SSH keys instead of passwords where possible");
+    recommendations.push('Implement password complexity requirements');
+    recommendations.push('Use SSH keys instead of passwords where possible');
 
     // Calculate issue counts by severity
     const summary = {
       totalIssues: issues.length,
-      critical: issues.filter((i) => i.severity === "critical").length,
-      high: issues.filter((i) => i.severity === "high").length,
-      medium: issues.filter((i) => i.severity === "medium").length,
-      low: issues.filter((i) => i.severity === "low").length,
-      info: issues.filter((i) => i.severity === "info").length,
+      critical: issues.filter((i) => i.severity === 'critical').length,
+      high: issues.filter((i) => i.severity === 'high').length,
+      medium: issues.filter((i) => i.severity === 'medium').length,
+      low: issues.filter((i) => i.severity === 'low').length,
+      info: issues.filter((i) => i.severity === 'info').length,
     };
 
     return {
@@ -1464,7 +1464,7 @@ export class SmartUser {
 export function getSmartUser(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  metricsCollector: MetricsCollector,
+  metricsCollector: MetricsCollector
 ): SmartUser {
   return new SmartUser(cache, tokenCounter, metricsCollector);
 }
@@ -1477,20 +1477,20 @@ export async function runSmartUser(
   options: SmartUserOptions,
   cache?: CacheEngine,
   tokenCounter?: TokenCounter,
-  metricsCollector?: MetricsCollector,
+  metricsCollector?: MetricsCollector
 ): Promise<SmartUserResult> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
   const cacheInstance =
-    cache || new CacheEngine(join(homedir(), ".hypercontext", "cache"), 100);
+    cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
   const metricsInstance = metricsCollector || new MetricsCollector();
 
   const tool = getSmartUser(
     cacheInstance,
     tokenCounterInstance,
-    metricsInstance,
+    metricsInstance
   );
   return await tool.run(options);
 }
@@ -1500,59 +1500,59 @@ export async function runSmartUser(
 // ===========================
 
 export const SMART_USER_TOOL_DEFINITION = {
-  name: "smart_user",
+  name: 'smart_user',
   description:
-    "Intelligent user and permission management with smart caching (86%+ token reduction). Manage users, groups, permissions, ACLs, and perform security audits across Windows, Linux, and macOS.",
+    'Intelligent user and permission management with smart caching (86%+ token reduction). Manage users, groups, permissions, ACLs, and perform security audits across Windows, Linux, and macOS.',
   inputSchema: {
-    type: "object" as const,
+    type: 'object' as const,
     properties: {
       operation: {
-        type: "string" as const,
+        type: 'string' as const,
         enum: [
-          "list-users",
-          "list-groups",
-          "check-permissions",
-          "audit-security",
-          "get-acl",
-          "get-user-info",
-          "get-group-info",
-          "check-sudo",
+          'list-users',
+          'list-groups',
+          'check-permissions',
+          'audit-security',
+          'get-acl',
+          'get-user-info',
+          'get-group-info',
+          'check-sudo',
         ],
-        description: "User/permission operation to perform",
+        description: 'User/permission operation to perform',
       },
       username: {
-        type: "string" as const,
-        description: "Username for user-specific operations",
+        type: 'string' as const,
+        description: 'Username for user-specific operations',
       },
       groupname: {
-        type: "string" as const,
-        description: "Group name for group-specific operations",
+        type: 'string' as const,
+        description: 'Group name for group-specific operations',
       },
       path: {
-        type: "string" as const,
+        type: 'string' as const,
         description:
-          "File/directory path for permission checks and ACL operations",
+          'File/directory path for permission checks and ACL operations',
       },
       includeSystemUsers: {
-        type: "boolean" as const,
-        description: "Include system users in user listings (default: false)",
+        type: 'boolean' as const,
+        description: 'Include system users in user listings (default: false)',
         default: false,
       },
       includeSystemGroups: {
-        type: "boolean" as const,
-        description: "Include system groups in group listings (default: false)",
+        type: 'boolean' as const,
+        description: 'Include system groups in group listings (default: false)',
         default: false,
       },
       useCache: {
-        type: "boolean" as const,
-        description: "Use cached results when available (default: true)",
+        type: 'boolean' as const,
+        description: 'Use cached results when available (default: true)',
         default: true,
       },
       ttl: {
-        type: "number" as const,
-        description: "Cache TTL in seconds (default: varies by operation)",
+        type: 'number' as const,
+        description: 'Cache TTL in seconds (default: varies by operation)',
       },
     },
-    required: ["operation"],
+    required: ['operation'],
   },
 };

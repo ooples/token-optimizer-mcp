@@ -10,12 +10,12 @@
  * - File hash-based invalidation
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import { createHash } from "crypto";
-import { CacheEngine } from "../../core/cache-engine.js";
-import type { TokenCounter } from "../../core/token-counter.js";
-import type { MetricsCollector } from "../../core/metrics.js";
+import * as fs from 'fs';
+import * as path from 'path';
+import { createHash } from 'crypto';
+import { CacheEngine } from '../../core/cache-engine.js';
+import type { TokenCounter } from '../../core/token-counter.js';
+import type { MetricsCollector } from '../../core/metrics.js';
 
 // ===========================
 // Types & Interfaces
@@ -114,7 +114,7 @@ export class SmartEnv {
             duration: executionTime,
             success: true,
             cacheHit: true,
-            savedTokens: cached.metadata.tokensUsed
+            savedTokens: cached.metadata.tokensUsed,
           });
           return cached;
         }
@@ -143,13 +143,14 @@ export class SmartEnv {
         duration: executionTime,
         success: true,
         cacheHit: false,
-        savedTokens: 0
+        savedTokens: 0,
       });
 
       return result;
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       this.metrics.record({
         operation: 'smart-env',
@@ -157,7 +158,7 @@ export class SmartEnv {
         success: false,
         cacheHit: false,
         savedTokens: 0,
-        metadata: { error: errorMessage }
+        metadata: { error: errorMessage },
       });
 
       return {
@@ -167,14 +168,14 @@ export class SmartEnv {
           total: 0,
           loaded: 0,
           empty: 0,
-          commented: 0
+          commented: 0,
         },
         metadata: {
           cached: false,
           tokensUsed: 0,
           tokensSaved: 0,
-          executionTime
-        }
+          executionTime,
+        },
       };
     }
   }
@@ -239,8 +240,9 @@ export class SmartEnv {
       let value = match[2];
 
       // Check for quotes
-      const hasQuotes = (value.startsWith('"') && value.endsWith('"')) ||
-                        (value.startsWith("'") && value.endsWith("'"));
+      const hasQuotes =
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"));
 
       // Remove quotes if present
       if (hasQuotes) {
@@ -258,7 +260,7 @@ export class SmartEnv {
         value,
         line: lineNumber,
         hasQuotes,
-        isEmpty: value.length === 0
+        isEmpty: value.length === 0,
       });
     }
 
@@ -279,14 +281,20 @@ export class SmartEnv {
 
     // Count variable types
     const total = parsed.length;
-    const loaded = parsed.filter(v => !v.isEmpty).length;
-    const empty = parsed.filter(v => v.isEmpty).length;
-    const commented = content.split('\n').filter(line => line.trim().startsWith('#')).length;
+    const loaded = parsed.filter((v) => !v.isEmpty).length;
+    const empty = parsed.filter((v) => v.isEmpty).length;
+    const commented = content
+      .split('\n')
+      .filter((line) => line.trim().startsWith('#')).length;
 
     // Check for missing required variables
     let missing: MissingVariable[] | undefined;
     if (options.suggestMissing) {
-      missing = this.detectMissingVariables(parsed, environment, options.requiredVars);
+      missing = this.detectMissingVariables(
+        parsed,
+        environment,
+        options.requiredVars
+      );
     }
 
     // Security analysis
@@ -296,7 +304,12 @@ export class SmartEnv {
     }
 
     // Generate suggestions
-    const suggestions = this.generateSuggestions(parsed, environment, missing, security);
+    const suggestions = this.generateSuggestions(
+      parsed,
+      environment,
+      missing,
+      security
+    );
 
     // Calculate token usage
     const fullResult = {
@@ -305,7 +318,7 @@ export class SmartEnv {
       parsed,
       missing,
       security,
-      suggestions
+      suggestions,
     };
 
     const fullJson = JSON.stringify(fullResult);
@@ -315,8 +328,10 @@ export class SmartEnv {
     const compactResult = {
       environment,
       variables: { total, loaded, empty },
-      security: security ? { score: security.score, issueCount: security.issues.length } : undefined,
-      missingCount: missing?.length || 0
+      security: security
+        ? { score: security.score, issueCount: security.issues.length }
+        : undefined,
+      missingCount: missing?.length || 0,
     };
     const compactJson = JSON.stringify(compactResult);
     const compactTokens = this.tokenCounter.count(compactJson).tokens;
@@ -336,8 +351,8 @@ export class SmartEnv {
         cached: false,
         tokensUsed: compactTokens,
         tokensSaved,
-        executionTime: 0 // Will be set by caller
-      }
+        executionTime: 0, // Will be set by caller
+      },
     };
   }
 
@@ -345,22 +360,29 @@ export class SmartEnv {
    * Detect environment type from variable names
    */
   private detectEnvironment(parsed: EnvVariable[]): string {
-    const keys = parsed.map(v => v.key.toLowerCase());
+    const keys = parsed.map((v) => v.key.toLowerCase());
 
     // Check for explicit environment variable
-    const envVar = parsed.find(v => v.key === 'NODE_ENV' || v.key === 'ENVIRONMENT' || v.key === 'ENV');
+    const envVar = parsed.find(
+      (v) => v.key === 'NODE_ENV' || v.key === 'ENVIRONMENT' || v.key === 'ENV'
+    );
     if (envVar) {
       return envVar.value.toLowerCase();
     }
 
     // Heuristic detection
-    if (keys.some(k => k.includes('prod') || k.includes('production'))) {
+    if (keys.some((k) => k.includes('prod') || k.includes('production'))) {
       return 'production';
     }
-    if (keys.some(k => k.includes('stag') || k.includes('staging'))) {
+    if (keys.some((k) => k.includes('stag') || k.includes('staging'))) {
       return 'staging';
     }
-    if (keys.some(k => k.includes('dev') || k.includes('development') || k.includes('local'))) {
+    if (
+      keys.some(
+        (k) =>
+          k.includes('dev') || k.includes('development') || k.includes('local')
+      )
+    ) {
       return 'development';
     }
 
@@ -375,7 +397,7 @@ export class SmartEnv {
     environment: string,
     requiredVars?: string[]
   ): MissingVariable[] {
-    const existing = new Set(parsed.map(v => v.key));
+    const existing = new Set(parsed.map((v) => v.key));
     const missing: MissingVariable[] = [];
 
     // Check user-specified required variables
@@ -385,7 +407,7 @@ export class SmartEnv {
           missing.push({
             name: varName,
             description: `Required variable not found`,
-            required: true
+            required: true,
           });
         }
       }
@@ -399,7 +421,7 @@ export class SmartEnv {
           name: varName,
           description: info.description,
           defaultValue: info.defaultValue,
-          required: info.required
+          required: info.required,
         });
       }
     }
@@ -410,37 +432,40 @@ export class SmartEnv {
   /**
    * Get common variables for environment type
    */
-  private getCommonVariables(environment: string): Record<string, {
-    description: string;
-    defaultValue?: string;
-    required: boolean;
-  }> {
+  private getCommonVariables(environment: string): Record<
+    string,
+    {
+      description: string;
+      defaultValue?: string;
+      required: boolean;
+    }
+  > {
     const common: Record<string, any> = {
       NODE_ENV: {
         description: 'Node.js environment mode',
         defaultValue: environment,
-        required: true
+        required: true,
       },
       PORT: {
         description: 'Application port',
         defaultValue: '3000',
-        required: false
+        required: false,
       },
       LOG_LEVEL: {
         description: 'Logging level (error, warn, info, debug)',
         defaultValue: environment === 'production' ? 'warn' : 'debug',
-        required: false
-      }
+        required: false,
+      },
     };
 
     if (environment === 'production') {
       common.REDIS_URL = {
         description: 'Redis connection URL',
-        required: true
+        required: true,
       };
       common.DATABASE_URL = {
         description: 'Database connection URL',
-        required: true
+        required: true,
       };
     }
 
@@ -460,13 +485,24 @@ export class SmartEnv {
 
     // Security patterns
     const secretPatterns = [
-      { pattern: /secret|password|pwd|key|token|api_key/i, severity: 'critical' as const },
-      { pattern: /private|credential|auth/i, severity: 'high' as const }
+      {
+        pattern: /secret|password|pwd|key|token|api_key/i,
+        severity: 'critical' as const,
+      },
+      { pattern: /private|credential|auth/i, severity: 'high' as const },
     ];
 
     const weakValuePatterns = [
-      { pattern: /^(password|secret|admin|root|12345|test)$/i, name: 'weak value', severity: 'critical' as const },
-      { pattern: /^(true|false|yes|no)$/i, name: 'boolean as string', severity: 'low' as const }
+      {
+        pattern: /^(password|secret|admin|root|12345|test)$/i,
+        name: 'weak value',
+        severity: 'critical' as const,
+      },
+      {
+        pattern: /^(true|false|yes|no)$/i,
+        name: 'boolean as string',
+        severity: 'low' as const,
+      },
     ];
 
     for (const variable of parsed) {
@@ -481,8 +517,9 @@ export class SmartEnv {
               severity: 'high',
               variable: variable.key,
               issue: 'Short secret value (less than 16 characters)',
-              recommendation: 'Use a strong, randomly generated value of at least 32 characters',
-              line: variable.line
+              recommendation:
+                'Use a strong, randomly generated value of at least 32 characters',
+              line: variable.line,
             });
             score -= 10;
           }
@@ -494,8 +531,9 @@ export class SmartEnv {
                 severity: 'critical',
                 variable: variable.key,
                 issue: `Weak or common ${weakPattern.name}: "${variable.value}"`,
-                recommendation: 'Use a strong, unique value. Never use default or test values in production',
-                line: variable.line
+                recommendation:
+                  'Use a strong, unique value. Never use default or test values in production',
+                line: variable.line,
               });
               score -= 20;
             }
@@ -510,20 +548,23 @@ export class SmartEnv {
           variable: variable.key,
           issue: 'Secret variable is empty',
           recommendation: 'Provide a secure value for this variable',
-          line: variable.line
+          line: variable.line,
         });
         score -= 15;
       }
 
       // Check for hardcoded URLs in production
       if (environment === 'production') {
-        if (variable.value.includes('localhost') || variable.value.includes('127.0.0.1')) {
+        if (
+          variable.value.includes('localhost') ||
+          variable.value.includes('127.0.0.1')
+        ) {
           issues.push({
             severity: 'critical',
             variable: variable.key,
             issue: 'Localhost URL in production environment',
             recommendation: 'Use production-ready URLs',
-            line: variable.line
+            line: variable.line,
           });
           score -= 25;
         }
@@ -535,8 +576,9 @@ export class SmartEnv {
           severity: 'medium',
           variable: variable.key,
           issue: 'Value contains special characters without quotes',
-          recommendation: 'Wrap value in quotes to prevent shell interpretation',
-          line: variable.line
+          recommendation:
+            'Wrap value in quotes to prevent shell interpretation',
+          line: variable.line,
         });
         score -= 5;
       }
@@ -544,13 +586,13 @@ export class SmartEnv {
 
     // Check for missing security-critical variables in production
     if (environment === 'production') {
-      const hasHttps = parsed.some(v => v.value.startsWith('https://'));
+      const hasHttps = parsed.some((v) => v.value.startsWith('https://'));
       if (!hasHttps) {
         issues.push({
           severity: 'high',
           variable: 'HTTPS URLs',
           issue: 'No HTTPS URLs detected in production',
-          recommendation: 'Use HTTPS for all external services in production'
+          recommendation: 'Use HTTPS for all external services in production',
         });
         score -= 10;
       }
@@ -559,7 +601,7 @@ export class SmartEnv {
     return {
       score: Math.max(0, score),
       issues: issues.slice(0, 10), // Limit to top 10
-      hasSecrets
+      hasSecrets,
     };
   }
 
@@ -576,10 +618,10 @@ export class SmartEnv {
 
     // Missing variables
     if (missing && missing.length > 0) {
-      const requiredMissing = missing.filter(m => m.required);
+      const requiredMissing = missing.filter((m) => m.required);
       if (requiredMissing.length > 0) {
         suggestions.push(
-          `Add ${requiredMissing.length} required variable(s): ${requiredMissing.map(m => m.name).join(', ')}`
+          `Add ${requiredMissing.length} required variable(s): ${requiredMissing.map((m) => m.name).join(', ')}`
         );
       }
     }
@@ -593,19 +635,23 @@ export class SmartEnv {
 
     // Environment-specific suggestions
     if (environment === 'production') {
-      const hasBackup = parsed.some(v => v.key.includes('BACKUP'));
+      const hasBackup = parsed.some((v) => v.key.includes('BACKUP'));
       if (!hasBackup) {
         suggestions.push('Consider adding backup configuration for production');
       }
 
-      const hasMonitoring = parsed.some(v => v.key.includes('MONITORING') || v.key.includes('SENTRY'));
+      const hasMonitoring = parsed.some(
+        (v) => v.key.includes('MONITORING') || v.key.includes('SENTRY')
+      );
       if (!hasMonitoring) {
-        suggestions.push('Consider adding monitoring/error tracking configuration');
+        suggestions.push(
+          'Consider adding monitoring/error tracking configuration'
+        );
       }
     }
 
     // Empty variables
-    const emptyVars = parsed.filter(v => v.isEmpty);
+    const emptyVars = parsed.filter((v) => v.isEmpty);
     if (emptyVars.length > 0) {
       suggestions.push(
         `${emptyVars.length} variable(s) are empty. Provide values or remove unused variables`
@@ -630,7 +676,7 @@ export class SmartEnv {
       checkSecurity: options.checkSecurity,
       suggestMissing: options.suggestMissing,
       environment: options.environment,
-      requiredVars: options.requiredVars
+      requiredVars: options.requiredVars,
     };
     const hash = createHash('md5')
       .update('smart_env' + JSON.stringify(keyData))
@@ -641,12 +687,17 @@ export class SmartEnv {
   /**
    * Get cached result
    */
-  private async getCached(key: string, ttl: number): Promise<SmartEnvResult | null> {
+  private async getCached(
+    key: string,
+    ttl: number
+  ): Promise<SmartEnvResult | null> {
     const cached = await this.cache.get(key);
     if (!cached) return null;
 
     try {
-      const result = JSON.parse(cached) as SmartEnvResult & { timestamp: number };
+      const result = JSON.parse(cached) as SmartEnvResult & {
+        timestamp: number;
+      };
       const age = Date.now() - result.timestamp;
 
       if (age > ttl * 1000) {
@@ -664,7 +715,10 @@ export class SmartEnv {
   /**
    * Cache result
    */
-  private async cacheResult(key: string, result: SmartEnvResult): Promise<void> {
+  private async cacheResult(
+    key: string,
+    result: SmartEnvResult
+  ): Promise<void> {
     const cacheData = { ...result, timestamp: Date.now() };
     const serialized = JSON.stringify(cacheData);
     const originalSize = Buffer.byteLength(serialized, 'utf-8');
@@ -691,13 +745,16 @@ export function getSmartEnv(
 export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
-  const { globalTokenCounter, globalMetricsCollector } = await import('../../core/globals.js');
+  const { TokenCounter } = await import('../../core/token-counter.js');
+  const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngine(
     join(homedir(), '.token-optimizer-cache', 'cache.db')
   );
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
 
-  const tool = getSmartEnv(cache, globalTokenCounter, globalMetricsCollector);
+  const tool = getSmartEnv(cache, tokenCounter, metrics);
   const result = await tool.run(options);
 
   return JSON.stringify(result, null, 2);
@@ -709,48 +766,49 @@ export async function runSmartEnv(options: SmartEnvOptions): Promise<string> {
 
 export const SMART_ENV_TOOL_DEFINITION = {
   name: 'smart_env',
-  description: 'Smart environment variable analyzer with security checking and suggestions (83% token reduction)',
+  description:
+    'Smart environment variable analyzer with security checking and suggestions (83% token reduction)',
   inputSchema: {
     type: 'object' as const,
     properties: {
       envFile: {
         type: 'string',
-        description: 'Path to .env file (default: .env in current directory)'
+        description: 'Path to .env file (default: .env in current directory)',
       },
       envContent: {
         type: 'string',
-        description: 'Direct .env file content (alternative to envFile)'
+        description: 'Direct .env file content (alternative to envFile)',
       },
       checkSecurity: {
         type: 'boolean',
         description: 'Analyze security issues (default: false)',
-        default: false
+        default: false,
       },
       suggestMissing: {
         type: 'boolean',
         description: 'Suggest missing common variables (default: false)',
-        default: false
+        default: false,
       },
       environment: {
         type: 'string',
         enum: ['development', 'staging', 'production'],
-        description: 'Environment type (auto-detected if not specified)'
+        description: 'Environment type (auto-detected if not specified)',
       },
       requiredVars: {
         type: 'array',
         items: { type: 'string' },
-        description: 'List of required variable names'
+        description: 'List of required variable names',
       },
       force: {
         type: 'boolean',
         description: 'Force fresh analysis, bypass cache (default: false)',
-        default: false
+        default: false,
       },
       ttl: {
         type: 'number',
         description: 'Cache TTL in seconds (default: 3600)',
-        default: 3600
-      }
-    }
-  }
+        default: 3600,
+      },
+    },
+  },
 };

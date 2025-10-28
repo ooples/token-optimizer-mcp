@@ -8,14 +8,14 @@
  * - Suggestion prioritization
  */
 
-import { spawn } from "child_process";
-import { CacheEngine } from "../../core/cache-engine";
-import { MetricsCollector } from "../../core/metrics";
-import { TokenCounter } from "../../core/token-counter";
-import { createHash } from "crypto";
-import { readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { spawn } from 'child_process';
+import { CacheEngine } from '../../core/cache-engine.js';
+import { MetricsCollector } from '../../core/metrics.js';
+import { TokenCounter } from '../../core/token-counter.js';
+import { createHash } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 interface TypeCheckError {
   file: string;
@@ -79,7 +79,7 @@ interface SmartTypeCheckOutput {
   errorsByCategory: Array<{
     category: string;
     count: number;
-    severity: "critical" | "high" | "medium" | "low";
+    severity: 'critical' | 'high' | 'medium' | 'low';
     errors: Array<{
       file: string;
       location: string;
@@ -92,7 +92,7 @@ interface SmartTypeCheckOutput {
    * Ranked suggestions (most impactful first)
    */
   suggestions: Array<{
-    type: "fix" | "refactor" | "config";
+    type: 'fix' | 'refactor' | 'config';
     priority: number;
     message: string;
     impact: string;
@@ -110,14 +110,14 @@ interface SmartTypeCheckOutput {
 
 export class SmartTypeCheck {
   private cache: CacheEngine;
-  private cacheNamespace = "smart_typecheck";
+  private cacheNamespace = 'smart_typecheck';
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
     _tokenCounter: TokenCounter,
     _metrics: MetricsCollector,
-    projectRoot?: string,
+    projectRoot?: string
   ) {
     this.cache = cache;
     this.projectRoot = projectRoot || process.cwd();
@@ -127,12 +127,12 @@ export class SmartTypeCheck {
    * Run type check with smart caching and output reduction
    */
   async run(
-    options: SmartTypeCheckOptions = {},
+    options: SmartTypeCheckOptions = {}
   ): Promise<SmartTypeCheckOutput> {
     const {
       force = false,
       watch = false,
-      tsconfig = "tsconfig.json",
+      tsconfig = 'tsconfig.json',
       maxCacheAge = 3600,
     } = options;
 
@@ -175,33 +175,33 @@ export class SmartTypeCheck {
     watch: boolean;
   }): Promise<TypeCheckResult> {
     const args = [
-      "--project",
+      '--project',
       options.tsconfig,
-      "--noEmit", // Type check only, don't emit files
+      '--noEmit', // Type check only, don't emit files
     ];
 
     if (options.watch) {
-      args.push("--watch");
+      args.push('--watch');
     }
 
     return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
+      let stdout = '';
+      let stderr = '';
 
-      const tsc = spawn("npx", ["tsc", ...args], {
+      const tsc = spawn('npx', ['tsc', ...args], {
         cwd: this.projectRoot,
         shell: true,
       });
 
-      tsc.stdout.on("data", (data) => {
+      tsc.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      tsc.stderr.on("data", (data) => {
+      tsc.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      tsc.on("close", (code) => {
+      tsc.on('close', (code) => {
         const output = stdout + stderr;
         const errors = this.parseTypeCheckOutput(output);
 
@@ -214,7 +214,7 @@ export class SmartTypeCheck {
         });
       });
 
-      tsc.on("error", (err) => {
+      tsc.on('error', (err) => {
         reject(err);
       });
     });
@@ -225,12 +225,12 @@ export class SmartTypeCheck {
    */
   private parseTypeCheckOutput(output: string): TypeCheckError[] {
     const errors: TypeCheckError[] = [];
-    const lines = output.split("\n");
+    const lines = output.split('\n');
 
     for (const line of lines) {
       // Match TypeScript error format: file.ts(line,col): error TSxxxx: message
       const match = line.match(
-        /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$/,
+        /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$/
       );
       if (match) {
         const code = match[4];
@@ -254,46 +254,46 @@ export class SmartTypeCheck {
   private categorizeError(code: string, message: string): string {
     const categories: Record<string, string> = {
       // Type errors
-      TS2322: "Type Assignment",
-      TS2345: "Type Argument",
-      TS2339: "Property Access",
-      TS2304: "Name Not Found",
-      TS2551: "Property Does Not Exist",
-      TS2571: "Object Type Unknown",
+      TS2322: 'Type Assignment',
+      TS2345: 'Type Argument',
+      TS2339: 'Property Access',
+      TS2304: 'Name Not Found',
+      TS2551: 'Property Does Not Exist',
+      TS2571: 'Object Type Unknown',
 
       // Import/Module errors
-      TS2307: "Module Resolution",
-      TS2305: "Module Export",
-      TS2306: "Module Not Found",
+      TS2307: 'Module Resolution',
+      TS2305: 'Module Export',
+      TS2306: 'Module Not Found',
 
       // Function/Method errors
-      TS2554: "Function Arguments",
-      TS2555: "Function Overload",
-      TS2556: "Function This Type",
+      TS2554: 'Function Arguments',
+      TS2555: 'Function Overload',
+      TS2556: 'Function This Type',
 
       // Declaration errors
-      TS2300: "Duplicate Identifier",
-      TS2451: "Redeclare Block Variable",
-      TS2403: "Subsequent Variable Declaration",
+      TS2300: 'Duplicate Identifier',
+      TS2451: 'Redeclare Block Variable',
+      TS2403: 'Subsequent Variable Declaration',
 
       // Generic errors
-      TS2314: "Generic Type Arguments",
-      TS2315: "Generic Type Parameters",
-      TS2344: "Generic Type Constraint",
+      TS2314: 'Generic Type Arguments',
+      TS2315: 'Generic Type Parameters',
+      TS2344: 'Generic Type Constraint',
 
       // Any/Unknown errors
-      TS7006: "Implicit Any Parameter",
-      TS7019: "Implicit Any Rest Parameter",
-      TS7023: "Implicit Any Contextual",
-      TS7034: "Implicit Any Variable",
+      TS7006: 'Implicit Any Parameter',
+      TS7019: 'Implicit Any Rest Parameter',
+      TS7023: 'Implicit Any Contextual',
+      TS7034: 'Implicit Any Variable',
 
       // Null/Undefined errors
-      TS2531: "Possibly Null",
-      TS2532: "Possibly Undefined",
-      TS2533: "Possibly Null or Undefined",
-      TS2538: "Type Undefined",
-      TS2722: "Cannot Invoke Possibly Undefined",
-      TS2790: "Possibly Undefined in Optional Chaining",
+      TS2531: 'Possibly Null',
+      TS2532: 'Possibly Undefined',
+      TS2533: 'Possibly Null or Undefined',
+      TS2538: 'Type Undefined',
+      TS2722: 'Cannot Invoke Possibly Undefined',
+      TS2790: 'Possibly Undefined in Optional Chaining',
     };
 
     const category = categories[code];
@@ -302,17 +302,17 @@ export class SmartTypeCheck {
     }
 
     // Fallback: categorize by message content
-    if (message.includes("null") || message.includes("undefined")) {
-      return "Null/Undefined Safety";
+    if (message.includes('null') || message.includes('undefined')) {
+      return 'Null/Undefined Safety';
     }
-    if (message.includes("any")) {
-      return "Type Safety (any)";
+    if (message.includes('any')) {
+      return 'Type Safety (any)';
     }
-    if (message.includes("module") || message.includes("import")) {
-      return "Module Resolution";
+    if (message.includes('module') || message.includes('import')) {
+      return 'Module Resolution';
     }
 
-    return "Other";
+    return 'Other';
   }
 
   /**
@@ -320,32 +320,32 @@ export class SmartTypeCheck {
    */
   private determineSeverity(
     category: string,
-    _code: string,
-  ): "critical" | "high" | "medium" | "low" {
+    _code: string
+  ): 'critical' | 'high' | 'medium' | 'low' {
     // Critical: Module resolution issues (blocks compilation)
-    if (category === "Module Resolution") {
-      return "critical";
+    if (category === 'Module Resolution') {
+      return 'critical';
     }
 
     // High: Type safety issues
     if (
-      category.includes("Type Assignment") ||
-      category.includes("Type Argument")
+      category.includes('Type Assignment') ||
+      category.includes('Type Argument')
     ) {
-      return "high";
+      return 'high';
     }
 
     // Medium: Implicit any
-    if (category.includes("any")) {
-      return "medium";
+    if (category.includes('any')) {
+      return 'medium';
     }
 
     // Low: Null/undefined (usually caught at runtime with proper checks)
-    if (category.includes("Null") || category.includes("Undefined")) {
-      return "low";
+    if (category.includes('Null') || category.includes('Undefined')) {
+      return 'low';
     }
 
-    return "medium";
+    return 'medium';
   }
 
   /**
@@ -354,7 +354,7 @@ export class SmartTypeCheck {
   private countCheckedFiles(output: string): number {
     // Look for unique file paths in errors
     const files = new Set<string>();
-    const lines = output.split("\n");
+    const lines = output.split('\n');
 
     for (const line of lines) {
       const match = line.match(/^(.+?)\(\d+,\d+\):/);
@@ -370,24 +370,24 @@ export class SmartTypeCheck {
    * Generate cache key
    */
   private async generateCacheKey(tsconfig: string): Promise<string> {
-    const hash = createHash("sha256");
+    const hash = createHash('sha256');
     hash.update(this.cacheNamespace);
 
     // Hash tsconfig
     const tsconfigPath = join(this.projectRoot, tsconfig);
     if (existsSync(tsconfigPath)) {
-      const content = readFileSync(tsconfigPath, "utf-8");
+      const content = readFileSync(tsconfigPath, 'utf-8');
       hash.update(content);
     }
 
     // Hash package.json
-    const packageJsonPath = join(this.projectRoot, "package.json");
+    const packageJsonPath = join(this.projectRoot, 'package.json');
     if (existsSync(packageJsonPath)) {
-      const content = readFileSync(packageJsonPath, "utf-8");
+      const content = readFileSync(packageJsonPath, 'utf-8');
       hash.update(content);
     }
 
-    return `${this.cacheNamespace}:${hash.digest("hex")}`;
+    return `${this.cacheNamespace}:${hash.digest('hex')}`;
   }
 
   /**
@@ -435,13 +435,13 @@ export class SmartTypeCheck {
    * Generate optimization suggestions based on error patterns
    */
   private generateSuggestions(result: TypeCheckResult): Array<{
-    type: "fix" | "refactor" | "config";
+    type: 'fix' | 'refactor' | 'config';
     priority: number;
     message: string;
     impact: string;
   }> {
     const suggestions: Array<{
-      type: "fix" | "refactor" | "config";
+      type: 'fix' | 'refactor' | 'config';
       priority: number;
       message: string;
       impact: string;
@@ -452,17 +452,17 @@ export class SmartTypeCheck {
     for (const error of result.errors) {
       categoryCounts.set(
         error.category,
-        (categoryCounts.get(error.category) || 0) + 1,
+        (categoryCounts.get(error.category) || 0) + 1
       );
     }
 
     // Suggest enabling strict mode if many type safety issues
     const typeSafetyCount =
-      (categoryCounts.get("Type Assignment") || 0) +
-      (categoryCounts.get("Type Argument") || 0);
+      (categoryCounts.get('Type Assignment') || 0) +
+      (categoryCounts.get('Type Argument') || 0);
     if (typeSafetyCount > 10) {
       suggestions.push({
-        type: "config",
+        type: 'config',
         priority: 10,
         message:
           'Enable "strict": true in tsconfig.json for better type safety',
@@ -472,37 +472,37 @@ export class SmartTypeCheck {
 
     // Suggest fixing implicit any
     const implicitAnyCount =
-      (categoryCounts.get("Implicit Any Parameter") || 0) +
-      (categoryCounts.get("Implicit Any Variable") || 0);
+      (categoryCounts.get('Implicit Any Parameter') || 0) +
+      (categoryCounts.get('Implicit Any Variable') || 0);
     if (implicitAnyCount > 5) {
       suggestions.push({
-        type: "refactor",
+        type: 'refactor',
         priority: 8,
-        message: "Add explicit type annotations to reduce implicit any usage",
+        message: 'Add explicit type annotations to reduce implicit any usage',
         impact: `${implicitAnyCount} locations need type annotations`,
       });
     }
 
     // Suggest module resolution fixes
-    const moduleErrors = categoryCounts.get("Module Resolution") || 0;
+    const moduleErrors = categoryCounts.get('Module Resolution') || 0;
     if (moduleErrors > 0) {
       suggestions.push({
-        type: "fix",
+        type: 'fix',
         priority: 10,
-        message: "Fix module resolution errors (check paths in tsconfig.json)",
+        message: 'Fix module resolution errors (check paths in tsconfig.json)',
         impact: `${moduleErrors} module resolution errors blocking compilation`,
       });
     }
 
     // Suggest null/undefined handling
     const nullUndefinedCount =
-      (categoryCounts.get("Possibly Null") || 0) +
-      (categoryCounts.get("Possibly Undefined") || 0);
+      (categoryCounts.get('Possibly Null') || 0) +
+      (categoryCounts.get('Possibly Undefined') || 0);
     if (nullUndefinedCount > 10) {
       suggestions.push({
-        type: "refactor",
+        type: 'refactor',
         priority: 6,
-        message: "Add null/undefined checks or use optional chaining",
+        message: 'Add null/undefined checks or use optional chaining',
         impact: `${nullUndefinedCount} potential null/undefined access issues`,
       });
     }
@@ -518,7 +518,7 @@ export class SmartTypeCheck {
    */
   private transformOutput(
     result: TypeCheckResult,
-    fromCache = false,
+    fromCache = false
   ): SmartTypeCheckOutput {
     // Group errors by category
     const categorizedErrors = new Map<string, TypeCheckError[]>();
@@ -547,7 +547,7 @@ export class SmartTypeCheck {
             message: err.message,
           })),
         };
-      },
+      }
     );
 
     // Sort by severity and count
@@ -578,7 +578,7 @@ export class SmartTypeCheck {
         originalTokens: Math.ceil(originalSize / 4),
         compactedTokens: Math.ceil(compactSize / 4),
         reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100,
+          ((originalSize - compactSize) / originalSize) * 100
         ),
       },
     };
@@ -609,13 +609,11 @@ export class SmartTypeCheck {
     };
 
     // Only include top 3 categories with first 3 errors each
-    const topCategories = result.errors
-      .slice(0, 9)
-      .map((e) => ({
-        category: e.category,
-        code: e.code,
-        message: e.message.slice(0, 50),
-      }));
+    const topCategories = result.errors.slice(0, 9).map((e) => ({
+      category: e.category,
+      code: e.code,
+      message: e.message.slice(0, 50),
+    }));
 
     return JSON.stringify({ summary, topCategories }).length;
   }
@@ -634,7 +632,7 @@ export class SmartTypeCheck {
 export function getSmartTypeCheckTool(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
-  _metrics: MetricsCollector,
+  _metrics: MetricsCollector
 ): SmartTypeCheck {
   return new SmartTypeCheck(cache, tokenCounter, _metrics);
 }
@@ -643,11 +641,11 @@ export function getSmartTypeCheckTool(
  * CLI-friendly function for running smart type check
  */
 export async function runSmartTypeCheck(
-  options: SmartTypeCheckOptions = {},
+  options: SmartTypeCheckOptions = {}
 ): Promise<string> {
   // Create own resources for standalone CLI usage
   const cache = new CacheEngine(
-    join(homedir(), ".token-optimizer-cache", "cache.db"),
+    join(homedir(), '.token-optimizer-cache', 'cache.db')
   );
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
@@ -655,17 +653,17 @@ export async function runSmartTypeCheck(
     cache,
     tokenCounter,
     metrics,
-    options.projectRoot,
+    options.projectRoot
   );
   try {
     const result = await smartTypeCheck.run(options);
 
-    let output = `\nðŸ”Ž Smart Type Check Results ${result.summary.fromCache ? "(cached)" : ""}\n`;
-    output += `${"=".repeat(50)}\n\n`;
+    let output = `\nðŸ”Ž Smart Type Check Results ${result.summary.fromCache ? '(cached)' : ''}\n`;
+    output += `${'='.repeat(50)}\n\n`;
 
     // Summary
     output += `Summary:\n`;
-    output += `  Status: ${result.summary.success ? "âœ“ Pass" : "âœ— Fail"}\n`;
+    output += `  Status: ${result.summary.success ? 'âœ“ Pass' : 'âœ— Fail'}\n`;
     output += `  Files Checked: ${result.summary.filesChecked}\n`;
     output += `  Errors: ${result.summary.errorCount}\n`;
     output += `  Duration: ${(result.summary.duration / 1000).toFixed(2)}s\n\n`;
@@ -675,13 +673,13 @@ export async function runSmartTypeCheck(
       output += `Errors by Category:\n`;
       for (const category of result.errorsByCategory) {
         const severityIcon =
-          category.severity === "critical"
-            ? "ðŸ”´"
-            : category.severity === "high"
-              ? "ðŸŸ "
-              : category.severity === "medium"
-                ? "ðŸŸ¡"
-                : "ðŸŸ¢";
+          category.severity === 'critical'
+            ? 'ðŸ”´'
+            : category.severity === 'high'
+              ? 'ðŸŸ '
+              : category.severity === 'medium'
+                ? 'ðŸŸ¡'
+                : 'ðŸŸ¢';
 
         output += `\n  ${severityIcon} ${category.category} (${category.count} errors)\n`;
 
@@ -694,7 +692,7 @@ export async function runSmartTypeCheck(
           output += `    ... and ${category.count - category.errors.length} more\n`;
         }
       }
-      output += "\n";
+      output += '\n';
     }
 
     // Suggestions
@@ -702,16 +700,16 @@ export async function runSmartTypeCheck(
       output += `Optimization Suggestions:\n`;
       for (const suggestion of result.suggestions) {
         const typeIcon =
-          suggestion.type === "fix"
-            ? "ðŸ”§"
-            : suggestion.type === "refactor"
-              ? "â™»ï¸"
-              : "âš™ï¸";
+          suggestion.type === 'fix'
+            ? 'ðŸ”§'
+            : suggestion.type === 'refactor'
+              ? 'â™»ï¸'
+              : 'âš™ï¸';
 
         output += `  ${typeIcon} [Priority ${suggestion.priority}] ${suggestion.message}\n`;
         output += `    Impact: ${suggestion.impact}\n`;
       }
-      output += "\n";
+      output += '\n';
     }
 
     // _metrics
@@ -728,33 +726,33 @@ export async function runSmartTypeCheck(
 
 // MCP Tool definition
 export const SMART_TYPECHECK_TOOL_DEFINITION = {
-  name: "smart_typecheck",
+  name: 'smart_typecheck',
   description:
-    "Run TypeScript type checking with intelligent caching and categorized error reporting",
+    'Run TypeScript type checking with intelligent caching and categorized error reporting',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       force: {
-        type: "boolean",
-        description: "Force full type check (ignore cache)",
+        type: 'boolean',
+        description: 'Force full type check (ignore cache)',
         default: false,
       },
       watch: {
-        type: "boolean",
-        description: "Watch mode for continuous type checking",
+        type: 'boolean',
+        description: 'Watch mode for continuous type checking',
         default: false,
       },
       projectRoot: {
-        type: "string",
-        description: "Project root directory",
+        type: 'string',
+        description: 'Project root directory',
       },
       tsconfig: {
-        type: "string",
-        description: "TypeScript config file path",
+        type: 'string',
+        description: 'TypeScript config file path',
       },
       maxCacheAge: {
-        type: "number",
-        description: "Maximum cache age in seconds (default: 3600)",
+        type: 'number',
+        description: 'Maximum cache age in seconds (default: 3600)',
         default: 3600,
       },
     },

@@ -18,43 +18,49 @@
  * - Average: 83% reduction
  */
 
-import { createHash } from "crypto";
+import { createHash } from 'crypto';
 import {
   CacheEngine,
   CacheEngine as CacheEngineClass,
-} from "../../core/cache-engine";
+} from '../../core/cache-engine.js';
 import {
   TokenCounter,
   TokenCounter as TokenCounterClass,
-} from "../../core/token-counter";
+} from '../../core/token-counter.js';
 import {
   MetricsCollector,
   MetricsCollector as MetricsCollectorClass,
-} from "../../core/metrics";
+} from '../../core/metrics.js';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 export type DatabaseAction =
-  | "query"
-  | "explain"
-  | "analyze"
-  | "optimize"
-  | "health"
-  | "pool"
-  | "slow"
-  | "batch";
+  | 'query'
+  | 'explain'
+  | 'analyze'
+  | 'optimize'
+  | 'health'
+  | 'pool'
+  | 'slow'
+  | 'batch';
 
 export type DatabaseEngine =
-  | "postgresql"
-  | "mysql"
-  | "sqlite"
-  | "mongodb"
-  | "redis"
-  | "generic";
+  | 'postgresql'
+  | 'mysql'
+  | 'sqlite'
+  | 'mongodb'
+  | 'redis'
+  | 'generic';
 
-export type QueryType = "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "DDL" | "UNKNOWN";
+export type QueryType =
+  | 'SELECT'
+  | 'INSERT'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'DDL'
+  | 'UNKNOWN';
 
 export interface SmartDatabaseOptions {
   // Action to perform
@@ -148,7 +154,7 @@ export interface QueryPlanStep {
 
 export interface QueryAnalysis {
   queryType: QueryType;
-  complexity: "low" | "medium" | "high" | "critical";
+  complexity: 'low' | 'medium' | 'high' | 'critical';
   estimatedDuration: number;
   tablesAccessed: string[];
   indexesUsed: string[];
@@ -162,27 +168,27 @@ export interface MissingIndex {
   table: string;
   columns: string[];
   reason: string;
-  impact: "low" | "medium" | "high" | "critical";
+  impact: 'low' | 'medium' | 'high' | 'critical';
   estimatedImprovement: string;
 }
 
 export interface Optimization {
   type:
-    | "index"
-    | "rewrite"
-    | "join"
-    | "subquery"
-    | "limit"
-    | "cache"
-    | "partition";
-  priority: "low" | "medium" | "high" | "critical";
+    | 'index'
+    | 'rewrite'
+    | 'join'
+    | 'subquery'
+    | 'limit'
+    | 'cache'
+    | 'partition';
+  priority: 'low' | 'medium' | 'high' | 'critical';
   description: string;
   suggestedQuery?: string;
   estimatedImprovement: string;
 }
 
 export interface HealthMetrics {
-  status: "healthy" | "degraded" | "unhealthy";
+  status: 'healthy' | 'degraded' | 'unhealthy';
   uptime: number;
   activeConnections: number;
   maxConnections: number;
@@ -373,7 +379,7 @@ class ConnectionPool {
         if (index > -1) {
           this.waitQueue.splice(index, 1);
         }
-        reject(new Error("Connection timeout"));
+        reject(new Error('Connection timeout'));
       }, this.config.connectionTimeout);
 
       this.waitQueue.push((conn) => {
@@ -440,19 +446,19 @@ class ConnectionPool {
 
     if (this.waitQueue.length > 5) {
       recommendations.push(
-        "High connection wait queue. Consider increasing pool size."
+        'High connection wait queue. Consider increasing pool size.'
       );
     }
 
     if (idle > this.config.minSize * 2) {
       recommendations.push(
-        "Many idle connections. Consider decreasing pool size."
+        'Many idle connections. Consider decreasing pool size.'
       );
     }
 
     if (poolEfficiency < 80) {
       recommendations.push(
-        "Low pool efficiency. Review connection usage patterns."
+        'Low pool efficiency. Review connection usage patterns.'
       );
     }
 
@@ -490,7 +496,7 @@ class ConnectionPool {
 interface CircuitBreakerState {
   failures: number;
   lastFailure: number;
-  state: "closed" | "open" | "half-open";
+  state: 'closed' | 'open' | 'half-open';
   successCount: number;
 }
 
@@ -505,20 +511,20 @@ class CircuitBreaker {
     this.state = {
       failures: 0,
       lastFailure: 0,
-      state: "closed",
+      state: 'closed',
       successCount: 0,
     };
   }
 
   canExecute(): boolean {
-    if (this.state.state === "closed") {
+    if (this.state.state === 'closed') {
       return true;
     }
 
-    if (this.state.state === "open") {
+    if (this.state.state === 'open') {
       // Check if timeout has passed
       if (Date.now() - this.state.lastFailure > this.timeout) {
-        this.state.state = "half-open";
+        this.state.state = 'half-open';
         this.state.successCount = 0;
         return true;
       }
@@ -530,7 +536,7 @@ class CircuitBreaker {
   }
 
   recordSuccess(): void {
-    if (this.state.state === "half-open") {
+    if (this.state.state === 'half-open') {
       this.state.successCount++;
       if (this.state.successCount >= 2) {
         // After 2 successful requests, close the circuit
@@ -545,12 +551,12 @@ class CircuitBreaker {
     this.state.failures++;
     this.state.lastFailure = Date.now();
 
-    if (this.state.state === "half-open") {
+    if (this.state.state === 'half-open') {
       // Failure during half-open, reopen circuit
-      this.state.state = "open";
+      this.state.state = 'open';
       this.state.successCount = 0;
     } else if (this.state.failures >= this.threshold) {
-      this.state.state = "open";
+      this.state.state = 'open';
     }
   }
 
@@ -558,7 +564,7 @@ class CircuitBreaker {
     this.state = {
       failures: 0,
       lastFailure: 0,
-      state: "closed",
+      state: 'closed',
       successCount: 0,
     };
   }
@@ -607,7 +613,7 @@ export class SmartDatabase {
       this.validateOptions(options);
 
       // Default action
-      const action = options.action || "query";
+      const action = options.action || 'query';
 
       // Initialize pool if not exists
       if (!this.pool && this.shouldUsePool(action)) {
@@ -619,7 +625,9 @@ export class SmartDatabase {
         options.enableCircuitBreaker !== false &&
         !this.circuitBreaker.canExecute()
       ) {
-        throw new Error("Circuit breaker is open. Database may be unavailable.");
+        throw new Error(
+          'Circuit breaker is open. Database may be unavailable.'
+        );
       }
 
       // Generate cache key for read operations
@@ -628,11 +636,7 @@ export class SmartDatabase {
         : null;
 
       // Check cache
-      if (
-        cacheKey &&
-        options.enableCache !== false &&
-        !options.force
-      ) {
+      if (cacheKey && options.enableCache !== false && !options.force) {
         const cached = await this.getCachedResult(cacheKey, options.ttl || 300);
         if (cached) {
           const output = this.transformOutput(
@@ -642,7 +646,7 @@ export class SmartDatabase {
           );
 
           this.metrics.record({
-            operation: "smart_database",
+            operation: 'smart_database',
             duration: Date.now() - startTime,
             success: true,
             cacheHit: true,
@@ -675,7 +679,7 @@ export class SmartDatabase {
       );
 
       this.metrics.record({
-        operation: "smart_database",
+        operation: 'smart_database',
         duration: Date.now() - startTime,
         success: true,
         cacheHit: false,
@@ -695,7 +699,7 @@ export class SmartDatabase {
         error instanceof Error ? error.message : String(error);
 
       this.metrics.record({
-        operation: "smart_database",
+        operation: 'smart_database',
         duration: Date.now() - startTime,
         success: false,
         cacheHit: false,
@@ -713,37 +717,40 @@ export class SmartDatabase {
   // ============================================================================
 
   private validateOptions(options: SmartDatabaseOptions): void {
-    const action = options.action || "query";
+    const action = options.action || 'query';
 
     const validActions: DatabaseAction[] = [
-      "query",
-      "explain",
-      "analyze",
-      "optimize",
-      "health",
-      "pool",
-      "slow",
-      "batch",
+      'query',
+      'explain',
+      'analyze',
+      'optimize',
+      'health',
+      'pool',
+      'slow',
+      'batch',
     ];
 
     if (!validActions.includes(action)) {
       throw new Error(`Invalid action: ${action}`);
     }
 
-    if (action === "query" && !options.query) {
-      throw new Error("Query is required for query action");
+    if (action === 'query' && !options.query) {
+      throw new Error('Query is required for query action');
     }
 
-    if (action === "batch" && (!options.queries || options.queries.length === 0)) {
-      throw new Error("Queries array is required for batch action");
+    if (
+      action === 'batch' &&
+      (!options.queries || options.queries.length === 0)
+    ) {
+      throw new Error('Queries array is required for batch action');
     }
 
     if (options.timeout && options.timeout < 0) {
-      throw new Error("Timeout must be positive");
+      throw new Error('Timeout must be positive');
     }
 
     if (options.poolSize && options.poolSize < 1) {
-      throw new Error("Pool size must be at least 1");
+      throw new Error('Pool size must be at least 1');
     }
   }
 
@@ -756,28 +763,28 @@ export class SmartDatabase {
     options: SmartDatabaseOptions
   ): Promise<SmartDatabaseResult> {
     switch (action) {
-      case "query":
+      case 'query':
         return this.executeQuery(options);
 
-      case "explain":
+      case 'explain':
         return this.explainQuery(options);
 
-      case "analyze":
+      case 'analyze':
         return this.analyzeQuery(options);
 
-      case "optimize":
+      case 'optimize':
         return this.optimizeQuery(options);
 
-      case "health":
+      case 'health':
         return this.getHealthMetrics(options);
 
-      case "pool":
+      case 'pool':
         return this.getPoolInfo();
 
-      case "slow":
+      case 'slow':
         return this.getSlowQueries(options);
 
-      case "batch":
+      case 'batch':
         return this.executeBatch(options);
 
       default:
@@ -797,7 +804,8 @@ export class SmartDatabase {
     try {
       // Execute query with retry logic
       let retries = 0;
-      const maxRetries = options.enableRetry !== false ? (options.maxRetries || 3) : 0;
+      const maxRetries =
+        options.enableRetry !== false ? options.maxRetries || 3 : 0;
       let lastError: Error | null = null;
 
       while (retries <= maxRetries) {
@@ -833,7 +841,7 @@ export class SmartDatabase {
 
           return {
             success: true,
-            action: "query",
+            action: 'query',
             result,
             executionTime,
             retries,
@@ -851,7 +859,7 @@ export class SmartDatabase {
         }
       }
 
-      throw lastError || new Error("Query failed after all retries");
+      throw lastError || new Error('Query failed after all retries');
     } finally {
       if (conn && this.pool) {
         this.pool.release(conn);
@@ -873,21 +881,26 @@ export class SmartDatabase {
     // Simulate query execution
     await this.sleep(Math.random() * 100 + 50);
 
-    if (queryType === "SELECT") {
+    if (queryType === 'SELECT') {
       // Generate mock result rows
       const rowCount = Math.floor(Math.random() * 1000) + 10;
-      const rows = Array.from({ length: Math.min(limit, rowCount) }, (_, i) => ({
-        id: i + 1,
-        name: `Record ${i + 1}`,
-        value: Math.random() * 100,
-        created_at: new Date(Date.now() - Math.random() * 86400000 * 30).toISOString(),
-      }));
+      const rows = Array.from(
+        { length: Math.min(limit, rowCount) },
+        (_, i) => ({
+          id: i + 1,
+          name: `Record ${i + 1}`,
+          value: Math.random() * 100,
+          created_at: new Date(
+            Date.now() - Math.random() * 86400000 * 30
+          ).toISOString(),
+        })
+      );
 
       const fields: FieldInfo[] = [
-        { name: "id", type: "integer", nullable: false, isPrimaryKey: true },
-        { name: "name", type: "varchar", nullable: false },
-        { name: "value", type: "numeric", nullable: true },
-        { name: "created_at", type: "timestamp", nullable: false },
+        { name: 'id', type: 'integer', nullable: false, isPrimaryKey: true },
+        { name: 'name', type: 'varchar', nullable: false },
+        { name: 'value', type: 'numeric', nullable: true },
+        { name: 'created_at', type: 'timestamp', nullable: false },
       ];
 
       return {
@@ -902,7 +915,10 @@ export class SmartDatabase {
         rows: [],
         rowCount: 0,
         affectedRows,
-        insertId: queryType === "INSERT" ? Math.floor(Math.random() * 10000) : undefined,
+        insertId:
+          queryType === 'INSERT'
+            ? Math.floor(Math.random() * 10000)
+            : undefined,
       };
     }
   }
@@ -918,44 +934,44 @@ export class SmartDatabase {
     await this.sleep(50);
 
     const plan: QueryPlan = {
-      planType: "Hash Join",
+      planType: 'Hash Join',
       estimatedCost: Math.random() * 1000 + 100,
       estimatedRows: Math.floor(Math.random() * 10000) + 100,
       executionTime: Date.now() - startTime,
       steps: [
         {
           stepNumber: 1,
-          operation: "Seq Scan",
-          table: "users",
+          operation: 'Seq Scan',
+          table: 'users',
           rowsScanned: Math.floor(Math.random() * 1000) + 100,
           rowsReturned: Math.floor(Math.random() * 100) + 10,
           cost: Math.random() * 500 + 50,
-          description: "Sequential scan on users table",
+          description: 'Sequential scan on users table',
         },
         {
           stepNumber: 2,
-          operation: "Index Scan",
-          table: "orders",
-          indexUsed: "idx_user_id",
+          operation: 'Index Scan',
+          table: 'orders',
+          indexUsed: 'idx_user_id',
           rowsScanned: Math.floor(Math.random() * 500) + 50,
           rowsReturned: Math.floor(Math.random() * 50) + 5,
           cost: Math.random() * 200 + 20,
-          description: "Index scan using idx_user_id",
+          description: 'Index scan using idx_user_id',
         },
         {
           stepNumber: 3,
-          operation: "Hash Join",
+          operation: 'Hash Join',
           rowsScanned: Math.floor(Math.random() * 100) + 10,
           rowsReturned: Math.floor(Math.random() * 50) + 5,
           cost: Math.random() * 300 + 30,
-          description: "Hash join on user_id",
+          description: 'Hash join on user_id',
         },
       ],
     };
 
     return {
       success: true,
-      action: "explain",
+      action: 'explain',
       plan,
       executionTime: Date.now() - startTime,
       timestamp: Date.now(),
@@ -982,63 +998,70 @@ export class SmartDatabase {
     const warnings: string[] = [];
 
     // Analyze for missing indexes
-    if (query.includes("WHERE") && !query.includes("INDEX")) {
+    if (query.includes('WHERE') && !query.includes('INDEX')) {
       missingIndexes.push({
-        table: tablesAccessed[0] || "unknown",
-        columns: ["user_id", "created_at"],
-        reason: "Frequent WHERE clause filtering without index",
-        impact: "high",
-        estimatedImprovement: "70-85% faster",
+        table: tablesAccessed[0] || 'unknown',
+        columns: ['user_id', 'created_at'],
+        reason: 'Frequent WHERE clause filtering without index',
+        impact: 'high',
+        estimatedImprovement: '70-85% faster',
       });
     }
 
     // Optimization suggestions
-    if (query.includes("SELECT *")) {
+    if (query.includes('SELECT *')) {
       optimizations.push({
-        type: "rewrite",
-        priority: "high",
-        description: "Avoid SELECT * - specify only needed columns",
-        suggestedQuery: query.replace("SELECT *", "SELECT id, name, created_at"),
-        estimatedImprovement: "30-50% reduction in data transfer",
+        type: 'rewrite',
+        priority: 'high',
+        description: 'Avoid SELECT * - specify only needed columns',
+        suggestedQuery: query.replace(
+          'SELECT *',
+          'SELECT id, name, created_at'
+        ),
+        estimatedImprovement: '30-50% reduction in data transfer',
       });
     }
 
-    if (!query.includes("LIMIT") && queryType === "SELECT") {
+    if (!query.includes('LIMIT') && queryType === 'SELECT') {
       optimizations.push({
-        type: "limit",
-        priority: "medium",
-        description: "Add LIMIT clause to prevent large result sets",
+        type: 'limit',
+        priority: 'medium',
+        description: 'Add LIMIT clause to prevent large result sets',
         suggestedQuery: `${query} LIMIT 1000`,
-        estimatedImprovement: "Prevents memory issues",
+        estimatedImprovement: 'Prevents memory issues',
       });
     }
 
-    if (query.includes("IN (SELECT")) {
+    if (query.includes('IN (SELECT')) {
       optimizations.push({
-        type: "subquery",
-        priority: "high",
-        description: "Replace IN subquery with JOIN for better performance",
-        estimatedImprovement: "50-70% faster",
+        type: 'subquery',
+        priority: 'high',
+        description: 'Replace IN subquery with JOIN for better performance',
+        estimatedImprovement: '50-70% faster',
       });
     }
 
     // Warnings
-    if (query.includes("OR")) {
-      warnings.push("OR conditions can prevent index usage");
+    if (query.includes('OR')) {
+      warnings.push('OR conditions can prevent index usage');
     }
 
     if (query.includes("LIKE '%")) {
-      warnings.push("Leading wildcard in LIKE prevents index usage");
+      warnings.push('Leading wildcard in LIKE prevents index usage');
     }
 
-    const score = this.calculateQueryScore(query, missingIndexes, optimizations);
+    const score = this.calculateQueryScore(
+      query,
+      missingIndexes,
+      optimizations
+    );
 
     const analysis: QueryAnalysis = {
       queryType,
       complexity,
       estimatedDuration: Math.random() * 500 + 50,
       tablesAccessed,
-      indexesUsed: ["idx_user_id", "idx_created_at"],
+      indexesUsed: ['idx_user_id', 'idx_created_at'],
       missingIndexes,
       optimizations,
       warnings,
@@ -1047,7 +1070,7 @@ export class SmartDatabase {
 
     return {
       success: true,
-      action: "analyze",
+      action: 'analyze',
       analysis,
       executionTime: Date.now() - startTime,
       timestamp: Date.now(),
@@ -1076,7 +1099,7 @@ export class SmartDatabase {
 
     return {
       success: true,
-      action: "optimize",
+      action: 'optimize',
       analysis: analysisResult.analysis,
       result: {
         rows: [{ original: options.query, optimized: optimizedQuery }],
@@ -1104,7 +1127,12 @@ export class SmartDatabase {
         : 0;
 
     const health: HealthMetrics = {
-      status: avgQueryTime < 1000 ? "healthy" : avgQueryTime < 3000 ? "degraded" : "unhealthy",
+      status:
+        avgQueryTime < 1000
+          ? 'healthy'
+          : avgQueryTime < 3000
+            ? 'degraded'
+            : 'unhealthy',
       uptime: Date.now() - (Date.now() - 86400000 * 7), // 7 days
       activeConnections: this.pool?.getInfo().activeConnections || 0,
       maxConnections: 100,
@@ -1128,7 +1156,7 @@ export class SmartDatabase {
 
     return {
       success: true,
-      action: "health",
+      action: 'health',
       health,
       executionTime: Date.now() - startTime,
       timestamp: Date.now(),
@@ -1139,14 +1167,14 @@ export class SmartDatabase {
     const startTime = Date.now();
 
     if (!this.pool) {
-      throw new Error("Connection pool not initialized");
+      throw new Error('Connection pool not initialized');
     }
 
     const pool = this.pool.getInfo();
 
     return {
       success: true,
-      action: "pool",
+      action: 'pool',
       pool,
       executionTime: Date.now() - startTime,
       timestamp: Date.now(),
@@ -1163,7 +1191,7 @@ export class SmartDatabase {
 
     return {
       success: true,
-      action: "slow",
+      action: 'slow',
       slowQueries,
       executionTime: Date.now() - startTime,
       timestamp: Date.now(),
@@ -1190,12 +1218,19 @@ export class SmartDatabase {
       const batchPromises: Promise<void>[] = [];
 
       for (let j = 0; j < batch.length; j += parallelBatches) {
-        const parallelQueries = batch.slice(j, Math.min(j + parallelBatches, batch.length));
+        const parallelQueries = batch.slice(
+          j,
+          Math.min(j + parallelBatches, batch.length)
+        );
 
         const promises = parallelQueries.map(async (query, idx) => {
           const queryIndex = i + j + idx;
           try {
-            const result = await this.executeQueryInternal(query, options, null);
+            const result = await this.executeQueryInternal(
+              query,
+              options,
+              null
+            );
             results[queryIndex] = result;
             successful++;
           } catch (error) {
@@ -1227,7 +1262,7 @@ export class SmartDatabase {
 
     return {
       success: true,
-      action: "batch",
+      action: 'batch',
       batch,
       executionTime: totalTime,
       timestamp: Date.now(),
@@ -1239,19 +1274,22 @@ export class SmartDatabase {
   // ============================================================================
 
   private shouldUsePool(action: DatabaseAction): boolean {
-    return ["query", "explain", "batch"].includes(action);
+    return ['query', 'explain', 'batch'].includes(action);
   }
 
-  private shouldCache(action: DatabaseAction, options: SmartDatabaseOptions): boolean {
+  private shouldCache(
+    action: DatabaseAction,
+    options: SmartDatabaseOptions
+  ): boolean {
     // Only cache read operations
-    if (!["query", "explain", "analyze"].includes(action)) {
+    if (!['query', 'explain', 'analyze'].includes(action)) {
       return false;
     }
 
     // Don't cache write operations
     if (options.query) {
       const queryType = this.detectQueryType(options.query);
-      if (["INSERT", "UPDATE", "DELETE", "DDL"].includes(queryType)) {
+      if (['INSERT', 'UPDATE', 'DELETE', 'DDL'].includes(queryType)) {
         return false;
       }
     }
@@ -1271,23 +1309,23 @@ export class SmartDatabase {
   private detectQueryType(query: string): QueryType {
     const upperQuery = query.trim().toUpperCase();
 
-    if (upperQuery.startsWith("SELECT")) {
-      return "SELECT";
-    } else if (upperQuery.startsWith("INSERT")) {
-      return "INSERT";
-    } else if (upperQuery.startsWith("UPDATE")) {
-      return "UPDATE";
-    } else if (upperQuery.startsWith("DELETE")) {
-      return "DELETE";
+    if (upperQuery.startsWith('SELECT')) {
+      return 'SELECT';
+    } else if (upperQuery.startsWith('INSERT')) {
+      return 'INSERT';
+    } else if (upperQuery.startsWith('UPDATE')) {
+      return 'UPDATE';
+    } else if (upperQuery.startsWith('DELETE')) {
+      return 'DELETE';
     } else if (
-      upperQuery.startsWith("CREATE") ||
-      upperQuery.startsWith("ALTER") ||
-      upperQuery.startsWith("DROP")
+      upperQuery.startsWith('CREATE') ||
+      upperQuery.startsWith('ALTER') ||
+      upperQuery.startsWith('DROP')
     ) {
-      return "DDL";
+      return 'DDL';
     }
 
-    return "UNKNOWN";
+    return 'UNKNOWN';
   }
 
   private extractTables(query: string): string[] {
@@ -1306,21 +1344,23 @@ export class SmartDatabase {
     return tables;
   }
 
-  private calculateComplexity(query: string): "low" | "medium" | "high" | "critical" {
+  private calculateComplexity(
+    query: string
+  ): 'low' | 'medium' | 'high' | 'critical' {
     let score = 0;
 
     // Check for complexity indicators
-    if (query.includes("JOIN")) score += 2;
-    if (query.includes("SUBQUERY") || query.includes("IN (SELECT")) score += 3;
-    if (query.includes("GROUP BY")) score += 1;
-    if (query.includes("HAVING")) score += 2;
-    if (query.includes("ORDER BY")) score += 1;
+    if (query.includes('JOIN')) score += 2;
+    if (query.includes('SUBQUERY') || query.includes('IN (SELECT')) score += 3;
+    if (query.includes('GROUP BY')) score += 1;
+    if (query.includes('HAVING')) score += 2;
+    if (query.includes('ORDER BY')) score += 1;
     if ((query.match(/JOIN/g) || []).length > 3) score += 3;
 
-    if (score === 0) return "low";
-    if (score <= 3) return "medium";
-    if (score <= 6) return "high";
-    return "critical";
+    if (score === 0) return 'low';
+    if (score <= 3) return 'medium';
+    if (score <= 6) return 'high';
+    return 'critical';
   }
 
   private calculateQueryScore(
@@ -1331,16 +1371,18 @@ export class SmartDatabase {
     let score = 100;
 
     // Deduct points for issues
-    if (query.includes("SELECT *")) score -= 15;
-    if (!query.includes("LIMIT")) score -= 10;
-    if (query.includes("OR")) score -= 5;
+    if (query.includes('SELECT *')) score -= 15;
+    if (!query.includes('LIMIT')) score -= 10;
+    if (query.includes('OR')) score -= 5;
     if (query.includes("LIKE '%")) score -= 10;
 
     // Deduct for missing indexes
     score -= missingIndexes.length * 10;
 
     // Deduct for needed optimizations
-    const highPriorityOpts = optimizations.filter(o => o.priority === "high").length;
+    const highPriorityOpts = optimizations.filter(
+      (o) => o.priority === 'high'
+    ).length;
     score -= highPriorityOpts * 8;
 
     return Math.max(0, Math.min(100, score));
@@ -1363,9 +1405,9 @@ export class SmartDatabase {
       engine: options.engine,
     };
 
-    const hash = createHash("sha256");
-    hash.update("smart_database:" + JSON.stringify(keyData));
-    return hash.digest("hex");
+    const hash = createHash('sha256');
+    hash.update('smart_database:' + JSON.stringify(keyData));
+    return hash.digest('hex');
   }
 
   private async getCachedResult(
@@ -1416,7 +1458,7 @@ export class SmartDatabase {
       this.cache.set(key, cacheStr, tokensSaved, cacheStr.length);
     } catch (error) {
       // Caching failure should not break the operation
-      console.error("Failed to cache database result:", error);
+      console.error('Failed to cache database result:', error);
     }
   }
 
@@ -1471,7 +1513,7 @@ export class SmartDatabase {
       actualTokens = this.tokenCounter.count(output).tokens;
     } else {
       // Default: Minimal output
-      output = "# No database data available";
+      output = '# No database data available';
       actualTokens = this.tokenCounter.count(output).tokens;
     }
 
@@ -1501,10 +1543,10 @@ export class SmartDatabase {
         .map((row, i) => {
           const fields = Object.entries(row)
             .map(([key, value]) => `  ${key}: ${JSON.stringify(value)}`)
-            .join("\n");
+            .join('\n');
           return `Row #${i + 1}:\n${fields}`;
         })
-        .join("\n\n");
+        .join('\n\n');
 
       return `# Database Query Results - Complete Data
 
@@ -1552,12 +1594,15 @@ ${count} rows | ${result.executionTime}ms
     const { plan } = result;
 
     if (!plan) {
-      return "# Plan\n\nN/A";
+      return '# Plan\n\nN/A';
     }
 
-    const topSteps = plan.steps.slice(0, 3).map(s => {
-      return `${s.operation}${s.table ? ` (${s.table})` : ""}: ${s.rowsScanned} rows`;
-    }).join("\n");
+    const topSteps = plan.steps
+      .slice(0, 3)
+      .map((s) => {
+        return `${s.operation}${s.table ? ` (${s.table})` : ''}: ${s.rowsScanned} rows`;
+      })
+      .join('\n');
 
     return `# Query Plan (85%)
 
@@ -1573,22 +1618,22 @@ ${topSteps}`;
     const { analysis } = result;
 
     if (!analysis) {
-      return "# Analysis\n\nN/A";
+      return '# Analysis\n\nN/A';
     }
 
     const topOptimizations = analysis.optimizations
       .slice(0, 3)
-      .map(o => `- ${o.description}`)
-      .join("\n");
+      .map((o) => `- ${o.description}`)
+      .join('\n');
 
     return `# Query Analysis (90%)
 
 Score: ${analysis.score}/100
 Complexity: ${analysis.complexity}
-Tables: ${analysis.tablesAccessed.join(", ")}
+Tables: ${analysis.tablesAccessed.join(', ')}
 
 Optimizations:
-${topOptimizations || "None"}
+${topOptimizations || 'None'}
 
 Missing Indexes: ${analysis.missingIndexes.length}`;
   }
@@ -1597,16 +1642,16 @@ Missing Indexes: ${analysis.missingIndexes.length}`;
     const { result: queryResult } = result;
 
     if (!queryResult || !queryResult.rows || queryResult.rows.length === 0) {
-      return "# Result\n\nNo rows";
+      return '# Result\n\nNo rows';
     }
 
     const topRows = queryResult.rows.slice(0, 5);
     const rowsList = topRows
       .map((row, i) => {
         const preview = JSON.stringify(row).slice(0, 80);
-        return `${i + 1}. ${preview}${JSON.stringify(row).length > 80 ? "..." : ""}`;
+        return `${i + 1}. ${preview}${JSON.stringify(row).length > 80 ? '...' : ''}`;
       })
-      .join("\n");
+      .join('\n');
 
     return `# Query Result (80%)
 
@@ -1620,10 +1665,15 @@ ${rowsList}`;
     const { health } = result;
 
     if (!health) {
-      return "# Health\n\nN/A";
+      return '# Health\n\nN/A';
     }
 
-    const statusIcon = health.status === "healthy" ? "✓" : health.status === "degraded" ? "⚠" : "✗";
+    const statusIcon =
+      health.status === 'healthy'
+        ? '✓'
+        : health.status === 'degraded'
+          ? '⚠'
+          : '✗';
 
     return `# Database Health (85%)
 
@@ -1639,7 +1689,7 @@ Disk: ${health.diskUsage?.percentUsed}% used`;
     const { pool } = result;
 
     if (!pool) {
-      return "# Pool\n\nN/A";
+      return '# Pool\n\nN/A';
     }
 
     return `# Connection Pool (85%)
@@ -1656,13 +1706,16 @@ Efficiency: ${pool.poolEfficiency.toFixed(1)}%`;
     const { slowQueries } = result;
 
     if (!slowQueries || slowQueries.length === 0) {
-      return "# Slow Queries\n\nNone";
+      return '# Slow Queries\n\nNone';
     }
 
-    const topSlow = slowQueries.slice(0, 5).map(q => {
-      const queryPreview = q.query.slice(0, 50);
-      return `${q.executionTime}ms: ${queryPreview}...`;
-    }).join("\n");
+    const topSlow = slowQueries
+      .slice(0, 5)
+      .map((q) => {
+        const queryPreview = q.query.slice(0, 50);
+        return `${q.executionTime}ms: ${queryPreview}...`;
+      })
+      .join('\n');
 
     return `# Slow Queries (85%)
 
@@ -1676,7 +1729,7 @@ ${topSlow}`;
     const { batch } = result;
 
     if (!batch) {
-      return "# Batch\n\nN/A";
+      return '# Batch\n\nN/A';
     }
 
     return `# Batch Execution (90%)
@@ -1719,11 +1772,11 @@ export function getSmartDatabase(
 export async function runSmartDatabase(
   options: SmartDatabaseOptions
 ): Promise<string> {
-  const { homedir } = await import("os");
-  const { join } = await import("path");
+  const { homedir } = await import('os');
+  const { join } = await import('path');
 
   const cache = new CacheEngineClass(
-    join(homedir(), ".hypercontext", "cache"),
+    join(homedir(), '.hypercontext', 'cache'),
     100
   );
   const tokenCounter = new TokenCounterClass();
@@ -1737,7 +1790,7 @@ export async function runSmartDatabase(
 ---
 Tokens: ${result.tokens.actual} (saved ${result.tokens.saved}, ${result.tokens.reduction}% reduction)
 Execution time: ${result.executionTime}ms
-${result.cached ? "Cached result" : "Fresh execution"}`;
+${result.cached ? 'Cached result' : 'Fresh execution'}`;
 }
 
 // ============================================================================
@@ -1745,100 +1798,110 @@ ${result.cached ? "Cached result" : "Fresh execution"}`;
 // ============================================================================
 
 export const SMART_DATABASE_TOOL_DEFINITION = {
-  name: "smart_database",
+  name: 'smart_database',
   description:
-    "Database query optimizer with connection pooling, circuit breaking, and 83% token reduction. Supports query execution, EXPLAIN analysis, performance optimization, health monitoring, slow query detection, and batch operations.",
+    'Database query optimizer with connection pooling, circuit breaking, and 83% token reduction. Supports query execution, EXPLAIN analysis, performance optimization, health monitoring, slow query detection, and batch operations.',
   inputSchema: {
-    type: "object",
+    type: 'object',
     properties: {
       action: {
-        type: "string",
-        enum: ["query", "explain", "analyze", "optimize", "health", "pool", "slow", "batch"],
-        description: "Action to perform (default: query)",
-        default: "query",
+        type: 'string',
+        enum: [
+          'query',
+          'explain',
+          'analyze',
+          'optimize',
+          'health',
+          'pool',
+          'slow',
+          'batch',
+        ],
+        description: 'Action to perform (default: query)',
+        default: 'query',
       },
       engine: {
-        type: "string",
-        enum: ["postgresql", "mysql", "sqlite", "mongodb", "redis", "generic"],
-        description: "Database engine (default: generic)",
-        default: "generic",
+        type: 'string',
+        enum: ['postgresql', 'mysql', 'sqlite', 'mongodb', 'redis', 'generic'],
+        description: 'Database engine (default: generic)',
+        default: 'generic',
       },
       query: {
-        type: "string",
-        description: "SQL query to execute (required for query/explain/analyze/optimize)",
+        type: 'string',
+        description:
+          'SQL query to execute (required for query/explain/analyze/optimize)',
       },
       queries: {
-        type: "array",
-        items: { type: "string" },
-        description: "Array of queries for batch execution",
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Array of queries for batch execution',
       },
       params: {
-        type: "array",
-        description: "Query parameters for prepared statements",
+        type: 'array',
+        description: 'Query parameters for prepared statements',
       },
       timeout: {
-        type: "number",
-        description: "Query timeout in milliseconds (default: 30000)",
+        type: 'number',
+        description: 'Query timeout in milliseconds (default: 30000)',
         default: 30000,
       },
       limit: {
-        type: "number",
-        description: "Maximum rows to return (default: 10)",
+        type: 'number',
+        description: 'Maximum rows to return (default: 10)',
         default: 10,
       },
       poolSize: {
-        type: "number",
-        description: "Connection pool size (default: 10)",
+        type: 'number',
+        description: 'Connection pool size (default: 10)',
         default: 10,
       },
       maxPoolSize: {
-        type: "number",
-        description: "Maximum pool size (default: 20)",
+        type: 'number',
+        description: 'Maximum pool size (default: 20)',
         default: 20,
       },
       enableCache: {
-        type: "boolean",
-        description: "Enable query result caching (default: true)",
+        type: 'boolean',
+        description: 'Enable query result caching (default: true)',
         default: true,
       },
       ttl: {
-        type: "number",
-        description: "Cache TTL in seconds (default: 300)",
+        type: 'number',
+        description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
       force: {
-        type: "boolean",
-        description: "Force fresh query, bypassing cache (default: false)",
+        type: 'boolean',
+        description: 'Force fresh query, bypassing cache (default: false)',
         default: false,
       },
       enableRetry: {
-        type: "boolean",
-        description: "Enable automatic retry on failure (default: true)",
+        type: 'boolean',
+        description: 'Enable automatic retry on failure (default: true)',
         default: true,
       },
       maxRetries: {
-        type: "number",
-        description: "Maximum retry attempts (default: 3)",
+        type: 'number',
+        description: 'Maximum retry attempts (default: 3)',
         default: 3,
       },
       slowQueryThreshold: {
-        type: "number",
-        description: "Slow query threshold in milliseconds (default: 1000)",
+        type: 'number',
+        description: 'Slow query threshold in milliseconds (default: 1000)',
         default: 1000,
       },
       enableCircuitBreaker: {
-        type: "boolean",
-        description: "Enable circuit breaker pattern (default: true)",
+        type: 'boolean',
+        description: 'Enable circuit breaker pattern (default: true)',
         default: true,
       },
       batchSize: {
-        type: "number",
-        description: "Batch size for batch operations (default: 100)",
+        type: 'number',
+        description: 'Batch size for batch operations (default: 100)',
         default: 100,
       },
       parallelBatches: {
-        type: "number",
-        description: "Number of parallel batch operations (default: 4)",
+        type: 'number',
+        description: 'Number of parallel batch operations (default: 4)',
         default: 4,
       },
     },
