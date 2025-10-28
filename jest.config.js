@@ -14,7 +14,7 @@ export default {
     ],
   },
   testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts', '**/*.bench.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/worktrees/', '/dist/'],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
