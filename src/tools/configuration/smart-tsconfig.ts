@@ -14,8 +14,8 @@ import { resolve, dirname, join } from 'path';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
-import { globalMetricsCollector } from '../../core/globals.js';
 import { TokenCounter } from '../../core/token-counter.js';
+import { MetricsCollector } from '../../core/metrics.js';
 import { hashContent, generateCacheKey } from '../shared/hash-utils.js';
 
 // ==================== Type Definitions ====================
@@ -106,15 +106,18 @@ interface SmartTsConfigOutput {
 class SmartTsConfig {
   private cache: CacheEngine;
   private tokenCounter: TokenCounter;
+  private metrics: MetricsCollector;
   private projectRoot: string;
 
   constructor(
     cache: CacheEngine,
     tokenCounter: TokenCounter,
+    metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
     this.tokenCounter = tokenCounter;
+    this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
 
@@ -149,7 +152,7 @@ class SmartTsConfig {
           const executionTime = Date.now() - startTime;
 
           // Record metrics
-          globalMetricsCollector.record({
+          this.metrics.record({
             operation: 'smart-tsconfig',
             duration: executionTime,
             cacheHit: true,
@@ -208,7 +211,7 @@ class SmartTsConfig {
       const executionTime = Date.now() - startTime;
 
       // Record metrics
-      globalMetricsCollector.record({
+      this.metrics.record({
         operation: 'smart-tsconfig',
         duration: executionTime,
         cacheHit: false,
@@ -228,7 +231,7 @@ class SmartTsConfig {
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
-      globalMetricsCollector.record({
+      this.metrics.record({
         operation: 'smart-tsconfig',
         duration: executionTime,
         cacheHit: false,
@@ -601,9 +604,10 @@ class SmartTsConfig {
 export function getSmartTsConfig(
   cache: CacheEngine,
   tokenCounter: TokenCounter,
+  metrics: MetricsCollector,
   projectRoot?: string
 ): SmartTsConfig {
-  return new SmartTsConfig(cache, tokenCounter, projectRoot);
+  return new SmartTsConfig(cache, tokenCounter, metrics, projectRoot);
 }
 
 /**
@@ -617,8 +621,9 @@ export async function runSmartTsconfig(
 ): Promise<SmartTsConfigOutput> {
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'));
   const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
   const projectRoot = options.projectRoot ?? process.cwd();
-  const tool = getSmartTsConfig(cache, tokenCounter, projectRoot);
+  const tool = getSmartTsConfig(cache, tokenCounter, metrics, projectRoot);
 
   try {
     return await tool.run(options);
