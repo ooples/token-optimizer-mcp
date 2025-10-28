@@ -820,15 +820,16 @@ export async function runSmartORM(options: SmartORMOptions): Promise<string> {
   const { CacheEngine: CacheEngineClass } = await import(
     '../../core/cache-engine'
   );
-  const { globalTokenCounter, globalMetricsCollector } = await import(
-    '../../core/globals'
-  );
+  const { TokenCounter } = await import('../../core/token-counter');
+  const { MetricsCollector } = await import('../../core/metrics');
 
   const cache = new CacheEngineClass(
     join(homedir(), '.hypercontext', 'cache'),
     100
   );
-  const orm = getSmartOrm(cache, globalTokenCounter, globalMetricsCollector);
+  const tokenCounter = new TokenCounter();
+  const metrics = new MetricsCollector();
+  const orm = getSmartOrm(cache, tokenCounter, metrics);
   const result = await orm.run(options);
 
   return JSON.stringify(result, null, 2);
