@@ -526,7 +526,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'analyze_project_tokens',
         description:
-          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all operations-*.csv files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log-*.jsonl files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1098,19 +1098,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             targetSessionId = sessionData.sessionId;
           }
 
-          // --- 2. Read Operations CSV ---
-          const csvFilePath = path.join(
+          // --- 2. Read JSONL Log ---
+          const jsonlFilePath = path.join(
             hooksDataPath,
-            `operations-${targetSessionId}.csv`
+            `session-log-${targetSessionId}.jsonl`
           );
-          if (!fs.existsSync(csvFilePath)) {
+          if (!fs.existsSync(jsonlFilePath)) {
             throw new Error(
-              `Operations file not found for session ${targetSessionId}`
+              `JSONL log not found for session ${targetSessionId}`
             );
           }
 
-          const csvContent = fs.readFileSync(csvFilePath, 'utf-8');
-          const lines = csvContent.trim().split('\n');
+          // Parse JSONL using shared utility
+          const { operations } = await parseSessionLog(jsonlFilePath);
 
           // --- 3. Filter and Process Operations ---
           let originalTokens = 0;
@@ -1120,7 +1120,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           // DEBUG: Track filtering and security logic
           const debugInfo = {
-            totalLines: lines.length,
+            totalOperations: operations.length,
             securityRejected: 0,
           };
 
@@ -1130,14 +1130,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // Resolve to absolute path to prevent bypasses
           const secureBaseDir = path.resolve(os.homedir());
 
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            const parts = line.split(',');
-            if (parts.length < 4) continue;
-
-            const toolName = parts[1];
-            const tokens = parseInt(parts[2], 10) || 0;
-            let metadata = parts[3] || '';
+          for (const op of operations) {
+            const toolName = op.toolName;
+            const tokens = op.tokens;
+            let metadata = op.metadata;
 
             // Strip surrounding quotes from file path
             metadata = metadata.trim().replace(/^"(.*)"$/, '$1');
@@ -1217,7 +1213,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   {
                     success: true,
                     sessionId: targetSessionId,
-                    operationsAnalyzed: lines.length,
+                    operationsAnalyzed: operations.length,
                     operationsCompressed,
                     tokens: {
                       before: originalTokens,
