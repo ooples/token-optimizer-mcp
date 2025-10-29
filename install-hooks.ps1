@@ -543,10 +543,10 @@ try {
             Write-Host "║   Installation Complete!                                  ║" -ForegroundColor Green
             Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
             Write-Host ""
-            Write-Status "Next steps:" "INFO"
+            Write-Status "Next steps" "INFO"
             Write-Status "1. Restart Claude Code CLI" "INFO"
             Write-Status "2. Run any command (e.g. claude help)" "INFO"
-            Write-Status "3. Check logs in: $HOOKS_DIR\logs\dispatcher.log" "INFO"
+            Write-Status "3. Check logs at $HOOKS_DIR\logs\dispatcher.log" "INFO"
             Write-Host ""
             Write-Status "Documentation: https://github.com/ooples/token-optimizer-mcp/blob/main/HOOKS-INSTALLATION.md" "INFO"
         } else {
