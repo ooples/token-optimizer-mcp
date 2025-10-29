@@ -220,7 +220,10 @@ export class DeduplicationModule implements IOptimizationModule {
       // Normalize for comparison (trim whitespace and punctuation)
       const normalized = caseSensitive
         ? sentence.trim().replace(/[.!?]+$/, '')
-        : sentence.trim().replace(/[.!?]+$/, '').toLowerCase();
+        : sentence
+            .trim()
+            .replace(/[.!?]+$/, '')
+            .toLowerCase();
 
       // Skip short sentences
       if (normalized.length < minLength) {
