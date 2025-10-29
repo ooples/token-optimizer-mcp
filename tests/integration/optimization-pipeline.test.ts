@@ -101,7 +101,7 @@ Another  line   here.
       const dedup = new DeduplicationModule(tokenCounter);
       const optimizer = new TokenOptimizer([dedup], tokenCounter);
 
-      const text = 'Same. Same. Same. Same.';
+      const text = 'Repeated. Repeated. Repeated. Repeated.';
       const result = await optimizer.optimize(text);
 
       expect(result.percentSaved).toBeGreaterThan(0);
@@ -230,7 +230,8 @@ Copyright 2024. All rights reserved.
       const result = await optimizer.optimize(text);
 
       expect(result.savings).toBeGreaterThan(0);
-      expect(result.moduleResults[0].metadata?.duplicateSentences).toBe(1);
+      // "Copyright 2024." and "All rights reserved." both appear twice = 2 duplicates
+      expect(result.moduleResults[0].metadata?.duplicateSentences).toBe(2);
     });
 
     it('should optimize copy-paste artifacts', async () => {

@@ -1,4 +1,7 @@
-import { IOptimizationModule, OptimizationResult } from './IOptimizationModule.js';
+import {
+  IOptimizationModule,
+  OptimizationResult,
+} from './IOptimizationModule.js';
 import { ITokenCounter } from '../interfaces/ITokenCounter.js';
 
 /**
@@ -120,14 +123,11 @@ export class DeduplicationModule implements IOptimizationModule {
 
     if (preserveCodeBlocks) {
       // Extract code blocks and replace with placeholders
-      optimized = optimized.replace(
-        /```[\s\S]*?```/g,
-        (match) => {
-          const index = codeBlocks.length;
-          codeBlocks.push(match);
-          return `___CODE_BLOCK_${index}___`;
-        }
-      );
+      optimized = optimized.replace(/```[\s\S]*?```/g, (match) => {
+        const index = codeBlocks.length;
+        codeBlocks.push(match);
+        return `___CODE_BLOCK_${index}___`;
+      });
     }
 
     // Deduplicate at paragraph level if requested
@@ -189,7 +189,9 @@ export class DeduplicationModule implements IOptimizationModule {
     duplicateCount: number;
   } {
     // Split into sentences (simple split on . ! ?)
-    const sentences = text.split(/([.!?]+\s+)/).filter(s => s.trim().length > 0);
+    const sentences = text
+      .split(/([.!?]+\s+)/)
+      .filter((s) => s.trim().length > 0);
     const minLength = this.options?.minSentenceLength ?? 5;
     const caseSensitive = this.options?.caseSensitive ?? true;
     const preserveFirst = this.options?.preserveFirst ?? true;
@@ -198,32 +200,40 @@ export class DeduplicationModule implements IOptimizationModule {
     const result: string[] = [];
     let originalCount = 0;
     let duplicateCount = 0;
+    let skipNextPunctuation = false;
 
     for (let i = 0; i < sentences.length; i++) {
       const sentence = sentences[i];
 
-      // Skip punctuation-only segments
+      // Handle punctuation-only segments
       if (/^[.!?\s]+$/.test(sentence)) {
-        result.push(sentence);
+        // Only add punctuation if we didn't just skip a duplicate
+        if (!skipNextPunctuation) {
+          result.push(sentence);
+        }
+        skipNextPunctuation = false;
         continue;
       }
 
       originalCount++;
 
-      // Normalize for comparison
+      // Normalize for comparison (trim whitespace and punctuation)
       const normalized = caseSensitive
-        ? sentence.trim()
-        : sentence.trim().toLowerCase();
+        ? sentence.trim().replace(/[.!?]+$/, '')
+        : sentence.trim().replace(/[.!?]+$/, '').toLowerCase();
 
       // Skip short sentences
       if (normalized.length < minLength) {
         result.push(sentence);
+        skipNextPunctuation = false;
         continue;
       }
 
       // Check for duplicates
       if (seen.has(normalized)) {
         duplicateCount++;
+        // Mark that we should skip the following punctuation
+        skipNextPunctuation = true;
         if (!preserveFirst) {
           // If preserving last, we need to update the result
           // For simplicity, we just skip the duplicate here
@@ -236,6 +246,7 @@ export class DeduplicationModule implements IOptimizationModule {
 
       seen.add(normalized);
       result.push(sentence);
+      skipNextPunctuation = false;
     }
 
     return {
@@ -276,9 +287,7 @@ export class DeduplicationModule implements IOptimizationModule {
       originalCount++;
 
       // Normalize for comparison
-      const normalized = caseSensitive
-        ? trimmed
-        : trimmed.toLowerCase();
+      const normalized = caseSensitive ? trimmed : trimmed.toLowerCase();
 
       // Check for duplicates
       if (seen.has(normalized)) {
@@ -300,24 +309,5 @@ export class DeduplicationModule implements IOptimizationModule {
       originalCount,
       duplicateCount,
     };
-  }
-
-  /**
-   * Calculate similarity between two strings (Jaccard similarity).
-   *
-   * Used for fuzzy matching when similarityThreshold < 1.0.
-   *
-   * @param a - First string
-   * @param b - Second string
-   * @returns Similarity score between 0 and 1
-   */
-  private calculateSimilarity(a: string, b: string): number {
-    const setA = new Set(a.toLowerCase().split(/\s+/));
-    const setB = new Set(b.toLowerCase().split(/\s+/));
-
-    const intersection = new Set([...setA].filter(x => setB.has(x)));
-    const union = new Set([...setA, ...setB]);
-
-    return union.size > 0 ? intersection.size / union.size : 0;
   }
 }

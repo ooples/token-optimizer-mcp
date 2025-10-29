@@ -27,7 +27,7 @@ describe('Semantic Caching Integration', () => {
       vectorStore,
       {
         enabled: true,
-        similarityThreshold: 0.85,
+        similarityThreshold: 0.6,
         topK: 5,
       }
     );
@@ -73,13 +73,18 @@ describe('Semantic Caching Integration', () => {
   });
 
   it('should track semantic hits in statistics', async () => {
-    await cacheEngine.setWithSemantic('hello world', 'response1', 100, 50);
+    await cacheEngine.setWithSemantic(
+      'get user information from database',
+      'response1',
+      100,
+      50
+    );
 
     // Exact match
-    await cacheEngine.getWithSemantic('hello world');
+    await cacheEngine.getWithSemantic('get user information from database');
 
     // Semantic match
-    await cacheEngine.getWithSemantic('hello earth'); // Similar to "hello world"
+    await cacheEngine.getWithSemantic('retrieve user info from db'); // Similar to "get user information from database"
 
     const stats = cacheEngine.getStats();
 

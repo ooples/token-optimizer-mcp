@@ -1,4 +1,7 @@
-import { IOptimizationModule, OptimizationResult } from './IOptimizationModule.js';
+import {
+  IOptimizationModule,
+  OptimizationResult,
+} from './IOptimizationModule.js';
 import { ITokenCounter } from '../interfaces/ITokenCounter.js';
 
 /**
@@ -101,19 +104,23 @@ export class WhitespaceOptimizationModule implements IOptimizationModule {
 
     if (preserveCodeBlocks) {
       // Extract code blocks and replace with placeholders
-      optimized = optimized.replace(
-        /```[\s\S]*?```/g,
-        (match) => {
-          const index = codeBlocks.length;
-          codeBlocks.push(match);
-          return `___CODE_BLOCK_${index}___`;
-        }
-      );
+      optimized = optimized.replace(/```[\s\S]*?```/g, (match) => {
+        const index = codeBlocks.length;
+        codeBlocks.push(match);
+        return `___CODE_BLOCK_${index}___`;
+      });
     }
 
-    // Collapse multiple spaces into single spaces
+    // Collapse multiple spaces into single spaces (but not at line start if preserving indentation)
     const spacesBefore = (optimized.match(/ /g) || []).length;
-    optimized = optimized.replace(/ {2,}/g, ' ');
+    if (this.options?.preserveIndentation) {
+      // Only collapse spaces that are NOT at the beginning of lines
+      // Match: (non-space character)(space)(2+ spaces) -> replace with $1$2
+      optimized = optimized.replace(/([^ \n\t])( ) {2,}/g, '$1$2');
+    } else {
+      // Collapse all multiple spaces
+      optimized = optimized.replace(/ {2,}/g, ' ');
+    }
     const spacesAfter = (optimized.match(/ /g) || []).length;
     stats.spacesRemoved = spacesBefore - spacesAfter;
 
@@ -133,8 +140,13 @@ export class WhitespaceOptimizationModule implements IOptimizationModule {
     const newlinesAfter = (optimized.match(/\n/g) || []).length;
     stats.newlinesRemoved = newlinesBefore - newlinesAfter;
 
-    // Trim leading and trailing whitespace
-    optimized = optimized.trim();
+    // Trim leading and trailing whitespace (only if not preserving indentation)
+    if (!this.options?.preserveIndentation) {
+      optimized = optimized.trim();
+    } else {
+      // Just trim trailing whitespace to avoid unnecessary blank lines at end
+      optimized = optimized.replace(/\s+$/, '');
+    }
 
     // Restore code blocks
     if (preserveCodeBlocks && codeBlocks.length > 0) {

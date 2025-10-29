@@ -1,4 +1,7 @@
-import { IOptimizationModule, OptimizationResult } from './IOptimizationModule.js';
+import {
+  IOptimizationModule,
+  OptimizationResult,
+} from './IOptimizationModule.js';
 import { CompressionEngine } from '../core/compression-engine.js';
 import { ITokenCounter } from '../interfaces/ITokenCounter.js';
 

@@ -207,7 +207,7 @@ export class TokenOptimizer {
    * @returns Array of module names in execution order
    */
   getModuleNames(): string[] {
-    return this.modules.map(m => m.name);
+    return this.modules.map((m) => m.name);
   }
 
   /**

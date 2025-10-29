@@ -27,9 +27,10 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
     const normalized = this.normalizeText(text);
     const embedding = new Array(this.dimensions).fill(0);
 
-    // Part 1: Hash-based features (first 1/3 of dimensions)
+    // Part 1: Hash-based features (first 1/6 of dimensions)
     // Use multiple hash functions to create diverse features
-    const hashSection = Math.floor(this.dimensions / 3);
+    // Reduced from 1/3 to 1/6 to reduce sensitivity to exact text changes
+    const hashSection = Math.floor(this.dimensions / 6);
     for (let i = 0; i < hashSection; i++) {
       const hash = createHash('sha256')
         .update(normalized + i.toString())
@@ -38,7 +39,8 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
       embedding[i] = hash[i % hash.length] / 127.5 - 1;
     }
 
-    // Part 2: Statistical features (middle 1/3)
+    // Part 2: Statistical features (next 1/3)
+    // Increased weight for semantic features
     const statsSection = Math.floor(this.dimensions / 3);
     const statsStart = hashSection;
     const stats = this.computeStatistics(normalized);
@@ -46,7 +48,8 @@ export class FoundationModelEmbeddingGenerator implements IEmbeddingGenerator {
       embedding[statsStart + i] = stats[i % stats.length];
     }
 
-    // Part 3: N-gram features (last 1/3)
+    // Part 3: N-gram features (remaining ~1/2)
+    // Increased weight for n-gram semantic matching
     const ngramSection = this.dimensions - hashSection - statsSection;
     const ngramStart = hashSection + statsSection;
     const ngrams = this.computeNgramFeatures(normalized, ngramSection);
