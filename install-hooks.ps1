@@ -390,7 +390,7 @@ function Configure-MCPServer {
 
     if ($toolsConfigured -eq 0) {
         Write-Status "No AI tools detected. MCP server not configured." "WARN"
-        Write-Status "Supported tools: Claude Desktop, Cursor IDE, Cline (VS Code), GitHub Copilot (VS Code), Windsurf" "INFO"
+        Write-Status "Supported tools: Claude Desktop / Cursor IDE / Cline (VS Code) / GitHub Copilot (VS Code) / Windsurf" "INFO"
     } else {
         Write-Status "✓ Configured token-optimizer MCP server for $toolsConfigured AI tool(s)" "SUCCESS"
     }
@@ -558,6 +558,6 @@ try {
     Write-Host ""
     Write-Status "Installation failed: $($_.Exception.Message)" "ERROR"
     Write-Status "Check the error above and try again" "ERROR"
-    Write-Status "For help, see: https://github.com/ooples/token-optimizer-mcp/issues" "INFO"
+    Write-Status "For help see: https://github.com/ooples/token-optimizer-mcp/issues" "INFO"
     exit 1
 }
