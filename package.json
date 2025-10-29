@@ -12,6 +12,8 @@
     "dist/**/*",
     "cli-wrapper.mjs",
     "hooks/**/*",
+    "install-hooks.ps1",
+    "install-hooks.sh",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
