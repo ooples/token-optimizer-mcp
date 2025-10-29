@@ -1,5 +1,5 @@
 {
-  "name": "token-optimizer-mcp",
+  "name": "@ooples/token-optimizer-mcp",
   "version": "2.12.1",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
   "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
