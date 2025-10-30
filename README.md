@@ -29,33 +29,28 @@ Token Optimizer MCP is a Model Context Protocol (MCP) server that reduces contex
 # Run PowerShell as Administrator, then:
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
-# Install globally
+# Install globally (hooks install automatically!)
 npm install -g @ooples/token-optimizer-mcp
-
-# Run the installer
-cd "$env:APPDATA\npm\node_modules\@ooples\token-optimizer-mcp"
-powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
 ```
 
 #### macOS / Linux
 
 ```bash
-# Install globally
+# Install globally (hooks install automatically!)
 npm install -g @ooples/token-optimizer-mcp
-
-# Run the installer
-NPM_PREFIX=$(npm config get prefix)
-cd "$NPM_PREFIX/lib/node_modules/@ooples/token-optimizer-mcp"
-bash install-hooks.sh
 ```
 
-This will:
+That's it! The postinstall script will automatically:
 1. ✅ Install token-optimizer-mcp globally via npm
 2. ✅ Auto-detect and configure all installed AI tools (Claude Desktop, Cursor, Cline, etc.)
 3. ✅ Set up automatic token optimization on every tool call
 4. ✅ Configure workspace trust and execution permissions
 
 **Result**: 60-90% token reduction across all operations!
+
+**Note**: If automatic installation is skipped (e.g., in CI environments), you can manually run the installer:
+- Windows: `powershell -ExecutionPolicy Bypass -File install-hooks.ps1`
+- macOS/Linux: `bash install-hooks.sh`
 
 ### Manual Configuration
 

@@ -144,7 +144,7 @@
       {
         "assets": [],
         "draftRelease": false,
-        "successComment": "This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version}. :tada:\n\nThe release is available on:\n- [GitHub release](${releaseUrl})\n- [npm package (@latest dist-tag)](https://www.npmjs.com/package/token-optimizer-mcp/v/${nextRelease.version})\n\nYour **semantic-release** bot :package::rocket:",
+        "successComment": "This ${issue.pull_request ? 'PR is included' : 'issue has been resolved'} in version ${nextRelease.version}. :tada:\n\nThe release is available on:\n- [GitHub release](https://github.com/ooples/token-optimizer-mcp/releases/tag/v${nextRelease.version})\n- [npm package (@latest dist-tag)](https://www.npmjs.com/package/token-optimizer-mcp/v/${nextRelease.version})\n\nYour **semantic-release** bot :package::rocket:",
         "failComment": false,
         "failTitle": false,
         "labels": [
