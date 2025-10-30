@@ -14,14 +14,14 @@
     "hooks/**/*",
     "install-hooks.ps1",
     "install-hooks.sh",
-    "scripts/postinstall.js",
+    "scripts/postinstall.cjs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
     "CLI_WRAPPER_README.md"
   ],
   "scripts": {
-    "postinstall": "node scripts/postinstall.js",
+    "postinstall": "node scripts/postinstall.cjs",
     "build": "tsc",
     "start": "node dist/server/index.js",
     "dev": "tsc --watch",
