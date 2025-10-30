@@ -91,7 +91,7 @@ if ($oldHasBOM) {
 # Test 4: Verify Claude Code can parse the file
 Write-Host "`n[TEST 4] Verifying file is compatible with JSON parsers..." -ForegroundColor Yellow
 if (Get-Command node -ErrorAction SilentlyContinue) {
-    $nodeTest = node -e "try { require('fs').readFileSync('$($testSettingsFile.Replace('\','\\'))'); console.log('OK'); } catch(e) { console.error('ERROR:', e.message); process.exit(1); }" 2>&1
+    $nodeTest = node -e "try { JSON.parse(require('fs').readFileSync('$($testSettingsFile.Replace('\','\\'))', 'utf8')); console.log('OK'); } catch(e) { console.error('ERROR:', e.message); process.exit(1); }" 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "[PASS] Node.js JSON parser accepts the file" -ForegroundColor Green
     } else {
