@@ -44,3 +44,40 @@ worktrees/
 # Local development configs and logs
 .codex/
 logs/
+
+# Report and investigation files (per CLAUDE.md - never create these)
+*REPORT.md
+*-REPORT.md
+*_REPORT.md
+AGENT_*.md
+*-FINDINGS.md
+*_FINDINGS.md
+*INVESTIGATION.md
+*-INVESTIGATION.md
+*ANALYSIS.md
+*-ANALYSIS.md
+*_ANALYSIS.md
+*-plan.md
+*_PLAN.md
+FIX_PLAN.md
+SUMMARY.md
+*_SUMMARY.md
+
+# Temporary files and scripts
+fix-*.ps1
+debug-*.ps1
+test-*.ps1
+*.patch
+fix-*.cjs
+fix-*.js
+gemini-*.md
+gemini-*.txt
+generated-*.txt
+cleanup*.ps1
+*.tmp
+
+# Lock files from tools
+.ambiance-mcp-*.lock
+
+# Temporary directories
+${HOME}/
