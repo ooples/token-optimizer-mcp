@@ -18,7 +18,7 @@ $CLAUDE_SETTINGS = "$env:USERPROFILE\.claude\settings.json"
 $CLAUDE_STATE = "$env:USERPROFILE\.claude.json"
 $MCP_CONFIG = "$env:APPDATA\Claude\claude_desktop_config.json"
 
-$REPO_URL = "https://raw.githubusercontent.com/ooples/token-optimizer-mcp/main/hooks"
+$REPO_URL = "https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/hooks"
 
 # ============================================================
 # Helper Functions
