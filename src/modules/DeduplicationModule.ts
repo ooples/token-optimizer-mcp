@@ -416,7 +416,7 @@ export class DeduplicationModule implements IOptimizationModule {
     if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
       try {
         const segmenter = new (Intl as any).Segmenter('en', {
-          granularity: 'sentence'
+          granularity: 'sentence',
         });
         const segments = segmenter.segment(text);
         const sentences: string[] = [];
