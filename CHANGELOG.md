@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2025-10-30
+
+### Fixed
+- **Fixed flaky performance tests in CI/CD pipeline**
+  - Increased timeout from 200ms to 500ms in path-traversal.test.ts
+  - Accounts for CI environment variability
+  - Prevents intermittent release workflow failures
+  - All performance benchmarks now stable across all Node.js versions
+
+### Changed
+- **Complete repository cleanup and organization**
+  - Removed 75+ junk files (archive/, AGENT_*.md, *REPORT.md, fix scripts)
+  - Moved 13 documentation files to docs/ folder for better organization
+  - Moved utility files to proper locations (scripts/, examples/)
+  - Removed duplicate documentation files
+  - Clean, professional root directory structure
+
+### Security
+- **Removed committed secrets from repository**
+  - Deleted .mcpregistry_registry_token (contained JWT token)
+  - Enhanced .gitignore to prevent re-adding token files
+  - Added comprehensive patterns for secrets and temporary files
+
+### Improved
+- **Enhanced .gitignore patterns**
+  - Comprehensive patterns per CLAUDE.md policies
+  - Prevents report/investigation files
+  - Blocks temporary scripts and lock files
+  - Excludes worktrees and ${HOME}/ artifacts
+
 ## [2.4.0] - 2025-10-20
 
 ### Fixed
