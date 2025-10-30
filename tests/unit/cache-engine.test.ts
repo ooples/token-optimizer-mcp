@@ -16,6 +16,20 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+/**
+ * Helper to clean up cache artifacts (db, WAL, SHM files and directory)
+ */
+function cleanupCacheArtifacts(dbPath: string, cacheDir?: string): void {
+  if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  const walPath = `${dbPath}-wal`;
+  const shmPath = `${dbPath}-shm`;
+  if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+  if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+  if (cacheDir && fs.existsSync(cacheDir)) {
+    fs.rmdirSync(cacheDir);
+  }
+}
+
 describe('CacheEngine', () => {
   let cache: CacheEngine;
   let testDbPath: string;
@@ -492,12 +506,7 @@ describe('CacheEngine', () => {
       cacheWithEnv.close();
 
       // Clean up custom directory
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-      const walPath = `${dbPath}-wal`;
-      const shmPath = `${dbPath}-shm`;
-      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-      if (fs.existsSync(customCacheDir)) fs.rmdirSync(customCacheDir);
+      cleanupCacheArtifacts(dbPath, customCacheDir);
     });
 
     it('should fall back to os.homedir() when environment variable not set', () => {
@@ -530,12 +539,7 @@ describe('CacheEngine', () => {
       cacheWithExplicit.close();
 
       // Clean up
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-      const walPath = `${dbPath}-wal`;
-      const shmPath = `${dbPath}-shm`;
-      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-      if (fs.existsSync(path.dirname(dbPath))) fs.rmdirSync(path.dirname(dbPath));
+      cleanupCacheArtifacts(dbPath, path.dirname(dbPath));
     });
 
     it('should create cache directory from environment variable if it does not exist', () => {
@@ -552,12 +556,7 @@ describe('CacheEngine', () => {
       cacheWithEnv.close();
 
       // Clean up
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-      const walPath = `${dbPath}-wal`;
-      const shmPath = `${dbPath}-shm`;
-      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-      if (fs.existsSync(customCacheDir)) fs.rmdirSync(customCacheDir);
+      cleanupCacheArtifacts(dbPath, customCacheDir);
     });
 
     it('should work correctly with environment variable set to existing directory', () => {
@@ -578,12 +577,7 @@ describe('CacheEngine', () => {
       cacheWithEnv.close();
 
       // Clean up
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-      const walPath = `${dbPath}-wal`;
-      const shmPath = `${dbPath}-shm`;
-      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-      if (fs.existsSync(customCacheDir)) fs.rmdirSync(customCacheDir);
+      cleanupCacheArtifacts(dbPath, customCacheDir);
     });
   });
 });
