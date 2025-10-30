@@ -44,12 +44,12 @@ function Test-Prerequisites {
     if ($PSVersionTable.PSVersion.Major -lt 5) {
         throw "PowerShell 5.1 or later is required. Current version: $($PSVersionTable.PSVersion)"
     }
-    Write-Status "✓ PowerShell version: $($PSVersionTable.PSVersion)" "SUCCESS"
+    Write-Status " PowerShell version: $($PSVersionTable.PSVersion)" "SUCCESS"
 
     # Check Claude Code is installed
     try {
         $claudeVersion = & claude --version 2>&1
-        Write-Status "✓ Claude Code installed: $claudeVersion" "SUCCESS"
+        Write-Status " Claude Code installed: $claudeVersion" "SUCCESS"
     } catch {
         throw "Claude Code CLI not found. Install from: https://docs.claude.com/en/docs/claude-code"
     }
@@ -60,9 +60,9 @@ function Test-Prerequisites {
         Write-Status "PowerShell execution policy is Restricted" "WARN"
         Write-Status "Setting execution policy to RemoteSigned..." "INFO"
         Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-        Write-Status "✓ Execution policy updated" "SUCCESS"
+        Write-Status " Execution policy updated" "SUCCESS"
     } else {
-        Write-Status "✓ Execution policy: $policy" "SUCCESS"
+        Write-Status " Execution policy: $policy" "SUCCESS"
     }
 
     # Check token-optimizer-mcp is installed (optional)
@@ -75,12 +75,12 @@ function Test-Prerequisites {
             $response = Read-Host "Install token-optimizer-mcp now? (y/n)"
             if ($response -eq "y") {
                 npm install -g @ooples/token-optimizer-mcp
-                Write-Status "✓ token-optimizer-mcp installed" "SUCCESS"
+                Write-Status " token-optimizer-mcp installed" "SUCCESS"
             } else {
                 throw "token-optimizer-mcp is required for hooks to work"
             }
         } else {
-            Write-Status "✓ token-optimizer-mcp found" "SUCCESS"
+            Write-Status " token-optimizer-mcp found" "SUCCESS"
         }
     }
 }
@@ -91,7 +91,7 @@ function Install-HooksFiles {
     # Create hooks directory
     if (-not (Test-Path $HOOKS_DIR)) {
         New-Item -ItemType Directory -Path $HOOKS_DIR -Force | Out-Null
-        Write-Status "✓ Created hooks directory: $HOOKS_DIR" "SUCCESS"
+        Write-Status " Created hooks directory: $HOOKS_DIR" "SUCCESS"
     }
 
     # Create subdirectories
@@ -118,16 +118,16 @@ function Install-HooksFiles {
         try {
             Write-Status "Downloading: $($file.Source)" "INFO"
             Invoke-WebRequest -Uri $file.Source -OutFile $file.Dest -UseBasicParsing
-            Write-Status "✓ Downloaded: $(Split-Path $file.Dest -Leaf)" "SUCCESS"
+            Write-Status " Downloaded: $(Split-Path $file.Dest -Leaf)" "SUCCESS"
         } catch {
-            Write-Status "⚠ Failed to download $($file.Source): $($_.Exception.Message)" "ERROR"
+            Write-Status " Failed to download $($file.Source): $($_.Exception.Message)" "ERROR"
             Write-Status "Using local package files instead..." "INFO"
 
             # Fallback: Copy from npm package
             $npmPath = "$env:APPDATA\npm\node_modules\@ooples\token-optimizer-mcp\hooks"
             if (Test-Path $npmPath) {
                 Copy-Item -Path "$npmPath\*" -Destination $HOOKS_DIR -Recurse -Force
-                Write-Status "✓ Copied hooks from npm package" "SUCCESS"
+                Write-Status " Copied hooks from npm package" "SUCCESS"
             } else {
                 throw "Could not download hooks and npm package not found"
             }
@@ -142,14 +142,14 @@ function Configure-ClaudeSettings {
     $settingsDir = Split-Path $CLAUDE_SETTINGS
     if (-not (Test-Path $settingsDir)) {
         New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
-        Write-Status "✓ Created settings directory: $settingsDir" "SUCCESS"
+        Write-Status " Created settings directory: $settingsDir" "SUCCESS"
     }
 
     # Backup existing settings
     if (Test-Path $CLAUDE_SETTINGS) {
         $backup = "$CLAUDE_SETTINGS.backup.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         Copy-Item $CLAUDE_SETTINGS $backup
-        Write-Status "✓ Backed up existing settings to: $backup" "SUCCESS"
+        Write-Status " Backed up existing settings to: $backup" "SUCCESS"
     }
 
     # Create or update settings.json
@@ -217,7 +217,7 @@ function Configure-ClaudeSettings {
 
     # Save settings
     $settings | ConvertTo-Json -Depth 10 | Set-Content $CLAUDE_SETTINGS -Encoding UTF8
-    Write-Status "✓ Updated Claude Code settings" "SUCCESS"
+    Write-Status " Updated Claude Code settings" "SUCCESS"
 }
 
 function Configure-WorkspaceTrust {
@@ -256,7 +256,7 @@ function Configure-WorkspaceTrust {
 
     # Save state
     $state | ConvertTo-Json -Depth 100 | Set-Content $CLAUDE_STATE -Encoding UTF8
-    Write-Status "✓ Accepted workspace trust for: $currentDir" "SUCCESS"
+    Write-Status " Accepted workspace trust for: $currentDir" "SUCCESS"
 }
 
 function Configure-MCPServer {
@@ -284,13 +284,13 @@ function Configure-MCPServer {
 
             if (-not $DryRun) {
                 $settings | ConvertTo-Json -Depth 10 | Set-Content $claudeDesktopConfig -Encoding UTF8
-                Write-Status "✓ Configured token-optimizer for Claude Desktop" "SUCCESS"
+                Write-Status " Configured token-optimizer for Claude Desktop" "SUCCESS"
                 $toolsConfigured++
             } else {
                 Write-Status "[DRY RUN] Would configure Claude Desktop" "INFO"
             }
         } catch {
-            Write-Status "⚠ Failed to configure Claude Desktop: $($_.Exception.Message)" "WARN"
+            Write-Status " Failed to configure Claude Desktop: $($_.Exception.Message)" "WARN"
         }
     }
 
@@ -306,13 +306,13 @@ function Configure-MCPServer {
 
             if (-not $DryRun) {
                 $settings | ConvertTo-Json -Depth 10 | Set-Content $cursorConfig -Encoding UTF8
-                Write-Status "✓ Configured token-optimizer for Cursor IDE" "SUCCESS"
+                Write-Status " Configured token-optimizer for Cursor IDE" "SUCCESS"
                 $toolsConfigured++
             } else {
                 Write-Status "[DRY RUN] Would configure Cursor IDE" "INFO"
             }
         } catch {
-            Write-Status "⚠ Failed to configure Cursor IDE: $($_.Exception.Message)" "WARN"
+            Write-Status " Failed to configure Cursor IDE: $($_.Exception.Message)" "WARN"
         }
     }
 
@@ -334,13 +334,13 @@ function Configure-MCPServer {
 
             if (-not $DryRun) {
                 $settings | ConvertTo-Json -Depth 10 | Set-Content $clineConfig -Encoding UTF8
-                Write-Status "✓ Configured token-optimizer for Cline (VS Code)" "SUCCESS"
+                Write-Status " Configured token-optimizer for Cline (VS Code)" "SUCCESS"
                 $toolsConfigured++
             } else {
                 Write-Status "[DRY RUN] Would configure Cline (VS Code)" "INFO"
             }
         } catch {
-            Write-Status "⚠ Failed to configure Cline: $($_.Exception.Message)" "WARN"
+            Write-Status " Failed to configure Cline: $($_.Exception.Message)" "WARN"
         }
     }
 
@@ -356,13 +356,13 @@ function Configure-MCPServer {
 
             if (-not $DryRun) {
                 $settings | ConvertTo-Json -Depth 10 | Set-Content $vscodeWorkspaceConfig -Encoding UTF8
-                Write-Status "✓ Configured token-optimizer for VS Code Copilot (workspace)" "SUCCESS"
+                Write-Status " Configured token-optimizer for VS Code Copilot (workspace)" "SUCCESS"
                 $toolsConfigured++
             } else {
                 Write-Status "[DRY RUN] Would configure VS Code Copilot" "INFO"
             }
         } catch {
-            Write-Status "⚠ Failed to configure VS Code Copilot: $($_.Exception.Message)" "WARN"
+            Write-Status " Failed to configure VS Code Copilot: $($_.Exception.Message)" "WARN"
         }
     }
 
@@ -378,21 +378,21 @@ function Configure-MCPServer {
 
             if (-not $DryRun) {
                 $settings | ConvertTo-Json -Depth 10 | Set-Content $windsurfConfig -Encoding UTF8
-                Write-Status "✓ Configured token-optimizer for Windsurf IDE" "SUCCESS"
+                Write-Status " Configured token-optimizer for Windsurf IDE" "SUCCESS"
                 $toolsConfigured++
             } else {
                 Write-Status "[DRY RUN] Would configure Windsurf IDE" "INFO"
             }
         } catch {
-            Write-Status "⚠ Failed to configure Windsurf IDE: $($_.Exception.Message)" "WARN"
+            Write-Status " Failed to configure Windsurf IDE: $($_.Exception.Message)" "WARN"
         }
     }
 
     if ($toolsConfigured -eq 0) {
         Write-Status "No AI tools detected. MCP server not configured." "WARN"
-        Write-Status "Supported tools: Claude Desktop, Cursor IDE, Cline (VS Code), GitHub Copilot (VS Code), Windsurf" "INFO"
+        Write-Status "Supported tools: Claude Desktop / Cursor IDE / Cline (VS Code) / GitHub Copilot (VS Code) / Windsurf" "INFO"
     } else {
-        Write-Status "✓ Configured token-optimizer MCP server for $toolsConfigured AI tool(s)" "SUCCESS"
+        Write-Status " Configured token-optimizer MCP server for $toolsConfigured AI tool(s)" "SUCCESS"
     }
 }
 
@@ -481,7 +481,7 @@ function Test-Installation {
     if (-not $mcpConfigured) {
         $issues += "token-optimizer MCP server not configured in any AI tool"
     } else {
-        Write-Status "✓ MCP server configured in: $($checkedConfigs -join ', ')" "SUCCESS"
+        Write-Status " MCP server configured in: $($checkedConfigs -join ', ')" "SUCCESS"
     }
 
     if ($issues.Count -gt 0) {
@@ -490,7 +490,7 @@ function Test-Installation {
         return $false
     }
 
-    Write-Status "✓ All verification checks passed!" "SUCCESS"
+    Write-Status " All verification checks passed!" "SUCCESS"
     return $true
 }
 
@@ -500,10 +500,10 @@ function Test-Installation {
 
 try {
     Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║   Token Optimizer MCP - Hooks Installer                  ║" -ForegroundColor Cyan
-    Write-Host "║   Automated installation of global Claude Code hooks     ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "=============================================================" -ForegroundColor Cyan
+    Write-Host "   Token Optimizer MCP - Hooks Installer                    " -ForegroundColor Cyan
+    Write-Host "   Automated installation of global Claude Code hooks       " -ForegroundColor Cyan
+    Write-Host "=============================================================" -ForegroundColor Cyan
     Write-Host ""
 
     if ($DryRun) {
@@ -539,14 +539,14 @@ try {
 
         if ($verified) {
             Write-Host ""
-            Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Green
-            Write-Host "║   Installation Complete!                                  ║" -ForegroundColor Green
-            Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
+            Write-Host "=============================================================" -ForegroundColor Green
+            Write-Host "   Installation Complete!                                    " -ForegroundColor Green
+            Write-Host "=============================================================" -ForegroundColor Green
             Write-Host ""
-            Write-Status "Next steps:" "INFO"
+            Write-Status "Next steps" "INFO"
             Write-Status "1. Restart Claude Code CLI" "INFO"
-            Write-Status "2. Run any command (e.g., claude 'help')" "INFO"
-            Write-Status "3. Check logs: Get-Content '$HOOKS_DIR\logs\dispatcher.log' -Tail 20" "INFO"
+            Write-Status "2. Run any command (e.g. claude help)" "INFO"
+            Write-Status "3. Check logs at $env:USERPROFILE\.claude-global\hooks\logs\dispatcher.log" "INFO"
             Write-Host ""
             Write-Status "Documentation: https://github.com/ooples/token-optimizer-mcp/blob/main/HOOKS-INSTALLATION.md" "INFO"
         } else {
@@ -558,6 +558,6 @@ try {
     Write-Host ""
     Write-Status "Installation failed: $($_.Exception.Message)" "ERROR"
     Write-Status "Check the error above and try again" "ERROR"
-    Write-Status "For help, see: https://github.com/ooples/token-optimizer-mcp/issues" "INFO"
+    Write-Status "For help see: https://github.com/ooples/token-optimizer-mcp/issues" "INFO"
     exit 1
 }

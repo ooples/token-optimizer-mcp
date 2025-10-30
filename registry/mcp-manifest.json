@@ -1,5 +1,5 @@
 {
-  "name": "token-optimizer-mcp",
+  "name": "@ooples/token-optimizer-mcp",
   "version": "0.2.0",
   "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
   "author": {
@@ -31,8 +31,8 @@
     "prompts": false
   },
   "installation": {
-    "npm": "npm install -g token-optimizer-mcp",
-    "npx": "npx token-optimizer-mcp"
+    "npm": "npm install -g @ooples/token-optimizer-mcp",
+    "npx": "npx @ooples/token-optimizer-mcp"
   },
   "toolCategories": [
     {

@@ -16,9 +16,7 @@ import { ITokenCounter } from '../interfaces/ITokenCounter.js';
  *
  * The module uses multiple deduplication strategies:
  * - Exact sentence matching (case-sensitive by default)
- * - Fuzzy matching for near-duplicates (optional)
  * - Paragraph-level deduplication (optional)
- * - Semantic deduplication (requires similarity threshold)
  *
  * @example
  * ```typescript
@@ -60,7 +58,9 @@ export class DeduplicationModule implements IOptimizationModule {
       minSentenceLength?: number;
 
       /**
-       * Preserve first occurrence (vs last occurrence)
+       * Preserve first occurrence
+       * Note: Currently, only preserveFirst=true is fully implemented.
+       * Setting this to false will still preserve the first occurrence.
        * @default true
        */
       preserveFirst?: boolean;
@@ -76,13 +76,6 @@ export class DeduplicationModule implements IOptimizationModule {
        * @default true
        */
       preserveCodeBlocks?: boolean;
-
-      /**
-       * Minimum similarity threshold for fuzzy matching (0-1)
-       * Set to 1.0 for exact matching only
-       * @default 1.0
-       */
-      similarityThreshold?: number;
     }
   ) {}
 
@@ -237,14 +230,9 @@ export class DeduplicationModule implements IOptimizationModule {
         duplicateCount++;
         // Mark that we should skip the following punctuation
         skipNextPunctuation = true;
-        if (!preserveFirst) {
-          // If preserving last, we need to update the result
-          // For simplicity, we just skip the duplicate here
-          continue;
-        } else {
-          // Skip this duplicate
-          continue;
-        }
+        // Note: preserveFirst=false is not yet implemented
+        // Both branches currently preserve the first occurrence
+        continue;
       }
 
       seen.add(normalized);
