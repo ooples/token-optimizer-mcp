@@ -16,8 +16,8 @@
   },
   "installation": {
     "npm": {
-      "package": "token-optimizer-mcp",
-      "command": "npx token-optimizer-mcp"
+      "package": "@ooples/token-optimizer-mcp",
+      "command": "npx @ooples/token-optimizer-mcp"
     }
   },
   "config": {
