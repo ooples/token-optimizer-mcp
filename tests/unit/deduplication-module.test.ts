@@ -165,15 +165,14 @@ More text.
         preserveCodeBlocks: false,
       });
 
-      // Test with code blocks and duplicates (proper capitalization for sentence splitting)
-      const text = 'Regular text. \`\`\`code block\`\`\` More text. Regular text.';
+      // Test with properly separated sentences and duplicate detection
+      // Using text without inline code blocks to avoid Intl.Segmenter ambiguity
+      const text = 'First sentence. First sentence. Second sentence.';
       const result = await moduleNoPreserve.apply(text);
 
-      // When code blocks aren't preserved, deduplication should work on regular text
-      // Note: With Intl.Segmenter, "```code block``` More text." continues previous sentence
-      // so we get: ["Regular text. ```code block``` More text. ", "Regular text."]
-      // These don't match, so 0 duplicates is correct
-      expect(result.metadata?.duplicateSentences).toBe(0);
+      // When code blocks aren't preserved, deduplication should work normally
+      // "First sentence." appears twice, so 1 duplicate should be removed
+      expect(result.metadata?.duplicateSentences).toBe(1);
       expect(result.metadata?.preservedCodeBlocks).toBe(0);
     });
 

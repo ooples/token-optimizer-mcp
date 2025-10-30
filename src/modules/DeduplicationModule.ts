@@ -270,9 +270,9 @@ export class DeduplicationModule implements IOptimizationModule {
           const firstIndex = seenMap.get(matchedKey);
           if (firstIndex !== undefined) {
             result[firstIndex] = sentence;
+            // Keep map pointing to the same slot we just updated
+            seenMap.set(matchedKey, firstIndex);
           }
-          // Update the index to point to current position
-          seenMap.set(matchedKey, result.length - 1);
           continue;
         }
       }
@@ -378,9 +378,9 @@ export class DeduplicationModule implements IOptimizationModule {
           const firstIndex = seenMap.get(matchedKey);
           if (firstIndex !== undefined) {
             result[firstIndex] = part;
+            // Keep map pointing to the same slot we just updated
+            seenMap.set(matchedKey, firstIndex);
           }
-          seenMap.set(matchedKey, result.length);
-          result.push(part);
           continue;
         }
       }
@@ -432,8 +432,19 @@ export class DeduplicationModule implements IOptimizationModule {
     }
 
     // Fallback: Use improved regex that handles more cases
+    // Capture whitespace in the split to preserve original spacing
     // This still has limitations but is better than the original
-    return text.split(/(?<=[.!?])\s+(?=[A-Z])/);
+    const parts = text.split(/(?<=[.!?])(\s+)(?=[A-Z])/);
+    // Filter out empty strings and standalone whitespace parts
+    // But keep whitespace attached to sentences
+    const sentences: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 0 && parts[i]) {
+        // Even indices are sentences, add with following whitespace if it exists
+        sentences.push(parts[i] + (parts[i + 1] || ''));
+      }
+    }
+    return sentences.length > 0 ? sentences : [text];
   }
 
   /**
