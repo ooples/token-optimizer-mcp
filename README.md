@@ -430,18 +430,17 @@ await get_session_stats({});
 
 ### Session Logs
 
-All operations are automatically logged to CSV files for analysis:
+All operations are automatically tracked in session data files:
 
-**Location**: `~/.token-optimizer/logs/operations-{sessionId}.csv`
+**Location**: `~/.claude-global/hooks/data/current-session.txt`
 
-**Columns**:
-- `timestamp` - When the operation occurred
-- `tool` - Which tool was used (e.g., "Read", "smart_read")
-- `operation` - Operation details (file path, API endpoint, etc.)
-- `originalTokens` - Tokens before optimization
-- `compressedTokens` - Tokens after optimization
-- `ratio` - Compression ratio
-- `saved` - Tokens saved
+**Tracked Data**:
+- `sessionId` - Unique identifier for the session
+- `totalOperations` - Number of operations performed
+- `totalTokens` - Cumulative token count
+- `lastOptimized` - Timestamp of last optimization
+
+**Note**: Detailed CSV logging is planned for a future release.
 
 ### Project-Wide Analysis
 
@@ -496,12 +495,15 @@ If you're already on v3.0.2+, manually remove the BOM:
 # Windows: Remove BOM from settings.json
 $content = Get-Content "~/.claude/settings.json" -Raw
 $content = $content -replace '^\xEF\xBB\xBF', ''
-$content | Set-Content "~/.claude/settings.json" -NoNewline
+$content | Set-Content "~/.claude/settings.json" -Encoding utf8NoBOM
 ```
 
 ```bash
-# macOS/Linux: Remove BOM from settings.json
+# Linux: Remove BOM from settings.json
 sed -i '1s/^\xEF\xBB\xBF//' ~/.claude/settings.json
+
+# macOS: Remove BOM from settings.json (BSD sed requires empty string after -i)
+sed -i '' '1s/^\xef\xbb\xbf//' ~/.claude/settings.json
 ```
 
 #### Issue: Hooks Not Working After Installation
@@ -656,32 +658,12 @@ await cache_warmup({
    rm -rf ~/.token-optimizer/cache.db
    ```
 
-### Debug Mode
-
-Enable verbose logging to diagnose issues:
-
-```typescript
-// Enable debug logging
-process.env.TOKEN_OPTIMIZER_DEBUG = "true";
-```
-
-Or set in your shell:
-```bash
-# macOS/Linux
-export TOKEN_OPTIMIZER_DEBUG=true
-
-# Windows PowerShell
-$env:TOKEN_OPTIMIZER_DEBUG = "true"
-```
-
-**Debug logs location**: `~/.token-optimizer/logs/debug-{sessionId}.log`
-
 ### Getting Help
 
 If you encounter issues not covered here:
 
-1. **Check the logs**: `~/.token-optimizer/logs/operations-{sessionId}.csv`
-2. **Enable debug mode** and reproduce the issue
+1. **Check the hook logs**: `~/.claude-global/hooks/logs/dispatcher.log`
+2. **Check session data**: `~/.claude-global/hooks/data/current-session.txt`
 3. **File an issue**: [GitHub Issues](https://github.com/ooples/token-optimizer-mcp/issues)
    - Include debug logs
    - Include your OS and Node.js version
