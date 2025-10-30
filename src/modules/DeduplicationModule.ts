@@ -187,7 +187,7 @@ export class DeduplicationModule implements IOptimizationModule {
       .filter((s) => s.trim().length > 0);
     const minLength = this.options?.minSentenceLength ?? 5;
     const caseSensitive = this.options?.caseSensitive ?? true;
-    const preserveFirst = this.options?.preserveFirst ?? true;
+    // Note: preserveFirst option exists but only true is currently implemented
 
     const seen = new Set<string>();
     const result: string[] = [];
