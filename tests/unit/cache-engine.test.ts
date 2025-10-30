@@ -7,6 +7,7 @@
  * - LRU eviction
  * - Hit/miss tracking
  * - Memory and disk cache interaction
+ * - Configurable cache path via environment variable
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
@@ -15,11 +16,29 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+/**
+ * Helper to clean up cache artifacts (db, WAL, SHM files and directory)
+ */
+function cleanupCacheArtifacts(dbPath: string, cacheDir?: string): void {
+  if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  const walPath = `${dbPath}-wal`;
+  const shmPath = `${dbPath}-shm`;
+  if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+  if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+  if (cacheDir && fs.existsSync(cacheDir)) {
+    fs.rmdirSync(cacheDir);
+  }
+}
+
 describe('CacheEngine', () => {
   let cache: CacheEngine;
   let testDbPath: string;
+  let originalEnv: string | undefined;
 
   beforeEach(() => {
+    // Save original environment variable
+    originalEnv = process.env.TOKEN_OPTIMIZER_CACHE_DIR;
+
     // Create a temporary database for testing
     const tempDir = path.join(os.tmpdir(), 'token-optimizer-test');
     if (!fs.existsSync(tempDir)) {
@@ -30,6 +49,13 @@ describe('CacheEngine', () => {
   });
 
   afterEach(() => {
+    // Restore original environment variable
+    if (originalEnv !== undefined) {
+      process.env.TOKEN_OPTIMIZER_CACHE_DIR = originalEnv;
+    } else {
+      delete process.env.TOKEN_OPTIMIZER_CACHE_DIR;
+    }
+
     // Clean up
     cache.close();
     if (fs.existsSync(testDbPath)) {
@@ -463,6 +489,95 @@ describe('CacheEngine', () => {
 
       expect(stats2.totalEntries).toBe(stats1.totalEntries);
       cache2.close();
+    });
+  });
+
+  describe('Configurable Cache Path', () => {
+    it('should use environment variable for cache directory when no dbPath provided', () => {
+      const customCacheDir = path.join(os.tmpdir(), `custom-cache-${Date.now()}`);
+      process.env.TOKEN_OPTIMIZER_CACHE_DIR = customCacheDir;
+
+      const cacheWithEnv = new CacheEngine(undefined, 100);
+      const dbPath = cacheWithEnv.getDatabasePath();
+
+      expect(dbPath).toContain(customCacheDir);
+      expect(fs.existsSync(customCacheDir)).toBe(true);
+
+      cacheWithEnv.close();
+
+      // Clean up custom directory
+      cleanupCacheArtifacts(dbPath, customCacheDir);
+    });
+
+    it('should fall back to os.homedir() when environment variable not set', () => {
+      delete process.env.TOKEN_OPTIMIZER_CACHE_DIR;
+
+      const cacheWithoutEnv = new CacheEngine(undefined, 100);
+      const dbPath = cacheWithoutEnv.getDatabasePath();
+
+      expect(dbPath).toContain('.token-optimizer-cache');
+      expect(dbPath).toContain(os.homedir());
+
+      cacheWithoutEnv.close();
+
+      // Note: We intentionally do not clean up the default home directory cache
+      // as it may be in use by other tests or processes, and this is the
+      // expected location for the cache in normal operation.
+    });
+
+    it('should prioritize explicit dbPath parameter over environment variable', () => {
+      const customCacheDir = path.join(os.tmpdir(), `custom-cache-${Date.now()}`);
+      process.env.TOKEN_OPTIMIZER_CACHE_DIR = customCacheDir;
+
+      const explicitPath = path.join(os.tmpdir(), `explicit-cache-${Date.now()}`, 'cache.db');
+      const cacheWithExplicit = new CacheEngine(explicitPath, 100);
+      const dbPath = cacheWithExplicit.getDatabasePath();
+
+      expect(dbPath).toBe(explicitPath);
+      expect(dbPath).not.toContain(customCacheDir);
+
+      cacheWithExplicit.close();
+
+      // Clean up
+      cleanupCacheArtifacts(dbPath, path.dirname(dbPath));
+    });
+
+    it('should create cache directory from environment variable if it does not exist', () => {
+      const customCacheDir = path.join(os.tmpdir(), `nonexistent-${Date.now()}`);
+      process.env.TOKEN_OPTIMIZER_CACHE_DIR = customCacheDir;
+
+      expect(fs.existsSync(customCacheDir)).toBe(false);
+
+      const cacheWithEnv = new CacheEngine(undefined, 100);
+
+      expect(fs.existsSync(customCacheDir)).toBe(true);
+
+      const dbPath = cacheWithEnv.getDatabasePath();
+      cacheWithEnv.close();
+
+      // Clean up
+      cleanupCacheArtifacts(dbPath, customCacheDir);
+    });
+
+    it('should work correctly with environment variable set to existing directory', () => {
+      const customCacheDir = path.join(os.tmpdir(), `existing-${Date.now()}`);
+      fs.mkdirSync(customCacheDir, { recursive: true });
+      process.env.TOKEN_OPTIMIZER_CACHE_DIR = customCacheDir;
+
+      const cacheWithEnv = new CacheEngine(undefined, 100);
+      const dbPath = cacheWithEnv.getDatabasePath();
+
+      expect(dbPath).toContain(customCacheDir);
+
+      // Test that cache operations work
+      cacheWithEnv.set('test-key', 'test-value', 10, 10);
+      const retrieved = cacheWithEnv.get('test-key');
+      expect(retrieved).toBe('test-value');
+
+      cacheWithEnv.close();
+
+      // Clean up
+      cleanupCacheArtifacts(dbPath, customCacheDir);
     });
   });
 });
