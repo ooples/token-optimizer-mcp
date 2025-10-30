@@ -39,6 +39,7 @@ coverage/
 
 # MCP registry tokens (secrets)
 .mcpregistry_github_token
+.mcpregistry_registry_token
 worktrees/
  
 # Local development configs and logs
