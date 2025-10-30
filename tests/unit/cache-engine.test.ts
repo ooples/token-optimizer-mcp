@@ -498,8 +498,6 @@ describe('CacheEngine', () => {
       if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
       if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
       if (fs.existsSync(customCacheDir)) fs.rmdirSync(customCacheDir);
-
-      delete process.env.TOKEN_OPTIMIZER_CACHE_DIR;
     });
 
     it('should fall back to os.homedir() when environment variable not set', () => {
@@ -538,8 +536,6 @@ describe('CacheEngine', () => {
       if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
       if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
       if (fs.existsSync(path.dirname(dbPath))) fs.rmdirSync(path.dirname(dbPath));
-
-      delete process.env.TOKEN_OPTIMIZER_CACHE_DIR;
     });
 
     it('should create cache directory from environment variable if it does not exist', () => {
@@ -562,8 +558,6 @@ describe('CacheEngine', () => {
       if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
       if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
       if (fs.existsSync(customCacheDir)) fs.rmdirSync(customCacheDir);
-
-      delete process.env.TOKEN_OPTIMIZER_CACHE_DIR;
     });
 
     it('should work correctly with environment variable set to existing directory', () => {
@@ -590,8 +584,6 @@ describe('CacheEngine', () => {
       if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
       if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
       if (fs.existsSync(customCacheDir)) fs.rmdirSync(customCacheDir);
-
-      delete process.env.TOKEN_OPTIMIZER_CACHE_DIR;
     });
   });
 });
