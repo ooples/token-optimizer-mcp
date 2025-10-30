@@ -215,8 +215,9 @@ function Configure-ClaudeSettings {
         return
     }
 
-    # Save settings
-    $settings | ConvertTo-Json -Depth 10 | Set-Content $CLAUDE_SETTINGS -Encoding UTF8
+    # Save settings (without BOM)
+    $json = $settings | ConvertTo-Json -Depth 10
+    [System.IO.File]::WriteAllText($CLAUDE_SETTINGS, $json, (New-Object System.Text.UTF8Encoding $false))
     Write-Status " Updated Claude Code settings" "SUCCESS"
 }
 
@@ -255,7 +256,8 @@ function Configure-WorkspaceTrust {
     }
 
     # Save state
-    $state | ConvertTo-Json -Depth 100 | Set-Content $CLAUDE_STATE -Encoding UTF8
+    $json = $state | ConvertTo-Json -Depth 100
+    [System.IO.File]::WriteAllText($CLAUDE_STATE, $json, (New-Object System.Text.UTF8Encoding $false))
     Write-Status " Accepted workspace trust for: $currentDir" "SUCCESS"
 }
 
@@ -283,7 +285,8 @@ function Configure-MCPServer {
             $settings.mcpServers."token-optimizer" = $mcpServerConfig
 
             if (-not $DryRun) {
-                $settings | ConvertTo-Json -Depth 10 | Set-Content $claudeDesktopConfig -Encoding UTF8
+                $json = $settings | ConvertTo-Json -Depth 10
+                [System.IO.File]::WriteAllText($claudeDesktopConfig, $json, (New-Object System.Text.UTF8Encoding $false))
                 Write-Status " Configured token-optimizer for Claude Desktop" "SUCCESS"
                 $toolsConfigured++
             } else {
@@ -305,7 +308,8 @@ function Configure-MCPServer {
             $settings.mcpServers."token-optimizer" = $mcpServerConfig
 
             if (-not $DryRun) {
-                $settings | ConvertTo-Json -Depth 10 | Set-Content $cursorConfig -Encoding UTF8
+                $json = $settings | ConvertTo-Json -Depth 10
+                [System.IO.File]::WriteAllText($cursorConfig, $json, (New-Object System.Text.UTF8Encoding $false))
                 Write-Status " Configured token-optimizer for Cursor IDE" "SUCCESS"
                 $toolsConfigured++
             } else {
@@ -333,7 +337,8 @@ function Configure-MCPServer {
             $settings.mcpServers."token-optimizer" = $mcpServerConfig
 
             if (-not $DryRun) {
-                $settings | ConvertTo-Json -Depth 10 | Set-Content $clineConfig -Encoding UTF8
+                $json = $settings | ConvertTo-Json -Depth 10
+                [System.IO.File]::WriteAllText($clineConfig, $json, (New-Object System.Text.UTF8Encoding $false))
                 Write-Status " Configured token-optimizer for Cline (VS Code)" "SUCCESS"
                 $toolsConfigured++
             } else {
@@ -355,7 +360,8 @@ function Configure-MCPServer {
             $settings.mcpServers."token-optimizer" = $mcpServerConfig
 
             if (-not $DryRun) {
-                $settings | ConvertTo-Json -Depth 10 | Set-Content $vscodeWorkspaceConfig -Encoding UTF8
+                $json = $settings | ConvertTo-Json -Depth 10
+                [System.IO.File]::WriteAllText($vscodeWorkspaceConfig, $json, (New-Object System.Text.UTF8Encoding $false))
                 Write-Status " Configured token-optimizer for VS Code Copilot (workspace)" "SUCCESS"
                 $toolsConfigured++
             } else {
@@ -377,7 +383,8 @@ function Configure-MCPServer {
             $settings.mcpServers."token-optimizer" = $mcpServerConfig
 
             if (-not $DryRun) {
-                $settings | ConvertTo-Json -Depth 10 | Set-Content $windsurfConfig -Encoding UTF8
+                $json = $settings | ConvertTo-Json -Depth 10
+                [System.IO.File]::WriteAllText($windsurfConfig, $json, (New-Object System.Text.UTF8Encoding $false))
                 Write-Status " Configured token-optimizer for Windsurf IDE" "SUCCESS"
                 $toolsConfigured++
             } else {
