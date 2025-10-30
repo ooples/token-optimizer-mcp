@@ -410,6 +410,283 @@ The automated installer detects and configures token-optimizer-mcp for:
 - **Operation Overhead**: <10ms for cache operations
 - **Compression Speed**: ~1ms per KB of text
 
+## Monitoring Token Savings
+
+### Real-Time Session Monitoring
+
+Track token savings in real-time using the built-in monitoring tools:
+
+```typescript
+// View current session statistics
+await get_session_stats({});
+```
+
+**Output includes:**
+- Total tokens saved (input + output)
+- Token reduction percentage
+- Cache hit rate
+- Breakdown by tool (Read, Grep, Glob, etc.)
+- Top 10 most optimized operations
+
+### Session Logs
+
+All operations are automatically logged to CSV files for analysis:
+
+**Location**: `~/.token-optimizer/logs/operations-{sessionId}.csv`
+
+**Columns**:
+- `timestamp` - When the operation occurred
+- `tool` - Which tool was used (e.g., "Read", "smart_read")
+- `operation` - Operation details (file path, API endpoint, etc.)
+- `originalTokens` - Tokens before optimization
+- `compressedTokens` - Tokens after optimization
+- `ratio` - Compression ratio
+- `saved` - Tokens saved
+
+### Project-Wide Analysis
+
+Analyze token usage across your entire project:
+
+```typescript
+// Analyze project token costs
+await analyze_project_tokens({
+  projectPath: "/path/to/project"
+});
+```
+
+**Provides:**
+- Total token cost estimation
+- Largest files by token count
+- Optimization opportunities
+- Cost projections at current API rates
+
+### Cache Performance
+
+Monitor cache hit rates and storage efficiency:
+
+```typescript
+// View cache statistics
+await get_cache_stats({});
+```
+
+**Metrics:**
+- Total entries
+- Cache hit rate (%)
+- Average compression ratio
+- Total storage saved
+- Most frequently accessed keys
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### Issue: "Invalid or malformed JSON" in Claude Code Settings
+
+**Symptom**: Claude Code shows "Invalid Settings" error after running install-hooks
+
+**Cause**: UTF-8 BOM (Byte Order Mark) was added to settings.json files
+
+**Solution**: Upgrade to v3.0.2+ which fixes the BOM issue:
+```bash
+npm install -g @ooples/token-optimizer-mcp@latest
+```
+
+If you're already on v3.0.2+, manually remove the BOM:
+```powershell
+# Windows: Remove BOM from settings.json
+$content = Get-Content "~/.claude/settings.json" -Raw
+$content = $content -replace '^\xEF\xBB\xBF', ''
+$content | Set-Content "~/.claude/settings.json" -NoNewline
+```
+
+```bash
+# macOS/Linux: Remove BOM from settings.json
+sed -i '1s/^\xEF\xBB\xBF//' ~/.claude/settings.json
+```
+
+#### Issue: Hooks Not Working After Installation
+
+**Symptom**: Token optimization not occurring automatically
+
+**Diagnosis**:
+1. Check if hooks are installed:
+   ```powershell
+   # Windows
+   Get-Content ~/.claude/settings.json | ConvertFrom-Json | Select-Object -ExpandProperty hooks
+   ```
+   ```bash
+   # macOS/Linux
+   cat ~/.claude/settings.json | jq .hooks
+   ```
+
+2. Verify dispatcher.ps1 exists:
+   ```powershell
+   # Windows
+   Test-Path ~/.claude-global/hooks/dispatcher.ps1
+   ```
+   ```bash
+   # macOS/Linux
+   [ -f ~/.claude-global/hooks/dispatcher.sh ] && echo "Exists" || echo "Missing"
+   ```
+
+**Solution**: Re-run the installer:
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File install-hooks.ps1
+```
+```bash
+# macOS/Linux
+bash install-hooks.sh
+```
+
+#### Issue: Low Cache Hit Rate (<50%)
+
+**Symptom**: Session stats show cache hit rate below 50%
+
+**Causes**:
+1. Working with many new files (expected)
+2. Cache was recently cleared
+3. TTL (time-to-live) is too short
+
+**Solutions**:
+1. **Warm up the cache** before starting work:
+   ```typescript
+   await cache_warmup({
+     paths: ["/path/to/frequently/used/files"],
+     recursive: true
+   });
+   ```
+
+2. **Increase TTL** for stable APIs:
+   ```typescript
+   await smart_api_fetch({
+     url: "https://api.example.com/data",
+     ttl: 3600  // 1 hour instead of default 5 minutes
+   });
+   ```
+
+3. **Check cache size limits**:
+   ```typescript
+   await smart_cache({
+     operation: "configure",
+     l1MaxSize: 2000,  // Increase from default 1000
+     l2MaxSize: 20000  // Increase from default 10000
+   });
+   ```
+
+#### Issue: High Memory Usage
+
+**Symptom**: Node.js process using excessive memory
+
+**Cause**: Large cache in memory (L1/L2 tiers)
+
+**Solution**: Configure cache limits:
+```typescript
+await smart_cache({
+  operation: "configure",
+  evictionStrategy: "LRU",  // Least Recently Used
+  l1MaxSize: 500,  // Reduce L1 cache
+  l2MaxSize: 5000  // Reduce L2 cache
+});
+```
+
+Or clear the cache:
+```typescript
+await clear_cache({});
+```
+
+#### Issue: Slow First-Time Operations
+
+**Symptom**: Initial Read/Grep/Glob operations are slow
+
+**Cause**: Cache is empty, building indexes
+
+**Solution**: This is expected behavior. Subsequent operations will be 80-90% faster.
+
+To pre-warm the cache:
+```typescript
+await cache_warmup({
+  paths: ["/src", "/tests", "/docs"],
+  recursive: true,
+  schedule: "startup"  // Auto-warm on every session start
+});
+```
+
+#### Issue: "Permission denied" Errors on Windows
+
+**Symptom**: Cannot write to cache or log files
+
+**Cause**: PowerShell execution policy or file permissions
+
+**Solution**:
+1. **Set execution policy**:
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+2. **Check file permissions**:
+   ```powershell
+   icacls "$env:USERPROFILE\.token-optimizer"
+   ```
+
+3. **Re-run installer as Administrator** if needed
+
+#### Issue: Cache Files Growing Too Large
+
+**Symptom**: `~/.token-optimizer/cache.db` is >1GB
+
+**Cause**: Caching very large files or many API responses
+
+**Solution**:
+1. **Clear old entries**:
+   ```typescript
+   await clear_cache({ olderThan: 7 });  // Clear entries older than 7 days
+   ```
+
+2. **Reduce cache retention**:
+   ```typescript
+   await smart_cache({
+     operation: "configure",
+     defaultTTL: 3600  // 1 hour instead of 7 days
+   });
+   ```
+
+3. **Manually delete cache** (nuclear option):
+   ```bash
+   rm -rf ~/.token-optimizer/cache.db
+   ```
+
+### Debug Mode
+
+Enable verbose logging to diagnose issues:
+
+```typescript
+// Enable debug logging
+process.env.TOKEN_OPTIMIZER_DEBUG = "true";
+```
+
+Or set in your shell:
+```bash
+# macOS/Linux
+export TOKEN_OPTIMIZER_DEBUG=true
+
+# Windows PowerShell
+$env:TOKEN_OPTIMIZER_DEBUG = "true"
+```
+
+**Debug logs location**: `~/.token-optimizer/logs/debug-{sessionId}.log`
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check the logs**: `~/.token-optimizer/logs/operations-{sessionId}.csv`
+2. **Enable debug mode** and reproduce the issue
+3. **File an issue**: [GitHub Issues](https://github.com/ooples/token-optimizer-mcp/issues)
+   - Include debug logs
+   - Include your OS and Node.js version
+   - Include the output of `get_session_stats`
+
 ## Limitations
 
 - **Small Text**: Best for content >500 characters (cache overhead on small snippets)
