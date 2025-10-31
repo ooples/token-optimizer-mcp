@@ -70,31 +70,21 @@ function Invoke-MCP {
     param(
         [string]$Server,
         [string]$Tool,
-        $Args  # Accept any type, will validate internally
+        $ToolArguments  # FIXED: Renamed from $Args to avoid collision with PowerShell's automatic $args variable
     )
 
     try {
         Write-Log "Invoking MCP: $Server -> $Tool" "DEBUG"
 
-        # Ensure Args is a proper object for JSON serialization
-        # ConvertTo-Json can serialize hashtables as arrays in some cases
-        # Force conversion to PSCustomObject to ensure object serialization
-        if ($null -eq $Args) {
-            $Args = @{}
+        # Ensure ToolArguments is a proper object for JSON serialization
+        if ($null -eq $ToolArguments) {
+            $ToolArguments = @{}
         }
 
         # Build MCP protocol request
-        # CRITICAL FIX: Explicitly convert nested Hashtable to PSCustomObject
-        # When a Hashtable is nested inside another Hashtable and then converted to JSON,
-        # PowerShell treats it as an enumerable collection, resulting in [] empty array
-        # instead of {} JSON object. This fix ensures proper JSON object serialization.
-        $jsonArguments = if ($Args -is [hashtable] -and $Args.Count -gt 0) {
-            [PSCustomObject]$Args
-        } elseif ($null -eq $Args -or ($Args -is [hashtable] -and $Args.Count -eq 0)) {
-            [PSCustomObject]@{}
-        } else {
-            $Args
-        }
+        # PowerShell Hashtables serialize correctly to JSON objects without casting
+        # No [PSCustomObject] conversion needed - let ConvertTo-Json handle it natively
+        $jsonArguments = $ToolArguments
 
         $request = @{
             jsonrpc = "2.0"
@@ -148,7 +138,7 @@ Write-Log "Arguments type: $($Arguments.GetType().FullName)" "DEBUG"
 Write-Log "Arguments content: $($Arguments | ConvertTo-Json -Compress)" "DEBUG"
 
 # Execute the MCP call
-$result = Invoke-MCP -Server $ServerName -Tool $Tool -Args $Arguments
+$result = Invoke-MCP -Server $ServerName -Tool $Tool -ToolArguments $Arguments
 
 # Output result as JSON for caller
 if ($result) {
