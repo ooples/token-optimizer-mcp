@@ -27,7 +27,7 @@ export class TokenCounter {
   /**
    * Map Claude/Anthropic models to tiktoken model names
    */
-  private mapToTiktokenModel(model: string): any {
+  private mapToTiktokenModel(model: string): 'gpt-4' | 'gpt-3.5-turbo' {
     const lowerModel = model.toLowerCase();
 
     // Claude models use GPT-4 tokenizer as closest approximation
