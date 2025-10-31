@@ -25,10 +25,12 @@ export function validateToolArgs<T = any>(toolName: string, args: unknown): T {
   } catch (error) {
     if (error instanceof z.ZodError) {
       // Format Zod validation errors into a user-friendly message
-      const errorMessages = error.errors.map(err => {
-        const path = err.path.join('.');
-        return `  - ${path || 'root'}: ${err.message}`;
-      }).join('\n');
+      const errorMessages = error.errors
+        .map((err) => {
+          const path = err.path.join('.');
+          return `  - ${path || 'root'}: ${err.message}`;
+        })
+        .join('\n');
 
       throw new Error(
         `Validation failed for tool "${toolName}":\n${errorMessages}`

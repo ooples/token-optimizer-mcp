@@ -641,7 +641,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         {
           type: 'text',
           text: JSON.stringify({
-            error: validationError instanceof Error ? validationError.message : String(validationError),
+            error:
+              validationError instanceof Error
+                ? validationError.message
+                : String(validationError),
           }),
         },
       ],
