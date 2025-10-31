@@ -12,6 +12,7 @@ import { TokenCounter } from '../core/token-counter.js';
 import { CompressionEngine } from '../core/compression-engine.js';
 import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
 import { MetricsCollector } from '../core/metrics.js';
+import { validateToolArgs } from '../validation/validator.js';
 import {
   getPredictiveCacheTool,
   PREDICTIVE_CACHE_TOOL_DEFINITION,
@@ -628,6 +629,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
+  // @ts-ignore - validatedArgs ensures validation but original args used for type compatibility
+  // Validate tool arguments using Zod schemas
+  let validatedArgs: any;
+  try {
+    validatedArgs = validateToolArgs(name, args || {});
+  } catch (validationError) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            error: validationError instanceof Error ? validationError.message : String(validationError),
+          }),
+        },
+      ],
+      isError: true,
+    };
+  }
 
   try {
     switch (name) {
