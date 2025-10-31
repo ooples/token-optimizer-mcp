@@ -495,20 +495,36 @@ All operations are automatically tracked in session data files:
 
 **Location**: `~/.claude-global/hooks/data/current-session.txt`
 
-**IMPORTANT**: This file shows operation tracking, NOT token savings:
+**Format**:
 
 ```json
 {
   "sessionId": "abc-123",
+  "sessionStart": "20251031-082211",
   "totalOperations": 1250,      // ← Number of operations
-  "totalTokens": 184000,         // ← Cumulative token COUNT (not savings!)
-  "lastOptimized": 1698765432
+  "totalTokens": 184000,         // ← Cumulative token COUNT
+  "lastOptimized": 1698765432,
+  "savings": {                   // ← Auto-updated every 10 operations (Issue #113)
+    "totalTokensSaved": 125430,  // Tokens saved by compression
+    "tokenReductionPercent": 68.2,  // Percentage of tokens saved
+    "originalTokens": 184000,    // Original token count before optimization
+    "optimizedTokens": 58570,    // Token count after optimization
+    "cacheHitRate": 42.5,        // Cache hit rate percentage
+    "compressionRatio": 0.32,    // Compression efficiency (lower is better)
+    "lastUpdated": "20251031-092500"  // Last savings update timestamp
+  }
 }
 ```
 
-**To see actual token SAVINGS**, you MUST use `get_session_stats()` - the session file only tracks operation counts, not optimization results.
+**New in v1.x**: The `savings` object is now automatically updated every 10 operations, eliminating the need to manually call `get_session_stats()` for real-time monitoring. This provides instant visibility into token optimization performance.
 
-**Note**: Detailed CSV logging with per-operation savings is planned for a future release.
+**How it works**:
+- Every 10 operations, the PowerShell hooks automatically call `get_cache_stats()` MCP tool
+- Savings metrics are calculated from cache performance data (compression ratio, original vs compressed sizes)
+- The session file is atomically updated with the latest savings data
+- If the MCP call fails, the update is skipped gracefully without blocking operations
+
+**Note**: For detailed per-operation analysis, use `get_session_stats()`. The session file provides high-level aggregate metrics.
 
 ### Project-Wide Analysis
 
