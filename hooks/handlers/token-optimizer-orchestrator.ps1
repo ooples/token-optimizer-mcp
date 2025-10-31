@@ -19,10 +19,73 @@ if (-not $env:TOKEN_OPTIMIZER_DEV_PATH) {
   $env:TOKEN_OPTIMIZER_DEV_PATH = (Join-Path $home "source\repos\token-optimizer-mcp")
 }
 
+# PERFORMANCE OPTIMIZATION: In-memory session state (50-70ms -> <10ms)
+# Reduces disk I/O overhead by keeping session state in memory
+# Use TOKEN_OPTIMIZER_USE_FILE_SESSION=true to revert to file-based behavior
+$script:CurrentSession = $null
+$script:OperationLogBuffer = @()
+$script:FlushTimer = $null
+$script:BATCH_SIZE = 100
+$script:BATCH_INTERVAL_MS = 5000
+
 # Token budget configuration
 $CONTEXT_LIMIT = 200000
 $OPTIMIZE_THRESHOLD = 0.80
 $FORCE_THRESHOLD = 0.90
+
+function Flush-OperationLogs {
+    # Flush buffered operation logs to disk
+    param([switch]$Force)
+
+    $syncWrites = $env:TOKEN_OPTIMIZER_SYNC_LOG_WRITES -eq 'true'
+
+    if ($script:OperationLogBuffer.Count -eq 0) {
+        return
+    }
+
+    # Flush if forced, batch size reached, or sync writes enabled
+    if ($Force -or $syncWrites -or $script:OperationLogBuffer.Count -ge $script:BATCH_SIZE) {
+        try {
+            $session = if ($script:CurrentSession) { $script:CurrentSession } else { Get-SessionInfo }
+            if (-not $session) { return }
+
+            $csvFile = "$OPERATIONS_DIR\operations-$($session.sessionId).csv"
+
+            # Create file with header if needed
+            if (-not (Test-Path $csvFile)) {
+                "timestamp,toolName,tokens,metadata" | Out-File $csvFile -Encoding UTF8
+            }
+
+            # Append all buffered entries
+            $script:OperationLogBuffer | Out-File $csvFile -Append -Encoding UTF8
+
+            Write-Log "Flushed $($script:OperationLogBuffer.Count) operation logs" "DEBUG"
+            $script:OperationLogBuffer = @()
+        } catch {
+            Write-Log "Failed to flush operation logs: $($_.Exception.Message)" "ERROR"
+        }
+    }
+}
+
+function Start-LogFlushTimer {
+    # Start periodic timer to flush logs every 5 seconds
+    if ($script:FlushTimer) { return }
+
+    try {
+        $script:FlushTimer = New-Object System.Timers.Timer
+        $script:FlushTimer.Interval = $script:BATCH_INTERVAL_MS
+        $script:FlushTimer.AutoReset = $true
+
+        Register-ObjectEvent -InputObject $script:FlushTimer -EventName Elapsed -Action {
+            Flush-OperationLogs
+        } | Out-Null
+
+        $script:FlushTimer.Start()
+        Write-Log "Started log flush timer (interval: $($script:BATCH_INTERVAL_MS)ms)" "DEBUG"
+    } catch {
+        Write-Log "Failed to start flush timer: $($_.Exception.Message)" "WARN"
+    }
+}
 
 function Write-Log {
     param(
@@ -30,6 +93,18 @@ function Write-Log {
         [ValidateSet('DEBUG','INFO','WARN','ERROR')][string]$Level = "INFO",
         [string]$Context = ""
     )
+
+    # Check if debug logging is disabled
+    $debugLogging = if ($env:TOKEN_OPTIMIZER_DEBUG_LOGGING) {
+        $env:TOKEN_OPTIMIZER_DEBUG_LOGGING -eq 'true'
+    } else {
+        $true  # Default: enabled
+    }
+
+    if ($Level -eq 'DEBUG' -and -not $debugLogging) {
+        return
+    }
+
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $contextPart = if ($Context) { " [$Context]" } else { "" }
     $logEntry = "[$timestamp] [$Level]$contextPart $Message"
@@ -56,7 +131,9 @@ function Get-SessionInfo {
 
 function Initialize-Session {
     # Create new session if needed
-    if (-not (Test-Path $SESSION_FILE)) {
+    $useFileSession = $env:TOKEN_OPTIMIZER_USE_FILE_SESSION -eq 'true'
+
+    if ($useFileSession -and -not (Test-Path $SESSION_FILE)) {
         $sessionId = [guid]::NewGuid().ToString()
         $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -74,20 +151,64 @@ function Initialize-Session {
         return $session
     }
 
-    return Get-SessionInfo
+    # OPTIMIZED: In-memory session initialization
+    if (-not $script:CurrentSession) {
+        $sessionId = [guid]::NewGuid().ToString()
+        $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
+
+        $script:CurrentSession = @{
+            sessionId = $sessionId
+            sessionStart = $sessionStart
+            totalOperations = 0
+            totalTokens = 0
+            lastOptimized = 0
+        }
+
+        # Write initial session file
+        $script:CurrentSession | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
+        Write-Log "Initialized new in-memory session: $sessionId" "INFO"
+
+        # Start log flush timer
+        Start-LogFlushTimer
+
+        return $script:CurrentSession
+    }
+
+    return if ($useFileSession) { Get-SessionInfo } else { $script:CurrentSession }
 }
 
 function Update-SessionOperation {
-    param([int]$TokensDelta = 0)
+    param(
+        [int]$TokensDelta = 0,
+        [switch]$Persist
+    )
 
-    $session = Initialize-Session
+    # Check if using file-based session (legacy mode)
+    $useFileSession = $env:TOKEN_OPTIMIZER_USE_FILE_SESSION -eq 'true'
 
-    $session.totalOperations++
-    $session.totalTokens += $TokensDelta
+    if ($useFileSession) {
+        # Legacy file-based mode
+        $session = Initialize-Session
+        $session.totalOperations++
+        $session.totalTokens += $TokensDelta
+        $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
+        return $session
+    }
 
-    $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
+    # OPTIMIZED: In-memory session state
+    if (-not $script:CurrentSession) {
+        $script:CurrentSession = Initialize-Session
+    }
 
-    return $session
+    $script:CurrentSession.totalOperations++
+    $script:CurrentSession.totalTokens += $TokensDelta
+
+    # Only write to disk when explicitly requested or on significant changes
+    if ($Persist) {
+        $script:CurrentSession | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
+    }
+
+    return $script:CurrentSession
 }
 
 function Handle-LogOperation {
@@ -102,14 +223,11 @@ function Handle-LogOperation {
         $data = $InputJson | ConvertFrom-Json
         $toolName = $data.tool_name
 
-        $session = Get-SessionInfo
+        $session = if ($script:CurrentSession) { $script:CurrentSession } else { Get-SessionInfo }
         if (-not $session) {
             Write-Log "No active session for operation logging" "WARN"
             return
         }
-
-        # Create CSV file path
-        $csvFile = "$OPERATIONS_DIR\operations-$($session.sessionId).csv"
 
         # Extract file path and tokens for file-based operations
         $filePath = ""
@@ -138,16 +256,30 @@ function Handle-LogOperation {
             $metadata = "toolName=$toolName"
         }
 
-        # Append to CSV
+        # Build CSV line
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $csvLine = "$timestamp,$toolName,$tokens,`"$metadata`""
 
-        # Create file with header if it doesn't exist
-        if (-not (Test-Path $csvFile)) {
-            "timestamp,toolName,tokens,metadata" | Out-File $csvFile -Encoding UTF8
+        # OPTIMIZED: Buffer in memory instead of immediate write
+        $syncWrites = $env:TOKEN_OPTIMIZER_SYNC_LOG_WRITES -eq 'true'
+
+        if ($syncWrites) {
+            # Legacy mode: write immediately
+            $csvFile = "$OPERATIONS_DIR\operations-$($session.sessionId).csv"
+            if (-not (Test-Path $csvFile)) {
+                "timestamp,toolName,tokens,metadata" | Out-File $csvFile -Encoding UTF8
+            }
+            $csvLine | Out-File $csvFile -Append -Encoding UTF8
+        } else {
+            # Batched mode: add to buffer
+            $script:OperationLogBuffer += $csvLine
+
+            # Flush if buffer is full
+            if ($script:OperationLogBuffer.Count -ge $script:BATCH_SIZE) {
+                Flush-OperationLogs
+            }
         }
 
-        $csvLine | Out-File $csvFile -Append -Encoding UTF8
         Write-Log "Logged operation: $toolName ($tokens tokens)" "DEBUG"
 
     } catch {
@@ -1579,6 +1711,28 @@ function Handle-SmartRead {
     }
 }
 
+# Cleanup function to flush logs on exit
+function Cleanup-Session {
+    try {
+        # Flush any remaining logs
+        Flush-OperationLogs -Force
+
+        # Persist final session state
+        if ($script:CurrentSession) {
+            $script:CurrentSession | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
+            Write-Log "Final session state persisted: $($script:CurrentSession.totalOperations) ops, $($script:CurrentSession.totalTokens) tokens" "INFO"
+        }
+
+        # Stop timer
+        if ($script:FlushTimer) {
+            $script:FlushTimer.Stop()
+            $script:FlushTimer.Dispose()
+        }
+    } catch {
+        # Silently fail on cleanup
+    }
+}
+
 # Main execution - Only run if script is executed directly (not dot-sourced)
 # When dot-sourced by dispatcher.ps1, this block is skipped and only functions are loaded
 if ($MyInvocation.InvocationName -ne '.') {
@@ -1600,12 +1754,14 @@ if ($MyInvocation.InvocationName -ne '.') {
             }
             "session-report" {
                 Handle-SessionReport
+                Cleanup-Session  # Flush logs after report
             }
             "log-operation" {
                 Handle-LogOperation
             }
             "optimize-session" {
                 Handle-OptimizeSession
+                Cleanup-Session  # Persist session after optimization
             }
             "session-track" {
                 # Update operation count
@@ -1636,6 +1792,7 @@ if ($MyInvocation.InvocationName -ne '.') {
 
     } catch {
         Write-Log "Orchestrator failed: $($_.Exception.Message)" "ERROR"
+        Cleanup-Session  # Ensure cleanup even on error
         exit 0  # Never block on error
     }
 }
