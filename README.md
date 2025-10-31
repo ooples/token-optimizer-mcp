@@ -407,8 +407,53 @@ The automated installer detects and configures token-optimizer-mcp for:
 - **Compression Ratio**: 2-4x typical (up to 82x for repetitive content)
 - **Context Window Savings**: 60-90% average across all operations
 - **Cache Hit Rate**: >80% in typical usage
-- **Operation Overhead**: <10ms for cache operations
+- **Operation Overhead**: <10ms for cache operations (optimized from 50-70ms)
 - **Compression Speed**: ~1ms per KB of text
+- **Hook Overhead**: <10ms per operation (7x improvement from in-memory optimizations)
+
+### Performance Optimizations
+
+The PowerShell hooks have been optimized to reduce overhead from 50-70ms to <10ms through:
+
+- **In-Memory Session State**: Session data kept in memory instead of disk I/O on every operation
+- **Batched Log Writes**: Operation logs buffered and flushed every 5 seconds or 100 operations
+- **Lazy Persistence**: Disk writes only occur when necessary (session end, optimization, reports)
+
+### Environment Variables
+
+Control hook behavior with these environment variables:
+
+#### Performance Controls
+
+- **`TOKEN_OPTIMIZER_USE_FILE_SESSION`** (default: `false`)
+  - Set to `true` to revert to file-based session tracking (legacy mode)
+  - Use if you encounter issues with in-memory session state
+  - Example: `$env:TOKEN_OPTIMIZER_USE_FILE_SESSION = "true"`
+
+- **`TOKEN_OPTIMIZER_SYNC_LOG_WRITES`** (default: `false`)
+  - Set to `true` to disable batched log writes
+  - Forces immediate writes to disk (slower but more resilient)
+  - Use for debugging or if logs are being lost
+  - Example: `$env:TOKEN_OPTIMIZER_SYNC_LOG_WRITES = "true"`
+
+- **`TOKEN_OPTIMIZER_DEBUG_LOGGING`** (default: `true`)
+  - Set to `false` to disable DEBUG-level logging
+  - Reduces log file size and improves performance
+  - INFO/WARN/ERROR logs still written
+  - Example: `$env:TOKEN_OPTIMIZER_DEBUG_LOGGING = "false"`
+
+#### Development Path
+
+- **`TOKEN_OPTIMIZER_DEV_PATH`**
+  - Path to local development installation
+  - Automatically set to `~/source/repos/token-optimizer-mcp` if not specified
+  - Override for custom development paths
+  - Example: `$env:TOKEN_OPTIMIZER_DEV_PATH = "C:\dev\token-optimizer-mcp"`
+
+**Performance Impact**: Using in-memory mode (default) provides a 7x improvement in hook overhead:
+- Before: 50-70ms per hook operation
+- After: <10ms per hook operation
+- 85% reduction in hook latency
 
 ## Monitoring Token Savings
 
