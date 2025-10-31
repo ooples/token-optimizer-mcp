@@ -8,11 +8,46 @@ export interface TokenCountResult {
 
 export class TokenCounter {
   private encoder: Tiktoken;
-  private readonly MODEL = 'gpt-4';
+  private readonly model: string;
 
-  constructor() {
-    // Initialize tiktoken encoder for Claude (uses GPT-4 tokenizer as approximation)
-    this.encoder = encoding_for_model(this.MODEL);
+  constructor(model?: string) {
+    // Auto-detect model from environment or use provided model
+    // Claude Code sets CLAUDE_MODEL env var with the active model
+    // Falls back to GPT-4 as universal approximation
+    this.model = model || process.env.CLAUDE_MODEL || process.env.ANTHROPIC_MODEL || 'gpt-4';
+
+    // Map Claude models to closest tiktoken equivalent
+    // Claude uses similar tokenization to GPT-4, so it's a good approximation
+    const tokenModel = this.mapToTiktokenModel(this.model);
+
+    // Initialize tiktoken encoder
+    this.encoder = encoding_for_model(tokenModel);
+  }
+
+  /**
+   * Map Claude/Anthropic models to tiktoken model names
+   */
+  private mapToTiktokenModel(model: string): any {
+    const lowerModel = model.toLowerCase();
+
+    // Claude models use GPT-4 tokenizer as closest approximation
+    if (lowerModel.includes('claude') || lowerModel.includes('sonnet') ||
+        lowerModel.includes('opus') || lowerModel.includes('haiku')) {
+      return 'gpt-4';
+    }
+
+    // GPT-4 variants
+    if (lowerModel.includes('gpt-4')) {
+      return 'gpt-4';
+    }
+
+    // GPT-3.5 variants
+    if (lowerModel.includes('gpt-3.5') || lowerModel.includes('gpt3.5')) {
+      return 'gpt-3.5-turbo';
+    }
+
+    // Default to GPT-4 for unknown models
+    return 'gpt-4';
   }
 
   /**
