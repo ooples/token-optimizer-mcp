@@ -113,6 +113,27 @@ import {
   SMARTSUMMARIZATIONTOOL,
 } from '../tools/intelligence/smart-summarization.js';
 
+
+
+// Analytics tools
+import {
+  getHookAnalyticsTool,
+  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/get-hook-analytics.js';
+import {
+  getActionAnalyticsTool,
+  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/get-action-analytics.js';
+import {
+  getMcpServerAnalyticsTool,
+  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/get-mcp-server-analytics.js';
+import {
+  getExportAnalyticsTool,
+  EXPORT_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/export-analytics.js';
+import { AnalyticsManager } from '../analytics/analytics-manager.js';
+
 // API & Database tools
 import {
   getSmartSql,
@@ -246,6 +267,7 @@ import {
 import {
   runSmartGrep,
   SMART_GREP_TOOL_DEFINITION,
+      // Analytics tools
 } from '../tools/file-operations/smart-grep.js';
 import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
@@ -269,6 +291,9 @@ const cache = new CacheEngine();
 const tokenCounter = new TokenCounter();
 const compression = new CompressionEngine();
 const metrics = new MetricsCollector();
+
+const analyticsManager = new AnalyticsManager();
+
 
 /**
  * Helper function to cache uncompressed text
@@ -341,6 +366,13 @@ const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
 const smartMerge = getSmartMergeTool(cache, tokenCounter, metrics);
 const smartStatus = getSmartStatusTool(cache, tokenCounter, metrics);
 const smartLog = getSmartLogTool(cache, tokenCounter, metrics);
+
+// Initialize Analytics tools
+const getHookAnalytics = getHookAnalyticsTool(analyticsManager);
+const getActionAnalytics = getActionAnalyticsTool(analyticsManager);
+const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
+const exportAnalytics = getExportAnalyticsTool(analyticsManager);
+
 
 // Create MCP server
 const server = new Server(
@@ -622,6 +654,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       SMART_EDIT_TOOL_DEFINITION,
       SMART_GLOB_TOOL_DEFINITION,
       SMART_GREP_TOOL_DEFINITION,
+      // Analytics tools
+      GET_HOOK_ANALYTICS_TOOL_DEFINITION,
+      GET_ACTION_ANALYTICS_TOOL_DEFINITION,
+      GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
+      EXPORT_ANALYTICS_TOOL_DEFINITION,
     ],
   };
 });
@@ -2129,6 +2166,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ],
         };
       }
+
+      case 'get_hook_analytics': {
+        const result = await getHookAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      case 'get_action_analytics': {
+        const result = await getActionAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      case 'get_mcp_server_analytics': {
+        const result = await getMcpServerAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      case 'export_analytics': {
+        const result = await exportAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }

@@ -56,7 +56,7 @@ That's it! The postinstall script will automatically:
 
 For detailed platform-specific installation instructions, see [docs/HOOKS-INSTALLATION.md](./docs/HOOKS-INSTALLATION.md).
 
-## Available Tools (61 Total)
+## Available Tools (65 Total)
 
 ### Core Caching & Optimization (8 tools)
 
@@ -256,6 +256,52 @@ get_session_stats({})
 </details>
 
 ## How It Works
+
+
+
+### Token Analytics (4 tools)
+
+<details>
+<summary>Click to expand</summary>
+
+Granular token usage analytics for pinpointing optimization opportunities:
+
+- **get_hook_analytics** - Token usage breakdown by hook phase (PreToolUse, PostToolUse, etc.)
+- **get_action_analytics** - Token usage breakdown by tool/action (Read, Write, Grep, etc.)
+- **get_mcp_server_analytics** - Token usage breakdown by MCP server (token-optimizer, filesystem, etc.)
+- **export_analytics** - Export analytics data in JSON or CSV format with filtering
+
+**Usage Example**:
+```typescript
+// Get per-hook analytics
+get_hook_analytics({
+  startDate: "2025-01-01T00:00:00Z",
+  endDate: "2025-12-31T23:59:59Z"
+})
+// Result: Shows which hooks consume the most tokens
+
+// Get per-action analytics
+get_action_analytics({})
+// Result: Shows which tools use the most tokens
+
+// Export analytics as CSV
+export_analytics({
+  format: "csv",
+  hookPhase: "PreToolUse"
+})
+// Result: CSV export filtered by PreToolUse hook
+```
+
+**Key Features**:
+- Per-hook phase tracking (PreToolUse, PostToolUse, SessionStart, etc.)
+- Per-action tracking (Read, Write, count_tokens, etc.)
+- Per-MCP-server tracking (token-optimizer, filesystem, github, etc.)
+- Date range filtering
+- JSON and CSV export
+- Persistent storage with SQLite
+- Zero performance impact (async batched writes)
+
+</details>
 
 ### Global Hooks System (7-Phase Optimization)
 
