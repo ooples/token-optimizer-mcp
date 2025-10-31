@@ -459,33 +459,56 @@ Control hook behavior with these environment variables:
 
 ### Real-Time Session Monitoring
 
-Track token savings in real-time using the built-in monitoring tools:
+**To view your actual token SAVINGS**, use the `get_session_stats` tool:
 
 ```typescript
-// View current session statistics
+// View current session statistics with token savings breakdown
 await get_session_stats({});
 ```
 
 **Output includes:**
-- Total tokens saved (input + output)
-- Token reduction percentage
-- Cache hit rate
-- Breakdown by tool (Read, Grep, Glob, etc.)
-- Top 10 most optimized operations
+- **Total tokens saved** (this is the actual savings amount!)
+- **Token reduction percentage** (e.g., "60% reduction")
+- **Cache hit rate** and **compression ratios**
+- **Breakdown by tool** (Read, Grep, Glob, etc.)
+- **Top 10 most optimized operations** with before/after comparison
 
-### Session Logs
+**Example Output:**
+```json
+{
+  "sessionId": "abc-123",
+  "totalTokensSaved": 125430,  // ← THIS is your savings!
+  "tokenReductionPercent": 68.2,
+  "originalTokens": 184000,
+  "optimizedTokens": 58570,
+  "cacheHitRate": 0.72,
+  "byTool": {
+    "smart_read": { "saved": 45000, "percent": 80 },
+    "smart_grep": { "saved": 32000, "percent": 75 }
+  }
+}
+```
+
+### Session Tracking Files
 
 All operations are automatically tracked in session data files:
 
 **Location**: `~/.claude-global/hooks/data/current-session.txt`
 
-**Tracked Data**:
-- `sessionId` - Unique identifier for the session
-- `totalOperations` - Number of operations performed
-- `totalTokens` - Cumulative token count
-- `lastOptimized` - Timestamp of last optimization
+**IMPORTANT**: This file shows operation tracking, NOT token savings:
 
-**Note**: Detailed CSV logging is planned for a future release.
+```json
+{
+  "sessionId": "abc-123",
+  "totalOperations": 1250,      // ← Number of operations
+  "totalTokens": 184000,         // ← Cumulative token COUNT (not savings!)
+  "lastOptimized": 1698765432
+}
+```
+
+**To see actual token SAVINGS**, you MUST use `get_session_stats()` - the session file only tracks operation counts, not optimization results.
+
+**Note**: Detailed CSV logging with per-operation savings is planned for a future release.
 
 ### Project-Wide Analysis
 

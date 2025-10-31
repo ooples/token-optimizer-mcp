@@ -14,7 +14,11 @@ export class TokenCounter {
     // Auto-detect model from environment or use provided model
     // Claude Code sets CLAUDE_MODEL env var with the active model
     // Falls back to GPT-4 as universal approximation
-    this.model = model || process.env.CLAUDE_MODEL || process.env.ANTHROPIC_MODEL || 'gpt-4';
+    this.model =
+      model ||
+      process.env.CLAUDE_MODEL ||
+      process.env.ANTHROPIC_MODEL ||
+      'gpt-4';
 
     // Map Claude models to closest tiktoken equivalent
     // Claude uses similar tokenization to GPT-4, so it's a good approximation
@@ -31,8 +35,12 @@ export class TokenCounter {
     const lowerModel = model.toLowerCase();
 
     // Claude models use GPT-4 tokenizer as closest approximation
-    if (lowerModel.includes('claude') || lowerModel.includes('sonnet') ||
-        lowerModel.includes('opus') || lowerModel.includes('haiku')) {
+    if (
+      lowerModel.includes('claude') ||
+      lowerModel.includes('sonnet') ||
+      lowerModel.includes('opus') ||
+      lowerModel.includes('haiku')
+    ) {
       return 'gpt-4';
     }
 

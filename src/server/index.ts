@@ -630,7 +630,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
-  // @ts-ignore - validatedArgs ensures validation but original args used for type compatibility
+  // @ts-expect-error - validatedArgs ensures validation but original args used for type compatibility
   // Validate tool arguments using Zod schemas
   let validatedArgs: any;
   try {
@@ -641,7 +641,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         {
           type: 'text',
           text: JSON.stringify({
-            error: validationError instanceof Error ? validationError.message : String(validationError),
+            error:
+              validationError instanceof Error
+                ? validationError.message
+                : String(validationError),
           }),
         },
       ],

@@ -7,7 +7,12 @@ import { z } from 'zod';
 export const OptimizeTextSchema = z.object({
   text: z.string().describe('Text to optimize'),
   key: z.string().describe('Cache key for storing the optimized text'),
-  quality: z.number().min(0).max(11).optional().describe('Compression quality (0-11, default 11)'),
+  quality: z
+    .number()
+    .min(0)
+    .max(11)
+    .optional()
+    .describe('Compression quality (0-11, default 11)'),
 });
 
 // 2. get_cached
@@ -23,7 +28,12 @@ export const CountTokensSchema = z.object({
 // 4. compress_text
 export const CompressTextSchema = z.object({
   text: z.string().describe('Text to compress'),
-  quality: z.number().min(0).max(11).optional().describe('Compression quality (0-11, default 11)'),
+  quality: z
+    .number()
+    .min(0)
+    .max(11)
+    .optional()
+    .describe('Compression quality (0-11, default 11)'),
 });
 
 // 5. decompress_text
@@ -36,7 +46,7 @@ export const GetCacheStatsSchema = z.object({});
 
 // 7. clear_cache
 export const ClearCacheSchema = z.object({
-  confirm: z.boolean().refine(val => val === true, {
+  confirm: z.boolean().refine((val) => val === true, {
     message: 'Must be true to confirm cache clearing',
   }),
 });
@@ -48,21 +58,57 @@ export const AnalyzeOptimizationSchema = z.object({
 
 // 9. get_session_stats
 export const GetSessionStatsSchema = z.object({
-  sessionId: z.string().optional().describe('Optional session ID to query. If not provided, uses current session.'),
+  sessionId: z
+    .string()
+    .optional()
+    .describe(
+      'Optional session ID to query. If not provided, uses current session.'
+    ),
 });
 
 // 10. optimize_session
 export const OptimizeSessionSchema = z.object({
-  sessionId: z.string().optional().describe('Optional session ID to optimize. If not provided, uses the current active session.'),
-  min_token_threshold: z.number().optional().default(30).describe('Minimum token count for a file operation to be considered for compression. Defaults to 30.'),
+  sessionId: z
+    .string()
+    .optional()
+    .describe(
+      'Optional session ID to optimize. If not provided, uses the current active session.'
+    ),
+  min_token_threshold: z
+    .number()
+    .optional()
+    .default(30)
+    .describe(
+      'Minimum token count for a file operation to be considered for compression. Defaults to 30.'
+    ),
 });
 
 // 11. analyze_project_tokens
 export const AnalyzeProjectTokensSchema = z.object({
-  projectPath: z.string().optional().describe('Path to the project directory. If not provided, uses the hooks data directory.'),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Optional start date filter (YYYY-MM-DD format).'),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Optional end date filter (YYYY-MM-DD format).'),
-  costPerMillionTokens: z.number().min(0).optional().default(30).describe('Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).'),
+  projectPath: z
+    .string()
+    .optional()
+    .describe(
+      'Path to the project directory. If not provided, uses the hooks data directory.'
+    ),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe('Optional start date filter (YYYY-MM-DD format).'),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe('Optional end date filter (YYYY-MM-DD format).'),
+  costPerMillionTokens: z
+    .number()
+    .min(0)
+    .optional()
+    .default(30)
+    .describe(
+      'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).'
+    ),
 });
 
 // For tools using `args as any`, we'll create a generic schema or rely on their internal validation.
@@ -73,7 +119,11 @@ export const AnalyzeProjectTokensSchema = z.object({
 // In a real-world scenario, you would import the actual Zod schemas from the tool definitions.
 
 // Placeholder for tools that use `args as any`
-const GenericToolOptionsSchema = z.record(z.any()).describe('Generic options for tools without explicit inline schema validation.');
+const GenericToolOptionsSchema = z
+  .record(z.any())
+  .describe(
+    'Generic options for tools without explicit inline schema validation.'
+  );
 
 // 12. predictive_cache (assuming it has its own schema defined in PREDICTIVE_CACHE_TOOL_DEFINITION)
 // For now, using GenericToolOptionsSchema as a placeholder
@@ -83,9 +133,11 @@ export const PredictiveCacheSchema = GenericToolOptionsSchema;
 export const CacheWarmupSchema = GenericToolOptionsSchema;
 
 // 14. smart_ast_grep
-export const SmartAstGrepSchema = z.object({
-  pattern: z.string().optional(),
-}).passthrough();
+export const SmartAstGrepSchema = z
+  .object({
+    pattern: z.string().optional(),
+  })
+  .passthrough();
 
 // 15. cache_analytics
 export const CacheAnalyticsSchema = GenericToolOptionsSchema;
@@ -180,46 +232,71 @@ export const SmartUserSchema = GenericToolOptionsSchema;
 // 45. smart_diff (using imported type SmartDiffOptions)
 // In a real Zod implementation, you'd convert SmartDiffOptions to a Zod schema.
 // For now, we'll assume it's an object with potentially any properties.
-export const SmartDiffSchema = z.object({}).passthrough().describe('Options for smart_diff tool');
+export const SmartDiffSchema = z
+  .object({})
+  .passthrough()
+  .describe('Options for smart_diff tool');
 
 // 46. smart_branch (using imported type SmartBranchOptions)
-export const SmartBranchSchema = z.object({}).passthrough().describe('Options for smart_branch tool');
+export const SmartBranchSchema = z
+  .object({})
+  .passthrough()
+  .describe('Options for smart_branch tool');
 
 // 47. smart_merge (using imported type SmartMergeOptions)
-export const SmartMergeSchema = z.object({}).passthrough().describe('Options for smart_merge tool');
+export const SmartMergeSchema = z
+  .object({})
+  .passthrough()
+  .describe('Options for smart_merge tool');
 
 // 48. smart_status (using imported type SmartStatusOptions)
-export const SmartStatusSchema = z.object({}).passthrough().describe('Options for smart_status tool');
+export const SmartStatusSchema = z
+  .object({})
+  .passthrough()
+  .describe('Options for smart_status tool');
 
 // 49. smart_log (using imported type SmartLogOptions)
-export const SmartLogSchema = z.object({}).passthrough().describe('Options for smart_log tool');
+export const SmartLogSchema = z
+  .object({})
+  .passthrough()
+  .describe('Options for smart_log tool');
 
 // 50. smart_read
-export const SmartReadSchema = z.object({
-  path: z.string(),
-}).passthrough();
+export const SmartReadSchema = z
+  .object({
+    path: z.string(),
+  })
+  .passthrough();
 
 // 51. smart_write
-export const SmartWriteSchema = z.object({
-  path: z.string(),
-  content: z.string(),
-}).passthrough();
+export const SmartWriteSchema = z
+  .object({
+    path: z.string(),
+    content: z.string(),
+  })
+  .passthrough();
 
 // 52. smart_edit
-export const SmartEditSchema = z.object({
-  path: z.string(),
-  operations: z.any(),
-}).passthrough();
+export const SmartEditSchema = z
+  .object({
+    path: z.string(),
+    operations: z.any(),
+  })
+  .passthrough();
 
 // 53. smart_glob
-export const SmartGlobSchema = z.object({
-  pattern: z.string(),
-}).passthrough();
+export const SmartGlobSchema = z
+  .object({
+    pattern: z.string(),
+  })
+  .passthrough();
 
 // 54. smart_grep
-export const SmartGrepSchema = z.object({
-  pattern: z.string(),
-}).passthrough();
+export const SmartGrepSchema = z
+  .object({
+    pattern: z.string(),
+  })
+  .passthrough();
 
 // 55. alert_manager
 export const AlertManagerSchema = GenericToolOptionsSchema;
@@ -262,67 +339,67 @@ export const SmartSummarizationSchema = GenericToolOptionsSchema;
 
 // Map tool names to their schemas for easy lookup
 export const toolSchemaMap: Record<string, z.ZodType<any>> = {
-  'optimize_text': OptimizeTextSchema,
-  'get_cached': GetCachedSchema,
-  'count_tokens': CountTokensSchema,
-  'compress_text': CompressTextSchema,
-  'decompress_text': DecompressTextSchema,
-  'get_cache_stats': GetCacheStatsSchema,
-  'clear_cache': ClearCacheSchema,
-  'analyze_optimization': AnalyzeOptimizationSchema,
-  'get_session_stats': GetSessionStatsSchema,
-  'optimize_session': OptimizeSessionSchema,
-  'analyze_project_tokens': AnalyzeProjectTokensSchema,
-  'predictive_cache': PredictiveCacheSchema,
-  'cache_warmup': CacheWarmupSchema,
-  'smart_ast_grep': SmartAstGrepSchema,
-  'cache_analytics': CacheAnalyticsSchema,
-  'cache_benchmark': CacheBenchmarkSchema,
-  'cache_compression': CacheCompressionSchema,
-  'cache_invalidation': CacheInvalidationSchema,
-  'cache_optimizer': CacheOptimizerSchema,
-  'cache_partition': CachePartitionSchema,
-  'cache_replication': CacheReplicationSchema,
-  'smart_cache': SmartCacheSchema,
-  'smart_sql': SmartSqlSchema,
-  'smart_schema': SmartSchemaSchema,
-  'smart_api_fetch': SmartApiFetchSchema,
-  'smart_cache_api': SmartCacheApiSchema,
-  'smart_database': SmartDatabaseSchema,
-  'smart_graphql': SmartGraphQLSchema,
-  'smart_migration': SmartMigrationSchema,
-  'smart_orm': SmartOrmSchema,
-  'smart_rest': SmartRestSchema,
-  'smart_websocket': SmartWebSocketSchema,
-  'smart_processes': SmartProcessesSchema,
-  'smart_network': SmartNetworkSchema,
-  'smart_logs': SmartLogsSchema,
-  'smart_lint': SmartLintSchema,
-  'smart_install': SmartInstallSchema,
-  'smart_docker': SmartDockerSchema,
-  'smart_build': SmartBuildSchema,
-  'smart_system_metrics': SmartSystemMetricsSchema,
-  'smart_test': SmartTestSchema,
-  'smart_typecheck': SmartTypeCheckSchema,
-  'smart_cron': SmartCronSchema,
-  'smart_user': SmartUserSchema,
-  'smart_diff': SmartDiffSchema,
-  'smart_branch': SmartBranchSchema,
-  'smart_merge': SmartMergeSchema,
-  'smart_status': SmartStatusSchema,
-  'smart_log': SmartLogSchema,
-  'smart_read': SmartReadSchema,
-  'smart_write': SmartWriteSchema,
-  'smart_edit': SmartEditSchema,
-  'smart_glob': SmartGlobSchema,
-  'smart_grep': SmartGrepSchema,
-  'alert_manager': AlertManagerSchema,
-  'metric_collector': MetricCollectorSchema,
-  'monitoring_integration': MonitoringIntegrationSchema,
-  'custom_widget': CustomWidgetSchema,
-  'data_visualizer': DataVisualizerSchema,
-  'health_monitor': HealthMonitorSchema,
-  'log_dashboard': LogDashboardSchema,
+  optimize_text: OptimizeTextSchema,
+  get_cached: GetCachedSchema,
+  count_tokens: CountTokensSchema,
+  compress_text: CompressTextSchema,
+  decompress_text: DecompressTextSchema,
+  get_cache_stats: GetCacheStatsSchema,
+  clear_cache: ClearCacheSchema,
+  analyze_optimization: AnalyzeOptimizationSchema,
+  get_session_stats: GetSessionStatsSchema,
+  optimize_session: OptimizeSessionSchema,
+  analyze_project_tokens: AnalyzeProjectTokensSchema,
+  predictive_cache: PredictiveCacheSchema,
+  cache_warmup: CacheWarmupSchema,
+  smart_ast_grep: SmartAstGrepSchema,
+  cache_analytics: CacheAnalyticsSchema,
+  cache_benchmark: CacheBenchmarkSchema,
+  cache_compression: CacheCompressionSchema,
+  cache_invalidation: CacheInvalidationSchema,
+  cache_optimizer: CacheOptimizerSchema,
+  cache_partition: CachePartitionSchema,
+  cache_replication: CacheReplicationSchema,
+  smart_cache: SmartCacheSchema,
+  smart_sql: SmartSqlSchema,
+  smart_schema: SmartSchemaSchema,
+  smart_api_fetch: SmartApiFetchSchema,
+  smart_cache_api: SmartCacheApiSchema,
+  smart_database: SmartDatabaseSchema,
+  smart_graphql: SmartGraphQLSchema,
+  smart_migration: SmartMigrationSchema,
+  smart_orm: SmartOrmSchema,
+  smart_rest: SmartRestSchema,
+  smart_websocket: SmartWebSocketSchema,
+  smart_processes: SmartProcessesSchema,
+  smart_network: SmartNetworkSchema,
+  smart_logs: SmartLogsSchema,
+  smart_lint: SmartLintSchema,
+  smart_install: SmartInstallSchema,
+  smart_docker: SmartDockerSchema,
+  smart_build: SmartBuildSchema,
+  smart_system_metrics: SmartSystemMetricsSchema,
+  smart_test: SmartTestSchema,
+  smart_typecheck: SmartTypeCheckSchema,
+  smart_cron: SmartCronSchema,
+  smart_user: SmartUserSchema,
+  smart_diff: SmartDiffSchema,
+  smart_branch: SmartBranchSchema,
+  smart_merge: SmartMergeSchema,
+  smart_status: SmartStatusSchema,
+  smart_log: SmartLogSchema,
+  smart_read: SmartReadSchema,
+  smart_write: SmartWriteSchema,
+  smart_edit: SmartEditSchema,
+  smart_glob: SmartGlobSchema,
+  smart_grep: SmartGrepSchema,
+  alert_manager: AlertManagerSchema,
+  metric_collector: MetricCollectorSchema,
+  monitoring_integration: MonitoringIntegrationSchema,
+  custom_widget: CustomWidgetSchema,
+  data_visualizer: DataVisualizerSchema,
+  health_monitor: HealthMonitorSchema,
+  log_dashboard: LogDashboardSchema,
   'intelligent-assistant': IntelligentAssistantSchema,
   'natural-language-query': NaturalLanguageQuerySchema,
   'pattern-recognition': PatternRecognitionSchema,
