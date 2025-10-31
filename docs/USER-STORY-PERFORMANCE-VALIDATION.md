@@ -4,6 +4,8 @@
 **Priority:** HIGH (Critical for production use)
 **Story Points:** 21 (Complex, multiple subsystems affected)
 
+> **📌 Note:** This epic document outlines the complete multi-phase optimization plan discovered through comprehensive Gemini CLI analysis (2M token context window). **The current PR (#107) addresses only the critical serialization bug** as the first step, with subsequent phases to be implemented in future PRs according to the roadmap below.
+
 ## Story
 
 **As a:** token-optimizer-mcp user
@@ -12,7 +14,10 @@
 
 ## Current State (Problems)
 
-### Critical Performance Issues
+### Critical Issues (Immediate - PR #107)
+- **JSON Serialization Bug (PR #107):** PowerShell 7.5+ incorrectly serializes Hashtables cast to `[PSCustomObject]`, causing empty arguments in all MCP requests. Session stats show `totalOperations: 45,487` but `totalTokens: 0` because optimization features never received arguments to process.
+
+### Critical Performance Issues (Future Phases)
 - **Hook Overhead:** 50-70ms per hook invocation (PreToolUse, PostToolUse)
 - **Validation Coverage:** Only 11 of 67 tools have argument validation (84% unvalidated!)
 - **Architecture:** All 67 tools loaded at startup, no lazy loading
@@ -476,6 +481,152 @@ describe('Tool Validation', () => {
 - Environment variables default to current behavior
 - Gradual rollout: validation warnings → errors
 - Feature flags for each optimization
+
+#### Backward Compatibility Testing:
+**Critical**: Each phase must be tested against existing user workflows to ensure no breaking changes.
+
+**Phase 1 (Validation System)**:
+- Test that existing hook scripts continue to work with validation enabled
+- Verify warning mode doesn't interrupt normal operation
+- Test with PowerShell 5.1, 7.0, 7.2, 7.4, and 7.5+ (serialization bug versions)
+- Confirm all 67 tools still execute correctly with validated arguments
+- Test with empty arguments, malformed arguments, and missing optional parameters
+
+**Phase 2 (PowerShell Hook Optimization)**:
+- Test in-memory session state produces identical results to file-based tracking
+- Verify batched log writes don't lose operations during crashes
+- Test timer-based flush works across multiple concurrent operations
+- Confirm session persistence on normal exit vs crash scenarios
+- Test with Claude Code restarts and session continuity
+
+**Phase 3 (Async File I/O)**:
+- Test async operations complete before server shutdown
+- Verify no race conditions with concurrent file reads
+- Test with large files (>10MB) to ensure streaming works
+- Confirm error handling for file not found, permission denied, etc.
+- Test with network drives and slow file systems
+
+**Phase 4 (Caching)**:
+- Test LRU eviction doesn't cause memory leaks over long sessions
+- Verify cache invalidation works when files change
+- Test cache hit rate with real user operations (should be >80%)
+- Confirm cache serialization/deserialization preserves data integrity
+- Test cache performance degrades gracefully when full
+
+**Phase 5 (Lazy Loading)**:
+- Test all 67 tools load correctly when first invoked
+- Verify no startup time regression for commonly used tools
+- Test dynamic imports work in both ESM and CommonJS contexts
+- Confirm error messages are clear when tool fails to load
+
+### Integration Testing Between Phases:
+**Critical**: Each phase builds on previous phases. Must test interactions.
+
+**Phase 1 + 2 Integration**:
+- Validation system must work with in-memory session state
+- Validation errors should be logged to batched operation logs
+- Test that invalid arguments don't corrupt session state
+
+**Phase 2 + 3 Integration**:
+- Async file I/O should work with batched log writes
+- In-memory session state shouldn't block async operations
+- Test timer-based flush works with async file writes
+
+**Phase 3 + 4 Integration**:
+- Cache reads/writes must be fully async
+- Token counting cache should work with async file reads
+- Test cache updates don't race with file operations
+
+**Phase 4 + 5 Integration**:
+- Lazy-loaded tools should have their own cache instances
+- LRU cache should handle dynamic tool loading
+- Test memory usage stays bounded with lazy loading + caching
+
+**Full Integration Test**:
+- Run real Claude Code session with all phases enabled
+- Execute all 67 tools at least once
+- Verify <10ms hook overhead achieved
+- Confirm 60-90% token savings working
+- Check cache hit rate >80%
+- Validate no errors in logs
+
+### Rollback and Failure Scenarios:
+
+#### Phase Rollback Strategy:
+Each phase can be disabled independently via environment variables if issues arise:
+
+```bash
+# Rollback Phase 1 (Validation)
+TOKEN_OPTIMIZER_VALIDATION_MODE=off  # Disable all validation
+
+# Rollback Phase 2 (PowerShell Optimization)
+TOKEN_OPTIMIZER_USE_FILE_SESSION=true  # Revert to file-based session tracking
+TOKEN_OPTIMIZER_SYNC_LOG_WRITES=true   # Disable batched writes
+
+# Rollback Phase 3 (Async I/O)
+TOKEN_OPTIMIZER_SYNC_IO=true  # Force synchronous file operations
+
+# Rollback Phase 4 (Caching)
+TOKEN_OPTIMIZER_TOKEN_CACHE_SIZE=0       # Disable token cache
+TOKEN_OPTIMIZER_EMBEDDING_CACHE_SIZE=0   # Disable embedding cache
+
+# Rollback Phase 5 (Lazy Loading)
+TOKEN_OPTIMIZER_EAGER_LOAD_TOOLS=true  # Load all tools at startup
+```
+
+#### Failure Scenario Handling:
+
+**Scenario 1: Validation Breaks Tool Execution**
+- **Symptom**: Tool returns validation error instead of executing
+- **Detection**: Monitor validation error rate > 5%
+- **Rollback**: Set `TOKEN_OPTIMIZER_VALIDATION_MODE=warn` (warnings only)
+- **Fix**: Update schema for affected tool, test, re-enable
+
+**Scenario 2: Batched Logging Loses Operations**
+- **Symptom**: Session totalOperations count doesn't match actual operations
+- **Detection**: Compare session stats with log file operation count
+- **Rollback**: Set `TOKEN_OPTIMIZER_SYNC_LOG_WRITES=true`
+- **Fix**: Debug flush timer, add flush on shutdown hook
+
+**Scenario 3: Async I/O Race Conditions**
+- **Symptom**: File read errors, corrupted cache data
+- **Detection**: Increased error rate in logs, cache inconsistencies
+- **Rollback**: Set `TOKEN_OPTIMIZER_SYNC_IO=true`
+- **Fix**: Add proper locking, test concurrent operations
+
+**Scenario 4: Cache Memory Leak**
+- **Symptom**: Memory usage grows unbounded over time
+- **Detection**: Monitor process memory, check if > 500MB
+- **Rollback**: Set `TOKEN_OPTIMIZER_TOKEN_CACHE_SIZE=0`
+- **Fix**: Debug LRU eviction, check for circular references
+
+**Scenario 5: Lazy Loading Import Failures**
+- **Symptom**: Tools fail to load with "Cannot find module" errors
+- **Detection**: Tool execution errors, missing imports
+- **Rollback**: Set `TOKEN_OPTIMIZER_EAGER_LOAD_TOOLS=true`
+- **Fix**: Check dynamic import paths, test in both dev and production builds
+
+**Scenario 6: Performance Regression**
+- **Symptom**: Hook overhead >50ms (worse than before)
+- **Detection**: Monitor hook execution times via metrics
+- **Rollback**: Disable phases sequentially until performance recovers
+- **Fix**: Profile to identify bottleneck, optimize hot path
+
+#### Monitoring for Early Detection:
+```typescript
+// Add to performance-metrics.ts
+export class HealthCheck {
+  async runDiagnostics() {
+    return {
+      validationErrorRate: this.getValidationErrorRate(),  // Should be <1%
+      avgHookOverhead: this.getAvgHookTime(),             // Should be <10ms
+      cacheHitRate: this.getCacheHitRate(),               // Should be >80%
+      memoryUsage: process.memoryUsage().heapUsed,        // Should be <200MB
+      sessionIntegrity: await this.checkSessionIntegrity(), // Should be 100%
+    };
+  }
+}
+```
 
 ### Rollout Plan:
 1. **Week 1:** Validation system (non-breaking, warnings only)
