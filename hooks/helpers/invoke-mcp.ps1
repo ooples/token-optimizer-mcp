@@ -84,14 +84,16 @@ function Invoke-MCP {
         }
 
         # Build MCP protocol request
-        # Use [PSCustomObject] cast to ensure proper JSON object serialization
-        $request = [PSCustomObject]@{
+        # CRITICAL FIX: Don't cast to [PSCustomObject] - let ConvertTo-Json handle Hashtables natively
+        # Casting Hashtable to PSCustomObject causes serialization bugs in PowerShell 7+
+        # where it becomes {"value":[],"Count":0} or an empty array [] instead of the actual object
+        $request = @{
             jsonrpc = "2.0"
             id = [guid]::NewGuid().ToString()
             method = "tools/call"
-            params = [PSCustomObject]@{
+            params = @{
                 name = $Tool
-                arguments = [PSCustomObject]$Args
+                arguments = $Args
             }
         } | ConvertTo-Json -Depth 10 -Compress
 
