@@ -186,7 +186,10 @@ async function sendToMCPServer(request: any): Promise<any> {
   }
 
   // Generate unique request ID
-  const id = request.id || `daemon-${requestIdCounter++}`;
+  const id =
+    request.id === undefined || request.id === null
+      ? `daemon-${requestIdCounter++}`
+      : request.id;
   request.id = id;
 
   console.error(`[DAEMON] Sending request ${id}: ${request.method}`);
@@ -221,8 +224,9 @@ async function sendToMCPServer(request: any): Promise<any> {
 async function handleIPCRequest(data: string): Promise<string> {
   const startTime = Date.now();
 
+  let request: any;
   try {
-    const request = JSON.parse(data);
+    request = JSON.parse(data);
 
     console.error(`[DAEMON] IPC request: ${request.method}`);
 
@@ -281,7 +285,7 @@ async function handleIPCRequest(data: string): Promise<string> {
 
     return JSON.stringify({
       jsonrpc: '2.0',
-      id: null,
+      id: request?.id ?? null,
       error: {
         code: -32603,
         message: error instanceof Error ? error.message : 'Internal error',

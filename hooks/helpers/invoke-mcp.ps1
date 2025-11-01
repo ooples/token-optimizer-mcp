@@ -17,8 +17,16 @@ param(
     [string]$ServerName = "token-optimizer"
 )
 
-$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\mcp-invocation.log"
-$PERF_LOG = "C:\Users\cheat\.claude-global\hooks\logs\performance.csv"
+$profileRoot = $env:USERPROFILE
+if (-not $profileRoot) {
+    throw "USERPROFILE is not set; cannot resolve log directory."
+}
+$logDir = Join-Path $profileRoot ".claude-global\hooks\logs"
+if (-not (Test-Path $logDir)) {
+    New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+}
+$LOG_FILE = Join-Path $logDir "mcp-invocation.log"
+$PERF_LOG = Join-Path $logDir "performance.csv"
 $SOCKET_PATH = "\.\pipe\token-optimizer-daemon"
 
 # Convert PSCustomObject to Hashtable recursively
