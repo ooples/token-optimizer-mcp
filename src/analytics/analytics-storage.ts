@@ -124,7 +124,9 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
     }
 
     this.batchTimer = setTimeout(() => {
-      this.flushBatch();
+      void this.flushBatch().catch((err) => {
+        console.error('Failed to flush analytics batch:', err);
+      });
     }, this.BATCH_DELAY_MS);
   }
 

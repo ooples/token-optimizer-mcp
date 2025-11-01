@@ -56,11 +56,10 @@ export class AnalyticsManager {
   }): Promise<HookAnalytics> {
     let entries: AnalyticsEntry[];
 
-    if (options?.startDate && options?.endDate) {
-      entries = await this.storage.queryByDateRange(
-        options.startDate,
-        options.endDate
-      );
+    if (options?.startDate || options?.endDate) {
+      const start = options?.startDate ?? '0001-01-01T00:00:00.000Z';
+      const end = options?.endDate ?? new Date().toISOString();
+      entries = await this.storage.queryByDateRange(start, end);
     } else {
       entries = await this.storage.query();
     }
@@ -77,11 +76,10 @@ export class AnalyticsManager {
   }): Promise<ActionAnalytics> {
     let entries: AnalyticsEntry[];
 
-    if (options?.startDate && options?.endDate) {
-      entries = await this.storage.queryByDateRange(
-        options.startDate,
-        options.endDate
-      );
+    if (options?.startDate || options?.endDate) {
+      const start = options?.startDate ?? '0001-01-01T00:00:00.000Z';
+      const end = options?.endDate ?? new Date().toISOString();
+      entries = await this.storage.queryByDateRange(start, end);
     } else {
       entries = await this.storage.query();
     }
@@ -98,11 +96,10 @@ export class AnalyticsManager {
   }): Promise<ServerAnalytics> {
     let entries: AnalyticsEntry[];
 
-    if (options?.startDate && options?.endDate) {
-      entries = await this.storage.queryByDateRange(
-        options.startDate,
-        options.endDate
-      );
+    if (options?.startDate || options?.endDate) {
+      const start = options?.startDate ?? '0001-01-01T00:00:00.000Z';
+      const end = options?.endDate ?? new Date().toISOString();
+      entries = await this.storage.queryByDateRange(start, end);
     } else {
       entries = await this.storage.query();
     }
@@ -121,11 +118,10 @@ export class AnalyticsManager {
     endDate?: string;
     sessionId?: string;
   }): Promise<AnalyticsEntry[]> {
-    if (filters?.startDate && filters?.endDate) {
-      const entries = await this.storage.queryByDateRange(
-        filters.startDate,
-        filters.endDate
-      );
+    if (filters?.startDate || filters?.endDate) {
+      const start = filters?.startDate ?? '0001-01-01T00:00:00.000Z';
+      const end = filters?.endDate ?? new Date().toISOString();
+      const entries = await this.storage.queryByDateRange(start, end);
 
       // Apply additional filters
       return entries.filter((entry) => {
@@ -383,5 +379,14 @@ export class AnalyticsManager {
     });
 
     return header + rows.join('\n') + '\n';
+  }
+
+  /**
+   * Close the underlying storage and flush any pending writes
+   */
+  close(): void {
+    if (this.storage && typeof this.storage.close === 'function') {
+      this.storage.close();
+    }
   }
 }

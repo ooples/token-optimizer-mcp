@@ -339,27 +339,27 @@ export const SmartSummarizationSchema = GenericToolOptionsSchema;
 
 // 68. get_hook_analytics
 export const GetHookAnalyticsSchema = z.object({
-  startDate: z.string().optional().describe("Optional start date filter in ISO 8601 format"),
-  endDate: z.string().optional().describe("Optional end date filter in ISO 8601 format"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional start date filter in ISO 8601 format"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional end date filter in ISO 8601 format"),
 });
 
 // 69. get_action_analytics
 export const GetActionAnalyticsSchema = z.object({
-  startDate: z.string().optional().describe("Optional start date filter in ISO 8601 format"),
-  endDate: z.string().optional().describe("Optional end date filter in ISO 8601 format"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional start date filter in ISO 8601 format"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional end date filter in ISO 8601 format"),
 });
 
 // 70. get_mcp_server_analytics
 export const GetMcpServerAnalyticsSchema = z.object({
-  startDate: z.string().optional().describe("Optional start date filter in ISO 8601 format"),
-  endDate: z.string().optional().describe("Optional end date filter in ISO 8601 format"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional start date filter in ISO 8601 format"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional end date filter in ISO 8601 format"),
 });
 
 // 71. export_analytics
 export const ExportAnalyticsSchema = z.object({
   format: z.enum(["json", "csv"]).describe("Output format: json or csv"),
-  startDate: z.string().optional().describe("Optional start date filter in ISO 8601 format"),
-  endDate: z.string().optional().describe("Optional end date filter in ISO 8601 format"),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional start date filter in ISO 8601 format"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/).optional().describe("Optional end date filter in ISO 8601 format"),
   hookPhase: z.enum(["PreToolUse", "PostToolUse", "SessionStart", "PreCompact", "UserPromptSubmit", "Unknown"]).optional().describe("Optional filter by hook phase"),
   toolName: z.string().optional().describe("Optional filter by tool/action name"),
   mcpServer: z.string().optional().describe("Optional filter by MCP server name"),

@@ -160,4 +160,6 @@ export interface AnalyticsStorage {
   clear(): Promise<void>;
   /** Get total count of stored entries */
   count(): Promise<number>;
+  /** Close the storage and flush any pending writes */
+  close(): void;
 }
