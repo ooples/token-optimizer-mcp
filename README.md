@@ -295,7 +295,7 @@ export_analytics({
 **Key Features**:
 - Per-hook phase tracking (PreToolUse, PostToolUse, SessionStart, etc.)
 - Per-action tracking (Read, Write, count_tokens, etc.)
-- Per-MCP-server tracking (token-optimizer, filesystem, github, etc.)
+- Per-MCP-server tracking (token-optimizer, filesystem, GitHub, etc.)
 - Date range filtering
 - JSON and CSV export
 - Persistent storage with SQLite
