@@ -6,7 +6,8 @@
   "main": "dist/server/index.js",
   "types": "dist/server/index.d.ts",
   "bin": {
-    "token-optimizer-mcp": "./dist/server/index.js"
+    "token-optimizer-mcp": "./dist/server/index.js",
+    "token-optimizer-daemon": "./dist/server/daemon.js"
   },
   "files": [
     "dist/**/*",
