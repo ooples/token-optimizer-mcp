@@ -2210,10 +2210,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // Helper to run cleanup operations with error handling
-function runCleanupOperations(operations: { fn: () => void; name: string }[]) {
+async function runCleanupOperations(
+  operations: { fn: () => void | Promise<void>; name: string }[]
+) {
   for (const op of operations) {
     try {
-      op.fn();
+      await op.fn();
     } catch (err) {
       console.error(`Error during cleanup (${op.name}):`, err);
     }
@@ -2221,8 +2223,12 @@ function runCleanupOperations(operations: { fn: () => void; name: string }[]) {
 }
 
 // Shared cleanup function to avoid duplication between signal handlers
-function cleanup() {
-  runCleanupOperations([
+async function cleanup() {
+  await runCleanupOperations([
+    {
+      fn: async () => await analyticsManager.close(),
+      name: 'flushing analytics',
+    },
     { fn: () => cache?.close(), name: 'closing cache' },
     { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
     // Note: predictiveCache and cacheWarmup do not implement dispose() methods
@@ -2238,13 +2244,11 @@ async function main() {
   // Cleanup on exit - Note: the signal handlers use try-catch blocks
   // to ensure cleanup continues even if disposal fails
   process.on('SIGINT', () => {
-    cleanup();
-    process.exit(0);
+    cleanup().finally(() => process.exit(0));
   });
 
   process.on('SIGTERM', () => {
-    cleanup();
-    process.exit(0);
+    cleanup().finally(() => process.exit(0));
   });
 }
 

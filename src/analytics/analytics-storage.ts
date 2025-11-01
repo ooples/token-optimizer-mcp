@@ -244,10 +244,10 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
   /**
    * Close the database connection
    */
-  close(): void {
+  async close(): Promise<void> {
     // Flush any pending writes
     if (this.batchQueue.length > 0) {
-      this.saveBatch(this.batchQueue);
+      await this.saveBatch(this.batchQueue);
       this.batchQueue = [];
     }
 

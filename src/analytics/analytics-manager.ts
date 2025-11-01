@@ -386,9 +386,9 @@ export class AnalyticsManager {
   /**
    * Close the underlying storage and flush any pending writes
    */
-  close(): void {
+  async close(): Promise<void> {
     if (this.storage && typeof this.storage.close === 'function') {
-      this.storage.close();
+      await this.storage.close();
     }
   }
 }
