@@ -481,7 +481,7 @@ await get_session_stats({});
   "tokenReductionPercent": 68.2,
   "originalTokens": 184000,
   "optimizedTokens": 58570,
-  "cacheHitRate": 0.72,
+  "cacheHitRate": 72.0,
   "byTool": {
     "smart_read": { "saved": 45000, "percent": 80 },
     "smart_grep": { "saved": 32000, "percent": 75 }
