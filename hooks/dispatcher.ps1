@@ -8,23 +8,10 @@ $HANDLERS_DIR = "C:\Users\cheat\.claude-global\hooks\handlers"
 $LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\dispatcher.log"
 $ORCHESTRATOR = "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
 
-# PERFORMANCE FIX: Prefer local dev path if not already set
-if (-not $env:TOKEN_OPTIMIZER_DEV_PATH) {
-  $home = $env:USERPROFILE; if (-not $home) { $home = (Get-Item "~").FullName }
-  $env:TOKEN_OPTIMIZER_DEV_PATH = (Join-Path $home "source\repos\token-optimizer-mcp")
-}
-
-# CRITICAL PERFORMANCE FIX: Dot-source orchestrator to avoid creating new PowerShell process for every action
-# This eliminates 90%+ of hook overhead by loading functions once instead of spawning processes
-. "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
-
 function Write-Log {
-    param(
-        [string]$Message,
-        [ValidateSet('DEBUG','INFO','WARN','ERROR')][string]$Level = 'INFO'
-    )
+    param([string]$Message)
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "[$timestamp] [$Level] [$Phase] $Message" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
+    "[$timestamp] [$Phase] $Message" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
 }
 
 function Block-Tool {
@@ -47,18 +34,8 @@ function Block-Tool {
 }
 
 try {
-    # DIAGNOSTIC: Log that dispatcher was invoked at all
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "[DEBUG] [$timestamp] [$Phase] DISPATCHER INVOKED" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
-
     # Read JSON input from stdin
-    # NOTE: [Console]::In.ReadToEnd() works fine on Windows - the UTF-8 byte stream approach BROKE it!
-    try { [Console]::InputEncoding = [System.Text.Encoding]::UTF8 } catch {}
     $input_json = [Console]::In.ReadToEnd()
-
-    # DEBUG: Log raw JSON to see what we're receiving (redact paths to prevent PII leakage)
-    $redactedJson = $input_json -replace '\\\\Users\\\\[^\\\\]+', '\\Users\***' -replace '/Users/[^/]+', '/Users/***'
-    "[DEBUG] [$timestamp] RAW JSON: $($redactedJson.Substring(0, [Math]::Min(200, $redactedJson.Length)))" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
 
     if (-not $input_json) {
         Write-Log "No JSON input"
@@ -69,7 +46,6 @@ try {
     $toolName = $data.tool_name
 
     Write-Log "Tool: $toolName"
-    "[DEBUG] [$timestamp] TOOL NAME: $toolName" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
 
     # ============================================================
     # PHASE: PreToolUse
@@ -79,14 +55,9 @@ try {
         # 1. SMART READ - Use smart_read MCP tool for cached file reads (CRITICAL FOR TOKEN SAVINGS!)
         # This replaces plain Read with intelligent caching, diffing, and truncation
         # Must run BEFORE user enforcers to ensure caching takes priority
-        # Match: Read, mcp__filesystem__read_file, mcp__filesystem__read_text_file
-        if ($toolName -eq "Read" -or $toolName -eq "mcp__filesystem__read_file" -or $toolName -eq "mcp__filesystem__read_text_file") {
-            "[DEBUG] [$timestamp] MATCHED READ TOOL: $toolName" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
-            $startTime = Get-Date
-            $smartReadResult = Handle-SmartRead -InputJson $input_json
-            $duration = ((Get-Date) - $startTime).TotalMilliseconds
-            Write-Log "[PERF] smart-read took $([math]::Round($duration, 2))ms" "DEBUG"
-            if ($smartReadResult -eq 2) {
+        if ($toolName -eq "Read") {
+            $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "smart-read"
+            if ($LASTEXITCODE -eq 2) {
                 # smart_read succeeded - blocks plain Read and returns cached/optimized content
                 exit 2
             }
@@ -94,21 +65,13 @@ try {
         }
 
         # 2. Context Guard - Check if we're approaching token limit
-        $startTime = Get-Date
-        $guardResult = Handle-ContextGuard -InputJson $input_json
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] context-guard took $([math]::Round($duration, 2))ms" "DEBUG"
-        if ($guardResult -eq 2) {
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "context-guard"
+        if ($LASTEXITCODE -eq 2) {
             Block-Tool -Reason "Context budget exhausted - session optimization required"
         }
 
         # 3. Track operation
-        $session = Update-SessionOperation
-        Write-Log "Operation #$($session.totalOperations)" "DEBUG"
-
-        # NOTE: pretooluse-optimize is DISABLED due to PowerShell/Node.js stdin EOF handling bug
-        # causing 60+ second hangs on every MCP call. Will re-enable after fixing invoke-mcp.ps1
-        # $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "pretooluse-optimize"
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "session-track"
 
         # 4. MCP Enforcers - Force usage of MCP tools over Bash/Read/Grep
 
@@ -145,9 +108,7 @@ try {
             }
 
             if ($isLocalOp) {
-                # Redact paths to prevent PII leakage
-                $redactedCmd = $data.tool_input.command -replace '\\Users\\[^\\]+', '\Users\***' -replace '/Users/[^/]+', '/Users/***'
-                Write-Log "[ALLOW] Local git operation: $redactedCmd"
+                Write-Log "[ALLOW] Local git operation: $($data.tool_input.command)"
                 exit 0
             }
 
@@ -165,13 +126,6 @@ try {
         #     }
         # }
 
-        # PHASE 3: Check cache, optimize inputs, avoid redundant tool calls
-        $startTime = Get-Date
-        $preResult = Handle-PreToolUseOptimization -InputJson $input_json
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] pretooluse-optimize took $([math]::Round($duration, 2))ms" "DEBUG"
-        if ($preResult -eq 2) { exit 2 }
-
         Write-Log "[ALLOW] $toolName"
         exit 0
     }
@@ -181,23 +135,12 @@ try {
     # ============================================================
     if ($Phase -eq "PostToolUse") {
 
-        # 1. PHASE 1 & 7: Optimize ALL tool outputs (tool-specific + general)
-        #    Uses optimize_text, count_tokens, compress_text, tool-specific handlers
-        $startTime = Get-Date
-        Handle-OptimizeToolOutput -InputJson $input_json
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] optimize-tool-output took $([math]::Round($duration, 2))ms" "DEBUG"
-
-        # 2. Log ALL tool operations to operations-{sessionId}.csv
+        # 1. Log ALL tool operations to operations-{sessionId}.csv
         #    This is CRITICAL for session-level optimization
-        $startTime = Get-Date
-        Handle-LogOperation -InputJson $input_json
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] log-operation took $([math]::Round($duration, 2))ms" "DEBUG"
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "log-operation"
 
-        # 3. Track operation count
-        $session = Update-SessionOperation
-        Write-Log "Operation #$($session.totalOperations)" "DEBUG"
+        # 2. Track operation count
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "session-track"
 
         exit 0
     }
@@ -207,13 +150,10 @@ try {
     # ============================================================
     if ($Phase -eq "SessionStart") {
 
-        Write-Log "Session starting - Phase 2 initialization"
+        Write-Log "Session starting - warming cache"
 
-        # PHASE 2: Initialize session with cache warmup, health checks, monitoring
-        $startTime = Get-Date
-        Handle-SessionStartInit
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] session-start-init took $([math]::Round($duration, 2))ms" "DEBUG"
+        # Pre-warm cache using predictive patterns
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "SessionStart" -Action "cache-warmup"
 
         exit 0
     }
@@ -223,20 +163,10 @@ try {
     # ============================================================
     if ($Phase -eq "PreCompact") {
 
-        Write-Log "Session ending - running PreCompact optimization"
-
-        # PHASE 1: Aggressive context optimization BEFORE compaction
-        # Uses optimize_text, compress_text, count_tokens to achieve 60-80% token reduction
-        $startTime = Get-Date
-        Handle-PreCompactOptimization -InputJson $input_json
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] precompact-optimize took $([math]::Round($duration, 2))ms" "DEBUG"
+        Write-Log "Session ending - generating final report"
 
         # Generate comprehensive session analytics
-        $startTime = Get-Date
-        Handle-SessionReport
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] session-report took $([math]::Round($duration, 2))ms" "DEBUG"
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreCompact" -Action "session-report"
 
         exit 0
     }
@@ -245,22 +175,12 @@ try {
     # PHASE: UserPromptSubmit
     # ============================================================
     if ($Phase -eq "UserPromptSubmit") {
-        # PHASE 2: Optimize user prompt before processing
-        $startTime = Get-Date
-        Handle-UserPromptOptimization -InputJson $input_json
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] user-prompt-optimize took $([math]::Round($duration, 2))ms" "DEBUG"
-
         # Track user prompts for analytics
-        $session = Update-SessionOperation
-        Write-Log "Operation #$($session.totalOperations)" "DEBUG"
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "session-track"
 
         # CRITICAL: Run session-level optimization at end of user turn
         # This batch-optimizes ALL file operations from the previous turn
-        $startTime = Get-Date
-        Handle-OptimizeSession
-        $duration = ((Get-Date) - $startTime).TotalMilliseconds
-        Write-Log "[PERF] optimize-session took $([math]::Round($duration, 2))ms" "DEBUG"
+        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "optimize-session"
 
         exit 0
     }
