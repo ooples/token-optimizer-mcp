@@ -113,8 +113,6 @@ import {
   SMARTSUMMARIZATIONTOOL,
 } from '../tools/intelligence/smart-summarization.js';
 
-
-
 // Analytics tools
 import {
   getHookAnalyticsTool,
@@ -267,7 +265,7 @@ import {
 import {
   runSmartGrep,
   SMART_GREP_TOOL_DEFINITION,
-      // Analytics tools
+  // Analytics tools
 } from '../tools/file-operations/smart-grep.js';
 import { parseSessionLog } from './session-log-parser.js';
 import fs from 'fs';
@@ -293,7 +291,6 @@ const compression = new CompressionEngine();
 const metrics = new MetricsCollector();
 
 const analyticsManager = new AnalyticsManager();
-
 
 /**
  * Helper function to cache uncompressed text
@@ -372,7 +369,6 @@ const getHookAnalytics = getHookAnalyticsTool(analyticsManager);
 const getActionAnalytics = getActionAnalyticsTool(analyticsManager);
 const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
 const exportAnalytics = getExportAnalyticsTool(analyticsManager);
-
 
 // Create MCP server
 const server = new Server(

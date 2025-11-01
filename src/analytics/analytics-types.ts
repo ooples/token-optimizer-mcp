@@ -155,7 +155,10 @@ export interface AnalyticsStorage {
   /** Query analytics entries with optional filters */
   query(filters?: Partial<AnalyticsEntry>): Promise<AnalyticsEntry[]>;
   /** Get all entries within a date range */
-  queryByDateRange(startDate: string, endDate: string): Promise<AnalyticsEntry[]>;
+  queryByDateRange(
+    startDate: string,
+    endDate: string
+  ): Promise<AnalyticsEntry[]>;
   /** Clear all analytics data */
   clear(): Promise<void>;
   /** Get total count of stored entries */

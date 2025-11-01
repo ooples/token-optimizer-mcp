@@ -3,7 +3,10 @@
  */
 
 import type { AnalyticsManager } from '../../analytics/analytics-manager.js';
-import type { ExportFormat, HookPhase } from '../../analytics/analytics-types.js';
+import type {
+  ExportFormat,
+  HookPhase,
+} from '../../analytics/analytics-types.js';
 
 export const EXPORT_ANALYTICS_TOOL_DEFINITION = {
   name: 'export_analytics',

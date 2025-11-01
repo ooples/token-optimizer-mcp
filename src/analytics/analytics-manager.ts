@@ -38,7 +38,9 @@ export class AnalyticsManager {
   /**
    * Track a batch of operations
    */
-  async trackBatch(entries: Omit<AnalyticsEntry, 'timestamp'>[]): Promise<void> {
+  async trackBatch(
+    entries: Omit<AnalyticsEntry, 'timestamp'>[]
+  ): Promise<void> {
     const fullEntries: AnalyticsEntry[] = entries.map((entry) => ({
       ...entry,
       timestamp: new Date().toISOString(),

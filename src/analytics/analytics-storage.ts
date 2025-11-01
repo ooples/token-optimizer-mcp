@@ -6,10 +6,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-import type {
-  AnalyticsEntry,
-  AnalyticsStorage,
-} from './analytics-types.js';
+import type { AnalyticsEntry, AnalyticsStorage } from './analytics-types.js';
 
 /**
  * SQLite-backed analytics storage
@@ -221,7 +218,9 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
     // Ensure any pending writes are flushed
     await this.flushBatch();
 
-    const result = this.db.prepare('SELECT COUNT(*) as count FROM analytics').get() as { count: number };
+    const result = this.db
+      .prepare('SELECT COUNT(*) as count FROM analytics')
+      .get() as { count: number };
     return result.count;
   }
 
