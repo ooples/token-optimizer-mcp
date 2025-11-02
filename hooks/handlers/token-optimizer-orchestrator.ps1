@@ -185,16 +185,24 @@ function Initialize-Session {
         $sessionId = [guid]::NewGuid().ToString()
         $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
 
+        # PHASE 4 FIX: Enhanced stats tracking
         $session = @{
             sessionId = $sessionId
             sessionStart = $sessionStart
             totalOperations = 0
-            totalTokens = 0
+            totalOriginalTokens = 0      # NEW: Track before optimization
+            totalOptimizedTokens = 0     # NEW: Track after optimization
+            totalTokensSaved = 0         # NEW: Explicit savings
+            optimizationFailures = 0     # NEW: Track failures (expansion)
+            optimizationSuccesses = 0    # NEW: Track successes
+            cacheHits = 0                # NEW: Track cache effectiveness
+            cacheMisses = 0              # NEW: Track cache misses
+            totalTokens = 0              # DEPRECATED: Keep for backwards compatibility
             lastOptimized = 0
         }
 
         $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
-        Write-Log "Initialized new session: $sessionId" "INFO"
+        Write-Log "Initialized new session: $sessionId (Phase 4 enhanced tracking)" "INFO"
 
         return $session
     }
@@ -204,11 +212,19 @@ function Initialize-Session {
         $sessionId = [guid]::NewGuid().ToString()
         $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
 
+        # PHASE 4 FIX: Enhanced stats tracking
         $script:CurrentSession = @{
             sessionId = $sessionId
             sessionStart = $sessionStart
             totalOperations = 0
-            totalTokens = 0
+            totalOriginalTokens = 0      # NEW: Track before optimization
+            totalOptimizedTokens = 0     # NEW: Track after optimization
+            totalTokensSaved = 0         # NEW: Explicit savings
+            optimizationFailures = 0     # NEW: Track failures (expansion)
+            optimizationSuccesses = 0    # NEW: Track successes
+            cacheHits = 0                # NEW: Track cache effectiveness
+            cacheMisses = 0              # NEW: Track cache misses
+            totalTokens = 0              # DEPRECATED: Keep for backwards compatibility
             lastOptimized = 0
         }
 
@@ -1366,6 +1382,12 @@ function Handle-PreToolUseOptimization {
                 $cachedData = $cachedResult | ConvertFrom-Json
                 if ($cachedData -and $cachedData.content) {
                     Write-Log "Cache HIT for $toolName - avoiding redundant tool call" "INFO"
+
+                    # PHASE 4 FIX: Track cache hit
+                    if ($script:CurrentSession) {
+                        $script:CurrentSession.cacheHits++
+                    }
+
                     # Return standard block response so dispatcher can exit 2
                     $blockResponse = @{
                         continue = $false
@@ -1382,8 +1404,17 @@ function Handle-PreToolUseOptimization {
                     return 2
                 }
             }
+
+            # PHASE 4 FIX: Track cache miss
+            if ($script:CurrentSession) {
+                $script:CurrentSession.cacheMisses++
+            }
         } catch {
             # Cache miss is normal, continue
+            # PHASE 4 FIX: Track cache miss
+            if ($script:CurrentSession) {
+                $script:CurrentSession.cacheMisses++
+            }
             Write-Log "Cache miss for $toolName" "DEBUG"
         }
 
@@ -1532,11 +1563,25 @@ function Handle-OptimizeToolOutput {
                 # PHASE 1 FIX: Rollback logic - only use optimization if it actually helps
                 if ($afterTokens -ge $beforeTokens) {
                     Write-Log "Optimization made things worse or had no effect ($beforeTokens → $afterTokens tokens), REVERTING to original" "WARN"
+
+                    # PHASE 4 FIX: Track failure
+                    if ($script:CurrentSession) {
+                        $script:CurrentSession.optimizationFailures++
+                    }
+
                     # Don't update session with optimized tokens, skip this optimization
                     return
                 }
 
                 Write-Log "Optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
+
+                # PHASE 4 FIX: Track success and detailed stats
+                if ($script:CurrentSession) {
+                    $script:CurrentSession.optimizationSuccesses++
+                    $script:CurrentSession.totalOriginalTokens += $beforeTokens
+                    $script:CurrentSession.totalOptimizedTokens += $afterTokens
+                    $script:CurrentSession.totalTokensSaved += $saved
+                }
 
                 # Update session tokens (only if optimization helped)
                 Update-SessionOperation -TokensDelta $afterTokens
