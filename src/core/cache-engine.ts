@@ -95,7 +95,7 @@ export class CacheEngine {
             if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
             if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
           } catch {
-            // If we can't clean up, we'll try temp directory on next attempt
+            // If we can't clean up, attempt 3 will fail with an error (no tmpdir fallback)
           }
         }
 
