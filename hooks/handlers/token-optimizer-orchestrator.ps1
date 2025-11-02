@@ -33,6 +33,13 @@ $CONTEXT_LIMIT = 200000
 $OPTIMIZE_THRESHOLD = 0.80
 $FORCE_THRESHOLD = 0.90
 
+# Optimization quality configuration
+$OPTIMIZATION_QUALITY = 11  # Maximum compression quality
+
+# Cache key hash configuration
+$HASH_PREFIX = "hash:"
+$HASH_LENGTH = 32
+
 # PHASE 2 FIX: Deterministic cache key generation
 # Fixes 0% cache hit rate by ensuring identical operations produce identical keys
 function Get-DeterministicCacheKey {
@@ -65,20 +72,20 @@ function Get-DeterministicCacheKey {
             $hasher = [System.Security.Cryptography.SHA256]::Create()
             $bytes = [System.Text.Encoding]::UTF8.GetBytes($value)
             $hashBytes = $hasher.ComputeHash($bytes)
-            $value = "hash:" + [Convert]::ToBase64String($hashBytes).Substring(0, 32)
+            $value = $script:HASH_PREFIX + [Convert]::ToBase64String($hashBytes).Substring(0, $script:HASH_LENGTH)
         }
 
         $canonical.args[$key] = $value
     }
 
-    # Convert to deterministic JSON (sorted keys via ConvertTo-Json with hashtable)
+    # Convert to deterministic JSON (determinism ensured by manually sorting keys before ConvertTo-Json)
     $json = $canonical | ConvertTo-Json -Depth 10 -Compress
 
     # Hash the entire key for fixed length (prevents extremely long keys)
     $hasher = [System.Security.Cryptography.SHA256]::Create()
     $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
     $hashBytes = $hasher.ComputeHash($keyBytes)
-    return [Convert]::ToBase64String($hashBytes).Substring(0, 32)
+    return [Convert]::ToBase64String($hashBytes).Substring(0, $script:HASH_LENGTH)
 }
 
 function Flush-OperationLogs {
@@ -615,7 +622,7 @@ function Handle-UserPromptOptimization {
             $optimizeArgs = @{
                 text = $userPrompt
                 key = "user_prompt_$contentHash"
-                quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
+                quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1444,7 +1451,7 @@ function Handle-PreToolUseOptimization {
                 $optimizeArgs = @{
                     text = $argsJson
                     key = "tool_input_${toolName}_$contentHash"
-                    quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
+                    quality = $script:OPTIMIZATION_QUALITY
                 }
                 $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
                 $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1546,7 +1553,7 @@ function Handle-OptimizeToolOutput {
             $optimizeArgs = @{
                 text = $outputText
                 key = "tool_output_${toolName}_$contentHash"
-                quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
+                quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1665,7 +1672,7 @@ function Handle-PreCompactOptimization {
             $optimizeArgs = @{
                 text = $contextText
                 key = "precompact_context_$contentHash"
-                quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
+                quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
