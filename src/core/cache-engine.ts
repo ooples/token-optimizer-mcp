@@ -81,14 +81,9 @@ export class CacheEngine {
       try {
         // First attempt: use requested path
         // Second attempt: try cleaning up corrupted files and retry
-        // Third attempt: use backup location in temp directory
-        const dbPathToUse =
-          attempt === 3
-            ? path.join(
-                os.tmpdir(),
-                `token-optimizer-cache-backup-${Date.now()}.db`
-              )
-            : finalDbPath;
+        // PHASE 1 FIX: Removed tmpdir fallback - was causing 0% cache hit rate
+        // Third attempt: fail loudly instead of falling back to ephemeral temp location
+        const dbPathToUse = finalDbPath;
 
         // If this is attempt 2, try to clean up corrupted files
         if (attempt === 2 && fs.existsSync(finalDbPath)) {
@@ -100,7 +95,7 @@ export class CacheEngine {
             if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
             if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
           } catch {
-            // If we can't clean up, we'll try temp directory on next attempt
+            // If we can't clean up, attempt 3 will fail with an error (no tmpdir fallback)
           }
         }
 
@@ -153,10 +148,12 @@ export class CacheEngine {
     // If all attempts failed, throw a comprehensive error
     if (!dbInitialized) {
       throw new Error(
-        `Failed to initialize cache database after ${maxAttempts} attempts. ` +
+        `CRITICAL: Failed to initialize persistent cache database after ${maxAttempts} attempts. ` +
           `Last error: ${lastError?.message || 'Unknown error'}. ` +
-          `Attempted paths: ${finalDbPath}, backup location. ` +
-          `Please check disk space and file permissions.`
+          `Attempted path: ${finalDbPath}. ` +
+          `PHASE 1 FIX: Removed tmpdir fallback to prevent 0% cache hit rate. ` +
+          `Action required: Check disk space, file permissions, and ensure directory exists. ` +
+          `Cache WILL NOT persist without fixing this issue.`
       );
     }
 

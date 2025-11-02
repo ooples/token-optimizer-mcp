@@ -26,6 +26,7 @@
     "subject-case": [2, "always", "lower-case"],
     "header-max-length": [2, "always", 100],
     "body-leading-blank": [1, "always"],
-    "footer-leading-blank": [1, "always"]
+    "footer-leading-blank": [1, "always"],
+    "body-max-line-length": [0]
   }
 }

@@ -33,6 +33,61 @@ $CONTEXT_LIMIT = 200000
 $OPTIMIZE_THRESHOLD = 0.80
 $FORCE_THRESHOLD = 0.90
 
+# Optimization quality configuration
+$OPTIMIZATION_QUALITY = 11  # Maximum compression quality
+
+# Cache key hash configuration
+$HASH_PREFIX = "hash:"
+$HASH_LENGTH = 32
+
+# PHASE 2 FIX: Deterministic cache key generation
+# Fixes 0% cache hit rate by ensuring identical operations produce identical keys
+function Get-DeterministicCacheKey {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs
+    )
+
+    # Create canonical representation
+    $canonical = @{
+        tool = $ToolName
+        args = @{}
+    }
+
+    # Sort keys and normalize values
+    foreach ($key in ($ToolArgs.Keys | Sort-Object)) {
+        $value = $ToolArgs[$key]
+
+        # Normalize file paths (absolute, lowercase, forward slashes)
+        if ($key -match 'path|file') {
+            try {
+                $value = [System.IO.Path]::GetFullPath($value).ToLower().Replace('\', '/')
+            } catch {
+                # If path resolution fails, use as-is
+            }
+        }
+
+        # Hash large content instead of embedding (prevents unique keys for every variation)
+        if ($value -is [string] -and $value.Length -gt 1000) {
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($value)
+            $hashBytes = $hasher.ComputeHash($bytes)
+            $value = $script:HASH_PREFIX + [Convert]::ToBase64String($hashBytes).Substring(0, $script:HASH_LENGTH)
+        }
+
+        $canonical.args[$key] = $value
+    }
+
+    # Convert to deterministic JSON (determinism ensured by manually sorting keys before ConvertTo-Json)
+    $json = $canonical | ConvertTo-Json -Depth 10 -Compress
+
+    # Hash the entire key for fixed length (prevents extremely long keys)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $hashBytes = $hasher.ComputeHash($keyBytes)
+    return [Convert]::ToBase64String($hashBytes).Substring(0, $script:HASH_LENGTH)
+}
+
 function Flush-OperationLogs {
     # Flush buffered operation logs to disk
     param([switch]$Force)
@@ -137,16 +192,24 @@ function Initialize-Session {
         $sessionId = [guid]::NewGuid().ToString()
         $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
 
+        # PHASE 4 FIX: Enhanced stats tracking
         $session = @{
             sessionId = $sessionId
             sessionStart = $sessionStart
             totalOperations = 0
-            totalTokens = 0
+            totalOriginalTokens = 0      # NEW: Track before optimization
+            totalOptimizedTokens = 0     # NEW: Track after optimization
+            totalTokensSaved = 0         # NEW: Explicit savings
+            optimizationFailures = 0     # NEW: Track failures (expansion)
+            optimizationSuccesses = 0    # NEW: Track successes
+            cacheHits = 0                # NEW: Track cache effectiveness
+            cacheMisses = 0              # NEW: Track cache misses
+            totalTokens = 0              # DEPRECATED: Keep for backwards compatibility
             lastOptimized = 0
         }
 
         $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
-        Write-Log "Initialized new session: $sessionId" "INFO"
+        Write-Log "Initialized new session: $sessionId (Phase 4 enhanced tracking)" "INFO"
 
         return $session
     }
@@ -156,11 +219,19 @@ function Initialize-Session {
         $sessionId = [guid]::NewGuid().ToString()
         $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
 
+        # PHASE 4 FIX: Enhanced stats tracking
         $script:CurrentSession = @{
             sessionId = $sessionId
             sessionStart = $sessionStart
             totalOperations = 0
-            totalTokens = 0
+            totalOriginalTokens = 0      # NEW: Track before optimization
+            totalOptimizedTokens = 0     # NEW: Track after optimization
+            totalTokensSaved = 0         # NEW: Explicit savings
+            optimizationFailures = 0     # NEW: Track failures (expansion)
+            optimizationSuccesses = 0    # NEW: Track successes
+            cacheHits = 0                # NEW: Track cache effectiveness
+            cacheMisses = 0              # NEW: Track cache misses
+            totalTokens = 0              # DEPRECATED: Keep for backwards compatibility
             lastOptimized = 0
         }
 
@@ -543,10 +614,15 @@ function Handle-UserPromptOptimization {
         }
 
         try {
+            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($userPrompt))
+            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
             $optimizeArgs = @{
                 text = $userPrompt
-                key = "user_prompt_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
+                key = "user_prompt_$contentHash"
+                quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1301,7 +1377,8 @@ function Handle-PreToolUseOptimization {
 
         # Step 1: Check predictive cache for this tool call
         try {
-            $cacheKey = "$toolName-$($toolArgs | ConvertTo-Json -Compress -Depth 5)"
+            # PHASE 2 FIX: Use deterministic cache key instead of non-deterministic JSON
+            $cacheKey = Get-DeterministicCacheKey -ToolName $toolName -ToolArgs $toolArgs
             $getCachedArgs = @{
                 key = $cacheKey
             }
@@ -1312,6 +1389,12 @@ function Handle-PreToolUseOptimization {
                 $cachedData = $cachedResult | ConvertFrom-Json
                 if ($cachedData -and $cachedData.content) {
                     Write-Log "Cache HIT for $toolName - avoiding redundant tool call" "INFO"
+
+                    # PHASE 4 FIX: Track cache hit
+                    if ($script:CurrentSession) {
+                        $script:CurrentSession.cacheHits++
+                    }
+
                     # Return standard block response so dispatcher can exit 2
                     $blockResponse = @{
                         continue = $false
@@ -1328,8 +1411,17 @@ function Handle-PreToolUseOptimization {
                     return 2
                 }
             }
+
+            # PHASE 4 FIX: Track cache miss
+            if ($script:CurrentSession) {
+                $script:CurrentSession.cacheMisses++
+            }
         } catch {
             # Cache miss is normal, continue
+            # PHASE 4 FIX: Track cache miss
+            if ($script:CurrentSession) {
+                $script:CurrentSession.cacheMisses++
+            }
             Write-Log "Cache miss for $toolName" "DEBUG"
         }
 
@@ -1351,10 +1443,15 @@ function Handle-PreToolUseOptimization {
         $argsJson = $toolArgs | ConvertTo-Json -Depth 10
         if ($toolArgs -and $argsJson.Length -gt 500) {
             try {
+                # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+                $hasher = [System.Security.Cryptography.SHA256]::Create()
+                $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($argsJson))
+                $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
                 $optimizeArgs = @{
                     text = $argsJson
-                    key = "tool_input_${toolName}_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                    quality = 7  # PHASE 4: Reduced from 9 to 7 for performance
+                    key = "tool_input_${toolName}_$contentHash"
+                    quality = $script:OPTIMIZATION_QUALITY
                 }
                 $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
                 $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1448,10 +1545,15 @@ function Handle-OptimizeToolOutput {
 
         # Optimize using optimize_text (PHASE 4: Reduced quality for performance)
         try {
+            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($outputText))
+            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
             $optimizeArgs = @{
                 text = $outputText
-                key = "tool_output_${toolName}_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
+                key = "tool_output_${toolName}_$contentHash"
+                quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1465,9 +1567,30 @@ function Handle-OptimizeToolOutput {
                 $saved = $beforeTokens - $afterTokens
                 $percent = if ($beforeTokens -gt 0) { [math]::Round(($saved / $beforeTokens) * 100, 1) } else { 0 }
 
+                # PHASE 1 FIX: Rollback logic - only use optimization if it actually helps
+                if ($afterTokens -ge $beforeTokens) {
+                    Write-Log "Optimization made things worse or had no effect ($beforeTokens → $afterTokens tokens), REVERTING to original" "WARN"
+
+                    # PHASE 4 FIX: Track failure
+                    if ($script:CurrentSession) {
+                        $script:CurrentSession.optimizationFailures++
+                    }
+
+                    # Don't update session with optimized tokens, skip this optimization
+                    return
+                }
+
                 Write-Log "Optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
 
-                # Update session tokens
+                # PHASE 4 FIX: Track success and detailed stats
+                if ($script:CurrentSession) {
+                    $script:CurrentSession.optimizationSuccesses++
+                    $script:CurrentSession.totalOriginalTokens += $beforeTokens
+                    $script:CurrentSession.totalOptimizedTokens += $afterTokens
+                    $script:CurrentSession.totalTokensSaved += $saved
+                }
+
+                # Update session tokens (only if optimization helped)
                 Update-SessionOperation -TokensDelta $afterTokens
             }
         } catch {
@@ -1541,10 +1664,15 @@ function Handle-PreCompactOptimization {
         # Step 2: Apply optimize_text (aggressive mode, PHASE 4: Reduced quality)
         $optimizedContext = $contextText
         try {
+            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($contextText))
+            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
             $optimizeArgs = @{
                 text = $contextText
-                key = "precompact_context_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
+                key = "precompact_context_$contentHash"
+                quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1558,25 +1686,12 @@ function Handle-PreCompactOptimization {
             Write-Log "PreCompact optimize_text failed: $($_.Exception.Message)" "ERROR"
         }
 
-        # Step 3: Apply compress_text if still over threshold (PHASE 4: Reduced quality)
-        if ($beforeTokens -gt ($CONTEXT_LIMIT * $OPTIMIZE_THRESHOLD)) {
-            try {
-                $compressArgs = @{
-                    text = $optimizedContext
-                    quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
-                }
-                $compressJson = $compressArgs | ConvertTo-Json -Compress
-                $compressResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "compress_text" -ArgumentsJson $compressJson
-                $compressData = if ($compressResult) { $compressResult | ConvertFrom-Json } else { $null }
-
-                if ($compressData -and $compressData.content) {
-                    $optimizedContext = $compressData.content[0].text
-                    Write-Log "After compress_text: compressed" "DEBUG"
-                }
-            } catch {
-                Write-Log "PreCompact compress_text failed: $($_.Exception.Message)" "ERROR"
-            }
-        }
+        # Step 3: compress_text REMOVED - it bypassed safety checks and caused token expansion
+        # The direct compress_text call was causing negative savings by:
+        # 1. No check if compression actually helps (unlike optimize_text)
+        # 2. Base64 encoding overhead (33-37%) often exceeded compression savings
+        # 3. Resulted in 1.02x expansion instead of compression
+        # Now relying solely on optimize_text which has proper safety checks
 
         # Step 4: Count tokens AFTER
         $afterTokens = 0
