@@ -33,6 +33,54 @@ $CONTEXT_LIMIT = 200000
 $OPTIMIZE_THRESHOLD = 0.80
 $FORCE_THRESHOLD = 0.90
 
+# PHASE 2 FIX: Deterministic cache key generation
+# Fixes 0% cache hit rate by ensuring identical operations produce identical keys
+function Get-DeterministicCacheKey {
+    param(
+        [string]$ToolName,
+        [hashtable]$ToolArgs
+    )
+
+    # Create canonical representation
+    $canonical = @{
+        tool = $ToolName
+        args = @{}
+    }
+
+    # Sort keys and normalize values
+    foreach ($key in ($ToolArgs.Keys | Sort-Object)) {
+        $value = $ToolArgs[$key]
+
+        # Normalize file paths (absolute, lowercase, forward slashes)
+        if ($key -match 'path|file') {
+            try {
+                $value = [System.IO.Path]::GetFullPath($value).ToLower().Replace('\', '/')
+            } catch {
+                # If path resolution fails, use as-is
+            }
+        }
+
+        # Hash large content instead of embedding (prevents unique keys for every variation)
+        if ($value -is [string] -and $value.Length -gt 1000) {
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($value)
+            $hashBytes = $hasher.ComputeHash($bytes)
+            $value = "hash:" + [Convert]::ToBase64String($hashBytes).Substring(0, 32)
+        }
+
+        $canonical.args[$key] = $value
+    }
+
+    # Convert to deterministic JSON (sorted keys via ConvertTo-Json with hashtable)
+    $json = $canonical | ConvertTo-Json -Depth 10 -Compress
+
+    # Hash the entire key for fixed length (prevents extremely long keys)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $hashBytes = $hasher.ComputeHash($keyBytes)
+    return [Convert]::ToBase64String($hashBytes).Substring(0, 32)
+}
+
 function Flush-OperationLogs {
     # Flush buffered operation logs to disk
     param([switch]$Force)
@@ -543,9 +591,14 @@ function Handle-UserPromptOptimization {
         }
 
         try {
+            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($userPrompt))
+            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
             $optimizeArgs = @{
                 text = $userPrompt
-                key = "user_prompt_$(Get-Date -Format 'yyyyMMddHHmmss')"
+                key = "user_prompt_$contentHash"
                 quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
@@ -1301,7 +1354,8 @@ function Handle-PreToolUseOptimization {
 
         # Step 1: Check predictive cache for this tool call
         try {
-            $cacheKey = "$toolName-$($toolArgs | ConvertTo-Json -Compress -Depth 5)"
+            # PHASE 2 FIX: Use deterministic cache key instead of non-deterministic JSON
+            $cacheKey = Get-DeterministicCacheKey -ToolName $toolName -ToolArgs $toolArgs
             $getCachedArgs = @{
                 key = $cacheKey
             }
@@ -1351,9 +1405,14 @@ function Handle-PreToolUseOptimization {
         $argsJson = $toolArgs | ConvertTo-Json -Depth 10
         if ($toolArgs -and $argsJson.Length -gt 500) {
             try {
+                # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+                $hasher = [System.Security.Cryptography.SHA256]::Create()
+                $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($argsJson))
+                $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
                 $optimizeArgs = @{
                     text = $argsJson
-                    key = "tool_input_${toolName}_$(Get-Date -Format 'yyyyMMddHHmmss')"
+                    key = "tool_input_${toolName}_$contentHash"
                     quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
                 }
                 $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
@@ -1448,9 +1507,14 @@ function Handle-OptimizeToolOutput {
 
         # Optimize using optimize_text (PHASE 4: Reduced quality for performance)
         try {
+            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($outputText))
+            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
             $optimizeArgs = @{
                 text = $outputText
-                key = "tool_output_${toolName}_$(Get-Date -Format 'yyyyMMddHHmmss')"
+                key = "tool_output_${toolName}_$contentHash"
                 quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
@@ -1548,9 +1612,14 @@ function Handle-PreCompactOptimization {
         # Step 2: Apply optimize_text (aggressive mode, PHASE 4: Reduced quality)
         $optimizedContext = $contextText
         try {
+            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
+            $hasher = [System.Security.Cryptography.SHA256]::Create()
+            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($contextText))
+            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
+
             $optimizeArgs = @{
                 text = $contextText
-                key = "precompact_context_$(Get-Date -Format 'yyyyMMddHHmmss')"
+                key = "precompact_context_$contentHash"
                 quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
