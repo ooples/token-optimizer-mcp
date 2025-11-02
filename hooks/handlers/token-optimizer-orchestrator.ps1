@@ -2,10 +2,28 @@
 # Unified handler for ALL token optimization operations
 # Replaces 15+ fragmented PowerShell handlers with direct MCP calls
 
-# CRITICAL FIX: Removed param block that consumed stdin when dot-sourced!
-# The Mandatory=$true parameters were trying to read from stdin during dot-sourcing,
-# consuming the JSON input before dispatcher.ps1 could read it.
-# Functions now receive their inputs via parameters (e.g., $InputJson)
+# Accept Phase, Action, and InputJsonFile (temp file path) from dispatcher
+# NOT marked as Mandatory to avoid stdin consumption issues
+param(
+    [string]$Phase = "",
+    [string]$Action = "",
+    [string]$InputJsonFile = ""
+)
+
+# DIAGNOSTIC: Log script version/load time to verify latest version is being used
+$SCRIPT_VERSION = Get-Date -Format 'yyyyMMdd.HHmmss'
+Write-Host "DEBUG: token-optimizer-orchestrator.ps1 version $SCRIPT_VERSION loaded. Phase=$Phase, Action=$Action" -ForegroundColor Cyan
+
+# Read JSON from temp file if provided
+# DO NOT delete temp file - dispatcher will clean it up after all handlers run
+$InputJson = ""
+if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
+    try {
+        $InputJson = Get-Content -Path $InputJsonFile -Raw -Encoding UTF8
+    } catch {
+        Write-Host "ERROR: Failed to read InputJsonFile: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
 
 $HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
 $INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
@@ -86,6 +104,76 @@ function Get-DeterministicCacheKey {
     $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
     $hashBytes = $hasher.ComputeHash($keyBytes)
     return [Convert]::ToBase64String($hashBytes).Substring(0, $script:HASH_LENGTH)
+}
+
+# Helper function to read session from file with locking
+function Read-SessionFile {
+    param([string]$FilePath)
+    $maxRetries = 5
+    $retryDelayMs = 100
+    for ($i = 0; $i -lt $maxRetries; $i++) {
+        try {
+            # Open file with exclusive read access (no other process can open it)
+            $fileStream = [System.IO.File]::Open($FilePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::None)
+            try {
+                $reader = New-Object System.IO.StreamReader($fileStream)
+                $content = $reader.ReadToEnd()
+                return $content | ConvertFrom-Json
+            } finally {
+                $fileStream.Close()
+                $fileStream.Dispose()
+            }
+        } catch [System.IO.IOException] {
+            Write-Log "Failed to acquire read lock on session file '$FilePath', retrying... ($($_.Exception.Message))" "WARN"
+            Start-Sleep -Milliseconds $retryDelayMs
+        } catch {
+            Write-Log "Failed to read session file '$FilePath': $($_.Exception.Message)" "ERROR"
+            return $null
+        }
+    }
+    Write-Log "Failed to read session file '$FilePath' after multiple retries due to locking." "ERROR"
+    return $null
+}
+
+# Helper function to write session to file with locking
+function Write-SessionFile {
+    param(
+        [string]$FilePath,
+        $SessionObject  # Accept any object type (hashtable or PSCustomObject)
+    )
+    $maxRetries = 5
+    $retryDelayMs = 100
+    for ($i = 0; $i -lt $maxRetries; $i++) {
+        $fileStream = $null # Initialize to null for proper finally handling
+        $writer = $null # Initialize to null for proper finally handling
+        try {
+            # Open file with exclusive write access (creates or overwrites)
+            $fileStream = [System.IO.File]::Open($FilePath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+            $writer = New-Object System.IO.StreamWriter($fileStream)
+            $json = $SessionObject | ConvertTo-Json -Depth 100 # Increased depth for robustness
+            $writer.Write($json)
+            $writer.Flush() # Ensure all buffered data is written
+            $writer.Close() # Close the writer
+            return $true
+        } catch [System.IO.IOException] {
+            Write-Log "Failed to acquire write lock on session file '$FilePath', retrying... ($($_.Exception.Message))" "WARN"
+            Start-Sleep -Milliseconds $retryDelayMs
+        } catch {
+            Write-Log "Failed to write session file '$FilePath': $($_.Exception.Message)" "ERROR"
+            return $false
+        } finally {
+            # Ensure writer and fileStream are disposed even if errors occur
+            if ($writer) {
+                $writer.Dispose()
+            }
+            if ($fileStream) {
+                $fileStream.Close()
+                $fileStream.Dispose()
+            }
+        }
+    }
+    Write-Log "Failed to write session file '$FilePath' after multiple retries due to locking." "ERROR"
+    return $false
 }
 
 function Flush-OperationLogs {
@@ -175,7 +263,7 @@ function Write-Log {
 function Get-SessionInfo {
     if (Test-Path $SESSION_FILE) {
         try {
-            $session = Get-Content $SESSION_FILE -Raw | ConvertFrom-Json
+            $session = Read-SessionFile -FilePath $SESSION_FILE
             return $session
         } catch {
             Write-Log "Failed to read session file: $($_.Exception.Message)" "ERROR"
@@ -185,10 +273,11 @@ function Get-SessionInfo {
 }
 
 function Initialize-Session {
-    # Create new session if needed
-    $useFileSession = $env:TOKEN_OPTIMIZER_USE_FILE_SESSION -eq 'true'
+    # Always try to load from file first
+    $session = Get-SessionInfo
 
-    if ($useFileSession -and -not (Test-Path $SESSION_FILE)) {
+    if (-not $session) {
+        # If file doesn't exist or is empty/corrupt, create a new session
         $sessionId = [guid]::NewGuid().ToString()
         $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -197,76 +286,54 @@ function Initialize-Session {
             sessionId = $sessionId
             sessionStart = $sessionStart
             totalOperations = 0
-            totalOriginalTokens = 0      # NEW: Track before optimization
-            totalOptimizedTokens = 0     # NEW: Track after optimization
-            totalTokensSaved = 0         # NEW: Explicit savings
-            optimizationFailures = 0     # NEW: Track failures (expansion)
-            optimizationSuccesses = 0    # NEW: Track successes
-            cacheHits = 0                # NEW: Track cache effectiveness
-            cacheMisses = 0              # NEW: Track cache misses
-            totalTokens = 0              # DEPRECATED: Keep for backwards compatibility
+            totalOriginalTokens = 0
+            totalOptimizedTokens = 0
+            totalTokensSaved = 0
+            optimizationFailures = 0
+            optimizationSuccesses = 0
+            cacheHits = 0
+            cacheMisses = 0
+            totalTokens = 0
             lastOptimized = 0
         }
 
-        $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
-        Write-Log "Initialized new session: $sessionId (Phase 4 enhanced tracking)" "INFO"
-
-        return $session
+        # Write the newly created session to file
+        if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $session) {
+            Write-Log "Initialized new session: $sessionId (Phase 4 enhanced tracking)" "INFO"
+        } else {
+            Write-Log "Failed to write new session to file. Session state might not persist." "ERROR"
+        }
+    } else {
+        Write-Log "Loaded existing session: $($session.sessionId)" "INFO"
     }
 
-    # OPTIMIZED: In-memory session initialization
-    if (-not $script:CurrentSession) {
-        $sessionId = [guid]::NewGuid().ToString()
-        $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
+    # Populate the in-memory script:CurrentSession for the current process
+    # This acts as a local cache for the current process's operations
+    $script:CurrentSession = $session
 
-        # PHASE 4 FIX: Enhanced stats tracking
-        $script:CurrentSession = @{
-            sessionId = $sessionId
-            sessionStart = $sessionStart
-            totalOperations = 0
-            totalOriginalTokens = 0      # NEW: Track before optimization
-            totalOptimizedTokens = 0     # NEW: Track after optimization
-            totalTokensSaved = 0         # NEW: Explicit savings
-            optimizationFailures = 0     # NEW: Track failures (expansion)
-            optimizationSuccesses = 0    # NEW: Track successes
-            cacheHits = 0                # NEW: Track cache effectiveness
-            cacheMisses = 0              # NEW: Track cache misses
-            totalTokens = 0              # DEPRECATED: Keep for backwards compatibility
-            lastOptimized = 0
-        }
+    # CRITICAL: Ensure the session file is ALWAYS written after initialization
+    # This guarantees multi-process persistence
+    if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+        Write-Log "Session state written to file after initialization." "DEBUG"
+    } else {
+        Write-Log "Failed to write session state to file after initialization. Session state might not persist." "ERROR"
+    }
 
-        # Write initial session file
-        $script:CurrentSession | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
-        Write-Log "Initialized new in-memory session: $sessionId" "INFO"
-
-        # Start log flush timer
+    # Start log flush timer only once per process if not already started
+    if (-not $script:FlushTimer) {
         Start-LogFlushTimer
-
-        return $script:CurrentSession
     }
 
-    return if ($useFileSession) { Get-SessionInfo } else { $script:CurrentSession }
+    return $script:CurrentSession
 }
 
 function Update-SessionOperation {
     param(
-        [int]$TokensDelta = 0,
-        [switch]$Persist
+        [int]$TokensDelta = 0
+        # Removed -Persist switch - now ALWAYS persists
     )
 
-    # Check if using file-based session (legacy mode)
-    $useFileSession = $env:TOKEN_OPTIMIZER_USE_FILE_SESSION -eq 'true'
-
-    if ($useFileSession) {
-        # Legacy file-based mode
-        $session = Initialize-Session
-        $session.totalOperations++
-        $session.totalTokens += $TokensDelta
-        $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
-        return $session
-    }
-
-    # OPTIMIZED: In-memory session state
+    # Ensure $script:CurrentSession is initialized for this process
     if (-not $script:CurrentSession) {
         $script:CurrentSession = Initialize-Session
     }
@@ -274,9 +341,11 @@ function Update-SessionOperation {
     $script:CurrentSession.totalOperations++
     $script:CurrentSession.totalTokens += $TokensDelta
 
-    # Only write to disk when explicitly requested or on significant changes
-    if ($Persist) {
-        $script:CurrentSession | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
+    # CRITICAL: ALWAYS write to disk for persistence across processes
+    if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+        Write-Log "Session state persisted to file (totalOperations: $($script:CurrentSession.totalOperations))." "DEBUG"
+    } else {
+        Write-Log "Failed to persist session state to file." "ERROR"
     }
 
     return $script:CurrentSession
@@ -1491,37 +1560,72 @@ function Handle-OptimizeToolOutput {
     param([string]$InputJson)
     # PHASE 1: PostToolUse optimization - optimize ALL tool outputs
     # Uses: optimize_text, count_tokens, compress_text, smart_cache
+
+    # Temporarily set ErrorActionPreference to Stop for debugging
+    $OriginalErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Stop'
+
     try {
+        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Entered function."
+
         if (-not $InputJson) {
             Write-Log "No input received for tool output optimization" "WARN"
+            Write-Host "DEBUG: [Handle-OptimizeToolOutput] No input received, returning."
             return
         }
 
+        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Parsing InputJson..."
         $data = $InputJson | ConvertFrom-Json
         $toolName = $data.tool_name
-        $toolOutput = $data.tool_result
+        $toolOutput = $data.tool_response  # FIXED: Claude Code uses tool_response not tool_result
+
+        $outputType = if ($toolOutput) { $toolOutput.GetType().Name } else { "null" }
+        Write-Log "DEBUG: tool_name=$toolName, tool_response_type=$outputType, has_content=$(-not -not $toolOutput)" "DEBUG"
+        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 1 - After line 1564 log. toolName=$toolName, outputType=$outputType"
 
         # Skip if no output or if output is already optimized
+        Write-Log "DEBUG: Checking if toolOutput is null or empty" "DEBUG"
+        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 2 - Before null/empty check."
         if (-not $toolOutput) {
-            Write-Log "No tool output to optimize for: $toolName" "DEBUG"
+            Write-Log "No tool output to optimize for: $toolName (toolOutput is null/false)" "DEBUG"
+            Write-Host "DEBUG: [Handle-OptimizeToolOutput] toolOutput is null/false, returning."
             return
         }
+        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 3 - After null/empty check, toolOutput exists."
 
         # Convert output to string for token counting
-        $outputText = if ($toolOutput -is [string]) { $toolOutput } else { $toolOutput | ConvertTo-Json -Depth 10 }
+        $outputText = ""
+        try {
+            Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 4 - Attempting to convert toolOutput to string. Is string: $($toolOutput -is [string])"
+            $outputText = if ($toolOutput -is [string]) { $toolOutput } else { $toolOutput | ConvertTo-Json -Depth 10 -ErrorAction Stop }
+            Write-Log "DEBUG: Converted tool output to string. Length: $($outputText.Length)" "DEBUG"
+            Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 5 - toolOutput converted. Length: $($outputText.Length)"
+        } catch {
+            Write-Log "ERROR: Failed to convert tool output to JSON string for ${toolName}: $($_.Exception.Message)" "ERROR"
+            Write-Host "ERROR: [Handle-OptimizeToolOutput] Failed to convert: $($_.Exception.Message)"
+            return
+        }
 
         # Count tokens BEFORE optimization
         $beforeTokens = 0
         try {
+            Write-Log "DEBUG: Starting token counting for $toolName" "DEBUG"
             $countArgs = @{ text = $outputText }
-            $countJson = $countArgs | ConvertTo-Json -Compress
+            $countJson = $countArgs | ConvertTo-Json -Compress -ErrorAction Stop
+            Write-Log "DEBUG: Calling invoke-mcp.ps1 count_tokens" "DEBUG"
             $countResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "count_tokens" -ArgumentsJson $countJson
-            $countData = if ($countResult) { $countResult | ConvertFrom-Json } else { $null }
+            Write-Log "DEBUG: invoke-mcp.ps1 returned, parsing result" "DEBUG"
+            $countData = if ($countResult) { $countResult | ConvertFrom-Json -ErrorAction Stop } else { $null }
             if ($countData -and $countData.content) {
                 $beforeTokens = [int]($countData.content[0].text)
+                Write-Log "DEBUG: Successfully counted $beforeTokens tokens" "DEBUG"
+            } else {
+                Write-Log "WARN: count_tokens result did not contain expected content" "WARN"
             }
         } catch {
-            Write-Log "Token counting failed: $($_.Exception.Message)" "WARN"
+            Write-Log "ERROR: Token counting failed for ${toolName}: $($_.Exception.Message)" "ERROR"
+            Write-Log "ERROR: Stack Trace: $($_.ScriptStackTrace)" "ERROR"
+            return
         }
 
         Write-Log "Tool output before optimization: $beforeTokens tokens" "DEBUG"
@@ -1598,7 +1702,13 @@ function Handle-OptimizeToolOutput {
         }
 
     } catch {
-        Write-Log "OptimizeToolOutput handler failed: $($_.Exception.Message)" "ERROR"
+        Write-Log "ERROR: OptimizeToolOutput handler failed: $($_.Exception.Message)" "ERROR"
+        Write-Host "ERROR: [Handle-OptimizeToolOutput] Caught outer error: $($_.Exception.Message)"
+        Write-Host "ERROR: [Handle-OptimizeToolOutput] Outer Stack Trace: $($_.ScriptStackTrace)"
+    } finally {
+        # Reset ErrorActionPreference to its original value
+        $ErrorActionPreference = $OriginalErrorActionPreference
+        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Exiting function."
     }
 }
 
@@ -1832,71 +1942,81 @@ function Cleanup-Session {
         # Flush any remaining logs
         Flush-OperationLogs -Force
 
-        # Persist final session state
+        # Persist final session state from in-memory $script:CurrentSession to file
         if ($script:CurrentSession) {
-            $script:CurrentSession | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
-            Write-Log "Final session state persisted: $($script:CurrentSession.totalOperations) ops, $($script:CurrentSession.totalTokens) tokens" "INFO"
+            if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                Write-Log "Final session state persisted: $($script:CurrentSession.totalOperations) ops, $($script:CurrentSession.totalTokens) tokens" "INFO"
+            } else {
+                Write-Log "Failed to persist final session state to file during cleanup." "ERROR"
+            }
         }
 
         # Stop timer
         if ($script:FlushTimer) {
             $script:FlushTimer.Stop()
             $script:FlushTimer.Dispose()
+            $script:FlushTimer = $null # Clear timer to allow re-initialization in next process
         }
     } catch {
-        # Silently fail on cleanup
+        Write-Log "Cleanup-Session failed: $($_.Exception.Message)" "ERROR"
     }
 }
 
 # Main execution - Only run if script is executed directly (not dot-sourced)
 # When dot-sourced by dispatcher.ps1, this block is skipped and only functions are loaded
 if ($MyInvocation.InvocationName -ne '.') {
+    # Initialize session at the very start of the script execution
+    # This loads the latest state from file into $script:CurrentSession
+    Initialize-Session
+
     try {
         Write-Log "Phase: $Phase, Action: $Action" "INFO"
 
         switch ($Action) {
             "smart-read" {
-                Handle-SmartRead
+                Handle-SmartRead -InputJson $InputJson
             }
             "context-guard" {
-                Handle-ContextGuard
+                Handle-ContextGuard -InputJson $InputJson
             }
             "periodic-optimize" {
-                Handle-PeriodicOptimize
+                Handle-PeriodicOptimize -InputJson $InputJson
             }
             "cache-warmup" {
-                Handle-CacheWarmup
+                Handle-CacheWarmup -InputJson $InputJson
             }
             "session-report" {
-                Handle-SessionReport
-                Cleanup-Session  # Flush logs after report
+                Handle-SessionReport -InputJson $InputJson
+                # Cleanup-Session is now in finally block, no need here
             }
             "log-operation" {
-                Handle-LogOperation
+                Handle-LogOperation -InputJson $InputJson
             }
             "optimize-session" {
-                Handle-OptimizeSession
-                Cleanup-Session  # Persist session after optimization
+                Handle-OptimizeSession -InputJson $InputJson
+                # Cleanup-Session is now in finally block, no need here
             }
             "session-track" {
-                # Update operation count
+                # Update operation count and persist immediately for session-track
+                # This ensures the counter is updated even if the process exits quickly
                 $session = Update-SessionOperation
                 Write-Log "Operation #$($session.totalOperations)" "DEBUG"
             }
             "optimize-tool-output" {
-                Handle-OptimizeToolOutput
+                Write-Log "DIAGNOSTIC: optimize-tool-output action triggered (script version $SCRIPT_VERSION)" "INFO"
+                Handle-OptimizeToolOutput -InputJson $InputJson
             }
             "precompact-optimize" {
-                Handle-PreCompactOptimization
+                Handle-PreCompactOptimization -InputJson $InputJson
             }
             "user-prompt-optimize" {
-                Handle-UserPromptOptimization
+                Handle-UserPromptOptimization -InputJson $InputJson
             }
             "session-start-init" {
-                Handle-SessionStartInit
+                Handle-SessionStartInit -InputJson $InputJson
             }
             "pretooluse-optimize" {
-                Handle-PreToolUseOptimization
+                Handle-PreToolUseOptimization -InputJson $InputJson
             }
             Default {
                 Write-Log "Unknown action: $Action" "WARN"
@@ -1907,7 +2027,9 @@ if ($MyInvocation.InvocationName -ne '.') {
 
     } catch {
         Write-Log "Orchestrator failed: $($_.Exception.Message)" "ERROR"
-        Cleanup-Session  # Ensure cleanup even on error
         exit 0  # Never block on error
+    } finally {
+        # Ensure cleanup runs regardless of success or failure
+        Cleanup-Session
     }
 }
