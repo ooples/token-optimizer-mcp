@@ -546,7 +546,7 @@ function Handle-UserPromptOptimization {
             $optimizeArgs = @{
                 text = $userPrompt
                 key = "user_prompt_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
+                quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1354,7 +1354,7 @@ function Handle-PreToolUseOptimization {
                 $optimizeArgs = @{
                     text = $argsJson
                     key = "tool_input_${toolName}_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                    quality = 7  # PHASE 4: Reduced from 9 to 7 for performance
+                    quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
                 }
                 $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
                 $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1451,7 +1451,7 @@ function Handle-OptimizeToolOutput {
             $optimizeArgs = @{
                 text = $outputText
                 key = "tool_output_${toolName}_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
+                quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1465,9 +1465,16 @@ function Handle-OptimizeToolOutput {
                 $saved = $beforeTokens - $afterTokens
                 $percent = if ($beforeTokens -gt 0) { [math]::Round(($saved / $beforeTokens) * 100, 1) } else { 0 }
 
+                # PHASE 1 FIX: Rollback logic - only use optimization if it actually helps
+                if ($afterTokens -ge $beforeTokens) {
+                    Write-Log "Optimization made things worse or had no effect ($beforeTokens → $afterTokens tokens), REVERTING to original" "WARN"
+                    # Don't update session with optimized tokens, skip this optimization
+                    return
+                }
+
                 Write-Log "Optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
 
-                # Update session tokens
+                # Update session tokens (only if optimization helped)
                 Update-SessionOperation -TokensDelta $afterTokens
             }
         } catch {
@@ -1544,7 +1551,7 @@ function Handle-PreCompactOptimization {
             $optimizeArgs = @{
                 text = $contextText
                 key = "precompact_context_$(Get-Date -Format 'yyyyMMddHHmmss')"
-                quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
+                quality = 11  # PHASE 1 FIX: Restored to 11 for maximum compression (quality=7 was causing expansion)
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
             $optimizeResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_text" -ArgumentsJson $optimizeJson
@@ -1558,25 +1565,12 @@ function Handle-PreCompactOptimization {
             Write-Log "PreCompact optimize_text failed: $($_.Exception.Message)" "ERROR"
         }
 
-        # Step 3: Apply compress_text if still over threshold (PHASE 4: Reduced quality)
-        if ($beforeTokens -gt ($CONTEXT_LIMIT * $OPTIMIZE_THRESHOLD)) {
-            try {
-                $compressArgs = @{
-                    text = $optimizedContext
-                    quality = 7  # PHASE 4: Reduced from 11 to 7 for performance
-                }
-                $compressJson = $compressArgs | ConvertTo-Json -Compress
-                $compressResult = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "compress_text" -ArgumentsJson $compressJson
-                $compressData = if ($compressResult) { $compressResult | ConvertFrom-Json } else { $null }
-
-                if ($compressData -and $compressData.content) {
-                    $optimizedContext = $compressData.content[0].text
-                    Write-Log "After compress_text: compressed" "DEBUG"
-                }
-            } catch {
-                Write-Log "PreCompact compress_text failed: $($_.Exception.Message)" "ERROR"
-            }
-        }
+        # Step 3: compress_text REMOVED - it bypassed safety checks and caused token expansion
+        # The direct compress_text call was causing negative savings by:
+        # 1. No check if compression actually helps (unlike optimize_text)
+        # 2. Base64 encoding overhead (33-37%) often exceeded compression savings
+        # 3. Resulted in 1.02x expansion instead of compression
+        # Now relying solely on optimize_text which has proper safety checks
 
         # Step 4: Count tokens AFTER
         $afterTokens = 0
