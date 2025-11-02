@@ -42,10 +42,17 @@ try {
         exit 0
     }
 
+    # DEBUG: Log raw stdin length and first 100 chars
+    Write-Log "DEBUG: stdin length=$($input_json.Length), preview=$($input_json.Substring(0, [Math]::Min(100, $input_json.Length)))"
+
     $data = $input_json | ConvertFrom-Json
     $toolName = $data.tool_name
 
     Write-Log "Tool: $toolName"
+
+    # Write JSON to temp file to avoid command-line length limits
+    $tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "hook-input-$([guid]::NewGuid().ToString()).json")
+    [System.IO.File]::WriteAllText($tempFile, $input_json, [System.Text.Encoding]::UTF8)
 
     # ============================================================
     # PHASE: PreToolUse
@@ -56,7 +63,7 @@ try {
         # This replaces plain Read with intelligent caching, diffing, and truncation
         # Must run BEFORE user enforcers to ensure caching takes priority
         if ($toolName -eq "Read") {
-            $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "smart-read"
+            & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "smart-read" -InputJsonFile $tempFile
             if ($LASTEXITCODE -eq 2) {
                 # smart_read succeeded - blocks plain Read and returns cached/optimized content
                 exit 2
@@ -65,13 +72,13 @@ try {
         }
 
         # 2. Context Guard - Check if we're approaching token limit
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "context-guard"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "context-guard" -InputJsonFile $tempFile
         if ($LASTEXITCODE -eq 2) {
             Block-Tool -Reason "Context budget exhausted - session optimization required"
         }
 
         # 3. Track operation
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "session-track"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "session-track" -InputJsonFile $tempFile
 
         # 4. MCP Enforcers - Force usage of MCP tools over Bash/Read/Grep
 
@@ -113,7 +120,10 @@ try {
             }
 
             # Block GitHub operations - require MCP
-            Block-Tool -Reason "Use GitHub MCP (mcp__github__*) for GitHub operations (pr, issue, etc.)"
+            # DISABLED: MCP tools not available, allow gh CLI
+            # Block-Tool -Reason "Use GitHub MCP (mcp__github__*) for GitHub operations (pr, issue, etc.)"
+            Write-Log "[ALLOW] GitHub operation via gh CLI: $($data.tool_input.command)"
+            exit 0
         }
 
         # Gemini CLI Enforcer - Now safe to enable because smart_read runs first
@@ -127,6 +137,12 @@ try {
         # }
 
         Write-Log "[ALLOW] $toolName"
+
+        # Cleanup temp file before exit
+        if (Test-Path $tempFile) {
+            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+        }
+
         exit 0
     }
 
@@ -134,13 +150,35 @@ try {
     # PHASE: PostToolUse
     # ============================================================
     if ($Phase -eq "PostToolUse") {
+        $phaseStart = Get-Date
 
         # 1. Log ALL tool operations to operations-{sessionId}.csv
         #    This is CRITICAL for session-level optimization
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "log-operation"
+        $actionStart = Get-Date
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "log-operation" -InputJsonFile $tempFile
+        $actionDuration = ((Get-Date) - $actionStart).TotalMilliseconds
+        Write-Log "TIMING: log-operation took ${actionDuration}ms"
 
-        # 2. Track operation count
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "session-track"
+        # 2. Optimize tool output for token savings (BACKGROUND MODE - NON-BLOCKING)
+        #    Run in background process to avoid blocking the main thread
+        #    This allows hooks to return immediately while optimization runs async
+        $actionStart = Get-Date
+        Write-Log "BACKGROUND: Starting optimize-tool-output in background process"
+        Start-Process -FilePath "powershell" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File",$ORCHESTRATOR,"-Phase","PostToolUse","-Action","optimize-tool-output","-InputJsonFile",$tempFile -WindowStyle Hidden -NoNewWindow
+        $actionDuration = ((Get-Date) - $actionStart).TotalMilliseconds
+        Write-Log "TIMING: optimize-tool-output background spawn took ${actionDuration}ms"
+
+        # 3. Track operation count
+        $actionStart = Get-Date
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "session-track" -InputJsonFile $tempFile
+        $actionDuration = ((Get-Date) - $actionStart).TotalMilliseconds
+        Write-Log "TIMING: session-track took ${actionDuration}ms"
+
+        $phaseDuration = ((Get-Date) - $phaseStart).TotalMilliseconds
+        Write-Log "TIMING: PostToolUse total took ${phaseDuration}ms"
+
+        # NOTE: Do NOT cleanup temp file here - background process needs it
+        # Background process will clean up when done
 
         exit 0
     }
@@ -153,7 +191,12 @@ try {
         Write-Log "Session starting - warming cache"
 
         # Pre-warm cache using predictive patterns
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "SessionStart" -Action "cache-warmup"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "SessionStart" -Action "cache-warmup" -InputJsonFile $tempFile
+
+        # Cleanup temp file
+        if (Test-Path $tempFile) {
+            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+        }
 
         exit 0
     }
@@ -166,7 +209,12 @@ try {
         Write-Log "Session ending - generating final report"
 
         # Generate comprehensive session analytics
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreCompact" -Action "session-report"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreCompact" -Action "session-report" -InputJsonFile $tempFile
+
+        # Cleanup temp file
+        if (Test-Path $tempFile) {
+            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+        }
 
         exit 0
     }
@@ -176,20 +224,37 @@ try {
     # ============================================================
     if ($Phase -eq "UserPromptSubmit") {
         # Track user prompts for analytics
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "session-track"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "session-track" -InputJsonFile $tempFile
 
         # CRITICAL: Run session-level optimization at end of user turn
         # This batch-optimizes ALL file operations from the previous turn
-        $input_json | & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "optimize-session"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "UserPromptSubmit" -Action "optimize-session" -InputJsonFile $tempFile
+
+        # Cleanup temp file
+        if (Test-Path $tempFile) {
+            Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+        }
 
         exit 0
     }
 
     # Unknown phase
     Write-Log "Unknown phase: $Phase"
+
+    # Cleanup temp file
+    if (Test-Path $tempFile) {
+        Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+    }
+
     exit 0
 
 } catch {
     Write-Log "[ERROR] Dispatcher failed: $($_.Exception.Message)"
+
+    # Cleanup temp file on error
+    if ($tempFile -and (Test-Path $tempFile)) {
+        Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+    }
+
     exit 0  # Never block on error
 }

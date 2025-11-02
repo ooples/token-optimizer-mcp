@@ -1459,9 +1459,15 @@ function Handle-PreToolUseOptimization {
                 if ($cachedData -and $cachedData.content) {
                     Write-Log "Cache HIT for $toolName - avoiding redundant tool call" "INFO"
 
-                    # PHASE 4 FIX: Track cache hit
+                    # PHASE 4 FIX: Track cache hit and persist immediately
                     if ($script:CurrentSession) {
                         $script:CurrentSession.cacheHits++
+                        # CRITICAL: Persist immediately to disk for multi-process visibility
+                        if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                            Write-Log "Session stats updated and persisted after cache hit." "DEBUG"
+                        } else {
+                            Write-Log "Failed to persist session stats after cache hit." "ERROR"
+                        }
                     }
 
                     # Return standard block response so dispatcher can exit 2
@@ -1481,15 +1487,27 @@ function Handle-PreToolUseOptimization {
                 }
             }
 
-            # PHASE 4 FIX: Track cache miss
+            # PHASE 4 FIX: Track cache miss and persist immediately
             if ($script:CurrentSession) {
                 $script:CurrentSession.cacheMisses++
+                # CRITICAL: Persist immediately to disk for multi-process visibility
+                if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                    Write-Log "Session stats updated and persisted after cache miss." "DEBUG"
+                } else {
+                    Write-Log "Failed to persist session stats after cache miss." "ERROR"
+                }
             }
         } catch {
             # Cache miss is normal, continue
-            # PHASE 4 FIX: Track cache miss
+            # PHASE 4 FIX: Track cache miss and persist immediately
             if ($script:CurrentSession) {
                 $script:CurrentSession.cacheMisses++
+                # CRITICAL: Persist immediately to disk for multi-process visibility
+                if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                    Write-Log "Session stats updated and persisted after cache miss (exception path)." "DEBUG"
+                } else {
+                    Write-Log "Failed to persist session stats after cache miss (exception path)." "ERROR"
+                }
             }
             Write-Log "Cache miss for $toolName" "DEBUG"
         }
@@ -1675,9 +1693,15 @@ function Handle-OptimizeToolOutput {
                 if ($afterTokens -ge $beforeTokens) {
                     Write-Log "Optimization made things worse or had no effect ($beforeTokens → $afterTokens tokens), REVERTING to original" "WARN"
 
-                    # PHASE 4 FIX: Track failure
+                    # PHASE 4 FIX: Track failure and persist immediately
                     if ($script:CurrentSession) {
                         $script:CurrentSession.optimizationFailures++
+                        # CRITICAL: Persist immediately to disk for multi-process visibility
+                        if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                            Write-Log "Session stats updated and persisted after optimization failure." "DEBUG"
+                        } else {
+                            Write-Log "Failed to persist session stats after optimization failure." "ERROR"
+                        }
                     }
 
                     # Don't update session with optimized tokens, skip this optimization
@@ -1686,12 +1710,18 @@ function Handle-OptimizeToolOutput {
 
                 Write-Log "Optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
 
-                # PHASE 4 FIX: Track success and detailed stats
+                # PHASE 4 FIX: Track success and detailed stats, persist immediately
                 if ($script:CurrentSession) {
                     $script:CurrentSession.optimizationSuccesses++
                     $script:CurrentSession.totalOriginalTokens += $beforeTokens
                     $script:CurrentSession.totalOptimizedTokens += $afterTokens
                     $script:CurrentSession.totalTokensSaved += $saved
+                    # CRITICAL: Persist immediately to disk for multi-process visibility
+                    if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                        Write-Log "Session stats updated and persisted after optimization success." "DEBUG"
+                    } else {
+                        Write-Log "Failed to persist session stats after optimization success." "ERROR"
+                    }
                 }
 
                 # Update session tokens (only if optimization helped)
@@ -2005,6 +2035,16 @@ if ($MyInvocation.InvocationName -ne '.') {
             "optimize-tool-output" {
                 Write-Log "DIAGNOSTIC: optimize-tool-output action triggered (script version $SCRIPT_VERSION)" "INFO"
                 Handle-OptimizeToolOutput -InputJson $InputJson
+
+                # Cleanup temp file after background optimization completes
+                if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
+                    try {
+                        Remove-Item -Path $InputJsonFile -Force -ErrorAction Stop
+                        Write-Log "BACKGROUND: Cleaned up temp file after optimization: $InputJsonFile" "DEBUG"
+                    } catch {
+                        Write-Log "BACKGROUND: Failed to cleanup temp file $InputJsonFile: $($_.Exception.Message)" "WARN"
+                    }
+                }
             }
             "precompact-optimize" {
                 Handle-PreCompactOptimization -InputJson $InputJson
