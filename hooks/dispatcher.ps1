@@ -8,14 +8,9 @@ param([string]$Phase = "")
 $HANDLERS_DIR = "C:\Users\cheat\.claude-global\hooks\handlers"
 $LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\dispatcher.log"
 $ORCHESTRATOR = "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
+. "$PSScriptRoot\helpers\logging.ps1"
 
-function Write-Log {
-    param([string]$Message)
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logMessage = "[$timestamp] [$Phase] $Message"
-    $logMessage | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
-    Write-Verbose $logMessage
-}
+
 
 function Block-Tool {
     param([string]$Reason)

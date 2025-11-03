@@ -27,6 +27,7 @@ if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
 
 $HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
 $INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
+. "$PSScriptRoot\..\helpers\logging.ps1"
 $LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-orchestrator.log"
 $SESSION_FILE = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
 $OPERATIONS_DIR = "C:\Users\cheat\.claude-global\hooks\data"
@@ -523,33 +524,7 @@ function Start-LogFlushTimer {
     }
 }
 
-function Write-Log {
-    param(
-        [string]$Message,
-        [ValidateSet('DEBUG','INFO','WARN','ERROR')][string]$Level = "INFO",
-        [string]$Context = ""
-    )
 
-    # Check if debug logging is disabled
-    $debugLogging = if ($env:TOKEN_OPTIMIZER_DEBUG_LOGGING) {
-        $env:TOKEN_OPTIMIZER_DEBUG_LOGGING -eq 'true'
-    } else {
-        $true  # Default: enabled
-    }
-
-    if ($Level -eq 'DEBUG' -and -not $debugLogging) {
-        return
-    }
-
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $contextPart = if ($Context) { " [$Context]" } else { "" }
-    $logEntry = "[$timestamp] [$Level]$contextPart $Message"
-    try {
-        $logEntry | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8 -ErrorAction SilentlyContinue
-    } catch {
-        # Silently fail
-    }
-}
 
 # Removed - now using direct invoke-mcp.ps1 calls
 
