@@ -12,7 +12,7 @@ param(
 
 # DIAGNOSTIC: Log script version/load time to verify latest version is being used
 $SCRIPT_VERSION = Get-Date -Format 'yyyyMMdd.HHmmss'
-Write-Host "DEBUG: token-optimizer-orchestrator.ps1 version $SCRIPT_VERSION loaded. Phase=$Phase, Action=$Action" -ForegroundColor Cyan
+Write-Log "token-optimizer-orchestrator.ps1 version $SCRIPT_VERSION loaded. Phase=$Phase, Action=$Action" "DEBUG"
 
 # Read JSON from temp file if provided
 # DO NOT delete temp file - dispatcher will clean it up after all handlers run
@@ -21,7 +21,7 @@ if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
     try {
         $InputJson = Get-Content -Path $InputJsonFile -Raw -Encoding UTF8
     } catch {
-        Write-Host "ERROR: Failed to read InputJsonFile: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Log "Failed to read InputJsonFile: $($_.Exception.Message)" "ERROR"
     }
 }
 
@@ -240,8 +240,8 @@ if (-not ('TokenCounter' -as [type])) {
                 $this.Cache.Set($cacheKey, $tokenCount)
                 return $tokenCount
             } catch {
-                # API failed, fall back to estimation (use Write-Host since Write-Log defined later)
-                Write-Host "WARN: Token counting API failed: $($_.Exception.Message), falling back to estimation" -ForegroundColor Yellow
+                # API failed, fall back to estimation
+                Write-Log "Token counting API failed: $($_.Exception.Message), falling back to estimation" "WARN"
             }
         }
 
@@ -346,7 +346,7 @@ if (-not ('TokenCounter' -as [type])) {
 if (-not $script:TokenCounter) {
     $apiKey = $env:GOOGLE_AI_API_KEY
     if (-not $apiKey) {
-        Write-Host "WARN: GOOGLE_AI_API_KEY not set, falling back to estimation only" -ForegroundColor Yellow
+        Write-Log "GOOGLE_AI_API_KEY not set, falling back to estimation only" "WARN"
     }
     $modelName = if ($env:GOOGLE_AI_MODEL) { $env:GOOGLE_AI_MODEL } else { "gemini-2.0-flash-exp" }
     $script:TokenCounter = [TokenCounter]::new($apiKey, $modelName)
@@ -1852,43 +1852,43 @@ function Handle-OptimizeToolOutput {
     $ErrorActionPreference = 'Stop'
 
     try {
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Entered function."
+        Write-Log "[Handle-OptimizeToolOutput] Entered function." "DEBUG"
 
         if (-not $InputJson) {
             Write-Log "No input received for tool output optimization" "WARN"
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] No input received, returning."
+            Write-Log "[Handle-OptimizeToolOutput] No input received, returning." "DEBUG"
             return
         }
 
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Parsing InputJson..."
+        Write-Log "[Handle-OptimizeToolOutput] Parsing InputJson..." "DEBUG"
         $data = $InputJson | ConvertFrom-Json
         $toolName = $data.tool_name
         $toolOutput = $data.tool_response  # FIXED: Claude Code uses tool_response not tool_result
 
         $outputType = if ($toolOutput) { $toolOutput.GetType().Name } else { "null" }
         Write-Log "DEBUG: tool_name=$toolName, tool_response_type=$outputType, has_content=$(-not -not $toolOutput)" "DEBUG"
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 1 - After line 1564 log. toolName=$toolName, outputType=$outputType"
+        Write-Log "[Handle-OptimizeToolOutput] Checkpoint 1 - After line 1564 log. toolName=$toolName, outputType=$outputType" "DEBUG"
 
         # Skip if no output or if output is already optimized
         Write-Log "DEBUG: Checking if toolOutput is null or empty" "DEBUG"
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 2 - Before null/empty check."
+        Write-Log "[Handle-OptimizeToolOutput] Checkpoint 2 - Before null/empty check." "DEBUG"
         if (-not $toolOutput) {
             Write-Log "No tool output to optimize for: $toolName (toolOutput is null/false)" "DEBUG"
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] toolOutput is null/false, returning."
+            Write-Log "[Handle-OptimizeToolOutput] toolOutput is null/false, returning." "DEBUG"
             return
         }
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 3 - After null/empty check, toolOutput exists."
+        Write-Log "[Handle-OptimizeToolOutput] Checkpoint 3 - After null/empty check, toolOutput exists." "DEBUG"
 
         # Convert output to string for token counting
         $outputText = ""
         try {
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 4 - Attempting to convert toolOutput to string. Is string: $($toolOutput -is [string])"
+            Write-Log "[Handle-OptimizeToolOutput] Checkpoint 4 - Attempting to convert toolOutput to string. Is string: $($toolOutput -is [string])" "DEBUG"
             $outputText = if ($toolOutput -is [string]) { $toolOutput } else { $toolOutput | ConvertTo-Json -Depth 10 -ErrorAction Stop }
             Write-Log "DEBUG: Converted tool output to string. Length: $($outputText.Length)" "DEBUG"
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 5 - toolOutput converted. Length: $($outputText.Length)"
+            Write-Log "[Handle-OptimizeToolOutput] Checkpoint 5 - toolOutput converted. Length: $($outputText.Length)" "DEBUG"
         } catch {
             Write-Log "ERROR: Failed to convert tool output to JSON string for ${toolName}: $($_.Exception.Message)" "ERROR"
-            Write-Host "ERROR: [Handle-OptimizeToolOutput] Failed to convert: $($_.Exception.Message)"
+            Write-Log "[Handle-OptimizeToolOutput] Failed to convert: $($_.Exception.Message)" "ERROR"
             return
         }
 
