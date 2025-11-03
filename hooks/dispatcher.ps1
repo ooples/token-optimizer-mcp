@@ -164,7 +164,7 @@ try {
         #    This allows hooks to return immediately while optimization runs async
         $actionStart = Get-Date
         Write-Log "BACKGROUND: Starting optimize-tool-output in background process"
-        Start-Process -FilePath "powershell" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File",$ORCHESTRATOR,"-Phase","PostToolUse","-Action","optimize-tool-output","-InputJsonFile",$tempFile -WindowStyle Hidden -NoNewWindow
+        Start-Process -FilePath "powershell" -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File",$ORCHESTRATOR,"-Phase","PostToolUse","-Action","optimize-tool-output","-InputJsonFile",$tempFile -WindowStyle Hidden
         $actionDuration = ((Get-Date) - $actionStart).TotalMilliseconds
         Write-Log "TIMING: optimize-tool-output background spawn took ${actionDuration}ms"
 
