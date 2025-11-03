@@ -2,6 +2,7 @@
 # Minimal dispatcher focused on token optimization via MCP
 # Replaces 400+ line mess with clean architecture
 
+[CmdletBinding()]
 param([string]$Phase = "")
 
 $HANDLERS_DIR = "C:\Users\cheat\.claude-global\hooks\handlers"
@@ -11,7 +12,9 @@ $ORCHESTRATOR = "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
 function Write-Log {
     param([string]$Message)
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "[$timestamp] [$Phase] $Message" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
+    $logMessage = "[$timestamp] [$Phase] $Message"
+    $logMessage | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
+    Write-Verbose $logMessage
 }
 
 function Block-Tool {
