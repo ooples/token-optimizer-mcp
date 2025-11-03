@@ -58,6 +58,271 @@ $OPTIMIZATION_QUALITY = 11  # Maximum compression quality
 $HASH_PREFIX = "hash:"
 $HASH_LENGTH = 32
 
+# =============================================================================
+# LRU CACHE CLASSES (Issue #5)
+# =============================================================================
+class LruCacheEntry {
+    [object]$Value
+    [datetime]$Timestamp
+
+    LruCacheEntry([object]$value) {
+        $this.Value = $value
+        $this.Timestamp = Get-Date
+    }
+}
+
+class LruCache {
+    [System.Collections.Specialized.OrderedDictionary]$Cache
+    [int]$MaxSize
+    [int]$TtlSeconds
+    [int]$HitCount = 0
+    [int]$MissCount = 0
+    [int]$EvictionCount = 0
+
+    LruCache([int]$maxSize, [int]$ttlSeconds) {
+        $this.Cache = [System.Collections.Specialized.OrderedDictionary]::new()
+        $this.MaxSize = $maxSize
+        $this.TtlSeconds = $ttlSeconds
+    }
+
+    # Get value from cache (returns $null if not found or expired)
+    [object] Get([string]$key) {
+        if (-not $this.Cache.Contains($key)) {
+            $this.MissCount++
+            return $null
+        }
+
+        $entry = $this.Cache[$key]
+
+        # Check TTL expiration
+        if ($this.TtlSeconds -gt 0) {
+            $age = ((Get-Date) - $entry.Timestamp).TotalSeconds
+            if ($age -gt $this.TtlSeconds) {
+                $this.Cache.Remove($key)
+                $this.MissCount++
+                $this.EvictionCount++
+                return $null
+            }
+        }
+
+        # Move to end (most recently used) by removing and re-adding
+        $value = $entry.Value
+        $this.Cache.Remove($key)
+        $this.Cache[$key] = [LruCacheEntry]::new($value)
+
+        $this.HitCount++
+        return $value
+    }
+
+    # Set value in cache
+    [void] Set([string]$key, [object]$value) {
+        # Remove if already exists (to re-insert at end)
+        if ($this.Cache.Contains($key)) {
+            $this.Cache.Remove($key)
+        }
+
+        # Evict least recently used if at capacity
+        if ($this.Cache.Count -ge $this.MaxSize) {
+            # First key is least recently used (OrderedDictionary maintains insertion order)
+            $firstKey = @($this.Cache.Keys)[0]
+            $this.Cache.Remove($firstKey)
+            $this.EvictionCount++
+        }
+
+        # Insert at end (most recently used)
+        $this.Cache[$key] = [LruCacheEntry]::new($value)
+    }
+
+    # Check if key exists and is not expired
+    [bool] ContainsKey([string]$key) {
+        return $null -ne $this.Get($key)
+    }
+
+    # Clear all entries
+    [void] Clear() {
+        $this.Cache.Clear()
+        $this.HitCount = 0
+        $this.MissCount = 0
+        $this.EvictionCount = 0
+    }
+
+    # Get cache statistics
+    [hashtable] GetStats() {
+        $totalRequests = $this.HitCount + $this.MissCount
+        return @{
+            Size = $this.Cache.Count
+            MaxSize = $this.MaxSize
+            HitCount = $this.HitCount
+            MissCount = $this.MissCount
+            EvictionCount = $this.EvictionCount
+            HitRate = if ($totalRequests -gt 0) {
+                [Math]::Round(($this.HitCount / $totalRequests) * 100, 2)
+            } else { 0 }
+        }
+    }
+
+    # Cleanup expired entries (call periodically)
+    [int] CleanupExpired() {
+        if ($this.TtlSeconds -le 0) { return 0 }
+
+        $removed = 0
+        $keysToRemove = @()
+
+        foreach ($key in $this.Cache.Keys) {
+            $entry = $this.Cache[$key]
+            $age = ((Get-Date) - $entry.Timestamp).TotalSeconds
+            if ($age -gt $this.TtlSeconds) {
+                $keysToRemove += $key
+            }
+        }
+
+        foreach ($key in $keysToRemove) {
+            $this.Cache.Remove($key)
+            $removed++
+        }
+
+        $this.EvictionCount += $removed
+        return $removed
+    }
+}
+
+# =============================================================================
+# TOKEN COUNTER CLASS (Issue #4)
+# =============================================================================
+class TokenCounter {
+    [string]$ApiKey
+    [string]$Model
+    [LruCache]$Cache
+    [int]$ApiCallCount = 0
+    [int]$CacheHitCount = 0
+    [int]$EstimationCount = 0
+
+    TokenCounter([string]$apiKey, [string]$model) {
+        $this.ApiKey = $apiKey
+        $this.Model = $model
+        # Use LRU cache: Max 200 entries, TTL 30 minutes (1800 seconds)
+        $this.Cache = [LruCache]::new(200, 1800)
+    }
+
+    # Primary method: try API first, fall back to estimation
+    [int] CountTokens([string]$text, [string]$contentType) {
+        # Check cache first (using content hash as key)
+        $textHash = [System.BitConverter]::ToString(
+            [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+                [System.Text.Encoding]::UTF8.GetBytes($text)
+            )
+        ).Replace("-", "")
+        $cacheKey = "${contentType}:${textHash}"
+
+        $cached = $this.Cache.Get($cacheKey)
+        if ($null -ne $cached) {
+            $this.CacheHitCount++
+            return $cached
+        }
+
+        # Try API call if key is available
+        if ($this.ApiKey) {
+            try {
+                $tokenCount = $this.CountTokensViaAPI($text)
+                $this.ApiCallCount++
+                $this.Cache.Set($cacheKey, $tokenCount)
+                return $tokenCount
+            } catch {
+                # API failed, fall back to estimation
+                Write-Log "Token counting API failed: $($_.Exception.Message), falling back to estimation" "WARN"
+            }
+        }
+
+        # Fallback to improved estimation
+        $estimated = $this.EstimateTokens($text, $contentType)
+        $this.EstimationCount++
+        $this.Cache.Set($cacheKey, $estimated)
+        return $estimated
+    }
+
+    # Google AI API integration
+    [int] CountTokensViaAPI([string]$text) {
+        $requestBody = @{
+            contents = @(
+                @{
+                    parts = @(
+                        @{
+                            text = $text
+                        }
+                    )
+                }
+            )
+        } | ConvertTo-Json -Depth 10 -Compress
+
+        $uri = "https://generativelanguage.googleapis.com/v1beta/models/$($this.Model):countTokens?key=$($this.ApiKey)"
+
+        $response = Invoke-RestMethod -Uri $uri -Method POST -ContentType "application/json" -Body $requestBody -TimeoutSec 5
+
+        return $response.totalTokens
+    }
+
+    # Improved estimation with content-type awareness
+    [int] EstimateTokens([string]$text, [string]$contentType) {
+        $baseRatio = [Math]::Ceiling($text.Length / 4.0)
+
+        switch ($contentType) {
+            "code" {
+                # Code has more tokens per character due to symbols/keywords
+                return [Math]::Ceiling($baseRatio * 1.2)
+            }
+            "json" {
+                # JSON structures add token overhead for delimiters
+                return [Math]::Ceiling($baseRatio * 1.15)
+            }
+            "markdown" {
+                # Markdown formatting adds token overhead
+                return [Math]::Ceiling($baseRatio * 1.1)
+            }
+            "text" {
+                # Plain text is slightly less than base ratio
+                return [Math]::Ceiling($baseRatio * 0.95)
+            }
+            default {
+                return $baseRatio
+            }
+        }
+    }
+
+    # Content type detection based on file extension or tool name
+    [string] DetectContentType([string]$identifier) {
+        switch -Regex ($identifier) {
+            '\.(cs|ps1|ts|js|py|java|cpp|c|h|go|rs|rb|php)$' { return "code" }
+            '\.(json|jsonc)$' { return "json" }
+            '\.(md|markdown)$' { return "markdown" }
+            '^Read$|^Grep$|^Bash$' { return "code" }
+            default { return "text" }
+        }
+    }
+
+    # Get cache statistics
+    [hashtable] GetStats() {
+        $cacheStats = $this.Cache.GetStats()
+        $totalCalls = $this.ApiCallCount + $this.CacheHitCount + $this.EstimationCount
+        return @{
+            ApiCalls = $this.ApiCallCount
+            CacheHits = $this.CacheHitCount
+            EstimationCount = $this.EstimationCount
+            CacheSize = $cacheStats.Size
+            CacheHitRate = $cacheStats.HitRate
+            TotalCalls = $totalCalls
+        }
+    }
+}
+
+# Initialize global TokenCounter (singleton pattern)
+if (-not $script:TokenCounter) {
+    $apiKey = $env:GOOGLE_AI_API_KEY
+    if (-not $apiKey) {
+        Write-Host "WARN: GOOGLE_AI_API_KEY not set, falling back to estimation only" -ForegroundColor Yellow
+    }
+    $script:TokenCounter = [TokenCounter]::new($apiKey, "gemini-2.0-flash-exp")
+}
+
 # PHASE 2 FIX: Deterministic cache key generation
 # Fixes 0% cache hit rate by ensuring identical operations produce identical keys
 function Get-DeterministicCacheKey {
