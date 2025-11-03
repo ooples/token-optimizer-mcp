@@ -421,7 +421,7 @@ function Read-SessionFile {
             Write-Log "Failed to acquire read lock on session file '$FilePath', retrying... ($($_.Exception.Message))" "WARN"
             Start-Sleep -Milliseconds $retryDelayMs
         } catch {
-            Write-Log "Failed to read session file '$FilePath': $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to read session file '$FilePath'"
             return $null
         }
     }
@@ -453,7 +453,7 @@ function Write-SessionFile {
             Write-Log "Failed to acquire write lock on session file '$FilePath', retrying... ($($_.Exception.Message))" "WARN"
             Start-Sleep -Milliseconds $retryDelayMs
         } catch {
-            Write-Log "Failed to write session file '$FilePath': $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to write session file '$FilePath'"
             return $false
         } finally {
             # Ensure writer and fileStream are disposed even if errors occur
@@ -499,7 +499,7 @@ function Flush-OperationLogs {
             Write-Log "Flushed $($script:OperationLogBuffer.Count) operation logs" "DEBUG"
             $script:OperationLogBuffer = @()
         } catch {
-            Write-Log "Failed to flush operation logs: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to flush operation logs"
         }
     }
 }
@@ -534,7 +534,7 @@ function Get-SessionInfo {
             $session = Read-SessionFile -FilePath $SESSION_FILE
             return $session
         } catch {
-            Write-Log "Failed to read session file: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to read session file"
         }
     }
     return $null
@@ -691,7 +691,7 @@ function Handle-LogOperation {
         Write-Log "Logged operation: $toolName ($tokens tokens)" "DEBUG"
 
     } catch {
-        Write-Log "Operation logging failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Operation logging failed"
     }
 }
 
@@ -721,7 +721,7 @@ function Handle-OptimizeSession {
         }
 
     } catch {
-        Write-Log "Session optimization failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Session optimization failed"
     }
 }
 
@@ -797,7 +797,7 @@ function Handle-ContextGuard {
         return 0  # Success - allow operation to proceed
 
     } catch {
-        Write-Log "Context guard failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Context guard failed"
         return 0  # On error, don't block
     }
 }
@@ -827,7 +827,7 @@ function Handle-PeriodicOptimize {
         }
 
     } catch {
-        Write-Log "Periodic optimize failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Periodic optimize failed"
     }
 }
 
@@ -852,7 +852,7 @@ function Handle-CacheWarmup {
         }
 
     } catch {
-        Write-Log "Cache warmup failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Cache warmup failed"
     }
 }
 
@@ -892,7 +892,7 @@ function Handle-SessionReport {
         }
 
     } catch {
-        Write-Log "Session report failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Session report failed"
     }
 }
 
@@ -974,11 +974,11 @@ function Handle-UserPromptOptimization {
                 Write-Log "Optimized user prompt: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
             }
         } catch {
-            Write-Log "Prompt optimization failed: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Prompt optimization failed"
         }
 
     } catch {
-        Write-Log "UserPromptOptimization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "UserPromptOptimization handler failed"
     }
 }
 
@@ -1030,7 +1030,7 @@ function Handle-SessionStartInit {
         }
 
     } catch {
-        Write-Log "SessionStartInit handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SessionStartInit handler failed"
     }
 }
 
@@ -1075,7 +1075,7 @@ function Handle-SmartDiff {
         return $null
 
     } catch {
-        Write-Log "SmartDiff handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SmartDiff handler failed"
         return $null
     }
 }
@@ -1115,7 +1115,7 @@ function Handle-SmartLogs {
         return $null
 
     } catch {
-        Write-Log "SmartLogs handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SmartLogs handler failed"
         return $null
     }
 }
@@ -1170,7 +1170,7 @@ function Handle-ToolSpecificOptimization {
         return $ToolOutput
 
     } catch {
-        Write-Log "ToolSpecificOptimization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "ToolSpecificOptimization handler failed"
         return $ToolOutput
     }
 }
@@ -1208,7 +1208,7 @@ function Handle-MetricCollector {
         return $null
 
     } catch {
-        Write-Log "MetricCollector handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "MetricCollector handler failed"
         return $null
     }
 }
@@ -1248,7 +1248,7 @@ function Handle-AlertManager {
         return $null
 
     } catch {
-        Write-Log "AlertManager handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "AlertManager handler failed"
         return $null
     }
 }
@@ -1280,7 +1280,7 @@ function Handle-HealthMonitor {
         return $null
 
     } catch {
-        Write-Log "HealthMonitor handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "HealthMonitor handler failed"
         return $null
     }
 }
@@ -1318,7 +1318,7 @@ function Handle-MonitoringIntegration {
         return $null
 
     } catch {
-        Write-Log "MonitoringIntegration handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "MonitoringIntegration handler failed"
         return $null
     }
 }
@@ -1354,7 +1354,7 @@ function Handle-AnalyzeOptimization {
         return $null
 
     } catch {
-        Write-Log "AnalyzeOptimization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "AnalyzeOptimization handler failed"
         return $null
     }
 }
@@ -1383,7 +1383,7 @@ function Handle-CacheAnalytics {
         return $null
 
     } catch {
-        Write-Log "CacheAnalytics handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheAnalytics handler failed"
         return $null
     }
 }
@@ -1413,7 +1413,7 @@ function Handle-CacheOptimizer {
         return $null
 
     } catch {
-        Write-Log "CacheOptimizer handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheOptimizer handler failed"
         return $null
     }
 }
@@ -1453,7 +1453,7 @@ function Handle-CacheCompression {
         return $Data
 
     } catch {
-        Write-Log "CacheCompression handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheCompression handler failed"
         return $Data
     }
 }
@@ -1480,7 +1480,7 @@ function Handle-CacheInvalidation {
         Write-Log "Cache invalidation completed for pattern: $Pattern" "DEBUG"
 
     } catch {
-        Write-Log "CacheInvalidation handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheInvalidation handler failed"
     }
 }
 
@@ -1520,7 +1520,7 @@ function Handle-SmartCache {
         return $null
 
     } catch {
-        Write-Log "SmartCache handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SmartCache handler failed"
         return $null
     }
 }
@@ -1568,7 +1568,7 @@ function Handle-IntelligentSummarization {
         return $Text
 
     } catch {
-        Write-Log "IntelligentSummarization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "IntelligentSummarization handler failed"
         return $Text
     }
 }
@@ -1614,7 +1614,7 @@ function Handle-PatternRecognition {
         return $null
 
     } catch {
-        Write-Log "PatternRecognition handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "PatternRecognition handler failed"
         return $null
     }
 }
@@ -1657,7 +1657,7 @@ function Handle-PredictiveAnalytics {
         return $Context
 
     } catch {
-        Write-Log "PredictiveAnalytics handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "PredictiveAnalytics handler failed"
         return $Context
     }
 }
@@ -1691,7 +1691,7 @@ function Handle-IntelligentAssistant {
         return $null
 
     } catch {
-        Write-Log "IntelligentAssistant handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "IntelligentAssistant handler failed"
         return $null
     }
 }
@@ -1836,7 +1836,7 @@ function Handle-PreToolUseOptimization {
         }
 
     } catch {
-        Write-Log "PreToolUse optimization failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "PreToolUse optimization failed"
         return 1
     }
     return 0
@@ -1909,8 +1909,7 @@ function Handle-OptimizeToolOutput {
                 Write-Log "WARN: count_tokens result did not contain expected content" "WARN"
             }
         } catch {
-            Write-Log "ERROR: Token counting failed for ${toolName}: $($_.Exception.Message)" "ERROR"
-            Write-Log "ERROR: Stack Trace: $($_.ScriptStackTrace)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Token counting failed for ${toolName}"
             return
         }
 
@@ -1996,7 +1995,7 @@ function Handle-OptimizeToolOutput {
                 Update-SessionOperation -TokensDelta $afterTokens
             }
         } catch {
-            Write-Log "Tool output optimization failed: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Tool output optimization failed"
         }
 
     } catch {

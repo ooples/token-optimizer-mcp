@@ -25,3 +25,15 @@ function Write-Log {
     $logMessage | Out-File -FilePath $script:LOG_FILE -Append -Encoding UTF8
     Write-Verbose $logMessage
 }
+
+function Handle-Error {
+    param(
+        [System.Exception]$Exception,
+        [string]$Message = ""
+    )
+
+    $errorMessage = if ($Message) { $Message } else { $Exception.Message }
+    $stackTrace = $Exception.ScriptStackTrace
+    Write-Log "ERROR: $errorMessage" "ERROR"
+    Write-Log "StackTrace: $stackTrace" "ERROR"
+}
