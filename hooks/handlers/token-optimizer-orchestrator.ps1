@@ -61,17 +61,21 @@ $HASH_LENGTH = 32
 # =============================================================================
 # LRU CACHE CLASSES (Issue #5)
 # =============================================================================
-class LruCacheEntry {
-    [object]$Value
-    [datetime]$Timestamp
+# Guard against class re-definition on subsequent script loads
+if (-not ('LruCacheEntry' -as [type])) {
+    class LruCacheEntry {
+        [object]$Value
+        [datetime]$Timestamp
 
-    LruCacheEntry([object]$value) {
-        $this.Value = $value
-        $this.Timestamp = Get-Date
+        LruCacheEntry([object]$value) {
+            $this.Value = $value
+            $this.Timestamp = Get-Date
+        }
     }
 }
 
-class LruCache {
+if (-not ('LruCache' -as [type])) {
+    class LruCache {
     [System.Collections.Specialized.OrderedDictionary]$Cache
     [int]$MaxSize
     [int]$TtlSeconds
@@ -185,11 +189,13 @@ class LruCache {
         return $removed
     }
 }
+}
 
 # =============================================================================
 # TOKEN COUNTER CLASS (Issue #4)
 # =============================================================================
-class TokenCounter {
+if (-not ('TokenCounter' -as [type])) {
+    class TokenCounter {
     [string]$ApiKey
     [string]$Model
     [LruCache]$Cache
@@ -206,12 +212,17 @@ class TokenCounter {
 
     # Primary method: try API first, fall back to estimation
     [int] CountTokens([string]$text, [string]$contentType) {
-        # Check cache first (using content hash as key)
-        $textHash = [System.BitConverter]::ToString(
-            [System.Security.Cryptography.SHA256]::Create().ComputeHash(
-                [System.Text.Encoding]::UTF8.GetBytes($text)
-            )
-        ).Replace("-", "")
+        # Check cache first (using content hash as key with proper disposal)
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $textHash = [System.BitConverter]::ToString(
+                $sha256.ComputeHash(
+                    [System.Text.Encoding]::UTF8.GetBytes($text)
+                )
+            ).Replace("-", "")
+        } finally {
+            $sha256.Dispose()
+        }
         $cacheKey = "${contentType}:${textHash}"
 
         $cached = $this.Cache.Get($cacheKey)
@@ -228,8 +239,8 @@ class TokenCounter {
                 $this.Cache.Set($cacheKey, $tokenCount)
                 return $tokenCount
             } catch {
-                # API failed, fall back to estimation
-                Write-Log "Token counting API failed: $($_.Exception.Message), falling back to estimation" "WARN"
+                # API failed, fall back to estimation (use Write-Host since Write-Log defined later)
+                Write-Host "WARN: Token counting API failed: $($_.Exception.Message), falling back to estimation" -ForegroundColor Yellow
             }
         }
 
@@ -256,7 +267,22 @@ class TokenCounter {
 
         $uri = "https://generativelanguage.googleapis.com/v1beta/models/$($this.Model):countTokens?key=$($this.ApiKey)"
 
-        $response = Invoke-RestMethod -Uri $uri -Method POST -ContentType "application/json" -Body $requestBody -TimeoutSec 5
+        try {
+            $response = Invoke-RestMethod -Uri $uri -Method POST -ContentType "application/json" -Body $requestBody -TimeoutSec 5
+        } catch {
+            $ex = $_.Exception
+            if ($ex -is [System.Net.WebException]) {
+                if ($ex.Status -eq [System.Net.WebExceptionStatus]::Timeout) {
+                    throw "Token counting API timeout after 5 seconds"
+                } elseif ($ex.Status -eq [System.Net.WebExceptionStatus]::ConnectFailure) {
+                    throw "Token counting API network error (connect failure)"
+                } else {
+                    throw "Token counting API network error: $($ex.Status)"
+                }
+            } else {
+                throw
+            }
+        }
 
         return $response.totalTokens
     }
@@ -294,7 +320,7 @@ class TokenCounter {
             '\.(cs|ps1|ts|js|py|java|cpp|c|h|go|rs|rb|php)$' { return "code" }
             '\.(json|jsonc)$' { return "json" }
             '\.(md|markdown)$' { return "markdown" }
-            '^Read$|^Grep$|^Bash$' { return "code" }
+            '^(Read|Grep|Bash)$' { return "code" }
             default { return "text" }
         }
     }
@@ -302,7 +328,7 @@ class TokenCounter {
     # Get cache statistics
     [hashtable] GetStats() {
         $cacheStats = $this.Cache.GetStats()
-        $totalCalls = $this.ApiCallCount + $this.CacheHitCount + $this.EstimationCount
+        $totalCalls = $this.ApiCallCount + $this.EstimationCount
         return @{
             ApiCalls = $this.ApiCallCount
             CacheHits = $this.CacheHitCount
@@ -313,6 +339,7 @@ class TokenCounter {
         }
     }
 }
+}
 
 # Initialize global TokenCounter (singleton pattern)
 if (-not $script:TokenCounter) {
@@ -320,7 +347,8 @@ if (-not $script:TokenCounter) {
     if (-not $apiKey) {
         Write-Host "WARN: GOOGLE_AI_API_KEY not set, falling back to estimation only" -ForegroundColor Yellow
     }
-    $script:TokenCounter = [TokenCounter]::new($apiKey, "gemini-2.0-flash-exp")
+    $modelName = if ($env:GOOGLE_AI_MODEL) { $env:GOOGLE_AI_MODEL } else { "gemini-2.0-flash-exp" }
+    $script:TokenCounter = [TokenCounter]::new($apiKey, $modelName)
 }
 
 # PHASE 2 FIX: Deterministic cache key generation
