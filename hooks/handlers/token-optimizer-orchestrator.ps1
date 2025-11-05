@@ -240,8 +240,8 @@ if (-not ('TokenCounter' -as [type])) {
                 $this.Cache.Set($cacheKey, $tokenCount)
                 return $tokenCount
             } catch {
-                # API failed, fall back to estimation
-                Write-Log "Token counting API failed: $($_.Exception.Message), falling back to estimation" "WARN"
+                # API failed, fall back to estimation (use Write-Host since Write-Log defined later)
+                Write-Host "WARN: Token counting API failed: $($_.Exception.Message), falling back to estimation" -ForegroundColor Yellow
             }
         }
 
