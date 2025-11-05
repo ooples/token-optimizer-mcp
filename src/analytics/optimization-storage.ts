@@ -1,107 +1,79 @@
-/**
- * Persistent storage for optimization results data using SQLite
- */
-
-import Database from 'better-sqlite3';
-import path from 'path';
-import os from 'os';
-import fs from 'fs';
-import { createGzip, gunzipSync } from 'zlib';
-import { promisify } from 'util';
-
-const gzip = promisify(createGzip);
+import sqlite3 from 'sqlite3';
+import { open, Database } from 'sqlite';
+import { CompressionEngine } from '../core/compression-engine';
 
 export interface OptimizationResult {
-  originalTextHash: string;
-  optimizedText: Buffer;
-  compressionAlgorithm: string;
+    originalTextHash: string;
+    optimizedText: string;
+    originalTokens: number;
+    optimizedTokens: number;
+    tokensSaved: number;
 }
 
-/**
- * SQLite-backed optimization results storage
- */
 export class SqliteOptimizationStorage {
-  private db: Database.Database;
+    private db: Database<sqlite3.Database, sqlite3.Statement>;
+    private dbPath: string;
+    private compressionEngine: CompressionEngine;
 
-  constructor(dbPath?: string) {
-    // Default to user's home directory
-    const defaultPath = path.join(
-      os.homedir(),
-      '.token-optimizer-mcp',
-      'optimization.db'
-    );
-    const finalPath = dbPath || defaultPath;
-
-    // Ensure directory exists
-    const dir = path.dirname(finalPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    constructor(dbPath: string = './optimization.db') {
+        this.dbPath = dbPath;
+        this.compressionEngine = new CompressionEngine();
     }
 
-    this.db = new Database(finalPath);
-    this.initializeDatabase();
-  }
+    public async initializeDatabase(): Promise<void> {
+        this.db = await open({
+            filename: this.dbPath,
+            driver: sqlite3.Database
+        });
 
-  /**
-   * Initialize database schema
-   */
-  private initializeDatabase(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS optimization_results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        original_text_hash TEXT NOT NULL UNIQUE,
-        optimized_text BLOB NOT NULL,
-        compression_algorithm TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_original_text_hash ON optimization_results(original_text_hash);
-    `);
-  }
-
-  /**
-   * Save a single optimization result
-   */
-  async save(entry: OptimizationResult): Promise<void> {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO optimization_results (
-        original_text_hash, optimized_text, compression_algorithm
-      ) VALUES (?, ?, ?)
-    `);
-
-    const compressedOptimizedText = await gzip(entry.optimizedText);
-
-    stmt.run(
-      entry.originalTextHash,
-      compressedOptimizedText,
-      'gzip'
-    );
-  }
-
-  /**
-   * Get an optimization result by hash
-   */
-  async get(originalTextHash: string): Promise<OptimizationResult | null> {
-    const stmt = this.db.prepare('SELECT * FROM optimization_results WHERE original_text_hash = ?');
-    const row = stmt.get(originalTextHash) as any;
-
-    if (!row) {
-      return null;
+        await this.db.exec(`
+            CREATE TABLE IF NOT EXISTS optimization_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                original_text_hash TEXT NOT NULL UNIQUE,
+                optimized_text_compressed BLOB NOT NULL,
+                compression_algorithm TEXT NOT NULL,
+                original_tokens INTEGER NOT NULL,
+                optimized_tokens INTEGER NOT NULL,
+                tokens_saved INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
     }
 
-    const decompressedOptimizedText = gunzipSync(row.optimized_text);
+    public async save(entry: OptimizationResult): Promise<void> {
+        const compressedOptimizedText = this.compressionEngine.compress(entry.optimizedText);
 
-    return {
-      originalTextHash: row.original_text_hash,
-      optimizedText: decompressedOptimizedText,
-      compressionAlgorithm: row.compression_algorithm,
-    };
-  }
+        await this.db.run(
+            `INSERT INTO optimization_results (original_text_hash, optimized_text_compressed, compression_algorithm, original_tokens, optimized_tokens, tokens_saved)
+             VALUES (?, ?, ?, ?, ?, ?)`, 
+            [entry.originalTextHash, compressedOptimizedText.compressed, 'brotli', entry.originalTokens, entry.optimizedTokens, entry.tokensSaved]
+        );
+    }
 
-  /**
-   * Close the database connection
-   */
-  async close(): Promise<void> {
-    this.db.close();
-  }
+    public async get(originalTextHash: string): Promise<OptimizationResult | null> {
+        const row = await this.db.get(
+            'SELECT optimized_text_compressed, original_tokens, optimized_tokens, tokens_saved FROM optimization_results WHERE original_text_hash = ?',
+            originalTextHash
+        );
+
+        if (!row) {
+            return null;
+        }
+
+        const optimizedText = this.compressionEngine.decompress(row.optimized_text_compressed);
+
+        return {
+            originalTextHash,
+            optimizedText,
+            originalTokens: row.original_tokens,
+            optimizedTokens: row.optimized_tokens,
+            tokensSaved: row.tokens_saved
+        };
+    }
+
+    public async close(): Promise<void> {
+        if (this.db) {
+            await this.db.close();
+        }
+    }
 }

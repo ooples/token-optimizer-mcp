@@ -126,11 +126,10 @@ import {
   getMcpServerAnalyticsTool,
   GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
 } from '../tools/analytics/get-mcp-server-analytics.js';
-import {
-  getExportAnalyticsTool,
-  EXPORT_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/export-analytics.js';
+import { getExportAnalyticsTool, EXPORT_ANALYTICS_TOOL_DEFINITION, } from '../tools/analytics/export-analytics.js';
+import { OptimizationStorageTool } from '../tools/optimization-storage-tool.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
+
 
 // API & Database tools
 import {
@@ -369,6 +368,43 @@ const getHookAnalytics = getHookAnalyticsTool(analyticsManager);
 const getActionAnalytics = getActionAnalyticsTool(analyticsManager);
 const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
 const exportAnalytics = getExportAnalyticsTool(analyticsManager);
+const optimizationStorage = new OptimizationStorageTool();
+
+const OPTIMIZATION_STORAGE_TOOL_DEFINITION = {
+    name: optimizationStorage.name,
+    description: optimizationStorage.description,
+    inputSchema: {
+        type: 'object',
+        properties: {
+            operation: {
+                type: 'string',
+                enum: ['store', 'retrieve'],
+                description: 'The operation to perform.',
+            },
+            originalTextHash: {
+                type: 'string',
+                description: 'The SHA256 hash of the original text.',
+            },
+            optimizedText: {
+                type: 'string',
+                description: 'The base64 encoded optimized text (for store operation).',
+            },
+            originalTokens: {
+                type: 'number',
+                description: 'The number of tokens in the original text (for store operation).',
+            },
+            optimizedTokens: {
+                type: 'number',
+                description: 'The number of tokens in the optimized text (for store operation).',
+            },
+            tokensSaved: {
+                type: 'number',
+                description: 'The number of tokens saved (for store operation).',
+            },
+        },
+        required: ['operation', 'originalTextHash'],
+    },
+};
 
 // Create MCP server
 const server = new Server(
@@ -655,6 +691,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       GET_ACTION_ANALYTICS_TOOL_DEFINITION,
       GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
       EXPORT_ANALYTICS_TOOL_DEFINITION,
+      OPTIMIZATION_STORAGE_TOOL_DEFINITION,
     ],
   };
 });
@@ -1983,7 +2020,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
-        const result = await runSmartGrep(pattern, options);
+        const result = await smartGrep.run(pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'optimization_storage': {
+        const result = await optimizationStorage.invoke({} as TurnContext, { tool_name: name, tool_input: args });
         return {
           content: [
             {

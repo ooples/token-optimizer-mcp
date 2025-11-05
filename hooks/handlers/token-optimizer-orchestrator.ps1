@@ -1932,16 +1932,52 @@ function Handle-OptimizeToolOutput {
             Write-Log "Tool-specific optimization failed: $($_.Exception.Message)" "WARN"
         }
 
+        # Calculate SHA256 hash of the output text for caching
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($outputText))
+        $originalTextHash = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLower()
+
+        # Attempt to retrieve from optimization storage
+        try {
+            $retrieveArgs = @{
+                operation = "retrieve"
+                originalTextHash = $originalTextHash
+            }
+            $retrieveJson = $retrieveArgs | ConvertTo-Json -Compress
+            $retrieveResultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimization_storage" -ArgumentsJson $retrieveJson
+            $retrieveResult = if ($retrieveResultJson) { $retrieveResultJson | ConvertFrom-Json } else { $null }
+
+            if ($retrieveResult -and $retrieveResult.success) {
+                Write-Log "Cache HIT for optimization result. Hash: $originalTextHash" "INFO"
+                $optimizedTextBytes = [System.Convert]::FromBase64String($retrieveResult.optimizedText)
+                $optimizedText = [System.Text.Encoding]::UTF8.GetString($optimizedTextBytes)
+                $afterTokens = $retrieveResult.optimizedTokens
+                $saved = $retrieveResult.tokensSaved
+                $percent = if ($beforeTokens -gt 0) { [math]::Round(($saved / $beforeTokens) * 100, 1) } else { 0 }
+
+                if ($script:CurrentSession) {
+                    $script:CurrentSession.cacheHits++
+                    if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                        Write-Log "Session stats updated and persisted after cache hit." "DEBUG"
+                    } else {
+                        Write-Log "Failed to persist session stats after cache hit." "ERROR"
+                    }
+                }
+
+                Write-Log "Using cached optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
+                Update-SessionOperation -TokensDelta $afterTokens
+                return
+            } else {
+                Write-Log "Cache MISS for optimization result. Hash: $originalTextHash" "DEBUG"
+            }
+        } catch {
+            Handle-Error -Exception $_.Exception -Message "Failed to retrieve from optimization storage"
+        }
+
         # Optimize using optimize_text (PHASE 4: Reduced quality for performance)
         try {
-            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
-            $hasher = [System.Security.Cryptography.SHA256]::Create()
-            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($outputText))
-            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
-
             $optimizeArgs = @{
                 text = $outputText
-                key = "tool_output_${toolName}_$contentHash"
                 quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
@@ -1956,34 +1992,43 @@ function Handle-OptimizeToolOutput {
                 $saved = $beforeTokens - $afterTokens
                 $percent = if ($beforeTokens -gt 0) { [math]::Round(($saved / $beforeTokens) * 100, 1) } else { 0 }
 
-                # PHASE 1 FIX: Rollback logic - only use optimization if it actually helps
                 if ($afterTokens -ge $beforeTokens) {
                     Write-Log "Optimization made things worse or had no effect ($beforeTokens → $afterTokens tokens), REVERTING to original" "WARN"
-
-                    # PHASE 4 FIX: Track failure and persist immediately
                     if ($script:CurrentSession) {
                         $script:CurrentSession.optimizationFailures++
-                        # CRITICAL: Persist immediately to disk for multi-process visibility
                         if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
                             Write-Log "Session stats updated and persisted after optimization failure." "DEBUG"
                         } else {
                             Write-Log "Failed to persist session stats after optimization failure." "ERROR"
                         }
                     }
-
-                    # Don't update session with optimized tokens, skip this optimization
                     return
                 }
 
                 Write-Log "Optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
 
-                # PHASE 4 FIX: Track success and detailed stats, persist immediately
+                # Store the new optimization result
+                try {
+                    $storeArgs = @{
+                        operation = "store"
+                        originalTextHash = $originalTextHash
+                        optimizedText = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($optimizedText))
+                        originalTokens = $beforeTokens
+                        optimizedTokens = $afterTokens
+                        tokensSaved = $saved
+                    }
+                    $storeJson = $storeArgs | ConvertTo-Json -Compress
+                    & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimization_storage" -ArgumentsJson $storeJson
+                    Write-Log "Stored new optimization result. Hash: $originalTextHash" "DEBUG"
+                } catch {
+                    Handle-Error -Exception $_.Exception -Message "Failed to store optimization result"
+                }
+
                 if ($script:CurrentSession) {
                     $script:CurrentSession.optimizationSuccesses++
                     $script:CurrentSession.totalOriginalTokens += $beforeTokens
                     $script:CurrentSession.totalOptimizedTokens += $afterTokens
                     $script:CurrentSession.totalTokensSaved += $saved
-                    # CRITICAL: Persist immediately to disk for multi-process visibility
                     if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
                         Write-Log "Session stats updated and persisted after optimization success." "DEBUG"
                     } else {
@@ -1991,7 +2036,6 @@ function Handle-OptimizeToolOutput {
                     }
                 }
 
-                # Update session tokens (only if optimization helped)
                 Update-SessionOperation -TokensDelta $afterTokens
             }
         } catch {
