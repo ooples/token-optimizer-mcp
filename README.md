@@ -2,6 +2,10 @@
 
 > Intelligent token optimization through caching, compression, and smart tooling for Claude Code and Claude Desktop
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/ooples-token-optimizer-mcp).
+
 ## Overview
 
 Token Optimizer MCP is a Model Context Protocol (MCP) server that reduces context window usage by 60-90% through intelligent caching, compression, and smart tool replacements. By storing compressed content externally in SQLite and providing optimized alternatives to standard tools, the server helps you maximize your available context window.
