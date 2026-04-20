@@ -44,17 +44,7 @@ export class CompressionEngine {
         if (!buffer || buffer.length === 0) {
             return '';
         }
-        // Brotli streams always begin with a framing byte whose high nibble
-        // encodes WBITS (0x0 / 0x8 / 0xC / …). That doesn't uniquely
-        // identify a Brotli payload, so we optimistically try to
-        // decompress and fall back to treating the buffer as raw UTF-8
-        // when the decoder rejects it. This preserves backward
-        // compatibility with any legacy plaintext row still in storage.
-        try {
-            return brotliDecompressSync(buffer).toString('utf8');
-        } catch {
-            return buffer.toString('utf8');
-        }
+        return brotliDecompressSync(buffer).toString('utf8');
     }
 
     public compressToBase64(text: string, options?: { quality?: number; mode?: string; }): Omit<CompressionResult, 'compressed'> & { compressed: string } {

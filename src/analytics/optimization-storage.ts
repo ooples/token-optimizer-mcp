@@ -113,18 +113,26 @@ export class SqliteOptimizationStorage {
      * touching the read path, and surfaces an explicit error for
      * unknown labels instead of silently corrupting data.
      */
-    private decodePayload(buffer: Buffer, algorithm: string): string {
-        switch (algorithm) {
-            case 'brotli':
-                return this.compressionEngine.decompress(buffer);
-            case 'none':
-            case '':
-                return buffer.toString('utf8');
-            default:
-                throw new Error(
-                    `Unknown compression_algorithm in optimization_results: ${algorithm}`
-                );
+    private decodePayload(buffer: Buffer, algorithm: string | null): string {
+        if (algorithm === 'brotli') {
+            return this.compressionEngine.decompress(buffer);
         }
+        if (algorithm === 'none' || algorithm === '') {
+            return buffer.toString('utf8');
+        }
+        if (algorithm === null || algorithm === undefined) {
+            // Legacy rows without a recorded algorithm: pre-tracking code
+            // always wrote brotli, but we still accept raw UTF-8 as a last
+            // resort so a one-off plaintext row doesn't poison reads.
+            try {
+                return this.compressionEngine.decompress(buffer);
+            } catch {
+                return buffer.toString('utf8');
+            }
+        }
+        throw new Error(
+            `Unknown compression_algorithm in optimization_results: ${algorithm}`
+        );
     }
 
     /** Algorithm label paired with the current CompressionEngine. */
