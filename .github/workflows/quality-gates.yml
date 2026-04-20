@@ -129,7 +129,12 @@ jobs:
       - name: Run npm audit
         id: audit
         run: |
-          npm audit --json > audit-results.json || true
+          # Audit production deps only — dev deps like @semantic-release/npm
+          # bundle their own node_modules (vulnerable transitively but never
+          # shipped to end users), which would otherwise fail CI on
+          # unfixable issues. The "Dependency Vulnerability Scan" step below
+          # still covers the full tree.
+          npm audit --omit=dev --json > audit-results.json || true
 
           # Check for high/critical vulnerabilities using Python for reliable JSON parsing
           HIGH_VULNS=$(python3 -c "import json; data = json.load(open('audit-results.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('high', 0))")
@@ -146,13 +151,15 @@ jobs:
 
           if [ "$CRITICAL_VULNS" -gt 0 ] 2>/dev/null; then
             echo "Error: Found $CRITICAL_VULNS critical vulnerabilities"
-            npm audit
+            npm audit --omit=dev || true
             exit 1
           fi
 
           if [ "$HIGH_VULNS" -gt 0 ] 2>/dev/null; then
             echo "Warning: Found $HIGH_VULNS high vulnerabilities"
-            npm audit
+            # npm audit exits non-zero when vulns exist — don't let that
+            # turn a "warning" into a failed step.
+            npm audit --omit=dev || true
           fi
 
       - name: Upload audit results
