@@ -127,7 +127,16 @@ import {
   GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
 } from '../tools/analytics/get-mcp-server-analytics.js';
 import { getExportAnalyticsTool, EXPORT_ANALYTICS_TOOL_DEFINITION, } from '../tools/analytics/export-analytics.js';
-import { OptimizationStorageTool } from '../tools/optimization-storage-tool.js';
+import {
+  OptimizationStorageTool,
+  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+} from '../tools/optimization-storage-tool.js';
+import {
+  ContextDeltaTool,
+  CONTEXT_DELTA_TOOL_DEFINITION,
+} from '../tools/context-delta-tool.js';
+import { SessionManager } from '../core/session-manager.js';
+import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 
 
@@ -370,41 +379,11 @@ const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
 const exportAnalytics = getExportAnalyticsTool(analyticsManager);
 const optimizationStorage = new OptimizationStorageTool();
 
-const OPTIMIZATION_STORAGE_TOOL_DEFINITION = {
-    name: optimizationStorage.name,
-    description: optimizationStorage.description,
-    inputSchema: {
-        type: 'object',
-        properties: {
-            operation: {
-                type: 'string',
-                enum: ['store', 'retrieve'],
-                description: 'The operation to perform.',
-            },
-            originalTextHash: {
-                type: 'string',
-                description: 'The SHA256 hash of the original text.',
-            },
-            optimizedText: {
-                type: 'string',
-                description: 'The base64 encoded optimized text (for store operation).',
-            },
-            originalTokens: {
-                type: 'number',
-                description: 'The number of tokens in the original text (for store operation).',
-            },
-            optimizedTokens: {
-                type: 'number',
-                description: 'The number of tokens in the optimized text (for store operation).',
-            },
-            tokensSaved: {
-                type: 'number',
-                description: 'The number of tokens saved (for store operation).',
-            },
-        },
-        required: ['operation', 'originalTextHash'],
-    },
-};
+const sessionManager = new SessionManager({
+  persistencePath: path.join(os.homedir(), '.token-optimizer', 'sessions.json'),
+  tokenizer: TokenizerFactory.createFromEnv(),
+});
+const contextDelta = new ContextDeltaTool(sessionManager);
 
 // Create MCP server
 const server = new Server(
@@ -692,6 +671,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
       EXPORT_ANALYTICS_TOOL_DEFINITION,
       OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+      CONTEXT_DELTA_TOOL_DEFINITION,
     ],
   };
 });
@@ -2033,6 +2013,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'optimization_storage': {
         const result = optimizationStorage.run(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'context_delta': {
+        const result = contextDelta.run(args as any);
         return {
           content: [
             {

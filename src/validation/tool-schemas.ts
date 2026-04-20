@@ -413,6 +413,24 @@ export const ExportAnalyticsSchema = z.object({
     .describe('Optional filter by MCP server name'),
 });
 
+// 72. optimization_storage
+export const OptimizationStorageSchema = z.object({
+  operation: z.enum(['store', 'retrieve']),
+  originalTextHash: z.string().optional(),
+  optimizedText: z.string().optional(),
+  originalTokens: z.number().optional(),
+  optimizedTokens: z.number().optional(),
+  tokensSaved: z.number().optional(),
+});
+
+// 73. context_delta
+export const ContextDeltaSchema = z.object({
+  operation: z.enum(['compute-delta', 'seed', 'clear']),
+  sessionId: z.string(),
+  filePath: z.string(),
+  currentContent: z.string().optional(),
+});
+
 // Map tool names to their schemas for easy lookup
 export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   optimize_text: OptimizeTextSchema,
@@ -486,4 +504,6 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   get_action_analytics: GetActionAnalyticsSchema,
   get_mcp_server_analytics: GetMcpServerAnalyticsSchema,
   export_analytics: ExportAnalyticsSchema,
+  optimization_storage: OptimizationStorageSchema,
+  context_delta: ContextDeltaSchema,
 };
