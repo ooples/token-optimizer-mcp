@@ -138,6 +138,7 @@ import {
 import { SessionManager } from '../core/session-manager.js';
 import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
 import { ConfigManager } from '../core/config.js';
+import { lruMemoize, memoRegistry } from '../utils/lru-memoize.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 
 
@@ -399,6 +400,41 @@ const sessionManager = new SessionManager({
   defaultMaxTokens: chatDefaultMaxTokens,
 });
 const contextDelta = new ContextDeltaTool(sessionManager);
+
+// #125: memoize the expensive read-only file-operation tools with an
+// LRU bounded by the user's cacheSettings. The memoRegistry hook lets
+// the cleanup handler below prune them all at once.
+const cacheSettings = optimizationConfig.cacheSettings;
+const memoizedSmartRead = lruMemoize(runSmartRead, {
+  name: 'smart_read',
+  maxSize: cacheSettings.maxSize,
+  ttlMs: cacheSettings.ttlSeconds * 1000,
+});
+const memoizedSmartGrep = lruMemoize(runSmartGrep, {
+  name: 'smart_grep',
+  maxSize: cacheSettings.maxSize,
+  ttlMs: cacheSettings.ttlSeconds * 1000,
+});
+const memoizedSmartGlob = lruMemoize(runSmartGlob, {
+  name: 'smart_glob',
+  maxSize: cacheSettings.maxSize,
+  ttlMs: cacheSettings.ttlSeconds * 1000,
+});
+
+// Periodic prune + stats log. Runs every 5 minutes; unref so it doesn't
+// keep the process alive on its own.
+const MEMO_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
+const memoPruneTimer = setInterval(() => {
+  const removed = memoRegistry.pruneAll();
+  if (removed > 0) {
+    console.error(
+      `[memo] pruned ${removed} expired cache entries; stats: ${JSON.stringify(memoRegistry.stats())}`
+    );
+  }
+}, MEMO_PRUNE_INTERVAL_MS);
+if (typeof memoPruneTimer.unref === 'function') {
+  memoPruneTimer.unref();
+}
 
 // Create MCP server
 const server = new Server(
@@ -1979,7 +2015,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_read': {
         const { path, ...options } = args as any;
-        const result = await runSmartRead(path, options);
+        const result = await memoizedSmartRead(path, options);
         return {
           content: [
             {
@@ -2018,7 +2054,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_glob': {
         const { pattern, ...options } = args as any;
-        const result = await runSmartGlob(pattern, options);
+        const result = await memoizedSmartGlob(pattern, options);
         return {
           content: [
             {
@@ -2031,7 +2067,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
-        const result = await runSmartGrep(pattern, options);
+        const result = await memoizedSmartGrep(pattern, options);
         return {
           content: [
             {
@@ -2306,6 +2342,13 @@ async function cleanup() {
     { fn: async () => await sessionManager.flush(), name: 'flushing sessions' },
     { fn: () => TokenizerFactory.disposeAll(), name: 'disposing tokenizers' },
     { fn: () => optimizationStorage.close(), name: 'closing optimization storage' },
+    {
+      fn: () => {
+        clearInterval(memoPruneTimer);
+        memoRegistry.clearAll();
+      },
+      name: 'clearing memo caches',
+    },
     // Note: predictiveCache and cacheWarmup do not implement dispose() methods
     // Removed dispose() calls to prevent runtime errors during cleanup
   ]);

@@ -1,0 +1,69 @@
+import { describe, it, expect } from '@jest/globals';
+import { lruMemoize, memoRegistry } from '../../src/utils/lru-memoize.js';
+
+describe('lruMemoize', () => {
+  it('returns cached value for identical args', async () => {
+    let calls = 0;
+    const fn = async (x: number) => {
+      calls++;
+      return x * 2;
+    };
+    const memo = lruMemoize(fn, { name: 'test-double', maxSize: 10 });
+    expect(await memo(3)).toBe(6);
+    expect(await memo(3)).toBe(6);
+    expect(calls).toBe(1);
+  });
+
+  it('differentiates calls by args', async () => {
+    let calls = 0;
+    const fn = async (x: number) => {
+      calls++;
+      return x * 2;
+    };
+    const memo = lruMemoize(fn, { name: 'test-by-args', maxSize: 10 });
+    await memo(1);
+    await memo(2);
+    await memo(1);
+    expect(calls).toBe(2);
+  });
+
+  it('expires entries past the TTL', async () => {
+    let calls = 0;
+    const fn = async (x: number) => {
+      calls++;
+      return x;
+    };
+    const memo = lruMemoize(fn, { name: 'test-ttl', maxSize: 10, ttlMs: 20 });
+    await memo(7);
+    await memo(7);
+    expect(calls).toBe(1);
+    await new Promise((r) => setTimeout(r, 30));
+    await memo(7);
+    expect(calls).toBe(2);
+  });
+
+  it('registers with memoRegistry for bulk prune / stats', async () => {
+    const fn = async (x: string) => x.toUpperCase();
+    lruMemoize(fn, { name: 'test-registered', maxSize: 5 });
+    const stats = memoRegistry.stats();
+    expect(stats['test-registered']).toBeDefined();
+    expect(stats['test-registered'].size).toBe(0);
+  });
+
+  it('accepts a custom key function', async () => {
+    let calls = 0;
+    const fn = async (obj: { id: string; ignore: number }) => {
+      calls++;
+      return obj.id;
+    };
+    const memo = lruMemoize(fn, {
+      name: 'test-custom-key',
+      maxSize: 5,
+      keyFn: ([{ id }]) => id,
+    });
+    await memo({ id: 'a', ignore: 1 });
+    await memo({ id: 'a', ignore: 9999 }); // same id → hit
+    await memo({ id: 'b', ignore: 1 }); // different id → miss
+    expect(calls).toBe(2);
+  });
+});
