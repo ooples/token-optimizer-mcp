@@ -23,6 +23,13 @@ export const GetCachedSchema = z.object({
 // 3. count_tokens
 export const CountTokensSchema = z.object({
   text: z.string().describe('Text to count tokens for'),
+  modelName: z
+    .string()
+    .optional()
+    .describe(
+      'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). ' +
+        'Defaults to the server-configured model when omitted.'
+    ),
 });
 
 // 4. compress_text

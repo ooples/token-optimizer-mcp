@@ -445,13 +445,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'count_tokens',
         description:
-          'Count tokens in text using tiktoken. Useful for understanding token usage before and after optimization.',
+          'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
         inputSchema: {
           type: 'object',
           properties: {
             text: {
               type: 'string',
               description: 'Text to count tokens for',
+            },
+            modelName: {
+              type: 'string',
+              description:
+                'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
             },
           },
           required: ['text'],
@@ -864,14 +869,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'count_tokens': {
-        const { text } = args as { text: string };
-        const result = tokenCounter.count(text);
+        const { text, modelName } = args as {
+          text: string;
+          modelName?: string;
+        };
+        const counter = modelName ? new TokenCounter(modelName) : tokenCounter;
+        const result = modelName
+          ? await counter.countAsync(text)
+          : counter.count(text);
+        if (modelName) {
+          // Model-specific counters are one-shot — free the local
+          // tiktoken encoder (if any) that this call allocated.
+          counter.free();
+        }
 
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result, null, 2),
+              text: JSON.stringify({ ...result, model: modelName ?? counter.model }, null, 2),
             },
           ],
         };
