@@ -48,6 +48,40 @@ export interface HypercontextConfig {
     streamingThreshold: number;
     enableStreaming: boolean;
   };
+  optimization?: OptimizationConfig;
+}
+
+/**
+ * Configuration-driven compression thresholds — addresses issue #120.
+ * Mirrors the fields exposed by Gemini CLI's settingsSchema.ts.
+ */
+export interface OptimizationConfig {
+  /** Fraction of model context at which compression kicks in (0-1). */
+  compressionTokenThreshold: number;
+  /** Fraction of chat history to keep uncompressed at the tail (0-1). */
+  compressionPreserveThreshold: number;
+  /** Minimum token count before an optimizer considers compressing. */
+  minTokensBeforeCompression: number;
+  /** Per-model total context window size, in tokens. */
+  modelTokenLimits: Record<string, number>;
+  /** Minimum output bytes before optimization emits a stored entry. */
+  minOutputSizeBytes: number;
+  /** Compression quality preset. */
+  quality: 'fast' | 'balanced' | 'max';
+  /** In-memory cache knobs — mirrors Gemini CLI's `cacheSettings`. */
+  cacheSettings: {
+    /** Max entries per LRU cache shard. */
+    maxSize: number;
+    /** Default TTL for cached entries, in seconds. */
+    ttlSeconds: number;
+  };
+  /** Chat-history compression knobs — #121. */
+  chatCompression: {
+    enabled: boolean;
+    /** Hard token limit per session (falls back to modelTokenLimit × compressionTokenThreshold). */
+    tokenLimit?: number;
+    strategy: 'summarize' | 'truncate';
+  };
 }
 
 export interface TokenMetrics {

@@ -10,9 +10,20 @@ param(
     [string]$InputJsonFile = ""
 )
 
+# Dot-source helpers BEFORE any logging — Write-Log must exist before
+# the first use below.
+$HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
+$INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
+$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-orchestrator.log"
+$SESSION_FILE = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
+. "$PSScriptRoot\..\helpers\logging.ps1"
+. "$PSScriptRoot\..\helpers\config.ps1"
+. "$PSScriptRoot\..\helpers\gzip.ps1"
+. "$PSScriptRoot\..\helpers\context-delta.ps1"
+
 # DIAGNOSTIC: Log script version/load time to verify latest version is being used
 $SCRIPT_VERSION = Get-Date -Format 'yyyyMMdd.HHmmss'
-Write-Host "DEBUG: token-optimizer-orchestrator.ps1 version $SCRIPT_VERSION loaded. Phase=$Phase, Action=$Action" -ForegroundColor Cyan
+Write-Log "token-optimizer-orchestrator.ps1 version $SCRIPT_VERSION loaded. Phase=$Phase, Action=$Action" "DEBUG"
 
 # Read JSON from temp file if provided
 # DO NOT delete temp file - dispatcher will clean it up after all handlers run
@@ -21,14 +32,9 @@ if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
     try {
         $InputJson = Get-Content -Path $InputJsonFile -Raw -Encoding UTF8
     } catch {
-        Write-Host "ERROR: Failed to read InputJsonFile: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Log "Failed to read InputJsonFile: $($_.Exception.Message)" "ERROR"
     }
 }
-
-$HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
-$INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
-$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-orchestrator.log"
-$SESSION_FILE = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
 $OPERATIONS_DIR = "C:\Users\cheat\.claude-global\hooks\data"
 
 # PERFORMANCE FIX: Prefer local dev path if not already set
@@ -345,7 +351,7 @@ if (-not ('TokenCounter' -as [type])) {
 if (-not $script:TokenCounter) {
     $apiKey = $env:GOOGLE_AI_API_KEY
     if (-not $apiKey) {
-        Write-Host "WARN: GOOGLE_AI_API_KEY not set, falling back to estimation only" -ForegroundColor Yellow
+        Write-Log "GOOGLE_AI_API_KEY not set, falling back to estimation only" "WARN"
     }
     $modelName = if ($env:GOOGLE_AI_MODEL) { $env:GOOGLE_AI_MODEL } else { "gemini-2.0-flash-exp" }
     $script:TokenCounter = [TokenCounter]::new($apiKey, $modelName)
@@ -420,7 +426,7 @@ function Read-SessionFile {
             Write-Log "Failed to acquire read lock on session file '$FilePath', retrying... ($($_.Exception.Message))" "WARN"
             Start-Sleep -Milliseconds $retryDelayMs
         } catch {
-            Write-Log "Failed to read session file '$FilePath': $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to read session file '$FilePath'"
             return $null
         }
     }
@@ -452,7 +458,7 @@ function Write-SessionFile {
             Write-Log "Failed to acquire write lock on session file '$FilePath', retrying... ($($_.Exception.Message))" "WARN"
             Start-Sleep -Milliseconds $retryDelayMs
         } catch {
-            Write-Log "Failed to write session file '$FilePath': $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to write session file '$FilePath'"
             return $false
         } finally {
             # Ensure writer and fileStream are disposed even if errors occur
@@ -498,7 +504,7 @@ function Flush-OperationLogs {
             Write-Log "Flushed $($script:OperationLogBuffer.Count) operation logs" "DEBUG"
             $script:OperationLogBuffer = @()
         } catch {
-            Write-Log "Failed to flush operation logs: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to flush operation logs"
         }
     }
 }
@@ -523,33 +529,7 @@ function Start-LogFlushTimer {
     }
 }
 
-function Write-Log {
-    param(
-        [string]$Message,
-        [ValidateSet('DEBUG','INFO','WARN','ERROR')][string]$Level = "INFO",
-        [string]$Context = ""
-    )
 
-    # Check if debug logging is disabled
-    $debugLogging = if ($env:TOKEN_OPTIMIZER_DEBUG_LOGGING) {
-        $env:TOKEN_OPTIMIZER_DEBUG_LOGGING -eq 'true'
-    } else {
-        $true  # Default: enabled
-    }
-
-    if ($Level -eq 'DEBUG' -and -not $debugLogging) {
-        return
-    }
-
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $contextPart = if ($Context) { " [$Context]" } else { "" }
-    $logEntry = "[$timestamp] [$Level]$contextPart $Message"
-    try {
-        $logEntry | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8 -ErrorAction SilentlyContinue
-    } catch {
-        # Silently fail
-    }
-}
 
 # Removed - now using direct invoke-mcp.ps1 calls
 
@@ -559,7 +539,7 @@ function Get-SessionInfo {
             $session = Read-SessionFile -FilePath $SESSION_FILE
             return $session
         } catch {
-            Write-Log "Failed to read session file: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Failed to read session file"
         }
     }
     return $null
@@ -716,7 +696,7 @@ function Handle-LogOperation {
         Write-Log "Logged operation: $toolName ($tokens tokens)" "DEBUG"
 
     } catch {
-        Write-Log "Operation logging failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Operation logging failed"
     }
 }
 
@@ -746,7 +726,7 @@ function Handle-OptimizeSession {
         }
 
     } catch {
-        Write-Log "Session optimization failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Session optimization failed"
     }
 }
 
@@ -822,7 +802,7 @@ function Handle-ContextGuard {
         return 0  # Success - allow operation to proceed
 
     } catch {
-        Write-Log "Context guard failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Context guard failed"
         return 0  # On error, don't block
     }
 }
@@ -852,7 +832,7 @@ function Handle-PeriodicOptimize {
         }
 
     } catch {
-        Write-Log "Periodic optimize failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Periodic optimize failed"
     }
 }
 
@@ -877,7 +857,7 @@ function Handle-CacheWarmup {
         }
 
     } catch {
-        Write-Log "Cache warmup failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Cache warmup failed"
     }
 }
 
@@ -917,7 +897,7 @@ function Handle-SessionReport {
         }
 
     } catch {
-        Write-Log "Session report failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "Session report failed"
     }
 }
 
@@ -999,11 +979,11 @@ function Handle-UserPromptOptimization {
                 Write-Log "Optimized user prompt: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
             }
         } catch {
-            Write-Log "Prompt optimization failed: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Prompt optimization failed"
         }
 
     } catch {
-        Write-Log "UserPromptOptimization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "UserPromptOptimization handler failed"
     }
 }
 
@@ -1055,7 +1035,7 @@ function Handle-SessionStartInit {
         }
 
     } catch {
-        Write-Log "SessionStartInit handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SessionStartInit handler failed"
     }
 }
 
@@ -1100,7 +1080,7 @@ function Handle-SmartDiff {
         return $null
 
     } catch {
-        Write-Log "SmartDiff handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SmartDiff handler failed"
         return $null
     }
 }
@@ -1140,7 +1120,7 @@ function Handle-SmartLogs {
         return $null
 
     } catch {
-        Write-Log "SmartLogs handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SmartLogs handler failed"
         return $null
     }
 }
@@ -1195,7 +1175,7 @@ function Handle-ToolSpecificOptimization {
         return $ToolOutput
 
     } catch {
-        Write-Log "ToolSpecificOptimization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "ToolSpecificOptimization handler failed"
         return $ToolOutput
     }
 }
@@ -1233,7 +1213,7 @@ function Handle-MetricCollector {
         return $null
 
     } catch {
-        Write-Log "MetricCollector handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "MetricCollector handler failed"
         return $null
     }
 }
@@ -1273,7 +1253,7 @@ function Handle-AlertManager {
         return $null
 
     } catch {
-        Write-Log "AlertManager handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "AlertManager handler failed"
         return $null
     }
 }
@@ -1305,7 +1285,7 @@ function Handle-HealthMonitor {
         return $null
 
     } catch {
-        Write-Log "HealthMonitor handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "HealthMonitor handler failed"
         return $null
     }
 }
@@ -1343,7 +1323,7 @@ function Handle-MonitoringIntegration {
         return $null
 
     } catch {
-        Write-Log "MonitoringIntegration handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "MonitoringIntegration handler failed"
         return $null
     }
 }
@@ -1379,7 +1359,7 @@ function Handle-AnalyzeOptimization {
         return $null
 
     } catch {
-        Write-Log "AnalyzeOptimization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "AnalyzeOptimization handler failed"
         return $null
     }
 }
@@ -1408,7 +1388,7 @@ function Handle-CacheAnalytics {
         return $null
 
     } catch {
-        Write-Log "CacheAnalytics handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheAnalytics handler failed"
         return $null
     }
 }
@@ -1438,7 +1418,7 @@ function Handle-CacheOptimizer {
         return $null
 
     } catch {
-        Write-Log "CacheOptimizer handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheOptimizer handler failed"
         return $null
     }
 }
@@ -1478,7 +1458,7 @@ function Handle-CacheCompression {
         return $Data
 
     } catch {
-        Write-Log "CacheCompression handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheCompression handler failed"
         return $Data
     }
 }
@@ -1505,7 +1485,7 @@ function Handle-CacheInvalidation {
         Write-Log "Cache invalidation completed for pattern: $Pattern" "DEBUG"
 
     } catch {
-        Write-Log "CacheInvalidation handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "CacheInvalidation handler failed"
     }
 }
 
@@ -1545,7 +1525,7 @@ function Handle-SmartCache {
         return $null
 
     } catch {
-        Write-Log "SmartCache handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "SmartCache handler failed"
         return $null
     }
 }
@@ -1593,7 +1573,7 @@ function Handle-IntelligentSummarization {
         return $Text
 
     } catch {
-        Write-Log "IntelligentSummarization handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "IntelligentSummarization handler failed"
         return $Text
     }
 }
@@ -1639,7 +1619,7 @@ function Handle-PatternRecognition {
         return $null
 
     } catch {
-        Write-Log "PatternRecognition handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "PatternRecognition handler failed"
         return $null
     }
 }
@@ -1682,7 +1662,7 @@ function Handle-PredictiveAnalytics {
         return $Context
 
     } catch {
-        Write-Log "PredictiveAnalytics handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "PredictiveAnalytics handler failed"
         return $Context
     }
 }
@@ -1716,7 +1696,7 @@ function Handle-IntelligentAssistant {
         return $null
 
     } catch {
-        Write-Log "IntelligentAssistant handler failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "IntelligentAssistant handler failed"
         return $null
     }
 }
@@ -1861,7 +1841,7 @@ function Handle-PreToolUseOptimization {
         }
 
     } catch {
-        Write-Log "PreToolUse optimization failed: $($_.Exception.Message)" "ERROR"
+        Handle-Error -Exception $_.Exception -Message "PreToolUse optimization failed"
         return 1
     }
     return 0
@@ -1877,43 +1857,43 @@ function Handle-OptimizeToolOutput {
     $ErrorActionPreference = 'Stop'
 
     try {
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Entered function."
+        Write-Log "[Handle-OptimizeToolOutput] Entered function." "DEBUG"
 
         if (-not $InputJson) {
             Write-Log "No input received for tool output optimization" "WARN"
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] No input received, returning."
+            Write-Log "[Handle-OptimizeToolOutput] No input received, returning." "DEBUG"
             return
         }
 
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Parsing InputJson..."
+        Write-Log "[Handle-OptimizeToolOutput] Parsing InputJson..." "DEBUG"
         $data = $InputJson | ConvertFrom-Json
         $toolName = $data.tool_name
         $toolOutput = $data.tool_response  # FIXED: Claude Code uses tool_response not tool_result
 
         $outputType = if ($toolOutput) { $toolOutput.GetType().Name } else { "null" }
         Write-Log "DEBUG: tool_name=$toolName, tool_response_type=$outputType, has_content=$(-not -not $toolOutput)" "DEBUG"
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 1 - After line 1564 log. toolName=$toolName, outputType=$outputType"
+        Write-Log "[Handle-OptimizeToolOutput] Checkpoint 1 - After line 1564 log. toolName=$toolName, outputType=$outputType" "DEBUG"
 
         # Skip if no output or if output is already optimized
         Write-Log "DEBUG: Checking if toolOutput is null or empty" "DEBUG"
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 2 - Before null/empty check."
+        Write-Log "[Handle-OptimizeToolOutput] Checkpoint 2 - Before null/empty check." "DEBUG"
         if (-not $toolOutput) {
             Write-Log "No tool output to optimize for: $toolName (toolOutput is null/false)" "DEBUG"
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] toolOutput is null/false, returning."
+            Write-Log "[Handle-OptimizeToolOutput] toolOutput is null/false, returning." "DEBUG"
             return
         }
-        Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 3 - After null/empty check, toolOutput exists."
+        Write-Log "[Handle-OptimizeToolOutput] Checkpoint 3 - After null/empty check, toolOutput exists." "DEBUG"
 
         # Convert output to string for token counting
         $outputText = ""
         try {
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 4 - Attempting to convert toolOutput to string. Is string: $($toolOutput -is [string])"
+            Write-Log "[Handle-OptimizeToolOutput] Checkpoint 4 - Attempting to convert toolOutput to string. Is string: $($toolOutput -is [string])" "DEBUG"
             $outputText = if ($toolOutput -is [string]) { $toolOutput } else { $toolOutput | ConvertTo-Json -Depth 10 -ErrorAction Stop }
             Write-Log "DEBUG: Converted tool output to string. Length: $($outputText.Length)" "DEBUG"
-            Write-Host "DEBUG: [Handle-OptimizeToolOutput] Checkpoint 5 - toolOutput converted. Length: $($outputText.Length)"
+            Write-Log "[Handle-OptimizeToolOutput] Checkpoint 5 - toolOutput converted. Length: $($outputText.Length)" "DEBUG"
         } catch {
             Write-Log "ERROR: Failed to convert tool output to JSON string for ${toolName}: $($_.Exception.Message)" "ERROR"
-            Write-Host "ERROR: [Handle-OptimizeToolOutput] Failed to convert: $($_.Exception.Message)"
+            Write-Log "[Handle-OptimizeToolOutput] Failed to convert: $($_.Exception.Message)" "ERROR"
             return
         }
 
@@ -1934,8 +1914,7 @@ function Handle-OptimizeToolOutput {
                 Write-Log "WARN: count_tokens result did not contain expected content" "WARN"
             }
         } catch {
-            Write-Log "ERROR: Token counting failed for ${toolName}: $($_.Exception.Message)" "ERROR"
-            Write-Log "ERROR: Stack Trace: $($_.ScriptStackTrace)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Token counting failed for ${toolName}"
             return
         }
 
@@ -1958,16 +1937,56 @@ function Handle-OptimizeToolOutput {
             Write-Log "Tool-specific optimization failed: $($_.Exception.Message)" "WARN"
         }
 
+        # Calculate SHA256 hash of the output text for caching
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($outputText))
+        $originalTextHash = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLower()
+
+        # Attempt to retrieve from optimization storage
+        try {
+            $retrieveArgs = @{
+                operation = "retrieve"
+                originalTextHash = $originalTextHash
+            }
+            $retrieveJson = $retrieveArgs | ConvertTo-Json -Compress
+            $retrieveResultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimization_storage" -ArgumentsJson $retrieveJson
+            $retrieveResult = if ($retrieveResultJson) { $retrieveResultJson | ConvertFrom-Json } else { $null }
+
+            if ($retrieveResult -and $retrieveResult.success -and $retrieveResult.result) {
+                Write-Log "Cache HIT for optimization result. Hash: $originalTextHash" "INFO"
+                # OptimizationStorageTool.retrieve() returns { success, result: { optimizedText, ... } }.
+                # Read the actual payload from $retrieveResult.result (not top-level), and mirror
+                # the base64 wrapping used on the store path below so round-tripped bytes survive JSON.
+                $cachedEntry = $retrieveResult.result
+                $optimizedTextBytes = [System.Convert]::FromBase64String($cachedEntry.optimizedText)
+                $optimizedText = [System.Text.Encoding]::UTF8.GetString($optimizedTextBytes)
+                $afterTokens = $cachedEntry.optimizedTokens
+                $saved = $cachedEntry.tokensSaved
+                $percent = if ($beforeTokens -gt 0) { [math]::Round(($saved / $beforeTokens) * 100, 1) } else { 0 }
+
+                if ($script:CurrentSession) {
+                    $script:CurrentSession.cacheHits++
+                    if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
+                        Write-Log "Session stats updated and persisted after cache hit." "DEBUG"
+                    } else {
+                        Write-Log "Failed to persist session stats after cache hit." "ERROR"
+                    }
+                }
+
+                Write-Log "Using cached optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
+                Update-SessionOperation -TokensDelta $afterTokens
+                return
+            } else {
+                Write-Log "Cache MISS for optimization result. Hash: $originalTextHash" "DEBUG"
+            }
+        } catch {
+            Handle-Error -Exception $_.Exception -Message "Failed to retrieve from optimization storage"
+        }
+
         # Optimize using optimize_text (PHASE 4: Reduced quality for performance)
         try {
-            # PHASE 2 FIX: Use content hash instead of timestamp for cache key
-            $hasher = [System.Security.Cryptography.SHA256]::Create()
-            $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($outputText))
-            $contentHash = [Convert]::ToBase64String($hashBytes).Substring(0, 16)
-
             $optimizeArgs = @{
                 text = $outputText
-                key = "tool_output_${toolName}_$contentHash"
                 quality = $script:OPTIMIZATION_QUALITY
             }
             $optimizeJson = $optimizeArgs | ConvertTo-Json -Compress
@@ -1982,34 +2001,43 @@ function Handle-OptimizeToolOutput {
                 $saved = $beforeTokens - $afterTokens
                 $percent = if ($beforeTokens -gt 0) { [math]::Round(($saved / $beforeTokens) * 100, 1) } else { 0 }
 
-                # PHASE 1 FIX: Rollback logic - only use optimization if it actually helps
                 if ($afterTokens -ge $beforeTokens) {
                     Write-Log "Optimization made things worse or had no effect ($beforeTokens → $afterTokens tokens), REVERTING to original" "WARN"
-
-                    # PHASE 4 FIX: Track failure and persist immediately
                     if ($script:CurrentSession) {
                         $script:CurrentSession.optimizationFailures++
-                        # CRITICAL: Persist immediately to disk for multi-process visibility
                         if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
                             Write-Log "Session stats updated and persisted after optimization failure." "DEBUG"
                         } else {
                             Write-Log "Failed to persist session stats after optimization failure." "ERROR"
                         }
                     }
-
-                    # Don't update session with optimized tokens, skip this optimization
                     return
                 }
 
                 Write-Log "Optimized $toolName output: $beforeTokens → $afterTokens tokens ($percent% reduction)" "INFO"
 
-                # PHASE 4 FIX: Track success and detailed stats, persist immediately
+                # Store the new optimization result
+                try {
+                    $storeArgs = @{
+                        operation = "store"
+                        originalTextHash = $originalTextHash
+                        optimizedText = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($optimizedText))
+                        originalTokens = $beforeTokens
+                        optimizedTokens = $afterTokens
+                        tokensSaved = $saved
+                    }
+                    $storeJson = $storeArgs | ConvertTo-Json -Compress
+                    & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimization_storage" -ArgumentsJson $storeJson
+                    Write-Log "Stored new optimization result. Hash: $originalTextHash" "DEBUG"
+                } catch {
+                    Handle-Error -Exception $_.Exception -Message "Failed to store optimization result"
+                }
+
                 if ($script:CurrentSession) {
                     $script:CurrentSession.optimizationSuccesses++
                     $script:CurrentSession.totalOriginalTokens += $beforeTokens
                     $script:CurrentSession.totalOptimizedTokens += $afterTokens
                     $script:CurrentSession.totalTokensSaved += $saved
-                    # CRITICAL: Persist immediately to disk for multi-process visibility
                     if (Write-SessionFile -FilePath $SESSION_FILE -SessionObject $script:CurrentSession) {
                         Write-Log "Session stats updated and persisted after optimization success." "DEBUG"
                     } else {
@@ -2017,11 +2045,10 @@ function Handle-OptimizeToolOutput {
                     }
                 }
 
-                # Update session tokens (only if optimization helped)
                 Update-SessionOperation -TokensDelta $afterTokens
             }
         } catch {
-            Write-Log "Tool output optimization failed: $($_.Exception.Message)" "ERROR"
+            Handle-Error -Exception $_.Exception -Message "Tool output optimization failed"
         }
 
     } catch {
@@ -2225,6 +2252,28 @@ function Handle-SmartRead {
             if ($tokens -ne "unknown") {
                 Update-SessionOperation -TokensDelta $tokens
                 Write-Log "Updated session totalTokens by $tokens" "DEBUG"
+            }
+
+            # #122: update the MCP server's context_delta so the next read
+            # of this file can be served as a diff. Failure here is
+            # non-fatal — smart_read still succeeds.
+            #
+            # IMPORTANT: only feed FULL content. smart_read can return a
+            # diff payload (metadata.isDiff), and persisting a diff as the
+            # new baseline would make the next compute-delta compare
+            # against the previous patch instead of the file contents.
+            try {
+                $isDiff = $result.metadata -and $result.metadata.isDiff
+                $contentText = if ($result.content -and $result.content[0] -and $result.content[0].text) {
+                    $result.content[0].text
+                } else {
+                    $null
+                }
+                if ($contentText -and -not $isDiff) {
+                    $null = Invoke-ContextDelta -Operation 'compute-delta' -FilePath $filePath -CurrentContent $contentText
+                }
+            } catch {
+                Write-Log "context_delta update skipped: $($_.Exception.Message)" 'DEBUG'
             }
 
             # Return smart_read result and block plain Read

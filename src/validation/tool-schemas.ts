@@ -23,6 +23,13 @@ export const GetCachedSchema = z.object({
 // 3. count_tokens
 export const CountTokensSchema = z.object({
   text: z.string().describe('Text to count tokens for'),
+  modelName: z
+    .string()
+    .optional()
+    .describe(
+      'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). ' +
+        'Defaults to the server-configured model when omitted.'
+    ),
 });
 
 // 4. compress_text
@@ -413,6 +420,46 @@ export const ExportAnalyticsSchema = z.object({
     .describe('Optional filter by MCP server name'),
 });
 
+// 72. optimization_storage — discriminated union keyed on `operation` so
+// the zod validator rejects a `store` request missing the required
+// payload fields at validateToolArgs time, instead of after dispatch.
+export const OptimizationStorageSchema = z.discriminatedUnion('operation', [
+  z.object({
+    operation: z.literal('store'),
+    originalTextHash: z.string().min(1),
+    optimizedText: z.string(),
+    originalTokens: z.number().nonnegative(),
+    optimizedTokens: z.number().nonnegative(),
+    tokensSaved: z.number(),
+  }),
+  z.object({
+    operation: z.literal('retrieve'),
+    originalTextHash: z.string().min(1),
+  }),
+]);
+
+// 73. context_delta — discriminated on operation so compute-delta and
+// seed require currentContent at validation time rather than runtime.
+export const ContextDeltaSchema = z.discriminatedUnion('operation', [
+  z.object({
+    operation: z.literal('compute-delta'),
+    sessionId: z.string().min(1),
+    filePath: z.string().min(1),
+    currentContent: z.string(),
+  }),
+  z.object({
+    operation: z.literal('seed'),
+    sessionId: z.string().min(1),
+    filePath: z.string().min(1),
+    currentContent: z.string(),
+  }),
+  z.object({
+    operation: z.literal('clear'),
+    sessionId: z.string().min(1),
+    filePath: z.string().min(1),
+  }),
+]);
+
 // Map tool names to their schemas for easy lookup
 export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   optimize_text: OptimizeTextSchema,
@@ -486,4 +533,6 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   get_action_analytics: GetActionAnalyticsSchema,
   get_mcp_server_analytics: GetMcpServerAnalyticsSchema,
   export_analytics: ExportAnalyticsSchema,
+  optimization_storage: OptimizationStorageSchema,
+  context_delta: ContextDeltaSchema,
 };

@@ -126,11 +126,22 @@ import {
   getMcpServerAnalyticsTool,
   GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
 } from '../tools/analytics/get-mcp-server-analytics.js';
+import { getExportAnalyticsTool, EXPORT_ANALYTICS_TOOL_DEFINITION, } from '../tools/analytics/export-analytics.js';
 import {
-  getExportAnalyticsTool,
-  EXPORT_ANALYTICS_TOOL_DEFINITION,
-} from '../tools/analytics/export-analytics.js';
+  OptimizationStorageTool,
+  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+} from '../tools/optimization-storage-tool.js';
+import {
+  ContextDeltaTool,
+  CONTEXT_DELTA_TOOL_DEFINITION,
+} from '../tools/context-delta-tool.js';
+import { SessionManager } from '../core/session-manager.js';
+import { createSummarizerFromEnv } from '../core/summarization.js';
+import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
+import { ConfigManager } from '../core/config.js';
+import { lruMemoize, memoRegistry } from '../utils/lru-memoize.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
+
 
 // API & Database tools
 import {
@@ -369,6 +380,63 @@ const getHookAnalytics = getHookAnalyticsTool(analyticsManager);
 const getActionAnalytics = getActionAnalyticsTool(analyticsManager);
 const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
 const exportAnalytics = getExportAnalyticsTool(analyticsManager);
+const optimizationStorage = new OptimizationStorageTool();
+
+// #120: load user config (creates ~/.token-optimizer/config.json with
+// defaults on first run) and derive session-level knobs.
+const configManager = new ConfigManager();
+const optimizationConfig = configManager.getOptimizationConfig();
+const sessionTokenizer = TokenizerFactory.createFromEnv();
+const modelLimit =
+  configManager.getModelTokenLimit(sessionTokenizer.modelName) ??
+  // Fall back to an aggressive default for unknown models.
+  128000;
+const chatDefaultMaxTokens =
+  optimizationConfig.chatCompression.tokenLimit ??
+  Math.floor(modelLimit * optimizationConfig.compressionTokenThreshold);
+
+const sessionManager = new SessionManager({
+  persistencePath: path.join(os.homedir(), '.token-optimizer', 'sessions.json'),
+  tokenizer: sessionTokenizer,
+  defaultMaxTokens: chatDefaultMaxTokens,
+  summarizer: createSummarizerFromEnv(),
+});
+const contextDelta = new ContextDeltaTool(sessionManager);
+
+// #125: memoize the expensive read-only file-operation tools with an
+// LRU bounded by the user's cacheSettings. The memoRegistry hook lets
+// the cleanup handler below prune them all at once.
+const cacheSettings = optimizationConfig.cacheSettings;
+const memoizedSmartRead = lruMemoize(runSmartRead, {
+  name: 'smart_read',
+  maxSize: cacheSettings.maxSize,
+  ttlMs: cacheSettings.ttlSeconds * 1000,
+});
+const memoizedSmartGrep = lruMemoize(runSmartGrep, {
+  name: 'smart_grep',
+  maxSize: cacheSettings.maxSize,
+  ttlMs: cacheSettings.ttlSeconds * 1000,
+});
+const memoizedSmartGlob = lruMemoize(runSmartGlob, {
+  name: 'smart_glob',
+  maxSize: cacheSettings.maxSize,
+  ttlMs: cacheSettings.ttlSeconds * 1000,
+});
+
+// Periodic prune + stats log. Runs every 5 minutes; unref so it doesn't
+// keep the process alive on its own.
+const MEMO_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
+const memoPruneTimer = setInterval(() => {
+  const removed = memoRegistry.pruneAll();
+  if (removed > 0) {
+    console.error(
+      `[memo] pruned ${removed} expired cache entries; stats: ${JSON.stringify(memoRegistry.stats())}`
+    );
+  }
+}, MEMO_PRUNE_INTERVAL_MS);
+if (typeof memoPruneTimer.unref === 'function') {
+  memoPruneTimer.unref();
+}
 
 // Create MCP server
 const server = new Server(
@@ -430,13 +498,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'count_tokens',
         description:
-          'Count tokens in text using tiktoken. Useful for understanding token usage before and after optimization.',
+          'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
         inputSchema: {
           type: 'object',
           properties: {
             text: {
               type: 'string',
               description: 'Text to count tokens for',
+            },
+            modelName: {
+              type: 'string',
+              description:
+                'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
             },
           },
           required: ['text'],
@@ -655,6 +728,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       GET_ACTION_ANALYTICS_TOOL_DEFINITION,
       GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
       EXPORT_ANALYTICS_TOOL_DEFINITION,
+      OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+      CONTEXT_DELTA_TOOL_DEFINITION,
     ],
   };
 });
@@ -847,17 +922,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'count_tokens': {
-        const { text } = args as { text: string };
-        const result = tokenCounter.count(text);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
+        const { text, modelName } = args as {
+          text: string;
+          modelName?: string;
         };
+        const counter = modelName ? new TokenCounter(modelName) : tokenCounter;
+        try {
+          const result = modelName
+            ? await counter.countAsync(text)
+            : counter.count(text);
+          // Return the full result JSON under a dedicated `metadata`
+          // key while the primary `text` payload stays the scalar token
+          // count string — preserves the integer-parse contract that
+          // the PowerShell orchestrator relies on
+          // (e.g. token-optimizer-orchestrator.ps1 L931/1910/2092 cast
+          // `content[0].text -as [int]`) and still surfaces the richer
+          // object for TS callers.
+          return {
+            content: [
+              {
+                type: 'text',
+                text: String(result.tokens),
+              },
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { ...result, model: modelName ?? counter.model },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } finally {
+          // Always free one-shot counters — even when countAsync throws,
+          // leaving the tiktoken encoder allocated was leaking native
+          // resources.
+          if (modelName) {
+            counter.free();
+          }
+        }
       }
 
       case 'compress_text': {
@@ -1931,7 +2035,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_read': {
         const { path, ...options } = args as any;
-        const result = await runSmartRead(path, options);
+        const result = await memoizedSmartRead(path, options);
         return {
           content: [
             {
@@ -1945,6 +2049,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_write': {
         const { path, content, ...options } = args as any;
         const result = await runSmartWrite(path, content, options);
+        // Filesystem was mutated — drop every memoized read-only cache
+        // entry so the next smart_read/grep/glob reflects the new state
+        // instead of waiting for TTL expiry.
+        memoRegistry.clearAll();
         return {
           content: [
             {
@@ -1958,6 +2066,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_edit': {
         const { path, operations, ...options } = args as any;
         const result = await runSmartEdit(path, operations, options);
+        memoRegistry.clearAll();
         return {
           content: [
             {
@@ -1970,7 +2079,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_glob': {
         const { pattern, ...options } = args as any;
-        const result = await runSmartGlob(pattern, options);
+        const result = await memoizedSmartGlob(pattern, options);
         return {
           content: [
             {
@@ -1983,7 +2092,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
-        const result = await runSmartGrep(pattern, options);
+        const result = await memoizedSmartGrep(pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'optimization_storage': {
+        const result = optimizationStorage.run(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'context_delta': {
+        const result = contextDelta.run(args as any);
         return {
           content: [
             {
@@ -2231,6 +2364,16 @@ async function cleanup() {
     },
     { fn: () => cache?.close(), name: 'closing cache' },
     { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
+    { fn: async () => await sessionManager.flush(), name: 'flushing sessions' },
+    { fn: () => TokenizerFactory.disposeAll(), name: 'disposing tokenizers' },
+    { fn: () => optimizationStorage.close(), name: 'closing optimization storage' },
+    {
+      fn: () => {
+        clearInterval(memoPruneTimer);
+        memoRegistry.clearAll();
+      },
+      name: 'clearing memo caches',
+    },
     // Note: predictiveCache and cacheWarmup do not implement dispose() methods
     // Removed dispose() calls to prevent runtime errors during cleanup
   ]);

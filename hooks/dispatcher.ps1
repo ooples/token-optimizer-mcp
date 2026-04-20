@@ -2,17 +2,29 @@
 # Minimal dispatcher focused on token optimization via MCP
 # Replaces 400+ line mess with clean architecture
 
+[CmdletBinding()]
 param([string]$Phase = "")
 
 $HANDLERS_DIR = "C:\Users\cheat\.claude-global\hooks\handlers"
 $LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\dispatcher.log"
 $ORCHESTRATOR = "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
 
-function Write-Log {
-    param([string]$Message)
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    "[$timestamp] [$Phase] $Message" | Out-File -FilePath $LOG_FILE -Append -Encoding UTF8
+# Load the shared logging helper defensively: a missing/malformed helper
+# must not kill the dispatcher for every hook phase. Fall back to a
+# minimal Write-Log shim so the rest of the script still runs.
+$loggingHelperPath = "$PSScriptRoot\helpers\logging.ps1"
+try {
+    if (Test-Path $loggingHelperPath) {
+        . $loggingHelperPath
+    } else {
+        throw "logging helper not found at $loggingHelperPath"
+    }
+} catch {
+    function Write-Log { param([string]$Message, [string]$Level = 'INFO') $null = $Message; $null = $Level }
+    function Handle-Error { param($Exception, [string]$Message) $null = $Exception; $null = $Message }
 }
+
+
 
 function Block-Tool {
     param([string]$Reason)

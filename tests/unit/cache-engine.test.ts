@@ -48,7 +48,7 @@ describe('CacheEngine', () => {
     cache = new CacheEngine(testDbPath, 100);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Restore original environment variable
     if (originalEnv !== undefined) {
       process.env.TOKEN_OPTIMIZER_CACHE_DIR = originalEnv;
@@ -58,6 +58,7 @@ describe('CacheEngine', () => {
 
     // Clean up
     cache.close();
+    await new Promise(resolve => setTimeout(resolve, 100)); // Add a small delay
     if (fs.existsSync(testDbPath)) {
       fs.unlinkSync(testDbPath);
     }

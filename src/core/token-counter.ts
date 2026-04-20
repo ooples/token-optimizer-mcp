@@ -1,4 +1,7 @@
 import { encoding_for_model, Tiktoken } from 'tiktoken';
+import { TokenizerFactory } from './tokenizers/tokenizer-factory.js';
+import { ITokenizer } from './tokenizers/i-tokenizer.js';
+import { TiktokenTokenizer } from './tokenizers/tiktoken-tokenizer.js';
 
 export interface TokenCountResult {
   tokens: number;
@@ -6,114 +9,95 @@ export interface TokenCountResult {
   estimatedCost?: number;
 }
 
+/**
+ * TokenCounter — delegates tokenization to the pluggable
+ * TokenizerFactory from issue #124 while preserving the callable
+ * surface (`count`, `countBatch`, `estimate`, `calculateSavings`,
+ * `calculateCacheSavings`, `exceedsLimit`, `truncate`,
+ * `getTokenCharRatio`, `free`) the rest of the codebase relies on.
+ *
+ * Truncation still uses a local tiktoken encoder because the
+ * ITokenizer contract doesn't expose the raw token array — we
+ * keep one for GPT-4-family models and otherwise degrade to
+ * character-based truncation.
+ */
 export class TokenCounter {
-  private encoder: Tiktoken;
-  private readonly model: string;
+  private readonly tokenizer: ITokenizer;
+  private readonly encoder: Tiktoken | null;
+  public readonly model: string;
 
   constructor(model?: string) {
-    // Auto-detect model from environment or use provided model
-    // Claude Code sets CLAUDE_MODEL env var with the active model
-    // Falls back to GPT-4 as universal approximation
     this.model =
       model ||
       process.env.CLAUDE_MODEL ||
       process.env.ANTHROPIC_MODEL ||
+      process.env.OPENAI_MODEL ||
+      process.env.GOOGLE_AI_MODEL ||
       'gpt-4';
 
-    // Map Claude models to closest tiktoken equivalent
-    // Claude uses similar tokenization to GPT-4, so it's a good approximation
-    const tokenModel = this.mapToTiktokenModel(this.model);
+    this.tokenizer = TokenizerFactory.create(this.model);
 
-    // Initialize tiktoken encoder
-    this.encoder = encoding_for_model(tokenModel);
+    // Keep a local encoder for tiktoken-compatible models — truncate()
+    // needs to slice the raw token array, which the ITokenizer interface
+    // intentionally does not expose.
+    if (TiktokenTokenizer.supports(this.model)) {
+      this.encoder = encoding_for_model(
+        TiktokenTokenizer.mapToTiktokenModel(this.model)
+      );
+    } else {
+      this.encoder = null;
+    }
   }
 
   /**
-   * Map Claude/Anthropic models to tiktoken model names
-   */
-  private mapToTiktokenModel(model: string): 'gpt-4' | 'gpt-3.5-turbo' {
-    const lowerModel = model.toLowerCase();
-
-    // Claude models use GPT-4 tokenizer as closest approximation
-    if (
-      lowerModel.includes('claude') ||
-      lowerModel.includes('sonnet') ||
-      lowerModel.includes('opus') ||
-      lowerModel.includes('haiku')
-    ) {
-      return 'gpt-4';
-    }
-
-    // GPT-4 variants
-    if (lowerModel.includes('gpt-4')) {
-      return 'gpt-4';
-    }
-
-    // GPT-3.5 variants
-    if (lowerModel.includes('gpt-3.5') || lowerModel.includes('gpt3.5')) {
-      return 'gpt-3.5-turbo';
-    }
-
-    // Default to GPT-4 for unknown models
-    return 'gpt-4';
-  }
-
-  /**
-   * Count tokens in text
+   * Count tokens in text (synchronous).
+   *
+   * Synchronous on tiktoken-backed tokenizers, which is all we expose
+   * externally via Anthropic/OpenAI. Remote tokenizers (Google AI) are
+   * reachable via `countAsync`.
    */
   count(text: string): TokenCountResult {
-    const tokens = this.encoder.encode(text);
-
+    if (this.encoder) {
+      return {
+        tokens: this.encoder.encode(text).length,
+        characters: text.length,
+      };
+    }
+    // Fall back to the synchronous estimate so non-tiktoken paths keep
+    // working. Callers that want exact remote counts should use
+    // countAsync.
     return {
-      tokens: tokens.length,
+      tokens: this.estimate(text),
       characters: text.length,
     };
   }
 
   /**
-   * Count tokens in multiple texts
+   * Async token counting through the pluggable tokenizer — accurate for
+   * both local tiktoken and remote Google AI paths.
    */
+  async countAsync(text: string): Promise<TokenCountResult> {
+    const tokens = await this.tokenizer.countTokens(text);
+    return { tokens, characters: text.length };
+  }
+
   countBatch(texts: string[]): TokenCountResult {
     let totalTokens = 0;
     let totalCharacters = 0;
-
     for (const text of texts) {
       const result = this.count(text);
       totalTokens += result.tokens;
       totalCharacters += result.characters;
     }
-
-    return {
-      tokens: totalTokens,
-      characters: totalCharacters,
-    };
+    return { tokens: totalTokens, characters: totalCharacters };
   }
 
-  /**
-   * Estimate token count without encoding (faster, less accurate)
-   */
   estimate(text: string): number {
-    // Rough estimate: ~4 characters per token on average
+    // Rough fallback: ~4 characters per token. Only used when no
+    // tiktoken encoder is available for this model.
     return Math.ceil(text.length / 4);
   }
 
-  /**
-   * Calculate token savings based on context window management
-   *
-   * @param originalText - The original text content
-   * @param contextTokens - Number of tokens remaining in LLM context (default: 0 for full caching)
-   * @returns Token savings calculation
-   *
-   * @remarks
-   * This method measures context window optimization, NOT compression ratio.
-   * When content is cached externally (SQLite, Redis, etc.), it's completely
-   * removed from the LLM's context window, resulting in 100% token savings.
-   *
-   * Use cases:
-   * - External caching: contextTokens = 0 (100% savings)
-   * - Metadata-only: contextTokens = tokens in metadata (e.g., 8)
-   * - Summarization: contextTokens = tokens in summary (e.g., 50)
-   */
   calculateSavings(
     originalText: string,
     contextTokens: number = 0
@@ -136,36 +120,6 @@ export class TokenCounter {
     };
   }
 
-  /**
-   * Calculate context window savings for externally cached content
-   *
-   * @param originalText - The original text content being cached
-   * @returns Token savings calculation with 100% savings
-   *
-   * @remarks
-   * When content is compressed and stored in an external cache (SQLite, Redis, etc.),
-   * it's completely removed from the LLM's context window. The compressed/encoded
-   * data is NEVER sent to the LLM, so we measure 100% token savings.
-   *
-   * Key insight: We're measuring CONTEXT WINDOW CLEARANCE, not compression ratio.
-   * - ✅ Content removed from LLM context (saves tokens)
-   * - ✅ Storage compressed (saves disk space)
-   * - ❌ Don't count tokens in compressed data (it's not sent to LLM!)
-   *
-   * @example
-   * ```typescript
-   * const tokenCounter = new TokenCounter();
-   * const content = "Large file content...";
-   * const compressed = compress(content);
-   *
-   * // Store in external cache
-   * await cache.set(key, compressed);
-   *
-   * // Calculate context window savings
-   * const savings = tokenCounter.calculateCacheSavings(content);
-   * // Returns: { originalTokens: 250, contextTokens: 0, tokensSaved: 250, percentSaved: 100 }
-   * ```
-   */
   calculateCacheSavings(originalText: string): {
     originalTokens: number;
     contextTokens: number;
@@ -173,54 +127,45 @@ export class TokenCounter {
     percentSaved: number;
   } {
     const original = this.count(originalText);
-
     return {
       originalTokens: original.tokens,
-      contextTokens: 0, // External cache - nothing in context
-      tokensSaved: original.tokens, // 100% of original tokens saved
-      percentSaved: 100, // Always 100% for external caching
+      contextTokens: 0,
+      tokensSaved: original.tokens,
+      percentSaved: 100,
     };
   }
 
-  /**
-   * Check if text exceeds token limit
-   */
   exceedsLimit(text: string, limit: number): boolean {
-    const result = this.count(text);
-    return result.tokens > limit;
+    return this.count(text).tokens > limit;
   }
 
-  /**
-   * Truncate text to fit within token limit
-   */
   truncate(text: string, maxTokens: number): string {
+    if (!this.encoder) {
+      // No raw-token access for this model — fall back to a
+      // char-proportional slice using the estimate ratio.
+      const approxChars = maxTokens * 4;
+      return text.length <= approxChars ? text : text.slice(0, approxChars);
+    }
     const tokens = this.encoder.encode(text);
-
     if (tokens.length <= maxTokens) {
       return text;
     }
-
     const truncatedTokens = tokens.slice(0, maxTokens);
     const decoded = this.encoder.decode(truncatedTokens);
-
-    // Handle potential type issues with decode return value
     return typeof decoded === 'string'
       ? decoded
       : new TextDecoder().decode(decoded);
   }
 
-  /**
-   * Get token-to-character ratio for text
-   */
   getTokenCharRatio(text: string): number {
     const result = this.count(text);
     return result.tokens > 0 ? result.characters / result.tokens : 0;
   }
 
-  /**
-   * Free the encoder resources
-   */
   free(): void {
-    this.encoder.free();
+    if (this.encoder) {
+      this.encoder.free();
+    }
+    // TokenizerFactory owns the tokenizer's lifecycle (instance cache).
   }
 }

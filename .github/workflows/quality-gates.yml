@@ -129,30 +129,47 @@ jobs:
       - name: Run npm audit
         id: audit
         run: |
-          npm audit --json > audit-results.json || true
+          # Gating audit — prod deps only. Dev deps (e.g. @semantic-release/npm,
+          # which bundles its own node_modules/npm) can carry unfixable
+          # transitive vulnerabilities that never ship to end users, and
+          # failing CI on those is noise. The "Dependency Vulnerability Scan"
+          # step below still covers the full tree for visibility.
+          npm audit --omit=dev --json > audit-results.json || true
+
+          # Informational audit — full tree, including dev deps. Always
+          # collected so teams can review non-gating findings even on
+          # forks/repos without a SNYK_TOKEN.
+          npm audit --json > audit-results-full.json || true
 
           # Check for high/critical vulnerabilities using Python for reliable JSON parsing
           HIGH_VULNS=$(python3 -c "import json; data = json.load(open('audit-results.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('high', 0))")
           CRITICAL_VULNS=$(python3 -c "import json; data = json.load(open('audit-results.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('critical', 0))")
+          FULL_CRITICAL=$(python3 -c "import json; data = json.load(open('audit-results-full.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('critical', 0))")
+          FULL_HIGH=$(python3 -c "import json; data = json.load(open('audit-results-full.json')); print(data.get('metadata', {}).get('vulnerabilities', {}).get('high', 0))")
 
           # Ensure we have valid integers
           HIGH_VULNS=${HIGH_VULNS:-0}
           CRITICAL_VULNS=${CRITICAL_VULNS:-0}
+          FULL_CRITICAL=${FULL_CRITICAL:-0}
+          FULL_HIGH=${FULL_HIGH:-0}
 
           echo "high_vulnerabilities=$HIGH_VULNS" >> $GITHUB_OUTPUT
           echo "critical_vulnerabilities=$CRITICAL_VULNS" >> $GITHUB_OUTPUT
 
-          echo "Found $CRITICAL_VULNS critical and $HIGH_VULNS high severity vulnerabilities"
+          echo "Production: $CRITICAL_VULNS critical, $HIGH_VULNS high"
+          echo "Full tree:  $FULL_CRITICAL critical, $FULL_HIGH high (informational)"
 
           if [ "$CRITICAL_VULNS" -gt 0 ] 2>/dev/null; then
-            echo "Error: Found $CRITICAL_VULNS critical vulnerabilities"
-            npm audit
+            echo "Error: Found $CRITICAL_VULNS critical vulnerabilities in production deps"
+            npm audit --omit=dev || true
             exit 1
           fi
 
           if [ "$HIGH_VULNS" -gt 0 ] 2>/dev/null; then
-            echo "Warning: Found $HIGH_VULNS high vulnerabilities"
-            npm audit
+            echo "Warning: Found $HIGH_VULNS high vulnerabilities in production deps"
+            # npm audit exits non-zero when vulns exist — don't let that
+            # turn a "warning" into a failed step.
+            npm audit --omit=dev || true
           fi
 
       - name: Upload audit results
@@ -160,7 +177,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-audit-${{ github.sha }}
-          path: audit-results.json
+          path: |
+            audit-results.json
+            audit-results-full.json
           retention-days: 30
 
       - name: Comment PR with security audit
