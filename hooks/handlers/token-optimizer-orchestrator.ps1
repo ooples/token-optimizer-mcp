@@ -28,6 +28,9 @@ if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
 $HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
 $INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
 . "$PSScriptRoot\..\helpers\logging.ps1"
+. "$PSScriptRoot\..\helpers\config.ps1"
+. "$PSScriptRoot\..\helpers\gzip.ps1"
+. "$PSScriptRoot\..\helpers\context-delta.ps1"
 $LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-orchestrator.log"
 $SESSION_FILE = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
 $OPERATIONS_DIR = "C:\Users\cheat\.claude-global\hooks\data"
@@ -2243,6 +2246,22 @@ function Handle-SmartRead {
             if ($tokens -ne "unknown") {
                 Update-SessionOperation -TokensDelta $tokens
                 Write-Log "Updated session totalTokens by $tokens" "DEBUG"
+            }
+
+            # #122: update the MCP server's context_delta so the next read
+            # of this file can be served as a diff. Failure here is
+            # non-fatal — smart_read still succeeds.
+            try {
+                $contentText = if ($result.content -and $result.content[0] -and $result.content[0].text) {
+                    $result.content[0].text
+                } else {
+                    $null
+                }
+                if ($contentText) {
+                    $null = Invoke-ContextDelta -Operation 'compute-delta' -FilePath $filePath -CurrentContent $contentText
+                }
+            } catch {
+                Write-Log "context_delta update skipped: $($_.Exception.Message)" 'DEBUG'
             }
 
             # Return smart_read result and block plain Read
