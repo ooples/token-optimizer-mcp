@@ -1,6 +1,5 @@
-import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
-import { CompressionEngine } from '../core/compression-engine';
+import Database from 'better-sqlite3';
+import { CompressionEngine } from '../core/compression-engine.js';
 
 export interface OptimizationResult {
     originalTextHash: string;
@@ -11,22 +10,19 @@ export interface OptimizationResult {
 }
 
 export class SqliteOptimizationStorage {
-    private db: Database<sqlite3.Database, sqlite3.Statement>;
-    private dbPath: string;
-    private compressionEngine: CompressionEngine;
+    private db: Database.Database | null = null;
+    private readonly dbPath: string;
+    private readonly compressionEngine: CompressionEngine;
 
     constructor(dbPath: string = './optimization.db') {
         this.dbPath = dbPath;
         this.compressionEngine = new CompressionEngine();
     }
 
-    public async initializeDatabase(): Promise<void> {
-        this.db = await open({
-            filename: this.dbPath,
-            driver: sqlite3.Database
-        });
-
-        await this.db.exec(`
+    public initializeDatabase(): void {
+        this.db = new Database(this.dbPath);
+        this.db.pragma('journal_mode = WAL');
+        this.db.exec(`
             CREATE TABLE IF NOT EXISTS optimization_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 original_text_hash TEXT NOT NULL UNIQUE,
@@ -37,43 +33,68 @@ export class SqliteOptimizationStorage {
                 tokens_saved INTEGER NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE INDEX IF NOT EXISTS idx_optimization_hash
+                ON optimization_results(original_text_hash);
         `);
     }
 
-    public async save(entry: OptimizationResult): Promise<void> {
-        const compressedOptimizedText = this.compressionEngine.compress(entry.optimizedText);
+    private requireDb(): Database.Database {
+        if (!this.db) {
+            throw new Error('Optimization storage database is not initialized. Call initializeDatabase() first.');
+        }
+        return this.db;
+    }
 
-        await this.db.run(
-            `INSERT INTO optimization_results (original_text_hash, optimized_text_compressed, compression_algorithm, original_tokens, optimized_tokens, tokens_saved)
-             VALUES (?, ?, ?, ?, ?, ?)`, 
-            [entry.originalTextHash, compressedOptimizedText.compressed, 'brotli', entry.originalTokens, entry.optimizedTokens, entry.tokensSaved]
+    public save(entry: OptimizationResult): void {
+        const db = this.requireDb();
+        const compressed = this.compressionEngine.compress(entry.optimizedText);
+
+        db.prepare(
+            `INSERT OR REPLACE INTO optimization_results
+             (original_text_hash, optimized_text_compressed, compression_algorithm,
+              original_tokens, optimized_tokens, tokens_saved)
+             VALUES (?, ?, ?, ?, ?, ?)`
+        ).run(
+            entry.originalTextHash,
+            compressed.compressed,
+            'brotli',
+            entry.originalTokens,
+            entry.optimizedTokens,
+            entry.tokensSaved
         );
     }
 
-    public async get(originalTextHash: string): Promise<OptimizationResult | null> {
-        const row = await this.db.get(
-            'SELECT optimized_text_compressed, original_tokens, optimized_tokens, tokens_saved FROM optimization_results WHERE original_text_hash = ?',
-            originalTextHash
-        );
+    public get(originalTextHash: string): OptimizationResult | null {
+        const db = this.requireDb();
+        const row = db.prepare(
+            `SELECT optimized_text_compressed, original_tokens, optimized_tokens, tokens_saved
+             FROM optimization_results WHERE original_text_hash = ?`
+        ).get(originalTextHash) as
+            | {
+                  optimized_text_compressed: Buffer;
+                  original_tokens: number;
+                  optimized_tokens: number;
+                  tokens_saved: number;
+              }
+            | undefined;
 
         if (!row) {
             return null;
         }
 
-        const optimizedText = this.compressionEngine.decompress(row.optimized_text_compressed);
-
         return {
             originalTextHash,
-            optimizedText,
+            optimizedText: this.compressionEngine.decompress(row.optimized_text_compressed),
             originalTokens: row.original_tokens,
             optimizedTokens: row.optimized_tokens,
-            tokensSaved: row.tokens_saved
+            tokensSaved: row.tokens_saved,
         };
     }
 
-    public async close(): Promise<void> {
+    public close(): void {
         if (this.db) {
-            await this.db.close();
+            this.db.close();
+            this.db = null;
         }
     }
 }

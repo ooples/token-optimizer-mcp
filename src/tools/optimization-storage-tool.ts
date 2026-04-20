@@ -1,71 +1,139 @@
-import { Tool, ToolInvocation, TurnContext } from '../types/turn-context';
-import { SqliteOptimizationStorage, OptimizationResult } from '../analytics/optimization-storage';
+import { SqliteOptimizationStorage, OptimizationResult } from '../analytics/optimization-storage.js';
 
-export class OptimizationStorageTool implements Tool {
+export type OptimizationStorageOperation = 'store' | 'retrieve';
+
+export interface OptimizationStorageOptions {
+    operation: OptimizationStorageOperation;
+    originalTextHash?: string;
+    optimizedText?: string;
+    originalTokens?: number;
+    optimizedTokens?: number;
+    tokensSaved?: number;
+}
+
+export interface OptimizationStorageResponse {
+    success: boolean;
+    error?: string;
+    result?: OptimizationResult;
+}
+
+export class OptimizationStorageTool {
     public readonly name = 'optimization_storage';
-    public readonly description = 'A tool for storing and retrieving compressed optimization results.';
+    public readonly description =
+        'Persist and retrieve brotli-compressed optimization results keyed by text hash.';
 
-    private storage: SqliteOptimizationStorage;
+    private readonly storage: SqliteOptimizationStorage;
 
-    constructor() {
-        this.storage = new SqliteOptimizationStorage();
+    constructor(storage?: SqliteOptimizationStorage) {
+        this.storage = storage ?? new SqliteOptimizationStorage();
         this.storage.initializeDatabase();
     }
 
-    public async invoke(context: TurnContext, invocation: ToolInvocation): Promise<any> {
-        const operation = invocation.arguments?.operation;
-
-        if (operation === 'store') {
-            return this.store(invocation.arguments);
-        } else if (operation === 'retrieve') {
-            return this.retrieve(invocation.arguments);
-        } else {
-            return { error: `Unknown operation: ${operation}` };
+    public run(options: OptimizationStorageOptions): OptimizationStorageResponse {
+        switch (options.operation) {
+            case 'store':
+                return this.store(options);
+            case 'retrieve':
+                return this.retrieve(options);
+            default:
+                return {
+                    success: false,
+                    error: `Unknown operation: ${String((options as { operation: unknown }).operation)}`,
+                };
         }
     }
 
-    private async store(args: any): Promise<any> {
-        try {
-            const { originalTextHash, optimizedText, originalTokens, optimizedTokens, tokensSaved } = args;
-            if (!originalTextHash || !optimizedText || originalTokens === undefined || optimizedTokens === undefined || tokensSaved === undefined) {
-                return { error: 'Missing required arguments for store operation.' };
-            }
+    private store(options: OptimizationStorageOptions): OptimizationStorageResponse {
+        const { originalTextHash, optimizedText, originalTokens, optimizedTokens, tokensSaved } = options;
 
-            const optimizationResult: OptimizationResult = {
+        if (
+            !originalTextHash ||
+            !optimizedText ||
+            originalTokens === undefined ||
+            optimizedTokens === undefined ||
+            tokensSaved === undefined
+        ) {
+            return {
+                success: false,
+                error: 'Missing required arguments for store operation: originalTextHash, optimizedText, originalTokens, optimizedTokens, tokensSaved.',
+            };
+        }
+
+        try {
+            this.storage.save({
                 originalTextHash,
-                optimizedText: Buffer.from(optimizedText, 'base64').toString('utf8'),
+                optimizedText,
                 originalTokens,
                 optimizedTokens,
-                tokensSaved
-            };
-
-            await this.storage.save(optimizationResult);
+                tokensSaved,
+            });
             return { success: true };
         } catch (error) {
-            return { error: `Failed to store optimization result: ${error.message}` };
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: `Failed to store optimization result: ${message}` };
         }
     }
 
-    private async retrieve(args: any): Promise<any> {
-        try {
-            const { originalTextHash } = args;
-            if (!originalTextHash) {
-                return { error: 'Missing required argument for retrieve operation: originalTextHash' };
-            }
+    private retrieve(options: OptimizationStorageOptions): OptimizationStorageResponse {
+        const { originalTextHash } = options;
 
-            const result = await this.storage.get(originalTextHash);
-
-            if (result) {
-                return {
-                    success: true,
-                    ...result,
-                    optimizedText: Buffer.from(result.optimizedText, 'utf8').toString('base64')
-                };
-            } else {
-                return { success: false, message: 'Not found' };
-            }
-        } catch (error) {
-            return { error: `Failed to retrieve optimization result: ${error.message}` };
+        if (!originalTextHash) {
+            return {
+                success: false,
+                error: 'Missing required argument for retrieve operation: originalTextHash.',
+            };
         }
+
+        try {
+            const result = this.storage.get(originalTextHash);
+            if (!result) {
+                return { success: false, error: 'Not found' };
+            }
+            return { success: true, result };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: `Failed to retrieve optimization result: ${message}` };
+        }
+    }
+
+    public close(): void {
+        this.storage.close();
     }
 }
+
+export const OPTIMIZATION_STORAGE_TOOL_DEFINITION = {
+    name: 'optimization_storage',
+    description:
+        'Persist and retrieve brotli-compressed optimization results keyed by text hash. Operations: store, retrieve.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            operation: {
+                type: 'string',
+                enum: ['store', 'retrieve'],
+                description: 'The storage operation to perform',
+            },
+            originalTextHash: {
+                type: 'string',
+                description: 'Stable hash of the original uncompressed text (required for both operations)',
+            },
+            optimizedText: {
+                type: 'string',
+                description: 'The optimized text to store (required for store)',
+            },
+            originalTokens: {
+                type: 'number',
+                description: 'Token count of the original text (required for store)',
+            },
+            optimizedTokens: {
+                type: 'number',
+                description: 'Token count after optimization (required for store)',
+            },
+            tokensSaved: {
+                type: 'number',
+                description: 'Tokens saved by optimization (required for store)',
+            },
+        },
+        required: ['operation'],
+    },
+};

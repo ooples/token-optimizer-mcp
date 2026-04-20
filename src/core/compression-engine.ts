@@ -47,10 +47,13 @@ export class CompressionEngine {
         return brotliDecompressSync(buffer).toString('utf8');
     }
 
-    public compressToBase64(text: string, options?: { quality?: number; mode?: string; }): CompressionResult & { compressed: string } {
+    public compressToBase64(text: string, options?: { quality?: number; mode?: string; }): Omit<CompressionResult, 'compressed'> & { compressed: string } {
         const result = this.compress(text, options);
         return {
-            ...result,
+            originalSize: result.originalSize,
+            compressedSize: result.compressedSize,
+            ratio: result.ratio,
+            percentSaved: result.percentSaved,
             compressed: result.compressed.toString('base64'),
         };
     }

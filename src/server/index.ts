@@ -2020,7 +2020,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
-        const result = await smartGrep.run(pattern, options);
+        const result = await runSmartGrep(pattern, options);
         return {
           content: [
             {
@@ -2032,7 +2032,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'optimization_storage': {
-        const result = await optimizationStorage.invoke({} as TurnContext, { tool_name: name, tool_input: args });
+        const result = optimizationStorage.run(args as any);
         return {
           content: [
             {
