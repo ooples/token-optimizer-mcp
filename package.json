@@ -131,9 +131,5 @@
     "lru-cache": "^11.2.2",
     "tiktoken": "^1.0.22",
     "zod": ">=3.25.0 <5"
-  },
-  "overrides": {
-    "brace-expansion": "^2.0.2",
-    "picomatch": "^4.0.4"
   }
 }
