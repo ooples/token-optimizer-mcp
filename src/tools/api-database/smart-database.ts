@@ -1838,6 +1838,9 @@ export const SMART_DATABASE_TOOL_DEFINITION = {
       params: {
         type: 'array',
         description: 'Query parameters for prepared statements',
+        items: {
+          type: ['string', 'number', 'boolean', 'null'],
+        },
       },
       timeout: {
         type: 'number',

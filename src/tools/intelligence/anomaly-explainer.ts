@@ -1682,6 +1682,15 @@ export const ANOMALYEXPLAINERTOOL = {
       historicalData: {
         type: 'array',
         description: 'Historical metric data for baseline analysis',
+        items: {
+          type: 'object',
+          properties: {
+            timestamp: { type: 'number' },
+            value: { type: 'number' },
+            metadata: { type: 'object', additionalProperties: true },
+          },
+          required: ['timestamp', 'value'],
+        },
       },
       hypothesis: {
         type: 'string',
@@ -1690,6 +1699,16 @@ export const ANOMALYEXPLAINERTOOL = {
       events: {
         type: 'array',
         description: 'Related system events',
+        items: {
+          type: 'object',
+          properties: {
+            timestamp: { type: 'number' },
+            type: { type: 'string' },
+            description: { type: 'string' },
+            severity: { type: 'string' },
+          },
+          required: ['timestamp', 'type', 'description'],
+        },
       },
       useCache: {
         type: 'boolean',
