@@ -4,9 +4,9 @@
 
 import { z } from 'zod';
 import { HypercontextConfig, OptimizationConfig } from './types.js';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 const DEFAULT_OPTIMIZATION: OptimizationConfig = {
   compressionTokenThreshold: 0.7,
@@ -26,6 +26,14 @@ const DEFAULT_OPTIMIZATION: OptimizationConfig = {
   },
   minOutputSizeBytes: 500,
   quality: 'balanced',
+  cacheSettings: {
+    maxSize: 1000,
+    ttlSeconds: 3600,
+  },
+  chatCompression: {
+    enabled: true,
+    strategy: 'summarize',
+  },
 };
 
 const DEFAULT_CONFIG: HypercontextConfig = {
@@ -62,6 +70,17 @@ const DEFAULT_CONFIG: HypercontextConfig = {
   optimization: DEFAULT_OPTIMIZATION,
 };
 
+const CacheSettingsSchema = z.object({
+  maxSize: z.number().int().positive(),
+  ttlSeconds: z.number().int().nonnegative(),
+});
+
+const ChatCompressionSchema = z.object({
+  enabled: z.boolean(),
+  tokenLimit: z.number().int().positive().optional(),
+  strategy: z.enum(['summarize', 'truncate']),
+});
+
 const OptimizationConfigSchema = z.object({
   compressionTokenThreshold: z.number().min(0).max(1),
   compressionPreserveThreshold: z.number().min(0).max(1),
@@ -69,6 +88,18 @@ const OptimizationConfigSchema = z.object({
   modelTokenLimits: z.record(z.string(), z.number().int().positive()),
   minOutputSizeBytes: z.number().int().nonnegative(),
   quality: z.enum(['fast', 'balanced', 'max']),
+  cacheSettings: CacheSettingsSchema,
+  chatCompression: ChatCompressionSchema,
+});
+
+/**
+ * User-supplied optimization schema. Partial at every depth so users can
+ * override just one field (e.g. `{ cacheSettings: { maxSize: 42 } }`)
+ * without having to re-supply the entire sub-object.
+ */
+const OptimizationConfigUserSchema = OptimizationConfigSchema.partial().extend({
+  cacheSettings: CacheSettingsSchema.partial().optional(),
+  chatCompression: ChatCompressionSchema.partial().optional(),
 });
 
 const HypercontextConfigSchema = z
@@ -110,7 +141,7 @@ const HypercontextConfigSchema = z
       })
       .partial()
       .optional(),
-    optimization: OptimizationConfigSchema.partial().optional(),
+    optimization: OptimizationConfigUserSchema.optional(),
   })
   .passthrough();
 
@@ -118,10 +149,35 @@ export class ConfigManager {
   private config: HypercontextConfig;
   private configPath: string;
 
-  constructor(configPath?: string) {
+  constructor(configPath?: string, options: { writeDefaults?: boolean } = {}) {
     this.configPath =
-      configPath || join(homedir(), '.hypercontext', 'config.json');
+      configPath || join(homedir(), '.token-optimizer', 'config.json');
+    const writeDefaults = options.writeDefaults ?? true;
+    if (writeDefaults && !existsSync(this.configPath)) {
+      this.writeDefaultConfig();
+    }
     this.config = this.loadConfig();
+  }
+
+  /**
+   * Write DEFAULT_CONFIG to configPath on first run — addresses #120's
+   * "Default config created on first run" acceptance criterion.
+   * Errors are logged and non-fatal; callers still get an in-memory
+   * DEFAULT_CONFIG via loadConfig().
+   */
+  private writeDefaultConfig(): void {
+    try {
+      const dir = dirname(this.configPath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+      writeFileSync(this.configPath, JSON.stringify(DEFAULT_CONFIG, null, 2));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `ConfigManager: failed to write default config to ${this.configPath}: ${message}`
+      );
+    }
   }
 
   private loadConfig(): HypercontextConfig {
@@ -157,15 +213,32 @@ export class ConfigManager {
       monitoring?: Partial<HypercontextConfig['monitoring']>;
       intelligence?: Partial<HypercontextConfig['intelligence']>;
       performance?: Partial<HypercontextConfig['performance']>;
-      optimization?: Partial<OptimizationConfig>;
+      optimization?: Partial<
+        Omit<OptimizationConfig, 'cacheSettings' | 'chatCompression'>
+      > & {
+        cacheSettings?: Partial<OptimizationConfig['cacheSettings']>;
+        chatCompression?: Partial<OptimizationConfig['chatCompression']>;
+      };
     }
   ): HypercontextConfig {
+    const userOpt = user.optimization ?? {};
     return {
       cache: { ...defaults.cache, ...user.cache },
       monitoring: { ...defaults.monitoring, ...user.monitoring },
       intelligence: { ...defaults.intelligence, ...user.intelligence },
       performance: { ...defaults.performance, ...user.performance },
-      optimization: { ...DEFAULT_OPTIMIZATION, ...(user.optimization ?? {}) },
+      optimization: {
+        ...DEFAULT_OPTIMIZATION,
+        ...userOpt,
+        cacheSettings: {
+          ...DEFAULT_OPTIMIZATION.cacheSettings,
+          ...(userOpt.cacheSettings ?? {}),
+        },
+        chatCompression: {
+          ...DEFAULT_OPTIMIZATION.chatCompression,
+          ...(userOpt.chatCompression ?? {}),
+        },
+      },
     };
   }
 

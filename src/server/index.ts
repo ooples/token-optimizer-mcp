@@ -137,6 +137,7 @@ import {
 } from '../tools/context-delta-tool.js';
 import { SessionManager } from '../core/session-manager.js';
 import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
+import { ConfigManager } from '../core/config.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 
 
@@ -379,9 +380,23 @@ const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
 const exportAnalytics = getExportAnalyticsTool(analyticsManager);
 const optimizationStorage = new OptimizationStorageTool();
 
+// #120: load user config (creates ~/.token-optimizer/config.json with
+// defaults on first run) and derive session-level knobs.
+const configManager = new ConfigManager();
+const optimizationConfig = configManager.getOptimizationConfig();
+const sessionTokenizer = TokenizerFactory.createFromEnv();
+const modelLimit =
+  configManager.getModelTokenLimit(sessionTokenizer.modelName) ??
+  // Fall back to an aggressive default for unknown models.
+  128000;
+const chatDefaultMaxTokens =
+  optimizationConfig.chatCompression.tokenLimit ??
+  Math.floor(modelLimit * optimizationConfig.compressionTokenThreshold);
+
 const sessionManager = new SessionManager({
   persistencePath: path.join(os.homedir(), '.token-optimizer', 'sessions.json'),
-  tokenizer: TokenizerFactory.createFromEnv(),
+  tokenizer: sessionTokenizer,
+  defaultMaxTokens: chatDefaultMaxTokens,
 });
 const contextDelta = new ContextDeltaTool(sessionManager);
 

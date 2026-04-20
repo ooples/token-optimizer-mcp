@@ -68,6 +68,20 @@ export interface OptimizationConfig {
   minOutputSizeBytes: number;
   /** Compression quality preset. */
   quality: 'fast' | 'balanced' | 'max';
+  /** In-memory cache knobs — mirrors Gemini CLI's `cacheSettings`. */
+  cacheSettings: {
+    /** Max entries per LRU cache shard. */
+    maxSize: number;
+    /** Default TTL for cached entries, in seconds. */
+    ttlSeconds: number;
+  };
+  /** Chat-history compression knobs — #121. */
+  chatCompression: {
+    enabled: boolean;
+    /** Hard token limit per session (falls back to modelTokenLimit × compressionTokenThreshold). */
+    tokenLimit?: number;
+    strategy: 'summarize' | 'truncate';
+  };
 }
 
 export interface TokenMetrics {
