@@ -1,12 +1,4 @@
-import {
-    existsSync,
-    mkdirSync,
-    readFileSync,
-    writeFileSync,
-    renameSync,
-    unlinkSync,
-} from 'fs';
-import { dirname } from 'path';
+import { existsSync } from 'fs';
 import { z } from 'zod';
 import {
     Session,
@@ -15,6 +7,7 @@ import {
 } from './session.js';
 import { ITokenizer } from './tokenizers/i-tokenizer.js';
 import { ISummarizer } from './summarization.js';
+import { loadMaybeGzippedFile, saveGzippedFile } from '../utils/gzip.js';
 
 /**
  * Persistent SessionManager — addresses issues #121 / #122.
@@ -84,7 +77,11 @@ export class SessionManager {
         this.sessionTtlMs = options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS;
         this.maxFileStateBytes =
             options.maxFileStateBytes ?? DEFAULT_MAX_FILE_STATE_BYTES;
-        if (this.persistencePath && existsSync(this.persistencePath)) {
+        if (
+            this.persistencePath &&
+            (existsSync(`${this.persistencePath}.gz`) ||
+                existsSync(this.persistencePath))
+        ) {
             this.load();
         }
     }
@@ -200,27 +197,17 @@ export class SessionManager {
             const state = {
                 sessions: this.listSessions().map((s) => s.toSnapshot()),
             };
-            const dir = dirname(this.persistencePath);
-            if (!existsSync(dir)) {
-                mkdirSync(dir, { recursive: true });
-            }
-            const tmpPath = `${this.persistencePath}.tmp`;
-            writeFileSync(tmpPath, JSON.stringify(state, null, 2));
-            renameSync(tmpPath, this.persistencePath);
+            // Gzip + atomic tmp + rename (handled inside saveGzippedFile).
+            saveGzippedFile(
+                this.persistencePath,
+                JSON.stringify(state, null, 2)
+            );
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : String(error);
             console.warn(
                 `SessionManager: failed to persist to ${this.persistencePath}: ${message}`
             );
-            // Best-effort cleanup of the tmp file
-            if (this.persistencePath) {
-                try {
-                    unlinkSync(`${this.persistencePath}.tmp`);
-                } catch {
-                    // Ignore — tmp file may not exist.
-                }
-            }
         } finally {
             this.persistInFlight = false;
         }
@@ -231,7 +218,10 @@ export class SessionManager {
             return;
         }
         try {
-            const raw = readFileSync(this.persistencePath, 'utf-8');
+            const raw = loadMaybeGzippedFile(this.persistencePath);
+            if (raw === null) {
+                return;
+            }
             const json = JSON.parse(raw);
             const parsed = PersistedStateSchema.safeParse(json);
             if (!parsed.success) {
