@@ -1836,10 +1836,29 @@ export const KNOWLEDGE_GRAPH_TOOL_DEFINITION = {
       entities: {
         type: 'array',
         description: 'Entities to add to graph (for build-graph)',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            type: { type: 'string' },
+            properties: { type: 'object', additionalProperties: true },
+          },
+          required: ['id', 'type', 'properties'],
+        },
       },
       relations: {
         type: 'array',
         description: 'Relations between entities (for build-graph)',
+        items: {
+          type: 'object',
+          properties: {
+            from: { type: 'string' },
+            to: { type: 'string' },
+            type: { type: 'string' },
+            properties: { type: 'object', additionalProperties: true },
+          },
+          required: ['from', 'to', 'type'],
+        },
       },
       pattern: {
         type: 'object',
