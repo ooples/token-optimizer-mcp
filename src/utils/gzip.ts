@@ -75,13 +75,22 @@ export function saveGzippedFile(path: string, text: string, level: number = 6): 
 
 /**
  * Load either `${path}.gz` or `${path}` — whichever exists. Returns
- * null if neither is present.
+ * null if neither is present. If the `.gz` sibling exists but can't
+ * be decompressed (corrupt, partially-written), falls back to the
+ * plaintext path so the backward-compat migration still works.
  */
 export function loadMaybeGzippedFile(path: string): string | null {
     const gzPath = `${path}.gz`;
     if (existsSync(gzPath)) {
-        const buffer = readFileSync(gzPath);
-        return gunzipBuffer(buffer);
+        try {
+            const buffer = readFileSync(gzPath);
+            return gunzipBuffer(buffer);
+        } catch (error) {
+            if (!existsSync(path)) {
+                throw error;
+            }
+            // Fall through to the plaintext sibling below.
+        }
     }
     if (existsSync(path)) {
         return readFileSync(path, 'utf-8');

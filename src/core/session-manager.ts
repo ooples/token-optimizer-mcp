@@ -121,13 +121,28 @@ export class SessionManager {
     ): Promise<number> {
         const session = this.requireSession(sessionId);
         session.addMessage(role, content);
-        const currentTokens = await session.getHistoryTokenCount();
-        let finalTokens = currentTokens;
-        if (currentTokens > session.maxTokens) {
-            finalTokens = await session.compressHistory();
+        // Schedule persistence in `finally` so the mutated session still
+        // hits disk even if tokenization or compression throws. Without
+        // this, a single tokenizer error leaves the message appended
+        // in memory but never persisted, and a restart loses the turn.
+        try {
+            const currentTokens = await session.getHistoryTokenCount();
+            if (currentTokens > session.maxTokens) {
+                return await session.compressHistory();
+            }
+            return currentTokens;
+        } finally {
+            this.schedulePersist();
         }
-        this.schedulePersist();
-        return finalTokens;
+    }
+
+    /** Fetch an existing session, or create one with the given id. */
+    public getOrCreateSession(id: string): Session {
+        const existing = this.sessions.get(id);
+        if (existing) {
+            return existing;
+        }
+        return this.createSession({ id });
     }
 
     public updateFileState(
@@ -235,7 +250,22 @@ export class SessionManager {
                 if (now - snapshot.updatedAt > this.sessionTtlMs) {
                     continue; // Expired session — drop.
                 }
-                const session = Session.fromSnapshot(snapshot, {
+                // Enforce the same per-file size cap on restore that
+                // updateFileState enforces on writes; otherwise a
+                // tampered or legacy persisted file can smuggle in
+                // oversized entries past the live guardrail.
+                const maxBytes = this.maxFileStateBytes;
+                const sanitizedFileState: Record<string, string> = {};
+                for (const [filePath, content] of Object.entries(snapshot.fileState)) {
+                    if (Buffer.byteLength(content, 'utf8') <= maxBytes) {
+                        sanitizedFileState[filePath] = content;
+                    }
+                }
+                const safeSnapshot = {
+                    ...snapshot,
+                    fileState: sanitizedFileState,
+                };
+                const session = Session.fromSnapshot(safeSnapshot, {
                     tokenizer: this.tokenizer,
                     summarizer: this.summarizer,
                 });

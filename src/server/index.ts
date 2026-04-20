@@ -927,23 +927,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           modelName?: string;
         };
         const counter = modelName ? new TokenCounter(modelName) : tokenCounter;
-        const result = modelName
-          ? await counter.countAsync(text)
-          : counter.count(text);
-        if (modelName) {
-          // Model-specific counters are one-shot — free the local
-          // tiktoken encoder (if any) that this call allocated.
-          counter.free();
+        try {
+          const result = modelName
+            ? await counter.countAsync(text)
+            : counter.count(text);
+          // Return the full result JSON under a dedicated `metadata`
+          // key while the primary `text` payload stays the scalar token
+          // count string — preserves the integer-parse contract that
+          // the PowerShell orchestrator relies on
+          // (e.g. token-optimizer-orchestrator.ps1 L931/1910/2092 cast
+          // `content[0].text -as [int]`) and still surfaces the richer
+          // object for TS callers.
+          return {
+            content: [
+              {
+                type: 'text',
+                text: String(result.tokens),
+              },
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { ...result, model: modelName ?? counter.model },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } finally {
+          // Always free one-shot counters — even when countAsync throws,
+          // leaving the tiktoken encoder allocated was leaking native
+          // resources.
+          if (modelName) {
+            counter.free();
+          }
         }
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ ...result, model: modelName ?? counter.model }, null, 2),
-            },
-          ],
-        };
       }
 
       case 'compress_text': {
@@ -2031,6 +2049,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_write': {
         const { path, content, ...options } = args as any;
         const result = await runSmartWrite(path, content, options);
+        // Filesystem was mutated — drop every memoized read-only cache
+        // entry so the next smart_read/grep/glob reflects the new state
+        // instead of waiting for TTL expiry.
+        memoRegistry.clearAll();
         return {
           content: [
             {
@@ -2044,6 +2066,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'smart_edit': {
         const { path, operations, ...options } = args as any;
         const result = await runSmartEdit(path, operations, options);
+        memoRegistry.clearAll();
         return {
           content: [
             {

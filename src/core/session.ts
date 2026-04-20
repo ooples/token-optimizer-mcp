@@ -86,11 +86,13 @@ export class Session {
     }
 
     public getHistory(): readonly Message[] {
-        return this.history;
+        // Defensive copy so external mutation (push/splice/in-place
+        // edit) can't bypass updatedAt tracking or corrupt the history.
+        return this.history.map((message) => ({ ...message }));
     }
 
     public getFileState(): Readonly<SessionFileState> {
-        return this.fileState;
+        return { ...this.fileState };
     }
 
     public getFileContent(filePath: string): string | undefined {
@@ -163,8 +165,13 @@ export class Session {
         }
 
         const summary = await this.summarizer.summarize(head);
+        // Store summaries as `assistant`, not `system` — a user turn
+        // can contain prompt-injection text, and promoting it into a
+        // system-role message after compression would let that text
+        // act as a higher-priority instruction. Assistant role keeps
+        // the context without the privilege escalation.
         const summaryMessage: Message = {
-            role: 'system',
+            role: 'assistant',
             content: `[summary of earlier conversation] ${summary}`,
             timestamp: head[head.length - 1].timestamp,
         };
@@ -177,7 +184,7 @@ export class Session {
     public toSnapshot(): SessionSnapshot {
         return {
             id: this.id,
-            history: [...this.history],
+            history: this.history.map((message) => ({ ...message })),
             fileState: { ...this.fileState },
             maxTokens: this.maxTokens,
             createdAt: this.createdAt,
@@ -196,7 +203,7 @@ export class Session {
             updatedAt: snapshot.updatedAt,
             ...options,
         });
-        session.history = [...snapshot.history];
+        session.history = snapshot.history.map((message) => ({ ...message }));
         session.fileState = { ...snapshot.fileState };
         return session;
     }

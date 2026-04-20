@@ -438,13 +438,27 @@ export const OptimizationStorageSchema = z.discriminatedUnion('operation', [
   }),
 ]);
 
-// 73. context_delta
-export const ContextDeltaSchema = z.object({
-  operation: z.enum(['compute-delta', 'seed', 'clear']),
-  sessionId: z.string(),
-  filePath: z.string(),
-  currentContent: z.string().optional(),
-});
+// 73. context_delta — discriminated on operation so compute-delta and
+// seed require currentContent at validation time rather than runtime.
+export const ContextDeltaSchema = z.discriminatedUnion('operation', [
+  z.object({
+    operation: z.literal('compute-delta'),
+    sessionId: z.string().min(1),
+    filePath: z.string().min(1),
+    currentContent: z.string(),
+  }),
+  z.object({
+    operation: z.literal('seed'),
+    sessionId: z.string().min(1),
+    filePath: z.string().min(1),
+    currentContent: z.string(),
+  }),
+  z.object({
+    operation: z.literal('clear'),
+    sessionId: z.string().min(1),
+    filePath: z.string().min(1),
+  }),
+]);
 
 // Map tool names to their schemas for easy lookup
 export const toolSchemaMap: Record<string, z.ZodType<any>> = {

@@ -6,7 +6,6 @@ const DEFAULT_CACHE_SIZE = 500;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REQUEST_TIMEOUT_MS = 10_000;
-const KEY_HASH_THRESHOLD_CHARS = 256;
 
 /**
  * Remote tokenizer that uses Google AI's countTokens REST endpoint —
@@ -47,18 +46,20 @@ export class GoogleAITokenizer implements ITokenizer {
     }
 
     public async countTokens(text: string): Promise<number> {
-        const key =
-            text.length <= KEY_HASH_THRESHOLD_CHARS
-                ? text
-                : createHash('sha256').update(text).digest('hex');
+        // Always hash with a namespace prefix so cache keys can't collide
+        // with a raw string arg and so sensitive user text isn't retained
+        // verbatim in process memory.
+        const key = `sha256:${createHash('sha256').update(text).digest('hex')}`;
         const cached = this.cache.get(key);
         if (cached !== undefined) {
             return cached;
         }
 
+        // Per Gemini API reference, x-goog-api-key is the recommended
+        // auth path — it keeps the key out of URLs and access logs.
         const url = `${this.endpoint}/${encodeURIComponent(
             this.modelName
-        )}:countTokens?key=${encodeURIComponent(this.apiKey)}`;
+        )}:countTokens`;
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -66,7 +67,10 @@ export class GoogleAITokenizer implements ITokenizer {
         try {
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': this.apiKey,
+                },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text }] }],
                 }),
@@ -74,9 +78,10 @@ export class GoogleAITokenizer implements ITokenizer {
             });
 
             if (!response.ok) {
-                const body = await response.text().catch(() => '');
+                // Don't embed the response body — it can leak prompt
+                // content in upstream logs.
                 throw new Error(
-                    `Google AI countTokens failed: ${response.status} ${response.statusText} ${body.slice(0, 200)}`
+                    `Google AI countTokens failed: ${response.status} ${response.statusText}`
                 );
             }
 

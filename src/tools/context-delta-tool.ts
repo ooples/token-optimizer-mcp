@@ -68,10 +68,10 @@ export class ContextDeltaTool {
                 error: 'currentContent is required for compute-delta',
             };
         }
-        const session = this.sessionManager.getSession(sessionId);
-        if (!session) {
-            return { success: false, error: `Unknown session: ${sessionId}` };
-        }
+        // Auto-bootstrap the session on first contact so PS-side callers
+        // that locally generate a sessionId don't have to separately
+        // create it server-side first.
+        const session = this.sessionManager.getOrCreateSession(sessionId);
         const previous = session.getFileContent(filePath);
 
         try {
@@ -116,6 +116,7 @@ export class ContextDeltaTool {
             return { success: false, error: 'currentContent is required for seed' };
         }
         try {
+            this.sessionManager.getOrCreateSession(sessionId);
             this.sessionManager.updateFileState(sessionId, filePath, currentContent);
             return { success: true, isBaseline: true };
         } catch (error) {
@@ -139,28 +140,45 @@ export const CONTEXT_DELTA_TOOL_DEFINITION = {
     name: 'context_delta',
     description:
         'Compute a unified-diff delta for a file in a given session so the model only sees changes since the last snapshot. Operations: compute-delta, seed, clear.',
+    // Discriminated inputSchema keyed on `operation` — compute-delta and
+    // seed require currentContent at runtime, so enforce that at schema
+    // validation time rather than letting a malformed payload reach the
+    // tool body.
     inputSchema: {
         type: 'object',
-        properties: {
-            operation: {
-                type: 'string',
-                enum: ['compute-delta', 'seed', 'clear'],
-                description: 'Operation to perform',
+        oneOf: [
+            {
+                type: 'object',
+                properties: {
+                    operation: { type: 'string', const: 'compute-delta' },
+                    sessionId: { type: 'string', minLength: 1 },
+                    filePath: { type: 'string', minLength: 1 },
+                    currentContent: { type: 'string' },
+                },
+                required: ['operation', 'sessionId', 'filePath', 'currentContent'],
+                additionalProperties: false,
             },
-            sessionId: {
-                type: 'string',
-                description: 'Session identifier (create one via SessionManager first)',
+            {
+                type: 'object',
+                properties: {
+                    operation: { type: 'string', const: 'seed' },
+                    sessionId: { type: 'string', minLength: 1 },
+                    filePath: { type: 'string', minLength: 1 },
+                    currentContent: { type: 'string' },
+                },
+                required: ['operation', 'sessionId', 'filePath', 'currentContent'],
+                additionalProperties: false,
             },
-            filePath: {
-                type: 'string',
-                description: 'Path of the file inside the session state',
+            {
+                type: 'object',
+                properties: {
+                    operation: { type: 'string', const: 'clear' },
+                    sessionId: { type: 'string', minLength: 1 },
+                    filePath: { type: 'string', minLength: 1 },
+                },
+                required: ['operation', 'sessionId', 'filePath'],
+                additionalProperties: false,
             },
-            currentContent: {
-                type: 'string',
-                description:
-                    'Current file content (required for compute-delta and seed)',
-            },
-        },
-        required: ['operation', 'sessionId', 'filePath'],
+        ],
     },
 };

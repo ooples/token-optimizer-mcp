@@ -49,7 +49,9 @@ describe('Session', () => {
     expect((await session.getHistoryTokenCount()) > 50).toBe(true);
     await session.compressHistory();
     const history = session.getHistory();
-    expect(history[0].role).toBe('system');
+    // Summary is stored as `assistant` (never `system`) so that
+    // user-derived text can't be elevated into system-role context.
+    expect(history[0].role).toBe('assistant');
     expect(history[0].content.startsWith('[summary')).toBe(true);
     expect(history.length).toBeLessThan(10);
   });

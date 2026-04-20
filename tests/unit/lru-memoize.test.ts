@@ -81,4 +81,33 @@ describe('lruMemoize', () => {
     // Stampede collapsed into a single invocation.
     expect(calls).toBe(1);
   });
+
+  it('memoizes a legitimately-undefined return value', async () => {
+    let calls = 0;
+    const fn = async (): Promise<undefined> => {
+      calls++;
+      return undefined;
+    };
+    const memo = lruMemoize(fn, { name: 'test-undefined', maxSize: 10 });
+    expect(await memo()).toBeUndefined();
+    expect(await memo()).toBeUndefined();
+    // Without envelope-style storage, the second call would re-run fn.
+    expect(calls).toBe(1);
+  });
+
+  it('distinguishes bigint args from string args in the default key', async () => {
+    let calls = 0;
+    const fn = async (x: unknown) => {
+      calls++;
+      return String(x);
+    };
+    const memo = lruMemoize(fn as (x: unknown) => Promise<string>, {
+      name: 'test-bigint-collision',
+      maxSize: 10,
+    });
+    expect(await memo(1n)).toBe('1');
+    expect(await memo('1')).toBe('1');
+    // Two distinct args ⇒ two distinct cache keys ⇒ two invocations.
+    expect(calls).toBe(2);
+  });
 });

@@ -67,21 +67,32 @@ function Invoke-ContextDelta {
     if ($Operation -ne 'clear' -and $null -ne $CurrentContent) {
         $toolArgs.currentContent = $CurrentContent
     }
-    if (Get-Command Invoke-TokenOptimizer -ErrorAction SilentlyContinue) {
-        try {
-            return Invoke-TokenOptimizer -ToolName 'context_delta' -Arguments $toolArgs
-        } catch {
-            $msg = "Invoke-ContextDelta failed: $($_.Exception.Message)"
-            if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
-                Write-Log $msg 'WARN'
-            } else {
-                Write-Warning $msg
-            }
-            return $null
+
+    # Call the MCP tool via the repo's existing invoke-mcp.ps1 script.
+    # The server-side ContextDeltaTool auto-creates the session on first
+    # contact, so there's no separate bootstrap step needed here.
+    $invokeMcp = Join-Path $PSScriptRoot 'invoke-mcp.ps1'
+    if (-not (Test-Path $invokeMcp)) {
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+            Write-Log "invoke-mcp.ps1 not found at $invokeMcp; skipping context_delta." 'DEBUG'
         }
+        return $null
     }
-    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
-        Write-Log 'Invoke-TokenOptimizer helper not available; skipping context_delta.' 'DEBUG'
+
+    try {
+        $argsJson = $toolArgs | ConvertTo-Json -Compress
+        $resultJson = & $invokeMcp -Tool 'context_delta' -ArgumentsJson $argsJson
+        if ($resultJson) {
+            return ($resultJson | ConvertFrom-Json)
+        }
+        return $null
+    } catch {
+        $msg = "Invoke-ContextDelta failed: $($_.Exception.Message)"
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+            Write-Log $msg 'WARN'
+        } else {
+            Write-Warning $msg
+        }
+        return $null
     }
-    return $null
 }

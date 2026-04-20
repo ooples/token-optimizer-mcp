@@ -70,18 +70,19 @@ function Save-GzippedFile {
     }
     $compressed = Compress-String -InputString $Content
     $gzPath = "$Path.gz"
-    $tmpPath = "$gzPath.tmp"
+    # Per-write temp path so concurrent writers to the same destination
+    # can't clobber each other mid-write.
+    $tmpPath = "$gzPath.$([guid]::NewGuid().ToString('N')).tmp"
     [System.IO.File]::WriteAllBytes($tmpPath, $compressed)
     # Atomic swap: File::Move(src, dst, overwrite:$true) on .NET5+.
     # Unlike "delete then move", this never leaves the caller with a
     # missing .gz file if the process crashes.
     try {
         [System.IO.File]::Move($tmpPath, $gzPath, $true)
-    } catch {
+    } finally {
         if (Test-Path $tmpPath) {
             Remove-Item -Path $tmpPath -Force -ErrorAction SilentlyContinue
         }
-        throw
     }
     if (Test-Path $Path) {
         Remove-Item -Path $Path -Force -ErrorAction SilentlyContinue
@@ -98,8 +99,17 @@ function Read-MaybeGzippedFile {
     )
     $gzPath = "$Path.gz"
     if (Test-Path $gzPath) {
-        $bytes = [System.IO.File]::ReadAllBytes($gzPath)
-        return Expand-String -CompressedBytes $bytes
+        try {
+            $bytes = [System.IO.File]::ReadAllBytes($gzPath)
+            return Expand-String -CompressedBytes $bytes
+        } catch {
+            # Corrupt / partial .gz — fall back to the plaintext sibling
+            # so the backward-compat migration path still works. If no
+            # plaintext exists either, rethrow the original error.
+            if (-not (Test-Path $Path)) {
+                throw
+            }
+        }
     }
     if (Test-Path $Path) {
         return [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)

@@ -34,11 +34,20 @@ export interface TruncatingSummarizerOptions {
     maxChars?: number;
 }
 
+const TRUNCATION_MARKER = '\n... [truncated] ...\n';
+const MIN_MAX_CHARS = 32;
+
 export class TruncatingSummarizer implements ISummarizer {
     private readonly maxChars: number;
 
     constructor(options: TruncatingSummarizerOptions = {}) {
-        this.maxChars = options.maxChars ?? 2000;
+        const maxChars = options.maxChars ?? 2000;
+        if (!Number.isFinite(maxChars) || maxChars < MIN_MAX_CHARS) {
+            throw new Error(
+                `TruncatingSummarizer.maxChars must be >= ${MIN_MAX_CHARS}, got ${maxChars}`
+            );
+        }
+        this.maxChars = maxChars;
     }
 
     public async summarize(messages: readonly Message[]): Promise<string> {
@@ -54,11 +63,16 @@ export class TruncatingSummarizer implements ISummarizer {
             return joined;
         }
 
-        const keepHead = Math.floor(this.maxChars * 0.4);
-        const keepTail = this.maxChars - keepHead - 20;
+        // Budget excludes the marker length so the final string never
+        // exceeds maxChars — the previous `-20` was a guess that
+        // didn't match the marker exactly and produced unpredictable
+        // output for small limits.
+        const budget = Math.max(0, this.maxChars - TRUNCATION_MARKER.length);
+        const keepHead = Math.floor(budget * 0.4);
+        const keepTail = budget - keepHead;
         return (
             joined.slice(0, keepHead) +
-            '\n... [truncated] ...\n' +
+            TRUNCATION_MARKER +
             joined.slice(-keepTail)
         );
     }
@@ -131,9 +145,11 @@ export class AnthropicSummarizer implements ISummarizer {
             });
 
             if (!response.ok) {
-                const body = await response.text().catch(() => '');
+                // Deliberately omit the response body — it can echo
+                // user prompt content and we don't want that leaking
+                // into log pipelines via thrown errors.
                 throw new Error(
-                    `Anthropic summarize failed: ${response.status} ${response.statusText} ${body.slice(0, 200)}`
+                    `Anthropic summarize failed: ${response.status} ${response.statusText}`
                 );
             }
 
@@ -216,9 +232,9 @@ export class GoogleAISummarizer implements ISummarizer {
             });
 
             if (!response.ok) {
-                const body = await response.text().catch(() => '');
+                // See AnthropicSummarizer — no body in the thrown error.
                 throw new Error(
-                    `Google AI summarize failed: ${response.status} ${response.statusText} ${body.slice(0, 200)}`
+                    `Google AI summarize failed: ${response.status} ${response.statusText}`
                 );
             }
 

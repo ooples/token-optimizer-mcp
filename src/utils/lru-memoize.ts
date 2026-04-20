@@ -65,7 +65,11 @@ export function lruMemoize<Args extends readonly unknown[], R>(
     fn: (...args: Args) => Promise<R>,
     options: LruMemoizeOptions<Args>
 ): (...args: Args) => Promise<R> {
-    const cache = new LruCache<string, R>(options.maxSize, options.ttlMs ?? 0);
+    // Wrap values in a tiny envelope so a legitimately-cached `undefined`
+    // can be distinguished from a cache miss.
+    type Envelope = { value: R };
+    const cache = new LruCache<string, Envelope>(options.maxSize, options.ttlMs ?? 0);
+
     // Deduplicate concurrent calls for the same key so a stampede of
     // requests while the first promise is still pending doesn't run the
     // expensive function N times.
@@ -79,9 +83,14 @@ export function lruMemoize<Args extends readonly unknown[], R>(
     const keyFn =
         options.keyFn ??
         ((args: Args): string => {
-            const serialized = JSON.stringify(args, (_, v) =>
-                typeof v === 'bigint' ? v.toString() : v
-            );
+            const serialized = JSON.stringify(args, (_, v) => {
+                // Tag bigints with a dedicated discriminator so
+                // `[1n]` and `["1"]` don't collapse to the same key.
+                if (typeof v === 'bigint') {
+                    return { __memo_bigint__: v.toString() };
+                }
+                return v;
+            });
             return createHash('sha256').update(serialized).digest('hex');
         });
 
@@ -89,7 +98,7 @@ export function lruMemoize<Args extends readonly unknown[], R>(
         const key = keyFn(args);
         const hit = cache.get(key);
         if (hit !== undefined) {
-            return hit;
+            return hit.value;
         }
         const pending = inFlight.get(key);
         if (pending) {
@@ -98,7 +107,7 @@ export function lruMemoize<Args extends readonly unknown[], R>(
         const promise = (async () => {
             try {
                 const value = await fn(...args);
-                cache.set(key, value);
+                cache.set(key, { value });
                 return value;
             } finally {
                 inFlight.delete(key);

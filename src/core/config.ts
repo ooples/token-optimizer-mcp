@@ -222,26 +222,31 @@ export class ConfigManager {
     }
   ): HypercontextConfig {
     const userOpt = user.optimization ?? {};
+    // Preserve any existing optimization state the caller may have set
+    // (e.g. via prior update()) instead of always starting from
+    // DEFAULT_OPTIMIZATION. Non-optimization updates should no longer
+    // silently reset the entire optimization block.
+    const baseOptimization = defaults.optimization ?? DEFAULT_OPTIMIZATION;
     return {
       cache: { ...defaults.cache, ...user.cache },
       monitoring: { ...defaults.monitoring, ...user.monitoring },
       intelligence: { ...defaults.intelligence, ...user.intelligence },
       performance: { ...defaults.performance, ...user.performance },
       optimization: {
-        ...DEFAULT_OPTIMIZATION,
+        ...baseOptimization,
         ...userOpt,
         cacheSettings: {
-          ...DEFAULT_OPTIMIZATION.cacheSettings,
+          ...baseOptimization.cacheSettings,
           ...(userOpt.cacheSettings ?? {}),
         },
         chatCompression: {
-          ...DEFAULT_OPTIMIZATION.chatCompression,
+          ...baseOptimization.chatCompression,
           ...(userOpt.chatCompression ?? {}),
         },
         // Deep-merge model token limits so a user override like
         // { "custom-model": 500_000 } does not drop the built-in map.
         modelTokenLimits: {
-          ...DEFAULT_OPTIMIZATION.modelTokenLimits,
+          ...baseOptimization.modelTokenLimits,
           ...(userOpt.modelTokenLimits ?? {}),
         },
       },

@@ -43,7 +43,9 @@ function Handle-Error {
     )
 
     $errorMessage = if ($Message) { $Message } else { $Exception.Message }
-    $stackTrace = $Exception.ScriptStackTrace
+    # $StackTrace is a built-in PowerShell automatic variable — use a
+    # different name so we don't shadow it.
+    $exceptionTrace = $Exception.ScriptStackTrace
     Write-Log "ERROR: $errorMessage" "ERROR"
-    Write-Log "StackTrace: $stackTrace" "ERROR"
+    Write-Log "StackTrace: $exceptionTrace" "ERROR"
 }
