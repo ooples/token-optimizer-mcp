@@ -2272,6 +2272,9 @@ async function cleanup() {
     },
     { fn: () => cache?.close(), name: 'closing cache' },
     { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
+    { fn: async () => await sessionManager.flush(), name: 'flushing sessions' },
+    { fn: () => TokenizerFactory.disposeAll(), name: 'disposing tokenizers' },
+    { fn: () => optimizationStorage.close(), name: 'closing optimization storage' },
     // Note: predictiveCache and cacheWarmup do not implement dispose() methods
     // Removed dispose() calls to prevent runtime errors during cleanup
   ]);

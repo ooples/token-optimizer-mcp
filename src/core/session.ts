@@ -37,10 +37,17 @@ export interface SessionOptions {
     preserveTailRatio?: number;
     tokenizer?: ITokenizer;
     summarizer?: ISummarizer;
+    /**
+     * When true, getHistoryTokenCount may fall back to a character/4
+     * heuristic if no tokenizer is supplied. Production code should
+     * always pass a real tokenizer and leave this false (the default).
+     */
+    allowCharHeuristic?: boolean;
 }
 
 const DEFAULT_MAX_TOKENS = 100_000;
 const DEFAULT_PRESERVE_TAIL_RATIO = 0.3;
+const CHAR_HEURISTIC_RATIO = 4;
 
 export class Session {
     public readonly id: string;
@@ -53,6 +60,7 @@ export class Session {
     private readonly preserveTailRatio: number;
     private readonly tokenizer: ITokenizer | null;
     private readonly summarizer: ISummarizer;
+    private readonly allowCharHeuristic: boolean;
 
     constructor(options: SessionOptions = {}) {
         this.id = options.id ?? randomUUID();
@@ -60,6 +68,7 @@ export class Session {
         this.preserveTailRatio = options.preserveTailRatio ?? DEFAULT_PRESERVE_TAIL_RATIO;
         this.tokenizer = options.tokenizer ?? null;
         this.summarizer = options.summarizer ?? new TruncatingSummarizer();
+        this.allowCharHeuristic = options.allowCharHeuristic ?? false;
         this.createdAt = Date.now();
         this.updatedAt = this.createdAt;
     }
@@ -88,14 +97,31 @@ export class Session {
         this.updatedAt = Date.now();
     }
 
+    public clearFileContent(filePath: string): void {
+        if (filePath in this.fileState) {
+            delete this.fileState[filePath];
+            this.updatedAt = Date.now();
+        }
+    }
+
     /**
-     * Total token count of the current history. Uses the injected tokenizer
-     * when available; otherwise falls back to the character/4 heuristic.
+     * Total token count of the current history.
+     *
+     * Requires a tokenizer unless the caller opted into the character/4
+     * heuristic via `allowCharHeuristic: true`. We default to requiring a
+     * tokenizer because #124's whole point is eliminating char/4.
      */
     public async getHistoryTokenCount(): Promise<number> {
         if (!this.tokenizer) {
+            if (!this.allowCharHeuristic) {
+                throw new Error(
+                    'Session.getHistoryTokenCount requires a tokenizer. ' +
+                        'Construct the Session with TokenizerFactory.create(...) ' +
+                        'or pass allowCharHeuristic: true to opt into the fallback.'
+                );
+            }
             return this.history.reduce(
-                (acc, m) => acc + Math.ceil(m.content.length / 4),
+                (acc, m) => acc + Math.ceil(m.content.length / CHAR_HEURISTIC_RATIO),
                 0
             );
         }

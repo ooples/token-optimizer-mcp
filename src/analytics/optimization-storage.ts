@@ -1,4 +1,7 @@
 import Database from 'better-sqlite3';
+import { existsSync, mkdirSync } from 'fs';
+import { homedir } from 'os';
+import { dirname, join } from 'path';
 import { CompressionEngine } from '../core/compression-engine.js';
 
 export interface OptimizationResult {
@@ -9,17 +12,25 @@ export interface OptimizationResult {
     tokensSaved: number;
 }
 
+export function getDefaultOptimizationDbPath(): string {
+    return join(homedir(), '.token-optimizer', 'optimization.db');
+}
+
 export class SqliteOptimizationStorage {
     private db: Database.Database | null = null;
     private readonly dbPath: string;
     private readonly compressionEngine: CompressionEngine;
 
-    constructor(dbPath: string = './optimization.db') {
-        this.dbPath = dbPath;
+    constructor(dbPath?: string) {
+        this.dbPath = dbPath ?? getDefaultOptimizationDbPath();
         this.compressionEngine = new CompressionEngine();
     }
 
     public initializeDatabase(): void {
+        const dir = dirname(this.dbPath);
+        if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+        }
         this.db = new Database(this.dbPath);
         this.db.pragma('journal_mode = WAL');
         this.db.exec(`

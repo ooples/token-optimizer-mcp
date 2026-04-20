@@ -1,31 +1,68 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import {
+    existsSync,
+    mkdirSync,
+    readFileSync,
+    writeFileSync,
+    renameSync,
+    unlinkSync,
+} from 'fs';
 import { dirname } from 'path';
+import { z } from 'zod';
 import {
     Session,
     SessionOptions,
-    SessionSnapshot,
     MessageRole,
 } from './session.js';
 import { ITokenizer } from './tokenizers/i-tokenizer.js';
 import { ISummarizer } from './summarization.js';
 
 /**
- * Singleton-style SessionManager — addresses issues #121 / #122.
+ * Persistent SessionManager — addresses issues #121 / #122.
  *
- * Persists all sessions to a single JSON file so they survive restarts.
- * When a message is added we check whether the session has exceeded its
- * token budget and, if so, auto-compress the history (#121).
+ * Production behaviors added after the audit:
+ *   - Atomic persistence: write to <path>.tmp then rename so a crash mid-
+ *     write never produces a corrupt sessions.json.
+ *   - Debounced persistence: rapid addMessage calls coalesce into one
+ *     disk write per PERSIST_DEBOUNCE_MS window.
+ *   - Error-isolated persist(): a disk-full or permission error is logged
+ *     and never bubbles up to crash the MCP server.
+ *   - Schema-validated load(): malformed persisted state is rejected with
+ *     a warning instead of being cast blindly.
+ *   - Size / expiry caps: sessions inactive past `sessionTtlMs` are
+ *     evicted on load, and no individual file state entry can exceed
+ *     `maxFileStateBytes`.
  */
+
+const PERSIST_DEBOUNCE_MS = 250;
+const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const DEFAULT_MAX_FILE_STATE_BYTES = 10 * 1024 * 1024; // 10 MB per file
+
+const MessageSchema = z.object({
+    role: z.enum(['system', 'user', 'assistant', 'tool']),
+    content: z.string(),
+    timestamp: z.number(),
+});
+
+const SessionSnapshotSchema = z.object({
+    id: z.string(),
+    history: z.array(MessageSchema),
+    fileState: z.record(z.string(), z.string()),
+    maxTokens: z.number(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+});
+
+const PersistedStateSchema = z.object({
+    sessions: z.array(SessionSnapshotSchema),
+});
 
 export interface SessionManagerOptions {
     persistencePath?: string;
     tokenizer?: ITokenizer;
     summarizer?: ISummarizer;
     defaultMaxTokens?: number;
-}
-
-interface PersistedState {
-    sessions: SessionSnapshot[];
+    sessionTtlMs?: number;
+    maxFileStateBytes?: number;
 }
 
 export class SessionManager {
@@ -34,12 +71,19 @@ export class SessionManager {
     private readonly tokenizer: ITokenizer | undefined;
     private readonly summarizer: ISummarizer | undefined;
     private readonly defaultMaxTokens: number | undefined;
+    private readonly sessionTtlMs: number;
+    private readonly maxFileStateBytes: number;
+    private pendingPersistTimer: NodeJS.Timeout | null = null;
+    private persistInFlight = false;
 
     constructor(options: SessionManagerOptions = {}) {
         this.persistencePath = options.persistencePath ?? null;
         this.tokenizer = options.tokenizer;
         this.summarizer = options.summarizer;
         this.defaultMaxTokens = options.defaultMaxTokens;
+        this.sessionTtlMs = options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS;
+        this.maxFileStateBytes =
+            options.maxFileStateBytes ?? DEFAULT_MAX_FILE_STATE_BYTES;
         if (this.persistencePath && existsSync(this.persistencePath)) {
             this.load();
         }
@@ -53,7 +97,7 @@ export class SessionManager {
             ...options,
         });
         this.sessions.set(session.id, session);
-        this.persist();
+        this.schedulePersist();
         return session;
     }
 
@@ -68,33 +112,24 @@ export class SessionManager {
     public deleteSession(id: string): boolean {
         const removed = this.sessions.delete(id);
         if (removed) {
-            this.persist();
+            this.schedulePersist();
         }
         return removed;
     }
 
-    /**
-     * Add a message to the session and auto-compress the history if the
-     * token budget is exceeded (#121).
-     *
-     * Returns the post-add token count of the session.
-     */
     public async addMessage(
         sessionId: string,
         role: MessageRole,
         content: string
     ): Promise<number> {
-        const session = this.sessions.get(sessionId);
-        if (!session) {
-            throw new Error(`Unknown session: ${sessionId}`);
-        }
+        const session = this.requireSession(sessionId);
         session.addMessage(role, content);
         const currentTokens = await session.getHistoryTokenCount();
         let finalTokens = currentTokens;
         if (currentTokens > session.maxTokens) {
             finalTokens = await session.compressHistory();
         }
-        this.persist();
+        this.schedulePersist();
         return finalTokens;
     }
 
@@ -103,26 +138,92 @@ export class SessionManager {
         filePath: string,
         content: string
     ): void {
-        const session = this.sessions.get(sessionId);
-        if (!session) {
-            throw new Error(`Unknown session: ${sessionId}`);
+        const session = this.requireSession(sessionId);
+        if (Buffer.byteLength(content, 'utf8') > this.maxFileStateBytes) {
+            throw new Error(
+                `Session file state content exceeds ${this.maxFileStateBytes} bytes for ${filePath}`
+            );
         }
         session.setFileContent(filePath, content);
-        this.persist();
+        this.schedulePersist();
     }
 
-    private persist(): void {
+    public clearFileState(sessionId: string, filePath: string): void {
+        const session = this.requireSession(sessionId);
+        session.clearFileContent(filePath);
+        this.schedulePersist();
+    }
+
+    /**
+     * Flush any pending debounced persist. Call this from the host's
+     * shutdown handler so the last writes survive.
+     */
+    public async flush(): Promise<void> {
+        if (this.pendingPersistTimer) {
+            clearTimeout(this.pendingPersistTimer);
+            this.pendingPersistTimer = null;
+        }
+        this.persistNow();
+    }
+
+    private requireSession(id: string): Session {
+        const session = this.sessions.get(id);
+        if (!session) {
+            throw new Error(`Unknown session: ${id}`);
+        }
+        return session;
+    }
+
+    private schedulePersist(): void {
         if (!this.persistencePath) {
             return;
         }
-        const state: PersistedState = {
-            sessions: this.listSessions().map((s) => s.toSnapshot()),
-        };
-        const dir = dirname(this.persistencePath);
-        if (!existsSync(dir)) {
-            mkdirSync(dir, { recursive: true });
+        if (this.pendingPersistTimer) {
+            return;
         }
-        writeFileSync(this.persistencePath, JSON.stringify(state, null, 2));
+        this.pendingPersistTimer = setTimeout(() => {
+            this.pendingPersistTimer = null;
+            this.persistNow();
+        }, PERSIST_DEBOUNCE_MS);
+        // Don't keep the event loop alive just for persistence.
+        if (typeof this.pendingPersistTimer.unref === 'function') {
+            this.pendingPersistTimer.unref();
+        }
+    }
+
+    private persistNow(): void {
+        if (!this.persistencePath || this.persistInFlight) {
+            return;
+        }
+        this.persistInFlight = true;
+        try {
+            const state = {
+                sessions: this.listSessions().map((s) => s.toSnapshot()),
+            };
+            const dir = dirname(this.persistencePath);
+            if (!existsSync(dir)) {
+                mkdirSync(dir, { recursive: true });
+            }
+            const tmpPath = `${this.persistencePath}.tmp`;
+            writeFileSync(tmpPath, JSON.stringify(state, null, 2));
+            renameSync(tmpPath, this.persistencePath);
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error);
+            console.warn(
+                `SessionManager: failed to persist to ${this.persistencePath}: ${message}`
+            );
+            // Best-effort cleanup of the tmp file
+            if (this.persistencePath) {
+                try {
+                    unlinkSync(`${this.persistencePath}.tmp`);
+                } catch {
+                    // Ignore — tmp file may not exist.
+                }
+            }
+        } finally {
+            this.persistInFlight = false;
+        }
     }
 
     private load(): void {
@@ -131,11 +232,19 @@ export class SessionManager {
         }
         try {
             const raw = readFileSync(this.persistencePath, 'utf-8');
-            const parsed = JSON.parse(raw) as PersistedState;
-            if (!parsed || !Array.isArray(parsed.sessions)) {
+            const json = JSON.parse(raw);
+            const parsed = PersistedStateSchema.safeParse(json);
+            if (!parsed.success) {
+                console.warn(
+                    `SessionManager: invalid persisted state at ${this.persistencePath}, discarding.`
+                );
                 return;
             }
-            for (const snapshot of parsed.sessions) {
+            const now = Date.now();
+            for (const snapshot of parsed.data.sessions) {
+                if (now - snapshot.updatedAt > this.sessionTtlMs) {
+                    continue; // Expired session — drop.
+                }
                 const session = Session.fromSnapshot(snapshot, {
                     tokenizer: this.tokenizer,
                     summarizer: this.summarizer,

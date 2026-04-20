@@ -73,7 +73,14 @@ export class ContextDeltaTool {
             return { success: false, error: `Unknown session: ${sessionId}` };
         }
         const previous = session.getFileContent(filePath);
-        session.setFileContent(filePath, currentContent);
+
+        try {
+            // Goes through SessionManager so the new state hits disk.
+            this.sessionManager.updateFileState(sessionId, filePath, currentContent);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: message };
+        }
 
         if (previous === undefined) {
             return {
@@ -112,15 +119,13 @@ export class ContextDeltaTool {
     }
 
     private clear(options: ContextDeltaOptions): ContextDeltaResponse {
-        const session = this.sessionManager.getSession(options.sessionId);
-        if (!session) {
-            return {
-                success: false,
-                error: `Unknown session: ${options.sessionId}`,
-            };
+        try {
+            this.sessionManager.clearFileState(options.sessionId, options.filePath);
+            return { success: true };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: message };
         }
-        session.setFileContent(options.filePath, '');
-        return { success: true };
     }
 }
 

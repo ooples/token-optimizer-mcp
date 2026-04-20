@@ -5,7 +5,7 @@ import { HeuristicTokenizer } from '../../src/core/tokenizers/heuristic-tokenize
 
 describe('Session', () => {
   it('appends messages and tracks updatedAt', async () => {
-    const session = new Session();
+    const session = new Session({ allowCharHeuristic: true });
     const before = session.updatedAt;
     await new Promise((r) => setTimeout(r, 5));
     session.addMessage('user', 'hi');
@@ -14,11 +14,29 @@ describe('Session', () => {
   });
 
   it('compressHistory is a no-op under the budget', async () => {
-    const session = new Session({ maxTokens: 10_000 });
+    const session = new Session({
+      maxTokens: 10_000,
+      allowCharHeuristic: true,
+    });
     session.addMessage('user', 'short');
     const before = session.getHistory().length;
     await session.compressHistory();
     expect(session.getHistory().length).toBe(before);
+  });
+
+  it('getHistoryTokenCount throws without a tokenizer when heuristic is off', async () => {
+    const session = new Session();
+    session.addMessage('user', 'hi');
+    await expect(session.getHistoryTokenCount()).rejects.toThrow(
+      /requires a tokenizer/
+    );
+  });
+
+  it('clearFileContent removes the entry', () => {
+    const session = new Session();
+    session.setFileContent('a.ts', 'const x = 1;');
+    session.clearFileContent('a.ts');
+    expect(session.getFileContent('a.ts')).toBeUndefined();
   });
 
   it('compressHistory summarizes head when over budget', async () => {
