@@ -136,6 +136,7 @@ import {
   CONTEXT_DELTA_TOOL_DEFINITION,
 } from '../tools/context-delta-tool.js';
 import { SessionManager } from '../core/session-manager.js';
+import { createSummarizerFromEnv } from '../core/summarization.js';
 import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
 import { ConfigManager } from '../core/config.js';
 import { lruMemoize, memoRegistry } from '../utils/lru-memoize.js';
@@ -398,6 +399,7 @@ const sessionManager = new SessionManager({
   persistencePath: path.join(os.homedir(), '.token-optimizer', 'sessions.json'),
   tokenizer: sessionTokenizer,
   defaultMaxTokens: chatDefaultMaxTokens,
+  summarizer: createSummarizerFromEnv(),
 });
 const contextDelta = new ContextDeltaTool(sessionManager);
 
