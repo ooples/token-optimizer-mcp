@@ -1573,6 +1573,17 @@ export const CACHE_WARMUP_TOOL_DEFINITION = {
       accessHistory: {
         type: 'array',
         description: 'Access history for pattern-based warmup',
+        items: {
+          type: 'object',
+          properties: {
+            key: { type: 'string' },
+            timestamp: { type: 'number' },
+            accessCount: { type: 'number' },
+            category: { type: 'string' },
+            metadata: { type: 'object', additionalProperties: true },
+          },
+          required: ['key', 'timestamp', 'accessCount'],
+        },
       },
       minAccessCount: {
         type: 'number',
