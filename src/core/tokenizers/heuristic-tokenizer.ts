@@ -1,8 +1,18 @@
+import { createHash } from 'crypto';
 import { ITokenizer } from './i-tokenizer.js';
 import { LruCache } from '../../utils/lru-cache.js';
 
 const DEFAULT_CACHE_SIZE = 500;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
+/** See TiktokenTokenizer for rationale. */
+const KEY_HASH_THRESHOLD_CHARS = 256;
+
+function cacheKeyFor(text: string): string {
+    if (text.length <= KEY_HASH_THRESHOLD_CHARS) {
+        return text;
+    }
+    return createHash('sha256').update(text).digest('hex');
+}
 
 export enum ContentType {
     Code = 'code',
@@ -43,14 +53,15 @@ export class HeuristicTokenizer implements ITokenizer {
     }
 
     public async countTokens(text: string): Promise<number> {
-        const cached = this.cache.get(text);
+        const key = cacheKeyFor(text);
+        const cached = this.cache.get(key);
         if (cached !== undefined) {
             return cached;
         }
         const contentType = HeuristicTokenizer.detectContentType(text);
         const ratio = CHARS_PER_TOKEN[contentType];
         const count = Math.ceil(text.length / ratio);
-        this.cache.set(text, count);
+        this.cache.set(key, count);
         return count;
     }
 

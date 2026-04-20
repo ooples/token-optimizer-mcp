@@ -97,12 +97,45 @@ function Import-TokenOptimizerConfig {
     }
 }
 
+function Merge-TokenOptimizerHashtable {
+    param(
+        [hashtable]$Base,
+        $User
+    )
+    $merged = @{}
+    foreach ($key in $Base.Keys) {
+        $merged[$key] = $Base[$key]
+    }
+    if ($null -eq $User) {
+        return $merged
+    }
+    # Handle both hashtables and PSCustomObjects (ConvertFrom-Json returns the latter).
+    $userKeys = @()
+    if ($User -is [hashtable]) {
+        $userKeys = $User.Keys
+    } elseif ($User.PSObject) {
+        $userKeys = $User.PSObject.Properties.Name
+    }
+    foreach ($key in $userKeys) {
+        $userValue = if ($User -is [hashtable]) { $User[$key] } else { $User.$key }
+        if ($Base.ContainsKey($key) -and ($Base[$key] -is [hashtable]) -and ($null -ne $userValue)) {
+            $merged[$key] = Merge-TokenOptimizerHashtable -Base $Base[$key] -User $userValue
+        } else {
+            $merged[$key] = $userValue
+        }
+    }
+    return $merged
+}
+
 function Get-TokenOptimizerOptimizationConfig {
     $config = Import-TokenOptimizerConfig
-    if ($null -ne $config.optimization) {
-        return $config.optimization
+    $defaults = $script:TokenOptimizerDefaultConfig.optimization
+    if ($null -eq $config.optimization) {
+        return $defaults
     }
-    return $script:TokenOptimizerDefaultConfig.optimization
+    # Deep-merge the user's partial optimization section onto defaults so
+    # overriding one modelTokenLimit doesn't drop the rest of the map.
+    return Merge-TokenOptimizerHashtable -Base $defaults -User $config.optimization
 }
 
 function Get-TokenOptimizerModelTokenLimit {

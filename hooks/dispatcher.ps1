@@ -8,7 +8,21 @@ param([string]$Phase = "")
 $HANDLERS_DIR = "C:\Users\cheat\.claude-global\hooks\handlers"
 $LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\dispatcher.log"
 $ORCHESTRATOR = "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
-. "$PSScriptRoot\helpers\logging.ps1"
+
+# Load the shared logging helper defensively: a missing/malformed helper
+# must not kill the dispatcher for every hook phase. Fall back to a
+# minimal Write-Log shim so the rest of the script still runs.
+$loggingHelperPath = "$PSScriptRoot\helpers\logging.ps1"
+try {
+    if (Test-Path $loggingHelperPath) {
+        . $loggingHelperPath
+    } else {
+        throw "logging helper not found at $loggingHelperPath"
+    }
+} catch {
+    function Write-Log { param([string]$Message, [string]$Level = 'INFO') $null = $Message; $null = $Level }
+    function Handle-Error { param($Exception, [string]$Message) $null = $Exception; $null = $Message }
+}
 
 
 

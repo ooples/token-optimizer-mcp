@@ -10,6 +10,17 @@ param(
     [string]$InputJsonFile = ""
 )
 
+# Dot-source helpers BEFORE any logging — Write-Log must exist before
+# the first use below.
+$HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
+$INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
+$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-orchestrator.log"
+$SESSION_FILE = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
+. "$PSScriptRoot\..\helpers\logging.ps1"
+. "$PSScriptRoot\..\helpers\config.ps1"
+. "$PSScriptRoot\..\helpers\gzip.ps1"
+. "$PSScriptRoot\..\helpers\context-delta.ps1"
+
 # DIAGNOSTIC: Log script version/load time to verify latest version is being used
 $SCRIPT_VERSION = Get-Date -Format 'yyyyMMdd.HHmmss'
 Write-Log "token-optimizer-orchestrator.ps1 version $SCRIPT_VERSION loaded. Phase=$Phase, Action=$Action" "DEBUG"
@@ -24,15 +35,6 @@ if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
         Write-Log "Failed to read InputJsonFile: $($_.Exception.Message)" "ERROR"
     }
 }
-
-$HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
-$INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
-. "$PSScriptRoot\..\helpers\logging.ps1"
-. "$PSScriptRoot\..\helpers\config.ps1"
-. "$PSScriptRoot\..\helpers\gzip.ps1"
-. "$PSScriptRoot\..\helpers\context-delta.ps1"
-$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-orchestrator.log"
-$SESSION_FILE = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
 $OPERATIONS_DIR = "C:\Users\cheat\.claude-global\hooks\data"
 
 # PERFORMANCE FIX: Prefer local dev path if not already set
@@ -1950,12 +1952,16 @@ function Handle-OptimizeToolOutput {
             $retrieveResultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimization_storage" -ArgumentsJson $retrieveJson
             $retrieveResult = if ($retrieveResultJson) { $retrieveResultJson | ConvertFrom-Json } else { $null }
 
-            if ($retrieveResult -and $retrieveResult.success) {
+            if ($retrieveResult -and $retrieveResult.success -and $retrieveResult.result) {
                 Write-Log "Cache HIT for optimization result. Hash: $originalTextHash" "INFO"
-                $optimizedTextBytes = [System.Convert]::FromBase64String($retrieveResult.optimizedText)
+                # OptimizationStorageTool.retrieve() returns { success, result: { optimizedText, ... } }.
+                # Read the actual payload from $retrieveResult.result (not top-level), and mirror
+                # the base64 wrapping used on the store path below so round-tripped bytes survive JSON.
+                $cachedEntry = $retrieveResult.result
+                $optimizedTextBytes = [System.Convert]::FromBase64String($cachedEntry.optimizedText)
                 $optimizedText = [System.Text.Encoding]::UTF8.GetString($optimizedTextBytes)
-                $afterTokens = $retrieveResult.optimizedTokens
-                $saved = $retrieveResult.tokensSaved
+                $afterTokens = $cachedEntry.optimizedTokens
+                $saved = $cachedEntry.tokensSaved
                 $percent = if ($beforeTokens -gt 0) { [math]::Round(($saved / $beforeTokens) * 100, 1) } else { 0 }
 
                 if ($script:CurrentSession) {
@@ -2251,13 +2257,19 @@ function Handle-SmartRead {
             # #122: update the MCP server's context_delta so the next read
             # of this file can be served as a diff. Failure here is
             # non-fatal — smart_read still succeeds.
+            #
+            # IMPORTANT: only feed FULL content. smart_read can return a
+            # diff payload (metadata.isDiff), and persisting a diff as the
+            # new baseline would make the next compute-delta compare
+            # against the previous patch instead of the file contents.
             try {
+                $isDiff = $result.metadata -and $result.metadata.isDiff
                 $contentText = if ($result.content -and $result.content[0] -and $result.content[0].text) {
                     $result.content[0].text
                 } else {
                     $null
                 }
-                if ($contentText) {
+                if ($contentText -and -not $isDiff) {
                     $null = Invoke-ContextDelta -Operation 'compute-delta' -FilePath $filePath -CurrentContent $contentText
                 }
             } catch {

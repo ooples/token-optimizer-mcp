@@ -82,25 +82,31 @@ export class ContextDeltaTool {
             return { success: false, error: message };
         }
 
+        // Use UTF-8 byte counts throughout so the reported sizes match
+        // the byte-cap that SessionManager.updateFileState enforces.
+        // string.length counts UTF-16 code units, which drifts for any
+        // non-ASCII content.
+        const originalSize = Buffer.byteLength(currentContent, 'utf8');
         if (previous === undefined) {
             return {
                 success: true,
                 isBaseline: true,
                 delta: currentContent,
-                originalSize: currentContent.length,
-                deltaSize: currentContent.length,
+                originalSize,
+                deltaSize: originalSize,
                 bytesSaved: 0,
             };
         }
 
         const delta = calculateDelta(previous, currentContent, filePath);
+        const deltaSize = Buffer.byteLength(delta, 'utf8');
         return {
             success: true,
             isBaseline: false,
             delta,
-            originalSize: currentContent.length,
-            deltaSize: delta.length,
-            bytesSaved: Math.max(0, currentContent.length - delta.length),
+            originalSize,
+            deltaSize,
+            bytesSaved: Math.max(0, originalSize - deltaSize),
         };
     }
 

@@ -105,35 +105,62 @@ export const OPTIMIZATION_STORAGE_TOOL_DEFINITION = {
     name: 'optimization_storage',
     description:
         'Persist and retrieve brotli-compressed optimization results keyed by text hash. Operations: store, retrieve.',
+    // JSON Schema discriminated union — rejects a `store` payload that
+    // omits required fields at schema time instead of deep in the tool.
     inputSchema: {
         type: 'object',
-        properties: {
-            operation: {
-                type: 'string',
-                enum: ['store', 'retrieve'],
-                description: 'The storage operation to perform',
+        oneOf: [
+            {
+                type: 'object',
+                properties: {
+                    operation: { type: 'string', const: 'store' },
+                    originalTextHash: {
+                        type: 'string',
+                        minLength: 1,
+                        description: 'Stable hash of the original uncompressed text',
+                    },
+                    optimizedText: {
+                        type: 'string',
+                        description: 'The optimized text to store',
+                    },
+                    originalTokens: {
+                        type: 'number',
+                        minimum: 0,
+                        description: 'Token count of the original text',
+                    },
+                    optimizedTokens: {
+                        type: 'number',
+                        minimum: 0,
+                        description: 'Token count after optimization',
+                    },
+                    tokensSaved: {
+                        type: 'number',
+                        description: 'Tokens saved by optimization',
+                    },
+                },
+                required: [
+                    'operation',
+                    'originalTextHash',
+                    'optimizedText',
+                    'originalTokens',
+                    'optimizedTokens',
+                    'tokensSaved',
+                ],
+                additionalProperties: false,
             },
-            originalTextHash: {
-                type: 'string',
-                description: 'Stable hash of the original uncompressed text (required for both operations)',
+            {
+                type: 'object',
+                properties: {
+                    operation: { type: 'string', const: 'retrieve' },
+                    originalTextHash: {
+                        type: 'string',
+                        minLength: 1,
+                        description: 'Stable hash of the original uncompressed text',
+                    },
+                },
+                required: ['operation', 'originalTextHash'],
+                additionalProperties: false,
             },
-            optimizedText: {
-                type: 'string',
-                description: 'The optimized text to store (required for store)',
-            },
-            originalTokens: {
-                type: 'number',
-                description: 'Token count of the original text (required for store)',
-            },
-            optimizedTokens: {
-                type: 'number',
-                description: 'Token count after optimization (required for store)',
-            },
-            tokensSaved: {
-                type: 'number',
-                description: 'Tokens saved by optimization (required for store)',
-            },
-        },
-        required: ['operation'],
+        ],
     },
 };

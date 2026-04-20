@@ -66,4 +66,19 @@ describe('lruMemoize', () => {
     await memo({ id: 'b', ignore: 1 }); // different id → miss
     expect(calls).toBe(2);
   });
+
+  it('deduplicates concurrent calls for the same args', async () => {
+    let calls = 0;
+    const fn = async (x: number) => {
+      calls++;
+      await new Promise((r) => setTimeout(r, 20));
+      return x * 2;
+    };
+    const memo = lruMemoize(fn, { name: 'test-concurrent', maxSize: 10 });
+    const [a, b] = await Promise.all([memo(5), memo(5)]);
+    expect(a).toBe(10);
+    expect(b).toBe(10);
+    // Stampede collapsed into a single invocation.
+    expect(calls).toBe(1);
+  });
 });

@@ -238,6 +238,12 @@ export class ConfigManager {
           ...DEFAULT_OPTIMIZATION.chatCompression,
           ...(userOpt.chatCompression ?? {}),
         },
+        // Deep-merge model token limits so a user override like
+        // { "custom-model": 500_000 } does not drop the built-in map.
+        modelTokenLimits: {
+          ...DEFAULT_OPTIMIZATION.modelTokenLimits,
+          ...(userOpt.modelTokenLimits ?? {}),
+        },
       },
     };
   }

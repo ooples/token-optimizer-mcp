@@ -43,6 +43,10 @@ export interface SessionOptions {
      * always pass a real tokenizer and leave this false (the default).
      */
     allowCharHeuristic?: boolean;
+    /** Override for createdAt — used by fromSnapshot. */
+    createdAt?: number;
+    /** Override for updatedAt — used by fromSnapshot. */
+    updatedAt?: number;
 }
 
 const DEFAULT_MAX_TOKENS = 100_000;
@@ -69,8 +73,9 @@ export class Session {
         this.tokenizer = options.tokenizer ?? null;
         this.summarizer = options.summarizer ?? new TruncatingSummarizer();
         this.allowCharHeuristic = options.allowCharHeuristic ?? false;
-        this.createdAt = Date.now();
-        this.updatedAt = this.createdAt;
+        const now = Date.now();
+        this.createdAt = options.createdAt ?? now;
+        this.updatedAt = options.updatedAt ?? this.createdAt;
     }
 
     public addMessage(role: MessageRole, content: string): Message {
@@ -182,16 +187,17 @@ export class Session {
 
     public static fromSnapshot(
         snapshot: SessionSnapshot,
-        options: Omit<SessionOptions, 'id' | 'maxTokens'> = {}
+        options: Omit<SessionOptions, 'id' | 'maxTokens' | 'createdAt' | 'updatedAt'> = {}
     ): Session {
         const session = new Session({
             id: snapshot.id,
             maxTokens: snapshot.maxTokens,
+            createdAt: snapshot.createdAt,
+            updatedAt: snapshot.updatedAt,
             ...options,
         });
         session.history = [...snapshot.history];
         session.fileState = { ...snapshot.fileState };
-        session.updatedAt = snapshot.updatedAt;
         return session;
     }
 }

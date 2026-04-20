@@ -22,7 +22,17 @@ function Write-Log {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $contextPart = if ($Context) { " [$Context]" } else { "" }
     $logMessage = "[$timestamp] [$Level]$contextPart $Message"
-    $logMessage | Out-File -FilePath $script:LOG_FILE -Append -Encoding UTF8
+    if ($script:LOG_FILE) {
+        try {
+            $logDir = Split-Path -Parent $script:LOG_FILE
+            if ($logDir -and -not (Test-Path $logDir)) {
+                New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+            }
+            $logMessage | Out-File -FilePath $script:LOG_FILE -Append -Encoding UTF8
+        } catch {
+            # Swallow — logging must never be a failure mode for the caller.
+        }
+    }
     Write-Verbose $logMessage
 }
 

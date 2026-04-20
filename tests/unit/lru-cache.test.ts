@@ -63,6 +63,17 @@ describe('LruCache', () => {
     expect(cache.size).toBe(1);
   });
 
+  it('prune removes per-entry TTL expirations even when defaultTtlMs is 0', async () => {
+    const cache = new LruCache<string, number>(4, 0);
+    cache.set('short', 1, 20);
+    cache.set('forever', 2);
+    await new Promise((r) => setTimeout(r, 30));
+    const removed = cache.prune();
+    expect(removed).toBe(1);
+    expect(cache.has('forever')).toBe(true);
+    expect(cache.has('short')).toBe(false);
+  });
+
   it('stats.hitRate reflects hits / total', () => {
     const cache = new LruCache<string, number>(2);
     cache.set('a', 1);

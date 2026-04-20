@@ -72,10 +72,17 @@ function Save-GzippedFile {
     $gzPath = "$Path.gz"
     $tmpPath = "$gzPath.tmp"
     [System.IO.File]::WriteAllBytes($tmpPath, $compressed)
-    if (Test-Path $gzPath) {
-        Remove-Item -Path $gzPath -Force
+    # Atomic swap: File::Move(src, dst, overwrite:$true) on .NET5+.
+    # Unlike "delete then move", this never leaves the caller with a
+    # missing .gz file if the process crashes.
+    try {
+        [System.IO.File]::Move($tmpPath, $gzPath, $true)
+    } catch {
+        if (Test-Path $tmpPath) {
+            Remove-Item -Path $tmpPath -Force -ErrorAction SilentlyContinue
+        }
+        throw
     }
-    Move-Item -Path $tmpPath -Destination $gzPath -Force
     if (Test-Path $Path) {
         Remove-Item -Path $Path -Force -ErrorAction SilentlyContinue
     }

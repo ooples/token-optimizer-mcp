@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { ITokenizer } from './i-tokenizer.js';
 import { LruCache } from '../../utils/lru-cache.js';
 
@@ -5,6 +6,7 @@ const DEFAULT_CACHE_SIZE = 500;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REQUEST_TIMEOUT_MS = 10_000;
+const KEY_HASH_THRESHOLD_CHARS = 256;
 
 /**
  * Remote tokenizer that uses Google AI's countTokens REST endpoint —
@@ -45,7 +47,11 @@ export class GoogleAITokenizer implements ITokenizer {
     }
 
     public async countTokens(text: string): Promise<number> {
-        const cached = this.cache.get(text);
+        const key =
+            text.length <= KEY_HASH_THRESHOLD_CHARS
+                ? text
+                : createHash('sha256').update(text).digest('hex');
+        const cached = this.cache.get(key);
         if (cached !== undefined) {
             return cached;
         }
@@ -80,7 +86,7 @@ export class GoogleAITokenizer implements ITokenizer {
                     `Google AI countTokens returned unexpected payload: ${JSON.stringify(data).slice(0, 200)}`
                 );
             }
-            this.cache.set(text, data.totalTokens);
+            this.cache.set(key, data.totalTokens);
             return data.totalTokens;
         } finally {
             clearTimeout(timeout);

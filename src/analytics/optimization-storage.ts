@@ -68,7 +68,7 @@ export class SqliteOptimizationStorage {
         ).run(
             entry.originalTextHash,
             compressed.compressed,
-            'brotli',
+            SqliteOptimizationStorage.COMPRESSION_ALGORITHM,
             entry.originalTokens,
             entry.optimizedTokens,
             entry.tokensSaved
@@ -78,11 +78,13 @@ export class SqliteOptimizationStorage {
     public get(originalTextHash: string): OptimizationResult | null {
         const db = this.requireDb();
         const row = db.prepare(
-            `SELECT optimized_text_compressed, original_tokens, optimized_tokens, tokens_saved
+            `SELECT optimized_text_compressed, compression_algorithm,
+                    original_tokens, optimized_tokens, tokens_saved
              FROM optimization_results WHERE original_text_hash = ?`
         ).get(originalTextHash) as
             | {
                   optimized_text_compressed: Buffer;
+                  compression_algorithm: string;
                   original_tokens: number;
                   optimized_tokens: number;
                   tokens_saved: number;
@@ -95,12 +97,38 @@ export class SqliteOptimizationStorage {
 
         return {
             originalTextHash,
-            optimizedText: this.compressionEngine.decompress(row.optimized_text_compressed),
+            optimizedText: this.decodePayload(
+                row.optimized_text_compressed,
+                row.compression_algorithm
+            ),
             originalTokens: row.original_tokens,
             optimizedTokens: row.optimized_tokens,
             tokensSaved: row.tokens_saved,
         };
     }
+
+    /**
+     * Decode a stored payload using the persisted algorithm label. Keeps
+     * the door open for additional algorithms (gzip, zstd) without
+     * touching the read path, and surfaces an explicit error for
+     * unknown labels instead of silently corrupting data.
+     */
+    private decodePayload(buffer: Buffer, algorithm: string): string {
+        switch (algorithm) {
+            case 'brotli':
+                return this.compressionEngine.decompress(buffer);
+            case 'none':
+            case '':
+                return buffer.toString('utf8');
+            default:
+                throw new Error(
+                    `Unknown compression_algorithm in optimization_results: ${algorithm}`
+                );
+        }
+    }
+
+    /** Algorithm label paired with the current CompressionEngine. */
+    public static readonly COMPRESSION_ALGORITHM = 'brotli';
 
     public close(): void {
         if (this.db) {

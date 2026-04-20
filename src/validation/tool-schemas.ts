@@ -420,15 +420,23 @@ export const ExportAnalyticsSchema = z.object({
     .describe('Optional filter by MCP server name'),
 });
 
-// 72. optimization_storage
-export const OptimizationStorageSchema = z.object({
-  operation: z.enum(['store', 'retrieve']),
-  originalTextHash: z.string().optional(),
-  optimizedText: z.string().optional(),
-  originalTokens: z.number().optional(),
-  optimizedTokens: z.number().optional(),
-  tokensSaved: z.number().optional(),
-});
+// 72. optimization_storage — discriminated union keyed on `operation` so
+// the zod validator rejects a `store` request missing the required
+// payload fields at validateToolArgs time, instead of after dispatch.
+export const OptimizationStorageSchema = z.discriminatedUnion('operation', [
+  z.object({
+    operation: z.literal('store'),
+    originalTextHash: z.string().min(1),
+    optimizedText: z.string(),
+    originalTokens: z.number().nonnegative(),
+    optimizedTokens: z.number().nonnegative(),
+    tokensSaved: z.number(),
+  }),
+  z.object({
+    operation: z.literal('retrieve'),
+    originalTextHash: z.string().min(1),
+  }),
+]);
 
 // 73. context_delta
 export const ContextDeltaSchema = z.object({

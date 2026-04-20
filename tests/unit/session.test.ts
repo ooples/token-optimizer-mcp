@@ -54,7 +54,7 @@ describe('Session', () => {
     expect(history.length).toBeLessThan(10);
   });
 
-  it('snapshot round-trips', () => {
+  it('snapshot round-trips and preserves createdAt / updatedAt', () => {
     const session = new Session({ maxTokens: 42 });
     session.addMessage('user', 'hello');
     session.setFileContent('a.ts', 'const x = 1;');
@@ -64,6 +64,8 @@ describe('Session', () => {
     expect(restored.maxTokens).toBe(42);
     expect(restored.getFileContent('a.ts')).toBe('const x = 1;');
     expect(restored.getHistory()[0].content).toBe('hello');
+    expect(restored.createdAt).toBe(snapshot.createdAt);
+    expect(restored.updatedAt).toBe(snapshot.updatedAt);
   });
 });
 

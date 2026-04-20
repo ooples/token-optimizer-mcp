@@ -66,6 +66,11 @@ export function lruMemoize<Args extends readonly unknown[], R>(
     options: LruMemoizeOptions<Args>
 ): (...args: Args) => Promise<R> {
     const cache = new LruCache<string, R>(options.maxSize, options.ttlMs ?? 0);
+    // Deduplicate concurrent calls for the same key so a stampede of
+    // requests while the first promise is still pending doesn't run the
+    // expensive function N times.
+    const inFlight = new Map<string, Promise<R>>();
+
     memoRegistry.register({
         name: options.name,
         cache: cache as unknown as LruCache<string, unknown>,
@@ -86,8 +91,20 @@ export function lruMemoize<Args extends readonly unknown[], R>(
         if (hit !== undefined) {
             return hit;
         }
-        const value = await fn(...args);
-        cache.set(key, value);
-        return value;
+        const pending = inFlight.get(key);
+        if (pending) {
+            return pending;
+        }
+        const promise = (async () => {
+            try {
+                const value = await fn(...args);
+                cache.set(key, value);
+                return value;
+            } finally {
+                inFlight.delete(key);
+            }
+        })();
+        inFlight.set(key, promise);
+        return promise;
     };
 }

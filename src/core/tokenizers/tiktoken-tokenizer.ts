@@ -1,9 +1,24 @@
+import { createHash } from 'crypto';
 import { encoding_for_model, Tiktoken, TiktokenModel } from 'tiktoken';
 import { ITokenizer } from './i-tokenizer.js';
 import { LruCache } from '../../utils/lru-cache.js';
 
 const DEFAULT_CACHE_SIZE = 500;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
+/**
+ * Strings longer than this are hashed before being used as a cache key
+ * so the LRU stores ~64-byte SHA-256 digests instead of entire prompts
+ * or file contents — keeps the cache from ballooning into hundreds of
+ * MB on hot paths.
+ */
+const KEY_HASH_THRESHOLD_CHARS = 256;
+
+function cacheKeyFor(text: string): string {
+    if (text.length <= KEY_HASH_THRESHOLD_CHARS) {
+        return text;
+    }
+    return createHash('sha256').update(text).digest('hex');
+}
 
 const SUPPORTED_TIKTOKEN_MODELS: readonly TiktokenModel[] = ['gpt-4', 'gpt-3.5-turbo'];
 
@@ -20,12 +35,13 @@ export class TiktokenTokenizer implements ITokenizer {
     }
 
     public async countTokens(text: string): Promise<number> {
-        const cached = this.cache.get(text);
+        const key = cacheKeyFor(text);
+        const cached = this.cache.get(key);
         if (cached !== undefined) {
             return cached;
         }
         const count = this.encoder.encode(text).length;
-        this.cache.set(text, count);
+        this.cache.set(key, count);
         return count;
     }
 

@@ -30,12 +30,15 @@ export class TokenizerFactory {
     }
 
     public static createFromEnv(): ITokenizer {
+        // TOKEN_OPTIMIZER_MODEL has highest precedence so a user can pin
+        // the optimizer model without having to clear broader env vars
+        // (CLAUDE_MODEL, ANTHROPIC_MODEL, …) that may already be set.
         const modelName =
+            process.env.TOKEN_OPTIMIZER_MODEL ||
             process.env.CLAUDE_MODEL ||
             process.env.ANTHROPIC_MODEL ||
             process.env.OPENAI_MODEL ||
             process.env.GOOGLE_AI_MODEL ||
-            process.env.TOKEN_OPTIMIZER_MODEL ||
             'gpt-4';
         return TokenizerFactory.create(modelName);
     }

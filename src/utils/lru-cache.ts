@@ -102,11 +102,14 @@ export class LruCache<K, V> {
         return this.cache.size;
     }
 
-    /** Remove all entries whose TTL has expired. Returns the count removed. */
+    /**
+     * Remove all entries whose TTL has expired. Returns the count removed.
+     *
+     * Scans every entry regardless of the default TTL so per-entry TTLs
+     * passed via set(key, value, ttlMs) are also cleaned up even when the
+     * cache was constructed with defaultTtlMs === 0.
+     */
     public prune(): number {
-        if (this.defaultTtlMs === 0) {
-            return 0;
-        }
         const now = Date.now();
         let removed = 0;
         for (const [key, entry] of this.cache) {

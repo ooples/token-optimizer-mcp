@@ -73,6 +73,8 @@ describe('ConfigManager', () => {
     expect(opt.chatCompression.enabled).toBe(true);
     expect(opt.chatCompression.strategy).toBe('truncate');
     expect(mgr.getModelTokenLimit('custom-model')).toBe(500000);
+    // Built-in model limits must survive a partial override.
+    expect(mgr.getModelTokenLimit('gpt-4')).toBe(128000);
     expect(opt.compressionPreserveThreshold).toBe(0.3);
   });
 

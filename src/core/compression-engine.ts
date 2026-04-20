@@ -44,7 +44,17 @@ export class CompressionEngine {
         if (!buffer || buffer.length === 0) {
             return '';
         }
-        return brotliDecompressSync(buffer).toString('utf8');
+        // Brotli streams always begin with a framing byte whose high nibble
+        // encodes WBITS (0x0 / 0x8 / 0xC / …). That doesn't uniquely
+        // identify a Brotli payload, so we optimistically try to
+        // decompress and fall back to treating the buffer as raw UTF-8
+        // when the decoder rejects it. This preserves backward
+        // compatibility with any legacy plaintext row still in storage.
+        try {
+            return brotliDecompressSync(buffer).toString('utf8');
+        } catch {
+            return buffer.toString('utf8');
+        }
     }
 
     public compressToBase64(text: string, options?: { quality?: number; mode?: string; }): Omit<CompressionResult, 'compressed'> & { compressed: string } {
@@ -70,17 +80,20 @@ export class CompressionEngine {
         }));
     }
 
-    public shouldCompress(text: string, minSize: number = 500): boolean {
+    public shouldCompress(text: string, minSize: number = CompressionEngine.DEFAULT_MIN_SIZE_BYTES): boolean {
         if (Buffer.byteLength(text, 'utf8') < minSize) {
             return false;
         }
-        const stats = this.getCompressionStats(text);
+        const stats = this.getCompressionStats(text, minSize);
         return stats.percentSaved >= 20;
     }
 
-    public getCompressionStats(text: string): { uncompressed: number; compressed: number; ratio: number; percentSaved: number; recommended: boolean; } {
+    public getCompressionStats(
+        text: string,
+        minSize: number = CompressionEngine.DEFAULT_MIN_SIZE_BYTES
+    ): { uncompressed: number; compressed: number; ratio: number; percentSaved: number; recommended: boolean; } {
         const result = this.compress(text);
-        const recommended = result.originalSize >= 500 && result.percentSaved >= 20;
+        const recommended = result.originalSize >= minSize && result.percentSaved >= 20;
         return {
             uncompressed: result.originalSize,
             compressed: result.compressedSize,
@@ -89,4 +102,12 @@ export class CompressionEngine {
             recommended: recommended,
         };
     }
+
+    /**
+     * Default minimum size (in bytes) below which compression isn't
+     * worth the metadata overhead. Exposed as a static so callers can
+     * override via OptimizationConfig.minOutputSizeBytes and have
+     * `recommended` / `shouldCompress` agree on the threshold.
+     */
+    public static DEFAULT_MIN_SIZE_BYTES = 500;
 }
