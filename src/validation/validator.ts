@@ -25,8 +25,8 @@ export function validateToolArgs<T = any>(toolName: string, args: unknown): T {
   } catch (error) {
     if (error instanceof z.ZodError) {
       // Format Zod validation errors into a user-friendly message
-      const errorMessages = error.errors
-        .map((err) => {
+      const errorMessages = error.issues
+        .map((err: z.ZodIssue) => {
           const path = err.path.join('.');
           return `  - ${path || 'root'}: ${err.message}`;
         })

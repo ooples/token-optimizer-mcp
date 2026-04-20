@@ -120,7 +120,7 @@ export const AnalyzeProjectTokensSchema = z.object({
 
 // Placeholder for tools that use `args as any`
 const GenericToolOptionsSchema = z
-  .record(z.any())
+  .record(z.string(), z.any())
   .describe(
     'Generic options for tools without explicit inline schema validation.'
   );
