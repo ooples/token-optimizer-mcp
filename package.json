@@ -1,6 +1,6 @@
 {
   "name": "@ooples/token-optimizer-mcp",
-  "version": "5.0.1",
+  "version": "5.0.2",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
   "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
   "main": "dist/server/index.js",
@@ -23,7 +23,8 @@
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",
-    "build": "tsc",
+    "build": "tsc && npm run copy:assets",
+    "copy:assets": "node -e \"require('fs').cpSync('src/dashboard/public','dist/dashboard/public',{recursive:true})\"",
     "start": "node dist/server/index.js",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
@@ -36,8 +37,8 @@
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit",
     "test:benchmark": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/benchmarks",
     "dashboard": "node dist/server/web-server.js",
-    "dashboard:dev": "tsc -p tsconfig.dashboard.json && node dist/server/web-server.js",
-    "dashboard:build": "tsc -p tsconfig.dashboard.json",
+    "dashboard:dev": "tsc -p tsconfig.dashboard.json && npm run copy:assets && node dist/server/web-server.js",
+    "dashboard:build": "tsc -p tsconfig.dashboard.json && npm run copy:assets",
     "lint": "eslint src --ext .ts,.js",
     "lint:fix": "eslint src --ext .ts,.js --fix",
     "format": "prettier --write 'src/**/*.{ts,js,json}'",
