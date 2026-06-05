@@ -9,6 +9,7 @@
  */
 
 import { spawn } from 'child_process';
+import { assertAllowed } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
@@ -145,8 +146,29 @@ export class SmartInstall {
 
     const startTime = Date.now();
 
-    // Detect package manager
-    const detectedPm = packageManager || this.detectPackageManager();
+    // SECURITY (CWE-78): the package manager is used as the executable name.
+    // Constrain it to a strict allowlist at runtime so a crafted value such as
+    // `npm; id #` can never reach the process spawn as a command.
+    const detectedPm = assertAllowed(
+      packageManager || this.detectPackageManager(),
+      ['npm', 'yarn', 'pnpm'] as const,
+      'packageManager'
+    );
+
+    // SECURITY: reject package specs that could be interpreted as option flags
+    // (e.g. `--registry=...`) or that carry control characters. Combined with
+    // argv-mode spawning below this prevents both option- and command-injection.
+    for (const pkg of packages) {
+      if (typeof pkg !== 'string' || pkg.length === 0) {
+        throw new Error('Invalid package name: must be a non-empty string');
+      }
+      if (pkg.startsWith('-')) {
+        throw new Error(`Invalid package name: '${pkg}' must not start with '-'`);
+      }
+      if (/[\0\n\r]/.test(pkg)) {
+        throw new Error(`Invalid package name: '${pkg}' contains control characters`);
+      }
+    }
 
     // Check if lockfile exists BEFORE running install (for recommendations)
     const lockFile =
@@ -248,9 +270,16 @@ export class SmartInstall {
       let stdout = '';
       let stderr = '';
 
-      const child = spawn(packageManager, args, {
+      // SECURITY: argv mode (shell: false) so neither the package-manager name
+      // nor any package argument is interpreted by a shell. On Windows the
+      // package managers are `.cmd` shims that must be named explicitly when
+      // not going through a shell.
+      const command =
+        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
+      const child = spawn(command, args, {
         cwd: this.projectRoot,
-        shell: true,
+        shell: false,
+        windowsHide: true,
       });
 
       child.stdout.on('data', (data) => {

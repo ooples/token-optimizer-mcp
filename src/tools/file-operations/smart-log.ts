@@ -11,7 +11,11 @@
  * Target: 75% reduction vs full git log output
  */
 
-import { execSync } from 'child_process';
+import {
+  execFileSafeSync,
+  assertSafeGitRef,
+  assertSafePathArg,
+} from '../../utils/safe-exec.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -276,7 +280,7 @@ export class SmartLogTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['rev-parse', '--git-dir'], { cwd });
       return true;
     } catch {
       return false;
@@ -288,9 +292,8 @@ export class SmartLogTool {
    */
   private getCurrentBranch(cwd: string): string {
     try {
-      return execSync('git branch --show-current', {
+      return execFileSafeSync('git', ['branch', '--show-current'], {
         cwd,
-        encoding: 'utf-8',
       }).trim();
     } catch {
       return 'HEAD';
@@ -302,7 +305,7 @@ export class SmartLogTool {
    */
   private getLatestCommitHash(cwd: string): string {
     try {
-      return execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
+      return execFileSafeSync('git', ['rev-parse', 'HEAD'], { cwd }).trim();
     } catch {
       return 'unknown';
     }
@@ -348,40 +351,44 @@ export class SmartLogTool {
       ];
       const format = formatParts.join('%x1F'); // Use ASCII Unit Separator
 
-      let command = `git log --format="${format}%x1E"`; // Use ASCII Record Separator
+      // Build argv array (no shell). %x1E = ASCII Record Separator.
+      const args = ['log', `--format=${format}%x1E`];
 
-      // Add branch if specified
+      // Add branch if specified (validated as a git ref)
       if (opts.branch) {
-        command += ` ${opts.branch}`;
+        assertSafeGitRef(opts.branch, 'branch');
+        args.push(opts.branch);
       }
 
-      // Add filters
+      // Add filters. These are free-text values (dates, author names, grep
+      // patterns); argv mode passes each as a single literal argument, so no
+      // shell can interpret their contents.
       if (opts.since) {
-        command += ` --since="${opts.since}"`;
+        args.push(`--since=${opts.since}`);
       }
       if (opts.until) {
-        command += ` --until="${opts.until}"`;
+        args.push(`--until=${opts.until}`);
       }
       if (opts.author) {
-        command += ` --author="${opts.author}"`;
+        args.push(`--author=${opts.author}`);
       }
       if (opts.grep) {
-        command += ` --grep="${opts.grep}"`;
+        args.push(`--grep=${opts.grep}`);
       }
 
       // Add reverse order if requested
       if (opts.reverse) {
-        command += ' --reverse';
+        args.push('--reverse');
       }
 
       // Add file path if specified
       if (opts.filePath) {
-        command += ` -- "${opts.filePath}"`;
+        assertSafePathArg(opts.filePath, 'filePath');
+        args.push('--', opts.filePath);
       }
 
-      const output = execSync(command, {
+      const output = execFileSafeSync('git', args, {
         cwd: opts.cwd,
-        encoding: 'utf-8',
         maxBuffer: 50 * 1024 * 1024, // 50MB
       });
 
@@ -455,12 +462,11 @@ export class SmartLogTool {
    */
   private getCommitFiles(hash: string, cwd: string): string[] {
     try {
-      const output = execSync(
-        `git diff-tree --no-commit-id --name-only -r ${hash}`,
-        {
-          cwd,
-          encoding: 'utf-8',
-        }
+      assertSafeGitRef(hash, 'hash');
+      const output = execFileSafeSync(
+        'git',
+        ['diff-tree', '--no-commit-id', '--name-only', '-r', hash],
+        { cwd }
       );
       return output.split('\n').filter((f) => f.trim());
     } catch {
@@ -476,10 +482,12 @@ export class SmartLogTool {
     cwd: string
   ): { additions: number; deletions: number } {
     try {
-      const output = execSync(`git show --shortstat --format="" ${hash}`, {
-        cwd,
-        encoding: 'utf-8',
-      });
+      assertSafeGitRef(hash, 'hash');
+      const output = execFileSafeSync(
+        'git',
+        ['show', '--shortstat', '--format=', hash],
+        { cwd }
+      );
 
       const addMatch = output.match(/(\d+) insertion/);
       const delMatch = output.match(/(\d+) deletion/);

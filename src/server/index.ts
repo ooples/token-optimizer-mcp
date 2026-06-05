@@ -736,13 +736,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name } = request.params;
 
-  // @ts-expect-error - validatedArgs ensures validation but original args used for type compatibility
-  // Validate tool arguments using Zod schemas
-  let validatedArgs: any;
+  // Validate tool arguments using Zod schemas. The validated (and, for tightened
+  // schemas, sanitized) result REPLACES the raw args so every downstream tool
+  // case operates on validated input — closing the prior gap where the handler
+  // computed `validatedArgs` but then routed the unvalidated raw `args`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let args: any = request.params.arguments;
   try {
-    validatedArgs = validateToolArgs(name, args || {});
+    args = validateToolArgs(name, args || {});
   } catch (validationError) {
     return {
       content: [

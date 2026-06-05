@@ -32,6 +32,26 @@ function getHooksDataPath(): string {
   return path.join(os.homedir(), '.claude-global', 'hooks', 'data');
 }
 
+/**
+ * Allowed session-id format. Session IDs are generated as alphanumeric tokens,
+ * so this strict allowlist rejects any value containing path separators or
+ * `.` traversal sequences before it is ever used to build a filesystem path.
+ *
+ * SECURITY (CWE-22): both /api/session-summary and /api/session-events
+ * concatenate the caller-supplied `sessionId` into a path. Without this guard,
+ * a value like `abc/../../../../secret` resolves outside the hooks data dir,
+ * allowing unauthenticated arbitrary `.jsonl` file reads.
+ */
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Returns true when `sessionId` is safe to use in a path. Sends a 400 and
+ * returns false otherwise so callers can `if (!validateSessionId(...)) return;`.
+ */
+function isValidSessionId(sessionId: string): boolean {
+  return SESSION_ID_RE.test(sessionId);
+}
+
 // Helper function to get current session ID
 function getCurrentSessionId(): string | null {
   try {
@@ -67,6 +87,13 @@ app.get('/api/session-summary', (req, res) => {
       return res.status(404).json({
         success: false,
         error: 'No active session found',
+      });
+    }
+
+    if (!isValidSessionId(sessionId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sessionId',
       });
     }
 
@@ -291,6 +318,13 @@ app.get('/api/session-events', (req, res) => {
       return res.status(404).json({
         success: false,
         error: 'No active session found',
+      });
+    }
+
+    if (!isValidSessionId(sessionId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sessionId',
       });
     }
 
