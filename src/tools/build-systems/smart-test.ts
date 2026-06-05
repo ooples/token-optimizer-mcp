@@ -239,9 +239,14 @@ export class SmartTest {
       let stdout = '';
       let stderr = '';
 
-      const jest = spawn('npm', ['run', 'test', '--', ...args], {
+      // SECURITY: argv mode (shell:false) so caller-controlled args (e.g. the
+      // test path pattern) are passed verbatim and cannot be reinterpreted by a
+      // shell. On Windows npm is a .cmd shim named explicitly here.
+      const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      const jest = spawn(npm, ['run', 'test', '--', ...args], {
         cwd: this.projectRoot,
-        shell: true,
+        shell: false,
+        windowsHide: true,
       });
 
       jest.stdout.on('data', (data) => {

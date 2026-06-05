@@ -48,7 +48,7 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
  * Returns true when `sessionId` is safe to use in a path. Sends a 400 and
  * returns false otherwise so callers can `if (!validateSessionId(...)) return;`.
  */
-function isValidSessionId(sessionId: string): boolean {
+export function isValidSessionId(sessionId: string): boolean {
   return SESSION_ID_RE.test(sessionId);
 }
 

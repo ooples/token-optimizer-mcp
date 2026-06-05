@@ -11,7 +11,7 @@
  * Target: 83% reduction vs running ast-grep each time
  */
 
-import { execSync } from 'child_process';
+import { execFileSafeSync } from '../../utils/safe-exec.js';
 import { existsSync, statSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -453,12 +453,14 @@ export class SmartAstGrepTool {
       args.push(index.projectPath);
     }
 
-    // Execute ast-grep
+    // Execute ast-grep in argv mode (shell:false). The caller-controlled
+    // pattern / language / file pattern are passed as individual arguments and
+    // cannot be interpreted by a shell (previously they were concatenated into
+    // a command string and run through execSync — a command-injection sink).
     try {
-      const command = `npx ast-grep ${args.map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`;
-      const output = execSync(command, {
+      const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const output = execFileSafeSync(npx, ['ast-grep', ...args], {
         cwd: index.projectPath,
-        encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
         timeout: 120000, // 2 minutes timeout
       });

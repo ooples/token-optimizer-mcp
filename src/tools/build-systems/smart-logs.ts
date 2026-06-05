@@ -8,10 +8,10 @@
  * - Token-optimized output
  */
 
-import { spawn } from 'child_process';
+import { spawnSafe } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -327,40 +327,29 @@ export class SmartLogs {
       return [];
     }
 
-    return new Promise((resolve) => {
-      const entries: LogEntry[] = [];
-      let output = '';
+    // SECURITY: read and tail the file in-process. The previous implementation
+    // interpolated `filePath` into a PowerShell command run with shell:true,
+    // which allowed command injection via a crafted path. No subprocess is
+    // needed to read the last N lines of a file.
+    const entries: LogEntry[] = [];
+    try {
+      const content = readFileSync(filePath, 'utf-8');
+      const lines = content
+        .split('\n')
+        .filter((l) => l.trim())
+        .slice(-Math.max(0, tail));
 
-      // Use tail command on Unix, Get-Content on Windows
-      const command = process.platform === 'win32' ? 'powershell' : 'tail';
-      const args =
-        process.platform === 'win32'
-          ? ['-Command', `Get-Content -Path "${filePath}" -Tail ${tail}`]
-          : ['-n', tail.toString(), filePath];
-
-      const child = spawn(command, args, { shell: true });
-
-      child.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      child.on('close', () => {
-        const lines = output.split('\n').filter((l) => l.trim());
-
-        for (const line of lines) {
-          const entry = this.parseLogLine(line, filePath);
-          if (entry) {
-            entries.push(entry);
-          }
+      for (const line of lines) {
+        const entry = this.parseLogLine(line, filePath);
+        if (entry) {
+          entries.push(entry);
         }
+      }
+    } catch {
+      return [];
+    }
 
-        resolve(entries);
-      });
-
-      child.on('error', () => {
-        resolve([]); // Return empty on error
-      });
-    });
+    return entries;
   }
 
   /**
@@ -370,62 +359,66 @@ export class SmartLogs {
     source: string,
     tail: number
   ): Promise<LogEntry[]> {
-    const logType = source.split(':')[1];
+    const logType = source.split(':')[1] || '';
 
-    return new Promise((resolve) => {
-      const entries: LogEntry[] = [];
-      let output = '';
+    // SECURITY: logType is caller-controlled and (on Windows) is interpolated
+    // into a PowerShell script. Constrain it to a strict identifier and clamp
+    // `tail` to a safe integer so neither can carry an injection payload.
+    const safeLogType = logType;
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(safeLogType)) {
+      return [];
+    }
+    const safeTail = Math.max(1, Math.min(100000, Math.floor(tail) || 1));
 
-      let command: string;
-      let args: string[];
+    const entries: LogEntry[] = [];
 
-      if (process.platform === 'win32') {
-        // Windows Event Log
-        command = 'powershell';
-        args = [
-          '-Command',
-          `Get-EventLog -LogName ${logType} -Newest ${tail} | Select-Object TimeGenerated,EntryType,Message | ConvertTo-Json`,
-        ];
-      } else if (process.platform === 'darwin') {
-        // macOS - use log show
-        command = 'log';
-        args = ['show', '--last', '1h', '--style', 'json'];
-      } else {
-        // Linux - use journalctl
-        command = 'journalctl';
-        args = ['-n', tail.toString(), '-o', 'json'];
+    let command: string;
+    let args: string[];
+
+    if (process.platform === 'win32') {
+      // Windows Event Log
+      command = 'powershell';
+      args = [
+        '-NoProfile',
+        '-Command',
+        `Get-EventLog -LogName ${safeLogType} -Newest ${safeTail} | Select-Object TimeGenerated,EntryType,Message | ConvertTo-Json`,
+      ];
+    } else if (process.platform === 'darwin') {
+      // macOS - use log show
+      command = 'log';
+      args = ['show', '--last', '1h', '--style', 'json'];
+    } else {
+      // Linux - use journalctl
+      command = 'journalctl';
+      args = ['-n', safeTail.toString(), '-o', 'json'];
+    }
+
+    let output = '';
+    try {
+      // argv mode (shell:false): arguments are passed verbatim, no shell.
+      const result = await spawnSafe(command, args);
+      output = result.stdout;
+    } catch {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(output);
+      const items = Array.isArray(parsed) ? parsed : [parsed];
+
+      for (const item of items) {
+        entries.push(this.parseSystemLogEntry(item, source));
       }
+    } catch {
+      // Failed to parse JSON, try line-by-line
+      const lines = output.split('\n').filter((l) => l.trim());
+      for (const line of lines) {
+        const entry = this.parseLogLine(line, source);
+        if (entry) entries.push(entry);
+      }
+    }
 
-      const child = spawn(command, args, { shell: true });
-
-      child.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      child.on('close', () => {
-        try {
-          const parsed = JSON.parse(output);
-          const items = Array.isArray(parsed) ? parsed : [parsed];
-
-          for (const item of items) {
-            entries.push(this.parseSystemLogEntry(item, source));
-          }
-        } catch {
-          // Failed to parse JSON, try line-by-line
-          const lines = output.split('\n').filter((l) => l.trim());
-          for (const line of lines) {
-            const entry = this.parseLogLine(line, source);
-            if (entry) entries.push(entry);
-          }
-        }
-
-        resolve(entries);
-      });
-
-      child.on('error', () => {
-        resolve([]);
-      });
-    });
+    return entries;
   }
 
   /**

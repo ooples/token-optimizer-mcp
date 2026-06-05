@@ -13,13 +13,10 @@
  */
 
 import { spawn, ChildProcess } from 'child_process';
-import { promisify } from 'util';
-import { exec } from 'child_process';
+import { execFileSafe, assertSafeArg } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-
-const execAsync = promisify(exec);
 
 export interface SmartProcessOptions {
   operation: 'start' | 'stop' | 'status' | 'monitor' | 'tree' | 'restart';
@@ -442,14 +439,21 @@ export class SmartProcess {
     pid?: number,
     name?: string
   ): Promise<ProcessInfo[]> {
-    // Use WMIC on Windows
-    const query = pid
-      ? `wmic process where "ProcessId=${pid}" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-      : name
-        ? `wmic process where "Name='${name}'" get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`
-        : `wmic process get ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime /format:csv`;
+    // Use WMIC on Windows (argv mode; validate caller-controlled inputs)
+    const fields =
+      'ProcessId,Name,CommandLine,HandleCount,ThreadCount,WorkingSetSize,KernelModeTime,UserModeTime';
+    const wmicArgs = ['process'];
+    if (pid !== undefined) {
+      const pidNum = Math.floor(Number(pid));
+      if (!Number.isFinite(pidNum)) throw new Error('Invalid pid');
+      wmicArgs.push('where', `ProcessId=${pidNum}`);
+    } else if (name) {
+      assertSafeArg(name, 'name');
+      wmicArgs.push('where', `Name='${name}'`);
+    }
+    wmicArgs.push('get', fields, '/format:csv');
 
-    const { stdout } = await execAsync(query);
+    const { stdout } = await execFileSafe('wmic', wmicArgs);
 
     // Parse CSV output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
@@ -481,14 +485,21 @@ export class SmartProcess {
     pid?: number,
     name?: string
   ): Promise<ProcessInfo[]> {
-    // Use ps on Unix
-    const query = pid
-      ? `ps -p ${pid} -o pid,comm,args,%cpu,%mem,stat,lstart`
-      : name
-        ? `ps -C ${name} -o pid,comm,args,%cpu,%mem,stat,lstart`
-        : `ps -eo pid,comm,args,%cpu,%mem,stat,lstart`;
+    // Use ps on Unix (argv mode; validate caller-controlled inputs)
+    const fields = 'pid,comm,args,%cpu,%mem,stat,lstart';
+    let psArgs: string[];
+    if (pid !== undefined) {
+      const pidNum = Math.floor(Number(pid));
+      if (!Number.isFinite(pidNum)) throw new Error('Invalid pid');
+      psArgs = ['-p', String(pidNum), '-o', fields];
+    } else if (name) {
+      assertSafeArg(name, 'name');
+      psArgs = ['-C', name, '-o', fields];
+    } else {
+      psArgs = ['-eo', fields];
+    }
 
-    const { stdout } = await execAsync(query);
+    const { stdout } = await execFileSafe('ps', psArgs);
 
     // Parse ps output
     const lines = stdout.trim().split('\n').slice(1); // Skip header
@@ -535,9 +546,12 @@ export class SmartProcess {
     rootPid?: number
   ): Promise<ProcessTreeNode> {
     // Use WMIC to get parent-child relationships
-    const { stdout } = await execAsync(
-      'wmic process get ProcessId,ParentProcessId,Name /format:csv'
-    );
+    const { stdout } = await execFileSafe('wmic', [
+      'process',
+      'get',
+      'ProcessId,ParentProcessId,Name',
+      '/format:csv',
+    ]);
 
     const lines = stdout.trim().split('\n').slice(1);
     const processMap = new Map<number, { name: string; children: number[] }>();
@@ -580,8 +594,11 @@ export class SmartProcess {
     rootPid?: number
   ): Promise<ProcessTreeNode> {
     // Use pstree on Unix
-    const pid = rootPid || process.pid;
-    const { stdout: _stdout } = await execAsync(`pstree -p ${pid}`);
+    const pid = Math.floor(Number(rootPid || process.pid));
+    const { stdout: _stdout } = await execFileSafe('pstree', [
+      '-p',
+      String(pid),
+    ]);
 
     // Parse pstree output (simplified)
     return {

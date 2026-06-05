@@ -13,7 +13,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
-import { execSync } from 'child_process';
+import { execFileSafeSync } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -408,22 +408,19 @@ export class SmartPackageJson {
     try {
       const packageManager = this.detectPackageManager();
 
-      // Use package manager's native list command
-      let cmd: string;
-      if (packageManager === 'npm') {
-        cmd = 'npm list --json --depth=' + maxDepth;
-      } else if (packageManager === 'yarn') {
-        cmd = 'yarn list --json --depth=' + maxDepth;
-      } else {
-        cmd = 'pnpm list --json --depth=' + maxDepth;
-      }
-
-      const output = execSync(cmd, {
-        cwd: this.projectRoot,
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        timeout: 30000, // 30 second timeout
-      });
+      // Use package manager's native list command (argv mode, no shell).
+      const pmCmd =
+        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
+      const depth = Math.max(0, Math.floor(Number(maxDepth)) || 0);
+      const output = execFileSafeSync(
+        pmCmd,
+        ['list', '--json', `--depth=${depth}`],
+        {
+          cwd: this.projectRoot,
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+          timeout: 30000, // 30 second timeout
+        }
+      );
 
       return this.parseDependencyTreeOutput(output, packageManager);
     } catch (error) {
@@ -604,19 +601,11 @@ export class SmartPackageJson {
   private async scanSecurityIssues(): Promise<SecurityIssue[]> {
     try {
       const packageManager = this.detectPackageManager();
-      let cmd: string;
+      const pmCmd =
+        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
 
-      if (packageManager === 'npm') {
-        cmd = 'npm audit --json';
-      } else if (packageManager === 'yarn') {
-        cmd = 'yarn audit --json';
-      } else {
-        cmd = 'pnpm audit --json';
-      }
-
-      const output = execSync(cmd, {
+      const output = execFileSafeSync(pmCmd, ['audit', '--json'], {
         cwd: this.projectRoot,
-        encoding: 'utf-8',
         timeout: 30000,
         maxBuffer: 10 * 1024 * 1024,
       });
@@ -720,19 +709,11 @@ export class SmartPackageJson {
   ): Promise<void> {
     try {
       const packageManager = this.detectPackageManager();
-      let cmd: string;
+      const pmCmd =
+        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
 
-      if (packageManager === 'npm') {
-        cmd = 'npm outdated --json';
-      } else if (packageManager === 'yarn') {
-        cmd = 'yarn outdated --json';
-      } else {
-        cmd = 'pnpm outdated --json';
-      }
-
-      const output = execSync(cmd, {
+      const output = execFileSafeSync(pmCmd, ['outdated', '--json'], {
         cwd: this.projectRoot,
-        encoding: 'utf-8',
         timeout: 30000,
         maxBuffer: 10 * 1024 * 1024,
       });

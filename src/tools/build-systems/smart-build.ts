@@ -207,9 +207,14 @@ export class SmartBuild {
       let stdout = '';
       let stderr = '';
 
-      const tsc = spawn('npx', ['tsc', ...args], {
+      // SECURITY: argv mode (shell:false) so caller-controlled args (e.g.
+      // tsconfig path) cannot be reinterpreted by a shell. On Windows npx is a
+      // .cmd shim that must be named explicitly when not using a shell.
+      const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const tsc = spawn(npx, ['tsc', ...args], {
         cwd: this.projectRoot,
-        shell: true,
+        shell: false,
+        windowsHide: true,
       });
 
       tsc.stdout.on('data', (data) => {

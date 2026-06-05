@@ -19,11 +19,16 @@
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import * as crypto from 'crypto';
+import { execFileSafe, assertSafeArg } from '../../utils/safe-exec.js';
 
-const execAsync = promisify(exec);
+/**
+ * SECURITY (CWE-78): all service commands run in argv mode via
+ * {@link execFileSafe} (no shell) and `serviceName` is validated with
+ * {@link assertSafeArg} before use. The previous implementation interpolated
+ * the caller-controlled service name into shell command strings such as
+ * `sudo systemctl start ${serviceName}`, allowing command injection.
+ */
 
 // ===========================
 // Types & Interfaces
@@ -220,9 +225,11 @@ export class SmartService {
     }
 
     try {
-      const { stdout } = await execAsync('docker ps --format "{{.Names}}"', {
-        timeout: 5000,
-      });
+      const { stdout } = await execFileSafe(
+        'docker',
+        ['ps', '--format', '{{.Names}}'],
+        { timeout: 5000 }
+      );
       if (stdout.includes(serviceName)) {
         return 'docker';
       }
@@ -321,9 +328,12 @@ export class SmartService {
   private async getSystemdServiceInfo(
     serviceName: string
   ): Promise<ServiceInfo> {
-    const { stdout } = await execAsync(
-      `systemctl show ${serviceName} --no-pager`
-    );
+    assertSafeArg(serviceName, 'serviceName');
+    const { stdout } = await execFileSafe('systemctl', [
+      'show',
+      serviceName,
+      '--no-pager',
+    ]);
 
     const properties: Record<string, string> = {};
     stdout.split('\n').forEach((line) => {
@@ -353,9 +363,13 @@ export class SmartService {
 
     // Get dependencies
     try {
-      const { stdout: depsOut } = await execAsync(
-        `systemctl list-dependencies ${serviceName} --plain --no-pager`
-      );
+      assertSafeArg(serviceName, 'serviceName');
+      const { stdout: depsOut } = await execFileSafe('systemctl', [
+        'list-dependencies',
+        serviceName,
+        '--plain',
+        '--no-pager',
+      ]);
       info.dependencies = depsOut
         .split('\n')
         .filter((line) => line.trim() && !line.includes('●'))
@@ -373,7 +387,8 @@ export class SmartService {
   private async getWindowsServiceInfo(
     serviceName: string
   ): Promise<ServiceInfo> {
-    const { stdout } = await execAsync(`sc query "${serviceName}"`);
+    assertSafeArg(serviceName, 'serviceName');
+    const { stdout } = await execFileSafe('sc', ['query', serviceName]);
 
     const lines = stdout.split('\n');
     const statusLine = lines.find((line) => line.includes('STATE'));
@@ -394,7 +409,8 @@ export class SmartService {
 
     // Check if service is set to auto-start
     try {
-      const { stdout: configOut } = await execAsync(`sc qc "${serviceName}"`);
+      assertSafeArg(serviceName, 'serviceName');
+      const { stdout: configOut } = await execFileSafe('sc', ['qc', serviceName]);
       info.enabled = configOut.includes('AUTO_START');
     } catch {
       info.enabled = false;
@@ -409,7 +425,8 @@ export class SmartService {
   private async getDockerServiceInfo(
     serviceName: string
   ): Promise<ServiceInfo> {
-    const { stdout } = await execAsync(`docker inspect ${serviceName}`);
+    assertSafeArg(serviceName, 'serviceName');
+    const { stdout } = await execFileSafe('docker', ['inspect', serviceName]);
     const containers = JSON.parse(stdout);
 
     if (!containers || containers.length === 0) {
@@ -451,24 +468,29 @@ export class SmartService {
     options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
-    let command: string;
+    assertSafeArg(serviceName, 'serviceName');
+    let file: string;
+    let args: string[];
 
     switch (serviceType) {
       case 'systemd':
-        command = `sudo systemctl start ${serviceName}`;
+        file = 'sudo';
+        args = ['systemctl', 'start', serviceName];
         break;
       case 'windows':
-        command = `sc start "${serviceName}"`;
+        file = 'sc';
+        args = ['start', serviceName];
         break;
       case 'docker':
-        command = `docker start ${serviceName}`;
+        file = 'docker';
+        args = ['start', serviceName];
         break;
       default:
         throw new Error(`Unsupported service type: ${serviceType}`);
     }
 
     try {
-      const { stdout, stderr } = await execAsync(command);
+      const { stdout, stderr } = await execFileSafe(file, args);
       const output = stdout || stderr;
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
@@ -501,24 +523,29 @@ export class SmartService {
     options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
-    let command: string;
+    assertSafeArg(serviceName, 'serviceName');
+    let file: string;
+    let args: string[];
 
     switch (serviceType) {
       case 'systemd':
-        command = `sudo systemctl stop ${serviceName}`;
+        file = 'sudo';
+        args = ['systemctl', 'stop', serviceName];
         break;
       case 'windows':
-        command = `sc stop "${serviceName}"`;
+        file = 'sc';
+        args = ['stop', serviceName];
         break;
       case 'docker':
-        command = `docker stop ${serviceName}`;
+        file = 'docker';
+        args = ['stop', serviceName];
         break;
       default:
         throw new Error(`Unsupported service type: ${serviceType}`);
     }
 
     try {
-      const { stdout, stderr } = await execAsync(command);
+      const { stdout, stderr } = await execFileSafe(file, args);
       const output = stdout || stderr;
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
@@ -551,27 +578,32 @@ export class SmartService {
     options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
-    let command: string;
+    assertSafeArg(serviceName, 'serviceName');
+    let file: string;
+    let args: string[];
 
     switch (serviceType) {
       case 'systemd':
-        command = `sudo systemctl restart ${serviceName}`;
+        file = 'sudo';
+        args = ['systemctl', 'restart', serviceName];
         break;
       case 'windows':
         // Windows requires stop then start
-        await execAsync(`sc stop "${serviceName}"`);
+        await execFileSafe('sc', ['stop', serviceName]);
         await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
-        command = `sc start "${serviceName}"`;
+        file = 'sc';
+        args = ['start', serviceName];
         break;
       case 'docker':
-        command = `docker restart ${serviceName}`;
+        file = 'docker';
+        args = ['restart', serviceName];
         break;
       default:
         throw new Error(`Unsupported service type: ${serviceType}`);
     }
 
     try {
-      const { stdout, stderr } = await execAsync(command);
+      const { stdout, stderr } = await execFileSafe(file, args);
       const output = stdout || stderr;
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
@@ -604,24 +636,29 @@ export class SmartService {
     options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
-    let command: string;
+    assertSafeArg(serviceName, 'serviceName');
+    let file: string;
+    let args: string[];
 
     switch (serviceType) {
       case 'systemd':
-        command = `sudo systemctl enable ${serviceName}`;
+        file = 'sudo';
+        args = ['systemctl', 'enable', serviceName];
         break;
       case 'windows':
-        command = `sc config "${serviceName}" start= auto`;
+        file = 'sc';
+        args = ['config', serviceName, 'start=', 'auto'];
         break;
       case 'docker':
-        command = `docker update --restart=always ${serviceName}`;
+        file = 'docker';
+        args = ['update', '--restart=always', serviceName];
         break;
       default:
         throw new Error(`Unsupported service type: ${serviceType}`);
     }
 
     try {
-      const { stdout, stderr } = await execAsync(command);
+      const { stdout, stderr } = await execFileSafe(file, args);
       const output = stdout || stderr;
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
@@ -650,24 +687,29 @@ export class SmartService {
     options: SmartServiceOptions
   ): Promise<SmartServiceResult> {
     const { serviceName, serviceType } = options;
-    let command: string;
+    assertSafeArg(serviceName, 'serviceName');
+    let file: string;
+    let args: string[];
 
     switch (serviceType) {
       case 'systemd':
-        command = `sudo systemctl disable ${serviceName}`;
+        file = 'sudo';
+        args = ['systemctl', 'disable', serviceName];
         break;
       case 'windows':
-        command = `sc config "${serviceName}" start= demand`;
+        file = 'sc';
+        args = ['config', serviceName, 'start=', 'demand'];
         break;
       case 'docker':
-        command = `docker update --restart=no ${serviceName}`;
+        file = 'docker';
+        args = ['update', '--restart=no', serviceName];
         break;
       default:
         throw new Error(`Unsupported service type: ${serviceType}`);
     }
 
     try {
-      const { stdout, stderr } = await execAsync(command);
+      const { stdout, stderr } = await execFileSafe(file, args);
       const output = stdout || stderr;
       const tokensUsed = this.tokenCounter.count(output).tokens;
 
@@ -732,9 +774,12 @@ export class SmartService {
     // Docker-specific health checks
     if (options.serviceType === 'docker') {
       try {
-        const { stdout } = await execAsync(
-          `docker inspect --format='{{.State.Health.Status}}' ${options.serviceName}`
-        );
+        assertSafeArg(options.serviceName, 'serviceName');
+        const { stdout } = await execFileSafe('docker', [
+          'inspect',
+          '--format={{.State.Health.Status}}',
+          options.serviceName,
+        ]);
         const healthStatus = stdout.trim();
 
         checks.push({
@@ -854,9 +899,13 @@ export class SmartService {
     if (serviceType === 'systemd') {
       // Get dependencies (services this service requires)
       try {
-        const { stdout: depsOut } = await execAsync(
-          `systemctl list-dependencies ${serviceName} --plain --no-pager`
-        );
+        assertSafeArg(serviceName, 'serviceName');
+        const { stdout: depsOut } = await execFileSafe('systemctl', [
+          'list-dependencies',
+          serviceName,
+          '--plain',
+          '--no-pager',
+        ]);
         graph.dependencies = depsOut
           .split('\n')
           .filter((line) => line.trim() && !line.includes('●'))
@@ -867,9 +916,14 @@ export class SmartService {
 
       // Get dependents (services that require this service)
       try {
-        const { stdout: revDepsOut } = await execAsync(
-          `systemctl list-dependencies ${serviceName} --reverse --plain --no-pager`
-        );
+        assertSafeArg(serviceName, 'serviceName');
+        const { stdout: revDepsOut } = await execFileSafe('systemctl', [
+          'list-dependencies',
+          serviceName,
+          '--reverse',
+          '--plain',
+          '--no-pager',
+        ]);
         graph.dependents = revDepsOut
           .split('\n')
           .filter((line) => line.trim() && !line.includes('●'))
@@ -880,7 +934,8 @@ export class SmartService {
     } else if (serviceType === 'docker') {
       // Docker dependencies are determined by links and networks
       try {
-        const { stdout } = await execAsync(`docker inspect ${serviceName}`);
+        assertSafeArg(serviceName, 'serviceName');
+        const { stdout } = await execFileSafe('docker', ['inspect', serviceName]);
         const containers = JSON.parse(stdout);
 
         if (containers && containers.length > 0) {

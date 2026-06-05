@@ -8,15 +8,12 @@
  * - Anomaly detection
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { execFileSafe } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { join } from 'path';
 import { homedir, cpus, totalmem } from 'os';
-
-const execAsync = promisify(exec);
 
 interface ProcessInfo {
   pid: number;
@@ -236,8 +233,14 @@ export class SmartProcesses {
    */
   private async getWindowsProcesses(): Promise<ProcessInfo[]> {
     try {
-      const { stdout } = await execAsync(
-        'wmic process get ProcessId,Name,UserModeTime,WorkingSetSize,CommandLine /format:csv',
+      const { stdout } = await execFileSafe(
+        'wmic',
+        [
+          'process',
+          'get',
+          'ProcessId,Name,UserModeTime,WorkingSetSize,CommandLine',
+          '/format:csv',
+        ],
         { maxBuffer: 10 * 1024 * 1024 }
       );
 
@@ -279,7 +282,7 @@ export class SmartProcesses {
    */
   private async getUnixProcesses(): Promise<ProcessInfo[]> {
     try {
-      const { stdout } = await execAsync('ps aux --no-headers', {
+      const { stdout } = await execFileSafe('ps', ['aux', '--no-headers'], {
         maxBuffer: 10 * 1024 * 1024,
       });
 
