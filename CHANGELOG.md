@@ -15,9 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Now reads `error.issues ?? error.errors ?? []`, so error formatting works on
     both zod v3 and v4 and can never crash on a malformed `ZodError`.
 - **`smart_read` now validates its `path` argument**
-  - Passing a missing/blank path (e.g. the wrong key `file_path`) returned an
-    opaque downstream error. It now fails fast with
+  - Passing a missing/blank or whitespace-only path (e.g. the wrong key
+    `file_path`) returned an opaque downstream error. It now fails fast with
     `smart_read requires a non-empty "path" argument`.
+
+### Tests
+- Added regression coverage: `validateToolArgs` formats failures without the
+  `.map` crash, and the `smart_read` path guard rejects empty/whitespace/
+  non-string paths.
 
 ### Docs
 - Rewrote `docs/TESTING_INSTRUCTIONS.md` for the WSL2/Linux native port:

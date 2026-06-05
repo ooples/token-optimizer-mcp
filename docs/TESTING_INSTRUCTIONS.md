@@ -1,11 +1,11 @@
-# Testing Instructions for smart_read Caching (v5.0.1)
+# Testing Instructions for smart_read Caching (v5.0.2)
 
 ## Prerequisites
 
 **CRITICAL**: `smart_read` is reached through the long-running daemon, not the
 MCP server process directly. Make sure:
 
-1. ✅ Package built/installed at v5.0.1 (`smart_read` tool present).
+1. ✅ Package built/installed at v5.0.2 (`smart_read` tool present).
 2. ✅ The daemon is running and its Unix socket exists:
    `node -e 'console.log(require("path").join(require("os").tmpdir(),"token-optimizer-daemon.sock"))'`
    — the `dispatcher.sh` hook (`ensure_daemon`) spawns it automatically on the
@@ -131,7 +131,7 @@ The result is JSON; inspect `.content[0].text` (itself JSON) for
 ### Issue: "Cannot read properties of undefined (reading 'map')"
 **Cause**: Old build — `validator.ts` read `error.errors`, removed in zod v4
 (the global package bundles zod 4.x), so it was `undefined.map`.
-**Fix**: Fixed in v5.0.1 (`error.issues ?? error.errors ?? []`). Rebuild
+**Fix**: Fixed in v5.0.2 (`error.issues ?? error.errors ?? []`). Rebuild
 (`npm run build`) and, if the **global** install drives the daemon, copy the
 patched `dist/validation/validator.js` into
 `~/.local/lib/node_modules/@ooples/token-optimizer-mcp/dist/validation/` and
@@ -139,7 +139,7 @@ restart the daemon.
 
 ### Issue: "File not found: undefined" or no `path`
 **Cause**: Called with `file_path` instead of `path`.
-**Fix**: Use `path`. v5.0.1 also guards with a clear
+**Fix**: Use `path`. v5.0.2 also guards with a clear
 `smart_read requires a non-empty "path" argument` message.
 
 ### Issue: No cache hits
