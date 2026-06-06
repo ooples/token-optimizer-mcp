@@ -63,14 +63,42 @@ export class CacheEngine {
     const defaultCacheDir =
       process.env.TOKEN_OPTIMIZER_CACHE_DIR ||
       path.join(os.homedir(), '.token-optimizer-cache');
-    const cacheDir = dbPath ? path.dirname(dbPath) : defaultCacheDir;
+
+    // Resolve the cache directory and the database file path.
+    //
+    // `dbPath` is normally the database FILE path, but historically some callers
+    // passed a cache DIRECTORY here (and upgraders may still have a directory at
+    // that location on disk — e.g. ~/.hypercontext/cache/ containing cache.db).
+    // If we're handed an existing directory, put the database inside it rather
+    // than trying to open the directory as a SQLite file (which fails with
+    // "unable to open database file").
+    let cacheDir: string;
+    let finalDbPath: string;
+    if (dbPath) {
+      let dbPathIsDirectory = false;
+      try {
+        dbPathIsDirectory =
+          fs.existsSync(dbPath) && fs.statSync(dbPath).isDirectory();
+      } catch {
+        dbPathIsDirectory = false;
+      }
+
+      if (dbPathIsDirectory) {
+        cacheDir = dbPath;
+        finalDbPath = path.join(dbPath, 'cache.db');
+      } else {
+        cacheDir = path.dirname(dbPath);
+        finalDbPath = dbPath;
+      }
+    } else {
+      cacheDir = defaultCacheDir;
+      finalDbPath = path.join(cacheDir, 'cache.db');
+    }
 
     // Ensure cache directory exists
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true });
     }
-
-    const finalDbPath = dbPath || path.join(cacheDir, 'cache.db');
 
     // Retry logic with up to 3 attempts
     let lastError = null;
