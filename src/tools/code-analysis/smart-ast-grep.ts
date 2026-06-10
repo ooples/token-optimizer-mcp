@@ -590,8 +590,9 @@ export class SmartAstGrepTool {
 
     // User-defined exclusions
     for (const pattern of excludePatterns) {
-      // Simple glob matching
-      if (relativePath.includes(pattern.replace('*', ''))) {
+      // Simple glob matching: strip every wildcard, not just the first, so a
+      // pattern like `*.test.*` doesn't leave a literal `*` in the substring.
+      if (relativePath.includes(pattern.replace(/\*/g, ''))) {
         return true;
       }
     }
