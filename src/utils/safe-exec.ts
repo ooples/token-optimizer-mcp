@@ -90,7 +90,12 @@ export async function execFileSafe(
     // With `encoding` set, execFile yields strings.
     return { stdout: stdout as string, stderr: stderr as string };
   } catch (error) {
-    if (options.ignoreExitCode && error && typeof error === 'object' && 'stdout' in error) {
+    if (
+      options.ignoreExitCode &&
+      error &&
+      typeof error === 'object' &&
+      'stdout' in error
+    ) {
       const e = error as { stdout?: string | Buffer; stderr?: string | Buffer };
       return {
         stdout: e.stdout ? e.stdout.toString() : '',
@@ -160,7 +165,9 @@ export function assertSafeGitRef(value: string, fieldName = 'ref'): string {
     throw new Error(`Invalid ${fieldName}: must be a non-empty string`);
   }
   if (value.length > MAX_GIT_REF_LENGTH) {
-    throw new Error(`Invalid ${fieldName}: exceeds ${MAX_GIT_REF_LENGTH} characters`);
+    throw new Error(
+      `Invalid ${fieldName}: exceeds ${MAX_GIT_REF_LENGTH} characters`
+    );
   }
   if (!GIT_REF_RE.test(value)) {
     throw new Error(
@@ -188,10 +195,14 @@ export function assertSafeArg(value: string, fieldName = 'argument'): string {
     throw new Error(`Invalid ${fieldName}: must be a non-empty string`);
   }
   if (value.length > MAX_PATH_LENGTH) {
-    throw new Error(`Invalid ${fieldName}: exceeds ${MAX_PATH_LENGTH} characters`);
+    throw new Error(
+      `Invalid ${fieldName}: exceeds ${MAX_PATH_LENGTH} characters`
+    );
   }
   if (/[\0\n\r]/.test(value)) {
-    throw new Error(`Invalid ${fieldName}: contains illegal control characters`);
+    throw new Error(
+      `Invalid ${fieldName}: contains illegal control characters`
+    );
   }
   if (value.startsWith('-')) {
     throw new Error(`Invalid ${fieldName}: must not start with '-'`);

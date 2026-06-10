@@ -282,12 +282,14 @@ export class SmartProcesses {
    */
   private async getUnixProcesses(): Promise<ProcessInfo[]> {
     try {
-      const { stdout } = await execFileSafe('ps', ['aux', '--no-headers'], {
+      // `--no-headers` is GNU-only (unsupported on macOS/BSD ps), so request
+      // the default output and drop the header row in code instead.
+      const { stdout } = await execFileSafe('ps', ['aux'], {
         maxBuffer: 10 * 1024 * 1024,
       });
 
       const processes: ProcessInfo[] = [];
-      const lines = stdout.split('\n');
+      const lines = stdout.split('\n').slice(1);
 
       for (const line of lines) {
         if (!line.trim()) continue;

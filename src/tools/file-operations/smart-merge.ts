@@ -549,7 +549,9 @@ export class SmartMergeTool {
 
       // Stage 3 = theirs (merged branch)
       try {
-        stages.theirs = execFileSafeSync('git', ['show', `:3:${file}`], { cwd });
+        stages.theirs = execFileSafeSync('git', ['show', `:3:${file}`], {
+          cwd,
+        });
       } catch {}
     } catch {}
 

@@ -126,7 +126,10 @@ import {
   getMcpServerAnalyticsTool,
   GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
 } from '../tools/analytics/get-mcp-server-analytics.js';
-import { getExportAnalyticsTool, EXPORT_ANALYTICS_TOOL_DEFINITION, } from '../tools/analytics/export-analytics.js';
+import {
+  getExportAnalyticsTool,
+  EXPORT_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/export-analytics.js';
 import {
   OptimizationStorageTool,
   OPTIMIZATION_STORAGE_TOOL_DEFINITION,
@@ -141,7 +144,6 @@ import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
 import { ConfigManager } from '../core/config.js';
 import { lruMemoize, memoRegistry } from '../utils/lru-memoize.js';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
-
 
 // API & Database tools
 import {
@@ -2369,7 +2371,10 @@ async function cleanup() {
     { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
     { fn: async () => await sessionManager.flush(), name: 'flushing sessions' },
     { fn: () => TokenizerFactory.disposeAll(), name: 'disposing tokenizers' },
-    { fn: () => optimizationStorage.close(), name: 'closing optimization storage' },
+    {
+      fn: () => optimizationStorage.close(),
+      name: 'closing optimization storage',
+    },
     {
       fn: () => {
         clearInterval(memoPruneTimer);

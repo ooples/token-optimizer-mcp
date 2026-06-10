@@ -10,10 +10,10 @@
  */
 
 export interface ITokenizer {
-    readonly modelName: string;
+  readonly modelName: string;
 
-    countTokens(text: string): Promise<number>;
+  countTokens(text: string): Promise<number>;
 
-    /** Free any native resources. */
-    free(): void;
+  /** Free any native resources. */
+  free(): void;
 }

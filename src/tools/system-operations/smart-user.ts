@@ -268,7 +268,7 @@ export class SmartUser {
    * List all users with smart caching (95% reduction)
    */
   private async listUsers(options: SmartUserOptions): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash('md5').update(`users-list:include-system:${options.includeSystemUsers}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`users-list:include-system:${options.includeSystemUsers}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache - user list changes infrequently
@@ -322,7 +322,7 @@ export class SmartUser {
   private async listGroups(
     options: SmartUserOptions
   ): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash('md5').update(`groups-list:include-system:${options.includeSystemGroups}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`groups-list:include-system:${options.includeSystemGroups}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -382,7 +382,7 @@ export class SmartUser {
       throw new Error('Username is required for get-user-info operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash('md5').update(`user-info:${options.username}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`user-info:${options.username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -440,7 +440,7 @@ export class SmartUser {
       throw new Error('Groupname is required for get-group-info operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash('md5').update(`group-info:${options.groupname}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`group-info:${options.groupname}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -499,7 +499,7 @@ export class SmartUser {
     }
 
     const username = options.username || (await this.getCurrentUser());
-    const cacheKey = `cache-${crypto.createHash('md5').update(`permissions:${options.path}:${username}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`permissions:${options.path}:${username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -555,7 +555,7 @@ export class SmartUser {
       throw new Error('Path is required for get-acl operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash('md5').update(`acl:${options.path}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`acl:${options.path}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -608,7 +608,7 @@ export class SmartUser {
    */
   private async checkSudo(options: SmartUserOptions): Promise<SmartUserResult> {
     const username = options.username || (await this.getCurrentUser());
-    const cacheKey = `cache-${crypto.createHash('md5').update(`sudo-check:${username}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`sudo-check:${username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -662,7 +662,7 @@ export class SmartUser {
   private async auditSecurity(
     options: SmartUserOptions
   ): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash('md5').update('security-audit:full').digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update('security-audit:full').digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache (audit results can be cached for a short period)

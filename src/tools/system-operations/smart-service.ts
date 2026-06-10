@@ -410,7 +410,10 @@ export class SmartService {
     // Check if service is set to auto-start
     try {
       assertSafeArg(serviceName, 'serviceName');
-      const { stdout: configOut } = await execFileSafe('sc', ['qc', serviceName]);
+      const { stdout: configOut } = await execFileSafe('sc', [
+        'qc',
+        serviceName,
+      ]);
       info.enabled = configOut.includes('AUTO_START');
     } catch {
       info.enabled = false;
@@ -935,7 +938,10 @@ export class SmartService {
       // Docker dependencies are determined by links and networks
       try {
         assertSafeArg(serviceName, 'serviceName');
-        const { stdout } = await execFileSafe('docker', ['inspect', serviceName]);
+        const { stdout } = await execFileSafe('docker', [
+          'inspect',
+          serviceName,
+        ]);
         const containers = JSON.parse(stdout);
 
         if (containers && containers.length > 0) {

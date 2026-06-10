@@ -163,10 +163,14 @@ export class SmartInstall {
         throw new Error('Invalid package name: must be a non-empty string');
       }
       if (pkg.startsWith('-')) {
-        throw new Error(`Invalid package name: '${pkg}' must not start with '-'`);
+        throw new Error(
+          `Invalid package name: '${pkg}' must not start with '-'`
+        );
       }
       if (/[\0\n\r]/.test(pkg)) {
-        throw new Error(`Invalid package name: '${pkg}' contains control characters`);
+        throw new Error(
+          `Invalid package name: '${pkg}' contains control characters`
+        );
       }
     }
 

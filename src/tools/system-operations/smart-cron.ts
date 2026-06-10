@@ -631,8 +631,7 @@ export class SmartCron {
    * Add a Windows scheduled task
    */
   private async addWindowsTask(options: SmartCronOptions): Promise<string> {
-    const { taskName, command, schedule, user, workingDirectory, description } =
-      options;
+    const { taskName, command, schedule, user, workingDirectory } = options;
 
     // Convert cron-like schedule to Windows schedule format
     const windowsSchedule = this.convertToWindowsSchedule(schedule!);
@@ -668,9 +667,9 @@ export class SmartCron {
       // This would require XML export/import
     }
 
-    if (description) {
-      args.push('/tn', description);
-    }
+    // schtasks /create has no description flag; a description can only be set
+    // via an XML task definition or PowerShell's Register-ScheduledTask, so
+    // the description parameter is ignored here.
 
     args.push('/f'); // Force create, overwrite existing
 
@@ -788,7 +787,7 @@ export class SmartCron {
     // Write new crontab
     if (newCrontab.trim()) {
       // Deliver new crontab over stdin (argv mode) — no shell echo/pipe.
-    await spawnSafe('crontab', ['-'], { input: newCrontab });
+      await spawnSafe('crontab', ['-'], { input: newCrontab });
     } else {
       await execFileSafe('crontab', ['-r']); // Remove empty crontab
     }
