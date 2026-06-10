@@ -13,107 +13,110 @@ import { LruCache, LruCacheStats } from './lru-cache.js';
  */
 
 export interface LruMemoizeOptions<Args extends readonly unknown[]> {
-    /** Identifier used in logs. */
-    name: string;
-    /** Max cached entries. */
-    maxSize: number;
-    /** Default per-entry TTL in ms. 0 disables expiration. */
-    ttlMs?: number;
-    /** Custom key function; defaults to sha256(JSON.stringify(args)). */
-    keyFn?: (args: Args) => string;
+  /** Identifier used in logs. */
+  name: string;
+  /** Max cached entries. */
+  maxSize: number;
+  /** Default per-entry TTL in ms. 0 disables expiration. */
+  ttlMs?: number;
+  /** Custom key function; defaults to sha256(JSON.stringify(args)). */
+  keyFn?: (args: Args) => string;
 }
 
 export interface RegisteredCache {
-    name: string;
-    cache: LruCache<string, unknown>;
+  name: string;
+  cache: LruCache<string, unknown>;
 }
 
 class MemoRegistry {
-    private readonly caches = new Map<string, RegisteredCache>();
+  private readonly caches = new Map<string, RegisteredCache>();
 
-    public register(entry: RegisteredCache): void {
-        this.caches.set(entry.name, entry);
-    }
+  public register(entry: RegisteredCache): void {
+    this.caches.set(entry.name, entry);
+  }
 
-    /** Prune every registered cache and return total entries removed. */
-    public pruneAll(): number {
-        let total = 0;
-        for (const { cache } of this.caches.values()) {
-            total += cache.prune();
-        }
-        return total;
+  /** Prune every registered cache and return total entries removed. */
+  public pruneAll(): number {
+    let total = 0;
+    for (const { cache } of this.caches.values()) {
+      total += cache.prune();
     }
+    return total;
+  }
 
-    public stats(): Record<string, LruCacheStats> {
-        const out: Record<string, LruCacheStats> = {};
-        for (const [name, { cache }] of this.caches) {
-            out[name] = cache.stats();
-        }
-        return out;
+  public stats(): Record<string, LruCacheStats> {
+    const out: Record<string, LruCacheStats> = {};
+    for (const [name, { cache }] of this.caches) {
+      out[name] = cache.stats();
     }
+    return out;
+  }
 
-    public clearAll(): void {
-        for (const { cache } of this.caches.values()) {
-            cache.clear();
-        }
+  public clearAll(): void {
+    for (const { cache } of this.caches.values()) {
+      cache.clear();
     }
+  }
 }
 
 export const memoRegistry = new MemoRegistry();
 
 export function lruMemoize<Args extends readonly unknown[], R>(
-    fn: (...args: Args) => Promise<R>,
-    options: LruMemoizeOptions<Args>
+  fn: (...args: Args) => Promise<R>,
+  options: LruMemoizeOptions<Args>
 ): (...args: Args) => Promise<R> {
-    // Wrap values in a tiny envelope so a legitimately-cached `undefined`
-    // can be distinguished from a cache miss.
-    type Envelope = { value: R };
-    const cache = new LruCache<string, Envelope>(options.maxSize, options.ttlMs ?? 0);
+  // Wrap values in a tiny envelope so a legitimately-cached `undefined`
+  // can be distinguished from a cache miss.
+  type Envelope = { value: R };
+  const cache = new LruCache<string, Envelope>(
+    options.maxSize,
+    options.ttlMs ?? 0
+  );
 
-    // Deduplicate concurrent calls for the same key so a stampede of
-    // requests while the first promise is still pending doesn't run the
-    // expensive function N times.
-    const inFlight = new Map<string, Promise<R>>();
+  // Deduplicate concurrent calls for the same key so a stampede of
+  // requests while the first promise is still pending doesn't run the
+  // expensive function N times.
+  const inFlight = new Map<string, Promise<R>>();
 
-    memoRegistry.register({
-        name: options.name,
-        cache: cache as unknown as LruCache<string, unknown>,
+  memoRegistry.register({
+    name: options.name,
+    cache: cache as unknown as LruCache<string, unknown>,
+  });
+
+  const keyFn =
+    options.keyFn ??
+    ((args: Args): string => {
+      const serialized = JSON.stringify(args, (_, v) => {
+        // Tag bigints with a dedicated discriminator so
+        // `[1n]` and `["1"]` don't collapse to the same key.
+        if (typeof v === 'bigint') {
+          return { __memo_bigint__: v.toString() };
+        }
+        return v;
+      });
+      return createHash('sha256').update(serialized).digest('hex');
     });
 
-    const keyFn =
-        options.keyFn ??
-        ((args: Args): string => {
-            const serialized = JSON.stringify(args, (_, v) => {
-                // Tag bigints with a dedicated discriminator so
-                // `[1n]` and `["1"]` don't collapse to the same key.
-                if (typeof v === 'bigint') {
-                    return { __memo_bigint__: v.toString() };
-                }
-                return v;
-            });
-            return createHash('sha256').update(serialized).digest('hex');
-        });
-
-    return async (...args: Args): Promise<R> => {
-        const key = keyFn(args);
-        const hit = cache.get(key);
-        if (hit !== undefined) {
-            return hit.value;
-        }
-        const pending = inFlight.get(key);
-        if (pending) {
-            return pending;
-        }
-        const promise = (async () => {
-            try {
-                const value = await fn(...args);
-                cache.set(key, { value });
-                return value;
-            } finally {
-                inFlight.delete(key);
-            }
-        })();
-        inFlight.set(key, promise);
-        return promise;
-    };
+  return async (...args: Args): Promise<R> => {
+    const key = keyFn(args);
+    const hit = cache.get(key);
+    if (hit !== undefined) {
+      return hit.value;
+    }
+    const pending = inFlight.get(key);
+    if (pending) {
+      return pending;
+    }
+    const promise = (async () => {
+      try {
+        const value = await fn(...args);
+        cache.set(key, { value });
+        return value;
+      } finally {
+        inFlight.delete(key);
+      }
+    })();
+    inFlight.set(key, promise);
+    return promise;
+  };
 }

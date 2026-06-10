@@ -13,14 +13,14 @@ import { createPatch, applyPatch } from 'diff';
  * that to skip transmitting a no-op delta).
  */
 export function calculateDelta(
-    previous: string,
-    current: string,
-    fileName: string = 'content'
+  previous: string,
+  current: string,
+  fileName: string = 'content'
 ): string {
-    if (previous === current) {
-        return '';
-    }
-    return createPatch(fileName, previous, current, '', '');
+  if (previous === current) {
+    return '';
+  }
+  return createPatch(fileName, previous, current, '', '');
 }
 
 /**
@@ -28,12 +28,12 @@ export function calculateDelta(
  * `current`. Throws if the patch cannot be applied cleanly.
  */
 export function applyDelta(previous: string, delta: string): string {
-    if (delta === '') {
-        return previous;
-    }
-    const result = applyPatch(previous, delta);
-    if (result === false) {
-        throw new Error('Failed to apply delta: patch did not apply cleanly');
-    }
-    return result;
+  if (delta === '') {
+    return previous;
+  }
+  const result = applyPatch(previous, delta);
+  if (result === false) {
+    throw new Error('Failed to apply delta: patch did not apply cleanly');
+  }
+  return result;
 }
