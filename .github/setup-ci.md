@@ -269,7 +269,7 @@ schedule:
 
 ## Getting Help
 
-- **Documentation**: [GitHub Actions README](./.github/README.md)
+- **Documentation**: [GitHub Actions CI/CD Documentation](./.github/CI_CD.md)
 - **Issues**: https://github.com/ooples/token-optimizer-mcp/issues
 - **Discussions**: https://github.com/ooples/token-optimizer-mcp/discussions
 

@@ -194,7 +194,7 @@ BREAKING: → major version
 
 ### 3. Documentation Created
 
-#### Main Documentation (`.github/README.md`)
+#### Main Documentation (`.github/CI_CD.md`)
 **Sections**:
 - Overview of CI/CD pipeline
 - Detailed workflow descriptions
@@ -644,7 +644,7 @@ Track these metrics to measure CI/CD effectiveness:
 
 ### Documentation
 - [Setup Guide](.github/setup-ci.md)
-- [GitHub Actions README](.github/README.md)
+- [GitHub Actions CI/CD Documentation](.github/CI_CD.md)
 - [Branch Protection Guide](.github/BRANCH_PROTECTION.md)
 - [Release Flow Diagram](.github/RELEASE_FLOW.md)
 - [Secrets Template](.github/SECRETS_TEMPLATE.md)

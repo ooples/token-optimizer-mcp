@@ -199,7 +199,7 @@ npm publish
 
 ## Resources
 
-- **Full Documentation**: [.github/README.md](.github/README.md)
+- **Full Documentation**: [.github/CI_CD.md](.github/CI_CD.md)
 - **Setup Guide**: [.github/setup-ci.md](.github/setup-ci.md)
 - **Branch Protection**: [.github/BRANCH_PROTECTION.md](.github/BRANCH_PROTECTION.md)
 - **Release Flow**: [.github/RELEASE_FLOW.md](.github/RELEASE_FLOW.md)
