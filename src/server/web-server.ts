@@ -34,16 +34,17 @@ function getHooksDataPath(): string {
 
 /**
  * Allowed session-id format, kept in sync with the MCP-side validator in
- * src/server/index.ts. Dots are permitted (the ID is embedded in a
- * `session-log-<id>.jsonl` filename, so `.` cannot traverse), but path
- * separators are rejected before the value is used to build a filesystem path.
+ * src/server/index.ts. Session IDs are generated as alphanumeric/dash tokens,
+ * so this strict allowlist (no dots, no path separators) rejects any value
+ * containing `.` traversal sequences before it is ever used to build a
+ * filesystem path.
  *
  * SECURITY (CWE-22): both /api/session-summary and /api/session-events
  * concatenate the caller-supplied `sessionId` into a path. Without this guard,
  * a value like `abc/../../../../secret` resolves outside the hooks data dir,
  * allowing unauthenticated arbitrary `.jsonl` file reads.
  */
-const SESSION_ID_RE = /^[A-Za-z0-9._-]{1,64}$/;
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * Returns true when `sessionId` is safe to use in a path. Sends a 400 and

@@ -1266,8 +1266,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // --- 2. Read JSONL Log (validated) ---
-          // SECURITY: Reject IDs with path separators; allow simple [A-Za-z0-9._-]
-          if (!/^[A-Za-z0-9._-]+$/.test(targetSessionId)) {
+          // SECURITY: strict allowlist, kept in sync with SESSION_ID_RE in
+          // web-server.ts — no dots or path separators, so `..` traversal
+          // sequences are rejected before the path is built.
+          if (!/^[A-Za-z0-9_-]{1,64}$/.test(targetSessionId)) {
             throw new Error('Invalid sessionId format.');
           }
           const jsonlFilePath = path.join(
