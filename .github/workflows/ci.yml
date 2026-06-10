@@ -6,6 +6,11 @@ on:
   push:
     branches: [ master ]
 
+# Least-privilege default for every job; jobs that comment on PRs elevate
+# explicitly (CodeQL actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 # Cancel in-progress runs for the same workflow and branch
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
