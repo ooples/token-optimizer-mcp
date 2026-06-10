@@ -1,11 +1,11 @@
 import { gzipSync, gunzipSync } from 'zlib';
 import {
-    existsSync,
-    mkdirSync,
-    readFileSync,
-    renameSync,
-    unlinkSync,
-    writeFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
 } from 'fs';
 import { dirname } from 'path';
 
@@ -21,30 +21,30 @@ import { dirname } from 'path';
  */
 
 export interface GzipStats {
-    originalBytes: number;
-    compressedBytes: number;
-    ratio: number;
-    percentSaved: number;
+  originalBytes: number;
+  compressedBytes: number;
+  ratio: number;
+  percentSaved: number;
 }
 
 export function gzipString(text: string, level: number = 6): Buffer {
-    return gzipSync(Buffer.from(text, 'utf8'), { level });
+  return gzipSync(Buffer.from(text, 'utf8'), { level });
 }
 
 export function gunzipBuffer(buffer: Buffer): string {
-    return gunzipSync(buffer).toString('utf8');
+  return gunzipSync(buffer).toString('utf8');
 }
 
 export function computeStats(text: string, compressed: Buffer): GzipStats {
-    const originalBytes = Buffer.byteLength(text, 'utf8');
-    const compressedBytes = compressed.length;
-    const ratio = originalBytes === 0 ? 0 : compressedBytes / originalBytes;
-    return {
-        originalBytes,
-        compressedBytes,
-        ratio,
-        percentSaved: originalBytes === 0 ? 0 : (1 - ratio) * 100,
-    };
+  const originalBytes = Buffer.byteLength(text, 'utf8');
+  const compressedBytes = compressed.length;
+  const ratio = originalBytes === 0 ? 0 : compressedBytes / originalBytes;
+  return {
+    originalBytes,
+    compressedBytes,
+    ratio,
+    percentSaved: originalBytes === 0 ? 0 : (1 - ratio) * 100,
+  };
 }
 
 /**
@@ -53,24 +53,28 @@ export function computeStats(text: string, compressed: Buffer): GzipStats {
  * stale uncompressed plaintext at `path` once the gzip lands (backward
  * compat cleanup).
  */
-export function saveGzippedFile(path: string, text: string, level: number = 6): GzipStats {
-    const dir = dirname(path);
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
+export function saveGzippedFile(
+  path: string,
+  text: string,
+  level: number = 6
+): GzipStats {
+  const dir = dirname(path);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const compressed = gzipString(text, level);
+  const gzPath = `${path}.gz`;
+  const tmpPath = `${gzPath}.tmp`;
+  writeFileSync(tmpPath, compressed);
+  renameSync(tmpPath, gzPath);
+  if (existsSync(path)) {
+    try {
+      unlinkSync(path);
+    } catch {
+      // Best-effort — leaving the plaintext file isn't fatal.
     }
-    const compressed = gzipString(text, level);
-    const gzPath = `${path}.gz`;
-    const tmpPath = `${gzPath}.tmp`;
-    writeFileSync(tmpPath, compressed);
-    renameSync(tmpPath, gzPath);
-    if (existsSync(path)) {
-        try {
-            unlinkSync(path);
-        } catch {
-            // Best-effort — leaving the plaintext file isn't fatal.
-        }
-    }
-    return computeStats(text, compressed);
+  }
+  return computeStats(text, compressed);
 }
 
 /**
@@ -80,20 +84,20 @@ export function saveGzippedFile(path: string, text: string, level: number = 6): 
  * plaintext path so the backward-compat migration still works.
  */
 export function loadMaybeGzippedFile(path: string): string | null {
-    const gzPath = `${path}.gz`;
-    if (existsSync(gzPath)) {
-        try {
-            const buffer = readFileSync(gzPath);
-            return gunzipBuffer(buffer);
-        } catch (error) {
-            if (!existsSync(path)) {
-                throw error;
-            }
-            // Fall through to the plaintext sibling below.
-        }
+  const gzPath = `${path}.gz`;
+  if (existsSync(gzPath)) {
+    try {
+      const buffer = readFileSync(gzPath);
+      return gunzipBuffer(buffer);
+    } catch (error) {
+      if (!existsSync(path)) {
+        throw error;
+      }
+      // Fall through to the plaintext sibling below.
     }
-    if (existsSync(path)) {
-        return readFileSync(path, 'utf-8');
-    }
-    return null;
+  }
+  if (existsSync(path)) {
+    return readFileSync(path, 'utf-8');
+  }
+  return null;
 }
