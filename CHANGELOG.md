@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.2] - 2026-05-28
+
+### Fixed
+- **`smart_read` crashed with `Cannot read properties of undefined (reading 'map')`**
+  - Root cause: `validateToolArgs` read `error.errors`, which zod v4 removed in
+    favor of `error.issues`. Any failed validation (e.g. a wrong argument key)
+    hit `undefined.map`.
+  - Now reads `error.issues ?? error.errors ?? []`, so error formatting works on
+    both zod v3 and v4 and can never crash on a malformed `ZodError`.
+- **`smart_read` now validates its `path` argument**
+  - Passing a missing/blank or whitespace-only path (e.g. the wrong key
+    `file_path`) returned an opaque downstream error. It now fails fast with
+    `smart_read requires a non-empty "path" argument`.
+
+### Tests
+- Added regression coverage: `validateToolArgs` formats failures without the
+  `.map` crash, and the `smart_read` path guard rejects empty/whitespace/
+  non-string paths.
+
+### Docs
+- Rewrote `docs/TESTING_INSTRUCTIONS.md` for the WSL2/Linux native port:
+  correct `path` argument, daemon/`invoke-mcp.js` invocation, WSL paths
+  (`dispatcher.log`, `~/.token-optimizer-cache/cache.db`), the dedup-based
+  Read interception model, and a regression test for the `.map` crash.
+
 ## [2.20.0] - 2025-10-30
 
 ### Fixed

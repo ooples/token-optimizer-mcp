@@ -101,6 +101,18 @@ export class SmartReadTool {
       encoding = 'utf-8',
     } = options;
 
+    // Guard against a missing/blank path (e.g. caller passed `file_path`
+    // instead of `path`) so we fail with a clear message instead of an
+    // opaque downstream error. The typeof check must come first so we never
+    // call a string method on a non-string; whitespace-only paths are also
+    // treated as blank.
+    if (typeof filePath !== 'string' || filePath.trim().length === 0) {
+      throw new Error(
+        'smart_read requires a non-empty "path" argument (received: ' +
+          `${JSON.stringify(filePath)})`
+      );
+    }
+
     // Validate file exists
     if (!existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);

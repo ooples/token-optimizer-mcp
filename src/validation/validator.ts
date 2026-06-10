@@ -24,8 +24,14 @@ export function validateToolArgs<T = any>(toolName: string, args: unknown): T {
     return validatedArgs as T;
   } catch (error) {
     if (error instanceof z.ZodError) {
+      // zod v3 exposes issues as `.errors`; zod v4 renamed it to `.issues`.
+      // Read both and fall back to an empty list so a version skew can never
+      // crash here with "Cannot read properties of undefined (reading 'map')".
+      const issues = (error.issues ??
+        (error as { errors?: z.ZodIssue[] }).errors ??
+        []) as z.ZodIssue[];
       // Format Zod validation errors into a user-friendly message
-      const errorMessages = error.issues
+      const errorMessages = issues
         .map((err: z.ZodIssue) => {
           const path = err.path.join('.');
           return `  - ${path || 'root'}: ${err.message}`;
