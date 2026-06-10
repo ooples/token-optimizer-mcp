@@ -1,9 +1,11 @@
 name: Commit Lint
 
+# SECURITY: never use pull_request_target here — it grants a privileged token
+# while this job checks out and runs `npm install` against untrusted PR code
+# (CodeQL actions/untrusted-checkout). The plain pull_request event runs the
+# same validation with a read-only token for forks.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
-  pull_request_target:
     types: [opened, synchronize, reopened, edited]
 
 permissions:
@@ -33,12 +35,8 @@ jobs:
         run: |
           npm install --save-dev @commitlint/config-conventional @commitlint/cli
 
-      - name: Validate current commit (if any)
-        if: github.event_name == 'push'
-        run: npx commitlint --from HEAD~1 --to HEAD --verbose
-
       - name: Validate PR commits
-        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         id: commitlint
         run: |
           echo "::group::Debug Information"
@@ -52,7 +50,10 @@ jobs:
           echo "::endgroup::"
 
       - name: Comment on PR with commit format guide
-        if: failure() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+        # Fork PRs get a read-only token under pull_request, so commenting is
+        # limited to same-repo PRs and never fails the job.
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
