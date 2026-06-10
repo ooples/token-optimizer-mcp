@@ -219,9 +219,13 @@ export class SmartLint {
       let stdout = '';
       let stderr = '';
 
-      const eslint = spawn('npx', ['eslint', ...args], {
+      // SECURITY: argv mode (shell:false) so caller-controlled file paths are
+      // passed verbatim to eslint and cannot be reinterpreted by a shell.
+      const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const eslint = spawn(npx, ['eslint', ...args], {
         cwd: this.projectRoot,
-        shell: true,
+        shell: false,
+        windowsHide: true,
       });
 
       eslint.stdout.on('data', (data) => {

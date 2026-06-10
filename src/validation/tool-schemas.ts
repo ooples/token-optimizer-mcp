@@ -3,6 +3,45 @@ import { z } from 'zod';
 // Base schema for common options if any, or just define individual schemas
 // BaseOptionsSchema removed - not used
 
+// ---------------------------------------------------------------------------
+// Reusable security validators (defense-in-depth)
+//
+// These mirror the runtime argv-mode guards in src/utils/safe-exec.ts. They
+// reject command-injection / option-injection payloads in the dangerous string
+// fields of the git/system tools at the validation boundary, before the value
+// ever reaches a tool implementation. Argv-mode execution remains the primary
+// protection; these are an additional early-rejection layer.
+// ---------------------------------------------------------------------------
+
+/** A git ref / branch / tag / commit-ish: allowlist of safe characters only. */
+const safeGitRef = z
+  .string()
+  .min(1)
+  .max(256)
+  .regex(
+    /^[A-Za-z0-9._/+@~^{}-]+$/,
+    'must contain only characters valid in a git ref'
+  )
+  .refine((v) => !v.startsWith('-'), { message: "must not start with '-'" });
+
+/** A filesystem path argument: rejects NUL/newline and leading '-'. */
+const safePathArg = z
+  .string()
+  .min(1)
+  .max(4096)
+  .refine((v) => !/[\0\n\r]/.test(v), {
+    message: 'must not contain control characters',
+  })
+  .refine((v) => !v.startsWith('-'), { message: "must not start with '-'" });
+
+/** A free-text git filter (author, grep, date) — argv-mode safe; reject only NUL/newline. */
+const safeFilterText = z
+  .string()
+  .max(1024)
+  .refine((v) => !/[\0\n\r]/.test(v), {
+    message: 'must not contain control characters',
+  });
+
 // 1. optimize_text
 export const OptimizeTextSchema = z.object({
   text: z.string().describe('Text to optimize'),
@@ -213,7 +252,30 @@ export const SmartLogsSchema = GenericToolOptionsSchema;
 export const SmartLintSchema = GenericToolOptionsSchema;
 
 // 37. smart_install
-export const SmartInstallSchema = GenericToolOptionsSchema;
+// packageManager is constrained to a strict enum (it is used as the executable
+// name); package specs must not be option flags or contain control characters.
+export const SmartInstallSchema = z
+  .object({
+    packageManager: z.enum(['npm', 'yarn', 'pnpm']).optional(),
+    packages: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(214)
+          .refine((v) => !v.startsWith('-'), {
+            message: "package name must not start with '-'",
+          })
+          .refine((v) => !/[\0\n\r]/.test(v), {
+            message: 'package name must not contain control characters',
+          })
+      )
+      .optional(),
+    dev: z.boolean().optional(),
+    force: z.boolean().optional(),
+  })
+  .passthrough()
+  .describe('Options for smart_install tool');
 
 // 38. smart_docker
 export const SmartDockerSchema = GenericToolOptionsSchema;
@@ -234,37 +296,69 @@ export const SmartTypeCheckSchema = GenericToolOptionsSchema;
 export const SmartCronSchema = GenericToolOptionsSchema;
 
 // 44. smart_user
-export const SmartUserSchema = GenericToolOptionsSchema;
+// username / groupname / path reach external lookup commands; validate them.
+export const SmartUserSchema = z
+  .object({
+    username: safePathArg.optional(),
+    groupname: safePathArg.optional(),
+    path: safePathArg.optional(),
+  })
+  .passthrough()
+  .describe('Options for smart_user tool');
 
 // 45. smart_diff (using imported type SmartDiffOptions)
-// In a real Zod implementation, you'd convert SmartDiffOptions to a Zod schema.
-// For now, we'll assume it's an object with potentially any properties.
+// Security-sensitive ref/path fields are validated; other documented options
+// pass through so the schema stays in sync with the tool without breakage.
 export const SmartDiffSchema = z
-  .object({})
+  .object({
+    source: safeGitRef.optional(),
+    target: safeGitRef.optional(),
+    ref: safeGitRef.optional(),
+    files: z.array(safePathArg).optional(),
+    filePattern: safePathArg.optional(),
+  })
   .passthrough()
   .describe('Options for smart_diff tool');
 
 // 46. smart_branch (using imported type SmartBranchOptions)
 export const SmartBranchSchema = z
-  .object({})
+  .object({
+    mergedInto: safeGitRef.optional(),
+    branch: safeGitRef.optional(),
+    pattern: safeFilterText.optional(),
+  })
   .passthrough()
   .describe('Options for smart_branch tool');
 
 // 47. smart_merge (using imported type SmartMergeOptions)
 export const SmartMergeSchema = z
-  .object({})
+  .object({
+    branch: safeGitRef.optional(),
+    commit: safeGitRef.optional(),
+    strategy: safeGitRef.optional(),
+    strategyOption: z.array(safeFilterText).optional(),
+  })
   .passthrough()
   .describe('Options for smart_merge tool');
 
 // 48. smart_status (using imported type SmartStatusOptions)
 export const SmartStatusSchema = z
-  .object({})
+  .object({
+    filePath: safePathArg.optional(),
+  })
   .passthrough()
   .describe('Options for smart_status tool');
 
 // 49. smart_log (using imported type SmartLogOptions)
 export const SmartLogSchema = z
-  .object({})
+  .object({
+    branch: safeGitRef.optional(),
+    since: safeFilterText.optional(),
+    until: safeFilterText.optional(),
+    author: safeFilterText.optional(),
+    grep: safeFilterText.optional(),
+    filePath: safePathArg.optional(),
+  })
   .passthrough()
   .describe('Options for smart_log tool');
 

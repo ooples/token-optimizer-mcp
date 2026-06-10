@@ -1195,8 +1195,13 @@ export class SmartPretty {
       });
     }
 
-    // Remove any remaining HTML tags
-    result = result.replace(/<[^>]+>/g, '');
+    // Remove any remaining HTML tags. Strip to a fixpoint so nested or
+    // malformed input like `<<script>script>` can't survive a single pass.
+    let before: string;
+    do {
+      before = result;
+      result = result.replace(/<[^>]+>/g, '');
+    } while (result !== before);
 
     return result;
   }

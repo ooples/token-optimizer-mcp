@@ -738,13 +738,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name } = request.params;
 
-  // @ts-expect-error - validatedArgs ensures validation but original args used for type compatibility
-  // Validate tool arguments using Zod schemas
-  let validatedArgs: any;
+  // Validate tool arguments using Zod schemas. The validated (and, for tightened
+  // schemas, sanitized) result REPLACES the raw args so every downstream tool
+  // case operates on validated input — closing the prior gap where the handler
+  // computed `validatedArgs` but then routed the unvalidated raw `args`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let args: any = request.params.arguments;
   try {
-    validatedArgs = validateToolArgs(name, args || {});
+    args = validateToolArgs(name, args || {});
   } catch (validationError) {
     return {
       content: [
@@ -1263,8 +1266,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // --- 2. Read JSONL Log (validated) ---
-          // SECURITY: Reject IDs with path separators; allow simple [A-Za-z0-9._-]
-          if (!/^[A-Za-z0-9._-]+$/.test(targetSessionId)) {
+          // SECURITY: strict allowlist, kept in sync with SESSION_ID_RE in
+          // web-server.ts — no dots or path separators, so `..` traversal
+          // sequences are rejected before the path is built.
+          if (!/^[A-Za-z0-9_-]{1,64}$/.test(targetSessionId)) {
             throw new Error('Invalid sessionId format.');
           }
           const jsonlFilePath = path.join(

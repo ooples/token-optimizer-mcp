@@ -11,7 +11,11 @@
  * Target: 85% reduction vs full file content for changed files
  */
 
-import { execSync } from 'child_process';
+import {
+  execFileSafeSync,
+  assertSafeGitRef,
+  assertSafePathArg,
+} from '../../utils/safe-exec.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -283,7 +287,7 @@ export class SmartDiffTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['rev-parse', '--git-dir'], { cwd });
       return true;
     } catch {
       return false;
@@ -295,10 +299,8 @@ export class SmartDiffTool {
    */
   private getGitHash(cwd: string, ref: string): string {
     try {
-      return execSync(`git rev-parse ${ref}`, {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
+      assertSafeGitRef(ref, 'ref');
+      return execFileSafeSync('git', ['rev-parse', ref], { cwd }).trim();
     } catch {
       return ref;
     }
@@ -338,34 +340,41 @@ export class SmartDiffTool {
    */
   private getDiffStats(opts: Required<SmartDiffOptions>): DiffStats[] {
     try {
-      // Build diff command
-      let command = 'git diff --numstat';
+      // Build diff command as an argv array (no shell interpolation).
+      const args = ['diff', '--numstat'];
 
       if (opts.staged) {
-        command += ' --cached';
+        args.push('--cached');
       }
 
       if (opts.showRenames) {
-        command += ' -M';
+        args.push('-M');
       }
 
       // Add comparison targets
       if (opts.target) {
-        command += ` ${opts.source}...${opts.target}`;
+        assertSafeGitRef(opts.source, 'source');
+        assertSafeGitRef(opts.target, 'target');
+        args.push(`${opts.source}...${opts.target}`);
       } else if (opts.source !== 'HEAD' || opts.staged) {
-        command += ` ${opts.source}`;
+        assertSafeGitRef(opts.source, 'source');
+        args.push(opts.source);
       }
 
       // Add file filters
       if (opts.files.length > 0) {
-        command += ' -- ' + opts.files.join(' ');
+        args.push('--');
+        for (const file of opts.files) {
+          assertSafePathArg(file, 'file');
+          args.push(file);
+        }
       } else if (opts.filePattern) {
-        command += ` -- '${opts.filePattern}'`;
+        assertSafePathArg(opts.filePattern, 'filePattern');
+        args.push('--', opts.filePattern);
       }
 
-      const output = execSync(command, {
+      const output = execFileSafeSync('git', args, {
         cwd: opts.cwd,
-        encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024, // 10MB
       });
 
@@ -413,37 +422,40 @@ export class SmartDiffTool {
 
     for (const file of files) {
       try {
-        // Build diff command for single file
-        let command = 'git diff';
+        // Build diff command for single file as an argv array.
+        const args = ['diff'];
 
         if (opts.unified) {
-          command += ` -U${opts.contextLines}`;
+          args.push(`-U${opts.contextLines}`);
         }
 
         if (opts.staged) {
-          command += ' --cached';
+          args.push('--cached');
         }
 
         if (opts.showRenames) {
-          command += ' -M';
+          args.push('-M');
         }
 
         if (!opts.includeBinary) {
-          command += ' --no-binary';
+          args.push('--no-binary');
         }
 
         // Add comparison targets
         if (opts.target) {
-          command += ` ${opts.source}...${opts.target}`;
+          assertSafeGitRef(opts.source, 'source');
+          assertSafeGitRef(opts.target, 'target');
+          args.push(`${opts.source}...${opts.target}`);
         } else if (opts.source !== 'HEAD' || opts.staged) {
-          command += ` ${opts.source}`;
+          assertSafeGitRef(opts.source, 'source');
+          args.push(opts.source);
         }
 
-        command += ` -- "${file}"`;
+        assertSafePathArg(file, 'file');
+        args.push('--', file);
 
-        const diff = execSync(command, {
+        const diff = execFileSafeSync('git', args, {
           cwd: opts.cwd,
-          encoding: 'utf-8',
           maxBuffer: 10 * 1024 * 1024, // 10MB
         });
 

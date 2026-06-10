@@ -201,22 +201,12 @@ export class SmartTest {
       // Convert Windows backslashes to forward slashes
       let normalizedPattern = options.pattern.replace(/\\/g, '/');
 
-      // Escape regex special characters for Jest pattern matching
-      // Preserve wildcards (*) as .* for regex, but escape other special chars
+      // Escape every regex metacharacter (including backslash) in a single
+      // pass, then convert the user-facing `*` wildcard (escaped to `\*` by
+      // the previous step) into `.*` for Jest's regex pattern matching.
       normalizedPattern = normalizedPattern
-        .replace(/\./g, '\\.') // Escape dots
-        .replace(/\+/g, '\\+') // Escape plus
-        .replace(/\?/g, '\\?') // Escape question mark
-        .replace(/\[/g, '\\[') // Escape square brackets
-        .replace(/\]/g, '\\]')
-        .replace(/\(/g, '\\(') // Escape parentheses
-        .replace(/\)/g, '\\)')
-        .replace(/\{/g, '\\{') // Escape curly braces
-        .replace(/\}/g, '\\}')
-        .replace(/\^/g, '\\^') // Escape caret
-        .replace(/\$/g, '\\$') // Escape dollar
-        .replace(/\|/g, '\\|') // Escape pipe
-        .replace(/\*/g, '.*'); // Convert wildcard * to .* for regex
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\\\*/g, '.*');
 
       args.push('--testPathPattern=' + normalizedPattern);
     }
@@ -239,9 +229,14 @@ export class SmartTest {
       let stdout = '';
       let stderr = '';
 
-      const jest = spawn('npm', ['run', 'test', '--', ...args], {
+      // SECURITY: argv mode (shell:false) so caller-controlled args (e.g. the
+      // test path pattern) are passed verbatim and cannot be reinterpreted by a
+      // shell. On Windows npm is a .cmd shim named explicitly here.
+      const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      const jest = spawn(npm, ['run', 'test', '--', ...args], {
         cwd: this.projectRoot,
-        shell: true,
+        shell: false,
+        windowsHide: true,
       });
 
       jest.stdout.on('data', (data) => {

@@ -19,12 +19,20 @@
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import * as crypto from 'crypto';
+import {
+  execFileSafe,
+  spawnSafe,
+  assertSafeArg,
+} from '../../utils/safe-exec.js';
 
-const execAsync = promisify(exec);
+/**
+ * SECURITY (CWE-78): all scheduler commands run in argv mode via
+ * {@link execFileSafe} (no shell). New crontab content is delivered to
+ * `crontab -` over stdin instead of an `echo "..." | crontab -` shell pipe,
+ * and caller-controlled task names are validated with {@link assertSafeArg}.
+ */
 
 // ===========================
 // Types & Interfaces
@@ -343,7 +351,7 @@ export class SmartCron {
    */
   private async listCronJobs(): Promise<CronJob[]> {
     try {
-      const { stdout } = await execAsync('crontab -l');
+      const { stdout } = await execFileSafe('crontab', ['-l']);
       const jobs: CronJob[] = [];
       const lines = stdout
         .split('\n')
@@ -411,7 +419,12 @@ export class SmartCron {
    */
   private async listWindowsTasks(): Promise<CronJob[]> {
     try {
-      const { stdout } = await execAsync('schtasks /query /fo CSV /v');
+      const { stdout } = await execFileSafe('schtasks', [
+        '/query',
+        '/fo',
+        'CSV',
+        '/v',
+      ]);
       const jobs: CronJob[] = [];
       const lines = stdout.split('\n').slice(1); // Skip header
 
@@ -595,7 +608,7 @@ export class SmartCron {
     // Get current crontab
     let currentCrontab = '';
     try {
-      const { stdout } = await execAsync('crontab -l');
+      const { stdout } = await execFileSafe('crontab', ['-l']);
       currentCrontab = stdout;
     } catch {
       // No crontab exists yet
@@ -608,7 +621,8 @@ export class SmartCron {
       : jobLine;
 
     // Write new crontab
-    await execAsync(`echo "${newCrontab.replace(/"/g, '\\"')}" | crontab -`);
+    // Deliver new crontab over stdin (argv mode) — no shell echo/pipe.
+    await spawnSafe('crontab', ['-'], { input: newCrontab });
 
     return `Added cron job: ${taskName}`;
   }
@@ -617,24 +631,35 @@ export class SmartCron {
    * Add a Windows scheduled task
    */
   private async addWindowsTask(options: SmartCronOptions): Promise<string> {
-    const { taskName, command, schedule, user, workingDirectory, description } =
-      options;
+    const { taskName, command, schedule, user, workingDirectory } = options;
 
     // Convert cron-like schedule to Windows schedule format
     const windowsSchedule = this.convertToWindowsSchedule(schedule!);
 
-    let cmd = `schtasks /create /tn "${taskName}" /tr "${command}" /sc ${windowsSchedule.type}`;
+    if (taskName) assertSafeArg(taskName, 'taskName');
+
+    // Build an argv array (no shell). Caller-controlled values (task name,
+    // command to run, user) are passed verbatim as individual arguments.
+    const args = [
+      '/create',
+      '/tn',
+      taskName ?? '',
+      '/tr',
+      command ?? '',
+      '/sc',
+      windowsSchedule.type,
+    ];
 
     if (windowsSchedule.modifier) {
-      cmd += ` /mo ${windowsSchedule.modifier}`;
+      args.push('/mo', windowsSchedule.modifier);
     }
 
     if (windowsSchedule.startTime) {
-      cmd += ` /st ${windowsSchedule.startTime}`;
+      args.push('/st', windowsSchedule.startTime);
     }
 
     if (user) {
-      cmd += ` /ru "${user}"`;
+      args.push('/ru', user);
     }
 
     if (workingDirectory) {
@@ -642,13 +667,13 @@ export class SmartCron {
       // This would require XML export/import
     }
 
-    if (description) {
-      cmd += ` /tn "${description}"`;
-    }
+    // schtasks /create has no description flag; a description can only be set
+    // via an XML task definition or PowerShell's Register-ScheduledTask, so
+    // the description parameter is ignored here.
 
-    cmd += ' /f'; // Force create, overwrite existing
+    args.push('/f'); // Force create, overwrite existing
 
-    const { stdout } = await execAsync(cmd);
+    const { stdout } = await execFileSafe('schtasks', args);
     return stdout;
   }
 
@@ -736,7 +761,7 @@ export class SmartCron {
    */
   private async removeCronJob(taskName: string): Promise<string> {
     // Get current crontab
-    const { stdout } = await execAsync('crontab -l');
+    const { stdout } = await execFileSafe('crontab', ['-l']);
     const lines = stdout.split('\n');
 
     // Filter out the job and its comment
@@ -761,9 +786,10 @@ export class SmartCron {
 
     // Write new crontab
     if (newCrontab.trim()) {
-      await execAsync(`echo "${newCrontab.replace(/"/g, '\\"')}" | crontab -`);
+      // Deliver new crontab over stdin (argv mode) — no shell echo/pipe.
+      await spawnSafe('crontab', ['-'], { input: newCrontab });
     } else {
-      await execAsync('crontab -r'); // Remove empty crontab
+      await execFileSafe('crontab', ['-r']); // Remove empty crontab
     }
 
     return `Removed cron job: ${taskName}`;
@@ -773,7 +799,13 @@ export class SmartCron {
    * Remove a Windows scheduled task
    */
   private async removeWindowsTask(taskName: string): Promise<string> {
-    const { stdout } = await execAsync(`schtasks /delete /tn "${taskName}" /f`);
+    assertSafeArg(taskName, 'taskName');
+    const { stdout } = await execFileSafe('schtasks', [
+      '/delete',
+      '/tn',
+      taskName,
+      '/f',
+    ]);
     return stdout;
   }
 
@@ -813,9 +845,13 @@ export class SmartCron {
    * Enable a Windows scheduled task
    */
   private async enableWindowsTask(taskName: string): Promise<string> {
-    const { stdout } = await execAsync(
-      `schtasks /change /tn "${taskName}" /enable`
-    );
+    assertSafeArg(taskName, 'taskName');
+    const { stdout } = await execFileSafe('schtasks', [
+      '/change',
+      '/tn',
+      taskName,
+      '/enable',
+    ]);
     return stdout;
   }
 
@@ -865,7 +901,7 @@ export class SmartCron {
    */
   private async disableCronJob(taskName: string): Promise<string> {
     // Get current crontab
-    const { stdout } = await execAsync('crontab -l');
+    const { stdout } = await execFileSafe('crontab', ['-l']);
     const lines = stdout.split('\n');
 
     // Comment out the job
@@ -891,7 +927,8 @@ export class SmartCron {
     const newCrontab = modifiedLines.join('\n');
 
     // Write new crontab
-    await execAsync(`echo "${newCrontab.replace(/"/g, '\\"')}" | crontab -`);
+    // Deliver new crontab over stdin (argv mode) — no shell echo/pipe.
+    await spawnSafe('crontab', ['-'], { input: newCrontab });
 
     return `Disabled cron job: ${taskName}`;
   }
@@ -900,9 +937,13 @@ export class SmartCron {
    * Disable a Windows scheduled task
    */
   private async disableWindowsTask(taskName: string): Promise<string> {
-    const { stdout } = await execAsync(
-      `schtasks /change /tn "${taskName}" /disable`
-    );
+    assertSafeArg(taskName, 'taskName');
+    const { stdout } = await execFileSafe('schtasks', [
+      '/change',
+      '/tn',
+      taskName,
+      '/disable',
+    ]);
     return stdout;
   }
 
@@ -987,12 +1028,17 @@ export class SmartCron {
     if (schedulerType === 'cron') {
       // Try to read from syslog/journalctl for cron execution logs
       try {
-        const { stdout } = await execAsync(
-          `journalctl -u cron -n ${limit} --no-pager | grep CRON`
-        );
+        const limitNum = Math.max(1, Math.floor(Number(limit)) || 50);
+        const { stdout } = await execFileSafe('journalctl', [
+          '-u',
+          'cron',
+          '-n',
+          String(limitNum),
+          '--no-pager',
+        ]);
         const lines = stdout
           .split('\n')
-          .filter((line) => line.includes(taskName));
+          .filter((line) => line.includes('CRON') && line.includes(taskName));
 
         // Parse execution records (simplified)
         for (const line of lines) {
@@ -1016,9 +1062,15 @@ export class SmartCron {
     } else {
       // Windows Task Scheduler history
       try {
-        const { stdout } = await execAsync(
-          `schtasks /query /tn "${taskName}" /fo LIST /v`
-        );
+        assertSafeArg(taskName, 'taskName');
+        const { stdout } = await execFileSafe('schtasks', [
+          '/query',
+          '/tn',
+          taskName,
+          '/fo',
+          'LIST',
+          '/v',
+        ]);
 
         // Parse task history from verbose output
         const lastRunTimeMatch = stdout.match(/Last Run Time:\s+(.+)/);

@@ -11,7 +11,7 @@
  * Target: 60% reduction vs full git branch output with details
  */
 
-import { execSync } from 'child_process';
+import { execFileSafeSync, assertSafeGitRef } from '../../utils/safe-exec.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -318,7 +318,7 @@ export class SmartBranchTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['rev-parse', '--git-dir'], { cwd });
       return true;
     } catch {
       return false;
@@ -330,9 +330,8 @@ export class SmartBranchTool {
    */
   private getCurrentBranch(cwd: string): string {
     try {
-      return execSync('git branch --show-current', {
+      return execFileSafeSync('git', ['branch', '--show-current'], {
         cwd,
-        encoding: 'utf-8',
       }).trim();
     } catch {
       return 'HEAD';
@@ -344,7 +343,7 @@ export class SmartBranchTool {
    */
   private getLatestCommitHash(cwd: string): string {
     try {
-      return execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
+      return execFileSafeSync('git', ['rev-parse', 'HEAD'], { cwd }).trim();
     } catch {
       return 'unknown';
     }
@@ -377,19 +376,20 @@ export class SmartBranchTool {
     const branches: BranchInfo[] = [];
 
     try {
-      // Build command based on scope
-      let command =
-        'git branch --format="%(refname:short)%00%(upstream:short)%00%(HEAD)"';
+      // Build command based on scope as an argv array.
+      const args = [
+        'branch',
+        '--format=%(refname:short)%00%(upstream:short)%00%(HEAD)',
+      ];
 
       if (opts.remote && !opts.local) {
-        command += ' -r';
+        args.push('-r');
       } else if (opts.all) {
-        command += ' -a';
+        args.push('-a');
       }
 
-      const output = execSync(command, {
+      const output = execFileSafeSync('git', args, {
         cwd: opts.cwd,
-        encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024, // 10MB
       });
 
@@ -434,9 +434,9 @@ export class SmartBranchTool {
    */
   private isBranchMerged(branch: string, target: string, cwd: string): boolean {
     try {
-      const output = execSync(`git branch --merged ${target}`, {
+      assertSafeGitRef(target, 'target');
+      const output = execFileSafeSync('git', ['branch', '--merged', target], {
         cwd,
-        encoding: 'utf-8',
       });
 
       return output.includes(branch);
@@ -451,10 +451,12 @@ export class SmartBranchTool {
   private getLastCommit(branch: string, cwd: string): BranchInfo['lastCommit'] {
     try {
       const format = '%H%x00%h%x00%an%x00%aI%x00%s';
-      const output = execSync(`git log -1 --format="${format}" ${branch}`, {
-        cwd,
-        encoding: 'utf-8',
-      });
+      assertSafeGitRef(branch, 'branch');
+      const output = execFileSafeSync(
+        'git',
+        ['log', '-1', `--format=${format}`, branch],
+        { cwd }
+      );
 
       const parts = output.trim().split('\x00');
       if (parts.length < 5) return undefined;
@@ -481,12 +483,11 @@ export class SmartBranchTool {
     cwd: string
   ): { ahead: number; behind: number } {
     try {
-      const output = execSync(
-        `git rev-list --left-right --count ${branch}...@{u}`,
-        {
-          cwd,
-          encoding: 'utf-8',
-        }
+      assertSafeGitRef(branch, 'branch');
+      const output = execFileSafeSync(
+        'git',
+        ['rev-list', '--left-right', '--count', `${branch}...@{u}`],
+        { cwd }
       );
 
       const parts = output.trim().split('\t');

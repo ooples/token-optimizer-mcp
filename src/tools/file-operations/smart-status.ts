@@ -11,7 +11,7 @@
  * Target: 70% reduction vs full git diff output
  */
 
-import { execSync } from 'child_process';
+import { execFileSafeSync, assertSafePathArg } from '../../utils/safe-exec.js';
 import { existsSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -333,7 +333,7 @@ export class SmartStatusTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['rev-parse', '--git-dir'], { cwd });
       return true;
     } catch {
       return false;
@@ -345,7 +345,7 @@ export class SmartStatusTool {
    */
   private getGitHash(cwd: string): string {
     try {
-      return execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
+      return execFileSafeSync('git', ['rev-parse', 'HEAD'], { cwd }).trim();
     } catch {
       return 'no-commit';
     }
@@ -361,16 +361,16 @@ export class SmartStatusTool {
     clean: boolean;
   } {
     try {
-      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
+      const branch = execFileSafeSync(
+        'git',
+        ['rev-parse', '--abbrev-ref', 'HEAD'],
+        { cwd }
+      ).trim();
 
       const commit = this.getGitHash(cwd);
 
-      const statusOutput = execSync('git status --porcelain', {
+      const statusOutput = execFileSafeSync('git', ['status', '--porcelain'], {
         cwd,
-        encoding: 'utf-8',
       });
 
       return {
@@ -396,17 +396,17 @@ export class SmartStatusTool {
     includeIgnored: boolean
   ): string {
     try {
-      let command = 'git status --porcelain';
+      const args = ['status', '--porcelain'];
 
       if (includeUntracked) {
-        command += ' -u';
+        args.push('-u');
       }
 
       if (includeIgnored) {
-        command += ' --ignored';
+        args.push('--ignored');
       }
 
-      return execSync(command, { cwd, encoding: 'utf-8' });
+      return execFileSafeSync('git', args, { cwd });
     } catch (error) {
       throw new Error(
         `Failed to get git status: ${error instanceof Error ? error.message : String(error)}`
@@ -574,11 +574,12 @@ export class SmartStatusTool {
    */
   private getFileDiff(cwd: string, filePath: string, staged: boolean): string {
     try {
-      const command = staged
-        ? `git diff --cached -- "${filePath}"`
-        : `git diff -- "${filePath}"`;
+      assertSafePathArg(filePath, 'filePath');
+      const args = staged
+        ? ['diff', '--cached', '--', filePath]
+        : ['diff', '--', filePath];
 
-      return execSync(command, { cwd, encoding: 'utf-8' });
+      return execFileSafeSync('git', args, { cwd });
     } catch {
       return '';
     }

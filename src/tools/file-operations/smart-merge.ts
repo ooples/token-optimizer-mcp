@@ -11,7 +11,13 @@
  * Target: 80% reduction vs full git merge/status output
  */
 
-import { execSync } from 'child_process';
+import {
+  execFileSafeSync,
+  assertSafeGitRef,
+  assertSafePathArg,
+  assertSafeArg,
+} from '../../utils/safe-exec.js';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -319,7 +325,7 @@ export class SmartMergeTool {
    */
   private isGitRepository(cwd: string): boolean {
     try {
-      execSync('git rev-parse --git-dir', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['rev-parse', '--git-dir'], { cwd });
       return true;
     } catch {
       return false;
@@ -331,9 +337,8 @@ export class SmartMergeTool {
    */
   private getCurrentBranch(cwd: string): string {
     try {
-      return execSync('git branch --show-current', {
+      return execFileSafeSync('git', ['branch', '--show-current'], {
         cwd,
-        encoding: 'utf-8',
       }).trim();
     } catch {
       return 'HEAD';
@@ -345,10 +350,8 @@ export class SmartMergeTool {
    */
   private getGitHash(cwd: string, ref: string): string {
     try {
-      return execSync(`git rev-parse ${ref}`, {
-        cwd,
-        encoding: 'utf-8',
-      }).trim();
+      assertSafeGitRef(ref, 'ref');
+      return execFileSafeSync('git', ['rev-parse', ref], { cwd }).trim();
     } catch {
       return ref;
     }
@@ -425,7 +428,7 @@ export class SmartMergeTool {
    */
   private isMergeInProgress(cwd: string): boolean {
     try {
-      execSync('git rev-parse MERGE_HEAD', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['rev-parse', 'MERGE_HEAD'], { cwd });
       return true;
     } catch {
       return false;
@@ -437,10 +440,8 @@ export class SmartMergeTool {
    */
   private getMergeHead(cwd: string): string | undefined {
     try {
-      const mergeMsg = execSync('cat .git/MERGE_MSG', {
-        cwd,
-        encoding: 'utf-8',
-      });
+      // Read the merge message file directly rather than shelling out to `cat`.
+      const mergeMsg = readFileSync(join(cwd, '.git', 'MERGE_MSG'), 'utf-8');
       const match = mergeMsg.match(/Merge branch '([^']+)'/);
       return match ? match[1] : 'unknown';
     } catch {
@@ -454,10 +455,11 @@ export class SmartMergeTool {
   private getConflicts(cwd: string, includeContent: boolean): ConflictInfo[] {
     try {
       // Get unmerged files from git status
-      const output = execSync('git diff --name-only --diff-filter=U', {
-        cwd,
-        encoding: 'utf-8',
-      });
+      const output = execFileSafeSync(
+        'git',
+        ['diff', '--name-only', '--diff-filter=U'],
+        { cwd }
+      );
 
       const files = output.split('\n').filter((f) => f.trim());
       const conflicts: ConflictInfo[] = [];
@@ -494,9 +496,9 @@ export class SmartMergeTool {
    */
   private getConflictType(file: string, cwd: string): string {
     try {
-      const output = execSync(`git ls-files -u "${file}"`, {
+      assertSafePathArg(file, 'file');
+      const output = execFileSafeSync('git', ['ls-files', '-u', '--', file], {
         cwd,
-        encoding: 'utf-8',
       });
 
       if (!output) return 'content';
@@ -533,30 +535,22 @@ export class SmartMergeTool {
     const stages: { base?: string; ours?: string; theirs?: string } = {};
 
     try {
+      assertSafePathArg(file, 'file');
+
       // Stage 1 = base (common ancestor)
       try {
-        stages.base = execSync(`git show :1:"${file}"`, {
-          cwd,
-          encoding: 'utf-8',
-          stdio: 'pipe',
-        });
+        stages.base = execFileSafeSync('git', ['show', `:1:${file}`], { cwd });
       } catch {}
 
       // Stage 2 = ours (current branch)
       try {
-        stages.ours = execSync(`git show :2:"${file}"`, {
-          cwd,
-          encoding: 'utf-8',
-          stdio: 'pipe',
-        });
+        stages.ours = execFileSafeSync('git', ['show', `:2:${file}`], { cwd });
       } catch {}
 
       // Stage 3 = theirs (merged branch)
       try {
-        stages.theirs = execSync(`git show :3:"${file}"`, {
+        stages.theirs = execFileSafeSync('git', ['show', `:3:${file}`], {
           cwd,
-          encoding: 'utf-8',
-          stdio: 'pipe',
         });
       } catch {}
     } catch {}
@@ -569,10 +563,11 @@ export class SmartMergeTool {
    */
   private getMergedFiles(cwd: string): string[] {
     try {
-      const output = execSync('git diff --name-only --diff-filter=M --cached', {
-        cwd,
-        encoding: 'utf-8',
-      });
+      const output = execFileSafeSync(
+        'git',
+        ['diff', '--name-only', '--diff-filter=M', '--cached'],
+        { cwd }
+      );
 
       return output.split('\n').filter((f) => f.trim());
     } catch {
@@ -588,27 +583,28 @@ export class SmartMergeTool {
     const target = opts.branch || opts.commit;
 
     try {
-      // Build merge command
-      let command = 'git merge';
+      // Build merge command as an argv array (no shell interpolation).
+      const args = ['merge'];
 
-      if (opts.noCommit) command += ' --no-commit';
-      if (opts.noFf) command += ' --no-ff';
-      if (opts.ffOnly) command += ' --ff-only';
-      if (opts.squash) command += ' --squash';
-      if (opts.strategy) command += ` --strategy=${opts.strategy}`;
-
-      for (const option of opts.strategyOption) {
-        command += ` --strategy-option=${option}`;
+      if (opts.noCommit) args.push('--no-commit');
+      if (opts.noFf) args.push('--no-ff');
+      if (opts.ffOnly) args.push('--ff-only');
+      if (opts.squash) args.push('--squash');
+      if (opts.strategy) {
+        assertSafeGitRef(opts.strategy, 'strategy');
+        args.push(`--strategy=${opts.strategy}`);
       }
 
-      command += ` "${target}"`;
+      for (const option of opts.strategyOption) {
+        assertSafeArg(option, 'strategyOption');
+        args.push(`--strategy-option=${option}`);
+      }
+
+      assertSafeGitRef(target, 'target');
+      args.push(target);
 
       // Execute merge
-      const output = execSync(command, {
-        cwd,
-        encoding: 'utf-8',
-        stdio: 'pipe',
-      });
+      const output = execFileSafeSync('git', args, { cwd });
 
       // Check if fast-forward
       const fastForward = output.includes('Fast-forward');
@@ -619,13 +615,11 @@ export class SmartMergeTool {
 
       if (!opts.noCommit && !opts.squash) {
         try {
-          hash = execSync('git rev-parse HEAD', {
+          hash = execFileSafeSync('git', ['rev-parse', 'HEAD'], {
             cwd,
-            encoding: 'utf-8',
           }).trim();
-          message = execSync('git log -1 --format=%s', {
+          message = execFileSafeSync('git', ['log', '-1', '--format=%s'], {
             cwd,
-            encoding: 'utf-8',
           }).trim();
         } catch {}
       }
@@ -657,7 +651,7 @@ export class SmartMergeTool {
    */
   private abortMerge(cwd: string): void {
     try {
-      execSync('git merge --abort', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['merge', '--abort'], { cwd });
     } catch (error) {
       throw new Error(
         'Failed to abort merge: ' +
@@ -684,16 +678,14 @@ export class SmartMergeTool {
       }
 
       // Commit the merge
-      execSync('git commit --no-edit', { cwd, stdio: 'pipe' });
+      execFileSafeSync('git', ['commit', '--no-edit'], { cwd });
 
       // Get merge commit info
-      const hash = execSync('git rev-parse HEAD', {
+      const hash = execFileSafeSync('git', ['rev-parse', 'HEAD'], {
         cwd,
-        encoding: 'utf-8',
       }).trim();
-      const message = execSync('git log -1 --format=%s', {
+      const message = execFileSafeSync('git', ['log', '-1', '--format=%s'], {
         cwd,
-        encoding: 'utf-8',
       }).trim();
 
       return {

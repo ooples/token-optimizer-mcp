@@ -10,6 +10,7 @@
  */
 
 import { spawn } from 'child_process';
+import { assertSafeArg } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { homedir } from 'os';
@@ -307,14 +308,24 @@ export class SmartNetwork {
     return new Promise((resolve) => {
       let output = '';
 
+      // SECURITY: `host` is caller-controlled. Validate it (no control chars,
+      // no leading '-') and run ping in argv mode (shell:false) so the value
+      // cannot be interpreted as a shell command or an option flag.
+      try {
+        assertSafeArg(host, 'host');
+      } catch {
+        resolve({ host, reachable: false, error: 'Invalid host' });
+        return;
+      }
+
       // Platform-specific ping command
       const isWindows = process.platform === 'win32';
-      const command = isWindows ? 'ping' : 'ping';
+      const command = 'ping';
       const args = isWindows
         ? ['-n', count.toString(), '-w', timeout.toString(), host]
         : ['-c', count.toString(), '-W', (timeout / 1000).toString(), host];
 
-      const child = spawn(command, args, { shell: true });
+      const child = spawn(command, args, { shell: false, windowsHide: true });
 
       child.stdout.on('data', (data) => {
         output += data.toString();

@@ -19,11 +19,18 @@
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { readFileSync } from 'fs';
 import * as crypto from 'crypto';
+import { execFileSafe, assertSafeArg } from '../../utils/safe-exec.js';
 
-const execAsync = promisify(exec);
+/**
+ * SECURITY (CWE-78): every external command in this tool now runs in argv mode
+ * via {@link execFileSafe} (no shell), and all caller-controlled values
+ * (username, group name, path) are validated with {@link assertSafeArg} before
+ * use. The previous implementation interpolated these values into shell command
+ * strings (e.g. `getent passwd "${username}" || grep "^${username}:" ...`),
+ * which let `$(...)`/backtick payloads execute as the server user.
+ */
 
 // ===========================
 // Types & Interfaces
@@ -261,7 +268,7 @@ export class SmartUser {
    * List all users with smart caching (95% reduction)
    */
   private async listUsers(options: SmartUserOptions): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash('md5').update(`users-list:include-system:${options.includeSystemUsers}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`users-list:include-system:${options.includeSystemUsers}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache - user list changes infrequently
@@ -315,7 +322,7 @@ export class SmartUser {
   private async listGroups(
     options: SmartUserOptions
   ): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash('md5').update(`groups-list:include-system:${options.includeSystemGroups}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`groups-list:include-system:${options.includeSystemGroups}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -375,7 +382,7 @@ export class SmartUser {
       throw new Error('Username is required for get-user-info operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash('md5').update(`user-info:${options.username}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`user-info:${options.username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -433,7 +440,7 @@ export class SmartUser {
       throw new Error('Groupname is required for get-group-info operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash('md5').update(`group-info:${options.groupname}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`group-info:${options.groupname}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -492,7 +499,7 @@ export class SmartUser {
     }
 
     const username = options.username || (await this.getCurrentUser());
-    const cacheKey = `cache-${crypto.createHash('md5').update(`permissions:${options.path}:${username}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`permissions:${options.path}:${username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -548,7 +555,7 @@ export class SmartUser {
       throw new Error('Path is required for get-acl operation');
     }
 
-    const cacheKey = `cache-${crypto.createHash('md5').update(`acl:${options.path}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`acl:${options.path}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -601,7 +608,7 @@ export class SmartUser {
    */
   private async checkSudo(options: SmartUserOptions): Promise<SmartUserResult> {
     const username = options.username || (await this.getCurrentUser());
-    const cacheKey = `cache-${crypto.createHash('md5').update(`sudo-check:${username}`).digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update(`sudo-check:${username}`).digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache
@@ -655,7 +662,7 @@ export class SmartUser {
   private async auditSecurity(
     options: SmartUserOptions
   ): Promise<SmartUserResult> {
-    const cacheKey = `cache-${crypto.createHash('md5').update('security-audit:full').digest('hex')}`;
+    const cacheKey = `cache-${crypto.createHash('sha256').update('security-audit:full').digest('hex')}`;
     const useCache = options.useCache !== false;
 
     // Check cache (audit results can be cached for a short period)
@@ -708,6 +715,81 @@ export class SmartUser {
   // ===========================
 
   /**
+   * Read the full passwd database. Tries `getent passwd` (argv mode) and falls
+   * back to reading /etc/passwd directly when getent is unavailable. Replaces
+   * the former `getent passwd || cat /etc/passwd` shell pipeline.
+   */
+  private async readPasswdDatabase(): Promise<string> {
+    try {
+      const { stdout } = await execFileSafe('getent', ['passwd']);
+      if (stdout.trim()) return stdout;
+    } catch {
+      // getent not available; fall through to the file read.
+    }
+    return readFileSync('/etc/passwd', 'utf-8');
+  }
+
+  /**
+   * Read the full group database. Tries `getent group` (argv mode) and falls
+   * back to /etc/group. Replaces the former `getent group || cat /etc/group`.
+   */
+  private async readGroupDatabase(): Promise<string> {
+    try {
+      const { stdout } = await execFileSafe('getent', ['group']);
+      if (stdout.trim()) return stdout;
+    } catch {
+      // getent not available; fall through to the file read.
+    }
+    return readFileSync('/etc/group', 'utf-8');
+  }
+
+  /**
+   * Look up a single passwd entry by username. Tries `getent passwd <user>`
+   * (argv mode) and falls back to scanning /etc/passwd in-process. Replaces the
+   * injectable `getent passwd "${username}" || grep "^${username}:" ...`.
+   */
+  private async lookupPasswdEntry(username: string): Promise<string> {
+    assertSafeArg(username, 'username');
+    try {
+      const { stdout } = await execFileSafe('getent', ['passwd', username]);
+      if (stdout.trim()) return stdout.trim();
+    } catch {
+      // fall through to file scan
+    }
+    const contents = readFileSync('/etc/passwd', 'utf-8');
+    const match = contents
+      .split('\n')
+      .find((line) => line.startsWith(`${username}:`));
+    if (!match) {
+      throw new Error(`User not found: ${username}`);
+    }
+    return match;
+  }
+
+  /**
+   * Look up a single group entry by name. Tries `getent group <name>` (argv
+   * mode) and falls back to scanning /etc/group. Replaces the injectable
+   * `getent group "${groupname}" || grep "^${groupname}:" ...`.
+   */
+  private async lookupGroupEntry(groupname: string): Promise<string> {
+    assertSafeArg(groupname, 'groupname');
+    try {
+      const { stdout } = await execFileSafe('getent', ['group', groupname]);
+      if (stdout.trim()) return stdout.trim();
+    } catch {
+      // fall through to file scan
+    }
+    const contents = readFileSync('/etc/group', 'utf-8');
+    const match = contents
+      .split('\n')
+      .find((line) => line.startsWith(`${groupname}:`));
+    if (!match) {
+      throw new Error(`Group not found: ${groupname}`);
+    }
+    return match;
+  }
+
+  /**
    * Get all users from the system
    */
   private async getAllUsers(includeSystem: boolean): Promise<UserInfo[]> {
@@ -717,7 +799,7 @@ export class SmartUser {
     if (platform === 'win32') {
       // Windows: Use net user command
       try {
-        const { stdout } = await execAsync('net user');
+        const { stdout } = await execFileSafe('net', ['user']);
         const lines = stdout.split('\n');
         let inUserSection = false;
 
@@ -748,7 +830,7 @@ export class SmartUser {
     } else {
       // Unix-like systems: Parse /etc/passwd
       try {
-        const { stdout } = await execAsync('getent passwd || cat /etc/passwd');
+        const stdout = await this.readPasswdDatabase();
         const lines = stdout.split('\n');
 
         for (const line of lines) {
@@ -805,7 +887,7 @@ export class SmartUser {
     if (platform === 'win32') {
       // Windows: Use net localgroup command
       try {
-        const { stdout } = await execAsync('net localgroup');
+        const { stdout } = await execFileSafe('net', ['localgroup']);
         const lines = stdout.split('\n');
         let inGroupSection = false;
 
@@ -836,7 +918,7 @@ export class SmartUser {
     } else {
       // Unix-like systems: Parse /etc/group
       try {
-        const { stdout } = await execAsync('getent group || cat /etc/group');
+        const stdout = await this.readGroupDatabase();
         const lines = stdout.split('\n');
 
         for (const line of lines) {
@@ -883,7 +965,8 @@ export class SmartUser {
     if (platform === 'win32') {
       // Windows user details
       try {
-        const { stdout } = await execAsync(`net user "${username}"`);
+        assertSafeArg(username, 'username');
+        const { stdout } = await execFileSafe('net', ['user', username]);
         const lines = stdout.split('\n');
 
         let fullName = '';
@@ -914,9 +997,7 @@ export class SmartUser {
     } else {
       // Unix user details
       try {
-        const { stdout: passwdOut } = await execAsync(
-          `getent passwd "${username}" || grep "^${username}:" /etc/passwd`
-        );
+        const passwdOut = await this.lookupPasswdEntry(username);
         const parts = passwdOut.trim().split(':');
 
         if (parts.length < 7) {
@@ -960,7 +1041,8 @@ export class SmartUser {
     if (platform === 'win32') {
       // Windows group details
       try {
-        const { stdout } = await execAsync(`net localgroup "${groupname}"`);
+        assertSafeArg(groupname, 'groupname');
+        const { stdout } = await execFileSafe('net', ['localgroup', groupname]);
         const lines = stdout.split('\n');
         const members: string[] = [];
         let inMemberSection = false;
@@ -995,9 +1077,7 @@ export class SmartUser {
     } else {
       // Unix group details
       try {
-        const { stdout } = await execAsync(
-          `getent group "${groupname}" || grep "^${groupname}:" /etc/group`
-        );
+        const stdout = await this.lookupGroupEntry(groupname);
         const parts = stdout.trim().split(':');
 
         if (parts.length < 4) {
@@ -1032,7 +1112,8 @@ export class SmartUser {
     if (platform === 'win32') {
       // Windows: Extract groups from net user output
       try {
-        const { stdout } = await execAsync(`net user "${username}"`);
+        assertSafeArg(username, 'username');
+        const { stdout } = await execFileSafe('net', ['user', username]);
         const lines = stdout.split('\n');
         const groups: string[] = [];
         let inGroupSection = false;
@@ -1071,7 +1152,8 @@ export class SmartUser {
     } else {
       // Unix: Use id command
       try {
-        const { stdout } = await execAsync(`id -Gn "${username}"`);
+        assertSafeArg(username, 'username');
+        const { stdout } = await execFileSafe('id', ['-Gn', username]);
         return stdout.trim().split(/\s+/);
       } catch {
         return [];
@@ -1091,7 +1173,8 @@ export class SmartUser {
     if (platform === 'win32') {
       // Windows permissions (using icacls)
       try {
-        const { stdout } = await execAsync(`icacls "${path}"`);
+        assertSafeArg(path, 'path');
+        const { stdout } = await execFileSafe('icacls', [path]);
         const lines = stdout.split('\n');
 
         return {
@@ -1112,7 +1195,8 @@ export class SmartUser {
     } else {
       // Unix permissions
       try {
-        const { stdout: lsOut } = await execAsync(`ls -ld "${path}"`);
+        assertSafeArg(path, 'path');
+        const { stdout: lsOut } = await execFileSafe('ls', ['-ld', path]);
         const parts = lsOut.trim().split(/\s+/);
 
         const permissions = parts[0];
@@ -1196,7 +1280,10 @@ export class SmartUser {
     }
 
     try {
-      const { stdout } = await execAsync(`getfacl "${path}" 2>/dev/null`);
+      assertSafeArg(path, 'path');
+      const { stdout } = await execFileSafe('getfacl', [path], {
+        ignoreExitCode: true,
+      });
       const lines = stdout.split('\n');
       const entries: ACLEntry[] = [];
 
@@ -1241,7 +1328,8 @@ export class SmartUser {
     if (platform === 'win32') {
       // Windows: Check if user is in Administrators group
       try {
-        const { stdout } = await execAsync(`net user "${username}"`);
+        assertSafeArg(username, 'username');
+        const { stdout } = await execFileSafe('net', ['user', username]);
         return stdout.toLowerCase().includes('administrators');
       } catch {
         return false;
@@ -1262,8 +1350,11 @@ export class SmartUser {
 
         // Check sudoers file (requires sudo access)
         try {
-          const { stdout } = await execAsync(
-            `sudo -l -U "${username}" 2>/dev/null`
+          assertSafeArg(username, 'username');
+          const { stdout } = await execFileSafe(
+            'sudo',
+            ['-l', '-U', username],
+            { ignoreExitCode: true }
           );
           return !stdout.includes('not allowed');
         } catch {
@@ -1282,10 +1373,11 @@ export class SmartUser {
     const platform = process.platform;
 
     if (platform === 'win32') {
-      const { stdout } = await execAsync('echo %USERNAME%');
-      return stdout.trim();
+      // `echo %USERNAME%` simply prints the env var; read it directly instead
+      // of invoking a shell builtin.
+      return (process.env.USERNAME || process.env.USER || '').trim();
     } else {
-      const { stdout } = await execAsync('whoami');
+      const { stdout } = await execFileSafe('whoami', []);
       return stdout.trim();
     }
   }
@@ -1326,8 +1418,11 @@ export class SmartUser {
       // Check for users with no password (Unix only)
       if (process.platform !== 'win32') {
         try {
-          const { stdout } = await execAsync(
-            `passwd -S "${user.username}" 2>/dev/null`
+          assertSafeArg(user.username, 'username');
+          const { stdout } = await execFileSafe(
+            'passwd',
+            ['-S', user.username],
+            { ignoreExitCode: true }
           );
           if (stdout.includes('NP')) {
             noPasswordCount++;
@@ -1379,13 +1474,16 @@ export class SmartUser {
     // Check for world-writable directories (Unix only)
     if (process.platform !== 'win32') {
       try {
-        const { stdout } = await execAsync(
-          'find /tmp /var/tmp -type d -perm -002 -ls 2>/dev/null | head -20'
+        const { stdout } = await execFileSafe(
+          'find',
+          ['/tmp', '/var/tmp', '-type', 'd', '-perm', '-002', '-ls'],
+          { ignoreExitCode: true }
         );
         const worldWritableDirs = stdout
           .trim()
           .split('\n')
-          .filter((l) => l.trim());
+          .filter((l) => l.trim())
+          .slice(0, 20);
 
         if (worldWritableDirs.length > 0) {
           issues.push({
