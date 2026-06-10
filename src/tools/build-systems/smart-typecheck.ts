@@ -188,9 +188,13 @@ export class SmartTypeCheck {
       let stdout = '';
       let stderr = '';
 
-      const tsc = spawn('npx', ['tsc', ...args], {
+      // SECURITY: argv mode (shell:false) so caller-controlled args are passed
+      // verbatim and cannot be reinterpreted by a shell.
+      const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const tsc = spawn(npx, ['tsc', ...args], {
         cwd: this.projectRoot,
-        shell: true,
+        shell: false,
+        windowsHide: true,
       });
 
       tsc.stdout.on('data', (data) => {

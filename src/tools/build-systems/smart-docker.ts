@@ -352,9 +352,13 @@ export class SmartDocker {
       let stdout = '';
       let stderr = '';
 
+      // SECURITY: argv mode (shell:false) so caller-controlled values
+      // (image/container names, ports, env values, paths) are passed verbatim
+      // to docker and cannot be interpreted as shell commands.
       const docker = spawn('docker', args, {
         cwd: this.projectRoot,
-        shell: true,
+        shell: false,
+        windowsHide: true,
       });
 
       docker.stdout.on('data', (data) => {

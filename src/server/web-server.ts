@@ -7,6 +7,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -22,7 +23,19 @@ const PORT = 3100;
 // BOM (Byte Order Mark) removal regex - used to strip UTF-8 BOM character (\uFEFF) from file content
 const BOM_REGEX = /^\uFEFF/;
 
+// SECURITY (CWE-770): every dashboard route ends in a filesystem read, so an
+// unthrottled client can turn the server into a disk-thrashing DoS. 300
+// requests/min is far above what the dashboard UI generates while still
+// bounding abuse.
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Middleware
+app.use(limiter);
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'dashboard', 'public')));
@@ -30,6 +43,43 @@ app.use(express.static(path.join(__dirname, '..', 'dashboard', 'public')));
 // Helper function to get hooks data path
 function getHooksDataPath(): string {
   return path.join(os.homedir(), '.claude-global', 'hooks', 'data');
+}
+
+/**
+ * Allowed session-id format, kept in sync with the MCP-side validator in
+ * src/server/index.ts. Session IDs are generated as alphanumeric/dash tokens,
+ * so this strict allowlist (no dots, no path separators) rejects any value
+ * containing `.` traversal sequences before it is ever used to build a
+ * filesystem path.
+ *
+ * SECURITY (CWE-22): both /api/session-summary and /api/session-events
+ * concatenate the caller-supplied `sessionId` into a path. Without this guard,
+ * a value like `abc/../../../../secret` resolves outside the hooks data dir,
+ * allowing unauthenticated arbitrary `.jsonl` file reads.
+ */
+const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Returns true when `sessionId` is safe to use in a path. Sends a 400 and
+ * returns false otherwise so callers can `if (!validateSessionId(...)) return;`.
+ */
+export function isValidSessionId(sessionId: string): boolean {
+  return SESSION_ID_RE.test(sessionId);
+}
+
+/**
+ * Builds the absolute path of a session's JSONL log and proves containment:
+ * returns null unless the resolved path stays inside the hooks data dir.
+ * Defense-in-depth behind isValidSessionId (CWE-22 / js/path-injection).
+ */
+function resolveSessionLogPath(sessionId: string): string | null {
+  const base = path.resolve(getHooksDataPath());
+  const jsonlFilePath = path.resolve(base, `session-log-${sessionId}.jsonl`);
+  const rel = path.relative(base, jsonlFilePath);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    return null;
+  }
+  return jsonlFilePath;
 }
 
 // Helper function to get current session ID
@@ -70,11 +120,20 @@ app.get('/api/session-summary', (req, res) => {
       });
     }
 
-    const hooksDataPath = getHooksDataPath();
-    const jsonlFilePath = path.join(
-      hooksDataPath,
-      `session-log-${sessionId}.jsonl`
-    );
+    if (!isValidSessionId(sessionId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sessionId',
+      });
+    }
+
+    const jsonlFilePath = resolveSessionLogPath(sessionId);
+    if (!jsonlFilePath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sessionId',
+      });
+    }
 
     if (!fs.existsSync(jsonlFilePath)) {
       return res.status(404).json({
@@ -294,11 +353,20 @@ app.get('/api/session-events', (req, res) => {
       });
     }
 
-    const hooksDataPath = getHooksDataPath();
-    const jsonlFilePath = path.join(
-      hooksDataPath,
-      `session-log-${sessionId}.jsonl`
-    );
+    if (!isValidSessionId(sessionId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sessionId',
+      });
+    }
+
+    const jsonlFilePath = resolveSessionLogPath(sessionId);
+    if (!jsonlFilePath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid sessionId',
+      });
+    }
 
     if (!fs.existsSync(jsonlFilePath)) {
       return res.status(404).json({

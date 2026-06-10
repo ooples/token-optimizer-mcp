@@ -9,6 +9,7 @@
  */
 
 import { spawn } from 'child_process';
+import { assertSafePathArg } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { homedir } from 'os';
@@ -371,21 +372,28 @@ export class SmartSystemMetrics {
     return new Promise((resolve) => {
       let output = '';
 
-      // Platform-specific disk info commands
+      // SECURITY: `path` is caller-controlled and was previously passed to a
+      // shell (shell:true). Validate it and run in argv mode (shell:false).
       let command: string;
       let args: string[];
 
       if (process.platform === 'win32') {
-        // Windows: use wmic
+        // Windows: use wmic (path not used in the query)
         command = 'wmic';
         args = ['logicaldisk', 'get', 'size,freespace,caption'];
       } else {
         // Unix: use df
+        try {
+          assertSafePathArg(path, 'path');
+        } catch {
+          resolve(null);
+          return;
+        }
         command = 'df';
         args = ['-k', path];
       }
 
-      const child = spawn(command, args, { shell: true });
+      const child = spawn(command, args, { shell: false, windowsHide: true });
 
       child.stdout.on('data', (data) => {
         output += data.toString();

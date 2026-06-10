@@ -12,9 +12,12 @@ permissions:
 
 jobs:
   auto-fix:
-    # Only run when the referenced workflow failed and head branch is not master
-    # Secret presence is checked at step-level (secrets are not reliably accessible in job-level if)
-    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch != 'master' }}
+    # Only run when the referenced workflow failed and head branch is not master.
+    # Secret presence is checked at step-level (secrets are not reliably accessible in job-level if).
+    # SECURITY (CodeQL actions/untrusted-checkout): this privileged workflow_run
+    # job checks out and executes the failing ref, so it must only ever run for
+    # branches in this repository (pushed by maintainers) — never for forks.
+    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch != 'master' && github.event.workflow_run.head_repository.full_name == github.repository }}
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
