@@ -26,6 +26,12 @@ export interface LruMemoizeOptions<Args extends readonly unknown[]> {
 export interface RegisteredCache {
   name: string;
   cache: LruCache<string, unknown>;
+  /**
+   * Invalidation hook: clears stored entries AND fences off in-flight
+   * calls so a result computed before invalidation can never be written
+   * back into the cache afterwards.
+   */
+  invalidate: () => void;
 }
 
 class MemoRegistry {
@@ -53,8 +59,8 @@ class MemoRegistry {
   }
 
   public clearAll(): void {
-    for (const { cache } of this.caches.values()) {
-      cache.clear();
+    for (const { invalidate } of this.caches.values()) {
+      invalidate();
     }
   }
 }
@@ -78,9 +84,21 @@ export function lruMemoize<Args extends readonly unknown[], R>(
   // expensive function N times.
   const inFlight = new Map<string, Promise<R>>();
 
+  // Invalidation epoch: bumped on every invalidate() so calls that were
+  // already running when the cache was cleared cannot write their (now
+  // stale) result back afterwards.
+  let epoch = 0;
+
   memoRegistry.register({
     name: options.name,
     cache: cache as unknown as LruCache<string, unknown>,
+    invalidate: () => {
+      cache.clear();
+      // Forget pending promises too: a caller arriving after invalidation
+      // must not be handed a result computed against pre-invalidation state.
+      inFlight.clear();
+      epoch++;
+    },
   });
 
   const keyFn =
@@ -107,13 +125,25 @@ export function lruMemoize<Args extends readonly unknown[], R>(
     if (pending) {
       return pending;
     }
-    const promise = (async () => {
+    const startEpoch = epoch;
+    // Declared before the async closure so the closure's `finally` can
+    // compare against it; assignment happens before the first await yields.
+    let promise: Promise<R> | undefined;
+    promise = (async () => {
       try {
         const value = await fn(...args);
-        cache.set(key, { value });
+        // Skip the write-back if invalidate() ran while we were pending —
+        // the result was computed against pre-invalidation state.
+        if (epoch === startEpoch) {
+          cache.set(key, { value });
+        }
         return value;
       } finally {
-        inFlight.delete(key);
+        // invalidate() may have cleared inFlight and a newer call may have
+        // registered its own promise under this key; only remove our own.
+        if (inFlight.get(key) === promise) {
+          inFlight.delete(key);
+        }
       }
     })();
     inFlight.set(key, promise);

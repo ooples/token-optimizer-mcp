@@ -95,6 +95,56 @@ describe('lruMemoize', () => {
     expect(calls).toBe(1);
   });
 
+  it('does not let an in-flight call repopulate the cache after clearAll', async () => {
+    let calls = 0;
+    let release: (() => void) | undefined;
+    const fn = async (x: number) => {
+      calls++;
+      await new Promise<void>((r) => {
+        release = r;
+      });
+      return x * 2;
+    };
+    const memo = lruMemoize(fn, {
+      name: 'test-invalidate-inflight',
+      maxSize: 10,
+    });
+
+    const pending = memo(5); // starts, blocks inside fn
+    memoRegistry.clearAll(); // invalidate while in flight
+    release!();
+    expect(await pending).toBe(10); // caller still gets its result
+
+    // The stale completion must NOT have been written back: a fresh call
+    // re-runs fn instead of serving the pre-invalidation result.
+    const second = memo(5);
+    release!();
+    expect(await second).toBe(10);
+    expect(calls).toBe(2);
+  });
+
+  it('does not serve a pre-invalidation in-flight promise to new callers', async () => {
+    let calls = 0;
+    const releases: Array<() => void> = [];
+    const fn = async (x: number) => {
+      calls++;
+      await new Promise<void>((r) => {
+        releases.push(r);
+      });
+      return x * 2;
+    };
+    const memo = lruMemoize(fn, { name: 'test-invalidate-dedup', maxSize: 10 });
+
+    const before = memo(7);
+    memoRegistry.clearAll();
+    const after = memo(7); // must trigger a fresh invocation, not dedup onto `before`
+    expect(calls).toBe(2);
+
+    releases.forEach((r) => r());
+    expect(await before).toBe(14);
+    expect(await after).toBe(14);
+  });
+
   it('distinguishes bigint args from string args in the default key', async () => {
     let calls = 0;
     const fn = async (x: unknown) => {
