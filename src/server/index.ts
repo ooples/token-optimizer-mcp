@@ -520,7 +520,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'compress_text',
         description:
-          'Compress text using Brotli compression. Returns compressed text as base64 string.',
+          'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -973,11 +973,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const { text, quality } = args as { text: string; quality?: number };
         const result = compression.compressToBase64(text, { quality });
 
+        // Brotli+base64 reduces BYTES (~50%) but base64 tokenizes poorly, so
+        // the output usually has MORE LLM tokens than the input. Surface both
+        // token counts and a warning so callers don't feed the result back
+        // into a model context expecting savings — this tool is for at-rest
+        // storage, not for shrinking context.
+        const originalTokens = tokenCounter.count(text).tokens;
+        const compressedTokens = tokenCounter.count(result.compressed).tokens;
+        const increasesTokens = compressedTokens >= originalTokens;
+
         return {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(result, null, 2),
+              text: JSON.stringify(
+                {
+                  ...result,
+                  originalTokens,
+                  compressedTokens,
+                  increasesTokens,
+                  ...(increasesTokens
+                    ? {
+                        warning:
+                          'Base64 output has MORE LLM tokens than the input. This tool reduces BYTES for at-rest storage/caching; do NOT inject the result into a model context expecting token savings (use optimize_text with a cache key for that).',
+                      }
+                    : {}),
+                },
+                null,
+                2
+              ),
             },
           ],
         };

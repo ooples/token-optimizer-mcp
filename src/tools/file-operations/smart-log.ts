@@ -422,11 +422,18 @@ export class SmartLogTool {
         author,
         email,
         date: new Date(dateStr),
-        message: subject + (body ? '\n\n' + body.trim() : ''),
+        // `message` must honor `format`. Previously it ALWAYS concatenated the
+        // full body, so `oneline` still returned multi-paragraph bodies (and
+        // the reported token savings did not reflect what was actually sent).
+        // For oneline, mirror `git log --oneline`: subject only.
+        message:
+          opts.format === 'oneline'
+            ? subject
+            : subject + (body ? '\n\n' + body.trim() : ''),
         subject,
       };
 
-      // Add body if format is not oneline
+      // Add body only when the format actually includes it (not oneline).
       if (opts.format !== 'oneline' && body.trim()) {
         commit.body = body.trim();
       }

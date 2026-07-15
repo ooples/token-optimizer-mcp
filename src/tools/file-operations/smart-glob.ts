@@ -13,7 +13,7 @@
 
 import { globSync } from 'glob';
 import { statSync, readFileSync } from 'fs';
-import { relative, basename, extname, join } from 'path';
+import { relative, basename, extname, join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -174,7 +174,17 @@ export class SmartGlobTool {
 
       for (const filePath of matches) {
         try {
-          const stats = statSync(filePath);
+          // globSync returns paths relative to opts.cwd when absolute:false.
+          // statSync resolves relative paths against process.cwd(), NOT
+          // opts.cwd — so when a caller passes a cwd different from the MCP
+          // server's process cwd, EVERY statSync throws and every file is
+          // skipped, yielding 0 matches for a directory that actually has
+          // files. Resolve against opts.cwd for all filesystem access while
+          // keeping the caller-facing display path (filePath) unchanged.
+          const absPath = isAbsolute(filePath)
+            ? filePath
+            : join(opts.cwd, filePath);
+          const stats = statSync(absPath);
           const isFile = stats.isFile();
           const isDir = stats.isDirectory();
 
@@ -205,17 +215,18 @@ export class SmartGlobTool {
           let metadata: FileMetadata | undefined;
           if (opts.includeMetadata) {
             metadata = {
-              path: filePath,
-              relativePath: relative(opts.cwd, filePath),
-              name: basename(filePath),
-              extension: extname(filePath),
+              path: absPath,
+              relativePath: relative(opts.cwd, absPath),
+              name: basename(absPath),
+              extension: extname(absPath),
               size: stats.size,
               modified: stats.mtime,
               type: isFile ? 'file' : 'directory',
-              fileType: isFile ? detectFileType(filePath) : undefined,
+              fileType: isFile ? detectFileType(absPath) : undefined,
             };
           }
 
+          // Keep the caller-facing display path (respects opts.absolute).
           files.push({ path: filePath, metadata });
         } catch {
           // Skip files we can't access
@@ -242,10 +253,15 @@ export class SmartGlobTool {
       // Add content if requested (and files are small enough)
       if (opts.includeContent) {
         for (let i = 0; i < results.length; i++) {
-          const filePath =
+          const displayPath =
             typeof results[i] === 'string'
               ? (results[i] as string)
               : (results[i] as FileMetadata).path;
+          // Resolve against opts.cwd so content reads work when the display
+          // path is relative (same root cause as the statSync fix above).
+          const filePath = isAbsolute(displayPath)
+            ? displayPath
+            : join(opts.cwd, displayPath);
 
           try {
             const stats = statSync(filePath);
