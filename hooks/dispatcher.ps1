@@ -5,9 +5,13 @@
 [CmdletBinding()]
 param([string]$Phase = "")
 
-$HANDLERS_DIR = "C:\Users\cheat\.claude-global\hooks\handlers"
-$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\dispatcher.log"
-$ORCHESTRATOR = "$HANDLERS_DIR\token-optimizer-orchestrator.ps1"
+# Resolve every path relative to THIS script so the hooks work for any user
+# and any install location. NEVER hardcode a developer profile — that breaks
+# the hooks for everyone but the original dev machine. dispatcher.ps1 lives
+# at the hooks root, so $PSScriptRoot is the hooks root.
+$HANDLERS_DIR = Join-Path $PSScriptRoot "handlers"
+$LOG_FILE = Join-Path $PSScriptRoot "logs\dispatcher.log"
+$ORCHESTRATOR = Join-Path $HANDLERS_DIR "token-optimizer-orchestrator.ps1"
 
 # Load the shared logging helper defensively: a missing/malformed helper
 # must not kill the dispatcher for every hook phase. Fall back to a
@@ -71,17 +75,12 @@ try {
     # ============================================================
     if ($Phase -eq "PreToolUse") {
 
-        # 1. SMART READ - Use smart_read MCP tool for cached file reads (CRITICAL FOR TOKEN SAVINGS!)
-        # This replaces plain Read with intelligent caching, diffing, and truncation
-        # Must run BEFORE user enforcers to ensure caching takes priority
-        if ($toolName -eq "Read") {
-            & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "smart-read" -InputJsonFile $tempFile
-            if ($LASTEXITCODE -eq 2) {
-                # smart_read succeeded - blocks plain Read and returns cached/optimized content
-                exit 2
-            }
-            # If smart_read failed, allow plain Read to proceed
-        }
+        # NOTE: smart_read substitution intentionally does NOT run here.
+        # Claude Code's PreToolUse contract can only allow/deny/ask or rewrite
+        # a tool's INPUT (updatedInput) — it CANNOT let a tool run and replace
+        # its OUTPUT. The only supported way to serve cached/compressed content
+        # in place of a plain Read is PostToolUse `updatedToolOutput`, so the
+        # smart_read handling lives in the PostToolUse phase below.
 
         # 2. Context Guard - Check if we're approaching token limit
         & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PreToolUse" -Action "context-guard" -InputJsonFile $tempFile
@@ -163,6 +162,37 @@ try {
     # ============================================================
     if ($Phase -eq "PostToolUse") {
         $phaseStart = Get-Date
+
+        # 0. SMART READ SUBSTITUTION (Read only)
+        #    Replace the plain Read result with smart_read's cached/diffed/
+        #    optimized content via the supported PostToolUse `updatedToolOutput`
+        #    mechanism. This is the ONLY hook contract that lets us change what
+        #    content actually reaches the model. The orchestrator writes the
+        #    replacement JSON to its stdout and exits 2 as a "substitute" signal.
+        if ($toolName -eq "Read") {
+            $smartReadOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "smart-read" -InputJsonFile $tempFile
+            $smartReadExit = $LASTEXITCODE
+            if ($smartReadExit -eq 2 -and $smartReadOutput) {
+                # Still record the operation for session analytics. Suppress any
+                # stdout from these so it can't corrupt the JSON we relay.
+                & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "log-operation" -InputJsonFile $tempFile | Out-Null
+                & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "session-track" -InputJsonFile $tempFile | Out-Null
+
+                # Relay the orchestrator's updatedToolOutput JSON verbatim and
+                # exit 0 — PostToolUse only parses stdout JSON on exit 0 (exit 2
+                # would merely surface stderr and cannot substitute output).
+                [Console]::Out.Write(($smartReadOutput -join "`n"))
+                [Console]::Out.Flush()
+
+                if (Test-Path $tempFile) {
+                    Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
+                }
+                Write-Log "[SMART-READ] Substituted Read output via PostToolUse updatedToolOutput"
+                exit 0
+            }
+            # smart_read miss/failure: fall through to normal handling so the
+            # plain Read result is preserved and still logged/optimized.
+        }
 
         # 1. Log ALL tool operations to operations-{sessionId}.csv
         #    This is CRITICAL for session-level optimization

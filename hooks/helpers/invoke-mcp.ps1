@@ -169,21 +169,55 @@ function Invoke-MCPViaDaemon {
 function Invoke-MCPViaNpx {
     param(
         [string]$Tool,
-        $ToolArguments
+        $ToolArguments,
+        [int]$TimeoutMs = 20000
     )
 
+    # token-optimizer-mcp is a LONG-RUNNING stdio MCP server. The old fallback
+    # piped a single bare tools/call into `npx ... token-optimizer-mcp` with no
+    # MCP initialize handshake, never closed stdin, and had no timeout — so the
+    # server sat waiting for more stdin and NEVER exited. That hung every hook
+    # (i.e. every user turn) forever and left orphaned node/npx processes.
+    #
+    # This version:
+    #   1. Sends the full stdio lifecycle: initialize -> notifications/initialized
+    #      -> tools/call, one JSON-RPC message per line.
+    #   2. CLOSES stdin (EOF) so the server's stdio transport shuts down and the
+    #      process exits on its own.
+    #   3. Enforces a hard timeout and force-kills the whole process tree
+    #      (cmd -> npx -> node) via taskkill /T if it ever overruns.
+    $proc = $null
     try {
         Write-Log "Invoking MCP via npx (fallback): $Tool" "DEBUG"
 
-        # Ensure ToolArguments is a proper object
         if ($null -eq $ToolArguments) {
             $ToolArguments = @{}
         }
 
-        # Build MCP protocol request
-        $request = @{
+        if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
+            Write-Log "npx not found on PATH; cannot use npx fallback" "ERROR"
+            return $null
+        }
+
+        $initReq = @{
             jsonrpc = "2.0"
-            id = [guid]::NewGuid().ToString()
+            id = 1
+            method = "initialize"
+            params = @{
+                protocolVersion = "2024-11-05"
+                capabilities = @{}
+                clientInfo = @{ name = "token-optimizer-hooks"; version = "1.0.0" }
+            }
+        } | ConvertTo-Json -Depth 10 -Compress
+
+        $initializedNote = @{
+            jsonrpc = "2.0"
+            method = "notifications/initialized"
+        } | ConvertTo-Json -Compress
+
+        $callReq = @{
+            jsonrpc = "2.0"
+            id = 2
             method = "tools/call"
             params = @{
                 name = $Tool
@@ -191,34 +225,79 @@ function Invoke-MCPViaNpx {
             }
         } | ConvertTo-Json -Depth 10 -Compress
 
-        Write-Log "npx request: $request" "DEBUG"
+        $stdinPayload = "$initReq`n$initializedNote`n$callReq`n"
+        Write-Log "npx tools/call request: $callReq" "DEBUG"
 
-        # Invoke via npx (fallback method)
         $env:TOKEN_OPTIMIZER_CACHE_DIR = "$env:USERPROFILE\.token-optimizer-cache"
 
-        $result = $request | cmd /c npx -y token-optimizer-mcp@latest 2>&1
+        # Launch through a real Process we control so we can time it out and
+        # kill the tree. npx is a .cmd shim on Windows, so go via cmd.exe.
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "cmd.exe"
+        $psi.Arguments = "/c npx -y token-optimizer-mcp@latest"
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
 
-        if ($LASTEXITCODE -ne 0) {
-            Write-Log "npx call failed with exit code $LASTEXITCODE" "ERROR"
-            Write-Log "Output: $result" "ERROR"
+        $proc = [System.Diagnostics.Process]::Start($psi)
+
+        # Drain stdout/stderr asynchronously so a full pipe buffer can't
+        # deadlock the child while we wait.
+        $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+        $stderrTask = $proc.StandardError.ReadToEndAsync()
+
+        # Send the lifecycle and CLOSE stdin — this is what lets the server exit.
+        $proc.StandardInput.Write($stdinPayload)
+        $proc.StandardInput.Close()
+
+        if (-not $proc.WaitForExit($TimeoutMs)) {
+            Write-Log "npx MCP call timed out after ${TimeoutMs}ms; killing process tree $($proc.Id)" "ERROR"
+            # PS 5.1 / .NET Framework has no Process.Kill(bool) tree overload,
+            # so use taskkill /T to take out cmd -> npx -> node together.
+            try { & taskkill /PID $proc.Id /T /F 2>$null | Out-Null } catch {}
             return $null
         }
 
-        Write-Log "npx result: $result" "DEBUG"
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
 
-        # Parse JSON response
-        $response = $result | ConvertFrom-Json
-
-        if ($response.error) {
-            Write-Log "MCP error: $($response.error.message)" "ERROR"
-            return $null
+        if ($proc.ExitCode -ne 0) {
+            Write-Log "npx exited with code $($proc.ExitCode): $stderr" "ERROR"
         }
 
-        return $response.result
+        # The server emits one JSON-RPC message per line. Return the result for
+        # our tools/call (id = 2); ignore the initialize response (id = 1).
+        foreach ($line in ($stdout -split "`n")) {
+            $trimmed = $line.Trim()
+            if (-not $trimmed.StartsWith("{")) { continue }
+            try {
+                $obj = $trimmed | ConvertFrom-Json
+            } catch {
+                continue
+            }
+            if ($obj.id -eq 2) {
+                if ($obj.error) {
+                    Write-Log "MCP error: $($obj.error.message)" "ERROR"
+                    return $null
+                }
+                return $obj.result
+            }
+        }
+
+        Write-Log "npx fallback returned no tools/call response" "WARN"
+        return $null
 
     } catch {
         Write-Log "npx invocation failed: $($_.Exception.Message)" "ERROR"
         return $null
+    } finally {
+        # Never leave an orphaned process behind, even on early return/throw.
+        if ($proc -and -not $proc.HasExited) {
+            try { & taskkill /PID $proc.Id /T /F 2>$null | Out-Null } catch {}
+        }
+        if ($proc) { $proc.Dispose() }
     }
 }
 

@@ -12,14 +12,23 @@ param(
 
 # Dot-source helpers BEFORE any logging — Write-Log must exist before
 # the first use below.
-$HELPERS_DIR = "C:\Users\cheat\.claude-global\hooks\helpers"
-$INVOKE_MCP = "$HELPERS_DIR\invoke-mcp.ps1"
-$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-orchestrator.log"
-$SESSION_FILE = "C:\Users\cheat\.claude-global\hooks\data\current-session.txt"
-. "$PSScriptRoot\..\helpers\logging.ps1"
-. "$PSScriptRoot\..\helpers\config.ps1"
-. "$PSScriptRoot\..\helpers\gzip.ps1"
-. "$PSScriptRoot\..\helpers\context-delta.ps1"
+#
+# Resolve every path relative to THIS script so the hooks work for any
+# user and any install location. NEVER hardcode a developer profile
+# (e.g. C:\Users\cheat\...) — that breaks the hooks for everyone else.
+# This script lives in <hooks-root>\handlers, so the hooks root is the
+# parent of $PSScriptRoot.
+$HOOKS_ROOT = Split-Path -Parent $PSScriptRoot
+$HELPERS_DIR = Join-Path $HOOKS_ROOT "helpers"
+$INVOKE_MCP = Join-Path $HELPERS_DIR "invoke-mcp.ps1"
+$LOG_FILE = Join-Path $HOOKS_ROOT "logs\token-optimizer-orchestrator.log"
+$OPERATIONS_DIR = Join-Path $HOOKS_ROOT "data"
+# $SESSION_FILE is resolved per-session below, once the hook payload
+# (which carries the real Claude Code session_id) has been read.
+. (Join-Path $HELPERS_DIR "logging.ps1")
+. (Join-Path $HELPERS_DIR "config.ps1")
+. (Join-Path $HELPERS_DIR "gzip.ps1")
+. (Join-Path $HELPERS_DIR "context-delta.ps1")
 
 # DIAGNOSTIC: Log script version/load time to verify latest version is being used
 $SCRIPT_VERSION = Get-Date -Format 'yyyyMMdd.HHmmss'
@@ -35,12 +44,37 @@ if ($InputJsonFile -and (Test-Path $InputJsonFile)) {
         Write-Log "Failed to read InputJsonFile: $($_.Exception.Message)" "ERROR"
     }
 }
-$OPERATIONS_DIR = "C:\Users\cheat\.claude-global\hooks\data"
+# Resolve the session file from the REAL Claude Code session id carried in
+# the hook payload (field: session_id). Keying state per-session stops
+# concurrent/sequential Claude Code sessions from sharing one counter file,
+# and lets get_session_stats / transcript analytics match on the same id.
+# Falls back to a shared default only when the payload carries no session id.
+$SessionId = $null
+if ($InputJson) {
+    try {
+        $SessionId = ($InputJson | ConvertFrom-Json).session_id
+    } catch {
+        $SessionId = $null
+    }
+}
+if ($SessionId) {
+    # Strip anything that isn't filename-safe.
+    $safeSessionId = ($SessionId -replace '[^A-Za-z0-9._-]', '_')
+    $SESSION_FILE = Join-Path $OPERATIONS_DIR "session-$safeSessionId.txt"
+} else {
+    $SESSION_FILE = Join-Path $OPERATIONS_DIR "current-session.txt"
+}
+# Ensure the data directory exists before any session read/write.
+if (-not (Test-Path $OPERATIONS_DIR)) {
+    New-Item -ItemType Directory -Path $OPERATIONS_DIR -Force | Out-Null
+}
 
-# PERFORMANCE FIX: Prefer local dev path if not already set
+# PERFORMANCE FIX: Prefer local dev path if not already set.
+# NOTE: $HOME is a read-only PowerShell automatic variable — assigning to it
+# throws "Cannot overwrite variable HOME". Use a distinct local name.
 if (-not $env:TOKEN_OPTIMIZER_DEV_PATH) {
-  $home = $env:USERPROFILE; if (-not $home) { $home = (Get-Item "~").FullName }
-  $env:TOKEN_OPTIMIZER_DEV_PATH = (Join-Path $home "source\repos\token-optimizer-mcp")
+  $profileHome = $env:USERPROFILE; if (-not $profileHome) { $profileHome = (Get-Item "~").FullName }
+  $env:TOKEN_OPTIMIZER_DEV_PATH = (Join-Path $profileHome "source\repos\token-optimizer-mcp")
 }
 
 # PERFORMANCE OPTIMIZATION: In-memory session state (50-70ms -> <10ms)
@@ -218,7 +252,11 @@ if (-not ('TokenCounter' -as [type])) {
 
     # Primary method: try API first, fall back to estimation
     [int] CountTokens([string]$text, [string]$contentType) {
-        # Check cache first (using content hash as key with proper disposal)
+        # Check cache first (using content hash as key with proper disposal).
+        # Initialize $textHash before the try so PowerShell's class definite-
+        # assignment analysis sees it assigned on every path (otherwise the
+        # whole file fails to parse: "Variable is not assigned in the method").
+        $textHash = ""
         $sha256 = [System.Security.Cryptography.SHA256]::Create()
         try {
             $textHash = [System.BitConverter]::ToString(
@@ -318,6 +356,11 @@ if (-not ('TokenCounter' -as [type])) {
                 return $baseRatio
             }
         }
+        # Unreachable (the switch has a default), but PowerShell's class method
+        # analysis does not treat a switch as exhaustive, so without a trailing
+        # return the whole file fails to parse: "Not all code path returns
+        # value within method".
+        return $baseRatio
     }
 
     # Content type detection based on file extension or tool name
@@ -329,6 +372,8 @@ if (-not ('TokenCounter' -as [type])) {
             '^(Read|Grep|Bash)$' { return "code" }
             default { return "text" }
         }
+        # Guaranteed return so the class parses (see EstimateTokens above).
+        return "text"
     }
 
     # Get cache statistics
@@ -550,8 +595,12 @@ function Initialize-Session {
     $session = Get-SessionInfo
 
     if (-not $session) {
-        # If file doesn't exist or is empty/corrupt, create a new session
-        $sessionId = [guid]::NewGuid().ToString()
+        # If file doesn't exist or is empty/corrupt, create a new session.
+        # Prefer the REAL Claude Code session id (parsed from the hook payload
+        # into $script:SessionId) so operations-<sessionId>.csv and
+        # get_session_stats line up with the actual session. Only mint a
+        # random GUID when the payload carried no session id.
+        $sessionId = if ($script:SessionId) { $script:SessionId } else { [guid]::NewGuid().ToString() }
         $sessionStart = Get-Date -Format "yyyyMMdd-HHmmss"
 
         # PHASE 4 FIX: Enhanced stats tracking
@@ -717,7 +766,7 @@ function Handle-OptimizeSession {
             min_token_threshold = 30
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__optimize_session" -ArgumentsJson $argsJson
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_session" -ArgumentsJson $argsJson
         $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
         if ($result) {
@@ -752,7 +801,7 @@ function Handle-ContextGuard {
                 min_token_threshold = 30
             }
             $argsJson = $mcpArgs | ConvertTo-Json -Compress
-            $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__optimize_session" -ArgumentsJson $argsJson
+            $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_session" -ArgumentsJson $argsJson
             $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
             if ($result) {
@@ -788,7 +837,7 @@ function Handle-ContextGuard {
                     min_token_threshold = 30
                 }
                 $argsJson = $mcpArgs | ConvertTo-Json -Compress
-                $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__optimize_session" -ArgumentsJson $argsJson
+                $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_session" -ArgumentsJson $argsJson
                 $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
                 if ($result) {
@@ -822,7 +871,7 @@ function Handle-PeriodicOptimize {
             min_token_threshold = 30
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__optimize_session" -ArgumentsJson $argsJson
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "optimize_session" -ArgumentsJson $argsJson
         $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
         if ($result) {
@@ -849,7 +898,7 @@ function Handle-CacheWarmup {
             maxConcurrency = 5
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__cache_warmup" -ArgumentsJson $argsJson
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "cache_warmup" -ArgumentsJson $argsJson
         $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
         if ($result) {
@@ -876,7 +925,7 @@ function Handle-SessionReport {
             sessionId = $session.sessionId
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        $statsJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__get_session_stats" -ArgumentsJson $argsJson
+        $statsJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "get_session_stats" -ArgumentsJson $argsJson
         $stats = if ($statsJson) { $statsJson | ConvertFrom-Json } else { $null }
 
         if ($stats) {
@@ -884,11 +933,11 @@ function Handle-SessionReport {
 
             # Generate project-level analysis
             $mcpArgs = @{
-                projectPath = "C:\Users\cheat\.claude-global\hooks"
+                projectPath = $HOOKS_ROOT
                 costPerMillionTokens = 30
             }
             $argsJson = $mcpArgs | ConvertTo-Json -Compress
-            $analysisJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "mcp__token-optimizer__analyze_project_tokens" -ArgumentsJson $argsJson
+            $analysisJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "analyze_project_tokens" -ArgumentsJson $argsJson
             $analysis = if ($analysisJson) { $analysisJson | ConvertFrom-Json } else { $null }
 
             if ($analysis) {
@@ -2248,9 +2297,13 @@ function Handle-SmartRead {
 
             Write-Log "$fromCache - ${isDiff}: $filePath ($tokens tokens, saved $tokensSaved)" "INFO"
 
-            # FIX: Update session tokens with the tokens from smart_read
+            # FIX: Update session tokens with the tokens from smart_read.
+            # Discard the returned session object ($null = ...) so it does not
+            # leak into this function's pipeline output — the caller captures
+            # our return value ($code = Handle-SmartRead ...) to read the exit
+            # signal, and a stray object there would corrupt that check.
             if ($tokens -ne "unknown") {
-                Update-SessionOperation -TokensDelta $tokens
+                $null = Update-SessionOperation -TokensDelta $tokens
                 Write-Log "Updated session totalTokens by $tokens" "DEBUG"
             }
 
@@ -2276,24 +2329,39 @@ function Handle-SmartRead {
                 Write-Log "context_delta update skipped: $($_.Exception.Message)" 'DEBUG'
             }
 
-            # Return smart_read result and block plain Read
-            $blockResponse = @{
-                continue = $false
-                stopReason = "smart_read success"
+            # Substitute the Read's result with smart_read's optimized content
+            # using the PostToolUse `updatedToolOutput` contract. PreToolUse
+            # CANNOT replace a tool's output — only PostToolUse can — so this
+            # runs in the PostToolUse phase and hands Claude Code the smaller
+            # (cached / diffed / truncated) text in place of the raw file.
+            $optimizedText = if ($result.content) {
+                ($result.content | ForEach-Object { $_.text }) -join "`n"
+            } else {
+                $null
+            }
+
+            if (-not $optimizedText) {
+                Write-Log "smart_read produced empty content for $filePath - falling back to plain Read" "WARN"
+                return 0
+            }
+
+            $substituteResponse = @{
                 hookSpecificOutput = @{
-                    hookEventName = "PreToolUse"
-                    smartRead = $true
-                    filePath = $filePath
-                    content = $result.content
-                    metadata = $result.metadata
+                    hookEventName = "PostToolUse"
+                    # updatedToolOutput REPLACES the tool result returned to Claude.
+                    updatedToolOutput = $optimizedText
                 }
             } | ConvertTo-Json -Depth 10 -Compress
 
-            Write-Output $blockResponse
-            # PHASE 1 FIX: Flush output before exit to prevent freezing
+            # #6: write straight to the console stream, NOT Write-Output. When
+            # the dispatch site captures this function's value
+            # (`$code = Handle-SmartRead ...`), Write-Output would be swallowed
+            # into that variable and never reach stdout. [Console]::Out bypasses
+            # the pipeline so the JSON is emitted regardless of how we're called.
+            [Console]::Out.Write($substituteResponse)
             [Console]::Out.Flush()
             [Console]::Error.Flush()
-            return 2  # BUGFIX: Return instead of exit to avoid terminating dispatcher
+            return 2  # Signal to the caller: a replacement result was emitted.
 
         } else {
             # FAILED - Allow plain Read to proceed
@@ -2337,16 +2405,29 @@ function Cleanup-Session {
 # Main execution - Only run if script is executed directly (not dot-sourced)
 # When dot-sourced by dispatcher.ps1, this block is skipped and only functions are loaded
 if ($MyInvocation.InvocationName -ne '.') {
-    # Initialize session at the very start of the script execution
-    # This loads the latest state from file into $script:CurrentSession
-    Initialize-Session
+    # Initialize session at the very start of the script execution.
+    # This loads the latest state from file into $script:CurrentSession.
+    # Discard the returned session object ($null = ...) — otherwise it is
+    # emitted to stdout and would corrupt the JSON we relay for the
+    # PostToolUse smart-read `updatedToolOutput` substitution.
+    $null = Initialize-Session
 
     try {
         Write-Log "Phase: $Phase, Action: $Action" "INFO"
 
         switch ($Action) {
             "smart-read" {
-                Handle-SmartRead -InputJson $InputJson
+                # #5: capture the return and convert it into a REAL process exit
+                # code. The old code did `return 2` from the function but the
+                # switch always fell through to `exit 0`, so the dispatcher's
+                # `$LASTEXITCODE -eq 2` check never fired and substitution never
+                # engaged. Now exit 2 propagates to the dispatcher as the signal
+                # that a replacement tool result was written to stdout.
+                $smartReadCode = Handle-SmartRead -InputJson $InputJson
+                if ($smartReadCode -eq 2) {
+                    [Console]::Out.Flush()
+                    exit 2
+                }
             }
             "context-guard" {
                 Handle-ContextGuard -InputJson $InputJson
@@ -2384,7 +2465,7 @@ if ($MyInvocation.InvocationName -ne '.') {
                         Remove-Item -Path $InputJsonFile -Force -ErrorAction Stop
                         Write-Log "BACKGROUND: Cleaned up temp file after optimization: $InputJsonFile" "DEBUG"
                     } catch {
-                        Write-Log "BACKGROUND: Failed to cleanup temp file $InputJsonFile: $($_.Exception.Message)" "WARN"
+                        Write-Log "BACKGROUND: Failed to cleanup temp file ${InputJsonFile}: $($_.Exception.Message)" "WARN"
                     }
                 }
             }

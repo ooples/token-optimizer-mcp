@@ -149,6 +149,13 @@ export class SmartTest {
    * Run tests with smart caching and output reduction
    */
   async run(options: SmartTestOptions = {}): Promise<SmartTestOutput> {
+    // Honor a per-call projectRoot. The MCP server constructs this tool ONCE
+    // as a singleton (with the server's own cwd), so without this the
+    // projectRoot argument was silently ignored and npm ran in an unrelated
+    // directory — failing with ENOENT instead of running the project's tests.
+    if (options.projectRoot) {
+      this.projectRoot = options.projectRoot;
+    }
     const {
       pattern,
       onlyChanged = false,
