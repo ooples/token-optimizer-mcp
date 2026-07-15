@@ -14,7 +14,17 @@ param(
     [string]$ArgumentsJson = "{}",
 
     [Parameter(Mandatory=$false)]
-    [string]$ServerName = "token-optimizer"
+    [string]$ServerName = "token-optimizer",
+
+    # Skip the (slow) npx fallback entirely. Latency-sensitive per-tool hook
+    # paths (e.g. per-read substitution) set this so a missing daemon fails
+    # fast instead of paying npx spawn + package download on every call.
+    [Parameter(Mandatory=$false)]
+    [switch]$DaemonOnly,
+
+    # Named-pipe connect timeout in ms. Short for interactive per-tool paths.
+    [Parameter(Mandatory=$false)]
+    [int]$ConnectTimeoutMs = 5000
 )
 
 $profileRoot = $env:USERPROFILE
@@ -101,7 +111,8 @@ function Log-Performance {
 function Invoke-MCPViaDaemon {
     param(
         [string]$Tool,
-        $ToolArguments
+        $ToolArguments,
+        [int]$ConnectTimeoutMs = 5000
     )
 
     try {
@@ -129,8 +140,9 @@ function Invoke-MCPViaDaemon {
         $pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", "token-optimizer-daemon", "InOut")
 
         try {
-            # Connect with 5 second timeout
-            $pipe.Connect(5000)
+            # Connect with the caller-supplied timeout (short for interactive
+            # per-tool paths so a missing daemon fails fast).
+            $pipe.Connect($ConnectTimeoutMs)
 
             # Write request
             $writer = New-Object System.IO.StreamWriter($pipe)
@@ -234,7 +246,10 @@ function Invoke-MCPViaNpx {
         # kill the tree. npx is a .cmd shim on Windows, so go via cmd.exe.
         $psi = New-Object System.Diagnostics.ProcessStartInfo
         $psi.FileName = "cmd.exe"
-        $psi.Arguments = "/c npx -y token-optimizer-mcp@latest"
+        # Use the SCOPED package name. The unscoped `token-optimizer-mcp` on npm
+        # is a stale 2.x publish; the current server ships as
+        # `@ooples/token-optimizer-mcp` (its bin is still `token-optimizer-mcp`).
+        $psi.Arguments = "/c npx -y @ooples/token-optimizer-mcp@latest"
         $psi.RedirectStandardInput = $true
         $psi.RedirectStandardOutput = $true
         $psi.RedirectStandardError = $true
@@ -305,13 +320,20 @@ function Invoke-MCPViaNpx {
 $mcpStart = Get-Date
 
 # Try daemon first (fast path)
-$result = Invoke-MCPViaDaemon -Tool $Tool -ToolArguments $Arguments
+$result = Invoke-MCPViaDaemon -Tool $Tool -ToolArguments $Arguments -ConnectTimeoutMs $ConnectTimeoutMs
 
-# Fallback to npx if daemon unavailable
+# Fallback to npx if daemon unavailable — UNLESS the caller opted out. The
+# npx fallback spawns a fresh server (slow) and is inappropriate for
+# latency-sensitive per-tool paths, which pass -DaemonOnly.
 if ($null -eq $result) {
-    Write-Log "Daemon unavailable, using npx fallback" "WARN"
-    $result = Invoke-MCPViaNpx -Tool $Tool -ToolArguments $Arguments
-    $server = "npx"
+    if ($DaemonOnly) {
+        Write-Log "Daemon unavailable and -DaemonOnly set; skipping npx fallback" "WARN"
+        $server = "none"
+    } else {
+        Write-Log "Daemon unavailable, using npx fallback" "WARN"
+        $result = Invoke-MCPViaNpx -Tool $Tool -ToolArguments $Arguments
+        $server = "npx"
+    }
 } else {
     $server = "daemon"
 }

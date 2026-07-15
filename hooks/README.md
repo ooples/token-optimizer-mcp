@@ -29,6 +29,29 @@ hooks/
 
 3. The hooks will automatically find the CLI wrapper using relative paths.
 
+## File-read compression: what actually works
+
+Claude Code's hook contract limits how file-read output can be compressed. Know
+these rules before expecting "every Read is automatically compressed":
+
+- **Built-in `Read` — cannot be transparently compressed.** A `PreToolUse` hook
+  can only allow/deny/ask or rewrite a tool's *input*; it cannot replace output.
+  `PostToolUse.updatedToolOutput` is **ignored for built-in tools** (see
+  [anthropics/claude-code#32105](https://github.com/anthropics/claude-code/issues/32105)).
+  So there is no supported way to swap a normal `Read`'s content for a compressed
+  version.
+- **MCP file reads — compressed transparently.** For `mcp__filesystem__read_file`
+  / `read_text_file`, the hook substitutes `smart_read`'s cached/diffed/truncated
+  content via the supported `PostToolUse.updatedMCPToolOutput` field.
+- **`smart_read` MCP tool — always available.** Call `smart_read` directly for a
+  token-optimized read of any file; it returns compressed content regardless of
+  the hook limitations above.
+- **Opt-in large-`Read` redirect (off by default).** Set
+  `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true` to have the hook deny built-in
+  `Read` for files at/over `TOKEN_OPTIMIZER_LARGE_READ_BYTES` (default 50 KB) and
+  steer the model to `smart_read`. Off by default so it never disrupts edit
+  workflows.
+
 ## How It Works
 
 ### Hook Flow

@@ -809,19 +809,12 @@ function Handle-ContextGuard {
                 $session.lastOptimized = $session.totalOperations
                 $session | ConvertTo-Json | Out-File $SESSION_FILE -Encoding UTF8
             } else {
-                # BLOCK with standard response so dispatcher exits with 2
-                $blockResponse = @{
-                    continue = $false
-                    stopReason = "context guard block"
-                    hookSpecificOutput = @{
-                        hookEventName = "PreToolUse"
-                        reason = "optimize_session failed at FORCE_THRESHOLD"
-                        sessionId = $session.sessionId
-                        usagePercent = [Math]::Round($percentage * 100, 1)
-                    }
-                } | ConvertTo-Json -Depth 10 -Compress
-                Write-Output $blockResponse
-                [Console]::Out.Flush(); [Console]::Error.Flush()
+                # Signal the dispatcher to block (exit 2). Do NOT write a
+                # response here: the dispatcher owns the block and emits the
+                # correct PreToolUse deny schema via Block-Tool. Writing our own
+                # JSON to stdout would leak into the dispatcher's stdout and
+                # collide with Block-Tool's response.
+                Write-Log "Context guard: optimize_session failed at FORCE_THRESHOLD - signalling block" "WARN"
                 return 2
             }
 
@@ -2250,8 +2243,12 @@ function Handle-SmartRead {
         $data = $InputJson | ConvertFrom-Json
         $toolName = $data.tool_name
 
-        # Intercept Read, mcp__filesystem__read_file, and mcp__filesystem__read_text_file
-        if ($toolName -notin @("Read", "mcp__filesystem__read_file", "mcp__filesystem__read_text_file")) {
+        # Intercept ONLY the MCP filesystem read tools. Output substitution is
+        # not possible for the built-in Read tool (updatedToolOutput is ignored
+        # for built-in tools — anthropics/claude-code#32105); only MCP tools
+        # support updatedMCPToolOutput. Built-in Read is steered to smart_read
+        # via the opt-in PreToolUse redirect in the dispatcher instead.
+        if ($toolName -notin @("mcp__filesystem__read_file", "mcp__filesystem__read_text_file")) {
             return
         }
 
@@ -2276,7 +2273,10 @@ function Handle-SmartRead {
             includeMetadata = $true
         }
         $argsJson = $mcpArgs | ConvertTo-Json -Compress
-        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "smart_read" -ArgumentsJson $argsJson
+        # This runs on every intercepted read, so it must be fast: daemon-only
+        # (no slow npx fallback) with a short connect timeout. A missing daemon
+        # then fails fast and we simply leave the original result untouched.
+        $resultJson = & "$HELPERS_DIR\invoke-mcp.ps1" -Tool "smart_read" -ArgumentsJson $argsJson -DaemonOnly -ConnectTimeoutMs 1500
         $result = if ($resultJson) { $resultJson | ConvertFrom-Json } else { $null }
 
         # Check for errors - if MCP call failed, allow fallback to plain Read
@@ -2329,27 +2329,25 @@ function Handle-SmartRead {
                 Write-Log "context_delta update skipped: $($_.Exception.Message)" 'DEBUG'
             }
 
-            # Substitute the Read's result with smart_read's optimized content
-            # using the PostToolUse `updatedToolOutput` contract. PreToolUse
-            # CANNOT replace a tool's output — only PostToolUse can — so this
-            # runs in the PostToolUse phase and hands Claude Code the smaller
-            # (cached / diffed / truncated) text in place of the raw file.
-            $optimizedText = if ($result.content) {
-                ($result.content | ForEach-Object { $_.text }) -join "`n"
-            } else {
-                $null
-            }
-
-            if (-not $optimizedText) {
-                Write-Log "smart_read produced empty content for $filePath - falling back to plain Read" "WARN"
+            # Substitute the MCP read tool's result with smart_read's optimized
+            # content using `updatedMCPToolOutput` (the ONLY output-substitution
+            # contract Claude Code supports, and only for MCP tools — see
+            # anthropics/claude-code#32105). The replacement must MATCH the MCP
+            # tool's output schema, i.e. a CallToolResult { content: [...] }, so
+            # we hand back smart_read's content array (cached/diffed/truncated).
+            if (-not $result.content) {
+                Write-Log "smart_read produced empty content for $filePath - leaving original result" "WARN"
                 return 0
             }
 
             $substituteResponse = @{
                 hookSpecificOutput = @{
                     hookEventName = "PostToolUse"
-                    # updatedToolOutput REPLACES the tool result returned to Claude.
-                    updatedToolOutput = $optimizedText
+                    # Replaces the MCP tool result returned to Claude. Shape must
+                    # match the tool's output (a CallToolResult content array).
+                    updatedMCPToolOutput = @{
+                        content = $result.content
+                    }
                 }
             } | ConvertTo-Json -Depth 10 -Compress
 
@@ -2430,7 +2428,14 @@ if ($MyInvocation.InvocationName -ne '.') {
                 }
             }
             "context-guard" {
-                Handle-ContextGuard -InputJson $InputJson
+                # Same #5-class fix as smart-read: convert the function's
+                # return 2 into a real exit code so the dispatcher's
+                # `$LASTEXITCODE -eq 2` check fires and the token-budget block
+                # actually engages (previously it never did).
+                $guardCode = Handle-ContextGuard -InputJson $InputJson
+                if (($guardCode | Select-Object -Last 1) -eq 2) {
+                    exit 2
+                }
             }
             "periodic-optimize" {
                 Handle-PeriodicOptimize -InputJson $InputJson

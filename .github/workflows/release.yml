@@ -97,7 +97,7 @@ jobs:
 
           MESSAGE="New release: token-optimizer-mcp v${VERSION}\n"
           MESSAGE="${MESSAGE}Release notes: ${RELEASE_URL}\n"
-          MESSAGE="${MESSAGE}npm: https://www.npmjs.com/package/token-optimizer-mcp/v/${VERSION}"
+          MESSAGE="${MESSAGE}npm: https://www.npmjs.com/package/@ooples/token-optimizer-mcp/v/${VERSION}"
 
           echo "message<<EOF" >> $GITHUB_OUTPUT
           echo -e "$MESSAGE" >> $GITHUB_OUTPUT
@@ -145,7 +145,7 @@ jobs:
 
             Version:       v${{ needs.release.outputs.new_release_version }}
             Release notes: ${{ steps.release_notes.outputs.release_url }}
-            npm:           https://www.npmjs.com/package/token-optimizer-mcp/v/${{ needs.release.outputs.new_release_version }}
+            npm:           https://www.npmjs.com/package/@ooples/token-optimizer-mcp/v/${{ needs.release.outputs.new_release_version }}
 
             — automated by the release pipeline
 
@@ -188,4 +188,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Version: ${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
           echo "Release URL: ${{ steps.release_notes.outputs.release_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "npm URL: https://www.npmjs.com/package/token-optimizer-mcp/v/${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "npm URL: https://www.npmjs.com/package/@ooples/token-optimizer-mcp/v/${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
