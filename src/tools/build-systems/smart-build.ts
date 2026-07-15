@@ -119,6 +119,7 @@ export class SmartBuild {
   private cache: CacheEngine;
   private cacheNamespace = 'smart_build';
   private projectRoot: string;
+  private readonly defaultProjectRoot: string;
 
   constructor(
     cache: CacheEngine,
@@ -127,7 +128,8 @@ export class SmartBuild {
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.projectRoot = projectRoot || process.cwd();
+    this.defaultProjectRoot = projectRoot || process.cwd();
+    this.projectRoot = this.defaultProjectRoot;
   }
 
   /**
@@ -138,9 +140,9 @@ export class SmartBuild {
     // as a singleton (with the server's own cwd), so without this the
     // projectRoot argument was silently ignored and the build ran in the
     // wrong directory — reporting success:false with 0 files on a clean build.
-    if (options.projectRoot) {
-      this.projectRoot = options.projectRoot;
-    }
+    // Resolve from the constructor default each call so omitting projectRoot
+    // reverts to the default instead of stickily keeping a prior call's value.
+    this.projectRoot = options.projectRoot || this.defaultProjectRoot;
     const {
       force = false,
       watch = false,

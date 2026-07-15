@@ -152,6 +152,7 @@ export class SmartLint {
   private cache: CacheEngine;
   private cacheNamespace = 'smart_lint';
   private projectRoot: string;
+  private readonly defaultProjectRoot: string;
   private ignoredIssuesKey = 'ignored_issues';
 
   constructor(
@@ -161,7 +162,8 @@ export class SmartLint {
     projectRoot?: string
   ) {
     this.cache = cache;
-    this.projectRoot = projectRoot || process.cwd();
+    this.defaultProjectRoot = projectRoot || process.cwd();
+    this.projectRoot = this.defaultProjectRoot;
   }
 
   /**
@@ -172,9 +174,9 @@ export class SmartLint {
     // as a singleton (with the server's own cwd), so without this the
     // projectRoot argument was silently ignored and eslint ran in the wrong
     // directory (where it isn't installed, triggering an npx auto-download).
-    if (options.projectRoot) {
-      this.projectRoot = options.projectRoot;
-    }
+    // Resolve from the constructor default each call so omitting projectRoot
+    // reverts to the default instead of stickily keeping a prior call's value.
+    this.projectRoot = options.projectRoot || this.defaultProjectRoot;
     const {
       files = 'src',
       force = false,

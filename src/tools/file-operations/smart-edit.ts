@@ -143,6 +143,9 @@ export class SmartEditTool {
       // Check if content actually changed
       if (editedContent === originalContent) {
         const duration = Date.now() - startTime;
+        // Clamp so a tiny unchanged file (< 50 tokens) never reports a
+        // misleading negative saving.
+        const unchangedSaved = Math.max(0, originalTokens - 50);
 
         this.metrics.record({
           operation: 'smart_edit',
@@ -150,7 +153,7 @@ export class SmartEditTool {
           inputTokens: 50, // Minimal tokens for "no changes" message
           outputTokens: 0,
           cachedTokens: 0,
-          savedTokens: originalTokens - 50,
+          savedTokens: unchangedSaved,
           success: true,
           cacheHit: false,
         });
@@ -164,7 +167,7 @@ export class SmartEditTool {
             linesChanged: 0,
             originalLines: originalLines.length,
             finalLines: editedLines.length,
-            tokensSaved: originalTokens - 50,
+            tokensSaved: unchangedSaved,
             tokenCount: 50,
             originalTokenCount: originalTokens,
             compressionRatio: 50 / originalTokens,
