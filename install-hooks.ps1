@@ -107,11 +107,20 @@ function Install-HooksFiles {
         return
     }
 
-    # Download hooks files
+    # Download hooks files.
+    # IMPORTANT: the orchestrator dot-sources logging.ps1, config.ps1, gzip.ps1
+    # and context-delta.ps1 at startup, and both the orchestrator and
+    # context-delta.ps1 call invoke-mcp.ps1 at runtime. If ANY of these is
+    # missing, every hook invocation dies with "Write-Log is not recognized"
+    # (etc.), so ALL of them must be downloaded — not just the dispatcher trio.
     $files = @(
         @{ Source = "$REPO_URL/dispatcher.ps1"; Dest = "$HOOKS_DIR\dispatcher.ps1" },
         @{ Source = "$REPO_URL/handlers/token-optimizer-orchestrator.ps1"; Dest = "$HOOKS_DIR\handlers\token-optimizer-orchestrator.ps1" },
-        @{ Source = "$REPO_URL/helpers/invoke-mcp.ps1"; Dest = "$HOOKS_DIR\helpers\invoke-mcp.ps1" }
+        @{ Source = "$REPO_URL/helpers/invoke-mcp.ps1"; Dest = "$HOOKS_DIR\helpers\invoke-mcp.ps1" },
+        @{ Source = "$REPO_URL/helpers/logging.ps1"; Dest = "$HOOKS_DIR\helpers\logging.ps1" },
+        @{ Source = "$REPO_URL/helpers/config.ps1"; Dest = "$HOOKS_DIR\helpers\config.ps1" },
+        @{ Source = "$REPO_URL/helpers/gzip.ps1"; Dest = "$HOOKS_DIR\helpers\gzip.ps1" },
+        @{ Source = "$REPO_URL/helpers/context-delta.ps1"; Dest = "$HOOKS_DIR\helpers\context-delta.ps1" }
     )
 
     foreach ($file in $files) {
@@ -159,8 +168,14 @@ function Configure-ClaudeSettings {
         @{}
     }
 
-    # Add hooks configuration
-    $hookCommand = "powershell.exe -File $HOOKS_DIR\dispatcher.ps1 -Phase"
+    # Add hooks configuration.
+    # The command must be shell-safe: Claude Code may run hook commands through
+    # bash (e.g. when Git Bash is on PATH), where an UNQUOTED Windows path has
+    # its backslashes silently stripped, corrupting the path. So quote the
+    # dispatcher path. Also pass -NoProfile (don't load the user's PS profile)
+    # and -ExecutionPolicy Bypass (so the hook runs regardless of local policy).
+    $dispatcherPath = Join-Path $HOOKS_DIR "dispatcher.ps1"
+    $hookCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$dispatcherPath`" -Phase"
 
     $settings.hooks = @{
         PreToolUse = @(
@@ -408,11 +423,16 @@ function Test-Installation {
 
     $issues = @()
 
-    # Check hooks files exist
+    # Check hooks files exist (including every helper the orchestrator
+    # dot-sources — a missing helper breaks every hook invocation).
     $requiredFiles = @(
         "$HOOKS_DIR\dispatcher.ps1",
         "$HOOKS_DIR\handlers\token-optimizer-orchestrator.ps1",
-        "$HOOKS_DIR\helpers\invoke-mcp.ps1"
+        "$HOOKS_DIR\helpers\invoke-mcp.ps1",
+        "$HOOKS_DIR\helpers\logging.ps1",
+        "$HOOKS_DIR\helpers\config.ps1",
+        "$HOOKS_DIR\helpers\gzip.ps1",
+        "$HOOKS_DIR\helpers\context-delta.ps1"
     )
 
     foreach ($file in $requiredFiles) {

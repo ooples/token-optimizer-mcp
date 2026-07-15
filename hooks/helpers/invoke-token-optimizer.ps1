@@ -10,9 +10,16 @@ param(
     [hashtable]$Arguments
 )
 
-$LOG_FILE = "C:\Users\cheat\.claude-global\hooks\logs\token-optimizer-calls.log"
+# Resolve paths relative to this script — never hardcode a developer profile.
+# This script lives in <hooks-root>\helpers.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
+$hooksRoot = Split-Path -Parent $scriptDir
+$repoRoot = Split-Path -Parent $hooksRoot
+$logDir = Join-Path $hooksRoot "logs"
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+$LOG_FILE = Join-Path $logDir "token-optimizer-calls.log"
 $CLI_WRAPPER = Join-Path $repoRoot "cli-wrapper.mjs"
 
 function Write-Log {
