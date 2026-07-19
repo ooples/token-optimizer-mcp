@@ -2427,6 +2427,20 @@ async function main() {
   process.on('SIGTERM', () => {
     cleanup().finally(() => process.exit(0));
   });
+
+  // Windows stdio lifecycle fix: a stdio MCP server MUST exit when its parent
+  // (the MCP client, e.g. Claude Code) dies. On Windows a killed parent sends
+  // NO SIGTERM to the child, so the SIGINT/SIGTERM handlers above never fire on
+  // orphaning. The only reliable signal is the stdin stream closing/ending/
+  // erroring (the client's pipe write-end goes away). Without this the process
+  // leaks forever: the prune timer is unref'd (does not pin the loop), but the
+  // StdioServerTransport's active stdin read handle keeps the process alive.
+  const exitOnStdinClose = () => {
+    cleanup().finally(() => process.exit(0));
+  };
+  process.stdin.on('end', exitOnStdinClose);
+  process.stdin.on('close', exitOnStdinClose);
+  process.stdin.on('error', exitOnStdinClose);
 }
 
 main().catch((error) => {
