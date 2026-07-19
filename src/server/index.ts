@@ -2435,7 +2435,13 @@ async function main() {
   // erroring (the client's pipe write-end goes away). Without this the process
   // leaks forever: the prune timer is unref'd (does not pin the loop), but the
   // StdioServerTransport's active stdin read handle keeps the process alive.
+  // Idempotent: stdin can emit both 'end' and 'close' (and 'error') for a single
+  // disconnect, so guard against re-entry — cleanup()+exit must run exactly once,
+  // otherwise the handlers race (concurrent cleanup, double process.exit).
+  let stdinClosing = false;
   const exitOnStdinClose = () => {
+    if (stdinClosing) return;
+    stdinClosing = true;
     cleanup().finally(() => process.exit(0));
   };
   process.stdin.on('end', exitOnStdinClose);
