@@ -2,6 +2,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { installShutdownHandlers } from './lifecycle.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -2418,15 +2419,10 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Cleanup on exit - Note: the signal handlers use try-catch blocks
-  // to ensure cleanup continues even if disposal fails
-  process.on('SIGINT', () => {
-    cleanup().finally(() => process.exit(0));
-  });
-
-  process.on('SIGTERM', () => {
-    cleanup().finally(() => process.exit(0));
-  });
+  // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
+  // through one guarded shutdown. See ./lifecycle.ts for the full rationale
+  // (the stdin handlers are the Windows orphan-leak fix from PR #177).
+  installShutdownHandlers({ cleanup });
 }
 
 main().catch((error) => {
