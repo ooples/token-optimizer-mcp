@@ -222,6 +222,8 @@ async function sendToMCPServer(request: any): Promise<any> {
  * Handle incoming request from PowerShell hook via IPC
  */
 async function handleIPCRequest(data: string): Promise<string> {
+  // Any request counts as activity — push back the idle self-exit.
+  resetIdleTimer();
   const startTime = Date.now();
 
   let request: any;
@@ -296,6 +298,33 @@ async function handleIPCRequest(data: string): Promise<string> {
 
 let shuttingDown = false;
 
+// Idle self-exit. Unlike the stdio MCP server, the daemon does NOT read stdin,
+// so it can't use the stdin-close "parent is gone" signal — and on Windows a
+// killed parent sends no signal. An orphaned daemon (plus its MCP child) would
+// otherwise leak ~100 MB forever. So shut down after a stretch of no IPC
+// requests; the next client transparently respawns the daemon. It's a singleton
+// per socket, so at most one can exist, but this bounds even that one.
+// Set TOKEN_OPTIMIZER_DAEMON_IDLE_MS=0 to disable (keep a persistent daemon).
+const IDLE_TIMEOUT_MS = (() => {
+  const raw = process.env.TOKEN_OPTIMIZER_DAEMON_IDLE_MS;
+  if (raw === undefined || raw === '') return 30 * 60 * 1000; // default 30 min
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 30 * 60 * 1000;
+})();
+let idleTimer: NodeJS.Timeout | null = null;
+
+function resetIdleTimer(): void {
+  if (IDLE_TIMEOUT_MS <= 0) return; // disabled: persistent daemon
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    console.error(
+      `[DAEMON] Idle for ${IDLE_TIMEOUT_MS}ms with no requests — self-terminating to avoid an orphaned daemon`
+    );
+    shutdown();
+  }, IDLE_TIMEOUT_MS);
+  // Intentionally NOT unref'd: we WANT this timer to fire and stop an idle daemon.
+}
+
 /**
  * Graceful shutdown
  */
@@ -304,6 +333,11 @@ function shutdown(): void {
   shuttingDown = true;
 
   console.error('[DAEMON] Shutting down gracefully...');
+
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
 
   // Kill MCP server
   if (mcpProcess) {
@@ -378,6 +412,9 @@ function startDaemon(): void {
 
     // Write PID file for process management
     fs.writeFileSync(PID_FILE, process.pid.toString());
+
+    // Start the idle self-exit clock (no-op if disabled via env).
+    resetIdleTimer();
 
     console.error('[DAEMON] Daemon ready');
   });

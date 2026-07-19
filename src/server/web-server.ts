@@ -428,11 +428,29 @@ app.get('/', (_req, res) => {
 
 // Start server
 export function startWebServer() {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(
       `Token Optimizer Dashboard running on http://localhost:${PORT}`
     );
   });
+
+  // Graceful shutdown: the dashboard previously had NO lifecycle handlers, so a
+  // SIGINT/SIGTERM left the HTTP listener dangling instead of closing cleanly.
+  // Route both signals through one guarded close, and force-exit if connections
+  // don't drain promptly.
+  let shuttingDown = false;
+  const shutdown = (reason: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[dashboard] shutting down (${reason})`);
+    const force = setTimeout(() => process.exit(0), 5000);
+    force.unref();
+    server.close(() => process.exit(0));
+  };
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+  return server;
 }
 
 // Start server if this file is run directly

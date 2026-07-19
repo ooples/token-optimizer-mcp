@@ -2,6 +2,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { installShutdownHandlers } from './lifecycle.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -2418,35 +2419,10 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Cleanup on exit - Note: the signal handlers use try-catch blocks
-  // to ensure cleanup continues even if disposal fails
-  process.on('SIGINT', () => {
-    cleanup().finally(() => process.exit(0));
-  });
-
-  process.on('SIGTERM', () => {
-    cleanup().finally(() => process.exit(0));
-  });
-
-  // Windows stdio lifecycle fix: a stdio MCP server MUST exit when its parent
-  // (the MCP client, e.g. Claude Code) dies. On Windows a killed parent sends
-  // NO SIGTERM to the child, so the SIGINT/SIGTERM handlers above never fire on
-  // orphaning. The only reliable signal is the stdin stream closing/ending/
-  // erroring (the client's pipe write-end goes away). Without this the process
-  // leaks forever: the prune timer is unref'd (does not pin the loop), but the
-  // StdioServerTransport's active stdin read handle keeps the process alive.
-  // Idempotent: stdin can emit both 'end' and 'close' (and 'error') for a single
-  // disconnect, so guard against re-entry — cleanup()+exit must run exactly once,
-  // otherwise the handlers race (concurrent cleanup, double process.exit).
-  let stdinClosing = false;
-  const exitOnStdinClose = () => {
-    if (stdinClosing) return;
-    stdinClosing = true;
-    cleanup().finally(() => process.exit(0));
-  };
-  process.stdin.on('end', exitOnStdinClose);
-  process.stdin.on('close', exitOnStdinClose);
-  process.stdin.on('error', exitOnStdinClose);
+  // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
+  // through one guarded shutdown. See ./lifecycle.ts for the full rationale
+  // (the stdin handlers are the Windows orphan-leak fix from PR #177).
+  installShutdownHandlers({ cleanup });
 }
 
 main().catch((error) => {
