@@ -16,6 +16,8 @@ jobs:
   commitlint:
     name: Lint Commit Messages
     runs-on: ubuntu-latest
+    # Skip on release-please PRs: the release commit is auto-generated.
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 5
 
     steps:
