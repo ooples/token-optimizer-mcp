@@ -1,0 +1,33 @@
+name: HOL Plugin Scanner
+
+# Security scan required by the awesome-codex-plugins community directory
+# (hashgraph-online). Scans the Codex plugin bundle and must score >= 80/130
+# with no high-severity findings. Third-party action pinned to a commit SHA.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: HOL Plugin Scanner
+    runs-on: ubuntu-latest
+    # Skip on release-please PRs (they only bump version/changelog).
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: HOL Plugin Scanner
+        uses: hashgraph-online/ai-plugin-scanner-action@8f0a503ca2a70c1968a9a883e11fdff5737b7909 # v1 (v1.2.514)
+        with:
+          plugin_dir: "integrations/codex/plugin"
+          mode: scan
+          min_score: 80
+          fail_on_severity: high
+          format: sarif
+          upload_sarif: true
