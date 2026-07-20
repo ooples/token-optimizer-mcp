@@ -20,6 +20,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch: {} # allow manual re-runs (gh workflow run release.yml)
 
 permissions:
   contents: write
