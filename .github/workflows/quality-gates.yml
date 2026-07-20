@@ -19,6 +19,8 @@ jobs:
   bundle-size:
     name: Bundle Size Analysis
     runs-on: ubuntu-latest
+    # Skip on release-please PRs (only bump version/changelog already validated on merge).
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -121,6 +123,7 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -228,6 +231,7 @@ jobs:
   license-compliance:
     name: License Compliance
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -325,6 +329,7 @@ jobs:
   dependency-vulnerabilities:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
 
     steps:
@@ -375,6 +380,7 @@ jobs:
   code-quality:
     name: Code Quality Metrics
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
 
     steps:
