@@ -40,6 +40,11 @@ coverage/
 # MCP registry tokens (secrets)
 .mcpregistry_github_token
 .mcpregistry_registry_token
+
+# Local MCP server config — may contain project secrets (Supabase/Postgres
+# tokens etc.). MUST NOT be committed. A committed copy previously leaked
+# credentials to the public repo; keep this local-only from now on.
+.mcp.json
 worktrees/
  
 # Local development configs and logs

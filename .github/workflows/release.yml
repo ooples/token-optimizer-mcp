@@ -38,7 +38,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # semantic-release@25 requires Node ^22.14 || >=24.10. On Node 20 the
+          # `npx semantic-release` step aborted at its version check, so EVERY
+          # release since the semantic-release upgrade failed and no GitHub/npm
+          # releases were published. Pin to 22.x (latest satisfies >=22.14).
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
