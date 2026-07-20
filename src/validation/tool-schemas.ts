@@ -514,6 +514,30 @@ export const ExportAnalyticsSchema = z.object({
     .describe('Optional filter by MCP server name'),
 });
 
+// 71b. get_optimization_report
+export const GetOptimizationReportSchema = z.object({
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/)
+    .optional()
+    .describe('Optional start date filter in ISO 8601 format'),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/)
+    .optional()
+    .describe('Optional end date filter in ISO 8601 format'),
+  sessionId: z
+    .string()
+    .optional()
+    .describe('Optional session ID to scope the report to a single session'),
+  topN: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Limit each breakdown to the top N rows (default 10)'),
+});
+
 // 72. optimization_storage — discriminated union keyed on `operation` so
 // the zod validator rejects a `store` request missing the required
 // payload fields at validateToolArgs time, instead of after dispatch.
@@ -627,6 +651,7 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   get_action_analytics: GetActionAnalyticsSchema,
   get_mcp_server_analytics: GetMcpServerAnalyticsSchema,
   export_analytics: ExportAnalyticsSchema,
+  get_optimization_report: GetOptimizationReportSchema,
   optimization_storage: OptimizationStorageSchema,
   context_delta: ContextDeltaSchema,
 };
