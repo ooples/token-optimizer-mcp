@@ -6,6 +6,23 @@ import os from 'os';
 import { IEmbeddingGenerator } from '../interfaces/IEmbeddingGenerator.js';
 import { IVectorStore } from '../interfaces/IVectorStore.js';
 
+/**
+ * Whether an error from opening/initializing SQLite indicates the database file
+ * is corrupt or not a valid database (e.g. a partially-written file, or a
+ * non-DB file left at the path). Such a file can be safely deleted and
+ * recreated, so callers use this to decide whether to self-heal on retry.
+ */
+function isCorruptDatabaseError(err: unknown): boolean {
+  if (!err) return false;
+  const code = (err as { code?: string }).code ?? '';
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    code === 'SQLITE_NOTADB' ||
+    code === 'SQLITE_CORRUPT' ||
+    /not a database|file is encrypted|is not a database|malformed/i.test(message)
+  );
+}
+
 export interface CacheEntry {
   key: string;
   value: string;
@@ -107,23 +124,27 @@ export class CacheEngine {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        // First attempt: use requested path
-        // Second attempt: try cleaning up corrupted files and retry
-        // PHASE 1 FIX: Removed tmpdir fallback - was causing 0% cache hit rate
-        // Third attempt: fail loudly instead of falling back to ephemeral temp location
+        // First attempt: use requested path as-is.
+        // Any later attempt: if the previous failure was a corrupt/invalid DB
+        // file (e.g. SQLITE_NOTADB from a partial write or a stray non-DB file),
+        // delete the DB and its WAL/SHM sidecars so this attempt recreates a
+        // fresh database. This runs on EVERY retry (not just attempt 2) so a
+        // single failed delete doesn't strand the remaining attempts.
+        // PHASE 1 FIX: Removed tmpdir fallback - was causing 0% cache hit rate.
         const dbPathToUse = finalDbPath;
 
-        // If this is attempt 2, try to clean up corrupted files
-        if (attempt === 2 && fs.existsSync(finalDbPath)) {
-          try {
-            fs.unlinkSync(finalDbPath);
-            // Also remove WAL files
-            const walPath = `${finalDbPath}-wal`;
-            const shmPath = `${finalDbPath}-shm`;
-            if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
-            if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
-          } catch {
-            // If we can't clean up, attempt 3 will fail with an error (no tmpdir fallback)
+        if (attempt > 1 && isCorruptDatabaseError(lastError)) {
+          for (const p of [
+            finalDbPath,
+            `${finalDbPath}-wal`,
+            `${finalDbPath}-shm`,
+          ]) {
+            try {
+              if (fs.existsSync(p)) fs.unlinkSync(p);
+            } catch {
+              // Best-effort: if a sidecar can't be removed, the open below may
+              // still fail and we fall through to the next attempt / final error.
+            }
           }
         }
 
