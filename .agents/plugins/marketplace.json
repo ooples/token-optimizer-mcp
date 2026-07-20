@@ -1,0 +1,22 @@
+{
+  "name": "token-optimizer",
+  "interface": {
+    "displayName": "Token Optimizer"
+  },
+  "plugins": [
+    {
+      "name": "token-optimizer",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/ooples/token-optimizer-mcp.git",
+        "path": "./integrations/codex/plugin",
+        "ref": "master"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

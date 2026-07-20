@@ -41,10 +41,12 @@ coverage/
 .mcpregistry_github_token
 .mcpregistry_registry_token
 
-# Local MCP server config — may contain project secrets (Supabase/Postgres
-# tokens etc.). MUST NOT be committed. A committed copy previously leaked
-# credentials to the public repo; keep this local-only from now on.
-.mcp.json
+# Local MCP server config at the repo root — may contain project secrets
+# (Supabase/Postgres tokens etc.). MUST NOT be committed. A committed copy
+# previously leaked credentials to the public repo; keep this local-only.
+# Anchored to the root so plugin MCP manifests (plugin/.mcp.json,
+# integrations/**/.mcp.json — npx-only, no secrets) can still be tracked.
+/.mcp.json
 worktrees/
  
 # Local development configs and logs

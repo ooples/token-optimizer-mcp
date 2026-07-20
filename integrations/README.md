@@ -59,6 +59,20 @@ Alternatively add the `mcpServers` block from `gemini-extension.json` to
 
 ## OpenAI Codex
 
+**Native plugin (richest — bundles the MCP server + skill via Codex's plugin system):**
+
+```bash
+# Add this repo as a Codex plugin marketplace, then install:
+codex plugin marketplace add ooples/token-optimizer-mcp
+codex plugin install token-optimizer@token-optimizer
+```
+
+The plugin lives in `codex/plugin/` (`.codex-plugin/plugin.json` + `.mcp.json` +
+the `token-optimization` skill); the repo-root `.agents/plugins/marketplace.json`
+makes the repo an installable Codex marketplace.
+
+**Or just the MCP server + guidance (no plugin system):**
+
 ```bash
 # 1) Merge the MCP server into your Codex config:
 cat codex/config.toml >> ~/.codex/config.toml
