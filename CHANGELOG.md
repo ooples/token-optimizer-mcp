@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.0.1...v5.1.0) (2026-07-20)
+
+
+### Features
+
+* **analytics:** auto-record token savings + add get_optimization_report ([#181](https://github.com/ooples/token-optimizer-mcp/issues/181)) ([2b26227](https://github.com/ooples/token-optimizer-mcp/commit/2b2622738adf664e4c3d4d5a2e608d723a6bc040))
+* implement background optimization with immediate session persistence ([770cf31](https://github.com/ooples/token-optimizer-mcp/commit/770cf3164a9010d90e1848672b3b257e20889fd2))
+* implement LRU cache and sophisticated token counting (issues [#4](https://github.com/ooples/token-optimizer-mcp/issues/4) and [#5](https://github.com/ooples/token-optimizer-mcp/issues/5)) ([#127](https://github.com/ooples/token-optimizer-mcp/issues/127)) ([3f069f7](https://github.com/ooples/token-optimizer-mcp/commit/3f069f7ce82ed9f25ca30d8c9ad154425090f63d))
+* optimization platform — config, tokenizers, LRU cache, sessions, context-delta ([#163](https://github.com/ooples/token-optimizer-mcp/issues/163)) ([b316152](https://github.com/ooples/token-optimizer-mcp/commit/b3161526b031adec6a30e575c7152b5e7b69f4ec))
+* **packaging:** claude code plugin + gemini/codex/opencode/copilot integrations ([#180](https://github.com/ooples/token-optimizer-mcp/issues/180)) ([a694fc1](https://github.com/ooples/token-optimizer-mcp/commit/a694fc1ac5da917f24ef54579d50f59919fccad0))
+
+
+### Bug Fixes
+
+* add missing items schema to array tool parameters ([#153](https://github.com/ooples/token-optimizer-mcp/issues/153)) ([#154](https://github.com/ooples/token-optimizer-mcp/issues/154)) ([06b941f](https://github.com/ooples/token-optimizer-mcp/commit/06b941f1b65f85758f1efa16839c0629826a61d0))
+* add semantic-release git plugin and sync package.json to v5.0.1 ([#119](https://github.com/ooples/token-optimizer-mcp/issues/119)) ([31efcf3](https://github.com/ooples/token-optimizer-mcp/commit/31efcf3deb26002eacc979650b0f2e3b04bdcc2f))
+* **cache:** tolerate a directory passed as the cache engine db path ([#171](https://github.com/ooples/token-optimizer-mcp/issues/171)) ([d933821](https://github.com/ooples/token-optimizer-mcp/commit/d9338213fb5c2264d67b9ed3f74bf48b226bd601))
+* **ci,security:** repair release pipeline (Node 22) and stop tracking .mcp.json ([#179](https://github.com/ooples/token-optimizer-mcp/issues/179)) ([73550bc](https://github.com/ooples/token-optimizer-mcp/commit/73550bcd401adf0554e228f1abaeb87e5b464631))
+* **hooks,tools:** close gap-analysis findings on top of [#175](https://github.com/ooples/token-optimizer-mcp/issues/175) ([#176](https://github.com/ooples/token-optimizer-mcp/issues/176)) ([99252ae](https://github.com/ooples/token-optimizer-mcp/commit/99252aec279a1767878136fe59712f006018de26))
+* move background optimization and session fixes to PR (wrongly committed to master) ([#128](https://github.com/ooples/token-optimizer-mcp/issues/128)) ([1ac3e7b](https://github.com/ooples/token-optimizer-mcp/commit/1ac3e7bdd7f62cceb384dd999db3a082337f4501))
+* **release:** recognize existing vX.Y.Z tags in release-please ([#183](https://github.com/ooples/token-optimizer-mcp/issues/183)) ([4637590](https://github.com/ooples/token-optimizer-mcp/commit/46375901ca6b357c01f28e254f2d43219d7b82ef))
+* remove conflicting Start-Process parameters causing silent failures ([6e43e7c](https://github.com/ooples/token-optimizer-mcp/commit/6e43e7c1b1bdcafca902e26909208403543a7db2))
+* repair broken PowerShell hooks and 5 MCP tool bugs (15 user-reported issues) ([#175](https://github.com/ooples/token-optimizer-mcp/issues/175)) ([ced86aa](https://github.com/ooples/token-optimizer-mcp/commit/ced86aa345771e33e71d9db7ff5a899ef88acf28))
+* resolve powershell parse errors and session file corruption ([ceaf8e1](https://github.com/ooples/token-optimizer-mcp/commit/ceaf8e10d9df76022074a8c331cbb3ed25163f03))
+* **security:** eliminate os command injection across smart_* tools ([#169](https://github.com/ooples/token-optimizer-mcp/issues/169)) ([b4ee96d](https://github.com/ooples/token-optimizer-mcp/commit/b4ee96dac799cbfba0a9f9c17844ce9d613cbcc7))
+* **server:** exit stdio server on stdin close to prevent Windows orphan-leak ([#177](https://github.com/ooples/token-optimizer-mcp/issues/177)) ([0408bee](https://github.com/ooples/token-optimizer-mcp/commit/0408bee1a476814be830d12adec05a4165eeff95))
+* **smart_read:** guard zod-v4 error issues and require non-empty path ([#167](https://github.com/ooples/token-optimizer-mcp/issues/167)) ([4ae7c35](https://github.com/ooples/token-optimizer-mcp/commit/4ae7c351659b3a1a7f741f6dc427577aead9fdd8))
+
+
+### CI/CD
+
+* **release:** harden release pipeline + version-info notifications ([#170](https://github.com/ooples/token-optimizer-mcp/issues/170)) ([9e5a06c](https://github.com/ooples/token-optimizer-mcp/commit/9e5a06cad1e204b77349c03e1da0520ae3af54c0))
+* **release:** migrate to release-please with oidc npm publishing ([#182](https://github.com/ooples/token-optimizer-mcp/issues/182)) ([22462c7](https://github.com/ooples/token-optimizer-mcp/commit/22462c7d613b874e79fd433aecdeba4cae4052f0))
+
 ## [5.0.2] - 2026-05-28
 
 ### Fixed
