@@ -1,0 +1,10 @@
+# OpenAI Codex CLI — token-optimizer MCP server.
+# Merge this into ~/.codex/config.toml (Codex reads MCP servers under
+# [mcp_servers.<name>]). Then add the guidance from ../AGENTS.md to your
+# project's AGENTS.md (or ~/.codex/AGENTS.md) so Codex knows when to use them.
+
+[mcp_servers.token-optimizer]
+command = "npx"
+args = ["-y", "@ooples/token-optimizer-mcp@latest"]
+# Optional: point the cache somewhere stable.
+# env = { TOKEN_OPTIMIZER_CACHE_DIR = "~/.token-optimizer-cache" }
