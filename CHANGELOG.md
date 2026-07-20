@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.1.0...v5.1.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **release:** drop the redundant full test rerun from npm publish ([#186](https://github.com/ooples/token-optimizer-mcp/issues/186)) ([6874f62](https://github.com/ooples/token-optimizer-mcp/commit/6874f62fb58c0ccb44518b1fa4eb8df700276567))
+
 ## [5.1.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.0.1...v5.1.0) (2026-07-20)
 
 
