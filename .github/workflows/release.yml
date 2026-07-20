@@ -1,5 +1,21 @@
 name: Release
 
+# Release-please pipeline (replaces semantic-release).
+#
+# Flow:
+#   1. Every push to master runs release-please, which maintains a single
+#      "release PR" that accumulates version bump + CHANGELOG from the
+#      Conventional Commits since the last release.
+#   2. Merging that release PR makes release-please cut the git tag and the
+#      GitHub Release.
+#   3. That release triggers `publish-npm`, which builds and publishes to npm.
+#
+# npm auth (publish-npm) is OIDC-first:
+#   - Preferred: npm **trusted publishing** via GitHub OIDC (no secret). Once the
+#     trusted publisher is configured on npmjs.com for this repo + workflow, the
+#     NPM_TOKEN secret can be deleted and publishing keeps working.
+#   - Fallback/interim: the NPM_TOKEN secret. See docs/RELEASING.md.
+
 on:
   push:
     branches:
@@ -7,43 +23,60 @@ on:
 
 permissions:
   contents: write
-  issues: write
   pull-requests: write
-  id-token: write # required for npm provenance + OIDC publishing
+  issues: write
+  id-token: write # OIDC for npm trusted publishing + provenance attestation
 
-# Mirrors the AiDotNet automated-release pipeline: a new push to master cancels
-# any in-flight release so only the latest commit is published.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Do NOT cancel in-progress: a cancelled run mid-publish could leave a tag
+  # without its npm release.
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Semantic Release
+  # 1) Maintain the release PR; on merge, create the tag + GitHub Release.
+  release-please:
+    name: Release Please
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
-
+    timeout-minutes: 15
     outputs:
-      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
-      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
-
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
     steps:
-      - name: Checkout code
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # config-file / manifest-file default to the repo-root files:
+          #   release-please-config.json + .release-please-manifest.json
+
+  # 2) On an actual release, build and publish to npm.
+  publish-npm:
+    name: Publish to npm
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # required for OIDC trusted publishing + provenance
+    steps:
+      - name: Checkout the released tag
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          persist-credentials: false
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # semantic-release@25 requires Node ^22.14 || >=24.10. On Node 20 the
-          # `npx semantic-release` step aborted at its version check, so EVERY
-          # release since the semantic-release upgrade failed and no GitHub/npm
-          # releases were published. Pin to 22.x (latest satisfies >=22.14).
           node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
+
+      - name: Upgrade npm (>= 11.5.1 supports OIDC trusted publishing)
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -59,78 +92,46 @@ jobs:
           fi
           echo "Build artifacts verified successfully"
 
-      - name: Run tests
-        run: npm run test:coverage
+      - name: Publish to npm (provenance; OIDC trusted publishing or NPM_TOKEN)
+        # If a trusted publisher is configured on npmjs.com, npm uses OIDC and
+        # NODE_AUTH_TOKEN can be empty. Until then, the NPM_TOKEN secret is used.
+        run: npm publish --provenance --access public
         env:
-          NODE_OPTIONS: --experimental-vm-modules
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Semantic Release
-        id: semantic
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Publish with npm provenance (supply-chain attestation). Requires the
-          # id-token: write permission declared above.
-          NPM_CONFIG_PROVENANCE: true
-        run: npx semantic-release
-
+  # 3) Fan-out notifications, mirroring the previous pipeline. All optional and
+  #    skipped silently when the corresponding repo variable/secret is absent.
   notify:
     name: Notify Release
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
-
+    needs: [release-please, publish-npm]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.release.outputs.new_release_version }}
-
-      - name: Get release notes
-        id: release_notes
+      - name: Compute release links
+        id: links
         run: |
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/v${{ needs.release.outputs.new_release_version }}"
-          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
-
-      - name: Create notification message
-        id: notification
-        run: |
-          VERSION="${{ needs.release.outputs.new_release_version }}"
-          RELEASE_URL="${{ steps.release_notes.outputs.release_url }}"
-
-          MESSAGE="New release: token-optimizer-mcp v${VERSION}\n"
-          MESSAGE="${MESSAGE}Release notes: ${RELEASE_URL}\n"
-          MESSAGE="${MESSAGE}npm: https://www.npmjs.com/package/@ooples/token-optimizer-mcp/v/${VERSION}"
-
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$MESSAGE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          VERSION="${{ needs.release-please.outputs.version }}"
+          TAG="${{ needs.release-please.outputs.tag_name }}"
+          echo "release_url=https://github.com/${{ github.repository }}/releases/tag/${TAG}" >> "$GITHUB_OUTPUT"
+          echo "npm_url=https://www.npmjs.com/package/@ooples/token-optimizer-mcp/v/${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Post to Discord (if configured)
         if: vars.DISCORD_WEBHOOK_URL != ''
         run: |
-          MESSAGE='${{ steps.notification.outputs.message }}'
-
+          MSG="New release: token-optimizer-mcp ${{ needs.release-please.outputs.tag_name }}\nRelease notes: ${{ steps.links.outputs.release_url }}\nnpm: ${{ steps.links.outputs.npm_url }}"
           curl -X POST "${{ vars.DISCORD_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
-            -d "{\"content\": \"$MESSAGE\"}" \
-            || echo "Discord notification failed (optional)"
+            -d "{\"content\": \"$MSG\"}" || echo "Discord notification failed (optional)"
 
       - name: Post to Slack (if configured)
         if: vars.SLACK_WEBHOOK_URL != ''
         run: |
-          MESSAGE='${{ steps.notification.outputs.message }}'
-
+          MSG="New release: token-optimizer-mcp ${{ needs.release-please.outputs.tag_name }}\nRelease notes: ${{ steps.links.outputs.release_url }}\nnpm: ${{ steps.links.outputs.npm_url }}"
           curl -X POST "${{ vars.SLACK_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
-            -d "{\"text\": \"$MESSAGE\"}" \
-            || echo "Slack notification failed (optional)"
+            -d "{\"text\": \"$MSG\"}" || echo "Slack notification failed (optional)"
 
-      # Email the release version + notes. Runs only when a recipient is
-      # configured (repo variable RELEASE_EMAIL_TO); SMTP credentials come from
-      # secrets. Mirrors the version-info emails the AiDotNet pipeline sends.
-      # Skipped silently if not configured, like the Discord/Slack steps above.
       - name: Email release notification (if configured)
         if: vars.RELEASE_EMAIL_TO != ''
         continue-on-error: true
@@ -141,45 +142,47 @@ jobs:
           secure: true
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: 'token-optimizer-mcp v${{ needs.release.outputs.new_release_version }} released'
+          subject: 'token-optimizer-mcp ${{ needs.release-please.outputs.tag_name }} released'
           to: ${{ vars.RELEASE_EMAIL_TO }}
           from: token-optimizer-mcp CI <${{ secrets.SMTP_FROM || secrets.SMTP_USERNAME }}>
           body: |
             A new version of token-optimizer-mcp has been published.
 
-            Version:       v${{ needs.release.outputs.new_release_version }}
-            Release notes: ${{ steps.release_notes.outputs.release_url }}
-            npm:           https://www.npmjs.com/package/@ooples/token-optimizer-mcp/v/${{ needs.release.outputs.new_release_version }}
+            Version:       ${{ needs.release-please.outputs.tag_name }}
+            Release notes: ${{ steps.links.outputs.release_url }}
+            npm:           ${{ steps.links.outputs.npm_url }}
 
             — automated by the release pipeline
 
-      - name: Comment on related issues
+      - name: Comment on resolved issues
         uses: actions/github-script@v7
         with:
           script: |
-            const version = '${{ needs.release.outputs.new_release_version }}';
-            const releaseUrl = '${{ steps.release_notes.outputs.release_url }}';
-
-            // Get the release
-            const { data: release } = await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: `v${version}`
-            });
-
-            // Extract issue numbers from release body
+            const tag = '${{ needs.release-please.outputs.tag_name }}';
+            const version = '${{ needs.release-please.outputs.version }}';
+            const releaseUrl = '${{ steps.links.outputs.release_url }}';
+            let body = '';
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              body = release.body || '';
+            } catch (e) {
+              console.log('Could not load release body:', e.message);
+              return;
+            }
             const issueNumbers = [...new Set(
-              (release.body || '').match(/#(\d+)/g)?.map(m => parseInt(m.slice(1))) || []
+              (body.match(/#(\d+)/g) || []).map((m) => parseInt(m.slice(1), 10))
             )];
-
-            // Comment on each issue
             for (const issueNumber of issueNumbers) {
               try {
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: issueNumber,
-                  body: `This issue has been resolved in version ${version}.\n\nRelease notes: ${releaseUrl}`
+                  body: `This issue has been resolved in version ${version}.\n\nRelease notes: ${releaseUrl}`,
                 });
               } catch (error) {
                 console.log(`Failed to comment on issue #${issueNumber}:`, error.message);
@@ -188,8 +191,10 @@ jobs:
 
       - name: Update release summary
         run: |
-          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Version: ${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "Release URL: ${{ steps.release_notes.outputs.release_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "npm URL: https://www.npmjs.com/package/@ooples/token-optimizer-mcp/v/${{ needs.release.outputs.new_release_version }}" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Release Summary"
+            echo ""
+            echo "Version: ${{ needs.release-please.outputs.tag_name }}"
+            echo "Release URL: ${{ steps.links.outputs.release_url }}"
+            echo "npm URL: ${{ steps.links.outputs.npm_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
