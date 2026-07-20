@@ -1,23 +1,23 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.ooples/token-optimizer-mcp",
-  "description": "Intelligent token optimization achieving 95%+ reduction through caching, compression, and 80+ tools",
+  "description": "Context-window optimization: caching, compression & smart file tools that cut tokens 60-90%.",
   "repository": {
     "url": "https://github.com/ooples/token-optimizer-mcp",
     "source": "github"
   },
-  "version": "2.0.0",
+  "version": "5.0.1",
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "token-optimizer-mcp",
-      "version": "2.0.0",
+      "identifier": "@ooples/token-optimizer-mcp",
+      "version": "5.0.1",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "description": "Directory path for cache storage (optional, defaults to ~/.token-optimizer-cache)",
+          "description": "Directory path for cache storage (optional, defaults to ~/.token-optimizer-mcp)",
           "isRequired": false,
           "format": "string",
           "isSecret": false,

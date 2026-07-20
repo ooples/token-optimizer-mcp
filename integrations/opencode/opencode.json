@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "token-optimizer": {
+      "type": "local",
+      "command": ["npx", "-y", "@ooples/token-optimizer-mcp@latest"],
+      "enabled": true
+    }
+  },
+  "instructions": ["./AGENTS.md"]
+}
