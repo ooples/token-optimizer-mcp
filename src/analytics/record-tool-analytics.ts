@@ -56,7 +56,12 @@ const OPTIMIZED_KEYS = [
   'afterTokens',
   'outputTokens',
 ];
-const SAVED_KEYS = ['tokensSaved', 'savedTokens', 'tokens_saved', 'tokenSavings'];
+const SAVED_KEYS = [
+  'tokensSaved',
+  'savedTokens',
+  'tokens_saved',
+  'tokenSavings',
+];
 
 // Containers a triplet is commonly nested inside.
 const NESTED_CONTAINERS = [
@@ -187,7 +192,7 @@ export async function recordToolAnalytics(
 
     const sessionId =
       process.env.TOKEN_OPTIMIZER_SESSION_ID ||
-      (payload as Record<string, unknown>).sessionId as string | undefined;
+      ((payload as Record<string, unknown>).sessionId as string | undefined);
 
     await manager.track({
       hookPhase: currentHookPhase(),
