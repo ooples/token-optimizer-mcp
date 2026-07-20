@@ -5,6 +5,7 @@
       "release-type": "node",
       "changelog-path": "CHANGELOG.md",
       "include-v-in-tag": true,
+      "include-component-in-tag": false,
       "bump-minor-pre-major": false,
       "draft": false,
       "prerelease": false
