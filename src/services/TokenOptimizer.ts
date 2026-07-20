@@ -3,6 +3,7 @@ import {
   OptimizationResult as ModuleOptimizationResult,
 } from '../modules/IOptimizationModule.js';
 import { ITokenCounter } from '../interfaces/ITokenCounter.js';
+import { performance } from 'node:perf_hooks';
 
 /**
  * Result from a single module in the optimization pipeline.
@@ -141,7 +142,9 @@ export class TokenOptimizer {
    * @returns Detailed optimization result with per-module breakdown
    */
   async optimize(prompt: string): Promise<OptimizationPipelineResult> {
-    const startTime = Date.now();
+    // High-resolution monotonic timer: sub-millisecond ops still measure > 0,
+    // whereas Date.now()'s 1ms granularity can report 0 for fast pipelines.
+    const startTime = performance.now();
 
     let current = prompt;
     const originalTokenResult = await Promise.resolve(
@@ -187,7 +190,7 @@ export class TokenOptimizer {
     const savings = originalTokens - optimizedTokens;
     const percentSaved =
       originalTokens > 0 ? (savings / originalTokens) * 100 : 0;
-    const executionTimeMs = Date.now() - startTime;
+    const executionTimeMs = performance.now() - startTime;
 
     return {
       optimizedPrompt: current,
