@@ -21,3 +21,8 @@ export {
   getExportAnalyticsTool,
   EXPORT_ANALYTICS_TOOL_DEFINITION,
 } from './export-analytics.js';
+
+export {
+  getOptimizationReportTool,
+  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
+} from './get-optimization-report.js';

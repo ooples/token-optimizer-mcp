@@ -132,6 +132,11 @@ import {
   EXPORT_ANALYTICS_TOOL_DEFINITION,
 } from '../tools/analytics/export-analytics.js';
 import {
+  getOptimizationReportTool,
+  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
+} from '../tools/analytics/get-optimization-report.js';
+import { recordToolAnalytics } from '../analytics/record-tool-analytics.js';
+import {
   OptimizationStorageTool,
   OPTIMIZATION_STORAGE_TOOL_DEFINITION,
 } from '../tools/optimization-storage-tool.js';
@@ -383,6 +388,7 @@ const getHookAnalytics = getHookAnalyticsTool(analyticsManager);
 const getActionAnalytics = getActionAnalyticsTool(analyticsManager);
 const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
 const exportAnalytics = getExportAnalyticsTool(analyticsManager);
+const getOptimizationReport = getOptimizationReportTool(analyticsManager);
 const optimizationStorage = new OptimizationStorageTool();
 
 // #120: load user config (creates ~/.token-optimizer/config.json with
@@ -731,6 +737,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       GET_ACTION_ANALYTICS_TOOL_DEFINITION,
       GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
       EXPORT_ANALYTICS_TOOL_DEFINITION,
+      GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
       OPTIMIZATION_STORAGE_TOOL_DEFINITION,
       CONTEXT_DELTA_TOOL_DEFINITION,
     ],
@@ -738,7 +745,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 // Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+async function handleToolCall(request: {
+  params: { name: string; arguments?: unknown };
+}) {
   const { name } = request.params;
 
   // Validate tool arguments using Zod schemas. The validated (and, for tightened
@@ -2356,6 +2365,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case 'get_optimization_report': {
+        const result = await getOptimizationReport(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -2372,6 +2388,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       isError: true,
     };
   }
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const result = await handleToolCall(request);
+  // Best-effort: feed savings into analytics so the report/breakdown tools have
+  // real data. Never blocks meaningfully or breaks the tool call.
+  await recordToolAnalytics(analyticsManager, request.params.name, result);
+  return result;
 });
 
 // Helper to run cleanup operations with error handling
