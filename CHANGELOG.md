@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.3](https://github.com/ooples/token-optimizer-mcp/compare/v5.1.2...v5.1.3) (2026-07-21)
+
+
+### Bug Fixes
+
+* **plugins:** track plugin .mcp.json + add native Codex plugin packaging ([#191](https://github.com/ooples/token-optimizer-mcp/issues/191)) ([9a58141](https://github.com/ooples/token-optimizer-mcp/commit/9a581416cb728df3fc0e17162c69e296decf00a0))
+
+
+### Documentation
+
+* expand MCP setup and restore README reference ([#194](https://github.com/ooples/token-optimizer-mcp/issues/194)) ([ab89d8f](https://github.com/ooples/token-optimizer-mcp/commit/ab89d8f9826145b996a49dc9a81ecebe446471ac))
+
+
+### CI/CD
+
+* add HOL plugin scanner for awesome-codex-plugins listing ([#192](https://github.com/ooples/token-optimizer-mcp/issues/192)) ([093e6ea](https://github.com/ooples/token-optimizer-mcp/commit/093e6eab22fd0ae38449d25523b1d8286bd553ae))
+
 ## [5.1.2](https://github.com/ooples/token-optimizer-mcp/compare/v5.1.1...v5.1.2) (2026-07-20)
 
 
