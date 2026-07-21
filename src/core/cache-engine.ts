@@ -19,7 +19,9 @@ function isCorruptDatabaseError(err: unknown): boolean {
   return (
     code === 'SQLITE_NOTADB' ||
     code === 'SQLITE_CORRUPT' ||
-    /not a database|file is encrypted|is not a database|malformed/i.test(message)
+    /not a database|file is encrypted|is not a database|malformed/i.test(
+      message
+    )
   );
 }
 

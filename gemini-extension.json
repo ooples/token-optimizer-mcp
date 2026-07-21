@@ -1,6 +1,6 @@
 {
   "name": "token-optimizer",
-  "version": "5.0.2",
+  "version": "5.1.2",
   "description": "Context-window optimization tools (caching, compression, smart file tooling) for the Gemini CLI.",
   "mcpServers": {
     "token-optimizer": {
