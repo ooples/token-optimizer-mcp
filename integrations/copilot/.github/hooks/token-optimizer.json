@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node .github/hooks/token-optimizer-advisor.mjs session-start",
+        "powershell": "node .github/hooks/token-optimizer-advisor.mjs session-start",
+        "timeoutSec": 5
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "matcher": "view",
+        "bash": "node .github/hooks/token-optimizer-advisor.mjs before-read",
+        "powershell": "node .github/hooks/token-optimizer-advisor.mjs before-read",
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "matcher": "view",
+        "bash": "node .github/hooks/token-optimizer-advisor.mjs after-read",
+        "powershell": "node .github/hooks/token-optimizer-advisor.mjs after-read",
+        "timeoutSec": 5
+      }
+    ]
+  }
+}

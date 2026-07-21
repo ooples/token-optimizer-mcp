@@ -1,0 +1,31 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "name": "token-optimizer-session-guidance",
+            "command": "node \"${extensionPath}${/}hooks${/}gemini-token-optimizer-advisor.mjs\" session-start",
+            "timeout": 5000,
+            "description": "Load token-optimizer guidance into the Gemini session."
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "read_file",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "token-optimizer-large-read",
+            "command": "node \"${extensionPath}${/}hooks${/}gemini-token-optimizer-advisor.mjs\" after-read",
+            "timeout": 5000,
+            "description": "Advise on large reads or replace them with smart_read when automatic routing is enabled."
+          }
+        ]
+      }
+    ]
+  }
+}
