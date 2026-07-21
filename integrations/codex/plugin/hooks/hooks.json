@@ -1,0 +1,33 @@
+{
+  "description": "Load token-optimizer guidance and steer large file reads toward smart_read.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/token-optimizer-advisor.mjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\token-optimizer-advisor.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Loading token-optimizer guidance"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read|read_file|view_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/token-optimizer-advisor.mjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\token-optimizer-advisor.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking large read"
+          }
+        ]
+      }
+    ]
+  }
+}

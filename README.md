@@ -17,19 +17,28 @@ Token Optimizer is a local [Model Context Protocol](https://modelcontextprotocol
 
 ## Installation
 
-Every client launches the same stdio server—`npx -y @ooples/token-optimizer-mcp@latest`—but stores its MCP configuration and agent instructions differently.
+Every client launches the same stdio server—`npx -y @ooples/token-optimizer-mcp@latest`—but each client has its own instruction and lifecycle APIs. The ready-made integrations below use those native APIs; they do not pretend Claude Code's seven-phase PowerShell hook system is portable unchanged.
 
-| Client             | Fastest setup                                                                                                | Verify                            |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ | --------------------------------- |
-| Codex              | `codex mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`                                 | `codex mcp get token-optimizer`   |
-| Claude Code        | `claude mcp add --transport stdio --scope user token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest` | `claude mcp get token-optimizer`  |
-| GitHub Copilot CLI | `copilot mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`                               | `copilot mcp get token-optimizer` |
-| Gemini CLI         | `gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest`                      | `gemini mcp list`                 |
-| OpenCode           | Add the `mcp` block below to `opencode.json`                                                                 | `opencode mcp list`               |
+| Client             | Fastest MCP setup                                                                                            | Best-experience integration                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| Codex              | `codex mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`                                 | Codex plugin: MCP + skill + lifecycle hooks          |
+| Claude Code        | `claude mcp add --transport stdio --scope user token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest` | Claude plugin: MCP + skill + large-read hook         |
+| GitHub Copilot CLI | `copilot mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`                               | `AGENTS.md` + repository lifecycle hooks             |
+| Gemini CLI         | `gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest`                      | Gemini extension: MCP + context + lifecycle hooks    |
+| OpenCode           | Add the `mcp` block below to `opencode.json`                                                                 | `AGENTS.md` + local plugin + compaction preservation |
 
 ### Codex
 
-#### 1. Add the MCP server
+#### 1. Add the MCP server or native plugin
+
+For the best experience, install the Codex plugin. It bundles the MCP server, the token-optimization skill, session guidance, and a large-read hook:
+
+```bash
+codex plugin marketplace add ooples/token-optimizer-mcp
+codex plugin add token-optimizer@token-optimizer
+```
+
+Review and trust the bundled hooks with `/hooks`, then start a new conversation. If you prefer an MCP-only installation, use:
 
 ```bash
 codex mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest
@@ -54,9 +63,13 @@ codex mcp list
 
 Start a new Codex conversation after installation so the new tools are discovered. In an interactive CLI session, `/mcp` shows the tools available to the conversation.
 
-#### 3. Tell Codex when to use it
+#### 3. Add optimization guidance and hooks
 
-MCP registration makes the tools available; it does not transparently replace Codex's built-in file tools. Add the guidance from [`integrations/AGENTS.md`](./integrations/AGENTS.md) to your project `AGENTS.md`, or start with this smaller rule:
+The plugin supplies both automatically. For an MCP-only installation, add the guidance from [`integrations/AGENTS.md`](./integrations/AGENTS.md) to a project or global `AGENTS.md`. A ready-made standalone hook is also available under [`integrations/codex/hooks`](./integrations/codex/hooks); merge its `hooks.json` into `~/.codex/hooks.json`, copy the script to `~/.codex/hooks/`, and review it once with `/hooks`.
+
+The Codex hook injects guidance at `SessionStart`, advises on large first-class read calls, and can block those reads when `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true`. Shell commands such as `cat` or `Get-Content` are exposed to hooks as `Bash`, so the hook does not try to parse and rewrite arbitrary shell syntax. The `AGENTS.md`/skill guidance remains important.
+
+If you prefer a smaller instruction block:
 
 ```markdown
 ## Token optimization
@@ -70,6 +83,8 @@ Use the token-optimizer MCP for large or repeated reads:
 
 Use normal tools for small, one-off operations.
 ```
+
+See the current [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks.md) for hook trust, matching, and tool-coverage details.
 
 #### Equivalent manual Codex configuration
 
@@ -167,9 +182,25 @@ copilot mcp list
 
 Inside an interactive Copilot session, `/mcp show token-optimizer` displays the connection status and available tools.
 
-#### 3. Add optimization guidance
+#### 3. Add optimization guidance and hooks
 
-Keep [`integrations/AGENTS.md`](./integrations/AGENTS.md) as the repository's `AGENTS.md`, or adapt the same guidance into `.github/copilot-instructions.md`. See [GitHub's Copilot CLI MCP guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
+Keep [`integrations/AGENTS.md`](./integrations/AGENTS.md) as the repository's `AGENTS.md`, or adapt the same guidance into `.github/copilot-instructions.md`.
+
+For native lifecycle integration, copy the ready-made repository hooks into your project:
+
+```bash
+mkdir -p .github/hooks
+cp integrations/copilot/.github/hooks/token-optimizer* .github/hooks/
+```
+
+```powershell
+New-Item -ItemType Directory -Force .github/hooks | Out-Null
+Copy-Item integrations/copilot/.github/hooks/token-optimizer* .github/hooks/
+```
+
+The hooks inject optimization guidance at `sessionStart`, add a model-visible suggestion after a large `view`, and—when `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true`—deny a large built-in read so Copilot retries with `smart_read`. Partial reads and files below 25 KB pass through unchanged. Repository hooks work without overwriting user-level files; global hooks can instead be placed in `~/.copilot/hooks/` with their script paths adjusted for that directory.
+
+Restart Copilot CLI after changing hook files. See GitHub's official [MCP setup guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) and [hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference).
 
 ### Gemini CLI
 
@@ -196,9 +227,17 @@ gemini extensions list
 
 Run `/mcp` inside Gemini CLI to inspect the connection. Restart Gemini CLI after installing or updating the extension.
 
-#### 3. Add optimization guidance
+#### 3. Add optimization guidance and hooks
 
-Direct MCP users should copy [`GEMINI.md`](./GEMINI.md) into the project or merge its rules into an existing `GEMINI.md`. Extension users receive that context file with the extension. See the official [Gemini MCP guide](https://geminicli.com/docs/tools/mcp-server/) and [extension guide](https://geminicli.com/docs/extensions/reference/).
+Direct MCP users should copy [`GEMINI.md`](./GEMINI.md) into the project or merge its rules into an existing `GEMINI.md`. Extension users receive that context file plus native hooks automatically.
+
+The extension's `SessionStart` hook injects optimization guidance. Its `AfterTool` hook notices full-file `read_file` results over 25 KB and suggests `smart_read`. To make Gemini automatically replace those large results with a token-optimizer tail call, configure the extension setting **Automatic large-read routing** as `true`:
+
+```bash
+gemini extensions config token-optimizer
+```
+
+Automatic routing uses Gemini's native `tailToolCallRequest`: the `smart_read` result replaces the built-in read result before it reaches the model. Partial reads remain unchanged. Restart Gemini CLI after installing, updating, or reconfiguring the extension. See the official [Gemini MCP guide](https://geminicli.com/docs/tools/mcp-server/), [extension guide](https://geminicli.com/docs/extensions/reference/), and [hooks reference](https://geminicli.com/docs/hooks/reference/).
 
 ### OpenCode
 
@@ -230,9 +269,21 @@ opencode mcp list
 
 The output shows configured servers and their connection status.
 
-#### 3. Add optimization guidance
+#### 3. Add optimization guidance and the local plugin
 
-Copy [`integrations/AGENTS.md`](./integrations/AGENTS.md) to the project as `AGENTS.md`; the `instructions` entry above loads it. See the [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/).
+Copy [`integrations/AGENTS.md`](./integrations/AGENTS.md) to the project as `AGENTS.md`; the `instructions` entry above loads it. Then copy the ready-made local plugin:
+
+```bash
+mkdir -p .opencode/plugins
+cp integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
+```
+
+```powershell
+New-Item -ItemType Directory -Force .opencode/plugins | Out-Null
+Copy-Item integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
+```
+
+The plugin preserves Token Optimizer usage state in OpenCode's compaction prompt. Set `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true` to make its `tool.execute.before` hook reject full-file reads over 25 KB and steer the agent to `smart_read`; small and partial reads pass normally. Restart OpenCode after adding the plugin. See the official [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) and [plugin hook guide](https://opencode.ai/docs/plugins/).
 
 ### Generic MCP configuration
 
@@ -617,6 +668,20 @@ get_session_stats({});
 
 ### Architecture and Global Hooks
 
+#### Native client lifecycle coverage
+
+The MCP server is identical in every client, but lifecycle APIs are not. The repository ships client-native adapters instead of copying Claude event names into tools that would silently ignore them.
+
+| Client             | Native integration events                   | Default behavior                                   | Optional strict behavior                                   |
+| ------------------ | ------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------- |
+| Codex              | `SessionStart`, `PreToolUse`                | Inject guidance; advise on large first-class reads | Deny large reads and steer to `smart_read`                 |
+| Claude Code        | `PreToolUse` plus optional global pipeline  | Advise on large reads                              | Deny and steer; global install adds the seven phases below |
+| GitHub Copilot CLI | `sessionStart`, `preToolUse`, `postToolUse` | Inject guidance; advise after large `view` calls   | Deny large `view` calls and steer to `smart_read`          |
+| Gemini CLI         | `SessionStart`, `AfterTool`                 | Inject guidance; advise after large `read_file`    | Tail-call `smart_read` and replace the built-in result     |
+| OpenCode           | `tool.execute.before`, compaction hook      | Preserve optimization guidance during compaction   | Reject large full-file reads and steer to `smart_read`     |
+
+Strict behavior is enabled with `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true` and uses a 25,600-byte threshold by default. Override the threshold with `TOKEN_OPTIMIZER_LARGE_READ_BYTES`. Partial reads pass through because they may already be more efficient than a full cached read.
+
 #### Analytics workflow and storage
 
 <details>
@@ -665,7 +730,7 @@ export_analytics({
 
 #### Global Hooks System (7-Phase Optimization)
 
-This pipeline applies to the optional Claude Code global-hook installation. MCP-only installations in Codex, Copilot, Gemini, OpenCode, and other clients expose model-invoked tools but do not transparently intercept built-in operations.
+This complete seven-phase pipeline applies to the optional Claude Code global-hook installation. Codex, Copilot, Gemini, and OpenCode use the smaller native adapters above because their event names, payloads, and result-replacement capabilities differ.
 
 When global hooks are installed, token-optimizer-mcp runs automatically on **every tool call**:
 
@@ -795,11 +860,11 @@ await analyze_project_tokens({
 
 Token Optimizer works with stdio-capable MCP clients and includes first-party setup guidance for:
 
-- **OpenAI Codex** - MCP configuration plus AGENTS.md guidance
+- **OpenAI Codex** - Direct MCP setup or the bundled plugin, skill, and hooks
 - **Claude Code** - Direct MCP setup or the bundled plugin, skill, and hooks
-- **GitHub Copilot CLI** - User or repository MCP configuration
-- **Google Gemini CLI** - Direct MCP setup or the bundled extension
-- **OpenCode** - Local MCP configuration plus AGENTS.md instructions
+- **GitHub Copilot CLI** - MCP configuration, AGENTS.md guidance, and repository hooks
+- **Google Gemini CLI** - Direct MCP setup or the bundled context-and-hooks extension
+- **OpenCode** - Local MCP configuration, AGENTS.md instructions, and compaction plugin
 - **Claude Desktop**, **Cursor**, **Cline**, and **Windsurf** - Standard MCP JSON configuration
 
 See [Installation](#installation) for the supported commands and configuration files.

@@ -8,5 +8,19 @@
       "args": ["-y", "@ooples/token-optimizer-mcp@latest"]
     }
   },
+  "settings": [
+    {
+      "name": "Automatic large-read routing",
+      "description": "Set to true to replace large built-in read results with token-optimizer smart_read results.",
+      "envVar": "TOKEN_OPTIMIZER_REDIRECT_LARGE_READS",
+      "sensitive": false
+    },
+    {
+      "name": "Large-read threshold in bytes",
+      "description": "Optional byte threshold for large-read guidance and routing (default 25600).",
+      "envVar": "TOKEN_OPTIMIZER_LARGE_READ_BYTES",
+      "sensitive": false
+    }
+  ],
   "contextFileName": "GEMINI.md"
 }
