@@ -181,12 +181,25 @@ jobs:
       - name: Run benchmark suite
         id: benchmark
         run: |
-          if [ -f "package.json" ] && npm run --silent test:benchmark 2>/dev/null; then
-            npm run --silent test:benchmark | tee benchmark-results.txt
+          # Jest writes its summary to STDERR, not stdout. Piping only stdout
+          # produced an empty benchmark-results.txt on every run, which is why
+          # the PR comment was an empty code block -- the suite was passing and
+          # reporting nothing. 2>&1 is the whole fix.
+          #
+          # It also ran the suite TWICE: once inside the `if` to test for
+          # existence, then again to capture output. Now it runs once and the
+          # exit status is inspected afterwards, so a benchmark FAILURE is
+          # visible in the artifact instead of being swallowed by the guard.
+          if npm run --silent test:benchmark > benchmark-results.txt 2>&1; then
+            echo "benchmark_status=passed" >> "$GITHUB_OUTPUT"
           else
-            echo "Benchmark suite not yet implemented, creating placeholder results"
-            echo '{"status": "not_implemented", "message": "Benchmark suite to be implemented"}' > benchmark-results.txt
+            echo "benchmark_status=failed" >> "$GITHUB_OUTPUT"
+            echo "Benchmark suite reported a failure; results captured below."
           fi
+          # Keep the comment readable: the tail carries the summary.
+          tail -c 60000 benchmark-results.txt > benchmark-results.trimmed
+          mv benchmark-results.trimmed benchmark-results.txt
+          cat benchmark-results.txt
 
       - name: Compare against baseline
         id: compare
@@ -221,10 +234,14 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            let results = 'Performance benchmarks completed.';
+            let results = 'Performance benchmarks produced no output.';
 
             if (fs.existsSync('benchmark-results.txt')) {
-              results = fs.readFileSync('benchmark-results.txt', 'utf8');
+              const raw = fs.readFileSync('benchmark-results.txt', 'utf8').trim();
+              // An empty file previously rendered as an empty code block, which
+              // reads as "benchmarks ran and found nothing" rather than "the
+              // capture is broken". Say which it is.
+              if (raw) results = raw;
             }
 
             github.rest.issues.createComment({
