@@ -154,11 +154,13 @@ export function restorationPlan(dir, graph, context = {}) {
   return {
     situation,
     tokens: spent,
+    // One blank line between blocks. The empty strings were separators from
+    // when this joined on '\n', and joining on '\n\n' turned each of them into a
+    // doubled gap -- wasted tokens inside the one block whose entire purpose is
+    // not wasting them.
     text: [
       `# Restored after compaction (${situation})`,
-      '',
       ...sections,
-      '',
       'Findings anchored to a file are surfaced automatically when you touch it.',
     ].join('\n\n'),
   };
