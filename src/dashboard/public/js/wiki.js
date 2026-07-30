@@ -118,21 +118,35 @@ function tagsFor(item) {
   return tags;
 }
 
+/** Tag markup with every value escaped, shared by the list and audit views. */
+function renderTags(item) {
+  return tagsFor(item)
+    .map((t) => `<span class="wiki-tag"${t.status ? ` data-status="${escapeHtml(t.status)}"` : ''}>${escapeHtml(t.text)}</span>`)
+    .join('');
+}
+
 function renderList(append) {
   const list = el('wiki-list');
   const html = state.items.map((item) => `
-    <li tabindex="0" data-id="${item.id}" data-key="${item.key}"
+    <li tabindex="0" data-id="${escapeHtml(item.id)}" data-key="${escapeHtml(item.key)}"
         aria-current="${state.selected === item.id}">
       <span class="wiki-claim">${escapeHtml(item.claim || item.key)}</span>
-      <span class="wiki-tags">${tagsFor(item)
-        .map((t) => `<span class="wiki-tag"${t.status ? ` data-status="${t.status}"` : ''}>${t.text}</span>`)
-        .join('')}</span>
+      <span class="wiki-tags">${renderTags(item)}</span>
     </li>`).join('');
 
   if (append) list.insertAdjacentHTML('beforeend', html);
   else list.innerHTML = html;
 }
 
+/**
+ * Escapes text for HTML interpolation.
+ *
+ * EVERY graph-derived value goes through this, not just `claim`. The graph is
+ * built from repository files by an agent, so its contents are not trusted
+ * input: a file named `"><img onerror=...>` or a harvested `type` reaches the
+ * dashboard verbatim otherwise. Attribute values are quoted AND escaped, since
+ * an unescaped `"` in `data-key` breaks out of the attribute entirely.
+ */
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -424,8 +438,8 @@ function showDetail(node) {
     <button class="btn" id="detail-close">Close</button>
     <h3>${escapeHtml(node.claim || node.key)}</h3>
     <dl>
-      <dt>Kind</dt><dd>${node.kind}</dd>
-      <dt>Type</dt><dd>${node.type || '—'}</dd>
+      <dt>Kind</dt><dd>${escapeHtml(node.kind)}</dd>
+      <dt>Type</dt><dd>${escapeHtml(node.type || '—')}</dd>
       <dt>Origin</dt><dd>${node.origin === 'human' ? '✎ asserted by a person' : 'harvested from a session'}</dd>
       <dt>Confidence</dt><dd class="wiki-figure">${(node.confidence ?? 0.5).toFixed(2)}</dd>
       <dt>Status</dt><dd>${node.stale ? '⚠ stale' : 'current'}</dd>
@@ -448,7 +462,7 @@ function showDetail(node) {
   const curate = async (body) => {
     await api('/api/wiki/curate', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-token-optimizer': 'dashboard' },
       body: JSON.stringify({ key: node.key, ...body }),
     });
     setDetailOpen(false);
@@ -499,11 +513,9 @@ async function loadAudit() {
         <h2>${title} <span class="wiki-muted">(${items.length})</span></h2>
         <p class="wiki-muted">${blurb}</p>
         <ol class="wiki-list">${items.map((item) => `
-          <li tabindex="0" data-id="${item.id}">
+          <li tabindex="0" data-id="${escapeHtml(item.id)}">
             <span class="wiki-claim">${escapeHtml(item.claim || item.key)}</span>
-            <span class="wiki-tags">${tagsFor(item)
-              .map((t) => `<span class="wiki-tag"${t.status ? ` data-status="${t.status}"` : ''}>${t.text}</span>`)
-              .join('')}</span>
+            <span class="wiki-tags">${renderTags(item)}</span>
           </li>`).join('')}</ol>
       </section>`;
   }).join('') || '<p class="wiki-muted">Nothing needs attention. The graph is healthy.</p>';

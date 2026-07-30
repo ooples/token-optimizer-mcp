@@ -243,11 +243,21 @@ describe('caller fields cannot overwrite node bookkeeping', () => {
 });
 
 describe('the graph directory is not world-readable', () => {
-  test('it is created with restrictive permissions', () => {
+  // POSIX mode bits are not meaningful on Windows, so the assertion is skipped
+  // DECLARATIVELY rather than by an early return inside the test body. The
+  // early return reported a pass on Windows while asserting nothing, which is
+  // the worst of both -- no coverage, and a green tick claiming there was.
+  const posixOnly = process.platform === 'win32' ? test.skip : test;
+
+  posixOnly('it is created with mode 0700', () => {
     putNode(dir, { kind: 'file', key: '/a.ts' });
-    const mode = statSync(dir).mode & 0o777;
-    // Skipped on Windows, where POSIX mode bits are not meaningful.
-    if (process.platform === 'win32') return;
-    expect(mode & 0o077).toBe(0);
+    expect(statSync(dir).mode & 0o077).toBe(0);
+  });
+
+  // This one is meaningful everywhere: the directory must exist and be usable.
+  test('it is created and writable on every platform', () => {
+    putNode(dir, { kind: 'file', key: '/a.ts' });
+    expect(statSync(dir).isDirectory()).toBe(true);
+    expect(load(dir).nodes.size).toBe(1);
   });
 });

@@ -124,14 +124,26 @@ export function report(dir) {
   // touched. In the treated arm the model often does not need the file, because
   // it already received the conclusions; in the control arm it does. That
   // difference is the saving, and `recordRead` below is what supplies it.
+  // Grouped by (session, anchor) AND ordered by time, because "downstream"
+  // means reads that happened AFTER the touch. Summing every read for the
+  // anchor would credit the injection with reads that preceded it -- including
+  // the very read that triggered the injection in the first place, which
+  // inflates the treated arm with cost it did not cause.
   const reads = new Map();
   for (const event of events) {
     if (event.kind !== 'read' || !event.anchor) continue;
     const key = `${event.sessionId || ''}|${event.anchor}`;
-    reads.set(key, (reads.get(key) || 0) + (event.tokens || 0));
+    if (!reads.has(key)) reads.set(key, []);
+    reads.get(key).push(event);
   }
-  const downstreamOf = (event) =>
-    event.downstream ?? reads.get(`${event.sessionId || ''}|${event.anchor}`) ?? 0;
+
+  const downstreamOf = (event) => {
+    if (event.downstream != null) return event.downstream;
+    const bucket = reads.get(`${event.sessionId || ''}|${event.anchor}`);
+    if (!bucket) return 0;
+    const after = event.at ?? 0;
+    return bucket.reduce((sum, r) => sum + ((r.at ?? 0) >= after ? (r.tokens || 0) : 0), 0);
+  };
 
   const meanDownstream = (rows) =>
     rows.length ? rows.reduce((sum, r) => sum + downstreamOf(r), 0) / rows.length : 0;

@@ -6,9 +6,15 @@ every request, which is the strongest lever available on this client.
 
 ## Install
 
-1. Add the MCP server. Merge `mcp_config.json` into your
-   `mcp_config.json`.
-2. Copy `token-optimizer.md` to `.windsurf/rules/token-optimizer.md` in your project.
+1. **MCP server** -- merge the contents of `mcp_config.json`
+   (in this directory) into your `mcp_config.json`.
+2. **Rules** -- copy `token-optimizer.md` (in this directory)
+   to `.windsurf/rules/token-optimizer.md` in your project.
+
+Both destinations are the paths Windsurf's own documentation specifies;
+the file names in this directory are flat because a repository cannot ship a
+dot-directory for every client. The destination, not the source name, is what
+matters.
 
 ## Provenance
 

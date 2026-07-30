@@ -18,6 +18,20 @@ import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
+/**
+ * Schema version, bumped whenever node ids or anchor hashes change meaning.
+ *
+ * Node ids and content hashes are DERIVED from a hash algorithm, so changing
+ * that algorithm silently rewrites every identity in the graph: old edges point
+ * at ids nothing will ever produce again, and every anchor compares unequal and
+ * reports stale. Records carry the version they were written under, and `load`
+ * ignores older ones, so an algorithm change degrades to "the graph rebuilds
+ * itself from use" instead of "every finding is wrong and says so confidently".
+ *
+ * v2: sha256 identities and hashes (v1 was sha1).
+ */
+export const GRAPH_VERSION = 2;
+
 /** Node kinds. `file` and `symbol` are first-class so staleness can propagate. */
 export const NODE_KINDS = ['file', 'symbol', 'task', 'finding'];
 
@@ -87,14 +101,14 @@ export function putNode(dir, { kind, key, ...rest }) {
   // Spreading it after `id` let a caller passing a whole existing node back in
   // -- which curate.mjs does on every pin, retire and correct -- carry a stale
   // `id` or `t` through and write a record that no longer matches its own key.
-  append(dir, { ...rest, t: 'n', id, kind, key, at: Date.now() });
+  append(dir, { ...rest, t: 'n', v: GRAPH_VERSION, id, kind, key, at: Date.now() });
   return id;
 }
 
 /** Records an edge. */
 export function putEdge(dir, from, edge, to) {
   if (!EDGE_KINDS.includes(edge)) throw new Error(`unknown edge kind: ${edge}`);
-  append(dir, { t: 'e', from, edge, to, at: Date.now() });
+  append(dir, { t: 'e', v: GRAPH_VERSION, from, edge, to, at: Date.now() });
 }
 
 /**
@@ -118,6 +132,10 @@ export function load(dir) {
     } catch {
       continue;
     }
+    // Records from an older schema are skipped rather than mixed in: their ids
+    // and hashes were derived differently, so honouring them produces confident
+    // nonsense rather than a visible error.
+    if ((record.v ?? 1) !== GRAPH_VERSION) continue;
     if (record.t === 'n') nodes.set(record.id, record);
     else if (record.t === 'e') edges.push(record);
   }

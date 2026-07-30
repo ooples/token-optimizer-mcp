@@ -39,7 +39,13 @@ const hash = (text) => createHash('sha256').update(String(text)).digest('hex').s
  * files are not: 256 KB keeps the common case (source files) covered while
  * refusing to mirror bundles, lockfiles and minified assets into the graph.
  */
-const SNAPSHOT_LIMIT = Number(process.env.TOKEN_OPTIMIZER_SNAPSHOT_LIMIT) || 262_144;
+function snapshotLimit() {
+  const raw = Number(process.env.TOKEN_OPTIMIZER_SNAPSHOT_LIMIT);
+  // `|| default` alone accepted Infinity and NaN-adjacent values: Infinity
+  // would snapshot a 2 GB bundle into the graph, and a negative value would
+  // disable snapshots entirely while looking configured.
+  return Number.isFinite(raw) && raw > 0 ? raw : 262_144;
+}
 
 /**
  * Records a file and the symbols inside it as nodes, each carrying a snapshot
@@ -69,7 +75,7 @@ export function indexFile(dir, path, text) {
   // into a second copy of the repository. Past the cap the hash still drives
   // staleness detection; only the diff degrades, and `serve` already states
   // plainly when evidence cannot be reconstructed.
-  const snapshot = source.length <= SNAPSHOT_LIMIT ? source : undefined;
+  const snapshot = source.length <= snapshotLimit() ? source : undefined;
   const fileNode = putNode(dir, { kind: 'file', key: path, hash: hash(source), snapshot });
 
   for (const symbol of extractSymbols(path, source)) {
@@ -241,13 +247,22 @@ export function invalidateOnWrite(dir, graph, path, beforeText, afterText) {
     if (!after.has(name)) changedSymbols.add(name);
   }
 
+  // Edges indexed ONCE by target. The nested loop below was O(nodes x edges) on
+  // every observed write, which on a mature graph is the hot path running
+  // inside a hook -- the one place latency is paid per tool call.
+  const byTarget = new Map();
+  for (const edge of graph.edges) {
+    if (edge.edge !== 'derived_from') continue;
+    if (!byTarget.has(edge.to)) byTarget.set(edge.to, []);
+    byTarget.get(edge.to).push(edge);
+  }
+
   for (const node of graph.nodes.values()) {
     if (node.kind === 'file' && node.key !== path) continue;
     if (node.kind === 'symbol' && (node.file !== path || !changedSymbols.has(node.name))) continue;
     if (node.kind !== 'file' && node.kind !== 'symbol') continue;
 
-    for (const edge of graph.edges) {
-      if (edge.edge !== 'derived_from' || edge.to !== node.id) continue;
+    for (const edge of byTarget.get(node.id) || []) {
       const finding = graph.nodes.get(edge.from);
       if (!finding || finding.kind !== 'finding') continue;
 

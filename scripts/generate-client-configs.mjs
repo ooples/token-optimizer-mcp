@@ -28,9 +28,23 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * The published package, PINNED to the version being generated from.
+ *
+ * `@latest` in a committed config is a supply-chain footgun: every launch
+ * resolves whatever is newest at that moment, so a compromised or simply broken
+ * release reaches every user immediately and no two machines are guaranteed to
+ * run the same code. Pinning makes upgrades an explicit, reviewable change --
+ * and `npm run sync:hooks` regenerates these from package.json, so the pin
+ * moves with each release rather than rotting.
+ */
+const PACKAGE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+const PACKAGE_SPEC = `@ooples/token-optimizer-mcp@${PACKAGE_VERSION}`;
+
 const MCP_STDIO = {
   command: 'npx',
-  args: ['-y', '@ooples/token-optimizer-mcp@latest'],
+  args: ['-y', PACKAGE_SPEC],
   env: {},
 };
 
@@ -122,7 +136,7 @@ the overhead would exceed the saving.`;
 
 function mcpConfig(shape) {
   if (shape === 'yaml') {
-    return `mcpServers:\n  - name: token-optimizer\n    command: npx\n    args: ["-y", "@ooples/token-optimizer-mcp@latest"]\n`;
+    return `mcpServers:\n  - name: token-optimizer\n    command: npx\n    args: ["-y", "${PACKAGE_SPEC}"]\n`;
   }
   if (shape === 'context_servers') {
     // No `source` key: it is not in Zed's current schema, and an unrecognised
@@ -138,7 +152,7 @@ function mcpConfig(shape) {
         'token-optimizer': {
           type: 'local',
           // An array, not a string plus args -- Kilo's schema differs here.
-          command: ['npx', '-y', '@ooples/token-optimizer-mcp@latest'],
+          command: ['npx', '-y', PACKAGE_SPEC],
           environment: {},
           enabled: true,
         },
@@ -191,9 +205,15 @@ every request, which is the strongest lever available on this client.
 
 ## Install
 
-1. Add the MCP server. Merge \`${client.mcpFile.split('/').pop()}\` into your
-   \`${client.mcpFile}\`.
-2. Copy \`${client.rulesFile.split('/').pop()}\` to \`${client.rulesFile}\` in your project.
+1. **MCP server** -- merge the contents of \`${client.mcpFile.split('/').pop()}\`
+   (in this directory) into your \`${client.mcpFile}\`.
+2. **Rules** -- copy \`${client.rulesFile.split('/').pop()}\` (in this directory)
+   to \`${client.rulesFile}\` in your project.
+
+Both destinations are the paths ${client.name}'s own documentation specifies;
+the file names in this directory are flat because a repository cannot ship a
+dot-directory for every client. The destination, not the source name, is what
+matters.
 
 ## Provenance
 

@@ -6,9 +6,15 @@ every request, which is the strongest lever available on this client.
 
 ## Install
 
-1. Add the MCP server. Merge `mcp.json` into your
-   `.roo/mcp.json`.
-2. Copy `token-optimizer.md` to `.roo/rules/token-optimizer.md` in your project.
+1. **MCP server** -- merge the contents of `mcp.json`
+   (in this directory) into your `.roo/mcp.json`.
+2. **Rules** -- copy `token-optimizer.md` (in this directory)
+   to `.roo/rules/token-optimizer.md` in your project.
+
+Both destinations are the paths Roo Code's own documentation specifies;
+the file names in this directory are flat because a repository cannot ship a
+dot-directory for every client. The destination, not the source name, is what
+matters.
 
 ## Provenance
 

@@ -16,14 +16,34 @@
 
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, cpSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, cpSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SHOTS = join(ROOT, 'artifacts', 'wiki-ui');
-const BASE = 'http://localhost:3100';
-const GRAPH = join(ROOT, '.token-optimizer', 'wiki');
+/**
+ * An isolated port, chosen at random and asserted free.
+ *
+ * The script previously assumed 3100. A server left running from an earlier
+ * session kept answering there, so the freshly spawned one silently failed to
+ * bind and the whole verification ran against a stale build -- passing or
+ * failing for reasons unrelated to the code under test.
+ */
+const PORT = 3100 + Math.floor(Math.random() * 400) + 1;
+const BASE = `http://localhost:${PORT}`;
+/**
+ * A THROWAWAY graph, never the repository's own.
+ *
+ * This pointed at <repo>/.token-optimizer/wiki -- the live graph for this
+ * project -- and deleted it on entry and again in the `finally`. Running the UI
+ * verification would have destroyed a developer's accumulated findings without
+ * warning. wikiDir() honours TOKEN_OPTIMIZER_WIKI_DIR ahead of the cwd default,
+ * so the server can be pointed at a temp directory instead.
+ */
+const GRAPH = mkdtempSync(join(tmpdir(), 'wiki-ui-graph-'));
+process.env.TOKEN_OPTIMIZER_WIKI_DIR = GRAPH;
 
 const results = [];
 const check = (name, pass, detail = '') => {
@@ -37,7 +57,7 @@ async function seed() {
   const { indexFile } = await import('../hooks-core/staleness.mjs');
   const { record } = await import('../hooks-core/metrics.mjs');
 
-  const src = join(ROOT, 'demo-src');
+  const src = join(GRAPH, 'demo-src');
   mkdirSync(src, { recursive: true });
   writeFileSync(join(src, 'auth.ts'),
     'export function verify(token) {\n  return token.exp > Date.now();\n}\n\nexport class Session {\n  refresh() { return true; }\n}\n');
@@ -97,17 +117,24 @@ function syncAssets() {
 }
 
 async function main() {
-  rmSync(GRAPH, { recursive: true, force: true });
-  rmSync(join(ROOT, 'demo-src'), { recursive: true, force: true });
   mkdirSync(SHOTS, { recursive: true });
   syncAssets();
   await seed();
 
   const server = spawn(process.execPath, [join(ROOT, 'dist', 'server', 'web-server.js')],
-    { cwd: ROOT, stdio: 'ignore', windowsHide: true });
+    { cwd: ROOT, stdio: 'ignore', windowsHide: true, env: { ...process.env, PORT: String(PORT) } });
 
   if (!await waitForServer()) {
-    console.error('server never came up');
+    console.error(`server never came up on ${BASE}`);
+    server.kill();
+    process.exit(1);
+  }
+
+  // Prove we are talking to OUR server against OUR graph, not something that
+  // was already listening. Without this the run can pass against a stale build.
+  const status = await (await fetch(`${BASE}/api/wiki/status`)).json();
+  if (status.dir !== GRAPH) {
+    console.error(`server is serving ${status.dir}, expected ${GRAPH}`);
     server.kill();
     process.exit(1);
   }
@@ -273,7 +300,6 @@ async function main() {
     await browser.close();
     server.kill();
     rmSync(GRAPH, { recursive: true, force: true });
-    rmSync(join(ROOT, 'demo-src'), { recursive: true, force: true });
   }
 
   const failed = results.filter((r) => !r.pass);

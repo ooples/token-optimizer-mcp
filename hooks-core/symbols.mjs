@@ -159,10 +159,16 @@ export function extractSymbols(path, text) {
     const index = seen.get(symbol.name) || 0;
     seen.set(symbol.name, index + 1);
     symbol.occurrence = index;
+    // THE FIRST OCCURRENCE KEEPS ITS PLAIN NAME. Suffixing every duplicate
+    // would rename a symbol the moment a namesake is introduced elsewhere in
+    // the file -- `read` becomes `read~0` -- orphaning every finding already
+    // anchored to it. Only the later ones are disambiguated, so adding a
+    // duplicate never invalidates existing anchors.
+    //
     // Ordinal rather than enclosing scope: it needs no parser, and it is stable
     // as long as declaration ORDER is stable, which survives edits inside a
     // function body -- the overwhelmingly common change.
-    symbol.name = `${symbol.name}~${index}`;
+    if (index > 0) symbol.name = `${symbol.name}~${index}`;
   }
 
   return found;

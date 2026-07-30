@@ -32,7 +32,7 @@
  *      would trade real tokens for hook overhead and user irritation.
  */
 
-import { statSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { statSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -154,8 +154,20 @@ export function loadState(sessionId) {
  * behaviour the two maps actually want, since both are append-only sets.
  */
 export function saveState(sessionId, state) {
+  let lock = null;
   try {
     mkdirSync(STATE_ROOT, { recursive: true, mode: 0o700 });
+
+    // A LOCK, because merging alone still loses updates: two processes can both
+    // read, both merge, and the second write still discards the first's
+    // additions. `wx` fails if the file exists, which makes creation an atomic
+    // test-and-set on every platform we target.
+    //
+    // Bounded and best-effort: if the lock cannot be taken quickly the write
+    // proceeds anyway. A stale lock from a killed process must never wedge
+    // enforcement, and the worst case without the lock is the merge behaviour
+    // that was already acceptable.
+    lock = takeLock(sessionId);
 
     const current = loadState(sessionId);
     const merged = {
@@ -171,7 +183,36 @@ export function saveState(sessionId, state) {
   } catch {
     // State is an optimization, not a requirement. Losing it degrades re-read
     // detection to size-only -- the old behaviour -- and never blocks anyone.
+  } finally {
+    if (lock) {
+      try {
+        unlinkSync(lock);
+      } catch {
+        // Already gone; nothing to release.
+      }
+    }
   }
+}
+
+/** Best-effort exclusive lock. Returns the lock path, or null if not acquired. */
+function takeLock(sessionId, { attempts = 20, staleMs = 5000 } = {}) {
+  const path = `${statePath(sessionId)}.lock`;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const fd = openSync(path, 'wx', 0o600);
+      closeSync(fd);
+      return path;
+    } catch {
+      // A lock left behind by a killed process would otherwise block every
+      // future write for the life of the session.
+      try {
+        if (Date.now() - statSync(path).mtimeMs > staleMs) unlinkSync(path);
+      } catch {
+        // Raced with the holder releasing it; just retry.
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -255,17 +296,33 @@ export async function readPayload({ timeoutMs = 5000, maxBytes = 8_000_000 } = {
   let size = 0;
 
   const raw = await new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), timeoutMs);
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
+    const onData = (chunk) => {
       size += chunk.length;
       // A payload this large is not a tool call; refusing to buffer it
       // unboundedly keeps a hook from becoming a memory problem.
-      if (size > maxBytes) { clearTimeout(timer); resolve(null); return; }
+      if (size > maxBytes) { finish(null); return; }
       chunks.push(chunk);
-    });
-    process.stdin.on('end', () => { clearTimeout(timer); resolve(chunks.join('')); });
-    process.stdin.on('error', () => { clearTimeout(timer); resolve(null); });
+    };
+    const onEnd = () => finish(chunks.join(''));
+    const onError = () => finish(null);
+
+    // Listeners are REMOVED on every exit path. Leaving them attached after the
+    // timeout wins means a late chunk keeps growing a buffer nobody will read,
+    // and holds the stream referenced so the process cannot exit cleanly.
+    function finish(value) {
+      clearTimeout(timer);
+      process.stdin.off('data', onData);
+      process.stdin.off('end', onEnd);
+      process.stdin.off('error', onError);
+      process.stdin.pause();
+      resolve(value);
+    }
+
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', onData);
+    process.stdin.on('end', onEnd);
+    process.stdin.on('error', onError);
   });
 
   if (raw === null) return null;

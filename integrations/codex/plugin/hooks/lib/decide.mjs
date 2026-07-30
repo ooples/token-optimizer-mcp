@@ -96,7 +96,10 @@ const TOOL_ALIASES = new Map(Object.entries({
   write: 'Write', write_file: 'Write', create_file: 'Write',
 
   bash: 'Bash', shell: 'Bash', run_command: 'Bash', execute_command: 'Bash',
-  run_terminal_cmd: 'Bash', terminal: 'Bash',
+  // Gemini's shell tool. Its own hooks.json matcher already listed
+  // run_shell_command, so the hook fired and then normalizeTool returned null,
+  // silently allowing every shell call through on that client.
+  run_shell_command: 'Bash', run_terminal_cmd: 'Bash', terminal: 'Bash',
 }));
 
 /** Maps a client's tool name onto the canonical one, or null if unhandled. */
@@ -252,7 +255,14 @@ export function decide(payload, state) {
 
     // A recursive search has no bound on its output. One with an explicit file
     // operand does, so it is left alone.
-    if (RECURSIVE_SEARCH.test(command) && /\s-{1,2}[rR]\b|\brg\b|\bag\b/.test(command)) {
+    // Recursive-search detection has to cover how people actually type it:
+    // `-r`, `-R`, `--recursive`, and BUNDLED short flags like `-rn` or `-nr`.
+    // The previous pattern required a lone `-r`/`-R`, so `grep -rn pattern .`
+    // -- among the most common forms there is -- was not recognised at all and
+    // passed straight through.
+    const recursiveFlag =
+      /(^|\s)-[A-Za-z]*[rR][A-Za-z]*(\s|$)|--recursive\b|\brg\b|\bag\b|\back\b/;
+    if (RECURSIVE_SEARCH.test(command) && recursiveFlag.test(command)) {
       if (!largeOperand(command, payload.cwd)) {
         return {
           key: `bash:search:${command.slice(0, 80)}`,

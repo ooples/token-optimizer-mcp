@@ -68,7 +68,27 @@ const RETIRED = [
   ['roo', 'mcp_settings.json', 'global path; project-level .roo/mcp.json takes precedence'],
 ];
 
-const PACKAGE = '@ooples/token-optimizer-mcp@latest';
+const PACKAGE_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+const PACKAGE = `@ooples/token-optimizer-mcp@${PACKAGE_VERSION}`;
+
+/**
+ * Parses JSON or JSONC.
+ *
+ * Kilo's config is `kilo.jsonc`, and JSONC permits comments and trailing
+ * commas. Strict JSON.parse on it is a check that passes only by accident --
+ * the moment a user (or we) add the comment the format exists for, the verifier
+ * reports the file as invalid when the client reads it fine.
+ */
+function parseJsonc(raw) {
+  // String literals are matched FIRST and passed through untouched, so a `//`
+  // or `/*` inside a value (a URL, a glob) is not mistaken for a comment.
+  const withoutComments = raw.replace(
+    /"(?:[^"\\]|\\.)*"|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+    (match) => (match.startsWith('"') ? match : ' '),
+  );
+  const withoutTrailingCommas = withoutComments.replace(/,(\s*[}\]])/g, '$1');
+  return JSON.parse(withoutTrailingCommas);
+}
 
 for (const [key, expected] of Object.entries(EXPECTED)) {
   const dir = join(INTEGRATIONS, key);
@@ -95,12 +115,15 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
   } else {
     let parsed;
     try {
-      parsed = JSON.parse(raw);
+      parsed = parseJsonc(raw);
     } catch (error) {
       check(`${key}: ${expected.file} is valid JSON`, false, error.message);
       continue;
     }
     check(`${key}: ${expected.file} is valid JSON`, true);
+    // A pinned spec, not @latest: a committed config that floats to whatever is
+    // newest is a supply-chain hazard and makes two machines irreproducible.
+    check(`${key}: pins the package version`, !raw.includes('@latest'));
 
     const servers = parsed[expected.topKey];
     check(`${key}: top-level key is "${expected.topKey}"`, Boolean(servers),
@@ -151,6 +174,28 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
   const readme = join(dir, 'README.md');
   check(`${key}: README records provenance`,
     existsSync(readme) && /Verified against http/.test(readFileSync(readme, 'utf8')));
+}
+
+/**
+ * Hand-maintained configs that are not generated but ship all the same.
+ *
+ * They were missed by the pinning sweep precisely because they are outside the
+ * generator, which is the usual way a rule holds everywhere except the places
+ * nobody regenerates.
+ */
+for (const relative of [
+  'integrations/copilot/mcp-config.json',
+  'integrations/gemini/gemini-extension.json',
+  'integrations/opencode/opencode.json',
+]) {
+  const path = join(ROOT, relative);
+  if (!existsSync(path)) {
+    check(`${relative}: exists`, false);
+    continue;
+  }
+  const raw = readFileSync(path, 'utf8');
+  check(`${relative}: pins the package version`, !raw.includes('@latest'));
+  check(`${relative}: names the current version`, raw.includes(PACKAGE));
 }
 
 for (const [key, file, why] of RETIRED) {

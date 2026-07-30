@@ -16,6 +16,7 @@
 
 import type { Express, Request, Response } from 'express';
 import path from 'path';
+import { statSync } from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
 
@@ -51,10 +52,97 @@ async function modules(): Promise<GraphModules | null> {
   }
 }
 
-/** The graph directory for the project the dashboard is being run against. */
-function graphDir(req: Request, wiki: any): string {
-  const requested = typeof req.query.project === 'string' ? req.query.project : undefined;
-  return wiki.wikiDir(requested || process.cwd());
+/**
+ * The graph directory. Deliberately NOT caller-controlled.
+ *
+ * This previously honoured a `?project=` query parameter, which flowed straight
+ * into wikiDir() -- a plain path join that accepts absolute paths and `..`. On
+ * the GET routes that disclosed the graph of any directory on the machine; on
+ * POST /api/wiki/curate it reached putNode/putEdge, which mkdir -p and append,
+ * making it a directory-creation and file-write primitive at a caller-chosen
+ * location. With no auth on a localhost server, any page open in the user's
+ * browser could drive it.
+ *
+ * The dashboard serves exactly one project: the one it was started in. An
+ * operator who wants a different graph sets TOKEN_OPTIMIZER_WIKI_DIR, which is
+ * a deliberate act on the server side rather than a request parameter.
+ */
+function graphDir(_req: Request, wiki: any): string {
+  return wiki.wikiDir(process.cwd());
+}
+
+/**
+ * Rejects cross-site requests to the mutating route.
+ *
+ * The dashboard has no authentication because it binds to localhost, but "no
+ * auth" plus "a browser will happily POST to localhost from any origin" is how
+ * a local tool becomes remotely drivable. Requiring an explicit header that a
+ * cross-origin form cannot set, plus a same-origin check when Origin is
+ * present, closes it without introducing a token flow.
+ */
+function rejectsCrossSite(req: Request, res: Response): boolean {
+  const origin = req.get('origin');
+  if (origin) {
+    const host = req.get('host');
+    let originHost: string | null = null;
+    try {
+      originHost = new URL(origin).host;
+    } catch {
+      originHost = null;
+    }
+    if (!host || originHost !== host) {
+      res.status(403).json({ error: 'cross-origin request refused' });
+      return true;
+    }
+  }
+
+  // Simple <form> posts cannot set a custom header, so requiring one blocks the
+  // no-CORS-preflight path that origin checking alone would miss.
+  if (req.get('x-token-optimizer') !== 'dashboard') {
+    res.status(403).json({ error: 'missing x-token-optimizer header' });
+    return true;
+  }
+  return false;
+}
+
+interface CachedGraph {
+  mtimeMs: number;
+  size: number;
+  graph: any;
+}
+
+let graphCache: CachedGraph | null = null;
+
+/**
+ * Loads the graph, reusing the parse when the log has not changed.
+ *
+ * Every route previously re-read and re-parsed the entire append-only log
+ * synchronously, so a single dashboard page load -- status, balance, search,
+ * audit, then a node lookup -- parsed a mature project's whole graph five
+ * times, on the event loop, blocking every other request.
+ *
+ * Keyed on the log's mtime AND size rather than mtime alone: the file is
+ * append-only and a same-millisecond append is entirely possible, which mtime
+ * alone would miss and serve a stale graph.
+ */
+function loadGraph(dir: string, wiki: any): any {
+  const logPath = path.join(dir, 'graph.jsonl');
+  let stamp: { mtimeMs: number; size: number };
+  try {
+    const stat = statSync(logPath);
+    stamp = { mtimeMs: stat.mtimeMs, size: stat.size };
+  } catch {
+    // No log yet: nothing to cache, and load() returns an empty graph.
+    return wiki.load(dir);
+  }
+
+  if (graphCache && graphCache.mtimeMs === stamp.mtimeMs && graphCache.size === stamp.size) {
+    return graphCache.graph;
+  }
+
+  const graph = wiki.load(dir);
+  graphCache = { ...stamp, graph };
+  return graph;
 }
 
 /**
@@ -87,7 +175,7 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.json({ available: false, reason: 'graph modules not found' });
 
     try {
-      const graph = mods.wiki.load(graphDir(req, mods.wiki));
+      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
       const findings = mods.curate.activeFindings(graph);
       return res.json({
         available: true,
@@ -112,7 +200,7 @@ export function registerWikiRoutes(app: Express): void {
     const offset = Math.max(0, Number(req.query.offset) || 0);
 
     try {
-      const graph = mods.wiki.load(graphDir(req, mods.wiki));
+      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
       let findings = mods.curate.activeFindings(graph);
 
       // Lexical filter, per the design's traversal-plus-lexical retrieval --
@@ -151,7 +239,7 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const graph = mods.wiki.load(graphDir(req, mods.wiki));
+      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
       const node = graph.nodes.get(req.params.id);
       if (!node) return res.status(404).json({ error: 'no such node' });
 
@@ -193,7 +281,7 @@ export function registerWikiRoutes(app: Express): void {
 
     const cap = Math.min(300, Number(req.query.cap) || 150);
     try {
-      const graph = mods.wiki.load(graphDir(req, mods.wiki));
+      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
       const findings = mods.curate.activeFindings(graph)
         .sort((a: any, b: any) => (b.confidence ?? 0) - (a.confidence ?? 0))
         .slice(0, cap);
@@ -223,7 +311,7 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const result = mods.curate.audit(mods.wiki.load(graphDir(req, mods.wiki)));
+      const result = mods.curate.audit(loadGraph(graphDir(req, mods.wiki), mods.wiki));
       return res.json({
         contradicted: result.contradicted.map(summarise),
         orphaned: result.orphaned.map(summarise),
@@ -262,7 +350,7 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const markdown = mods.curate.exportMarkdown(mods.wiki.load(graphDir(req, mods.wiki)));
+      const markdown = mods.curate.exportMarkdown(loadGraph(graphDir(req, mods.wiki), mods.wiki));
       return res.type('text/markdown').send(markdown);
     } catch {
       return res.status(500).json({ error: 'export failed' });
@@ -274,11 +362,17 @@ export function registerWikiRoutes(app: Express): void {
    * so the log remains the full history of what was believed and when.
    */
   app.post('/api/wiki/curate', async (req: Request, res: Response) => {
+    if (rejectsCrossSite(req, res)) return undefined;
+
     const mods = await modules();
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     const { action, key, claim, anchors, confidence, pinned } = req.body || {};
     const dir = graphDir(req, mods.wiki);
+    // Any curation appends to the log, so the cached parse is stale the moment
+    // it succeeds. Dropping it here is cheaper and more obviously correct than
+    // trying to patch the cached graph in place.
+    graphCache = null;
 
     try {
       switch (action) {
