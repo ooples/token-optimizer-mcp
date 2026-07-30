@@ -13,6 +13,8 @@
 
 import { fileSize, isBinaryPath, largeFileBytes } from './policy.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
+import { activeRules } from './remedy.mjs';
+import { wikiDir } from './wiki.mjs';
 
 const KB = (bytes) => Math.round(bytes / 1024);
 
@@ -167,6 +169,22 @@ export function normalizePayload(raw) {
  * @param {object} payload   Normalized payload (tool_name, tool_input, cwd).
  * @param {object} state     Session state; `state.seen` maps path -> true.
  */
+/**
+ * A skip rule covering this path, if one is in force.
+ *
+ * Only the rule types that mean "do not read the contents". A composite touch
+ * or a diff preference changes what is SERVED, not whether the call proceeds,
+ * and turning either into a refusal would deny a read nobody decided to deny.
+ */
+function matchingRule(cwd, path) {
+  const canonical = canonicalPath(path);
+  for (const rule of activeRules(wikiDir(cwd))) {
+    if (rule.type !== 'skip' && rule.type !== 'skeleton-only') continue;
+    if (rule.anchor && rule.anchor === canonical) return rule;
+  }
+  return null;
+}
+
 export function decide(payload, state) {
   const tool = payload.tool_name;
   const input = payload.tool_input || {};
@@ -183,6 +201,21 @@ export function decide(payload, state) {
 
     const size = fileSize(path);
     if (size < 0) return null;
+
+    // A FIX THAT HAS BEEN APPLIED HAS TO BITE, or it was a report with extra
+    // steps. Rules are derived from this project's own measured history -- a
+    // file read across many sessions that has never once been the source of a
+    // finding -- so the refusal states the measurement rather than a policy.
+    const rule = matchingRule(payload.cwd, path);
+    if (rule) {
+      return {
+        key: `read:${path}`,
+        reason:
+          `${shown} is covered by a fix applied on ${new Date(rule.appliedAt).toISOString().slice(0, 10)}: ` +
+          `${rule.why}. Call smart_read with path="${shown}" for its structure, or ` +
+          `revert the rule with id "${rule.id}" if it is wrong.`,
+      };
+    }
 
     // THE RE-READ CASE, which size-gating alone never caught. On a repeat visit
     // smart_read returns only what CHANGED, so the saving is proportional to

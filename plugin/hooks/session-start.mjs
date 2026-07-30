@@ -18,40 +18,20 @@
  * refused, which wastes a turn per tool family.
  */
 
-import { mode, MODE_OFF, MODE_ADVISE, largeFileBytes } from './lib/policy.mjs';
+import { mode, MODE_OFF } from './lib/policy.mjs';
+import { policyText } from './lib/adapter.mjs';
 
-const current = mode();
-if (current === MODE_OFF) process.exit(0);
+if (mode() === MODE_OFF) process.exit(0);
 
-const kb = Math.round(largeFileBytes() / 1024);
-
-const enforcement = current === MODE_ADVISE
-  ? 'These are recommendations; the built-in tools remain available.'
-  : `Built-in calls matching these cases are DENIED and must be reissued ` +
-    `against the tool named in the refusal. A second attempt at the same ` +
-    `target is always allowed, so you can never be stuck.`;
-
-const policy = `# Token optimization is active
-
-The token-optimizer MCP server is connected. Prefer its tools over the
-built-ins in these cases -- they cut context usage 60-90% by caching, diffing
-and bounding output:
-
-- Reading a file larger than ~${kb} KB, or ANY file already read this session
-  -> smart_read (returns only what changed since the last read)
-- Searching file contents -> smart_grep ; finding files -> smart_glob
-- Editing a file larger than ~${kb} KB -> smart_edit (returns a diff, not the file)
-- Printing a large file via cat/head/tail/type/Get-Content -> smart_read
-- Recursive shell searches (grep -r, rg) -> smart_grep
-
-${enforcement}
-
-When the context window gets tight, call optimize_session. To report savings,
-call get_optimization_report. Small one-off reads are fine with the built-ins.`;
-
+// THE TEXT ITSELF LIVES IN THE SHARED CORE. It used to be duplicated here,
+// which is exactly the drift the adapter was built to end: an addition to the
+// shared policy -- the project briefing, for instance -- reached the other five
+// clients and silently skipped Claude Code, the one client most users are on.
+// Claude Code keeps its own entry point because its PreToolUse router does more
+// than the shared one; the standing notice is not a place it needs to differ.
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: 'SessionStart',
-    additionalContext: policy,
+    additionalContext: policyText(true),
   },
 }));

@@ -30,6 +30,7 @@ import {
 import { decide, remember, normalizePayload, readCostBytes } from './decide.mjs';
 import { recordRead } from './metrics.mjs';
 import { wikiDir } from './wiki.mjs';
+import { briefing } from './remedy.mjs';
 
 /**
  * Per-client capability.
@@ -99,7 +100,29 @@ output:
 ${enforcement}
 
 When the context window gets tight, call optimize_session. To report savings,
-call get_optimization_report. Small one-off reads are fine with the built-ins.`;
+call get_optimization_report. Small one-off reads are fine with the built-ins.${projectBriefing()}`;
+}
+
+/**
+ * This project's own waste facts, appended to the standing policy.
+ *
+ * The cheapest of the four remedy surfaces by an order of magnitude: a few
+ * dozen tokens that change what the model reaches for, with no call to
+ * intercept and no turn to spend. Waste that never starts costs nothing to
+ * stop.
+ *
+ * Deliberately concrete. A general exhortation to be efficient is worth
+ * nothing; "this file has never repaid a read here" is a fact about this
+ * project that changes a decision.
+ */
+function projectBriefing() {
+  try {
+    const text = briefing(wikiDir(process.cwd()));
+    return text ? `\n\n## What we have learned about this project\n\n${text}` : '';
+  } catch {
+    // A briefing is a bonus. It must never be the reason a session starts badly.
+    return '';
+  }
 }
 
 /**
