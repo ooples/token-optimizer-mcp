@@ -25,6 +25,8 @@ import { findingsFor, putNode, putEdge, nodeId } from './wiki.mjs';
 import { serve, diffLines } from './staleness.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
+import { annotatedSkeleton } from './skeleton.mjs';
+import { substitutionBudget } from './metrics.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
@@ -143,6 +145,42 @@ ${lines.join('\n')}`;
  * the ordinary redirect -- this is an optimization on top of a working path,
  * never a replacement for it.
  */
+/**
+ * What a refusal returns INSTEAD of the file.
+ *
+ * Ordered by how much better than the file each option is:
+ *
+ *   1. UNCHANGED since the last read -- say so; there is nothing to send.
+ *   2. CHANGED and we hold a snapshot -- send the diff.
+ *   3. Otherwise -- send the annotated skeleton: structure plus every finding
+ *      anchored to it, plus git history when nothing has been learned yet.
+ *
+ * Only (3) is new, and it is the one that inverts the interaction. A refusal
+ * stops being a tax the model pays to get the real answer and becomes the most
+ * informative response available -- more useful than the file, not a lossier
+ * version of it.
+ */
+export function substitutionFor(dir, graph, rawPath, source) {
+  const filePath = canonicalPath(rawPath);
+  const budget = substitutionBudget(dir, filePath);
+  const built = annotatedSkeleton(graph, rawPath, source, { budget });
+
+  // A skeleton that is not meaningfully cheaper than the file saves nothing and
+  // costs the model a round trip; send it back to the ordinary redirect.
+  if (built.tokens * 4 > source.length * 0.5) return null;
+
+  record(dir, {
+    kind: 'substitute',
+    anchor: filePath,
+    tokens: built.tokens,
+    findings: built.findings,
+    symbols: built.symbols,
+    bytesAvoided: source.length,
+  });
+
+  return built.text;
+}
+
 export function refusalPayload(graph, rawPath, { maxDiffLines = 60 } = {}) {
   const filePath = canonicalPath(rawPath);
   const anchor = graph.nodes.get(nodeId('file', filePath));

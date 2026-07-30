@@ -246,6 +246,60 @@ export function report(dir) {
 }
 
 /**
+ * The substitution budget for ONE file, earned from measured effect.
+ *
+ * THIS IS THE PART A COMPETITOR CANNOT COPY. A fixed cap is a guess; ours is an
+ * experiment. Every substitution for a file is a bet that annotating it prevents
+ * downstream reading, and the holdout already measures exactly that -- so the
+ * budget follows the evidence per file rather than a constant somebody tuned
+ * once.
+ *
+ * A file whose annotations demonstrably suppress later reads earns more room. A
+ * file whose annotations are ignored shrinks back toward a bare skeleton, which
+ * costs almost nothing. Without a control arm there is no way to tell those two
+ * apart, which is why nobody else can do this.
+ */
+export function substitutionBudget(dir, anchor, { floor = 300, base = 1200, ceiling = 3000 } = {}) {
+  const events = readAll(dir);
+
+  const mine = events.filter((e) => e.kind === 'inject' && e.anchor === anchor);
+  const treated = mine.filter((e) => !e.holdout);
+  const withheld = mine.filter((e) => e.holdout);
+
+  // Below this the arms are noise; a new file starts at the default rather than
+  // inheriting a verdict from three data points.
+  if (treated.length < 4 || withheld.length < 2) return base;
+
+  const reads = new Map();
+  for (const event of events) {
+    if (event.kind !== 'read' || event.anchor !== anchor) continue;
+    const key = event.sessionId || '';
+    if (!reads.has(key)) reads.set(key, []);
+    reads.get(key).push(event);
+  }
+
+  const downstream = (rows) => {
+    if (!rows.length) return 0;
+    let total = 0;
+    for (const row of rows) {
+      const bucket = reads.get(row.sessionId || '') || [];
+      const after = row.at ?? 0;
+      total += bucket.reduce((sum, r) => sum + ((r.at ?? 0) >= after ? (r.tokens || 0) : 0), 0);
+    }
+    return total / rows.length;
+  };
+
+  const saved = downstream(withheld) - downstream(treated);
+  const spent = treated.reduce((sum, e) => sum + (e.tokens || 0), 0) / treated.length;
+
+  // Ratio of what annotating this file avoided to what annotating it cost.
+  // Above 1 it is paying for itself and earns room; below, it shrinks.
+  const ratio = spent > 0 ? saved / spent : 1;
+  const scaled = Math.round(base * Math.max(0.25, Math.min(2.5, ratio)));
+  return Math.max(floor, Math.min(ceiling, scaled));
+}
+
+/**
  * The earned index budget.
  *
  * Answers a real objection to a fixed cap: a mature project with a dense,
