@@ -101,6 +101,15 @@ export function record(dir, event) {
 const MAX_BYTES = Number(process.env.TOKEN_OPTIMIZER_METRICS_BYTES) || 2_000_000;
 const MAX_EVENTS = Number(process.env.TOKEN_OPTIMIZER_METRICS_WINDOW) || 5000;
 
+/**
+ * The event log, bounded. Exported because the forecast and calibration modules
+ * are consumers of the same measured record -- duplicating the tail-reading
+ * logic in each would be three places to get the bound wrong.
+ */
+export function readMetrics(dir) {
+  return readAll(dir);
+}
+
 function readAll(dir) {
   const path = metricsPath(dir);
   if (!existsSync(path)) return [];
