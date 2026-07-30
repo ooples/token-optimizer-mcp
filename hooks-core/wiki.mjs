@@ -20,6 +20,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { canonicalPath } from './paths.mjs';
 
 /**
  * Schema version, bumped whenever node ids or anchor hashes change meaning.
@@ -71,7 +72,27 @@ const logPath = (dir) => join(dir, 'graph.jsonl');
  * The digest is truncated either way, so nothing gets larger.
  */
 export function nodeId(kind, key) {
-  return `${kind}:${createHash('sha256').update(String(key)).digest('hex').slice(0, 16)}`;
+  return `${kind}:${createHash('sha256').update(canonicalKey(kind, key)).digest('hex').slice(0, 16)}`;
+}
+
+/**
+ * The canonical form of a node key.
+ *
+ * Path canonicalisation lives HERE, in the identity function, rather than at
+ * each call site. Doing it at call sites left `nodeId('file', rawPath)` correct
+ * only if the caller remembered -- and a caller that forgot produced a second
+ * node for a file that already existed, splitting its findings silently. There
+ * is no way to misuse it from here: `C:\x`, `/c/x` and `C:/x` are one node
+ * because they are one file.
+ */
+export function canonicalKey(kind, key) {
+  const raw = String(key);
+  if (kind === 'file') return canonicalPath(raw);
+  if (kind === 'symbol') {
+    const hash = raw.indexOf('#');
+    return hash === -1 ? canonicalPath(raw) : `${canonicalPath(raw.slice(0, hash))}#${raw.slice(hash + 1)}`;
+  }
+  return raw;
 }
 
 /** Content hash of a file, or null when unreadable. Drives staleness in P2. */
@@ -164,7 +185,7 @@ export function putNode(dir, { kind, key, ...rest }) {
   // Spreading it after `id` let a caller passing a whole existing node back in
   // -- which curate.mjs does on every pin, retire and correct -- carry a stale
   // `id` or `t` through and write a record that no longer matches its own key.
-  append(dir, { ...rest, t: 'n', v: GRAPH_VERSION, id, kind, key, at: Date.now() });
+  append(dir, { ...rest, t: 'n', v: GRAPH_VERSION, id, kind, key: canonicalKey(kind, key), at: Date.now() });
   return id;
 }
 

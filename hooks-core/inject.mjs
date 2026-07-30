@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import { findingsFor, putNode, putEdge, nodeId } from './wiki.mjs';
 import { serve, diffLines } from './staleness.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
+import { canonicalPath, resolvableCandidates } from './paths.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
@@ -61,7 +62,9 @@ function render(finding) {
  * measurement holdout -- in which case the caller must behave exactly as if the
  * graph were empty, or the experiment measures nothing.
  */
-export function forTouch(dir, graph, filePath, { budget = touchBudget(), sessionId } = {}) {
+export function forTouch(dir, graph, rawPath, { budget = touchBudget(), sessionId } = {}) {
+  // Canonical, so a touch finds findings anchored under any other spelling.
+  const filePath = canonicalPath(rawPath);
   const anchorId = nodeId('file', filePath);
   const candidates = findingsFor(graph, anchorId, { limit: 30 });
   if (!candidates.length) return null;
@@ -138,16 +141,19 @@ ${lines.join('\n')}`;
  * the ordinary redirect -- this is an optimization on top of a working path,
  * never a replacement for it.
  */
-export function refusalPayload(graph, filePath, { maxDiffLines = 60 } = {}) {
+export function refusalPayload(graph, rawPath, { maxDiffLines = 60 } = {}) {
+  const filePath = canonicalPath(rawPath);
   const anchor = graph.nodes.get(nodeId('file', filePath));
   if (!anchor || !anchor.snapshot) return null;
 
-  let current;
-  try {
-    current = readFileSync(filePath, 'utf8');
-  } catch {
-    return null;
+  let current = null;
+  for (const candidate of resolvableCandidates(rawPath)) {
+    try {
+      current = readFileSync(candidate, 'utf8');
+      break;
+    } catch { /* try the next spelling */ }
   }
+  if (current === null) return null;
 
   if (current === anchor.snapshot) {
     return `${filePath} is UNCHANGED since you last read it this session. ` +
@@ -175,7 +181,7 @@ export function refusalPayload(graph, filePath, { maxDiffLines = 60 } = {}) {
  * 20,000 edges.
  */
 export function linkCoOccurrence(dir, sessionId, paths, { maxLinks = 40 } = {}) {
-  const unique = [...new Set(paths)].slice(0, 12);
+  const unique = [...new Set(paths.map((p) => canonicalPath(p)))].slice(0, 12);
   let written = 0;
 
   for (let i = 0; i < unique.length && written < maxLinks; i++) {

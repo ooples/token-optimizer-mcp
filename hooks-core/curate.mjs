@@ -22,6 +22,7 @@
 import { putNode, putEdge, load, nodeId } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
+import { canonicalPath } from './paths.mjs';
 
 /** Alias so `create` can re-read the graph after indexing an anchor. */
 const loadGraph = load;
@@ -119,8 +120,9 @@ export function create(dir, { claim, anchors, type = 'finding', confidence = 0.9
   // the rule did not guard.
   const resolved = [];
   for (const anchor of anchors) {
-    const [path, symbol] = String(anchor).split('#');
-    if (!path) continue;
+    const [rawPath, symbol] = String(anchor).split('#');
+    if (!rawPath) continue;
+    const path = canonicalPath(rawPath);
     // Indexing creates the file node and its symbols with their hashes and
     // snapshots, which is what makes the claim checkable later.
     indexFile(dir, path);

@@ -14,6 +14,7 @@ import {
   pin, correct, retire, create, activeFindings, audit, exportMarkdown, ORIGIN_HUMAN,
 } from '../../hooks-core/curate.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
 import { indexFile, checkAnchor } from '../../hooks-core/staleness.mjs';
 
 let workspace;
@@ -161,8 +162,9 @@ describe('markdown export', () => {
     seed(b, 'f2', 'the cache evicts on write');
 
     const markdown = exportMarkdown(load(dir));
-    expect(markdown).toContain('## ' + a);
-    expect(markdown).toContain('## ' + b);
+    // Canonical, because that is the identity the graph stores.
+    expect(markdown).toContain('## ' + canonicalPath(a));
+    expect(markdown).toContain('## ' + canonicalPath(b));
     expect(markdown).toContain('tokens are verified');
   });
 

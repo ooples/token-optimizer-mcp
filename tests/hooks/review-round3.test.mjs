@@ -19,6 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { serve, indexFile } from '../../hooks-core/staleness.mjs';
 import { record, recordRead, report } from '../../hooks-core/metrics.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { decide, normalizePayload } from '../../hooks-core/decide.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -154,5 +156,62 @@ describe('serve() is the final gate on retired findings', () => {
 
     const graph = load(dir);
     expect(serve(graph, [graph.nodes.get(id)])).toHaveLength(1);
+  });
+});
+
+describe('one file is ONE identity, however it was spelled', () => {
+  // The bug that surfaced as "cat was allowed while Read was refused" on a real
+  // Windows repo was not a size-check bug. Read passes `C:\...`, Bash passes
+  // `/c/...`, some clients pass `C:/...`, and each hashed to a DIFFERENT node
+  // id and a different key in the session's `seen` map. So re-read detection --
+  // the headline feature -- missed whenever a file was touched through two
+  // different tools, wiki anchors split per spelling, and staleness compared
+  // against a path that might not resolve.
+  const cwd = 'C:/Users/me/repo';
+  const spellings = [
+    ['C:', 'Users', 'me', 'repo', 'src', 'Auth.cs'].join('\\'),
+    '/c/Users/me/repo/src/Auth.cs',
+    'C:/Users/me/repo/src/Auth.cs',
+    'c:/Users/me/repo/./src/Auth.cs',
+    'src/Auth.cs',
+    'C:/Users/me/repo/src/../src/Auth.cs',
+  ];
+
+  test('every spelling canonicalises to the same path', () => {
+    const canonical = new Set(spellings.map((s) => canonicalPath(s, cwd)));
+    expect([...canonical]).toEqual(['C:/Users/me/repo/src/Auth.cs']);
+  });
+
+  test('every spelling produces the same graph node id', () => {
+    const ids = new Set(spellings.map((s) => nodeId('file', canonicalPath(s, cwd))));
+    expect(ids.size).toBe(1);
+  });
+
+  test('a re-read through a DIFFERENT spelling is detected', () => {
+    // Uses a real file, because the Read branch returns early when the path
+    // does not resolve -- so a fake path can never exercise the seen-map.
+    const real = join(ROOT, 'package.json');
+    const msys = `/${real[0].toLowerCase()}${real.slice(2).split('\\').join('/')}`;
+    const state = { seen: {}, denied: {} };
+
+    const first = normalizePayload({ tool_name: 'Read', tool_input: { file_path: real }, cwd: ROOT });
+    expect(decide(first, state)).toBeNull();
+    state.seen[first.tool_input.file_path] = true;
+
+    const second = normalizePayload({ tool_name: 'Read', tool_input: { file_path: msys }, cwd: ROOT });
+    const verdict = decide(second, state);
+    expect(verdict).not.toBeNull();
+    expect(verdict.reason).toMatch(/already read/i);
+  });
+
+  test('a quoted shell operand still resolves', () => {
+    expect(canonicalPath('"/c/Users/me/repo/src/Auth.cs"', cwd))
+      .toBe('C:/Users/me/repo/src/Auth.cs');
+  });
+
+  test('a POSIX path on a POSIX-shaped input is left alone', () => {
+    // `/home/...` is not a drive-letter form and must not be mangled.
+    expect(canonicalPath('/home/me/repo/src/auth.ts', '/home/me/repo'))
+      .toBe('/home/me/repo/src/auth.ts');
   });
 });

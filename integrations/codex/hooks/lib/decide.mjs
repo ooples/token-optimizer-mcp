@@ -14,6 +14,7 @@
  */
 
 import { fileSize, isBinaryPath, largeFileBytes } from './policy.mjs';
+import { canonicalPath, resolvableCandidates } from './paths.mjs';
 
 const KB = (bytes) => Math.round(bytes / 1024);
 
@@ -73,14 +74,7 @@ function fileOperands(command) {
  * through one path and allowed through the other.
  */
 function candidatePaths(operand, cwd) {
-  const paths = [];
-  const msys = /^\/([A-Za-z])\/(.*)$/.exec(operand);
-  if (msys) paths.push(`${msys[1].toUpperCase()}:/${msys[2]}`);
-
-  if (operand.startsWith('/') || /^[A-Za-z]:/.test(operand)) paths.push(operand);
-  else paths.push(`${cwd || '.'}/${operand}`);
-
-  return paths;
+  return resolvableCandidates(operand, cwd);
 }
 
 /** Resolves the first operand that is a real file over the size threshold. */
@@ -144,13 +138,25 @@ export function normalizePayload(raw) {
   const filePath = input.file_path ?? input.path ?? input.absolute_path ?? input.filePath ?? input.target_file;
   const command = input.command ?? input.cmd ?? input.script;
 
+  const cwd = raw.cwd ?? raw.workspace_root ?? process.cwd();
+
   return {
     session_id: raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default',
-    cwd: raw.cwd ?? raw.workspace_root ?? process.cwd(),
+    cwd,
     tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool),
     tool_input: {
       ...input,
-      ...(filePath !== undefined ? { file_path: filePath } : {}),
+      // CANONICALISED HERE, once. Every consumer downstream -- the `seen` map
+      // that powers re-read detection, the verdict key that powers loop
+      // breaking, the size check, and the wiki anchor -- keys off this value,
+      // so normalising at the single point they all share is what makes one
+      // file one identity regardless of which tool spelled it.
+      ...(filePath !== undefined ? { file_path: canonicalPath(filePath, cwd) } : {}),
+      // The ORIGINAL spelling, kept for messages. Identity is internal and
+      // canonical; what the refusal says back to the model should be the path
+      // the model actually used, or the instruction reads as being about a
+      // different file than the one it asked for.
+      ...(filePath !== undefined ? { raw_file_path: filePath } : {}),
       ...(command !== undefined ? { command } : {}),
       // Gemini and Cursor express paging as start_line/end_line.
       ...(input.start_line !== undefined ? { offset: input.start_line } : {}),
@@ -170,6 +176,7 @@ export function decide(payload, state) {
 
   if (tool === 'Read') {
     const path = input.file_path;
+    const shown = input.raw_file_path ?? path;
     if (!path || isBinaryPath(path)) return null;
 
     // A paged read is already a deliberate act of token economy. Overriding it
@@ -186,8 +193,8 @@ export function decide(payload, state) {
       return {
         key: `read:${path}`,
         reason:
-          `You already read ${path} earlier in this session. Call the ` +
-          `token-optimizer MCP tool smart_read with path="${path}" instead -- ` +
+          `You already read ${shown} earlier in this session. Call the ` +
+          `token-optimizer MCP tool smart_read with path="${shown}" instead -- ` +
           `it returns only a diff of what changed since that read, typically a ` +
           `few tokens rather than the whole file.`,
       };
@@ -197,9 +204,9 @@ export function decide(payload, state) {
       return {
         key: `read:${path}`,
         reason:
-          `${path} is ${KB(size)} KB, large enough to cost a meaningful share ` +
+          `${shown} is ${KB(size)} KB, large enough to cost a meaningful share ` +
           `of the context window. Call the token-optimizer MCP tool smart_read ` +
-          `with path="${path}" instead -- it caches the content and returns ` +
+          `with path="${shown}" instead -- it caches the content and returns ` +
           `diffs on later reads.`,
       };
     }

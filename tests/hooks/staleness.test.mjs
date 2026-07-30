@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { extractSymbols, languageOf, spanText } from '../../hooks-core/symbols.mjs';
 import { indexFile, checkAnchor, diffLines, serve, invalidateOnWrite } from '../../hooks-core/staleness.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 let workspace;
 let dir;

@@ -31,6 +31,20 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { putNode, putEdge, contentHash } from './wiki.mjs';
 import { extractSymbols, spanText, symbolKey } from './symbols.mjs';
+import { canonicalPath, resolvableCandidates } from './paths.mjs';
+
+/** Reads a path in whichever spelling resolves, or throws if none do. */
+function readAnySpelling(path) {
+  let last;
+  for (const candidate of resolvableCandidates(path)) {
+    try {
+      return readFileSync(candidate, 'utf8');
+    } catch (error) {
+      last = error;
+    }
+  }
+  throw last ?? new Error('unreadable');
+}
 
 const hash = (text) => createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
 
@@ -57,13 +71,17 @@ function snapshotLimit() {
  * bounded: only regions that findings actually anchor to are stored, and a
  * function is orders of magnitude smaller than the file containing it.
  */
-export function indexFile(dir, path, text) {
+export function indexFile(dir, rawPath, text) {
+  // The graph KEY is canonical, so one file is one node however it was spelled.
+  // Reading still tries the spellings that actually resolve on this host.
+  const path = canonicalPath(rawPath);
   const source = text ?? (() => {
-    try {
-      return readFileSync(path, 'utf8');
-    } catch {
-      return null;
+    for (const candidate of resolvableCandidates(rawPath)) {
+      try {
+        return readFileSync(candidate, 'utf8');
+      } catch { /* try the next spelling */ }
     }
+    return null;
   })();
   if (source === null) return null;
 
@@ -111,7 +129,7 @@ export function checkAnchor(anchor) {
 
   let source;
   try {
-    source = readFileSync(path, 'utf8');
+    source = readAnySpelling(path);
   } catch {
     return { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: '', reason: 'file no longer readable' };
   }
@@ -236,7 +254,10 @@ export function serve(graph, findings) {
  * The eager path: our hook saw a write, so mark dependent findings now and
  * record the diff while both sides are still in hand.
  */
-export function invalidateOnWrite(dir, graph, path, beforeText, afterText) {
+export function invalidateOnWrite(dir, graph, rawPath, beforeText, afterText) {
+  // Canonical at the boundary, because node keys are canonical. Comparing a raw
+  // path against them matched nothing and silently invalidated no findings.
+  const path = canonicalPath(rawPath);
   const marked = [];
 
   // Which symbols in this file ACTUALLY changed. Without this the loop below
