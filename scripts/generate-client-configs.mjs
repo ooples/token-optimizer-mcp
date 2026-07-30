@@ -60,11 +60,18 @@ const CLIENTS = [
   { key: 'cline',    name: 'Cline',           mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: '.clinerules/token-optimizer.md',    rulesFormat: 'md',
     docs: 'https://docs.cline.bot/mcp/configuring-mcp-servers', verified: 'mcpServers key confirmed; CLI reads ~/.cline/mcp.json, the VS Code extension reads cline_mcp_settings.json' },
 
-  { key: 'roo',      name: 'Roo Code',        mcpFile: 'mcp_settings.json',       mcpShape: 'mcpServers',      rulesFile: '.roo/rules/token-optimizer.md',     rulesFormat: 'md',
-    docs: 'https://docs.roocode.com/features/mcp/using-mcp-in-roo', verified: 'structural only -- not confirmed against live docs' },
+  // Project-level .roo/mcp.json is preferred over the global mcp_settings.json:
+  // it is version-controllable and takes precedence.
+  { key: 'roo',      name: 'Roo Code',        mcpFile: '.roo/mcp.json',           mcpShape: 'mcpServers',      rulesFile: '.roo/rules/token-optimizer.md',     rulesFormat: 'md',
+    docs: 'https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo', verified: 'mcpServers key and project-level .roo/mcp.json precedence confirmed' },
 
-  { key: 'kilo',     name: 'Kilo Code',       mcpFile: 'mcp_settings.json',       mcpShape: 'mcpServers',      rulesFile: '.kilocode/rules/token-optimizer.md', rulesFormat: 'md',
-    docs: 'https://kilocode.ai/docs/features/mcp/using-mcp-in-kilo-code', verified: 'structural only -- not confirmed against live docs' },
+  // CORRECTED, and the largest error found: Kilo rebranded (kilocode.ai now
+  // redirects to kilo.ai) and its schema is nothing like the common one. It
+  // reads kilo.jsonc under an `mcp` key, with type "local", `command` as an
+  // ARRAY, and `environment` rather than `env`. The previous mcp_settings.json
+  // /mcpServers config would never have loaded.
+  { key: 'kilo',     name: 'Kilo',            mcpFile: '.kilo/kilo.jsonc',        mcpShape: 'kilo',            rulesFile: '.kilo/rules/token-optimizer.md',    rulesFormat: 'md',
+    docs: 'https://kilo.ai/docs/features/mcp/using-mcp-in-kilo-code', verified: 'kilo.jsonc with mcp key, type local, command ARRAY and environment -- confirmed' },
 
   // CORRECTED: Zed's current schema has no `source` key; command is a string
   // beside an args array.
@@ -83,7 +90,7 @@ const CLIENTS = [
     docs: 'https://github.com/charmbracelet/crush', verified: 'mcp key with type:stdio confirmed; AGENTS.md is the project default' },
 
   { key: 'droid',    name: 'Droid (Factory)', mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
-    docs: 'https://docs.factory.ai/cli/configuration/mcp', verified: 'structural only -- not confirmed against live docs' },
+    docs: 'https://docs.factory.ai/cli/configuration/mcp', verified: 'mcpServers key confirmed; the CLI reads ~/.factory/mcp.json' },
 ];
 
 /** The policy, written once. */
@@ -124,6 +131,19 @@ function mcpConfig(shape) {
   }
   if (shape === 'amp.mcpServers') {
     return JSON.stringify({ 'amp.mcpServers': { 'token-optimizer': MCP_STDIO } }, null, 2) + '\n';
+  }
+  if (shape === 'kilo') {
+    return JSON.stringify({
+      mcp: {
+        'token-optimizer': {
+          type: 'local',
+          // An array, not a string plus args -- Kilo's schema differs here.
+          command: ['npx', '-y', '@ooples/token-optimizer-mcp@latest'],
+          environment: {},
+          enabled: true,
+        },
+      },
+    }, null, 2) + '\n';
   }
   if (shape === 'mcp') {
     return JSON.stringify({ mcp: { 'token-optimizer': { type: 'stdio', ...MCP_STDIO } } }, null, 2) + '\n';

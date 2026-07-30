@@ -13,7 +13,7 @@ every request, which is the strongest lever available on this client.
 ## Provenance
 
 Verified against https://docs.factory.ai/cli/configuration/mcp
-(structural only -- not confirmed against live docs).
+(mcpServers key confirmed; the CLI reads ~/.factory/mcp.json).
 
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

@@ -9,13 +9,17 @@
  * because the files are valid JSON either way.
  *
  * So this asserts the shape each client's documentation specifies, and the
- * generator records the doc URL every entry was checked against. Four real
- * errors were found this way on the first run:
+ * generator records the doc URL every entry was checked against. SIX real
+ * errors were found this way:
  *
+ *   - Kilo rebranded and its schema is nothing like the common one: kilo.jsonc
+ *     under an `mcp` key, type "local", command as an ARRAY, `environment`
+ *     rather than `env`. The old mcpServers config could never have loaded.
  *   - Zed carried a `source` key that is not in its current schema
  *   - Windsurf targeted `.windsurfrules`, the LEGACY single-file form
  *   - Crush targeted CRUSH.md, which is the per-user file, not the project one
  *   - Cline used the VS Code extension's filename for a CLI config
+ *   - Roo used the global path rather than project-level `.roo/mcp.json`
  *
  * Run: npm run verify:clients
  */
@@ -44,8 +48,10 @@ const EXPECTED = {
   cursor:   { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.mdc', frontmatter: true },
   windsurf: { file: 'mcp_config.json', topKey: 'mcpServers',      rules: 'token-optimizer.md' },
   cline:    { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.md' },
-  roo:      { file: 'mcp_settings.json', topKey: 'mcpServers',    rules: 'token-optimizer.md' },
-  kilo:     { file: 'mcp_settings.json', topKey: 'mcpServers',    rules: 'token-optimizer.md' },
+  roo:      { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.md' },
+  // Kilo's schema is genuinely different: an `mcp` key, type "local", command
+  // as an ARRAY, and `environment` rather than `env`.
+  kilo:     { file: 'kilo.jsonc',      topKey: 'mcp',             rules: 'token-optimizer.md', kiloShape: true },
   zed:      { file: 'settings.json',   topKey: 'context_servers', rules: 'AGENTS.md' },
   amp:      { file: 'settings.json',   topKey: 'amp.mcpServers',  rules: 'AGENTS.md' },
   continue: { file: 'config.yaml',     yaml: true,                rules: 'token-optimizer.md' },
@@ -58,6 +64,8 @@ const RETIRED = [
   ['windsurf', '.windsurfrules', 'legacy single-file form'],
   ['crush', 'CRUSH.md', 'per-user file, not the project one'],
   ['cline', 'cline_mcp_settings.json', 'VS Code extension filename'],
+  ['kilo', 'mcp_settings.json', 'wrong schema entirely -- Kilo reads kilo.jsonc'],
+  ['roo', 'mcp_settings.json', 'global path; project-level .roo/mcp.json takes precedence'],
 ];
 
 const PACKAGE = '@ooples/token-optimizer-mcp@latest';
@@ -103,8 +111,17 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
     check(`${key}: declares the token-optimizer server`, Boolean(entry));
     if (!entry) continue;
 
-    check(`${key}: command is a string`, typeof entry.command === 'string', String(entry.command));
-    check(`${key}: args include the package`, Array.isArray(entry.args) && entry.args.includes(PACKAGE));
+    if (expected.kiloShape) {
+      check(`${key}: type is "local"`, entry.type === 'local', String(entry.type));
+      check(`${key}: command is an ARRAY containing the package`,
+        Array.isArray(entry.command) && entry.command.includes(PACKAGE));
+      // `env` here would be silently ignored -- Kilo reads `environment`.
+      check(`${key}: uses "environment", not "env"`,
+        entry.environment !== undefined && entry.env === undefined);
+    } else {
+      check(`${key}: command is a string`, typeof entry.command === 'string', String(entry.command));
+      check(`${key}: args include the package`, Array.isArray(entry.args) && entry.args.includes(PACKAGE));
+    }
 
     if (expected.stdioType) {
       check(`${key}: declares type stdio`, entry.type === 'stdio', String(entry.type));
@@ -180,6 +197,6 @@ for (const key of ['codex', 'gemini']) {
 
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-console.log('NOTE: shapes verified against each client\'s published docs; roo, kilo and droid');
-console.log('      are structural-only and flagged as such in their READMEs.');
+console.log('NOTE: all ten directive-tier shapes are confirmed against published docs;');
+console.log('      the source URL is recorded in each integration README.');
 process.exit(failed.length ? 1 : 0);

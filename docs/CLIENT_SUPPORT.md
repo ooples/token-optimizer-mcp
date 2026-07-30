@@ -29,13 +29,13 @@ rarely — but it is guidance, and a model can read past guidance.
 | Cursor | `.cursor/rules/token-optimizer.mdc` (`alwaysApply: true`) | `.cursor/mcp.json` |
 | Windsurf | `.windsurf/rules/token-optimizer.md` | `mcp_config.json` |
 | Cline | `.clinerules/token-optimizer.md` | `~/.cline/mcp.json` (CLI) or `cline_mcp_settings.json` (VS Code) |
-| Roo Code | `.roo/rules/token-optimizer.md` | `mcp_settings.json` |
-| Kilo Code | `.kilocode/rules/token-optimizer.md` | `mcp_settings.json` |
+| Roo Code | `.roo/rules/token-optimizer.md` | `.roo/mcp.json` (project-level, takes precedence) |
+| Kilo | `.kilo/rules/token-optimizer.md` | `.kilo/kilo.jsonc` (`mcp` key) |
 | Zed | `AGENTS.md` | `settings.json` (`context_servers`) |
 | Amp | `AGENTS.md` | `settings.json` (`amp.mcpServers`) |
 | Continue | `.continue/rules/token-optimizer.md` | `config.yaml` |
 | Crush | `AGENTS.md` | `crush.json` |
-| Droid (Factory) | `AGENTS.md` | `mcp.json` |
+| Droid (Factory) | `AGENTS.md` | `~/.factory/mcp.json` |
 | GitHub Copilot CLI | `.github/copilot-instructions.md` | `mcp-config.json` |
 | Gemini CLI | extension `GEMINI.md` | `gemini-extension.json` |
 | Qwen Code | extension context file | extension config |
@@ -75,18 +75,23 @@ client reports nothing, and the server never loads:
 
 | Client | Was | Should be |
 |---|---|---|
+| **Kilo** | `mcp_settings.json` / `mcpServers` | **wrong at the schema level.** Kilo rebranded; it reads `kilo.jsonc` under an `mcp` key, with `type: "local"`, `command` as an **array**, and `environment` rather than `env` |
 | Zed | a `source` key | not in the current schema; removed |
 | Windsurf | `.windsurfrules` | the legacy single-file form; now `.windsurf/rules/` |
 | Crush | `CRUSH.md` | the per-user file; the project one is `AGENTS.md` |
 | Cline | `cline_mcp_settings.json` | the VS Code filename; the CLI reads `~/.cline/mcp.json` |
+| Roo | `mcp_settings.json` | the global path; project-level `.roo/mcp.json` takes precedence |
+
+Kilo is the one worth dwelling on: **six of ten clients share the `mcpServers`
+convention, and assuming the seventh did too would have shipped a config that
+could never load.** Conventions are not schemas.
 
 `npm run verify:clients` asserts these shapes on every run, including that
 superseded paths stay deleted and that no directive-tier rules file claims the
 enforcement its client cannot perform.
 
-Roo, Kilo and Droid are **structural-only**: their shapes follow the common
-`mcpServers` convention but were not confirmed against live documentation, and
-their READMEs say so.
+All ten directive-tier shapes are now confirmed against published documentation,
+with the source URL recorded in each integration's README.
 
 ## Configuration, all clients
 

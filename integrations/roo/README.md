@@ -6,14 +6,14 @@ every request, which is the strongest lever available on this client.
 
 ## Install
 
-1. Add the MCP server. Merge `mcp_settings.json` into your
-   `mcp_settings.json`.
+1. Add the MCP server. Merge `mcp.json` into your
+   `.roo/mcp.json`.
 2. Copy `token-optimizer.md` to `.roo/rules/token-optimizer.md` in your project.
 
 ## Provenance
 
-Verified against https://docs.roocode.com/features/mcp/using-mcp-in-roo
-(structural only -- not confirmed against live docs).
+Verified against https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo
+(mcpServers key and project-level .roo/mcp.json precedence confirmed).
 
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

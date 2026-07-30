@@ -1,7 +1,7 @@
 # Token optimization
 
 Prefer the token-optimizer MCP tools over built-in file and search tools.
-They cut context usage 60-90% by caching, diffing, and bounding output. Kilo Code
+They cut context usage 60-90% by caching, diffing, and bounding output. Kilo
 has no pre-execution hook, so nothing enforces this automatically -- following it
 is what produces the saving.
 
