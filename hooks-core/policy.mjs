@@ -1,5 +1,3 @@
-// GENERATED FILE -- do not edit.
-// Source of truth: hooks-core/policy.mjs. Regenerate with `npm run sync:hooks`.
 /**
  * Shared policy for the token-optimizer Claude Code hooks.
  *

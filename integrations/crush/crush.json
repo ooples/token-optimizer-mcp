@@ -1,0 +1,13 @@
+{
+  "mcp": {
+    "token-optimizer": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@ooples/token-optimizer-mcp@latest"
+      ],
+      "env": {}
+    }
+  }
+}

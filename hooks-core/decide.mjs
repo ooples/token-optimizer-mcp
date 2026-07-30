@@ -1,5 +1,3 @@
-// GENERATED FILE -- do not edit.
-// Source of truth: hooks-core/decide.mjs. Regenerate with `npm run sync:hooks`.
 /**
  * The routing decision, as a pure function.
  *

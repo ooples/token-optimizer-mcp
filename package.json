@@ -19,7 +19,9 @@
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
-    "CLI_WRAPPER_README.md"
+    "CLI_WRAPPER_README.md",
+    "hooks-core/**/*",
+    "integrations/**/*"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",
@@ -43,7 +45,9 @@
     "lint:fix": "eslint src --ext .ts,.js --fix",
     "format": "prettier --write 'src/**/*.{ts,js,json}'",
     "format:check": "prettier --check 'src/**/*.{ts,js,json}'",
-    "validate": "node scripts/validate-package.js"
+    "validate": "node scripts/validate-package.js",
+    "sync:hooks": "node scripts/sync-hook-core.mjs && node scripts/generate-client-entries.mjs && node scripts/generate-client-configs.mjs",
+    "sync:hooks:check": "node scripts/sync-hook-core.mjs --check"
   },
   "repository": {
     "type": "git",

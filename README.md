@@ -101,35 +101,74 @@ args = ["-y", "@ooples/token-optimizer-mcp@latest"]
 
 ### Claude Code
 
-#### 1. Add the MCP server
-
-Add Token Optimizer at user scope so it is available in every project:
-
-```bash
-claude mcp add --transport stdio --scope user token-optimizer -- \
-  npx -y @ooples/token-optimizer-mcp@latest
-```
-
-#### 2. Verify the installation
-
-```bash
-claude mcp get token-optimizer
-claude mcp list
-```
-
-Inside Claude Code, `/mcp` shows the live connection, tool count, and server status.
-
-#### 3. Add optimization guidance or hooks
-
-For MCP-only setup, add the recommendations from [`integrations/AGENTS.md`](./integrations/AGENTS.md) to your project's `CLAUDE.md`.
-
-For the richest integration, install the repository's Claude Code plugin. It bundles the MCP server, optimization skill, and large-read hook. Run these commands **inside Claude Code**:
+**Install the plugin, not the bare MCP server.** The plugin is the only path that
+optimizes by default; adding the MCP server alone gives the model a set of tools
+it is free to never call.
 
 ```text
 /plugin marketplace add ooples/token-optimizer-mcp
 /plugin install token-optimizer@token-optimizer
 /reload-plugins
 ```
+
+That is the whole installation. There is nothing to configure and no flag to
+turn on.
+
+#### What you get immediately
+
+From the first message of the next session, expensive built-in calls are
+**refused and redirected** to the optimized equivalent:
+
+| You (or the model) do this | What happens |
+|---|---|
+| `Read` a file over ~25 KB | Denied → `smart_read` (cached) |
+| `Read` **any** file already read this session | Denied → `smart_read` (returns only the diff) |
+| `Grep` file contents / `Glob` for files | Denied → `smart_grep` / `smart_glob` |
+| `Edit` a file over ~25 KB | Denied → `smart_edit` (returns a diff, not the file) |
+| `cat`/`head`/`tail`/`Get-Content` a large file | Denied → `smart_read` |
+| `grep -r` / `rg` across the tree | Denied → `smart_grep` |
+| Context fills and compaction starts | `optimize_session` runs first |
+
+The re-read case is usually the largest single win and the one most often
+missed: a 5 KB config read fifteen times across a session costs far more than
+one 200 KB file read once. Size-based rules never catch it.
+
+#### It cannot get you stuck
+
+Three properties, all tested:
+
+- **Fail-open.** Any error in the optimizer — bad payload, unreadable file,
+  unexpected exception — allows the original call through, exactly as if the
+  plugin were not installed.
+- **Loop-breaking.** A given target is refused **once**. Come back to it and it
+  is allowed. So if the MCP server is missing or misconfigured, the cost is one
+  wasted turn per file, self-healing, with no intervention.
+- **Cheap calls are left alone.** Small files, paged reads, `git log | head`,
+  and binary paths are never touched.
+
+#### Turning it down
+
+One variable, no reinstall:
+
+```bash
+TOKEN_OPTIMIZER_MODE=advise   # nudge instead of refuse (the pre-5.2 behaviour)
+TOKEN_OPTIMIZER_MODE=off      # disable the hooks entirely
+TOKEN_OPTIMIZER_LARGE_READ_BYTES=51200   # raise the "large file" threshold
+```
+
+#### MCP server only (not recommended)
+
+If you want the tools without the enforcement:
+
+```bash
+claude mcp add --transport stdio --scope user token-optimizer -- \
+  npx -y @ooples/token-optimizer-mcp@latest
+```
+
+Verify with `claude mcp get token-optimizer`, or `/mcp` inside Claude Code. Then
+add the recommendations from [`integrations/AGENTS.md`](./integrations/AGENTS.md)
+to your `CLAUDE.md` — but be aware that guidance in a context file is advisory,
+and models routinely read past it.
 
 The standalone global installer can also configure the Claude Code hooks and supported desktop clients:
 

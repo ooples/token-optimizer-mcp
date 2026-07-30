@@ -1,5 +1,5 @@
 {
-  "description": "Load token-optimizer guidance and steer large file reads toward smart_read.",
+  "description": "Enforce token optimization by default: state the policy at session start, and challenge expensive built-in calls before they spend context.",
   "hooks": {
     "SessionStart": [
       {
@@ -7,24 +7,24 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.codex/hooks/token-optimizer-advisor.mjs\"",
-            "commandWindows": "node \"$env:USERPROFILE\\.codex\\hooks\\token-optimizer-advisor.mjs\"",
+            "command": "node \"$HOME/.codex/hooks/session-start.mjs\"",
+            "commandWindows": "node \"$env:USERPROFILE\\.codex\\hooks\\session-start.mjs\"",
             "timeout": 5,
-            "statusMessage": "Loading token-optimizer guidance"
+            "statusMessage": "Loading token-optimizer policy"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|read_file|view_file",
+        "matcher": "Read|read_file|view_file|Grep|grep|search_file_content|Glob|glob|find_files|Edit|edit_file|apply_patch|Write|write_file|Bash|shell|run_command",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$HOME/.codex/hooks/token-optimizer-advisor.mjs\"",
-            "commandWindows": "node \"$env:USERPROFILE\\.codex\\hooks\\token-optimizer-advisor.mjs\"",
+            "command": "node \"$HOME/.codex/hooks/pre-tool.mjs\"",
+            "commandWindows": "node \"$env:USERPROFILE\\.codex\\hooks\\pre-tool.mjs\"",
             "timeout": 5,
-            "statusMessage": "Checking large read"
+            "statusMessage": "Routing to optimized tooling"
           }
         ]
       }
