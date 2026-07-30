@@ -3,6 +3,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { installShutdownHandlers } from './lifecycle.js';
+import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -464,6 +465,7 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      EXPAND_TOOL,
       {
         name: 'optimize_text',
         description:
@@ -2391,11 +2393,29 @@ async function handleToolCall(request: {
 }
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  // Following a pointer is handled here rather than in the tool switch, because
+  // it is not an operation on the codebase -- it is an operation on what we
+  // already said about it.
+  if (request.params.name === 'expand') {
+    return expandRef(request.params.arguments as any);
+  }
+
+  const started = Date.now();
   const result = await handleToolCall(request);
   // Best-effort: feed savings into analytics so the report/breakdown tools have
   // real data. Never blocks meaningfully or breaks the tool call.
   await recordToolAnalytics(analyticsManager, request.params.name, result);
-  return result;
+
+  // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
+  // per-tool is what keeps it a single policy instead of ninety. The elapsed
+  // time is passed along because it is what later decides whether a stale
+  // artifact is worth regenerating or worth serving with a marker.
+  return discloseResult(
+    request.params.name,
+    request.params.arguments as Record<string, unknown> | undefined,
+    result as any,
+    Date.now() - started
+  ) as any;
 });
 
 // Helper to run cleanup operations with error handling

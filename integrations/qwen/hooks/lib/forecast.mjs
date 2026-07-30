@@ -33,6 +33,7 @@
 
 import { readMetrics } from './metrics.mjs';
 import { aggregateConsolidation } from './consolidate.mjs';
+import { previewQuality } from './expand.mjs';
 
 /** Turns of headroom below which the runway is worth interrupting for. */
 export const ACTIONABLE_RUNWAY = 8;
@@ -168,6 +169,16 @@ export function forecastPanel(dir, session = {}, findings = []) {
     parts.consolidation = consolidation;
     lines.push(`${consolidation.derived.toLocaleString()} tokens of reasoning carried as ` +
       `${consolidation.carry.toLocaleString()} -- ${Math.round(consolidation.ratio)}x consolidation.`);
+  }
+
+  // How well the previews are holding. Reported rather than buried: the
+  // expansion rate is the honest quality metric for progressive disclosure, and
+  // a tool that hides it is asking to be trusted on a number it will not show.
+  // Only surfaced once it is failing -- a healthy rate is not news.
+  const previews = previewQuality(dir);
+  if (previews && !previews.healthy) {
+    parts.previews = previews;
+    lines.push(previews.text);
   }
 
   // Divergence between the modelled and measured views. Agreement is
