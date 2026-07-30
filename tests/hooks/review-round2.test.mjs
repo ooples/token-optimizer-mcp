@@ -77,57 +77,18 @@ describe('graph records are version-tagged', () => {
     expect(load(dir).nodes.get(id).v).toBe(GRAPH_VERSION);
   });
 
-  test('a v2 record keeps its hash -- only the KEY changed at v3', async () => {
-    // v1 -> current changed the hash ALGORITHM, so those digests are dropped.
-    // v2 -> v3 changed only the key, so dropping hashes there would report every
-    // file in an existing graph as stale for no reason.
-    const { nodeId } = await import('../../hooks-core/wiki.mjs');
+  test('a record from another schema is skipped, not interpreted', () => {
+    // No migration exists by design: nothing has shipped, so an old dev graph
+    // is an artifact rather than user data. Skipping degrades to "rebuilds from
+    // use"; interpreting would mix incompatible identities silently.
     putNode(dir, { kind: 'file', key: '/a.ts' });
-
-    const windowsKey = ['C:', 'Users', 'me', 'repo', 'src', 'Auth.cs'].join('\\');
     const log = join(dir, 'graph.jsonl');
     writeFileSync(log, readFileSync(log, 'utf8') +
-      JSON.stringify({ t: 'n', v: 2, id: 'file:oldv2id', kind: 'file',
-        key: windowsKey, hash: 'sha256digest', snapshot: 'body' }) + '\n');
+      JSON.stringify({ t: 'n', v: 99, id: 'file:fromthefuture', kind: 'file', key: '/x.ts' }) + '\n');
 
     const graph = load(dir);
-    const migrated = nodeId('file', 'C:/Users/me/repo/src/Auth.cs');
-    const node = graph.nodes.get(migrated);
-
-    expect(node).toBeTruthy();
-    // The key is rewritten too: a canonical id beside a raw key would make
-    // every display path disagree with the identity it was found under.
-    expect(node.key).toBe('C:/Users/me/repo/src/Auth.cs');
-    expect(node.hash).toBe('sha256digest');
-    expect(node.snapshot).toBe('body');
-  });
-
-  test('records from an older schema are MIGRATED, not discarded', async () => {
-    const { nodeId } = await import('../../hooks-core/wiki.mjs');
-    putNode(dir, { kind: 'file', key: '/a.ts' });
-
-    // A v1 node and an edge referencing it, as written before the hash change.
-    // Discarding these was safe but lossy: every finding from before the change
-    // became unreachable and the accumulated graph silently reset. The key is
-    // stored on the record, so the new id is recoverable exactly.
-    const log = join(dir, 'graph.jsonl');
-    writeFileSync(log, readFileSync(log, 'utf8') +
-      JSON.stringify({ t: 'n', v: 1, id: 'file:oldsha1id', kind: 'file', key: '/legacy.ts', hash: 'sha1hash' }) + '\n' +
-      JSON.stringify({ t: 'n', v: 1, id: 'finding:oldf', kind: 'finding', key: 'lf', claim: 'legacy claim', confidence: 0.9 }) + '\n' +
-      JSON.stringify({ t: 'e', v: 1, from: 'finding:oldf', edge: 'derived_from', to: 'file:oldsha1id' }) + '\n');
-
-    const graph = load(dir);
-    const migrated = nodeId('file', '/legacy.ts');
-
-    expect(graph.nodes.has(migrated)).toBe(true);
-    expect(graph.nodes.has('file:oldsha1id')).toBe(false);
-    // The edge follows the migrated identity, so traversal still reaches the
-    // finding rather than dead-ending on an id nothing will produce again.
-    expect(graph.edges.some((e) => e.to === migrated && e.edge === 'derived_from')).toBe(true);
-    // The v1 content hash is dropped: it cannot be compared against a sha256
-    // digest, so the anchor re-indexes on next touch instead of reporting a
-    // false staleness for every file in the graph.
-    expect(graph.nodes.get(migrated).hash).toBeUndefined();
+    expect(graph.nodes.size).toBe(1);
+    expect(graph.nodes.has('file:fromthefuture')).toBe(false);
   });
 });
 

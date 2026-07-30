@@ -23,25 +23,19 @@ import { createHash } from 'node:crypto';
 import { canonicalPath } from './paths.mjs';
 
 /**
- * Schema version, bumped whenever node ids or anchor hashes change meaning.
+ * Schema version stamped on every record.
  *
- * Node ids and content hashes are DERIVED from a hash algorithm, so changing
- * that algorithm silently rewrites every identity in the graph: old edges point
- * at ids nothing will ever produce again, and every anchor compares unequal and
- * reports stale. Records carry the version they were written under, and `load`
- * MIGRATES older ones -- identity is recoverable because the key is stored on
- * the record, so nodes and the edges between them are rewritten exactly.
- * Content hashes are dropped instead, since recomputing them needs the old
- * algorithm over content that may since have changed; the anchor re-indexes on
- * next touch rather than declaring every file stale.
+ * There is exactly ONE version and no migration code, because nothing has been
+ * released: a graph written by an older commit of an unreleased branch is a
+ * development artifact, not user data, and carrying migration paths for it costs
+ * real complexity to protect something nobody has. A record from any other
+ * version is skipped rather than interpreted, so a stale dev graph degrades to
+ * "rebuilds from use" instead of silently mixing incompatible identities.
  *
- * v2: sha256 identities and hashes (v1 was sha1).
- * v3: canonical path KEYS, so one file is one node however it was spelled.
- *     Content hashes are unaffected by v3 -- only the key changed -- so a v2
- *     record keeps its hash and snapshot and does NOT need re-indexing. A v1
- *     record still loses them, because there the hash algorithm itself changed.
+ * When this does ship, a bump here is where migration would be added -- with
+ * users to protect, that trade reverses.
  */
-export const GRAPH_VERSION = 3;
+export const GRAPH_VERSION = 1;
 
 /** Node kinds. `file` and `symbol` are first-class so staleness can propagate. */
 export const NODE_KINDS = ['file', 'symbol', 'task', 'finding'];
@@ -209,11 +203,6 @@ export function putEdge(dir, from, edge, to) {
 export function load(dir) {
   const nodes = new Map();
   const edges = [];
-  // Old id -> migrated id, and the v1 edges waiting to be rewritten with it.
-  // Edges are deferred because an edge can appear in the log before the nodes
-  // it joins, so the mapping is only complete once every record has been read.
-  const legacyIds = new Map();
-  const legacyEdges = [];
   const path = logPath(dir);
   if (!existsSync(path)) return { nodes, edges };
 
@@ -225,53 +214,12 @@ export function load(dir) {
     } catch {
       continue;
     }
-    // v1 records are MIGRATED, not discarded.
-    //
-    // Discarding them was safe but lossy: every finding from before the hash
-    // change became unreachable, so a newly harvested file would traverse to
-    // nothing and the accumulated graph silently reset. Identity is recoverable
-    // because the KEY is stored on the record -- the new id is just the new
-    // hash of the same key -- so nodes and the edges between them can be
-    // rewritten exactly.
-    //
-    // Content hashes cannot be migrated: recomputing them needs the old
-    // algorithm over content that may have changed since. Those are dropped, so
-    // the anchor re-indexes on next touch rather than comparing incomparable
-    // digests and declaring everything stale.
-    const version = record.v ?? 1;
-    if (version !== GRAPH_VERSION) {
-      if (record.t === 'n' && record.kind && record.key) {
-        // nodeId canonicalises, so the migrated id is correct for any spelling.
-        // The stored KEY is rewritten too, or the node would carry a canonical
-        // id beside a raw key and every display path would disagree with it.
-        const key = canonicalKey(record.kind, record.key);
-        const migratedId = nodeId(record.kind, key);
-        legacyIds.set(record.id, migratedId);
-
-        // v1 -> current also changed the HASH algorithm, so its digests are
-        // incomparable and are dropped; the anchor re-indexes on next touch.
-        // v2 -> v3 changed only the key, so its hash and snapshot stay valid
-        // and dropping them would needlessly report every file stale.
-        const { hash, snapshot, ...rest } = record;
-        nodes.set(migratedId, version === 1
-          ? { ...rest, key, id: migratedId, v: GRAPH_VERSION }
-          : { ...record, key, id: migratedId, v: GRAPH_VERSION });
-      } else if (record.t === 'e') {
-        legacyEdges.push(record);
-      }
-      continue;
-    }
+    // A record from another schema is skipped, not interpreted: its ids and
+    // hashes were derived differently, so honouring it produces confident
+    // nonsense rather than a visible error.
+    if ((record.v ?? 0) !== GRAPH_VERSION) continue;
     if (record.t === 'n') nodes.set(record.id, record);
     else if (record.t === 'e') edges.push(record);
-  }
-
-  // Rewrite v1 edges onto migrated ids. An endpoint with no mapping means the
-  // node record never appeared, so the edge was already dangling and is dropped
-  // rather than resurrected pointing at nothing.
-  for (const edge of legacyEdges) {
-    const from = legacyIds.get(edge.from);
-    const to = legacyIds.get(edge.to);
-    if (from && to) edges.push({ ...edge, v: GRAPH_VERSION, from, to });
   }
 
   return { nodes, edges };
