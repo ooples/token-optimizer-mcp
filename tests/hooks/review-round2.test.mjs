@@ -77,6 +77,31 @@ describe('graph records are version-tagged', () => {
     expect(load(dir).nodes.get(id).v).toBe(GRAPH_VERSION);
   });
 
+  test('a v2 record keeps its hash -- only the KEY changed at v3', async () => {
+    // v1 -> current changed the hash ALGORITHM, so those digests are dropped.
+    // v2 -> v3 changed only the key, so dropping hashes there would report every
+    // file in an existing graph as stale for no reason.
+    const { nodeId } = await import('../../hooks-core/wiki.mjs');
+    putNode(dir, { kind: 'file', key: '/a.ts' });
+
+    const windowsKey = ['C:', 'Users', 'me', 'repo', 'src', 'Auth.cs'].join('\\');
+    const log = join(dir, 'graph.jsonl');
+    writeFileSync(log, readFileSync(log, 'utf8') +
+      JSON.stringify({ t: 'n', v: 2, id: 'file:oldv2id', kind: 'file',
+        key: windowsKey, hash: 'sha256digest', snapshot: 'body' }) + '\n');
+
+    const graph = load(dir);
+    const migrated = nodeId('file', 'C:/Users/me/repo/src/Auth.cs');
+    const node = graph.nodes.get(migrated);
+
+    expect(node).toBeTruthy();
+    // The key is rewritten too: a canonical id beside a raw key would make
+    // every display path disagree with the identity it was found under.
+    expect(node.key).toBe('C:/Users/me/repo/src/Auth.cs');
+    expect(node.hash).toBe('sha256digest');
+    expect(node.snapshot).toBe('body');
+  });
+
   test('records from an older schema are MIGRATED, not discarded', async () => {
     const { nodeId } = await import('../../hooks-core/wiki.mjs');
     putNode(dir, { kind: 'file', key: '/a.ts' });

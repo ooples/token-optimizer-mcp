@@ -38,8 +38,12 @@ import { canonicalPath } from './paths.mjs';
  * next touch rather than declaring every file stale.
  *
  * v2: sha256 identities and hashes (v1 was sha1).
+ * v3: canonical path KEYS, so one file is one node however it was spelled.
+ *     Content hashes are unaffected by v3 -- only the key changed -- so a v2
+ *     record keeps its hash and snapshot and does NOT need re-indexing. A v1
+ *     record still loses them, because there the hash algorithm itself changed.
  */
-export const GRAPH_VERSION = 2;
+export const GRAPH_VERSION = 3;
 
 /** Node kinds. `file` and `symbol` are first-class so staleness can propagate. */
 export const NODE_KINDS = ['file', 'symbol', 'task', 'finding'];
@@ -236,12 +240,24 @@ export function load(dir) {
     // algorithm over content that may have changed since. Those are dropped, so
     // the anchor re-indexes on next touch rather than comparing incomparable
     // digests and declaring everything stale.
-    if ((record.v ?? 1) !== GRAPH_VERSION) {
+    const version = record.v ?? 1;
+    if (version !== GRAPH_VERSION) {
       if (record.t === 'n' && record.kind && record.key) {
-        const migratedId = nodeId(record.kind, record.key);
+        // nodeId canonicalises, so the migrated id is correct for any spelling.
+        // The stored KEY is rewritten too, or the node would carry a canonical
+        // id beside a raw key and every display path would disagree with it.
+        const key = canonicalKey(record.kind, record.key);
+        const migratedId = nodeId(record.kind, key);
         legacyIds.set(record.id, migratedId);
+
+        // v1 -> current also changed the HASH algorithm, so its digests are
+        // incomparable and are dropped; the anchor re-indexes on next touch.
+        // v2 -> v3 changed only the key, so its hash and snapshot stay valid
+        // and dropping them would needlessly report every file stale.
         const { hash, snapshot, ...rest } = record;
-        nodes.set(migratedId, { ...rest, id: migratedId, v: GRAPH_VERSION });
+        nodes.set(migratedId, version === 1
+          ? { ...rest, key, id: migratedId, v: GRAPH_VERSION }
+          : { ...record, key, id: migratedId, v: GRAPH_VERSION });
       } else if (record.t === 'e') {
         legacyEdges.push(record);
       }
