@@ -13,7 +13,10 @@ export default {
       },
     ],
   },
-  testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts', '**/*.bench.ts'],
+  // .mjs is matched so the hook tests run: the hooks ship as plain ESM Node
+  // files (no build step, because Claude Code executes them directly from the
+  // installed plugin directory), and they must be covered by the same suite.
+  testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts', '**/*.test.mjs', '**/*.bench.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   collectCoverageFrom: [
     'src/**/*.ts',
