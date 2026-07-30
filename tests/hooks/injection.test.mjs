@@ -24,6 +24,17 @@ beforeEach(() => {
   dir = join(workspace, 'wiki');
   delete process.env.TOKEN_OPTIMIZER_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
+
+  // Holdout OFF for every test that asserts injection HAPPENS.
+  //
+  // This suite was flaky roughly one run in ten before this line, and the cause
+  // is worth recording: inHoldout is deterministic in (path, epoch), the
+  // workspace path is random per run, so a test asserting an injection would
+  // occasionally land in the control arm and correctly receive nothing. The
+  // product was right and the test was wrong -- but an intermittent red run
+  // erodes trust in the whole suite, so the arm is pinned here and only the
+  // holdout tests opt back in.
+  process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
 });
 
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));
@@ -208,12 +219,15 @@ describe('P4 -- co-occurrence gives semantics without embeddings', () => {
 
 describe('P5 measurement', () => {
   test('the holdout is stable for a given file and epoch', () => {
+    // Opts back in: beforeEach pins the arm off for the injection tests.
+    process.env.TOKEN_OPTIMIZER_HOLDOUT = '0.1';
     // Flipping arms mid-session would contaminate both.
     const first = inHoldout('/a.ts');
     expect(inHoldout('/a.ts')).toBe(first);
   });
 
   test('the same file lands in different arms in different epochs', () => {
+    process.env.TOKEN_OPTIMIZER_HOLDOUT = '0.1';
     // Stratification: the comparison becomes within-file rather than across.
     const arms = new Set();
     for (let day = 0; day < 60; day++) arms.add(inHoldout('/a.ts', day * 86_400_000));
