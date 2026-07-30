@@ -47,7 +47,8 @@
     "format:check": "prettier --check 'src/**/*.{ts,js,json}'",
     "validate": "node scripts/validate-package.js",
     "sync:hooks": "node scripts/sync-hook-core.mjs && node scripts/generate-client-entries.mjs && node scripts/generate-client-configs.mjs",
-    "sync:hooks:check": "node scripts/sync-hook-core.mjs --check"
+    "sync:hooks:check": "node scripts/sync-hook-core.mjs --check",
+    "verify:ui": "node scripts/verify-wiki-ui.mjs"
   },
   "repository": {
     "type": "git",
@@ -121,6 +122,7 @@
     "eslint-config-prettier": "^10.1.8",
     "jest": "^30.2.0",
     "npm": "^11.16.0",
+    "playwright": "^1.62.1",
     "prettier": "^3.6.2",
     "semantic-release": "^25.0.2",
     "ts-jest": "^29.4.5",

@@ -38,6 +38,14 @@
 
 .wiki-balance h2 { font-size: 1.1rem; margin-bottom: 4px; }
 
+/* Four figures that are read together belong on one row. Inheriting the
+   dashboard's auto-fit grid wrapped the fourth onto a line of its own and left
+   a ragged empty gap beside it. */
+#balance-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+@media (max-width: 1100px) { #balance-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px)  { #balance-grid { grid-template-columns: 1fr; } }
+
 .wiki-balance-method {
     color: var(--text-secondary);
     font-size: 0.85rem;
@@ -218,16 +226,49 @@
 
 /* ---- Detail / curation ---------------------------------------------- */
 
+/*
+ * The detail drawer is a persistent side panel, not a modal, so it must never
+ * OCCLUDE the page behind it. It originally did: fixed to the right edge, it
+ * sat directly on top of the Focus/Constellation buttons, and once a finding
+ * was selected those controls could not be clicked at all. Nothing but a real
+ * browser catches that -- the elements are present, visible and enabled; they
+ * are simply covered.
+ *
+ * The fix is to reserve the space rather than paint over it. On a wide viewport
+ * the page gutter grows by the drawer's width; on a narrow one there is no room
+ * to reserve, so the drawer becomes a genuine overlay with a backdrop, which is
+ * the honest interaction for that size.
+ */
 .wiki-detail {
     position: fixed;
     right: 0; top: 0; bottom: 0;
-    width: min(460px, 100vw);
+    width: var(--wiki-drawer-width);
     background: var(--surface-color);
     border-left: 1px solid var(--border-color);
     padding: 24px;
     overflow-y: auto;
     box-shadow: var(--shadow);
     z-index: 20;
+}
+
+:root { --wiki-drawer-width: 420px; }
+
+body.wiki-detail-open .container {
+    padding-right: calc(var(--wiki-drawer-width) + 20px);
+}
+
+@media (max-width: 1100px) {
+    :root { --wiki-drawer-width: min(420px, 100vw); }
+    /* Too narrow to reserve a gutter: overlay, with a backdrop that makes the
+       modal behaviour obvious rather than leaving controls silently dead. */
+    body.wiki-detail-open .container { padding-right: 20px; }
+    body.wiki-detail-open::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        z-index: 19;
+    }
 }
 
 .wiki-detail h3 { margin-bottom: 12px; font-size: 1rem; }

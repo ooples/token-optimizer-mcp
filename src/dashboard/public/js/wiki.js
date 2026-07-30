@@ -21,6 +21,22 @@
 const KINDS = ['file', 'symbol', 'finding', 'task'];
 const RADIUS = { file: 9, symbol: 8, finding: 10, task: 8 };
 
+/**
+ * Room reserved on each side so a caption never runs off the edge.
+ *
+ * DRAWING IS IN REAL PIXELS, not a scaled viewBox. A viewBox was tried and is
+ * the wrong tool here: fitting a 1000-unit space into a ~535px pane scales
+ * everything by ~0.53, which drags 11px labels down to about 6px on screen and
+ * makes the whole graph unreadable. Text does not survive being scaled.
+ *
+ * The bug a viewBox was meant to solve -- the detail drawer reflowing the pane
+ * after coordinates were computed, leaving the graph off-centre with clipped
+ * labels -- is a STALE MEASUREMENT problem, so it is fixed by re-measuring:
+ * the drawer opens before the first render, and a ResizeObserver re-renders
+ * whenever the pane actually changes size.
+ */
+const LABEL_GUTTER = 150;
+
 const el = (id) => document.getElementById(id);
 const svgNS = 'http://www.w3.org/2000/svg';
 
@@ -145,6 +161,12 @@ function clearGraph() {
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 }
 
+/** Current pane size in real pixels, measured at draw time. */
+function paneSize() {
+  const box = el('wiki-graph').getBoundingClientRect();
+  return { width: Math.max(320, box.width), height: Math.max(320, box.height) };
+}
+
 function drawNode(svg, node, x, y, isCentre) {
   const group = document.createElementNS(svgNS, 'g');
   group.setAttribute('class', `wiki-node${isCentre ? ' is-center' : ''}`);
@@ -204,10 +226,15 @@ async function renderFocus(nodeId) {
   clearGraph();
   el('graph-hint').hidden = true;
 
-  const box = svg.getBoundingClientRect();
-  const cx = box.width / 2;
-  const cy = box.height / 2;
-  const ring = Math.min(cx, cy) - 90;
+  // The drawer is opened BEFORE measuring: it reflows the pane, and measuring
+  // first is exactly what left the graph off-centre with clipped captions.
+  showDetail(data.node);
+
+  const { width, height } = paneSize();
+  const cx = width / 2;
+  const cy = height / 2;
+  // Inset by the label gutter so captions stay on the canvas.
+  const ring = Math.max(70, Math.min(cx - LABEL_GUTTER, cy - 60));
 
   data.neighbours.forEach((neighbour, index) => {
     const angle = (index / data.neighbours.length) * Math.PI * 2 - Math.PI / 2;
@@ -220,7 +247,7 @@ async function renderFocus(nodeId) {
 
   drawNode(svg, data.node, cx, cy, true);
   if (data.truncated) el('graph-hint').hidden = false;
-  showDetail(data.node);
+  fitLabels(svg);
 }
 
 /**
@@ -236,16 +263,14 @@ async function renderConstellation() {
   clearGraph();
   el('graph-hint').hidden = data.nodes.length > 0;
 
-  const box = svg.getBoundingClientRect();
-  const width = box.width || 600;
-  const height = box.height || 520;
+  const { width, height } = paneSize();
 
   const positions = new Map();
   data.nodes.forEach((node, index) => {
     // Seeded from the index rather than randomly, so a refresh does not
     // reshuffle a layout the user has just learned to read.
     const angle = index * 2.39996;
-    const radius = 20 + (index / data.nodes.length) * Math.min(width, height) * 0.42;
+    const radius = 20 + (index / data.nodes.length) * Math.min(width - LABEL_GUTTER * 2, height) * 0.42;
     positions.set(node.id, { x: width / 2 + Math.cos(angle) * radius, y: height / 2 + Math.sin(angle) * radius });
   });
 
@@ -281,8 +306,26 @@ async function renderConstellation() {
     }
 
     for (const point of positions.values()) {
-      point.x = Math.max(30, Math.min(width - 30, point.x));
+      // Clamped inside the label gutter, not the raw canvas, so a node at the
+      // boundary still has room for its caption.
+      point.x = Math.max(LABEL_GUTTER, Math.min(width - LABEL_GUTTER, point.x));
       point.y = Math.max(24, Math.min(height - 24, point.y));
+    }
+  }
+
+  // Labels sit on a single baseline per node, so two nodes at a similar height
+  // overlap even when the MARKS are comfortably apart. The physics has no
+  // notion of text, so a separate pass nudges colliding captions apart. Without
+  // it, dense regions produce overlapping unreadable text -- visible only by
+  // looking at the rendered page, never from the node coordinates alone.
+  const LABEL_HEIGHT = 14;
+  const ordered = [...positions.entries()].sort((a, b) => a[1].y - b[1].y);
+  for (let i = 1; i < ordered.length; i++) {
+    const [, previous] = ordered[i - 1];
+    const [, current] = ordered[i];
+    const sameSide = (previous.x > width * 0.55) === (current.x > width * 0.55);
+    if (sameSide && current.y - previous.y < LABEL_HEIGHT) {
+      current.y = Math.min(height - 24, previous.y + LABEL_HEIGHT);
     }
   }
 
@@ -295,13 +338,88 @@ async function renderConstellation() {
     const point = positions.get(node.id);
     if (point) drawNode(svg, node, point.x, point.y, false);
   }
+  fitLabels(svg);
+}
+
+/**
+ * Corrects labels against what was ACTUALLY rendered.
+ *
+ * Predicting text width from character count does not work: font metrics vary
+ * by glyph, family and platform, so a caption budget that fits on one machine
+ * clips on another. Every attempt to solve clipping and overlap by guessing
+ * ahead of time left a label off the canvas somewhere.
+ *
+ * So this measures the painted boxes and fixes them in two passes -- flip the
+ * label inward, then trim it until it fits, then push colliding captions apart
+ * vertically. It runs once per render and is bounded, so it cannot loop.
+ */
+function fitLabels(svg) {
+  const bounds = svg.getBoundingClientRect();
+  const labels = [...svg.querySelectorAll('.wiki-node text')];
+
+  for (const label of labels) {
+    let box = label.getBoundingClientRect();
+
+    // Pass 1: if it runs off an edge, grow it the other way instead.
+    if (box.right > bounds.right - 4 && label.getAttribute('text-anchor') !== 'end') {
+      label.setAttribute('text-anchor', 'end');
+      label.setAttribute('x', String(-Math.abs(Number(label.getAttribute('x')) || 14)));
+      box = label.getBoundingClientRect();
+    } else if (box.left < bounds.left + 4 && label.getAttribute('text-anchor') === 'end') {
+      label.removeAttribute('text-anchor');
+      label.setAttribute('x', String(Math.abs(Number(label.getAttribute('x')) || 14)));
+      box = label.getBoundingClientRect();
+    }
+
+    // Pass 2: still overflowing, so trim. A visibly shortened label beats a
+    // silently cut one -- the reader can see that there is more.
+    let text = label.textContent;
+    let guard = 0;
+    while ((box.right > bounds.right - 4 || box.left < bounds.left + 4) && text.length > 6 && guard++ < 60) {
+      text = text.slice(0, -3);
+      label.textContent = text.replace(/…?$/, '…');
+      box = label.getBoundingClientRect();
+    }
+  }
+
+  // Pass 3: vertical de-overlap on the real boxes. Only the LABEL moves, never
+  // the node, so the edges stay attached to the marks they describe.
+  const ordered = labels
+    .map((label) => ({ label, box: label.getBoundingClientRect() }))
+    .sort((a, b) => a.box.top - b.box.top);
+
+  for (let i = 1; i < ordered.length; i++) {
+    for (let j = 0; j < i; j++) {
+      const a = ordered[j].box;
+      const b = ordered[i].box;
+      const overlaps = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      if (!overlaps) continue;
+      const shift = a.bottom - b.top + 2;
+      const current = Number(ordered[i].label.getAttribute('y')) || 0;
+      ordered[i].label.setAttribute('y', String(current + shift));
+      ordered[i].box = ordered[i].label.getBoundingClientRect();
+    }
+  }
 }
 
 /* ---- Detail and curation --------------------------------------------- */
 
+/**
+ * Opens or closes the drawer.
+ *
+ * The body class is what reserves the page gutter so the drawer never covers
+ * the controls behind it. Routing every open and close through here is what
+ * stops the class and the hidden flag drifting apart -- which would leave the
+ * page permanently indented, or the drawer silently swallowing clicks.
+ */
+function setDetailOpen(open) {
+  el('wiki-detail').hidden = !open;
+  document.body.classList.toggle('wiki-detail-open', open);
+}
+
 function showDetail(node) {
   const panel = el('wiki-detail');
-  panel.hidden = false;
+  setDetailOpen(true);
   panel.innerHTML = `
     <button class="btn" id="detail-close">Close</button>
     <h3>${escapeHtml(node.claim || node.key)}</h3>
@@ -323,7 +441,7 @@ function showDetail(node) {
       <p class="wiki-muted">Corrections append: the original is retired and kept,
       so the record shows what changed and when.</p>` : ''}`;
 
-  el('detail-close').addEventListener('click', () => { panel.hidden = true; });
+  el('detail-close').addEventListener('click', () => setDetailOpen(false));
 
   if (node.kind !== 'finding') return;
 
@@ -333,7 +451,7 @@ function showDetail(node) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ key: node.key, ...body }),
     });
-    panel.hidden = true;
+    setDetailOpen(false);
     await Promise.all([search(), loadAudit()]);
   };
 
@@ -403,6 +521,10 @@ document.addEventListener('click', (event) => {
   if (item && item.dataset.id) selectNode(item.dataset.id);
 });
 
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') setDetailOpen(false);
+});
+
 el('wiki-search').addEventListener('input', debounce(() => search(), 250));
 el('wiki-type').addEventListener('change', () => search());
 el('wiki-more-btn').addEventListener('click', () => search(true));
@@ -435,6 +557,29 @@ document.querySelectorAll('.wiki-tab').forEach((tab) => {
     el('tab-audit').hidden = tab.dataset.tab !== 'audit';
   });
 });
+
+/**
+ * Re-render when the pane actually changes size.
+ *
+ * Covers the drawer opening and closing, window resizes, and the responsive
+ * breakpoints -- every case where a previously-correct layout silently becomes
+ * wrong. Debounced so a drag-resize does not run the force simulation on every
+ * frame.
+ */
+const reRender = debounce(() => {
+  if (state.mode === 'constellation') renderConstellation();
+  else if (state.selected) renderFocus(state.selected);
+}, 200);
+
+if (typeof ResizeObserver !== 'undefined') {
+  let lastWidth = 0;
+  new ResizeObserver((entries) => {
+    const width = Math.round(entries[0].contentRect.width);
+    // Width only: the drawer changes width, and reacting to sub-pixel height
+    // jitter would re-render continuously.
+    if (Math.abs(width - lastWidth) > 8) { lastWidth = width; reRender(); }
+  }).observe(el('wiki-graph'));
+}
 
 (async function init() {
   try {

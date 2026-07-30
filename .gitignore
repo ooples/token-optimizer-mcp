@@ -92,3 +92,6 @@ ${HOME}/
 
 # Wiki graph: per-project agent knowledge, local by default (docs/WIKI_GRAPH.md)
 .token-optimizer/
+
+# Playwright UI verification output
+artifacts/
