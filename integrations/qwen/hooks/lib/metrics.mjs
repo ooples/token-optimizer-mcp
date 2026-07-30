@@ -18,7 +18,10 @@
  * number mean something at far lower volume.
  */
 
-import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
+import {
+  appendFileSync, readFileSync, existsSync, mkdirSync, chmodSync,
+  statSync, openSync, readSync, closeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
@@ -69,18 +72,64 @@ export function recordRead(dir, { anchor, sessionId, bytes }) {
 
 export function record(dir, event) {
   try {
-    mkdirSync(dir, { recursive: true });
+    // Same restriction as the graph directory: metrics name real file paths
+    // from a private codebase.
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // Not POSIX, or not ours to chmod; the write still proceeds.
+    }
     appendFileSync(metricsPath(dir), JSON.stringify({ ...event, at: Date.now() }) + '\n');
   } catch {
     // Metrics must never break a tool call.
   }
 }
 
+/**
+ * Bytes of the metrics log to read. Everything older is not consulted.
+ *
+ * The log is append-only and never rotated, and `indexBudget` reads it on the
+ * SessionStart hook path -- so an unbounded read turns into startup latency
+ * that grows forever on a long-lived project. Reading only the TAIL bounds both
+ * the I/O and the parse, which slicing the parsed array alone did not: the
+ * whole file still had to be read into memory first.
+ *
+ * It is also the right statistics. A saving measured months ago says little
+ * about the code as it stands now.
+ */
+const MAX_BYTES = Number(process.env.TOKEN_OPTIMIZER_METRICS_BYTES) || 2_000_000;
+const MAX_EVENTS = Number(process.env.TOKEN_OPTIMIZER_METRICS_WINDOW) || 5000;
+
 function readAll(dir) {
   const path = metricsPath(dir);
   if (!existsSync(path)) return [];
+
+  let text;
+  try {
+    const { size } = statSync(path);
+    if (size <= MAX_BYTES) {
+      text = readFileSync(path, 'utf8');
+    } else {
+      // Seek to the tail rather than reading the whole file.
+      const fd = openSync(path, 'r');
+      try {
+        const buffer = Buffer.allocUnsafe(MAX_BYTES);
+        const read = readSync(fd, buffer, 0, MAX_BYTES, size - MAX_BYTES);
+        text = buffer.subarray(0, read).toString('utf8');
+      } finally {
+        closeSync(fd);
+      }
+      // The first line is almost certainly cut mid-record; drop it rather than
+      // letting it fail to parse and look like corruption.
+      text = text.slice(text.indexOf('\n') + 1);
+    }
+  } catch {
+    return [];
+  }
+
   const out = [];
-  for (const line of readFileSync(path, 'utf8').split('\n')) {
+  for (const line of text.split('\n').slice(-MAX_EVENTS)) {
     if (!line) continue;
     try {
       out.push(JSON.parse(line));
@@ -139,12 +188,31 @@ export function report(dir) {
     reads.get(key).push(event);
   }
 
+  // How many injections share each key, so a key's read total is SPLIT between
+  // them rather than charged in full to each. Without this the arm means scale
+  // with injections-per-anchor instead of measuring per-touch cost: three
+  // injections against one anchor each claimed the whole read total, tripling
+  // the apparent downstream cost of that arm purely because it was touched more.
+  const injectionsPerKey = new Map();
+  for (const event of injections) {
+    const key = `${event.sessionId || ''}|${event.anchor}`;
+    injectionsPerKey.set(key, (injectionsPerKey.get(key) || 0) + 1);
+  }
+
   const downstreamOf = (event) => {
     if (event.downstream != null) return event.downstream;
-    const bucket = reads.get(`${event.sessionId || ''}|${event.anchor}`);
+    const key = `${event.sessionId || ''}|${event.anchor}`;
+    const bucket = reads.get(key);
     if (!bucket) return 0;
+
     const after = event.at ?? 0;
-    return bucket.reduce((sum, r) => sum + ((r.at ?? 0) >= after ? (r.tokens || 0) : 0), 0);
+    const total = bucket.reduce(
+      (sum, r) => sum + ((r.at ?? 0) >= after ? (r.tokens || 0) : 0), 0);
+
+    // Split across the injections that share this key. Each touch is one
+    // observation, so charging every one the full total would count the same
+    // tokens repeatedly.
+    return total / Math.max(1, injectionsPerKey.get(key) || 1);
   };
 
   const meanDownstream = (rows) =>

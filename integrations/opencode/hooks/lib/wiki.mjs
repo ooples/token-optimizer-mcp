@@ -16,7 +16,10 @@
  * log, so it can always be rebuilt from scratch.
  */
 
-import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
+import {
+  appendFileSync, readFileSync, existsSync, mkdirSync, chmodSync,
+  openSync, closeSync, unlinkSync, statSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
@@ -27,8 +30,11 @@ import { createHash } from 'node:crypto';
  * that algorithm silently rewrites every identity in the graph: old edges point
  * at ids nothing will ever produce again, and every anchor compares unequal and
  * reports stale. Records carry the version they were written under, and `load`
- * ignores older ones, so an algorithm change degrades to "the graph rebuilds
- * itself from use" instead of "every finding is wrong and says so confidently".
+ * MIGRATES older ones -- identity is recoverable because the key is stored on
+ * the record, so nodes and the edges between them are rewritten exactly.
+ * Content hashes are dropped instead, since recomputing them needs the old
+ * algorithm over content that may since have changed; the anchor re-indexes on
+ * next touch rather than declaring every file stale.
  *
  * v2: sha256 identities and hashes (v1 was sha1).
  */
@@ -79,10 +85,67 @@ export function contentHash(path) {
   }
 }
 
+/**
+ * Appends one record under an exclusive lock.
+ *
+ * APPEND IS NOT ATOMIC ENOUGH TO RELY ON. POSIX guarantees atomicity only up to
+ * PIPE_BUF (often 4 KB), and Windows gives no such guarantee at all -- while a
+ * single record here can carry a 256 KB file snapshot. Two concurrent hook
+ * processes can therefore interleave mid-line and corrupt both records.
+ *
+ * `load` already skips unparseable lines, so corruption costs a record rather
+ * than the graph, but "we tolerate it" is a weaker property than "it does not
+ * happen". The lock is the same bounded, stale-tolerant one the session state
+ * uses: if it cannot be taken quickly the write proceeds anyway, because a
+ * stale lock from a killed process must never stop the graph being written.
+ */
+function withLock(dir, write) {
+  const lockPath = join(dir, '.graph.lock');
+  let held = false;
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      closeSync(openSync(lockPath, 'wx', 0o600));
+      held = true;
+      break;
+    } catch {
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > 5000) unlinkSync(lockPath);
+      } catch {
+        // Raced with the holder releasing it; retry.
+      }
+    }
+  }
+
+  try {
+    write();
+  } finally {
+    if (held) {
+      try {
+        unlinkSync(lockPath);
+      } catch {
+        // Already released.
+      }
+    }
+  }
+}
+
 function append(dir, record) {
   try {
-    mkdirSync(dir, { recursive: true });
-    appendFileSync(logPath(dir), JSON.stringify(record) + '\n');
+    // 0o700 AND an explicit chmod. `recursive: true` applies the mode only to
+    // directories it actually creates, and the process umask masks it further,
+    // so the mode argument alone does not guarantee the result -- which is how
+    // this shipped group- and world-readable while a test claimed otherwise.
+    // (That test asserted on POSIX bits and was skipped on Windows, so it never
+    // ran where it would have failed.)
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // Not POSIX, or not ours to chmod. The mkdir mode above still applies
+      // where it can, and failing here must not stop the write.
+    }
+    withLock(dir, () => appendFileSync(logPath(dir), JSON.stringify(record) + '\n'));
     return true;
   } catch {
     // The graph is an optimization. Failing to write one must never fail the
@@ -123,6 +186,11 @@ export function putEdge(dir, from, edge, to) {
 export function load(dir) {
   const nodes = new Map();
   const edges = [];
+  // Old id -> migrated id, and the v1 edges waiting to be rewritten with it.
+  // Edges are deferred because an edge can appear in the log before the nodes
+  // it joins, so the mapping is only complete once every record has been read.
+  const legacyIds = new Map();
+  const legacyEdges = [];
   const path = logPath(dir);
   if (!existsSync(path)) return { nodes, edges };
 
@@ -134,13 +202,43 @@ export function load(dir) {
     } catch {
       continue;
     }
-    // Records from an older schema are skipped rather than mixed in: their ids
-    // and hashes were derived differently, so honouring them produces confident
-    // nonsense rather than a visible error.
-    if ((record.v ?? 1) !== GRAPH_VERSION) continue;
+    // v1 records are MIGRATED, not discarded.
+    //
+    // Discarding them was safe but lossy: every finding from before the hash
+    // change became unreachable, so a newly harvested file would traverse to
+    // nothing and the accumulated graph silently reset. Identity is recoverable
+    // because the KEY is stored on the record -- the new id is just the new
+    // hash of the same key -- so nodes and the edges between them can be
+    // rewritten exactly.
+    //
+    // Content hashes cannot be migrated: recomputing them needs the old
+    // algorithm over content that may have changed since. Those are dropped, so
+    // the anchor re-indexes on next touch rather than comparing incomparable
+    // digests and declaring everything stale.
+    if ((record.v ?? 1) !== GRAPH_VERSION) {
+      if (record.t === 'n' && record.kind && record.key) {
+        const migratedId = nodeId(record.kind, record.key);
+        legacyIds.set(record.id, migratedId);
+        const { hash, snapshot, ...rest } = record;
+        nodes.set(migratedId, { ...rest, id: migratedId, v: GRAPH_VERSION });
+      } else if (record.t === 'e') {
+        legacyEdges.push(record);
+      }
+      continue;
+    }
     if (record.t === 'n') nodes.set(record.id, record);
     else if (record.t === 'e') edges.push(record);
   }
+
+  // Rewrite v1 edges onto migrated ids. An endpoint with no mapping means the
+  // node record never appeared, so the edge was already dangling and is dropped
+  // rather than resurrected pointing at nothing.
+  for (const edge of legacyEdges) {
+    const from = legacyIds.get(edge.from);
+    const to = legacyIds.get(edge.to);
+    if (from && to) edges.push({ ...edge, v: GRAPH_VERSION, from, to });
+  }
+
   return { nodes, edges };
 }
 

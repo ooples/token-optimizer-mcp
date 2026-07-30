@@ -176,7 +176,16 @@ export function diffLines(before, after, { maxLines = 40 } = {}) {
 export function serve(graph, findings) {
   const served = [];
 
-  for (const finding of findings) {
+  // RETIRED FINDINGS STOP HERE, unconditionally.
+  //
+  // findingsFor and sessionIndex already filter them, so this is redundant on
+  // every current path -- deliberately. This function's own contract is that it
+  // is the only thing that hands a finding to a model, which makes it the right
+  // place for the guarantee to live: a future caller that reaches into the
+  // graph directly cannot accidentally serve a claim a human explicitly
+  // withdrew. A withheld claim reappearing is not a bug anyone would notice
+  // quickly.
+  for (const finding of findings.filter((f) => !f.retired)) {
     const anchors = graph.edges
       .filter((e) => e.edge === 'derived_from' && e.from === finding.id)
       .map((e) => graph.nodes.get(e.to))

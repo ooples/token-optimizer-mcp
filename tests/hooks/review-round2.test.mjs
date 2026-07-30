@@ -77,17 +77,32 @@ describe('graph records are version-tagged', () => {
     expect(load(dir).nodes.get(id).v).toBe(GRAPH_VERSION);
   });
 
-  test('records from an older schema are ignored, not mixed in', () => {
+  test('records from an older schema are MIGRATED, not discarded', async () => {
+    const { nodeId } = await import('../../hooks-core/wiki.mjs');
     putNode(dir, { kind: 'file', key: '/a.ts' });
-    // A v1 record: written when ids and hashes came from a different algorithm,
-    // so honouring it yields confident nonsense rather than a visible error.
+
+    // A v1 node and an edge referencing it, as written before the hash change.
+    // Discarding these was safe but lossy: every finding from before the change
+    // became unreachable and the accumulated graph silently reset. The key is
+    // stored on the record, so the new id is recoverable exactly.
     const log = join(dir, 'graph.jsonl');
     writeFileSync(log, readFileSync(log, 'utf8') +
-      JSON.stringify({ t: 'n', v: 1, id: 'file:oldsha1id', kind: 'file', key: '/legacy.ts' }) + '\n');
+      JSON.stringify({ t: 'n', v: 1, id: 'file:oldsha1id', kind: 'file', key: '/legacy.ts', hash: 'sha1hash' }) + '\n' +
+      JSON.stringify({ t: 'n', v: 1, id: 'finding:oldf', kind: 'finding', key: 'lf', claim: 'legacy claim', confidence: 0.9 }) + '\n' +
+      JSON.stringify({ t: 'e', v: 1, from: 'finding:oldf', edge: 'derived_from', to: 'file:oldsha1id' }) + '\n');
 
     const graph = load(dir);
-    expect(graph.nodes.size).toBe(1);
+    const migrated = nodeId('file', '/legacy.ts');
+
+    expect(graph.nodes.has(migrated)).toBe(true);
     expect(graph.nodes.has('file:oldsha1id')).toBe(false);
+    // The edge follows the migrated identity, so traversal still reaches the
+    // finding rather than dead-ending on an id nothing will produce again.
+    expect(graph.edges.some((e) => e.to === migrated && e.edge === 'derived_from')).toBe(true);
+    // The v1 content hash is dropped: it cannot be compared against a sha256
+    // digest, so the anchor re-indexes on next touch instead of reporting a
+    // false staleness for every file in the graph.
+    expect(graph.nodes.get(migrated).hash).toBeUndefined();
   });
 });
 
