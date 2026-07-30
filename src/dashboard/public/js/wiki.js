@@ -480,7 +480,27 @@ function showDetail(node) {
   el('detail-retire').addEventListener('click', () => curate({ action: 'retire' }));
 }
 
+/**
+ * Switches view mode, updating state AND the controls together.
+ *
+ * They were set in two places that could disagree. Selecting a node while
+ * Constellation was active rendered a FOCUS graph without changing `state.mode`,
+ * so the toggle still read "Constellation" -- and the next re-render (a resize,
+ * or the drawer opening) honoured the stale mode and threw the selection away.
+ * The user saw their click undo itself.
+ */
+function setMode(mode) {
+  state.mode = mode;
+  const focus = mode === 'focus';
+  el('mode-focus').classList.toggle('is-active', focus);
+  el('mode-constellation').classList.toggle('is-active', !focus);
+  el('mode-focus').setAttribute('aria-pressed', String(focus));
+  el('mode-constellation').setAttribute('aria-pressed', String(!focus));
+}
+
 async function selectNode(nodeId) {
+  // Selecting a node IS a focus action, whatever mode was active before.
+  setMode('focus');
   state.selected = nodeId;
   document.querySelectorAll('.wiki-list li').forEach((li) =>
     li.setAttribute('aria-current', String(li.dataset.id === nodeId)));
@@ -545,20 +565,12 @@ el('wiki-type').addEventListener('change', () => search());
 el('wiki-more-btn').addEventListener('click', () => search(true));
 
 el('mode-focus').addEventListener('click', () => {
-  state.mode = 'focus';
-  el('mode-focus').classList.add('is-active');
-  el('mode-constellation').classList.remove('is-active');
-  el('mode-focus').setAttribute('aria-pressed', 'true');
-  el('mode-constellation').setAttribute('aria-pressed', 'false');
+  setMode('focus');
   if (state.selected) renderFocus(state.selected);
 });
 
 el('mode-constellation').addEventListener('click', () => {
-  state.mode = 'constellation';
-  el('mode-constellation').classList.add('is-active');
-  el('mode-focus').classList.remove('is-active');
-  el('mode-constellation').setAttribute('aria-pressed', 'true');
-  el('mode-focus').setAttribute('aria-pressed', 'false');
+  setMode('constellation');
   renderConstellation();
 });
 
@@ -570,6 +582,9 @@ document.querySelectorAll('.wiki-tab').forEach((tab) => {
     });
     el('tab-explore').hidden = tab.dataset.tab !== 'explore';
     el('tab-audit').hidden = tab.dataset.tab !== 'audit';
+    // The drawer describes a selection made in the tab being left, so leaving it
+    // open shows detail for something no longer on screen.
+    setDetailOpen(false);
   });
 });
 
@@ -590,6 +605,14 @@ if (typeof ResizeObserver !== 'undefined') {
   let lastWidth = 0;
   new ResizeObserver((entries) => {
     const width = Math.round(entries[0].contentRect.width);
+
+    // A HIDDEN pane is not a resize worth reacting to. Switching to the Audit
+    // tab hides Explore, which collapses this pane to zero width and fired the
+    // observer -- which re-rendered, which called showDetail, which RE-OPENED
+    // the drawer a moment after the user had navigated away. Re-rendering
+    // something nobody can see is wasted work even without that side effect.
+    if (width === 0 || el('tab-explore').hidden) { lastWidth = 0; return; }
+
     // Width only: the drawer changes width, and reacting to sub-pixel height
     // jitter would re-render continuously.
     if (Math.abs(width - lastWidth) > 8) { lastWidth = width; reRender(); }
