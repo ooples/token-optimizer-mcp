@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Wiki &mdash; Token Optimizer</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/wiki.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Project Wiki</h1>
+            <div class="header-info">
+                <span id="graph-stats" class="badge">Loading&hellip;</span>
+                <a href="/" class="btn">Dashboard</a>
+                <a href="/api/wiki/export" class="btn btn-primary" download="project-knowledge.md">Export Markdown</a>
+            </div>
+        </header>
+
+        <main>
+            <!--
+              The balance leads. Every competitor reports "tokens saved" derived
+              from its own assumptions; this figure comes from a withheld control
+              arm, and the UI refuses to show a headline number until the
+              experiment can support one.
+            -->
+            <section class="wiki-balance" aria-labelledby="balance-heading">
+                <h2 id="balance-heading">Token balance</h2>
+                <p class="wiki-balance-method" id="balance-method">
+                    Measured against a withheld control arm &mdash; not estimated.
+                </p>
+                <div class="stats-grid" id="balance-grid"></div>
+                <p class="wiki-verdict" id="balance-verdict"></p>
+            </section>
+
+            <nav class="wiki-tabs" role="tablist">
+                <button class="wiki-tab is-active" role="tab" aria-selected="true" data-tab="explore">Explore</button>
+                <button class="wiki-tab" role="tab" aria-selected="false" data-tab="audit">
+                    Audit <span class="wiki-badge-count" id="audit-count" hidden>0</span>
+                </button>
+            </nav>
+
+            <section id="tab-explore" class="wiki-panel" role="tabpanel">
+                <div class="wiki-controls">
+                    <label class="wiki-field">
+                        <span>Search findings</span>
+                        <input type="search" id="wiki-search" placeholder="e.g. retry, auth, deadlock">
+                    </label>
+                    <label class="wiki-field">
+                        <span>Type</span>
+                        <select id="wiki-type">
+                            <option value="">All</option>
+                            <option value="finding">Finding</option>
+                            <option value="decision">Decision</option>
+                            <option value="failure">Failure / dead end</option>
+                            <option value="command">Command</option>
+                            <option value="map">Map</option>
+                        </select>
+                    </label>
+                    <div class="wiki-modes" role="group" aria-label="Graph view mode">
+                        <button class="wiki-mode is-active" id="mode-focus" aria-pressed="true">Focus</button>
+                        <button class="wiki-mode" id="mode-constellation" aria-pressed="false">Constellation</button>
+                    </div>
+                </div>
+
+                <div class="wiki-split">
+                    <div class="wiki-list-pane">
+                        <ol class="wiki-list" id="wiki-list"></ol>
+                        <div class="wiki-more">
+                            <button class="btn" id="wiki-more-btn" hidden>Load more</button>
+                            <span class="wiki-muted" id="wiki-count"></span>
+                        </div>
+                    </div>
+
+                    <div class="wiki-graph-pane">
+                        <svg id="wiki-graph" role="img" aria-labelledby="graph-title"></svg>
+                        <title id="graph-title">Knowledge graph</title>
+                        <p class="wiki-muted wiki-graph-hint" id="graph-hint">
+                            Select a finding to see what it was derived from.
+                        </p>
+                        <!--
+                          Identity is never carried by colour alone: every node
+                          renders its kind as a text label beside the mark, and
+                          this legend is always present.
+                        -->
+                        <ul class="wiki-legend" id="wiki-legend">
+                            <li><span class="wiki-swatch" data-kind="file"></span>File</li>
+                            <li><span class="wiki-swatch" data-kind="symbol"></span>Symbol</li>
+                            <li><span class="wiki-swatch" data-kind="finding"></span>Finding</li>
+                            <li><span class="wiki-swatch" data-kind="task"></span>Task</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-audit" class="wiki-panel" role="tabpanel" hidden>
+                <p class="wiki-muted">
+                    Rot does not announce itself. These are the findings a person
+                    needs to look at &mdash; until one does, they are still being
+                    served to the model.
+                </p>
+                <div id="audit-groups"></div>
+            </section>
+        </main>
+    </div>
+
+    <div class="wiki-detail" id="wiki-detail" hidden aria-live="polite"></div>
+
+    <script src="/js/wiki.js" type="module"></script>
+</body>
+</html>

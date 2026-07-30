@@ -13,6 +13,7 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { registerWikiRoutes } from './wiki-routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -419,6 +420,16 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
   });
+});
+
+// The wiki graph API. Registered before the catch-all root handler so its
+// routes are matched first, and isolated in its own module because it loads the
+// graph from plain ESM under hooks-core/ rather than from this build.
+registerWikiRoutes(app);
+
+// Serve the wiki graph browser.
+app.get('/wiki', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'dashboard', 'public', 'wiki.html'));
 });
 
 // Serve index.html for root route
