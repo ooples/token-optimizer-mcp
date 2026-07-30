@@ -57,15 +57,38 @@ function fileOperands(command) {
   return operands;
 }
 
+/**
+ * Candidate filesystem paths for one operand, most specific first.
+ *
+ * WINDOWS SHELLS WRITE PATHS NODE CANNOT STAT. A Bash tool call on Windows
+ * carries MSYS/Git-Bash paths -- `cat /c/Users/me/file.ts` -- because that is
+ * what the shell accepts. The hook only PARSES that string, so no MSYS
+ * translation ever happens, and `statSync('/c/Users/...')` fails ENOENT. The
+ * size check then silently found nothing and every shell dump was allowed
+ * through, on the one platform this runs on most.
+ *
+ * The `Read` tool passes `C:\Users\...`, which is why the same file was refused
+ * through one path and allowed through the other.
+ */
+function candidatePaths(operand, cwd) {
+  const paths = [];
+  const msys = /^\/([A-Za-z])\/(.*)$/.exec(operand);
+  if (msys) paths.push(`${msys[1].toUpperCase()}:/${msys[2]}`);
+
+  if (operand.startsWith('/') || /^[A-Za-z]:/.test(operand)) paths.push(operand);
+  else paths.push(`${cwd || '.'}/${operand}`);
+
+  return paths;
+}
+
 /** Resolves the first operand that is a real file over the size threshold. */
 function largeOperand(command, cwd) {
   const threshold = largeFileBytes();
   for (const operand of fileOperands(command)) {
-    const path = operand.startsWith('/') || /^[A-Za-z]:/.test(operand)
-      ? operand
-      : `${cwd || '.'}/${operand}`;
-    const size = fileSize(path);
-    if (size >= threshold && !isBinaryPath(path)) return { path: operand, size };
+    for (const path of candidatePaths(operand, cwd)) {
+      const size = fileSize(path);
+      if (size >= threshold && !isBinaryPath(path)) return { path: operand, size };
+    }
   }
   return null;
 }

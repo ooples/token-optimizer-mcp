@@ -103,6 +103,19 @@ describe('the shell bypass is closed', () => {
     expect(r.decision).toBe('allow');
   });
 
+  test('a Git-Bash/MSYS path is resolved, not silently skipped', () => {
+    // On Windows a Bash tool call carries `/c/Users/...`, which Node cannot
+    // stat -- so the size check found nothing and EVERY shell dump was allowed
+    // through on the platform this runs on most. The Read tool passes
+    // `C:\Users\...`, which is why the same file was refused one way and
+    // allowed the other. Found by pointing the optimizer at a real repository.
+    const drive = big[0];
+    const msys = `/${drive.toLowerCase()}${big.slice(2).replace(/\\/g, '/')}`;
+    const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${msys}` }, session_id: 'msys-1' });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toContain('smart_read');
+  });
+
   test('cat of a SMALL file is untouched', () => {
     const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${small}` }, session_id: 'bash-3' });
     expect(r.decision).toBe('allow');
