@@ -51,7 +51,8 @@
     "verify:ui": "node scripts/verify-wiki-ui.mjs",
     "verify:harvest": "node scripts/verify-harvest-api.mjs",
     "verify:clients": "node scripts/verify-client-configs.mjs",
-    "verify:all": "npm run sync:hooks:check && npm run verify:clients && npm run verify:harvest && npm run verify:ui"
+    "verify:all": "npm run sync:hooks:check && npm run verify:clients && npm run verify:harvest && npm run verify:ui && npm run verify:interactions",
+    "verify:interactions": "node scripts/verify-wiki-interactions.mjs"
   },
   "repository": {
     "type": "git",

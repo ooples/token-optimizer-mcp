@@ -163,6 +163,10 @@ function summarise(node: any) {
     origin: node.origin || 'harvested',
     stale: Boolean(node.stale),
     pinned: Boolean(node.pinned),
+    // Retired nodes stay REACHABLE -- a `supersedes` edge pointing at one is
+    // how the history of a claim stays legible -- but they must never look
+    // identical to a live finding. The flag is what lets the UI say so.
+    retired: Boolean(node.retired),
     at: node.at,
     ...(node.kind === 'symbol' ? { name: node.name, file: node.file } : {}),
   };

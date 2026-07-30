@@ -176,6 +176,8 @@
 .wiki-tag[data-status="stale"] { border-color: var(--wiki-stale); color: var(--wiki-stale); }
 .wiki-tag[data-status="human"] { border-color: var(--wiki-finding); color: var(--wiki-finding); }
 .wiki-tag[data-status="pinned"] { border-color: var(--success-color); color: var(--success-color); }
+/* Reserved status colour, and it ships with a glyph and a word like the others. */
+.wiki-tag[data-status="retired"] { border-color: var(--danger-color); color: var(--danger-color); }
 
 .wiki-muted { color: var(--text-secondary); font-size: 0.85rem; }
 .wiki-more { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
@@ -199,7 +201,16 @@
 /* A 2px surface ring keeps overlapping marks readable where they collide. */
 .wiki-node circle { stroke: var(--surface-color); stroke-width: 2; }
 .wiki-node:hover circle, .wiki-node:focus-visible circle { stroke: var(--text-primary); }
-.wiki-node text { font-size: 11px; fill: var(--text-secondary); pointer-events: none; }
+/*
+ * The LABEL is part of the hit target, not decoration.
+ *
+ * With `pointer-events: none` the only clickable part of a node was its ~10px
+ * circle, while the group's visual bulk -- and the thing a user actually aims
+ * at -- is the caption beside it. Clicking a label did nothing at all: the
+ * event fell through to the bare SVG canvas. Found by driving the page rather
+ * than looking at it, because a screenshot cannot show where a click lands.
+ */
+.wiki-node text { font-size: 11px; fill: var(--text-secondary); cursor: pointer; }
 .wiki-node.is-center text { fill: var(--text-primary); font-weight: 600; }
 
 .wiki-edge { stroke: var(--border-color); stroke-width: 2; fill: none; }

@@ -200,7 +200,10 @@ function drawNode(svg, node, x, y, isCentre) {
   const caption = node.kind === 'finding'
     ? (node.claim || node.key).slice(0, 46)
     : (node.name || node.key.split(/[\\/]/).pop());
-  label.textContent = `${caption}${node.stale ? ' ⚠' : ''}`;
+  // A retired node stays reachable through `supersedes` edges -- that is how the
+  // history of a claim remains legible -- so it must be marked here. Unlabelled,
+  // it renders identically to a live finding.
+  label.textContent = `${caption}${node.stale ? ' ⚠' : ''}${node.retired ? ' ⊘' : ''}`;
   group.appendChild(label);
 
   const title = document.createElementNS(svgNS, 'title');
