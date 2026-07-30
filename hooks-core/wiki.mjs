@@ -29,6 +29,9 @@ export const NODE_KINDS = ['file', 'symbol', 'task', 'finding'];
 export const EDGE_KINDS = [
   'derived_from', 'contains', 'imports', 'calls',
   'supersedes', 'contradicts', 'answers',
+  // Weak, behaviour-derived: files worked on together. This is what gives
+  // traversal-only retrieval a semantic neighbourhood without an embedding model.
+  'related',
 ];
 
 /** Resolves the graph directory for a project. Configurable, per the design. */
