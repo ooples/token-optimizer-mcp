@@ -43,16 +43,47 @@ const MCP_STDIO = {
  * written to the wrong filename is an integration that silently does nothing.
  */
 const CLIENTS = [
-  { key: 'cursor',   name: 'Cursor',            mcpFile: '.cursor/mcp.json',        mcpShape: 'mcpServers', rulesFile: '.cursor/rules/token-optimizer.mdc', rulesFormat: 'mdc' },
-  { key: 'windsurf', name: 'Windsurf',          mcpFile: 'mcp_config.json',         mcpShape: 'mcpServers', rulesFile: '.windsurfrules',                    rulesFormat: 'md' },
-  { key: 'cline',    name: 'Cline',             mcpFile: 'cline_mcp_settings.json', mcpShape: 'mcpServers', rulesFile: '.clinerules/token-optimizer.md',    rulesFormat: 'md' },
-  { key: 'roo',      name: 'Roo Code',          mcpFile: 'mcp_settings.json',       mcpShape: 'mcpServers', rulesFile: '.roo/rules/token-optimizer.md',     rulesFormat: 'md' },
-  { key: 'kilo',     name: 'Kilo Code',         mcpFile: 'mcp_settings.json',       mcpShape: 'mcpServers', rulesFile: '.kilocode/rules/token-optimizer.md', rulesFormat: 'md' },
-  { key: 'zed',      name: 'Zed',               mcpFile: 'settings.json',           mcpShape: 'context_servers', rulesFile: 'AGENTS.md',                    rulesFormat: 'md' },
-  { key: 'amp',      name: 'Amp',               mcpFile: 'settings.json',           mcpShape: 'amp.mcpServers',  rulesFile: 'AGENTS.md',                    rulesFormat: 'md' },
-  { key: 'continue', name: 'Continue',          mcpFile: 'config.yaml',             mcpShape: 'yaml',       rulesFile: '.continue/rules/token-optimizer.md', rulesFormat: 'md' },
-  { key: 'crush',    name: 'Crush',             mcpFile: 'crush.json',              mcpShape: 'mcp',        rulesFile: 'CRUSH.md',                          rulesFormat: 'md' },
-  { key: 'droid',    name: 'Droid (Factory)',   mcpFile: 'mcp.json',                mcpShape: 'mcpServers', rulesFile: 'AGENTS.md',                         rulesFormat: 'md' },
+  // `docs` is the page each entry was verified against. A config written to the
+  // wrong filename or with the wrong top-level key is an integration that
+  // silently does nothing -- it installs cleanly, reports no error, and never
+  // loads. Recording the source is what makes these re-checkable when a client
+  // changes its schema, rather than trusting a memory of how it worked once.
+  { key: 'cursor',   name: 'Cursor',          mcpFile: '.cursor/mcp.json',        mcpShape: 'mcpServers',      rulesFile: '.cursor/rules/token-optimizer.mdc', rulesFormat: 'mdc',
+    docs: 'https://cursor.com/docs/context/rules', verified: 'rules path, .mdc extension and alwaysApply frontmatter confirmed' },
+
+  // CORRECTED: `.windsurfrules` is the LEGACY single-file form. Current
+  // Windsurf reads per-rule markdown from a rules directory; the old path is
+  // still honoured, so this targets the current one.
+  { key: 'windsurf', name: 'Windsurf',        mcpFile: 'mcp_config.json',         mcpShape: 'mcpServers',      rulesFile: '.windsurf/rules/token-optimizer.md', rulesFormat: 'md',
+    docs: 'https://docs.windsurf.com/windsurf/cascade/memories', verified: 'directory form is current, .windsurfrules is legacy' },
+
+  { key: 'cline',    name: 'Cline',           mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: '.clinerules/token-optimizer.md',    rulesFormat: 'md',
+    docs: 'https://docs.cline.bot/mcp/configuring-mcp-servers', verified: 'mcpServers key confirmed; CLI reads ~/.cline/mcp.json, the VS Code extension reads cline_mcp_settings.json' },
+
+  { key: 'roo',      name: 'Roo Code',        mcpFile: 'mcp_settings.json',       mcpShape: 'mcpServers',      rulesFile: '.roo/rules/token-optimizer.md',     rulesFormat: 'md',
+    docs: 'https://docs.roocode.com/features/mcp/using-mcp-in-roo', verified: 'structural only -- not confirmed against live docs' },
+
+  { key: 'kilo',     name: 'Kilo Code',       mcpFile: 'mcp_settings.json',       mcpShape: 'mcpServers',      rulesFile: '.kilocode/rules/token-optimizer.md', rulesFormat: 'md',
+    docs: 'https://kilocode.ai/docs/features/mcp/using-mcp-in-kilo-code', verified: 'structural only -- not confirmed against live docs' },
+
+  // CORRECTED: Zed's current schema has no `source` key; command is a string
+  // beside an args array.
+  { key: 'zed',      name: 'Zed',             mcpFile: 'settings.json',           mcpShape: 'context_servers', rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
+    docs: 'https://zed.dev/docs/ai/mcp', verified: 'context_servers shape confirmed; no source key in the current schema' },
+
+  { key: 'amp',      name: 'Amp',             mcpFile: 'settings.json',           mcpShape: 'amp.mcpServers',  rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
+    docs: 'https://ampcode.com/manual', verified: 'amp.mcpServers key and AGENTS.md both confirmed' },
+
+  { key: 'continue', name: 'Continue',        mcpFile: 'config.yaml',             mcpShape: 'yaml',            rulesFile: '.continue/rules/token-optimizer.md', rulesFormat: 'md',
+    docs: 'https://docs.continue.dev/reference', verified: 'mcpServers is a LIST of name/command/args -- confirmed' },
+
+  // CORRECTED: Crush reads AGENTS.md for project instructions by default.
+  // CRUSH.md is the global per-user file, not the project one.
+  { key: 'crush',    name: 'Crush',           mcpFile: 'crush.json',              mcpShape: 'mcp',             rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
+    docs: 'https://github.com/charmbracelet/crush', verified: 'mcp key with type:stdio confirmed; AGENTS.md is the project default' },
+
+  { key: 'droid',    name: 'Droid (Factory)', mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
+    docs: 'https://docs.factory.ai/cli/configuration/mcp', verified: 'structural only -- not confirmed against live docs' },
 ];
 
 /** The policy, written once. */
@@ -87,7 +118,9 @@ function mcpConfig(shape) {
     return `mcpServers:\n  - name: token-optimizer\n    command: npx\n    args: ["-y", "@ooples/token-optimizer-mcp@latest"]\n`;
   }
   if (shape === 'context_servers') {
-    return JSON.stringify({ context_servers: { 'token-optimizer': { source: 'custom', ...MCP_STDIO } } }, null, 2) + '\n';
+    // No `source` key: it is not in Zed's current schema, and an unrecognised
+    // key is how a config file loads without the server ever appearing.
+    return JSON.stringify({ context_servers: { 'token-optimizer': MCP_STDIO } }, null, 2) + '\n';
   }
   if (shape === 'amp.mcpServers') {
     return JSON.stringify({ 'amp.mcpServers': { 'token-optimizer': MCP_STDIO } }, null, 2) + '\n';
@@ -125,6 +158,11 @@ every request, which is the strongest lever available on this client.
 1. Add the MCP server. Merge \`${client.mcpFile.split('/').pop()}\` into your
    \`${client.mcpFile}\`.
 2. Copy \`${client.rulesFile.split('/').pop()}\` to \`${client.rulesFile}\` in your project.
+
+## Provenance
+
+Verified against ${client.docs}
+(${client.verified}).
 
 Both files in this directory are generated from
 \`scripts/generate-client-configs.mjs\`; edit that, not these.

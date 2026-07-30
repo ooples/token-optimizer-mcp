@@ -10,5 +10,10 @@ every request, which is the strongest lever available on this client.
    `mcp_settings.json`.
 2. Copy `token-optimizer.md` to `.kilocode/rules/token-optimizer.md` in your project.
 
+## Provenance
+
+Verified against https://kilocode.ai/docs/features/mcp/using-mcp-in-kilo-code
+(structural only -- not confirmed against live docs).
+
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

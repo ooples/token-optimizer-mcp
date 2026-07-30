@@ -8,7 +8,12 @@ every request, which is the strongest lever available on this client.
 
 1. Add the MCP server. Merge `mcp_config.json` into your
    `mcp_config.json`.
-2. Copy `.windsurfrules` to `.windsurfrules` in your project.
+2. Copy `token-optimizer.md` to `.windsurf/rules/token-optimizer.md` in your project.
+
+## Provenance
+
+Verified against https://docs.windsurf.com/windsurf/cascade/memories
+(directory form is current, .windsurfrules is legacy).
 
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

@@ -10,5 +10,10 @@ every request, which is the strongest lever available on this client.
    `config.yaml`.
 2. Copy `token-optimizer.md` to `.continue/rules/token-optimizer.md` in your project.
 
+## Provenance
+
+Verified against https://docs.continue.dev/reference
+(mcpServers is a LIST of name/command/args -- confirmed).
+
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

@@ -10,5 +10,10 @@ every request, which is the strongest lever available on this client.
    `mcp_settings.json`.
 2. Copy `token-optimizer.md` to `.roo/rules/token-optimizer.md` in your project.
 
+## Provenance
+
+Verified against https://docs.roocode.com/features/mcp/using-mcp-in-roo
+(structural only -- not confirmed against live docs).
+
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

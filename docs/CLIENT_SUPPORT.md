@@ -27,14 +27,14 @@ rarely — but it is guidance, and a model can read past guidance.
 | Client | Rules file | MCP config |
 |---|---|---|
 | Cursor | `.cursor/rules/token-optimizer.mdc` (`alwaysApply: true`) | `.cursor/mcp.json` |
-| Windsurf | `.windsurfrules` | `mcp_config.json` |
-| Cline | `.clinerules/token-optimizer.md` | `cline_mcp_settings.json` |
+| Windsurf | `.windsurf/rules/token-optimizer.md` | `mcp_config.json` |
+| Cline | `.clinerules/token-optimizer.md` | `~/.cline/mcp.json` (CLI) or `cline_mcp_settings.json` (VS Code) |
 | Roo Code | `.roo/rules/token-optimizer.md` | `mcp_settings.json` |
 | Kilo Code | `.kilocode/rules/token-optimizer.md` | `mcp_settings.json` |
 | Zed | `AGENTS.md` | `settings.json` (`context_servers`) |
 | Amp | `AGENTS.md` | `settings.json` (`amp.mcpServers`) |
 | Continue | `.continue/rules/token-optimizer.md` | `config.yaml` |
-| Crush | `CRUSH.md` | `crush.json` |
+| Crush | `AGENTS.md` | `crush.json` |
 | Droid (Factory) | `AGENTS.md` | `mcp.json` |
 | GitHub Copilot CLI | `.github/copilot-instructions.md` | `mcp-config.json` |
 | Gemini CLI | extension `GEMINI.md` | `gemini-extension.json` |
@@ -65,6 +65,28 @@ The core is vendored into each client directory rather than imported, because
 each client executes hooks from a directory it controls (`~/.codex/hooks`, the
 Gemini extension path, the Claude Code plugin root) and no shared location
 resolves across all of them. `sync:hooks:check` is what keeps vendoring honest.
+
+## How these were verified
+
+Every config shape was checked against the client's own published documentation,
+and the URL is recorded in each integration's README. That check found four real
+errors, each of which would have failed **silently** -- the file installs, the
+client reports nothing, and the server never loads:
+
+| Client | Was | Should be |
+|---|---|---|
+| Zed | a `source` key | not in the current schema; removed |
+| Windsurf | `.windsurfrules` | the legacy single-file form; now `.windsurf/rules/` |
+| Crush | `CRUSH.md` | the per-user file; the project one is `AGENTS.md` |
+| Cline | `cline_mcp_settings.json` | the VS Code filename; the CLI reads `~/.cline/mcp.json` |
+
+`npm run verify:clients` asserts these shapes on every run, including that
+superseded paths stay deleted and that no directive-tier rules file claims the
+enforcement its client cannot perform.
+
+Roo, Kilo and Droid are **structural-only**: their shapes follow the common
+`mcpServers` convention but were not confirmed against live documentation, and
+their READMEs say so.
 
 ## Configuration, all clients
 

@@ -10,5 +10,10 @@ every request, which is the strongest lever available on this client.
    `.cursor/mcp.json`.
 2. Copy `token-optimizer.mdc` to `.cursor/rules/token-optimizer.mdc` in your project.
 
+## Provenance
+
+Verified against https://cursor.com/docs/context/rules
+(rules path, .mdc extension and alwaysApply frontmatter confirmed).
+
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

@@ -8,7 +8,12 @@ every request, which is the strongest lever available on this client.
 
 1. Add the MCP server. Merge `crush.json` into your
    `crush.json`.
-2. Copy `CRUSH.md` to `CRUSH.md` in your project.
+2. Copy `AGENTS.md` to `AGENTS.md` in your project.
+
+## Provenance
+
+Verified against https://github.com/charmbracelet/crush
+(mcp key with type:stdio confirmed; AGENTS.md is the project default).
 
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

@@ -22,8 +22,18 @@
 
 import { readFileSync } from 'node:fs';
 
-const MODEL = process.env.TOKEN_OPTIMIZER_HARVEST_MODEL || 'claude-haiku-4-5-20251001';
-const ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const MODEL = () => process.env.TOKEN_OPTIMIZER_HARVEST_MODEL || 'claude-haiku-4-5-20251001';
+
+/**
+ * The Messages endpoint, overridable.
+ *
+ * Not a test seam: plenty of organisations route model traffic through an
+ * internal gateway or proxy for auditing and cost attribution, and hardcoding
+ * the hostname makes the harvest unusable for exactly the teams most likely to
+ * care where their transcripts go. Read per call, like the other config.
+ */
+const ENDPOINT = () => process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT
+  || 'https://api.anthropic.com/v1/messages';
 
 /** Findings must be one of these. Free-form claims are rejected. */
 export const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map'];
@@ -173,7 +183,7 @@ export async function extract(digest, { timeoutMs = 30_000 } = {}) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(ENDPOINT, {
+    const response = await fetch(ENDPOINT(), {
       method: 'POST',
       signal: controller.signal,
       headers: {
@@ -182,7 +192,7 @@ export async function extract(digest, { timeoutMs = 30_000 } = {}) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: MODEL,
+        model: MODEL(),
         max_tokens: 2048,
         system: PROMPT,
         messages: [{ role: 'user', content: digest }],

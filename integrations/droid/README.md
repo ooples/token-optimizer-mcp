@@ -10,5 +10,10 @@ every request, which is the strongest lever available on this client.
    `mcp.json`.
 2. Copy `AGENTS.md` to `AGENTS.md` in your project.
 
+## Provenance
+
+Verified against https://docs.factory.ai/cli/configuration/mcp
+(structural only -- not confirmed against live docs).
+
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

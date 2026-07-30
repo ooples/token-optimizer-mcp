@@ -10,5 +10,10 @@ every request, which is the strongest lever available on this client.
    `settings.json`.
 2. Copy `AGENTS.md` to `AGENTS.md` in your project.
 
+## Provenance
+
+Verified against https://ampcode.com/manual
+(amp.mcpServers key and AGENTS.md both confirmed).
+
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

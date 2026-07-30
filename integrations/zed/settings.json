@@ -1,7 +1,6 @@
 {
   "context_servers": {
     "token-optimizer": {
-      "source": "custom",
       "command": "npx",
       "args": [
         "-y",
