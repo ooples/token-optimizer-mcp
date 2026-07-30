@@ -30,7 +30,16 @@ import { createHash } from 'node:crypto';
 import { putNode, putEdge, contentHash } from './wiki.mjs';
 import { extractSymbols, spanText, symbolKey } from './symbols.mjs';
 
-const hash = (text) => createHash('sha1').update(String(text)).digest('hex').slice(0, 16);
+const hash = (text) => createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
+
+/**
+ * Largest file whose full text is stored as an anchor snapshot.
+ *
+ * Symbol spans are stored unconditionally because a function is small. Whole
+ * files are not: 256 KB keeps the common case (source files) covered while
+ * refusing to mirror bundles, lockfiles and minified assets into the graph.
+ */
+const SNAPSHOT_LIMIT = Number(process.env.TOKEN_OPTIMIZER_SNAPSHOT_LIMIT) || 262_144;
 
 /**
  * Records a file and the symbols inside it as nodes, each carrying a snapshot
@@ -50,7 +59,18 @@ export function indexFile(dir, path, text) {
   })();
   if (source === null) return null;
 
-  const fileNode = putNode(dir, { kind: 'file', key: path, hash: hash(source) });
+  // THE SNAPSHOT IS NOT OPTIONAL ON A FILE NODE. Without it `checkAnchor`
+  // cannot produce a `before` side, so a stale file-level finding is served
+  // with an empty diff, and `refusalPayload` returns null for every real file
+  // -- meaning the zero-turn refusal, the headline of P4, never fired outside
+  // tests that hand-wrote the snapshot themselves.
+  //
+  // Bounded, because a snapshot of every large file read would turn the graph
+  // into a second copy of the repository. Past the cap the hash still drives
+  // staleness detection; only the diff degrades, and `serve` already states
+  // plainly when evidence cannot be reconstructed.
+  const snapshot = source.length <= SNAPSHOT_LIMIT ? source : undefined;
+  const fileNode = putNode(dir, { kind: 'file', key: path, hash: hash(source), snapshot });
 
   for (const symbol of extractSymbols(path, source)) {
     const body = spanText(source, symbol);
@@ -85,13 +105,13 @@ export function checkAnchor(anchor) {
   try {
     source = readFileSync(path, 'utf8');
   } catch {
-    return { fresh: false, before: anchor.snapshot || '', after: '', reason: 'file no longer readable' };
+    return { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: '', reason: 'file no longer readable' };
   }
 
   if (anchor.kind === 'file') {
     return hash(source) === anchor.hash
       ? { fresh: true }
-      : { fresh: false, before: anchor.snapshot || '', after: source, reason: 'file changed' };
+      : { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: source, reason: 'file changed' };
   }
 
   // For a symbol, re-locate it by NAME rather than by line number. Line numbers
@@ -99,13 +119,13 @@ export function checkAnchor(anchor) {
   // in a file as stale after an unrelated insert at the top.
   const current = extractSymbols(path, source).find((s) => s.name === anchor.name);
   if (!current) {
-    return { fresh: false, before: anchor.snapshot || '', after: '', reason: 'symbol no longer found' };
+    return { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: '', reason: 'symbol no longer found' };
   }
 
   const body = spanText(source, current);
   return hash(body) === anchor.hash
     ? { fresh: true }
-    : { fresh: false, before: anchor.snapshot || '', after: body, reason: 'symbol body changed' };
+    : { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: body, reason: 'symbol body changed' };
 }
 
 /**
@@ -165,7 +185,12 @@ export function serve(graph, findings) {
       if (check.fresh) continue;
       stale = true;
       reason = check.reason;
-      diff = diffLines(check.before, check.after);
+      // An absent snapshot is NOT an empty "before". Diffing against '' renders
+      // the whole file as added, which reads like a total rewrite and is worse
+      // than saying nothing -- so the missing-evidence case is detected from
+      // whether a snapshot exists, not from whether the diff string came back
+      // empty.
+      diff = check.hasBefore ? diffLines(check.before, check.after) : '';
       break;
     }
 
@@ -197,9 +222,28 @@ export function serve(graph, findings) {
 export function invalidateOnWrite(dir, graph, path, beforeText, afterText) {
   const marked = [];
 
+  // Which symbols in this file ACTUALLY changed. Without this the loop below
+  // marked every symbol node belonging to the file, so editing one function
+  // permanently staled every finding about every other function in it -- and
+  // permanently, because the eager mark is a stored flag that the lazy check
+  // never clears. That is worse than the file-level staleness symbols were
+  // introduced to avoid.
+  const before = new Map(extractSymbols(path, beforeText ?? '')
+    .map((s) => [s.name, hash(spanText(beforeText ?? '', s))]));
+  const after = new Map(extractSymbols(path, afterText ?? '')
+    .map((s) => [s.name, hash(spanText(afterText ?? '', s))]));
+
+  const changedSymbols = new Set();
+  for (const [name, digest] of after) {
+    if (before.get(name) !== digest) changedSymbols.add(name);
+  }
+  for (const name of before.keys()) {
+    if (!after.has(name)) changedSymbols.add(name);
+  }
+
   for (const node of graph.nodes.values()) {
     if (node.kind === 'file' && node.key !== path) continue;
-    if (node.kind === 'symbol' && node.file !== path) continue;
+    if (node.kind === 'symbol' && (node.file !== path || !changedSymbols.has(node.name))) continue;
     if (node.kind !== 'file' && node.kind !== 'symbol') continue;
 
     for (const edge of graph.edges) {

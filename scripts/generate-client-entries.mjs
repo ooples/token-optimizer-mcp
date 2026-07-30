@@ -10,7 +10,7 @@
  * drifted apart.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,10 +33,17 @@ const ENTRIES = [
   ['integrations/opencode/hooks', 'opencode', 'pre-tool', 'pre-tool.mjs'],
 ];
 
+// --check verifies rather than writes. Without it CI validated only the
+// vendored core, so a hand-edited generated entry sailed through green even
+// though `sync:hooks` would have overwritten it -- exactly the drift the check
+// exists to prevent, just one level up.
+const check = process.argv.includes('--check');
+let drifted = 0;
+
 for (const [dir, client, event, name] of ENTRIES) {
   const target = join(ROOT, dir);
-  mkdirSync(target, { recursive: true });
-  writeFileSync(join(target, name),
+  const destination = join(target, name);
+  const contents =
 `#!/usr/bin/env node
 // GENERATED FILE -- do not edit. Regenerate with \`npm run sync:hooks\`.
 // Client entry point: names the client and event; all policy lives in the
@@ -45,7 +52,27 @@ import { run } from './lib/adapter.mjs';
 
 // Fail open: a defect in the optimizer must never cost the user a tool call.
 run('${client}', '${event}').catch(() => process.exit(0));
-`);
+`;
+
+  if (check) {
+    const current = existsSync(destination) ? readFileSync(destination, 'utf8') : null;
+    if (current !== contents) {
+      console.error(`DRIFT: ${destination.slice(ROOT.length + 1)}`);
+      drifted++;
+    }
+    continue;
+  }
+
+  mkdirSync(target, { recursive: true });
+  writeFileSync(destination, contents);
 }
 
-console.log(`generated ${ENTRIES.length} client entry file(s)`);
+if (check && drifted > 0) {
+  console.error(`
+${drifted} generated entry file(s) differ. Run: npm run sync:hooks`);
+  process.exit(1);
+}
+
+console.log(check
+  ? 'client entries in sync'
+  : `generated ${ENTRIES.length} client entry file(s)`);

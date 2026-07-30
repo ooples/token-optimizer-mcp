@@ -47,7 +47,7 @@
     "format:check": "prettier --check 'src/**/*.{ts,js,json}'",
     "validate": "node scripts/validate-package.js",
     "sync:hooks": "node scripts/sync-hook-core.mjs && node scripts/generate-client-entries.mjs && node scripts/generate-client-configs.mjs",
-    "sync:hooks:check": "node scripts/sync-hook-core.mjs --check",
+    "sync:hooks:check": "node scripts/sync-hook-core.mjs --check && node scripts/generate-client-entries.mjs --check && node scripts/generate-client-configs.mjs --check",
     "verify:ui": "node scripts/verify-wiki-ui.mjs",
     "verify:harvest": "node scripts/verify-harvest-api.mjs",
     "verify:clients": "node scripts/verify-client-configs.mjs",

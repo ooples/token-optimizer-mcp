@@ -43,15 +43,23 @@ export function wikiDir(cwd) {
 
 const logPath = (dir) => join(dir, 'graph.jsonl');
 
-/** Stable id for a node, so the same file seen twice is one node, not two. */
+/**
+ * Stable id for a node, so the same file seen twice is one node, not two.
+ *
+ * SHA-256 rather than SHA-1. These digests are identifiers, not signatures, so
+ * collision resistance is not load-bearing -- but static analysis flags SHA-1 as
+ * a broken algorithm wherever it touches session-derived input, and arguing
+ * about intent in a security review costs more than using the stronger hash.
+ * The digest is truncated either way, so nothing gets larger.
+ */
 export function nodeId(kind, key) {
-  return `${kind}:${createHash('sha1').update(String(key)).digest('hex').slice(0, 16)}`;
+  return `${kind}:${createHash('sha256').update(String(key)).digest('hex').slice(0, 16)}`;
 }
 
 /** Content hash of a file, or null when unreadable. Drives staleness in P2. */
 export function contentHash(path) {
   try {
-    return createHash('sha1').update(readFileSync(path)).digest('hex').slice(0, 16);
+    return createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16);
   } catch {
     return null;
   }
@@ -77,7 +85,11 @@ function append(dir, record) {
 export function putNode(dir, { kind, key, ...rest }) {
   if (!NODE_KINDS.includes(kind)) throw new Error(`unknown node kind: ${kind}`);
   const id = nodeId(kind, key);
-  append(dir, { t: 'n', id, kind, key, ...rest, at: Date.now() });
+  // `rest` is spread FIRST so it can never override the bookkeeping fields.
+  // Spreading it after `id` let a caller passing a whole existing node back in
+  // -- which curate.mjs does on every pin, retire and correct -- carry a stale
+  // `id` or `t` through and write a record that no longer matches its own key.
+  append(dir, { ...rest, t: 'n', id, kind, key, at: Date.now() });
   return id;
 }
 
@@ -132,7 +144,10 @@ export function findingsFor(graph, anchorId, { limit = 20 } = {}) {
   for (const edge of graph.edges) {
     if (edge.edge !== 'derived_from' || !anchors.has(edge.to)) continue;
     const node = graph.nodes.get(edge.from);
-    if (node && node.kind === 'finding') found.push(node);
+    // Retired findings are excluded at the SOURCE so no consumer has to
+    // remember to filter them. A withdrawn claim reaching a model through some
+    // path that forgot is the failure this centralisation prevents.
+    if (node && node.kind === 'finding' && !node.retired) found.push(node);
   }
 
   // Ranked by confidence x recency, per the design. The hard token budget that

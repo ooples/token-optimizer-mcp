@@ -53,6 +53,18 @@ export function inHoldout(anchorKey, now = Date.now()) {
   return (digest[0] / 256) < fraction;
 }
 
+/**
+ * Records what a read of an anchor actually cost.
+ *
+ * Called from the router whenever a read is ALLOWED through, which is the only
+ * moment the cost is knowable. This is the producer that makes the holdout
+ * comparison a measurement rather than a subtraction of two zeroes.
+ */
+export function recordRead(dir, { anchor, sessionId, bytes }) {
+  if (!anchor || !bytes) return;
+  record(dir, { kind: 'read', anchor, sessionId, tokens: Math.ceil(bytes / 4) });
+}
+
 export function record(dir, event) {
   try {
     mkdirSync(dir, { recursive: true });
@@ -100,9 +112,32 @@ export function report(dir) {
     .filter((e) => e.kind === 'harvest')
     .reduce((sum, e) => sum + (e.tokens || 0), 0);
 
-  // Downstream cost = what the session spent on this anchor AFTER the touch.
-  const treatedCost = mean(treated, 'downstream');
-  const withheldCost = mean(withheld, 'downstream');
+  // DOWNSTREAM COST, JOINED FROM REAL READ EVENTS.
+  //
+  // This previously read a `downstream` field that NOTHING in the product ever
+  // wrote -- only the tests and the demo seeder did. So both arm means were
+  // zero, their difference was zero, and the headline saving would have been
+  // reported as zero forever while every test passed. A metric whose only
+  // producer is its own test suite is not a metric.
+  //
+  // The real quantity: tokens the session spent READING an anchor after it was
+  // touched. In the treated arm the model often does not need the file, because
+  // it already received the conclusions; in the control arm it does. That
+  // difference is the saving, and `recordRead` below is what supplies it.
+  const reads = new Map();
+  for (const event of events) {
+    if (event.kind !== 'read' || !event.anchor) continue;
+    const key = `${event.sessionId || ''}|${event.anchor}`;
+    reads.set(key, (reads.get(key) || 0) + (event.tokens || 0));
+  }
+  const downstreamOf = (event) =>
+    event.downstream ?? reads.get(`${event.sessionId || ''}|${event.anchor}`) ?? 0;
+
+  const meanDownstream = (rows) =>
+    rows.length ? rows.reduce((sum, r) => sum + downstreamOf(r), 0) / rows.length : 0;
+
+  const treatedCost = meanDownstream(treated);
+  const withheldCost = meanDownstream(withheld);
 
   const perTouchSaving = withheldCost - treatedCost;
   const estimatedAvoided = Math.max(0, Math.round(perTouchSaving * treated.length));

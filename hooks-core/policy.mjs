@@ -32,7 +32,7 @@
  *      would trade real tokens for hook overhead and user irritation.
  */
 
-import { statSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { statSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -109,18 +109,65 @@ function statePath(sessionId) {
   return join(STATE_ROOT, `${safe || 'default'}.json`);
 }
 
+/** A usable state object, whatever was on disk. */
+function emptyState() {
+  return { seen: {}, denied: {} };
+}
+
+/**
+ * Loads session state, validating its SHAPE and not merely that it parsed.
+ *
+ * Only a parse *throw* used to fall back to a default, so a file containing
+ * `null`, `{}`, or a layout from an older version produced an object with no
+ * `seen`/`denied` maps -- and the very next property access threw inside the
+ * router. That exception is caught and fails open, so the visible symptom would
+ * have been "enforcement silently stops working for this session", which is
+ * exactly the kind of quiet failure that never gets reported.
+ */
 export function loadState(sessionId) {
   try {
-    return JSON.parse(readFileSync(statePath(sessionId), 'utf8'));
+    const parsed = JSON.parse(readFileSync(statePath(sessionId), 'utf8'));
+    if (!parsed || typeof parsed !== 'object') return emptyState();
+    return {
+      seen: parsed.seen && typeof parsed.seen === 'object' ? parsed.seen : {},
+      denied: parsed.denied && typeof parsed.denied === 'object' ? parsed.denied : {},
+    };
   } catch {
-    return { seen: {}, denied: {} };
+    return emptyState();
   }
 }
 
+/**
+ * Persists session state, merging rather than overwriting.
+ *
+ * CONCURRENCY IS THE NORMAL CASE HERE, not an edge case: a client may run
+ * several tool calls in parallel, and each one spawns its own hook process.
+ * Those processes load, mutate and save the same file with no lock between
+ * them, so a plain write means the last writer erases whatever the others
+ * recorded -- losing a `denied` entry re-arms a refusal that was already
+ * issued, which is precisely the loop the design promises cannot happen.
+ *
+ * Re-reading and merging immediately before writing shrinks that window to the
+ * gap between read and rename. It does not close it -- that needs a lock file,
+ * which is a poor trade for state whose worst-case loss is one extra refusal --
+ * but it turns "last writer wins" into "union of writers", which is the
+ * behaviour the two maps actually want, since both are append-only sets.
+ */
 export function saveState(sessionId, state) {
   try {
-    mkdirSync(STATE_ROOT, { recursive: true });
-    writeFileSync(statePath(sessionId), JSON.stringify(state));
+    mkdirSync(STATE_ROOT, { recursive: true, mode: 0o700 });
+
+    const current = loadState(sessionId);
+    const merged = {
+      seen: { ...current.seen, ...state.seen },
+      denied: { ...current.denied, ...state.denied },
+    };
+
+    // Write-then-rename so a reader never observes a half-written file.
+    const target = statePath(sessionId);
+    const temporary = `${target}.${process.pid}.tmp`;
+    writeFileSync(temporary, JSON.stringify(merged), { mode: 0o600 });
+    renameSync(temporary, target);
   } catch {
     // State is an optimization, not a requirement. Losing it degrades re-read
     // detection to size-only -- the old behaviour -- and never blocks anyone.
@@ -193,13 +240,37 @@ export function enforce(reason, deniedBefore) {
   deny(reason);
 }
 
-/** Reads and parses the hook payload from stdin, or null when unusable. */
-export async function readPayload() {
+/**
+ * Reads and parses the hook payload from stdin, or null when unusable.
+ *
+ * BOUNDED, because fail-open does not cover a stall. Every entry point wraps
+ * this in a catch that allows the call on a throw -- but a host that opens the
+ * pipe and never closes it produces no throw at all, just a hook that waits
+ * forever while the user's tool call hangs behind it. A hung optimizer is worse
+ * than an absent one, so the wait has a ceiling and expiring it is treated
+ * exactly like unusable input.
+ */
+export async function readPayload({ timeoutMs = 5000, maxBytes = 8_000_000 } = {}) {
   const chunks = [];
-  process.stdin.setEncoding('utf8');
-  for await (const chunk of process.stdin) chunks.push(chunk);
+  let size = 0;
+
+  const raw = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      size += chunk.length;
+      // A payload this large is not a tool call; refusing to buffer it
+      // unboundedly keeps a hook from becoming a memory problem.
+      if (size > maxBytes) { clearTimeout(timer); resolve(null); return; }
+      chunks.push(chunk);
+    });
+    process.stdin.on('end', () => { clearTimeout(timer); resolve(chunks.join('')); });
+    process.stdin.on('error', () => { clearTimeout(timer); resolve(null); });
+  });
+
+  if (raw === null) return null;
   try {
-    return JSON.parse(chunks.join(''));
+    return JSON.parse(raw);
   } catch {
     return null;
   }

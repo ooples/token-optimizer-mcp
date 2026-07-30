@@ -138,6 +138,33 @@ export function extractSymbols(path, text) {
       }
     }
   }
+
+  // DISAMBIGUATE REPEATED NAMES.
+  //
+  // A file can legitimately declare the same name twice -- `read()` on two
+  // classes, `handle` in two modules, an overload pair. `path#name` is not
+  // unique in that case, so two different spans collapsed onto one node: the
+  // second write overwrote the first's hash and snapshot, and staleness was
+  // then evaluated against the WRONG span, reporting a function stale because
+  // an unrelated namesake changed.
+  //
+  // Only repeats are suffixed, so the common case keeps a stable, readable key
+  // and existing graphs do not churn.
+  const counts = new Map();
+  for (const symbol of found) counts.set(symbol.name, (counts.get(symbol.name) || 0) + 1);
+
+  const seen = new Map();
+  for (const symbol of found) {
+    if (counts.get(symbol.name) === 1) continue;
+    const index = seen.get(symbol.name) || 0;
+    seen.set(symbol.name, index + 1);
+    symbol.occurrence = index;
+    // Ordinal rather than enclosing scope: it needs no parser, and it is stable
+    // as long as declaration ORDER is stable, which survives edits inside a
+    // function body -- the overwhelmingly common change.
+    symbol.name = `${symbol.name}~${index}`;
+  }
+
   return found;
 }
 

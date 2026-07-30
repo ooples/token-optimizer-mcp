@@ -96,7 +96,11 @@ export function forTouch(dir, graph, filePath, { budget = touchBudget(), session
  */
 export function sessionIndex(dir, graph) {
   const budget = indexBudget(dir);
-  const findings = [...graph.nodes.values()].filter((n) => n.kind === 'finding');
+  // RETIRED findings must not appear. They are excluded from every other read
+  // path, so listing them here would advertise claims a human has explicitly
+  // withdrawn -- and the index is the first thing the model reads.
+  const findings = [...graph.nodes.values()]
+    .filter((n) => n.kind === 'finding' && !n.retired && typeof n.claim === 'string');
   if (!findings.length) return null;
 
   const now = Date.now();
@@ -107,7 +111,7 @@ export function sessionIndex(dir, graph) {
   const lines = [];
   let spent = 0;
   for (const finding of ranked) {
-    const line = `- ${finding.key}: ${finding.claim.slice(0, 90)}`;
+    const line = `- ${finding.key}: ${finding.claim.slice(0, 90)}`;  // claim guaranteed above
     const cost = estimate(line);
     if (spent + cost > budget) break;
     lines.push(line);

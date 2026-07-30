@@ -25,7 +25,9 @@
 import {
   loadState, saveState, alreadyDenied, mode, MODE_OFF, MODE_ADVISE, largeFileBytes,
 } from './policy.mjs';
-import { decide, remember, normalizePayload } from './decide.mjs';
+import { decide, remember, normalizePayload, readCostBytes } from './decide.mjs';
+import { recordRead } from './metrics.mjs';
+import { wikiDir } from './wiki.mjs';
 
 /**
  * Per-client capability.
@@ -46,12 +48,25 @@ function emit(object) {
   process.stdout.write(JSON.stringify(object));
 }
 
-async function readStdin() {
-  const chunks = [];
-  process.stdin.setEncoding('utf8');
-  for await (const chunk of process.stdin) chunks.push(chunk);
+/**
+ * Bounded stdin read. See policy.readPayload for why the ceiling matters: the
+ * entry points fail open on a THROW, but a host that opens the pipe and never
+ * closes it produces no throw -- just a hook that waits forever with the user's
+ * tool call stuck behind it.
+ */
+async function readStdin({ timeoutMs = 5000 } = {}) {
+  const raw = await new Promise((resolve) => {
+    const chunks = [];
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => chunks.push(chunk));
+    process.stdin.on('end', () => { clearTimeout(timer); resolve(chunks.join('')); });
+    process.stdin.on('error', () => { clearTimeout(timer); resolve(null); });
+  });
+
+  if (raw === null) return null;
   try {
-    return JSON.parse(chunks.join(''));
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -115,6 +130,18 @@ export async function run(clientName, event) {
   if (!verdict) {
     remember(payload, state);
     saveState(payload.session_id, state);
+
+    // Same measurement as the Claude Code router: every client's allowed read
+    // feeds the same holdout comparison, or the metric is client-specific and
+    // therefore not comparable.
+    const bytes = readCostBytes(payload);
+    if (bytes) {
+      recordRead(wikiDir(payload.cwd), {
+        anchor: payload.tool_input.file_path,
+        sessionId: payload.session_id,
+        bytes,
+      });
+    }
     process.exit(0);
   }
 

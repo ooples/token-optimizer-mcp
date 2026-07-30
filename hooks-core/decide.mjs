@@ -273,3 +273,18 @@ export function remember(payload, state) {
     state.seen[path] = true;
   }
 }
+
+/**
+ * The size an allowed read actually cost, or 0 when it is not a read.
+ *
+ * This is the measurement the holdout comparison consumes. It has to be taken
+ * here, at the moment a read is permitted, because that is the only point where
+ * the cost is both known and attributable to an anchor.
+ */
+export function readCostBytes(payload) {
+  if (payload.tool_name !== 'Read') return 0;
+  const path = payload.tool_input?.file_path;
+  if (!path || isBinaryPath(path)) return 0;
+  const size = fileSize(path);
+  return size > 0 ? size : 0;
+}

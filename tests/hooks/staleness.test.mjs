@@ -165,9 +165,27 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     expect(out.diff).toContain('return 2');
   });
 
-  test('a stale finding with no reconstructable evidence says so explicitly', () => {
+  test('a DELETED file still yields a real diff, because the snapshot survives', () => {
+    // File nodes carry a snapshot, so the evidence outlives the file itself.
+    // Before that fix this case produced an empty diff and fell through to the
+    // "unverified" fallback -- and, worse, refusalPayload returned null for
+    // every real file, so the zero-turn refusal never fired outside tests that
+    // hand-wrote the snapshot.
     const { path, finding } = seed();
     rmSync(path);
+
+    const graph = load(dir);
+    const [out] = serve(graph, [graph.nodes.get(finding)]);
+    expect(out.stale).toBe(true);
+    expect(out.diff).toContain('- export function f() { return 1; }');
+  });
+
+  test('a finding with genuinely unreconstructable evidence says so explicitly', () => {
+    // No snapshot at all -- what a file above the snapshot limit looks like.
+    const path = write('huge.ts', 'export const a = 1;');
+    putNode(dir, { kind: 'file', key: path, hash: 'stale-hash-no-snapshot' });
+    const finding = putNode(dir, { kind: 'finding', key: 'f9', claim: 'about a huge file', confidence: 0.9 });
+    putEdge(dir, finding, 'derived_from', nodeId('file', path));
 
     const graph = load(dir);
     const [out] = serve(graph, [graph.nodes.get(finding)]);

@@ -22,6 +22,11 @@
  */
 
 import { putNode, putEdge, load, nodeId } from './wiki.mjs';
+import { indexFile } from './staleness.mjs';
+import { symbolKey } from './symbols.mjs';
+
+/** Alias so `create` can re-read the graph after indexing an anchor. */
+const loadGraph = load;
 
 export const ORIGIN_HARVESTED = 'harvested';
 export const ORIGIN_HUMAN = 'human';
@@ -58,8 +63,12 @@ export function correct(dir, key, claim, { confidence = 0.95 } = {}) {
   const existing = findingByKey(graph, key);
   if (!existing) return false;
 
-  putNode(dir, { ...existing, kind: 'finding', key, retired: true });
-
+  // ORDER MATTERS. `append` fails open -- it swallows write errors and returns
+  // false -- so retiring first and then failing to write the replacement would
+  // delete the claim outright: gone from activeFindings, from the export, and
+  // from every read path, with nothing put in its place. Writing the successor
+  // first makes the worst case two live claims rather than none, and a
+  // duplicate is recoverable where a silent deletion is not.
   const replacementKey = `${key}-c${Date.now().toString(36)}`;
   putNode(dir, {
     kind: 'finding',
@@ -79,6 +88,8 @@ export function correct(dir, key, claim, { confidence = 0.95 } = {}) {
       putEdge(dir, replacementId, 'derived_from', edge.to);
     }
   }
+
+  putNode(dir, { ...existing, kind: 'finding', key, retired: true });
   return replacementKey;
 }
 
@@ -100,13 +111,32 @@ export function retire(dir, key) {
 export function create(dir, { claim, anchors, type = 'finding', confidence = 0.95 }) {
   if (!claim || !Array.isArray(anchors) || !anchors.length) return null;
 
-  const key = `human-${Date.now().toString(36)}`;
-  const id = putNode(dir, { kind: 'finding', key, claim, confidence, type, origin: ORIGIN_HUMAN });
-
+  // THE ANCHOR NODE MUST EXIST, not just the edge pointing at its id.
+  //
+  // Writing a `derived_from` edge to an id nothing ever created produced a
+  // finding that LOOKS anchored -- `audit()` counts it as such, because it
+  // checks for the edge -- while `checkAnchor` can never run on it, because
+  // there is no node to check. That is precisely the un-invalidatable finding
+  // the required-anchors rule exists to prevent, arriving through the one door
+  // the rule did not guard.
+  const resolved = [];
   for (const anchor of anchors) {
     const [path, symbol] = String(anchor).split('#');
-    putEdge(dir, id, 'derived_from', symbol ? nodeId('symbol', `${path}#${symbol}`) : nodeId('file', path));
+    if (!path) continue;
+    // Indexing creates the file node and its symbols with their hashes and
+    // snapshots, which is what makes the claim checkable later.
+    indexFile(dir, path);
+    const target = symbol ? nodeId('symbol', symbolKey(path, symbol)) : nodeId('file', path);
+    if (loadGraph(dir).nodes.has(target)) resolved.push(target);
   }
+
+  // A claim about files that do not exist cannot be verified against anything,
+  // so it is refused rather than stored as permanently-current.
+  if (!resolved.length) return null;
+
+  const key = `human-${Date.now().toString(36)}`;
+  const id = putNode(dir, { kind: 'finding', key, claim, confidence, type, origin: ORIGIN_HUMAN });
+  for (const target of resolved) putEdge(dir, id, 'derived_from', target);
   return key;
 }
 
@@ -124,8 +154,13 @@ export function activeFindings(graph) {
  */
 export function audit(graph) {
   const findings = activeFindings(graph);
+  // An edge whose TARGET does not exist is not an anchor -- the finding can
+  // never be checked against anything. Counting it as anchored is how an
+  // un-invalidatable claim hides from the very report meant to surface it.
   const anchored = new Set(
-    graph.edges.filter((e) => e.edge === 'derived_from').map((e) => e.from)
+    graph.edges
+      .filter((e) => e.edge === 'derived_from' && graph.nodes.has(e.to))
+      .map((e) => e.from)
   );
 
   const contradicted = new Set();

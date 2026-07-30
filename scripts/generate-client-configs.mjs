@@ -22,7 +22,7 @@
  * every client at once instead of being hand-copied thirteen times.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -151,11 +151,27 @@ function mcpConfig(shape) {
   return JSON.stringify({ mcpServers: { 'token-optimizer': MCP_STDIO } }, null, 2) + '\n';
 }
 
+const check = process.argv.includes('--check');
+let drifted = 0;
+
+/** Writes, or in check mode reports a mismatch without touching the file. */
+function emit(path, contents) {
+  if (check) {
+    const current = existsSync(path) ? readFileSync(path, 'utf8') : null;
+    if (current !== contents) {
+      console.error(`DRIFT: ${path.slice(ROOT.length + 1)}`);
+      drifted++;
+    }
+    return;
+  }
+  writeFileSync(path, contents);
+}
+
 for (const client of CLIENTS) {
   const dir = join(ROOT, 'integrations', client.key);
-  mkdirSync(dir, { recursive: true });
+  if (!check) mkdirSync(dir, { recursive: true });
 
-  writeFileSync(join(dir, client.mcpFile.split('/').pop()), mcpConfig(client.mcpShape));
+  emit(join(dir, client.mcpFile.split('/').pop()), mcpConfig(client.mcpShape));
 
   const body = rules(client.name);
   // Cursor's .mdc format needs frontmatter, and alwaysApply is the whole point:
@@ -164,9 +180,9 @@ for (const client of CLIENTS) {
   const text = client.rulesFormat === 'mdc'
     ? `---\ndescription: Route file and search operations through token-optimizer MCP tools\nalwaysApply: true\n---\n\n${body}\n`
     : `# Token optimization\n\n${body}\n`;
-  writeFileSync(join(dir, client.rulesFile.split('/').pop()), text);
+  emit(join(dir, client.rulesFile.split('/').pop()), text);
 
-  writeFileSync(join(dir, 'README.md'),
+  emit(join(dir, 'README.md'),
 `# ${client.name} integration
 
 Tier: **directive** -- ${client.name} exposes MCP but no pre-execution hook, so
@@ -189,4 +205,12 @@ Both files in this directory are generated from
 `);
 }
 
-console.log(`generated configs for ${CLIENTS.length} directive-tier client(s)`);
+if (check && drifted > 0) {
+  console.error(`
+${drifted} generated config file(s) differ. Run: npm run sync:hooks`);
+  process.exit(1);
+}
+
+console.log(check
+  ? 'client configs in sync'
+  : `generated configs for ${CLIENTS.length} directive-tier client(s)`);

@@ -13,7 +13,9 @@
 
 import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF }
   from './lib/policy.mjs';
-import { decide, remember, normalizePayload } from './lib/decide.mjs';
+import { decide, remember, normalizePayload, readCostBytes } from './lib/decide.mjs';
+import { recordRead } from './lib/metrics.mjs';
+import { wikiDir } from './lib/wiki.mjs';
 
 // Wrapped whole. Any defect in this hook must cost the user nothing: an
 // exception here allows the call exactly as if the plugin were not installed.
@@ -36,6 +38,17 @@ try {
     // a first read gets recorded, so the second one can be recognised.
     remember(payload, state);
     saveState(payload.session_id, state);
+
+    // And what the read COST, which is the signal the holdout comparison
+    // consumes. Without a producer here the measurement subtracts two zeroes.
+    const bytes = readCostBytes(payload);
+    if (bytes) {
+      recordRead(wikiDir(payload.cwd), {
+        anchor: payload.tool_input.file_path,
+        sessionId: payload.session_id,
+        bytes,
+      });
+    }
     allow();
   }
 
