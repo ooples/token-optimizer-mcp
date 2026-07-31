@@ -58,8 +58,19 @@ export function canonicalPath(input, cwd) {
 
   // Resolve relatives against the session's cwd so `src/a.ts` and the absolute
   // form of the same file share one identity.
+  //
+  // JOINED BY HAND rather than through path.resolve, which is platform-specific:
+  // on a POSIX host it does not recognise `C:/Users/me/repo` as absolute, so a
+  // Windows cwd produced `/home/runner/.../C:/Users/me/repo/src/a.ts`. That is
+  // not hypothetical -- a graph written on Windows and read anywhere else, or
+  // the fleet auditor looking across machines, hits exactly this. The segment
+  // loop below already collapses `.` and `..`, so a plain join is enough and is
+  // the same on every host.
   if (!isAbsolute(path) && !/^[A-Za-z]:/.test(path)) {
-    if (cwd) path = resolve(canonicalPath(cwd), path).replace(/\\/g, '/');
+    if (cwd) {
+      const base = canonicalPath(cwd);
+      path = `${base.endsWith('/') ? base.slice(0, -1) : base}/${path}`;
+    }
   }
 
   // Collapse `.` and `..` and any doubled separators, without touching a UNC

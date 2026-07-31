@@ -157,8 +157,20 @@ export function measureRemedy(dir, id) {
   const anchors = new Set([rule.anchor, ...(rule.anchors || [])].filter(Boolean));
   const after = new Map();
 
-  for (const event of readMetrics(dir)) {
-    if (event.kind !== 'read' || !event.anchor || (event.at ?? 0) < rule.appliedAt) continue;
+  // SPLIT BY POSITION, NOT BY TIMESTAMP. The log is append-only, so its order is
+  // authoritative, while `at` has millisecond granularity -- and on a fast host
+  // the reads that prompted a fix land in the SAME millisecond as the fix, get
+  // counted as "after", and turn an honest "cannot tell yet" into a fabricated
+  // saving. Position cannot tie.
+  const events = readMetrics(dir);
+  const appliedAt = events.findIndex(
+    (e) => e.kind === 'remedy' && e.action === 'applied' && e.id === id
+  );
+  const from = appliedAt === -1 ? events.length : appliedAt + 1;
+
+  for (let i = from; i < events.length; i++) {
+    const event = events[i];
+    if (event.kind !== 'read' || !event.anchor) continue;
     if (anchors.size && !anchors.has(canonicalPath(event.anchor))) continue;
     const key = event.sessionId || 'unknown';
     after.set(key, (after.get(key) || 0) + (event.tokens || 0));
