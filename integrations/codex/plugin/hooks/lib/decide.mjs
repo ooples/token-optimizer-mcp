@@ -355,7 +355,15 @@ export function normalizeTool(name) {
  * so both are resolved once here rather than in each decision branch.
  */
 export function normalizePayload(raw) {
-  const input = raw.tool_input || raw.tool_args || raw.arguments || raw.args || {};
+  // camelCase is accepted for the CONTAINER too, not just for `toolName` and
+  // `sessionId`. Accepting `toolName` but not `toolArgs` meant a client that
+  // spoke camelCase throughout had its arguments silently dropped: the payload
+  // still carried a tool name, so the hook ran, found no path and no command,
+  // and allowed every call. A total no-op with nothing in stderr and no failing
+  // check anywhere -- the worst way for an integration to be broken.
+  const input =
+    raw.tool_input || raw.toolInput || raw.tool_args || raw.toolArgs ||
+    raw.arguments || raw.args || raw.parameters || {};
   const filePath = input.file_path ?? input.path ?? input.absolute_path ?? input.filePath ?? input.target_file;
   const command = input.command ?? input.cmd ?? input.script;
 

@@ -10,7 +10,7 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedPaths, isContentDump, decide, isRecursiveSearch } from '../../hooks-core/decide.mjs';
+import { touchedPaths, isContentDump, decide, isRecursiveSearch, normalizePayload } from '../../hooks-core/decide.mjs';
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
 import { isMachineOwned } from '../../hooks-core/policy.mjs';
 
@@ -255,6 +255,27 @@ describe('a recursive search is a SEGMENT, not two words in the same string', ()
   test('a non-recursive grep is left alone', () => {
     expect(isRecursiveSearch('grep needle one-file.txt')).toBe(false);
     expect(isRecursiveSearch('git log | grep fix')).toBe(false);
+  });
+});
+
+describe('every payload dialect reaches the same judgement', () => {
+  // A client whose arguments are not recognised still carries a tool name, so
+  // the hook runs, finds no path and no command, and allows everything. There
+  // is no error and no failing check -- the integration is simply a no-op. That
+  // is the worst way for this to break, so every spelling is covered.
+  test('the args container is found under any of its names', () => {
+    const file = join(repoA, 'src/main.ts');
+    for (const key of ['tool_input', 'toolInput', 'tool_args', 'toolArgs', 'arguments', 'args', 'parameters']) {
+      const payload = normalizePayload({ session_id: 's', cwd: repoA, tool_name: 'Read', [key]: { file_path: file } });
+      expect(payload.tool_input.file_path).toBeTruthy();
+    }
+  });
+
+  test('the tool name is found under any of its names', () => {
+    for (const key of ['tool_name', 'toolName', 'tool']) {
+      const payload = normalizePayload({ session_id: 's', cwd: repoA, [key]: 'Read', tool_input: {} });
+      expect(payload.tool_name).toBe('Read');
+    }
   });
 });
 
