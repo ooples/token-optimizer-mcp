@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.0...v5.3.1) (2026-07-31)
+
+
+### CI/CD
+
+* cancel a PR's runs when it closes, instead of leaving them to drain ([#210](https://github.com/ooples/token-optimizer-mcp/issues/210)) ([cf386d6](https://github.com/ooples/token-optimizer-mcp/commit/cf386d6b5ea4a5e91403aea96255b4a0f583256b))
+* skip redundant jobs on the release merge commit, not just the release PR ([#208](https://github.com/ooples/token-optimizer-mcp/issues/208)) ([c4945aa](https://github.com/ooples/token-optimizer-mcp/commit/c4945aacec94d04892467b5bac862a77c62517a1))
+
 ## [5.3.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.2.0...v5.3.0) (2026-07-31)
 
 
