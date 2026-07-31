@@ -77,11 +77,35 @@ header h1 {
 .btn {
     padding: 8px 16px;
     border-radius: 6px;
-    border: none;
+    border: 1px solid var(--border-color);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+
+    /* An <a class="btn"> inherited the browser's default link colour, which is
+       a dark blue on a #0f172a surface -- effectively invisible. Buttons and
+       button-shaped links now state their own colour and drop the underline. */
+    color: var(--text-primary);
+    background: var(--surface-color);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+
+.btn:hover {
+    background: var(--surface-hover);
+}
+
+/* Keyboard users get the same affordance mouse users do. */
+.btn:focus-visible,
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 .btn-primary {

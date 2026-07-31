@@ -3,6 +3,13 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { installShutdownHandlers } from './lifecycle.js';
+import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
+import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
+import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
+import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
+import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
+import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
+import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -464,6 +471,13 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      AUDIT_TOOL,
+      DOCTOR_TOOL,
+      FLEET_TOOL,
+      EXPAND_TOOL,
+      WASTE_TOOL,
+      CACHE_TOOL,
+      ROUTING_TOOL,
       {
         name: 'optimize_text',
         description:
@@ -2391,11 +2405,55 @@ async function handleToolCall(request: {
 }
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  // Following a pointer is handled here rather than in the tool switch, because
+  // it is not an operation on the codebase -- it is an operation on what we
+  // already said about it.
+  if (request.params.name === 'expand') {
+    return expandRef(request.params.arguments as any);
+  }
+
+  // Likewise the audit: it reports on the tool log rather than operating on the
+  // codebase, and its own output must not be disclosed away.
+  if (request.params.name === 'waste_audit') {
+    return wasteAudit(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'cache_audit') {
+    return cacheAudit();
+  }
+
+  if (request.params.name === 'model_routing') {
+    return modelRouting(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'token_audit') {
+    return tokenAudit(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'install_doctor') {
+    return installDoctor(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'fleet_audit') {
+    return fleetAudit(request.params.arguments as any);
+  }
+
+  const started = Date.now();
   const result = await handleToolCall(request);
   // Best-effort: feed savings into analytics so the report/breakdown tools have
   // real data. Never blocks meaningfully or breaks the tool call.
   await recordToolAnalytics(analyticsManager, request.params.name, result);
-  return result;
+
+  // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
+  // per-tool is what keeps it a single policy instead of ninety. The elapsed
+  // time is passed along because it is what later decides whether a stale
+  // artifact is worth regenerating or worth serving with a marker.
+  return discloseResult(
+    request.params.name,
+    request.params.arguments as Record<string, unknown> | undefined,
+    result as any,
+    Date.now() - started
+  ) as any;
 });
 
 // Helper to run cleanup operations with error handling

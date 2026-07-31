@@ -19,10 +19,16 @@
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
-    "CLI_WRAPPER_README.md"
+    "CLI_WRAPPER_README.md",
+    "hooks-core/**/*",
+    "integrations/**/*"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",
+    "checksums": "node scripts/checksums.mjs",
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "uninstall-hooks": "node scripts/uninstall.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "build": "tsc && npm run copy:assets",
     "copy:assets": "node -e \"require('fs').cpSync('src/dashboard/public','dist/dashboard/public',{recursive:true})\"",
     "start": "node dist/server/index.js",
@@ -43,7 +49,15 @@
     "lint:fix": "eslint src --ext .ts,.js --fix",
     "format": "prettier --write 'src/**/*.{ts,js,json}'",
     "format:check": "prettier --check 'src/**/*.{ts,js,json}'",
-    "validate": "node scripts/validate-package.js"
+    "validate": "node scripts/validate-package.js",
+    "sync:hooks": "node scripts/sync-hook-core.mjs && node scripts/generate-client-entries.mjs && node scripts/generate-client-configs.mjs && node scripts/pin-mcp-version.mjs",
+    "sync:hooks:check": "node scripts/sync-hook-core.mjs --check && node scripts/generate-client-entries.mjs --check && node scripts/generate-client-configs.mjs --check && node scripts/pin-mcp-version.mjs --check",
+    "verify:ui": "node scripts/verify-wiki-ui.mjs",
+    "verify:harvest": "node scripts/verify-harvest-api.mjs",
+    "verify:clients": "node scripts/verify-client-configs.mjs",
+    "verify:all": "npm run sync:hooks:check && npm run verify:clients && npm run verify:harvest && npm run verify:ui && npm run verify:interactions",
+    "verify:interactions": "node scripts/verify-wiki-interactions.mjs",
+    "explore:wiki": "node scripts/explore-wiki.mjs"
   },
   "repository": {
     "type": "git",
@@ -116,7 +130,8 @@
     "eslint": "^9.38.0",
     "eslint-config-prettier": "^10.1.8",
     "jest": "^30.2.0",
-    "npm": "^11.16.0",
+    "npm": "^11.19.0",
+    "playwright": "^1.62.1",
     "prettier": "^3.6.2",
     "semantic-release": "^25.0.2",
     "ts-jest": "^29.4.5",
@@ -134,5 +149,10 @@
     "lru-cache": "^11.2.2",
     "tiktoken": "^1.0.22",
     "zod": ">=3.25.0 <5"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9",
+    "js-yaml": "4.3.0",
+    "undici": "7.29.0"
   }
 }

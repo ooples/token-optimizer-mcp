@@ -1,0 +1,316 @@
+/*
+ * Wiki graph browser.
+ *
+ * Extends the dashboard's existing tokens rather than introducing a second
+ * design system -- surfaces, text and radii all come from styles.css.
+ *
+ * The four node colours below were not chosen by eye. They were validated
+ * against this dashboard's actual surface (#1e293b) and pass all five checks:
+ * OKLCH lightness band, chroma floor, adjacent-pair CVD separation (worst pair
+ * deutan dE 18.9), normal-vision separation, and >=3:1 contrast. Assignment is
+ * FIXED per node kind and never cycled, so a filter that changes which kinds
+ * are present never repaints the survivors.
+ *
+ * Status colours (stale, contradicted) are deliberately NOT drawn from this
+ * ramp. They are reserved, and always ship with an icon and a text label rather
+ * than colour alone.
+ */
+
+:root {
+    --wiki-file: #3b82f6;
+    --wiki-symbol: #c2740a;
+    --wiki-finding: #8b5cf6;
+    --wiki-task: #0d9488;
+
+    --wiki-stale: var(--warning-color);
+    --wiki-contradicted: var(--danger-color);
+}
+
+/* ---- Balance -------------------------------------------------------- */
+
+.wiki-balance {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.wiki-balance h2 { font-size: 1.1rem; margin-bottom: 4px; }
+
+/* Four figures that are read together belong on one row. Inheriting the
+   dashboard's auto-fit grid wrapped the fourth onto a line of its own and left
+   a ragged empty gap beside it. */
+#balance-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+@media (max-width: 1100px) { #balance-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px)  { #balance-grid { grid-template-columns: 1fr; } }
+
+.wiki-balance-method {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+}
+
+.wiki-verdict {
+    margin-top: 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: var(--surface-hover);
+    border-left: 3px solid var(--border-color);
+}
+
+.wiki-verdict[data-state="positive"] { border-left-color: var(--success-color); }
+.wiki-verdict[data-state="negative"] { border-left-color: var(--danger-color); }
+.wiki-verdict[data-state="insufficient"] { border-left-color: var(--text-secondary); }
+
+/* Figures line up when they are compared, so digits are tabular. */
+.stat-value, .wiki-figure { font-variant-numeric: tabular-nums; }
+
+/* ---- Tabs ----------------------------------------------------------- */
+
+.wiki-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.wiki-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    padding: 10px 18px;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.wiki-tab:hover { color: var(--text-primary); }
+.wiki-tab.is-active { color: var(--text-primary); border-bottom-color: var(--primary-color); }
+.wiki-tab:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+
+.wiki-badge-count {
+    background: var(--warning-color);
+    color: #1a1a19;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+/* ---- Layout --------------------------------------------------------- */
+
+.wiki-controls {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.wiki-field { display: flex; flex-direction: column; gap: 4px; }
+.wiki-field > span { font-size: 0.75rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); }
+
+.wiki-field input, .wiki-field select {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 8px 12px;
+    min-width: 220px;
+    font: inherit;
+}
+
+.wiki-modes { display: flex; margin-left: auto; }
+
+.wiki-mode {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    cursor: pointer;
+    font: inherit;
+}
+
+.wiki-mode:first-child { border-radius: 8px 0 0 8px; }
+.wiki-mode:last-child { border-radius: 0 8px 8px 0; border-left: none; }
+.wiki-mode.is-active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+
+.wiki-split { display: grid; grid-template-columns: minmax(280px, 1fr) 1.4fr; gap: 20px; }
+
+@media (max-width: 900px) {
+    .wiki-split { grid-template-columns: 1fr; }
+}
+
+/* ---- Finding list --------------------------------------------------- */
+
+.wiki-list { list-style: none; margin: 0; padding: 0; max-height: 620px; overflow-y: auto; }
+
+.wiki-list li {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+.wiki-list li:hover, .wiki-list li:focus-visible { background: var(--surface-hover); outline: none; }
+.wiki-list li[aria-current="true"] { border-color: var(--primary-color); }
+
+.wiki-claim { display: block; margin-bottom: 6px; line-height: 1.45; }
+
+.wiki-tags { display: flex; gap: 6px; flex-wrap: wrap; font-size: 0.72rem; }
+
+.wiki-tag {
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 1px 8px;
+    color: var(--text-secondary);
+}
+
+/* Status tags carry an icon and a word; never colour alone. */
+.wiki-tag[data-status="stale"] { border-color: var(--wiki-stale); color: var(--wiki-stale); }
+.wiki-tag[data-status="human"] { border-color: var(--wiki-finding); color: var(--wiki-finding); }
+.wiki-tag[data-status="pinned"] { border-color: var(--success-color); color: var(--success-color); }
+/* Reserved status colour, and it ships with a glyph and a word like the others. */
+.wiki-tag[data-status="retired"] { border-color: var(--danger-color); color: var(--danger-color); }
+
+.wiki-muted { color: var(--text-secondary); font-size: 0.85rem; }
+.wiki-more { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+
+/* ---- Graph ---------------------------------------------------------- */
+
+.wiki-graph-pane {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    position: relative;
+    min-height: 420px;
+}
+
+#wiki-graph { width: 100%; height: 520px; display: block; }
+
+.wiki-graph-hint { position: absolute; top: 50%; left: 0; right: 0; text-align: center; }
+
+.wiki-node { cursor: pointer; }
+/* A 2px surface ring keeps overlapping marks readable where they collide. */
+.wiki-node circle { stroke: var(--surface-color); stroke-width: 2; }
+.wiki-node:hover circle, .wiki-node:focus-visible circle { stroke: var(--text-primary); }
+/*
+ * The LABEL is part of the hit target, not decoration.
+ *
+ * With `pointer-events: none` the only clickable part of a node was its ~10px
+ * circle, while the group's visual bulk -- and the thing a user actually aims
+ * at -- is the caption beside it. Clicking a label did nothing at all: the
+ * event fell through to the bare SVG canvas. Found by driving the page rather
+ * than looking at it, because a screenshot cannot show where a click lands.
+ */
+.wiki-node text { font-size: 11px; fill: var(--text-secondary); cursor: pointer; }
+.wiki-node.is-center text { fill: var(--text-primary); font-weight: 600; }
+
+.wiki-edge { stroke: var(--border-color); stroke-width: 2; fill: none; }
+.wiki-edge-label { font-size: 9px; fill: var(--text-secondary); }
+
+.wiki-legend {
+    display: flex;
+    gap: 16px;
+    list-style: none;
+    padding: 8px 0 0;
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.wiki-legend li { display: flex; align-items: center; gap: 6px; }
+
+.wiki-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.wiki-swatch[data-kind="file"] { background: var(--wiki-file); }
+.wiki-swatch[data-kind="symbol"] { background: var(--wiki-symbol); }
+.wiki-swatch[data-kind="finding"] { background: var(--wiki-finding); }
+.wiki-swatch[data-kind="task"] { background: var(--wiki-task); }
+
+/* ---- Detail / curation ---------------------------------------------- */
+
+/*
+ * The detail drawer is a persistent side panel, not a modal, so it must never
+ * OCCLUDE the page behind it. It originally did: fixed to the right edge, it
+ * sat directly on top of the Focus/Constellation buttons, and once a finding
+ * was selected those controls could not be clicked at all. Nothing but a real
+ * browser catches that -- the elements are present, visible and enabled; they
+ * are simply covered.
+ *
+ * The fix is to reserve the space rather than paint over it. On a wide viewport
+ * the page gutter grows by the drawer's width; on a narrow one there is no room
+ * to reserve, so the drawer becomes a genuine overlay with a backdrop, which is
+ * the honest interaction for that size.
+ */
+.wiki-detail {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    width: var(--wiki-drawer-width);
+    background: var(--surface-color);
+    border-left: 1px solid var(--border-color);
+    padding: 24px;
+    overflow-y: auto;
+    box-shadow: var(--shadow);
+    z-index: 20;
+}
+
+:root { --wiki-drawer-width: 420px; }
+
+body.wiki-detail-open .container {
+    padding-right: calc(var(--wiki-drawer-width) + 20px);
+}
+
+@media (max-width: 1100px) {
+    :root { --wiki-drawer-width: min(420px, 100vw); }
+    /* Too narrow to reserve a gutter: overlay, with a backdrop that makes the
+       modal behaviour obvious rather than leaving controls silently dead. */
+    body.wiki-detail-open .container { padding-right: 20px; }
+    body.wiki-detail-open::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        z-index: 19;
+    }
+}
+
+.wiki-detail h3 { margin-bottom: 12px; font-size: 1rem; }
+.wiki-detail dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 0.85rem; margin: 14px 0; }
+.wiki-detail dt { color: var(--text-secondary); }
+.wiki-detail dd { margin: 0; }
+
+.wiki-diff {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 260px;
+}
+
+.wiki-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.wiki-detail textarea {
+    width: 100%;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 10px;
+    font: inherit;
+    min-height: 80px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+}

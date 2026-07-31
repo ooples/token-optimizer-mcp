@@ -1,31 +1,428 @@
-# Token Optimizer MCP
+<h1 align="center">Token Optimizer MCP</h1>
 
-> Give Codex, Claude, Cursor, and other MCP clients more room to think with cached context, compact diffs, smart tools, and visible token-savings reports.
+<p align="center">
+  <strong>Your coding agent wastes most of its context window. This stops it — by default, on install, across 15 clients.</strong>
+</p>
 
-[![npm version](https://img.shields.io/npm/v/%40ooples%2Ftoken-optimizer-mcp?logo=npm)](https://www.npmjs.com/package/@ooples/token-optimizer-mcp)
-[![CI](https://github.com/ooples/token-optimizer-mcp/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/ooples/token-optimizer-mcp/actions/workflows/ci.yml)
-[![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@ooples/token-optimizer-mcp"><img src="https://img.shields.io/npm/v/%40ooples%2Ftoken-optimizer-mcp?logo=npm" alt="npm version"></a>
+  <a href="https://github.com/ooples/token-optimizer-mcp/actions/workflows/ci.yml"><img src="https://github.com/ooples/token-optimizer-mcp/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white" alt="Node.js 18+"></a>
+</p>
 
-Token Optimizer is a local [Model Context Protocol](https://modelcontextprotocol.io/) server. It reduces the text sent back into an agent's context by caching large payloads, returning diffs on repeated reads, filtering noisy command output, and recording the result of every measurable optimization.
+<p align="center">
+  <img src="https://img.shields.io/badge/enforced-by%20default-2ea043" alt="Enforced by default">
+  <img src="https://img.shields.io/badge/clients-15-8b5cf6" alt="15 clients">
+  <img src="https://img.shields.io/badge/savings-measured%20vs%20a%20control%20arm-3b82f6" alt="Measured against a control arm">
+  <img src="https://img.shields.io/badge/telemetry-none-2ea043" alt="No telemetry">
+  <img src="https://img.shields.io/badge/commercial%20use-MIT%2C%20allowed-0d9488" alt="MIT, commercial use allowed">
+</p>
 
-- **74 MCP tools** in the current release
-- **No hosted service required** for core caching and compression
-- **SQLite-backed persistence** across conversations
-- **Brotli compression** with token-aware keep-or-skip decisions
-- **Built-in savings reports** by tool, hook phase, and MCP server
+<p align="center">
+  <img alt="The knowledge graph: findings, decisions and dead ends accreted from real agent work, with a token balance measured against a withheld control arm" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/constellation-dark.png" width="900">
+</p>
+
+<p align="center"><em>Everything your agent worked out, kept — and a savings figure measured against a withheld control arm, not estimated.</em></p>
+
+---
+
+## The 30-second version
+
+Your agent burns most of its context on work it already did: re-reading files
+that have not changed, dumping a whole file to see three lines, running
+unbounded searches, and re-deriving conclusions it reached last session and then
+forgot.
+
+Token Optimizer attacks that on three fronts.
+
+**1. It makes the expensive call impossible.** Install the plugin and a built-in
+`Read` of a 200 KB file is **denied**, with the refusal naming the cached,
+diffed replacement. Same for `Grep`, `Glob`, `Edit`, `Write`, and `cat` /
+`head` / `grep -r` through the shell. **Re-reading a file you already read this
+session returns only a diff** — usually the single biggest win, and one that
+size-based rules structurally cannot catch. There is no setting to turn on.
+
+**2. It remembers what your agent worked out.** A per-project knowledge graph
+accumulates findings, decisions and dead ends as a side effect of working, then
+feeds them back the moment the agent touches the relevant file. A finding costs
+~150 tokens to carry. Re-deriving it costs 5k–50k.
+
+**3. It measures itself, in public, and tells you when it is losing.** A
+randomized control arm for savings. A forecast that keeps its own accuracy
+record. Cache economics read from your client's own transcript rather than
+modelled. Every number here is measured or absent — never estimated and
+presented as fact.
+
+No account, no telemetry, no hosted service. MIT, so it is usable at work.
+
+## Quick start
+
+**Claude Code** — install the plugin, not the bare MCP server. The plugin is
+what enforces; adding the server alone just gives the model tools it can ignore.
+
+```text
+/plugin marketplace add ooples/token-optimizer-mcp
+/plugin install token-optimizer@token-optimizer
+/reload-plugins
+```
+
+That is the entire installation. [All fifteen clients →](#installation)
+
+Then, whenever you want to know what to do next:
+
+```text
+token_audit
+```
+
+One ranked queue: what is costing the most, priced per session and per month,
+each line naming how to fix it. Not a dashboard, not six reports — a queue.
+
+---
+
+## The knowledge graph — the part nothing else has
+
+Every agent session ends the same way: the reasoning evaporates. The next
+session re-derives it, at full price, forever.
+
+This builds a **living per-project graph** — nodes for files, symbols, tasks and
+findings; edges for `derived_from`, `contains`, `supersedes`, `contradicts`,
+`related` — and it fills itself in from real work. No ingestion job, no
+embedding model, no rebuild step, no query to formulate.
+
+```
+you touch  src/auth.ts
+           │
+           ├─ verify() compares exp against the LOCAL clock          (finding, 0.9)
+           ├─ per-host retry budgets; global was rejected — deadlock (decision)
+           ├─ ! the skew fix was reverted once already               (dead end)
+           └─ [git] 47 changes in 90d, last three: "fix token expiry",
+                    "revert skew fix", "fix token expiry again"
+```
+
+None of that is in your repository. It exists only because an agent once burned
+tokens finding it out — and every other tool throws it away at the end of the
+session.
+
+### Why this is not RAG
+
+| Classic RAG | This |
+|---|---|
+| Retrieves **evidence**; the model re-derives meaning each time | Retrieves **verdicts** — the reasoning already happened |
+| Index built by a **batch ingestion job** | Accretes from **real agent traffic** — coverage follows attention |
+| **Similarity** search | **Traversal** — this symbol *and its callers* |
+| Model must **formulate a query** | Fires when the model **reaches for a file** |
+| Staleness **invisible**; serves rotted chunks confidently | Staleness **computed** from content hashes, served with the invalidating diff |
+| Returns only what is **in the documents** | Returns **dead ends**, which exist nowhere in your source tree |
+
+Traversal plus lexical search: deterministic, instant, explainable, and it works
+offline.
+
+### The zero-turn refusal
+
+A plain deny costs a full turn: the model calls `Read`, is refused, re-plans,
+calls `smart_read`. But at refusal time we already hold the file *and* the
+snapshot the graph stored — so the refusal **carries the answer inside it**.
+Nothing to re-plan, no second call. Turn cost drops from one to zero.
+
+And when the graph already holds the verdict a tool output would support, the
+output never enters context at all. Not compressed. Absent.
+
+---
+
+## The dashboard
+
+```bash
+npm run dashboard      # http://localhost:3100
+```
+
+<p align="center">
+  <img alt="Knowledge graph browser with focus view, token balance and audit tab" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/graph-dark.png" width="900">
+</p>
+
+<table>
+<tr><td width="50%">
+
+**Token balance**
+Earned, spent and net — with the control-arm method stated up front rather than
+buried. When the experiment cannot yet support a headline figure, it says so.
+
+**Knowledge graph browser**
+Focus view for one node and its neighbourhood; constellation view for the whole
+project. Click a finding to see what it was derived from, what superseded it,
+and what contradicts it.
+
+</td><td width="50%">
+
+**Audit tab**
+Contradictions, stale findings, and anything the graph believes that the code no
+longer supports — each with the diff that invalidated it.
+
+**One-click Markdown export**
+Your agent's accumulated knowledge as documentation you can review, edit and
+commit. The graph stops being a black box the moment you can read it as prose.
+
+</td></tr>
+</table>
+
+<p align="center">
+  <img alt="Audit tab surfacing contradictions, stale findings and low-confidence claims" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/audit-dark.png" width="900">
+</p>
+
+<p align="center"><em>The audit tab: two findings that contradict each other, surfaced automatically.</em></p>
+
+Server-side by design: the browser asks for a neighbourhood, a search result or
+a page. A mature graph holds thousands of nodes, and shipping it wholesale would
+make every page load a multi-megabyte download for a view that shows twenty
+things.
+
+---
+
+## What it does that other optimizers do not
+
+### Compaction is consolidation, not loss
+
+Everyone else checkpoints and restores what you *had* — which spends the
+scarcest budget in the session replaying context you already paid for.
+
+Selection here is **derived**, not a category list: `cost-to-rederive ×
+irrecoverability × reuse-probability`, with dead ends and decisions on a floor,
+because cheap-to-find is not the same as cheap-to-find-*again*. Restoration then
+adapts to the situation — mid-problem, cold resume, or in-flow — within a
+measured budget:
+
+> **Where you were:** does clock skew explain the 401s?
+> ruled out: token signing, clock drift on the client
+> untested: NTP skew on the server
+
+That is resuming a thought. A summary describes one.
+
+### Progressive disclosure that knows what you asked
+
+A large tool result becomes a preview chosen by the **session's actual
+question**, after parsing the output's shape (test report, diff, stack trace,
+log, JSON) — not the first 40 lines because they are first.
+
+```
+[selected against: "which shard fails?"]
+--- failures ---
+  FAILED  DBNetTests.BceOnRelu -- expected 0.0 got NaN
+  FAILED  TftGradientFlow -- gradient did not reach the encoder
+---- omitted: 1,760 lines of passing tests (expand 8bb6bd66) ----
+```
+
+Every cut is **named**, because a model reasoning over a silent truncation
+cannot know it is missing anything. `expand` serves from a content-addressed
+store — it never re-runs your test suite — and expanding both teaches the next
+preview and promotes what you needed into the graph, so the second expansion
+never happens.
+
+### Prompt-cache economics, measured from your own transcript
+
+A cache write costs 1.25× a plain token and a read costs 0.1×, so a prefix that
+keeps invalidating can cost more than every saving elsewhere. This reads the
+real numbers your client already recorded — then does the part a hit rate
+cannot:
+
+```
+! CLAUDE.md:2 has an embedded timestamp, invalidating everything after it
+    about 329,421 tokens re-written per session
+```
+
+Attributed to a line, priced by what sits *behind* it. Keep-warm is decided by
+expected value from your observed gaps, per TTL tier — and when neither tier
+pays, it says so.
+
+### Model routing decided by outcomes, not by task size
+
+Everyone guesses from task shape and never checks. This reads which model ran
+each episode and what happened — retries, errors, turns — and prices **both**
+mistakes: what an overpowered model wastes, and what an underpowered one costs
+in retries. A tier that needs a retry in more than half its episodes is excluded
+at any price, because four cheap turns that fail are not cheap.
+
+### Waste detection that becomes a ratchet
+
+A report is read once and forgotten. Here a detection produces a **durable,
+measured, reversible fix** — a skip rule, a composite touch — plus a ~50-token
+session-start briefing so the waste never starts. Detectors are a shipped floor
+*plus* patterns derived from your project's own history, each carrying what it
+has actually saved:
+
+```
+generated/schema.d.ts: read in 9/9 sessions, never the source of a finding
+    3,400 tokens/session (~$3.06/month); apply: waste_audit action="apply"
+```
+
+Anything that touches **your** files is proposed as a diff and never applied.
+
+### One audit across every project
+
+`fleet_audit` ranks your whole machine by measured cost, and does something a
+per-project scanner cannot: a fix proven in one project is offered to the others
+containing the **same file contents**, carrying the evidence from where it was
+measured. Matching is by content hash, never by filename.
+
+It also runs the natural experiment nobody else can — enforcing clients versus
+directive ones — and reports it whichever way it falls, with the confound
+stated.
+
+---
+
+## Trust: we ship hooks that refuse your tool calls
+
+That is a bigger ask than a normal dependency makes, so:
+
+**Verify the release.** Published from CI with npm provenance — `npm audit
+signatures` ties the artifact to the workflow run and the commit, without
+trusting us. `CHECKSUMS.sha256` ships alongside for offline checking.
+
+**Check that it works — not that files exist.**
+
+```bash
+npm run doctor
+```
+
+It feeds a synthetic payload to the *real* hook binary and asserts a large read
+is refused and a small one is not. A checklist would have passed on the exact
+bug this project once shipped, where the plugin was connected, visible in
+`/mcp`, and saving nothing. Every failure names its own fix.
+
+**Every refusal carries its own off switch.** Enforcement that hides its disable
+is coercive, and the person who needs it is mid-refusal, not reading a README:
+
+```
+auth.ts is 91 KB. Call smart_read instead.
+(Not what you wanted? TOKEN_OPTIMIZER_MODE=off disables enforcement.)
+```
+
+**Removal is exact.** The installer records every file it wrote, with hashes.
+Uninstall removes only what still matches; anything you edited since is left in
+place and named. Your own hooks are never touched, and we never rewrite your
+`settings.json` — we merge into it.
+
+```bash
+npm run uninstall-hooks              # show the plan; changes nothing
+npm run uninstall-hooks -- --apply   # carry it out
+```
+
+---
+
+## It proves its own savings against a control arm
+
+Every tool in this space reports "tokens saved" computed from its own
+assumptions. That number cannot be wrong, because nothing checks it.
+
+This runs a **randomized holdout**: injection is silently withheld on a slice of
+file touches, stratified by file so the comparison is within-file, and the
+saving is the measured difference between the arms. It refuses to print a
+headline figure until the experiment can support one, and it will tell you
+plainly:
+
+> the graph is NOT yet paying for itself
+
+A tool that can only ever report good news is not reporting. The same discipline
+runs throughout: an unmeasurable saving renders as **unknown**, never as zero,
+and never as `$0.00` — because "cannot tell yet" printed as "saved nothing" is a
+silent false negative, and dollars get quoted to other people.
+
+## It runs everywhere, and says which tier
+
+**Enforcing** — a pre-execution veto exists: Claude Code, Codex, OpenCode.
+
+**Directive** — MCP plus an always-applied rules file: Cursor, Windsurf, Cline,
+Roo, Kilo, Zed, Amp, Continue, Crush, Droid, Copilot, Gemini, Qwen.
+
+Gemini and Qwen sit in the second tier **despite having hooks**, because their
+only tool hook fires *after* the read is paid for. Claiming enforcement there
+would be a lie you would discover on your first large file.
+
+Every config shape is confirmed against that client's published documentation,
+with the source URL recorded in its README.
+
+## Everything here is verified, and you can run it
+
+```bash
+npm run verify:all
+```
+
+| Suite | Checks | What it proves |
+|---|---|---|
+| `test` | 416 | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
+| `verify:clients` | 129 | Every client config matches its documented schema |
+| `verify:harvest` | 26 | Request shape, response parsing, and that **no secret from a tool result crosses the wire** |
+| `verify:ui` | 22 | Real headless Chromium: layout, label collisions, legibility |
+| `doctor` | 10 | The installed hooks actually refuse, and the server actually answers |
+
+These are not decoration. They found six client configs that would have failed
+**silently**, an installer that destroyed user hooks, a Windows path bug that
+made enforcement blind to half its own refusals, and an uninstaller that printed
+a plan and deleted nothing.
+
+## Honest comparison
+
+| | Token Optimizer | Typical alternatives |
+|---|---|---|
+| **License** | MIT — commercial use fine | Often noncommercial-only; check before using at work |
+| Default behaviour | Refuses the wasteful call | Suggests a better tool |
+| Re-read of an unchanged file | Returns a diff | Returns the file again |
+| Savings figure | Measured against a withheld control | Computed from the tool's own assumptions |
+| Cross-session memory | Findings, decisions, dead ends | Usually none |
+| Compaction | Consolidation, ranked by cost-to-rederive | Checkpoint and replay |
+| Cache economics | Measured from the transcript, attributed to a line | Rarely addressed |
+| Model routing | Measured from episode outcomes | Guessed from task size |
+| Cross-project | Fixes transfer by content hash | Per-project only |
+| Clients | 15 | 3–6 typical |
+| Telemetry | None | Varies |
+
+
+---
 
 ## Installation
 
-Every client launches the same stdio server—`npx -y @ooples/token-optimizer-mcp@latest`—but each client has its own instruction and lifecycle APIs. The ready-made integrations below use those native APIs; they do not pretend Claude Code's seven-phase PowerShell hook system is portable unchanged.
+Every client launches the same stdio server — `npx -y @ooples/token-optimizer-mcp@latest` —
+but they differ in what they let a hook *do*, and that difference is the whole
+product. A client with a pre-execution veto can have the wasteful call refused;
+one without can only be told. Both are listed honestly below.
 
-| Client             | Fastest MCP setup                                                                                            | Best-experience integration                          |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
-| Codex              | `codex mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`                                 | Codex plugin: MCP + skill + lifecycle hooks          |
-| Claude Code        | `claude mcp add --transport stdio --scope user token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest` | Claude plugin: MCP + skill + large-read hook         |
-| GitHub Copilot CLI | `copilot mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`                               | `AGENTS.md` + repository lifecycle hooks             |
-| Gemini CLI         | `gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest`                      | Gemini extension: MCP + context + lifecycle hooks    |
-| OpenCode           | Add the `mcp` block below to `opencode.json`                                                                 | `AGENTS.md` + local plugin + compaction preservation |
+Ready-made configuration for all fifteen lives in
+[`integrations/`](./integrations), generated from one source and validated by
+`npm run verify:clients`. Full matrix: [`docs/CLIENT_SUPPORT.md`](./docs/CLIENT_SUPPORT.md).
+
+### Enforcing tier — the wasteful call is refused
+
+| Client | Install | What runs |
+| --- | --- | --- |
+| **Claude Code** | `/plugin marketplace add ooples/token-optimizer-mcp` then `/plugin install token-optimizer@token-optimizer` | SessionStart policy, PreToolUse router over Read/Grep/Glob/Edit/Write/Bash, PreCompact optimization |
+| **Codex** | Copy [`integrations/codex`](./integrations/codex) to `~/.codex` | SessionStart policy + PreToolUse router |
+| **OpenCode** | Copy [`integrations/opencode`](./integrations/opencode) | Pre-tool router |
+
+### Directive tier — MCP plus an always-applied rules file
+
+No pre-execution veto exists on these, so the optimizer states the policy on
+every request instead of enforcing it. Each directory holds the MCP config and
+the rules file, both at the paths that client's own documentation specifies.
+
+| Client | Config | Rules |
+| --- | --- | --- |
+| Cursor | `.cursor/mcp.json` | `.cursor/rules/token-optimizer.mdc` (`alwaysApply: true`) |
+| Windsurf | `mcp_config.json` | `.windsurf/rules/token-optimizer.md` |
+| Cline | `~/.cline/mcp.json` | `.clinerules/token-optimizer.md` |
+| Roo Code | `.roo/mcp.json` | `.roo/rules/token-optimizer.md` |
+| Kilo | `.kilo/kilo.jsonc` (`mcp` key) | `.kilo/rules/token-optimizer.md` |
+| Zed | `settings.json` (`context_servers`) | `AGENTS.md` |
+| Amp | `settings.json` (`amp.mcpServers`) | `AGENTS.md` |
+| Continue | `config.yaml` (`mcpServers` **list**) | `.continue/rules/token-optimizer.md` |
+| Crush | `crush.json` (`mcp` key) | `AGENTS.md` |
+| Droid (Factory) | `~/.factory/mcp.json` | `AGENTS.md` |
+| GitHub Copilot CLI | `copilot mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest` | `.github/copilot-instructions.md` |
+| Gemini CLI | `gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest` | Gemini extension context |
+| Qwen Code | Extension config | Extension context |
+
+> **These paths are checked, not assumed.** Verifying them against each client's
+> published docs found six configs that would have installed cleanly and never
+> loaded — including Kilo, whose schema shares nothing with the `mcpServers`
+> convention the other clients use. A convention is not a schema.
 
 ### Codex
 
@@ -101,35 +498,74 @@ args = ["-y", "@ooples/token-optimizer-mcp@latest"]
 
 ### Claude Code
 
-#### 1. Add the MCP server
-
-Add Token Optimizer at user scope so it is available in every project:
-
-```bash
-claude mcp add --transport stdio --scope user token-optimizer -- \
-  npx -y @ooples/token-optimizer-mcp@latest
-```
-
-#### 2. Verify the installation
-
-```bash
-claude mcp get token-optimizer
-claude mcp list
-```
-
-Inside Claude Code, `/mcp` shows the live connection, tool count, and server status.
-
-#### 3. Add optimization guidance or hooks
-
-For MCP-only setup, add the recommendations from [`integrations/AGENTS.md`](./integrations/AGENTS.md) to your project's `CLAUDE.md`.
-
-For the richest integration, install the repository's Claude Code plugin. It bundles the MCP server, optimization skill, and large-read hook. Run these commands **inside Claude Code**:
+**Install the plugin, not the bare MCP server.** The plugin is the only path that
+optimizes by default; adding the MCP server alone gives the model a set of tools
+it is free to never call.
 
 ```text
 /plugin marketplace add ooples/token-optimizer-mcp
 /plugin install token-optimizer@token-optimizer
 /reload-plugins
 ```
+
+That is the whole installation. There is nothing to configure and no flag to
+turn on.
+
+#### What you get immediately
+
+From the first message of the next session, expensive built-in calls are
+**refused and redirected** to the optimized equivalent:
+
+| You (or the model) do this | What happens |
+|---|---|
+| `Read` a file over ~25 KB | Denied → `smart_read` (cached) |
+| `Read` **any** file already read this session | Denied → `smart_read` (returns only the diff) |
+| `Grep` file contents / `Glob` for files | Denied → `smart_grep` / `smart_glob` |
+| `Edit` a file over ~25 KB | Denied → `smart_edit` (returns a diff, not the file) |
+| `cat`/`head`/`tail`/`Get-Content` a large file | Denied → `smart_read` |
+| `grep -r` / `rg` across the tree | Denied → `smart_grep` |
+| Context fills and compaction starts | `optimize_session` runs first |
+
+The re-read case is usually the largest single win and the one most often
+missed: a 5 KB config read fifteen times across a session costs far more than
+one 200 KB file read once. Size-based rules never catch it.
+
+#### It cannot get you stuck
+
+Three properties, all tested:
+
+- **Fail-open.** Any error in the optimizer — bad payload, unreadable file,
+  unexpected exception — allows the original call through, exactly as if the
+  plugin were not installed.
+- **Loop-breaking.** A given target is refused **once**. Come back to it and it
+  is allowed. So if the MCP server is missing or misconfigured, the cost is one
+  wasted turn per file, self-healing, with no intervention.
+- **Cheap calls are left alone.** Small files, paged reads, `git log | head`,
+  and binary paths are never touched.
+
+#### Turning it down
+
+One variable, no reinstall:
+
+```bash
+TOKEN_OPTIMIZER_MODE=advise   # nudge instead of refuse (the pre-5.2 behaviour)
+TOKEN_OPTIMIZER_MODE=off      # disable the hooks entirely
+TOKEN_OPTIMIZER_LARGE_READ_BYTES=51200   # raise the "large file" threshold
+```
+
+#### MCP server only (not recommended)
+
+If you want the tools without the enforcement:
+
+```bash
+claude mcp add --transport stdio --scope user token-optimizer -- \
+  npx -y @ooples/token-optimizer-mcp@latest
+```
+
+Verify with `claude mcp get token-optimizer`, or `/mcp` inside Claude Code. Then
+add the recommendations from [`integrations/AGENTS.md`](./integrations/AGENTS.md)
+to your `CLAUDE.md` — but be aware that guidance in a context file is advisory,
+and models routinely read past it.
 
 The standalone global installer can also configure the Claude Code hooks and supported desktop clients:
 
@@ -418,6 +854,56 @@ Default local data locations include:
 - sessions and configuration: `~/.token-optimizer/`
 
 Set `TOKEN_OPTIMIZER_CACHE_DIR` to override the cache location.
+
+## Verify it, check it, remove it
+
+This installs hooks that **refuse your tool calls**. That is a bigger ask than a
+normal dependency makes, so here is everything needed to check it and undo it.
+
+**Verify the release is genuine.** The package is published from CI with npm
+provenance, which signs an attestation binding the artifact to the workflow run
+and the commit that built it:
+
+```bash
+npm audit signatures
+```
+
+That verifies without trusting us. A `CHECKSUMS.sha256` is attached to each
+GitHub release for offline checking (`sha256sum -c CHECKSUMS.sha256`) — useful
+for mirrors, but weaker: it shares a trust root with the thing it hashes.
+
+**Check it actually works.** Not that the files are in place — that it *works*:
+
+```bash
+npm run doctor
+```
+
+This feeds a synthetic payload to the real hook binary and asserts a large read
+is refused and a small one is not, that session-start emits the policy, that the
+graph directory is writable, and that the MCP server starts and lists its tools.
+Every failure names its own fix. There is also an `install_doctor` MCP tool.
+
+**Turn enforcement off, instantly.** Every refusal says this, so you never have
+to come back here to find it:
+
+```bash
+TOKEN_OPTIMIZER_MODE=off      # no enforcement, no hooks
+TOKEN_OPTIMIZER_MODE=advise   # suggestions only, nothing is ever denied
+```
+
+**Remove it.** The installer records every file it wrote, with hashes, so
+removal is exact rather than best-effort:
+
+```bash
+npm run uninstall-hooks              # show the plan; changes nothing
+npm run uninstall-hooks -- --apply   # carry it out
+```
+
+It removes only files that still match what we wrote. Anything you have edited
+since is **left in place and named**, because removing it would destroy your
+work and removing it silently would be worse. Hooks you added yourself are not
+in the manifest and are never touched. Config entries we added are listed for
+you to remove — we do not rewrite your `settings.json`.
 
 ## Technical reference
 

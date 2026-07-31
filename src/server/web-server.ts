@@ -13,12 +13,20 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { registerWikiRoutes } from './wiki-routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = 3100;
+// Configurable because 3100 is a popular port and a collision is silent: the
+// second server fails to bind while the FIRST one keeps answering, so anything
+// probing the port gets stale results from a process it did not start. The UI
+// verification hit exactly that and spent a run testing an old build.
+const PORT =
+  Number(process.env.PORT) ||
+  Number(process.env.TOKEN_OPTIMIZER_DASHBOARD_PORT) ||
+  3100;
 
 // BOM (Byte Order Mark) removal regex - used to strip UTF-8 BOM character (\uFEFF) from file content
 const BOM_REGEX = /^\uFEFF/;
@@ -419,6 +427,16 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     port: PORT,
   });
+});
+
+// The wiki graph API. Registered before the catch-all root handler so its
+// routes are matched first, and isolated in its own module because it loads the
+// graph from plain ESM under hooks-core/ rather than from this build.
+registerWikiRoutes(app);
+
+// Serve the wiki graph browser.
+app.get('/wiki', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'dashboard', 'public', 'wiki.html'));
 });
 
 // Serve index.html for root route

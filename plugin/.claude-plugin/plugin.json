@@ -1,7 +1,7 @@
 {
   "name": "token-optimizer",
-  "description": "Intelligent context-window optimization: caching, compression, and smart file tooling that cut token usage 60-90%. Bundles the token-optimizer MCP server plus a usage skill and automatic-optimization hooks.",
-  "version": "5.0.2",
+  "description": "Aggressive context-window optimization by DEFAULT: enforcing hooks route expensive built-in file, search and shell calls to cached/diffed MCP tools, cutting token usage 60-90% without the user configuring anything.",
+  "version": "5.2.0",
   "author": {
     "name": "ooples"
   },

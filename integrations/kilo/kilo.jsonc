@@ -1,0 +1,14 @@
+{
+  "mcp": {
+    "token-optimizer": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@ooples/token-optimizer-mcp@5.2.0"
+      ],
+      "environment": {},
+      "enabled": true
+    }
+  }
+}

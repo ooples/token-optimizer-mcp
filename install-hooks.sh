@@ -45,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOKS_DIR="$HOME/.claude-global/hooks"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 CLAUDE_STATE="$HOME/.claude.json"
@@ -149,49 +150,36 @@ install_hooks_files() {
         write_status "✓ Created hooks directory: $HOOKS_DIR" "SUCCESS"
     fi
 
-    # Create subdirectories
-    for dir in handlers helpers logs data; do
-        mkdir -p "$HOOKS_DIR/$dir"
-    done
-
     if [[ "$DRY_RUN" == "true" ]]; then
-        write_status "[DRY RUN] Would download hooks files from $REPO_URL" "INFO"
+        write_status "[DRY RUN] Would install the plugin hooks into $HOOKS_DIR/token-optimizer" "INFO"
         return
     fi
 
-    # Download hooks files
-    declare -A files=(
-        ["dispatcher.sh"]="$HOOKS_DIR/dispatcher.sh"
-        ["handlers/token-optimizer-orchestrator.sh"]="$HOOKS_DIR/handlers/token-optimizer-orchestrator.sh"
-        ["helpers/invoke-mcp.sh"]="$HOOKS_DIR/helpers/invoke-mcp.sh"
-    )
+    # Install the CURRENT hook files from the package.
+    #
+    # This used to download a `dispatcher.sh` from the default branch and wire
+    # four events at it -- none of them SessionStart, which is where the policy
+    # and the project briefing are delivered. The plugin's real hooks are three
+    # ES modules under plugin/hooks, and they are what the doctor probes, so
+    # they are what gets installed.
+    local source_hooks="$SCRIPT_DIR/plugin/hooks"
+    if [[ ! -d "$source_hooks" ]]; then
+        source_hooks="$MCP_GLOBAL_PATH/plugin/hooks"
+    fi
 
-    for source in "${!files[@]}"; do
-        local dest="${files[$source]}"
-        local url="$REPO_URL/$source"
+    if [[ ! -d "$source_hooks" ]]; then
+        write_status "Could not find the plugin hooks to install (looked in $source_hooks)" "ERROR"
+        write_status "Reinstall the package: npm install -g @ooples/token-optimizer-mcp" "INFO"
+        exit 1
+    fi
 
-        write_status "Downloading: $url" "INFO"
-
-        if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
-            chmod +x "$dest"
-            write_status "✓ Downloaded: $(basename "$dest")" "SUCCESS"
-        else
-            write_status "⚠ Failed to download $url" "ERROR"
-            write_status "Using local package files instead..." "INFO"
-
-            # Fallback: Copy from npm package
-            local npm_hooks="$MCP_GLOBAL_PATH/hooks"
-            if [[ -d "$npm_hooks" ]]; then
-                cp -r "$npm_hooks"/* "$HOOKS_DIR/"
-                find "$HOOKS_DIR" -type f -name "*.sh" -print0 | xargs -0 chmod +x
-                write_status "✓ Copied hooks from npm package" "SUCCESS"
-            else
-                echo "Could not download hooks and npm package not found"
-                exit 1
-            fi
-            break
-        fi
-    done
+    # Under a token-optimizer/ subdirectory on purpose: it puts our marker into
+    # every command string we write, which is what makes the entries findable
+    # for verification and removable on uninstall.
+    local dest="$HOOKS_DIR/token-optimizer"
+    mkdir -p "$dest"
+    cp -r "$source_hooks"/. "$dest"/
+    write_status "Installed hooks to $dest" "SUCCESS"
 }
 
 configure_claude_settings() {
@@ -207,73 +195,26 @@ configure_claude_settings() {
         write_status "✓ Backed up existing settings to: $backup" "SUCCESS"
     fi
 
-    # Create or update settings.json
-    local hook_command="bash $HOOKS_DIR/dispatcher.sh"
-
-    local settings=$(cat <<EOF
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$hook_command PreToolUse"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$hook_command PostToolUse"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$hook_command UserPromptSubmit"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$hook_command PreCompact"
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
-)
+    # Wire the hooks by MERGING, never by overwriting.
+    #
+    # The previous version wrote the whole settings file when `jq` was absent
+    # and shallow-merged the `hooks` object when it was present -- both of which
+    # destroyed every hook the user had configured, silently. The merge now
+    # lives in scripts/wire-hooks.mjs, which appends our entries, replaces only
+    # our own from a previous run, and leaves everything else untouched.
+    local wire_script="$SCRIPT_DIR/scripts/wire-hooks.mjs"
+    if [[ ! -f "$wire_script" ]]; then
+        wire_script="$MCP_GLOBAL_PATH/scripts/wire-hooks.mjs"
+    fi
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        write_status "[DRY RUN] Would write hooks configuration to: $CLAUDE_SETTINGS" "INFO"
-        echo "$settings"
+        node "$wire_script" "$CLAUDE_SETTINGS" "$HOOKS_DIR/token-optimizer" --dry-run
         return
     fi
 
-    # If settings file exists, merge with existing settings using jq if available
-    if [[ -f "$CLAUDE_SETTINGS" ]] && command -v jq &> /dev/null; then
-        local merged=$(jq -s '.[0] * .[1]' "$CLAUDE_SETTINGS" <(echo "$settings"))
-        echo "$merged" > "$CLAUDE_SETTINGS"
-    else
-        echo "$settings" > "$CLAUDE_SETTINGS"
+    if ! node "$wire_script" "$CLAUDE_SETTINGS" "$HOOKS_DIR/token-optimizer"; then
+        write_status "Could not wire hooks into $CLAUDE_SETTINGS" "ERROR"
+        return 1
     fi
 
     write_status "✓ Updated Claude Code settings" "SUCCESS"
@@ -535,6 +476,11 @@ if [[ "$DRY_RUN" == "true" ]]; then
     write_status "DRY RUN COMPLETE - No changes were made" "SUCCESS"
 else
     if test_installation; then
+        # Record exactly what we put on this machine, so uninstall can be exact
+        # rather than best-effort and "what did this install" has an answer.
+        if command -v node >/dev/null 2>&1; then
+            node "$(dirname "${BASH_SOURCE[0]}")/scripts/record-install.mjs"                 "$HOOKS_DIR" "$CLAUDE_SETTINGS" 2>/dev/null                 || write_status "Could not record the install manifest (uninstall will be manual)" "WARN"
+        fi
         echo ""
         echo "╔═══════════════════════════════════════════════════════════╗"
         echo "║   Installation Complete!                                  ║"

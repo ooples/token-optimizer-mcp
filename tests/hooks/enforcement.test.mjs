@@ -1,0 +1,168 @@
+/**
+ * Behavioural tests for the enforcing hooks.
+ *
+ * These drive the REAL hook executable over stdin and read its stdout, rather
+ * than importing the decision function and asserting on it. That distinction
+ * matters: the failure this redesign fixes was never a wrong decision, it was a
+ * correct decision wired up so weakly that nothing acted on it. A test that
+ * bypasses the wiring would have passed against the old advisor too.
+ */
+
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { dirname } from 'node:path';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROUTER = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
+
+let workspace;
+let big;
+let small;
+
+beforeAll(() => {
+  workspace = mkdtempSync(join(tmpdir(), 'to-hooks-'));
+  big = join(workspace, 'big.ts');
+  small = join(workspace, 'small.ts');
+  writeFileSync(big, 'x'.repeat(80_000));
+  writeFileSync(small, 'x'.repeat(200));
+});
+
+afterAll(() => rmSync(workspace, { recursive: true, force: true }));
+
+/** Runs the router with a payload and returns the parsed decision. */
+function run(payload, env = {}) {
+  const result = spawnSync(process.execPath, [ROUTER], {
+    input: JSON.stringify({ session_id: payload.session_id || 's-default', ...payload }),
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+  });
+  if (!result.stdout.trim()) return { decision: 'allow' };
+  const parsed = JSON.parse(result.stdout);
+  const out = parsed.hookSpecificOutput || {};
+  return {
+    decision: out.permissionDecision || (out.additionalContext ? 'advise' : 'allow'),
+    reason: out.permissionDecisionReason || out.additionalContext || '',
+  };
+}
+
+const read = (path, extra = {}) => ({ tool_name: 'Read', tool_input: { file_path: path }, ...extra });
+
+describe('enforcement is the default', () => {
+  test('a large read is denied and names its replacement', () => {
+    const r = run(read(big, { session_id: 'large-1' }));
+    expect(r.decision).toBe('deny');
+    // A refusal that does not name the tool AND its argument gets met with a
+    // retry of the same call, which is the old advisor's failure mode.
+    expect(r.reason).toContain('smart_read');
+    expect(r.reason).toContain(big);
+  });
+
+  test('a small first read is untouched', () => {
+    expect(run(read(small, { session_id: 'small-1' })).decision).toBe('allow');
+  });
+
+  test('a paged read is untouched -- it is already bounded', () => {
+    const r = run({ ...read(big, { session_id: 'paged-1' }), tool_input: { file_path: big, offset: 0, limit: 50 } });
+    expect(r.decision).toBe('allow');
+  });
+});
+
+describe('re-read detection -- the case size-gating never caught', () => {
+  test('a SMALL file is denied on second read', () => {
+    const session = 'reread-' + Date.now();
+    expect(run(read(small, { session_id: session })).decision).toBe('allow');
+    const second = run(read(small, { session_id: session }));
+    expect(second.decision).toBe('deny');
+    expect(second.reason).toMatch(/already read/i);
+  });
+});
+
+describe('loop breaking bounds every failure mode', () => {
+  test('the second denial of the same target degrades to an advisory', () => {
+    const session = 'loop-' + Date.now();
+    expect(run(read(big, { session_id: session })).decision).toBe('deny');
+    // Without this, an agent that cannot reach the MCP server is wedged
+    // permanently on that file. With it, the cost is one turn.
+    expect(run(read(big, { session_id: session })).decision).toBe('advise');
+  });
+});
+
+describe('the shell bypass is closed', () => {
+  test('cat of a large file is denied', () => {
+    const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${big}` }, session_id: 'bash-1' });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toContain('smart_read');
+  });
+
+  test('a pipeline with no file operand is untouched', () => {
+    // `git log | head -30` must not be mistaken for a file dump.
+    const r = run({ tool_name: 'Bash', tool_input: { command: 'git log --oneline | head -30' }, session_id: 'bash-2' });
+    expect(r.decision).toBe('allow');
+  });
+
+  // WINDOWS ONLY, and skipped rather than deleted elsewhere. The `/c/Users/...`
+  // spelling is what Git Bash hands a Bash tool call ON WINDOWS; on Linux that
+  // is simply a path that does not exist, so the test could only ever fail
+  // there -- which is exactly what it did in CI while passing locally. The
+  // platform-independent half of the same guarantee is asserted below.
+  const onWindows = process.platform === 'win32' ? test : test.skip;
+
+  onWindows('a Git-Bash/MSYS path is resolved, not silently skipped', () => {
+    // A Bash tool call carries `/c/Users/...`, which Node cannot stat -- so the
+    // size check found nothing and EVERY shell dump was allowed through on the
+    // platform this runs on most. The Read tool passes `C:\Users\...`, which is
+    // why the same file was refused one way and allowed the other. Found by
+    // pointing the optimizer at a real repository.
+    const drive = big[0];
+    const msys = `/${drive.toLowerCase()}${big.slice(2).replace(/\\/g, '/')}`;
+    const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${msys}` }, session_id: 'msys-1' });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toContain('smart_read');
+  });
+
+  test('the two spellings of one path are one identity, on every platform', () => {
+    // The half of the MSYS guarantee that is testable everywhere: whatever the
+    // host, a path written two ways must not become two different nodes.
+    expect(canonicalPath('/c/Users/me/auth.ts')).toBe(canonicalPath('C:\\Users\\me\\auth.ts'));
+    expect(canonicalPath('C:/Users/me/auth.ts')).toBe(canonicalPath('C:\\Users\\me\\auth.ts'));
+  });
+
+  test('cat of a SMALL file is untouched', () => {
+    const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${small}` }, session_id: 'bash-3' });
+    expect(r.decision).toBe('allow');
+  });
+});
+
+describe('the escape hatch works', () => {
+  test('MODE=off allows what enforce denies', () => {
+    const r = run(read(big, { session_id: 'off-1' }), { TOKEN_OPTIMIZER_MODE: 'off' });
+    expect(r.decision).toBe('allow');
+  });
+
+  test('MODE=advise never denies', () => {
+    const r = run(read(big, { session_id: 'advise-1' }), { TOKEN_OPTIMIZER_MODE: 'advise' });
+    expect(r.decision).toBe('advise');
+  });
+});
+
+describe('fail-open', () => {
+  test('malformed input allows the call', () => {
+    const result = spawnSync(process.execPath, [ROUTER], { input: 'not json', encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('');
+  });
+
+  test('a missing file allows the call', () => {
+    expect(run(read(join(workspace, 'nope.ts'), { session_id: 'missing-1' })).decision).toBe('allow');
+  });
+
+  test('a binary path is never size-gated', () => {
+    const png = join(workspace, 'shot.png');
+    writeFileSync(png, Buffer.alloc(80_000));
+    expect(run(read(png, { session_id: 'bin-1' })).decision).toBe('allow');
+  });
+});
