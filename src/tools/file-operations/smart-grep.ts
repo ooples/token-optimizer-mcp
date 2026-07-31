@@ -13,13 +13,23 @@
 
 import { readFileSync, statSync } from 'fs';
 import { globSync } from 'glob';
-import { relative, join } from 'path';
+import { relative, join, resolve } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import { detectFileType } from '../shared/syntax-utils.js';
+
+/**
+ * The most this tool will ever return in one response.
+ *
+ * Roughly 4% of a 200k context window: large enough that ordinary searches are
+ * never trimmed, small enough that a pathological one cannot evict the
+ * conversation it was meant to serve. Callers who genuinely want more page
+ * through it with `offset`.
+ */
+const MAX_RESPONSE_TOKENS = 8_000;
 
 export interface GrepMatch {
   file: string; // File path
@@ -273,11 +283,40 @@ export class SmartGrepTool {
 
       // Apply pagination
       const totalMatches = allMatches.length;
-      const paginatedMatches = allMatches.slice(
+      let paginatedMatches = allMatches.slice(
         opts.offset,
         opts.offset + opts.limit
       );
-      const truncated = totalMatches > paginatedMatches.length + opts.offset;
+
+      // A HARD CEILING ON THE RESPONSE, because this tool's whole promise is
+      // that it "caps and deduplicates results before they reach the context
+      // window" -- the words the hook uses when it REFUSES the built-in Grep
+      // and sends the caller here.
+      //
+      // It did not cap anything: `limit` defaults to Infinity, so a broad
+      // search with context returned every match. Measured on this repository:
+      // one `grep 'export function' src/**/*.ts` produced a 481,578-token
+      // response -- more than twice a 200k context window, from the tool whose
+      // entire purpose is preventing exactly that.
+      //
+      // The budget is enforced on the SERIALISED result, since that is what the
+      // caller pays for, and whatever is dropped is reported rather than
+      // silently discarded.
+      let budgetTruncated = false;
+      while (paginatedMatches.length > 1) {
+        const size = this.tokenCounter.count(
+          JSON.stringify({ matches: paginatedMatches })
+        ).tokens;
+        if (size <= MAX_RESPONSE_TOKENS) break;
+        // Drop the tail proportionally rather than one at a time, so a huge
+        // result set converges in a few passes instead of thousands.
+        const keep = Math.max(1, Math.floor(paginatedMatches.length * Math.min(0.9, MAX_RESPONSE_TOKENS / size)));
+        paginatedMatches = paginatedMatches.slice(0, keep);
+        budgetTruncated = true;
+      }
+
+      const truncated =
+        budgetTruncated || totalMatches > paginatedMatches.length + opts.offset;
 
       // Build result based on mode
       let resultData: any;
@@ -303,21 +342,36 @@ export class SmartGrepTool {
         ).tokens;
       }
 
-      // Estimate original tokens (if we had returned all file contents)
-      let originalTokens = resultTokens;
-      if (opts.count || opts.filesWithMatches) {
-        // Count/files mode: estimate content would be 100x more tokens
-        originalTokens = resultTokens * 100;
-      } else if (!opts.includeContext) {
-        // Match-only mode: estimate content would be 20x more tokens
-        originalTokens = resultTokens * 20;
-      } else {
-        // Context mode: estimate content would be 5x more tokens
-        originalTokens = resultTokens * 5;
+      // THE BASELINE IS MEASURED, NOT INVENTED.
+      //
+      // This used to multiply the result by 100, 20 or 5 depending on mode and
+      // call the difference a saving. Those numbers came from nowhere: a search
+      // returning 200 tokens claimed to have saved 19,800 without anything
+      // having been read. An overstated saving is the one number this project
+      // must never produce, and this was the largest one it produced.
+      //
+      // The honest comparison is the alternative the caller actually had: to
+      // find these matches by hand they would have read the files that contain
+      // them. That is a real quantity -- the files are known and their sizes
+      // are on disk -- so it is summed rather than guessed. Files that could
+      // not be stat'd are simply not counted, which understates the saving; of
+      // the two directions to be wrong in, that is the safe one.
+      let searchedBytes = 0;
+      for (const file of filesWithMatches) {
+        try {
+          searchedBytes += statSync(resolve(opts.cwd, file)).size;
+        } catch {
+          // Not counted rather than estimated.
+        }
       }
+      // ~4 bytes per token is the same conversion used elsewhere in this
+      // codebase for byte-denominated budgets.
+      const originalTokens = Math.max(resultTokens, Math.round(searchedBytes / 4));
 
-      const tokensSaved = originalTokens - resultTokens;
-      const compressionRatio = resultTokens / originalTokens;
+      const tokensSaved = Math.max(0, originalTokens - resultTokens);
+      // An honest baseline can now equal the result (nothing was withheld), so
+      // the ratio must not divide by zero or report a nonsense figure.
+      const compressionRatio = originalTokens > 0 ? resultTokens / originalTokens : 1;
 
       // Build result
       const result: SmartGrepResult = {

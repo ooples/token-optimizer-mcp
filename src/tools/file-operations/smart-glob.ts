@@ -310,18 +310,27 @@ export class SmartGlobTool {
         JSON.stringify(results)
       ).tokens;
 
-      // Estimate original tokens (if we had returned all content)
-      let originalTokens = resultTokens;
-      if (!opts.includeContent && !opts.includeMetadata) {
-        // Path-only mode: estimate content would be 50x more tokens
-        originalTokens = resultTokens * 50;
-      } else if (!opts.includeContent) {
-        // Metadata mode: estimate content would be 10x more tokens
-        originalTokens = resultTokens * 10;
-      }
+      // WHAT WAS ACTUALLY WITHHELD, not a multiplier.
+      //
+      // This used to report `resultTokens * 50` as the baseline in path-only
+      // mode -- so listing 2,400 files claimed to have saved 117,943 tokens
+      // without having read a single one. Nothing was read, so nothing about
+      // file CONTENT was saved; the 50x came from nowhere.
+      //
+      // A listing's real saving is what pagination and filtering kept out of
+      // the response: the paths that matched and were not returned. That is
+      // countable, so it is counted. When everything matched fits in the
+      // response, the honest answer is that nothing was saved.
+      const withheldPaths = files.slice(opts.offset + paginatedFiles.length).map((f) => f.path);
+      const withheldTokens = withheldPaths.length
+        ? this.tokenCounter.count(JSON.stringify(withheldPaths)).tokens
+        : 0;
 
-      const tokensSaved = originalTokens - resultTokens;
-      const compressionRatio = resultTokens / originalTokens;
+      const originalTokens = resultTokens + withheldTokens;
+      const tokensSaved = withheldTokens;
+      // An honest baseline can now equal the result (nothing was withheld), so
+      // the ratio must not divide by zero or report a nonsense figure.
+      const compressionRatio = originalTokens > 0 ? resultTokens / originalTokens : 1;
 
       // Build result
       const result: SmartGlobResult = {
