@@ -7,7 +7,9 @@
   "types": "dist/server/index.d.ts",
   "bin": {
     "token-optimizer-mcp": "./dist/server/index.js",
-    "token-optimizer-daemon": "./dist/server/daemon.js"
+    "token-optimizer-daemon": "./dist/server/daemon.js",
+    "token-optimizer-install": "./scripts/install-cli.mjs",
+    "token-optimizer-doctor": "./scripts/doctor.mjs"
   },
   "files": [
     "dist/**/*",
