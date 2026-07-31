@@ -1,0 +1,100 @@
+name: Cancel in-progress runs on PR close
+
+# When a PR is merged or closed, cancel the workflow runs still executing
+# against its now-dead HEAD. Without this, the last `synchronize` push keeps a
+# full CI matrix and Quality Gates running for minutes on a SHA nobody will ever
+# merge -- and because the branch is usually deleted on merge, those runs are
+# working on something that no longer exists. They hold FIFO slots that queued
+# runs on live branches are waiting for, which is how a visible backlog forms
+# after a busy merge.
+#
+# Ported from ooples/AiDotNet, where this pattern is already proven.
+#
+# Fires on pull_request.closed, which covers merged AND closed-without-merge --
+# both leave the runs orphaned.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  # -- Server-side eviction (the runner-proof path) ---------------------------
+  #
+  # GitHub evaluates a job's `concurrency` group AT QUEUE TIME, the moment the
+  # run is created and BEFORE any runner is assigned. So entering a heavy
+  # workflow's group with cancel-in-progress: true cancels its in-flight run
+  # immediately, server-side, even while this job is itself sitting queued.
+  #
+  # That property is the whole point: the API sweep below needs a runner, and
+  # when the pool is saturated by the very runs it exists to cancel, it queues
+  # BEHIND them and fires far too late. These eviction jobs need no runner for
+  # their side effect -- their bodies are deliberately no-ops.
+  #
+  # The group keys must mirror each heavy workflow's own `concurrency.group`
+  # exactly, as evaluated in a pull_request context. Both use
+  # `${{ github.workflow }}-${{ github.ref }}`, and on a PR event `github.ref`
+  # is `refs/pull/<n>/merge` here just as it was there -- so the only part that
+  # must be substituted by hand is the workflow NAME, since `github.workflow`
+  # would otherwise evaluate to THIS workflow's name.
+  evict-ci-group:
+    name: Evict CI concurrency group
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    concurrency:
+      group: CI-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - run: echo "Evicted concurrency group CI-${{ github.ref }} (cancelled server-side at queue time)."
+
+  evict-quality-gates-group:
+    name: Evict Quality Gates concurrency group
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    concurrency:
+      group: Quality Gates-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - run: echo "Evicted concurrency group 'Quality Gates-${{ github.ref }}'."
+
+  # -- API sweep (defence in depth) -------------------------------------------
+  #
+  # Catches what the eviction jobs cannot: workflows with no `concurrency` block
+  # at all (Commit Lint, HOL Plugin Scanner, Codex Auto-Fix), and runs that are
+  # QUEUED but not yet started -- which still hold a slot. This may fire late
+  # under saturation, by which point the eviction jobs have already killed the
+  # long-running ones.
+  cancel:
+    name: Cancel orphaned PR runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel in-progress and queued runs for this PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Queued runs are included deliberately: a run that has not started
+          # still occupies a FIFO slot, so leaving it is exactly the backlog
+          # this workflow exists to clear.
+          for status in in_progress queued; do
+            echo "::group::$status runs on $PR_HEAD_REF"
+            gh api "repos/${REPO}/actions/runs?branch=${PR_HEAD_REF}&status=${status}&per_page=100" \
+              --jq '.workflow_runs[] | "\(.id) \(.head_sha) \(.name)"' \
+              | while read -r run_id head_sha run_name; do
+                  # Only cancel runs for THIS PR's head SHA. A branch name can
+                  # be reused by a later PR, and cancelling someone else's run
+                  # would be a worse bug than the one being fixed.
+                  if [ "$head_sha" = "$PR_HEAD_SHA" ]; then
+                    echo "Cancelling $run_id ($run_name) for PR #$PR_NUMBER at $head_sha"
+                    gh run cancel "$run_id" --repo "$REPO" || true
+                  fi
+                done
+            echo "::endgroup::"
+          done
