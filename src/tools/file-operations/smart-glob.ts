@@ -38,7 +38,10 @@ export interface SmartGlobOptions {
   absolute?: boolean; // Return absolute paths (default: false)
 
   // Filtering options
-  ignore?: string[]; // Patterns to ignore (default: node_modules, .git)
+  // Defaults are node_modules, .git, dist AND build -- the last two are real
+  // source directories in plenty of projects, so `metadata.ignoredMatches`
+  // reports whatever they withheld. Pass `[]` to search everything.
+  ignore?: string[];
   onlyFiles?: boolean; // Only return files, not directories (default: true)
   onlyDirectories?: boolean; // Only return directories (default: false)
 
@@ -85,6 +88,10 @@ export interface SmartGlobResult {
     compressionRatio: number;
     duration: number;
     cacheHit: boolean;
+    /** Real matches withheld by the ignore patterns; absent when none were. */
+    ignoredMatches?: number;
+    /** Plain-language explanation of what was withheld and how to see it. */
+    ignoreNote?: string;
   };
   files?: Array<string | FileMetadata>;
   error?: string;
@@ -110,6 +117,17 @@ export class SmartGlobTool {
     const opts: Required<SmartGlobOptions> = {
       cwd: options.cwd ?? process.cwd(),
       absolute: options.absolute ?? false,
+      // `dist` and `build` are conventions, not guarantees. Real projects keep
+      // real source in both -- AiDotNet.Tensors has two .csproj files under
+      // build/, and a search for '**/*.csproj' silently returned 16 of its 18.
+      // The hook DENIES the built-in Glob and sends the caller here, so a
+      // silent omission is not a smaller result set, it is the caller
+      // concluding their file does not exist.
+      //
+      // The defaults are kept, because they are right far more often than not.
+      // What is removed is the SILENCE: `ignoredMatches` below reports how many
+      // real matches these patterns withheld, so the omission is visible and
+      // the caller can pass their own `ignore` to see them.
       ignore: options.ignore ?? [
         '**/node_modules/**',
         '**/.git/**',
@@ -168,6 +186,16 @@ export class SmartGlobTool {
         ignore: opts.ignore,
         nodir: opts.onlyFiles,
       });
+
+      // How many REAL matches the ignore patterns withheld. Costs one extra
+      // walk only when something was actually hidden, and turns a silent
+      // omission into a number the caller can act on.
+      const unignored = globSync(pattern, {
+        cwd: opts.cwd,
+        absolute: opts.absolute,
+        nodir: opts.onlyFiles,
+      });
+      const ignoredMatches = Math.max(0, unignored.length - matches.length);
 
       // Filter and collect file info
       let files: Array<{ path: string; metadata?: FileMetadata }> = [];
@@ -309,6 +337,16 @@ export class SmartGlobTool {
           compressionRatio,
           duration: 0, // Will be set below
           cacheHit: false,
+          // Only present when something was actually withheld, so a normal
+          // search stays as quiet as it was.
+          ...(ignoredMatches > 0
+            ? {
+                ignoredMatches,
+                ignoreNote:
+                  `${ignoredMatches} file(s) matched but were excluded by the default ` +
+                  `ignore patterns (${opts.ignore.join(', ')}). Pass ignore: [] to include them.`,
+              }
+            : {}),
         },
         files: results,
       };
