@@ -89,13 +89,9 @@ function candidatePaths(operand, cwd) {
  * heredoc marker is not a file, and inventing a node for it would put fiction
  * in the graph.
  */
-export function touchedFiles(payload) {
+export function touchedPaths(payload) {
   const input = payload?.tool_input || {};
-  // path -> size. The size is kept because resolving a candidate ALREADY
-  // stats it: `fileSize(spelling) >= 0` is how a real file is told from a flag
-  // or a glob. Discarding the answer meant every caller stat'd each path again,
-  // on a hook that runs before EVERY tool call.
-  const out = new Map();
+  const out = new Set();
 
   // A `cd` INSIDE the command changes where its relative operands resolve, and
   // the hook payload's cwd knows nothing about it. Observed live: a Bash call
@@ -109,9 +105,8 @@ export function touchedFiles(payload) {
   const add = (candidate) => {
     if (!candidate || typeof candidate !== 'string') return;
     for (const spelling of resolvableCandidates(candidate, cwd)) {
-      const size = fileSize(spelling);
-      if (size >= 0) {
-        out.set(canonicalPath(spelling, cwd), size);
+      if (fileSize(spelling) >= 0) {
+        out.add(canonicalPath(spelling, cwd));
         return;
       }
     }
@@ -131,17 +126,7 @@ export function touchedFiles(payload) {
     for (const operand of fileOperands(segment)) add(operand);
   }
 
-  return [...out].map(([path, size]) => ({ path, size }));
-}
-
-/**
- * The touched paths alone, for callers that do not need the sizes.
- *
- * Kept so every existing caller and test reads the same, while the ones on the
- * hook's critical path can take the size that was measured on the way in.
- */
-export function touchedPaths(payload) {
-  return touchedFiles(payload).map((f) => f.path);
+  return [...out];
 }
 
 /** Resolves the first operand that is a real file over the size threshold. */
