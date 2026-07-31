@@ -44,6 +44,49 @@ const PID_FILE = path.join(
   '.token-optimizer-daemon.pid'
 );
 
+/** The pid recorded in the pid file, or null when there is not a usable one. */
+function recordedPid(): number | null {
+  try {
+    const pid = Number(fs.readFileSync(PID_FILE, 'utf8').trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Is that process actually there? Signal 0 tests without touching it. */
+function isRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Another daemon already owns this machine, if one is genuinely running.
+ *
+ * A pid file naming a process that no longer exists is stale -- left behind by
+ * a hard kill, which on Windows is what SIGTERM does, so the handler never gets
+ * to clean up. Stale files must not block a restart, which is why liveness is
+ * checked rather than mere existence.
+ */
+function liveDaemonPid(): number | null {
+  const pid = recordedPid();
+  if (pid === null || pid === process.pid) return null;
+  return isRunning(pid) ? pid : null;
+}
+
+/** Removes the pid file only when it still names this process. */
+function releasePidFile(): void {
+  try {
+    if (recordedPid() === process.pid) fs.unlinkSync(PID_FILE);
+  } catch {
+    // A pid file we cannot read or remove is not worth failing shutdown over.
+  }
+}
+
 interface DaemonStats {
   startTime: Date;
   requestCount: number;
@@ -345,10 +388,15 @@ function shutdown(): void {
     mcpProcess = null;
   }
 
-  // Remove PID file
-  if (fs.existsSync(PID_FILE)) {
-    fs.unlinkSync(PID_FILE);
-  }
+  // Remove the PID file ONLY IF IT IS OURS.
+  //
+  // It used to be removed unconditionally, and the path is shared by every
+  // instance. So a second daemon that failed to bind the socket -- the normal
+  // outcome of starting one twice -- ran this same shutdown path and deleted
+  // the RUNNING daemon's pid file on its way out. The live daemon was then
+  // untracked: nothing could find it to stop it, and the next start added
+  // another orphan.
+  releasePidFile();
 
   // Remove Unix socket
   if (PLATFORM !== 'win32' && fs.existsSync(SOCKET_PATH)) {
@@ -367,6 +415,19 @@ function startDaemon(): void {
   console.error(`[DAEMON] Version: ${DAEMON_VERSION}`);
   console.error(`[DAEMON] Platform: ${PLATFORM}`);
   console.error(`[DAEMON] Socket: ${SOCKET_PATH}`);
+
+  // REFUSE BEFORE DOING ANY WORK, if a daemon is already up.
+  //
+  // Starting twice previously got as far as spawning a second MCP server child
+  // before the socket bind failed, and the failure path then deleted the first
+  // daemon's pid file. Checking first means the second invocation costs
+  // nothing, says why, and leaves the running one strictly alone.
+  const running = liveDaemonPid();
+  if (running !== null) {
+    console.error(`[DAEMON] Already running (PID ${running}) -- this instance is exiting.`);
+    console.error(`[DAEMON] Stop it first if you meant to restart: kill ${running}`);
+    process.exit(0);
+  }
 
   // Start MCP server subprocess
   startMCPServer();
@@ -410,7 +471,8 @@ function startDaemon(): void {
     console.error(`[DAEMON] Listening on ${SOCKET_PATH}`);
     console.error(`[DAEMON] PID: ${process.pid}`);
 
-    // Write PID file for process management
+    // Claim the PID file. A stale one naming a dead process is replaced; a
+    // live one is refused above, before we ever get here.
     fs.writeFileSync(PID_FILE, process.pid.toString());
 
     // Start the idle self-exit clock (no-op if disabled via env).
