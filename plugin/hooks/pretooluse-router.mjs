@@ -13,12 +13,19 @@
 
 import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF, fileSize }
   from './lib/policy.mjs';
-import { decide, remember, normalizePayload, readCostBytes, touchedPaths } from './lib/decide.mjs';
+import { decide, remember, normalizePayload, readCostBytes, touchedPaths, isContentDump } from './lib/decide.mjs';
 import { recordRead } from './lib/metrics.mjs';
 import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { readFileSync } from 'node:fs';
+
+/**
+ * Largest file the hook will read to index. Above this the touch is still
+ * observed, but nothing is hashed or snapshotted -- a build log must never
+ * become hook latency the user waits on.
+ */
+const HARVEST_MAX_BYTES = Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
 
 // Wrapped whole. Any defect in this hook must cost the user nothing: an
 // exception here allows the call exactly as if the plugin were not installed.
@@ -66,7 +73,12 @@ try {
         sessionId: payload.session_id,
         bytes,
       });
-    } else {
+    } else if (isContentDump(payload.tool_input.command)) {
+      // ONLY commands that actually print the file pay for its bytes. `Write`,
+      // `Edit` and a bare `wc -l` name a file without reading it into context,
+      // so charging them a full-file read inflated the very cost the holdout
+      // comparison is built on -- and an overstated saving is the one number
+      // this project must never produce.
       for (const path of touched) {
         const size = fileSize(path);
         if (size > 0) recordRead(dirFor(path), { anchor: path, sessionId: payload.session_id, bytes: size });
@@ -82,6 +94,14 @@ try {
     // makes no claims.
     for (const path of touched) {
       try {
+        // CAPPED BEFORE THE READ. indexFile bounds the stored SNAPSHOT, not the
+        // read that produces it, so a single huge operand -- a multi-hundred-
+        // megabyte build log is the ordinary case -- would be slurped
+        // synchronously on the hook path with the user waiting. A file we
+        // cannot afford to hash is simply not indexed; the touch is still
+        // observed above.
+        if (fileSize(path) > HARVEST_MAX_BYTES) continue;
+
         const dir = dirFor(path);
         // ONE read, not two. harvest() hashed the file and indexFile() then
         // read it again, so every allowed call paid double the I/O on the

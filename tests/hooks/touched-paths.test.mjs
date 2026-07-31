@@ -10,7 +10,7 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedPaths } from '../../hooks-core/decide.mjs';
+import { touchedPaths, isContentDump } from '../../hooks-core/decide.mjs';
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
 
 let home;
@@ -92,7 +92,77 @@ describe('the graph a touch belongs to is the FILE\'s project', () => {
   });
 
   test('the marker search does not run away up the tree', () => {
-    // A bounded walk, so a path on a huge filesystem cannot cost a hook call.
-    expect(projectRootFor(join(repoA, 'src/main.ts'), repoA)).toBe(repoA.split('\\').join('/'));
+    // Actually builds a chain deeper than the bound, rather than re-checking
+    // the shallow case the tests above already cover -- the previous version of
+    // this test named the depth bound without ever reaching it.
+    const deep = join(home, 'unmarked', Array.from({ length: 45 }, (_, i) => `d${i}`).join('/'));
+    mkdirSync(deep, { recursive: true });
+    const buried = join(deep, 'main.ts');
+    writeFileSync(buried, 'x');
+
+    // No marker anywhere above it within the bound, so it must fall back rather
+    // than walk to the filesystem root.
+    expect(projectRootFor(buried, repoA)).toBe(repoA.split('\\').join('/'));
+  });
+
+  test('a nested package.json does NOT shadow the repository root', () => {
+    // In a monorepo every workspace has a manifest, so treating package.json as
+    // a repository marker split one project's graph into as many graphs as it
+    // had manifests.
+    const pkg = join(repoA, 'packages', 'foo');
+    mkdirSync(join(pkg, 'src'), { recursive: true });
+    writeFileSync(join(pkg, 'package.json'), '{}');
+    const file = join(pkg, 'src', 'index.ts');
+    writeFileSync(file, 'x');
+
+    expect(projectRootFor(file, repoA)).toBe(repoA.split('\\').join('/'));
+  });
+
+  test('a .git FILE counts, not just a directory', () => {
+    // Submodules and `git worktree` checkouts both write a .git FILE pointing
+    // elsewhere, and those are the layouts where the root is easiest to get
+    // wrong.
+    const wt = join(home, 'worktree');
+    mkdirSync(join(wt, 'src'), { recursive: true });
+    writeFileSync(join(wt, '.git'), 'gitdir: /elsewhere/.git/worktrees/wt\n');
+    const file = join(wt, 'src', 'main.ts');
+    writeFileSync(file, 'x');
+
+    expect(projectRootFor(file, repoA)).toBe(wt.split('\\').join('/'));
+  });
+});
+
+describe('a cd that goes nowhere must not lose the touch', () => {
+  test('an unresolvable cd falls back to the session cwd', () => {
+    // `cd $REPO && cat src/main.ts` with $REPO unexpanded re-based every
+    // relative operand onto a path resolving to nothing, so the call recorded
+    // no touch at all.
+    const out = bash('cd $REPO\nwc -l src/main.ts', repoA);
+    expect(names(out)).toEqual(['src/main.ts']);
+  });
+
+  test('a cd to a missing directory also falls back', () => {
+    const out = bash(`cd ${join(home, 'does-not-exist')}\nwc -l src/main.ts`, repoA);
+    expect(names(out)).toEqual(['src/main.ts']);
+  });
+
+  test('a cd to a FILE is not treated as a directory', () => {
+    const out = bash(`cd ${join(repoA, 'src/main.ts')}\nwc -l src/main.ts`, repoA);
+    expect(names(out)).toEqual(['src/main.ts']);
+  });
+});
+
+describe('only content dumps pay for the bytes', () => {
+  test('cat and grep are dumps', () => {
+    expect(isContentDump('cat src/main.ts')).toBe(true);
+    expect(isContentDump('grep -rn x src')).toBe(true);
+  });
+
+  test('a bare wc or an edit is not', () => {
+    // Charging these a full-file read inflated the cost the holdout comparison
+    // is built on, and an overstated saving is the one number to never produce.
+    expect(isContentDump('wc -l src/main.ts')).toBe(false);
+    expect(isContentDump('')).toBe(false);
+    expect(isContentDump(undefined)).toBe(false);
   });
 });

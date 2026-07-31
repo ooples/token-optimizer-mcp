@@ -12,11 +12,34 @@
  */
 
 import { fileSize, isBinaryPath, largeFileBytes } from './policy.mjs';
+import { statSync } from 'node:fs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { activeRules } from './remedy.mjs';
 import { wikiDir } from './wiki.mjs';
 
 const KB = (bytes) => Math.round(bytes / 1024);
+
+/** Whether a path names an existing directory. Never throws. */
+function isDirectory(path) {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Does this command DUMP file contents, rather than merely naming a file?
+ *
+ * `cat`, `head` and `grep` pay for the bytes; `Write`, `Edit` and a bare
+ * `wc -l` do not. Charging a full-file read for all of them overstated the very
+ * cost the holdout comparison is built on, and an inflated saving is the one
+ * failure this project cannot afford.
+ */
+export function isContentDump(command) {
+  if (typeof command !== 'string') return false;
+  return DUMP_COMMANDS.test(command) || RECURSIVE_SEARCH.test(command);
+}
 
 /**
  * Commands that print a whole file to stdout.
@@ -100,7 +123,13 @@ export function touchedPaths(payload) {
   // touch at all -- so work in a second repository was invisible.
   const command = typeof input.command === 'string' ? input.command : '';
   const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
-  const cwd = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : payload?.cwd;
+  const cdTarget = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : null;
+  // Only trust a `cd` that names a directory which EXISTS. `cd $REPO && cat
+  // src/app.ts` -- an unexpanded variable, or a plain typo -- otherwise re-bases
+  // every relative operand onto a path resolving to nothing, so the call records
+  // no touch at all. Falling back to the session cwd is strictly better than
+  // losing the observation.
+  const cwd = cdTarget && isDirectory(cdTarget) ? cdTarget : payload?.cwd;
 
   const add = (candidate) => {
     if (!candidate || typeof candidate !== 'string') return;
