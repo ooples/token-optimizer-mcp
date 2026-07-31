@@ -19,6 +19,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { readManifest, verifyManifest, residue } from './manifest.mjs';
@@ -118,7 +119,7 @@ export function probeEnforcement({ root, workspace }) {
   // on a machine therefore reported both probes as failures -- the product
   // behaving correctly, scored as broken. A doctor that cries wolf on its own
   // second run is worse than no doctor.
-  const probeId = `doctor-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const probeId = `doctor-${process.pid}-${randomBytes(4).toString('hex')}`;
   const big = join(workspace, `${probeId}-large.ts`);
   const small = join(workspace, `${probeId}-small.ts`);
   writeFileSync(big, 'export const x = 1;\n'.repeat(20_000));
