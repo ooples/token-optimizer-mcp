@@ -14,7 +14,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
-import { join, relative } from 'path';
+import { join, relative, isAbsolute } from 'path';
 import { homedir } from 'os';
 import * as ts from 'typescript';
 
@@ -144,7 +144,14 @@ export class SmartSymbolsTool {
     } = options;
 
     const startTime = Date.now();
-    const absolutePath = join(this.projectRoot, filePath);
+    // An ABSOLUTE filePath must be used as given.
+    // join(projectRoot, filePath) on an absolute path produces nonsense --
+    // a project root with a drive letter glued onto it -- and the tool then
+    // reports "File not found" for a file that is plainly there. Measured
+    // live: every call with an absolute path failed exactly this way.
+    const absolutePath = isAbsolute(filePath)
+      ? filePath
+      : join(this.projectRoot, filePath);
 
     // Validate file exists
     if (!existsSync(absolutePath)) {

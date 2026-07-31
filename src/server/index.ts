@@ -1772,9 +1772,12 @@ async function handleToolCall(request: {
       }
 
       case 'smart_config_read': {
-        // Takes the file path first, then options -- not the shared cache.
-        const { filePath, ...configOptions } = args as any;
-        const result = await runSmartConfigRead(filePath, configOptions);
+        // The ADVERTISED parameter is `path`, and the runner takes the file
+        // first and options second. Destructuring `filePath` here -- a name the
+        // published schema never mentions -- meant a caller passing exactly
+        // what the schema documents got "Config file not found: undefined".
+        const { path: configPath, ...configOptions } = args as any;
+        const result = await runSmartConfigRead(configPath, configOptions);
         return {
           content: [
             {

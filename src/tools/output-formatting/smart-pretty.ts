@@ -656,7 +656,12 @@ export class SmartPretty {
       const resultTokens = this.tokenCounter.count(highlightedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressionResult.compressed.toString(),
+        // BASE64, to match the base64 the read path decodes.
+        // `.toString()` with no encoding is utf8, which mangles binary gzip
+        // bytes irreversibly. The entry was then unreadable forever: every
+        // later call returned "incorrect header check" until the cache was
+        // cleared by hand. One call was enough to break the tool permanently.
+        compressionResult.compressed.toString('base64'),
         resultTokens,
         compressionResult.compressedSize
       );
@@ -918,7 +923,12 @@ export class SmartPretty {
       const resultTokens = this.tokenCounter.count(formattedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressionResult.compressed.toString(),
+        // BASE64, to match the base64 the read path decodes.
+        // `.toString()` with no encoding is utf8, which mangles binary gzip
+        // bytes irreversibly. The entry was then unreadable forever: every
+        // later call returned "incorrect header check" until the cache was
+        // cleared by hand. One call was enough to break the tool permanently.
+        compressionResult.compressed.toString('base64'),
         resultTokens,
         compressionResult.compressedSize
       );

@@ -134,6 +134,9 @@ interface ConnectionState {
 // ============================================================================
 
 export class SmartWebSocket {
+  /** Real, open sockets, keyed by url. Empty until something actually connects. */
+  private sockets = new Map<string, WebSocket>();
+
   private connections = new Map<string, ConnectionState>();
   private messageIdCounter = 0;
 
@@ -238,13 +241,47 @@ export class SmartWebSocket {
       state.reconnectAttempts++;
     }
 
-    // NOTE: Placeholder for Phase 3
-    // Real implementation will use 'ws' package
-    // Simulate connection with exponential backoff
+    // ACTUALLY CONNECT.
+    //
+    // This slept for a moment and then set state to 'connected' -- reporting a
+    // live WebSocket to a server it had never contacted. Every downstream
+    // answer built on that was fiction, and a caller has no way to tell a
+    // simulated connection from a real one.
+    //
+    // Node has had a global WebSocket since v22, so no extra dependency is
+    // needed. A connection that does not open is now reported as failed,
+    // with the reason.
     const backoffTime = this.calculateBackoff(state.reconnectAttempts);
-    await this.sleep(Math.min(backoffTime, 100)); // Cap at 100ms for testing
+    if (state.reconnectAttempts > 0) {
+      await this.sleep(Math.min(backoffTime, 100));
+    }
 
-    // Simulate successful connection
+    if (typeof globalThis.WebSocket !== 'function') {
+      state.state = 'error' as const;
+      throw new Error(
+        'WebSocket connections need Node 22 or newer (globalThis.WebSocket). ' +
+          'This tool no longer reports a simulated connection.'
+      );
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const socket = new globalThis.WebSocket(options.url);
+      const timer = setTimeout(() => {
+        try { socket.close(); } catch { /* already closing */ }
+        reject(new Error(`Timed out connecting to ${options.url}`));
+      }, 10_000);
+
+      socket.addEventListener('open', () => {
+        clearTimeout(timer);
+        this.sockets.set(options.url, socket);
+        resolve();
+      });
+      socket.addEventListener('error', () => {
+        clearTimeout(timer);
+        reject(new Error(`Could not connect to ${options.url}`));
+      });
+    });
+
     state.state = 'connected' as const;
     state.connectedAt = Date.now();
     state.protocol = options.protocols?.[0] || 'websocket';

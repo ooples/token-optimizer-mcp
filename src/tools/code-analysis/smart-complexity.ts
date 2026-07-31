@@ -8,7 +8,7 @@
 
 import * as ts from 'typescript';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, isAbsolute } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -127,7 +127,14 @@ export class SmartComplexityTool {
     if (fileContent) {
       content = fileContent;
     } else if (filePath) {
-      absolutePath = join(projectRoot, filePath);
+      // An ABSOLUTE filePath must be used as given.
+      // join(projectRoot, filePath) on an absolute path produces nonsense --
+      // a project root with a drive letter glued onto it -- and the tool then
+      // reports "File not found" for a file that is plainly there. Measured
+      // live: every call with an absolute path failed exactly this way.
+      absolutePath = isAbsolute(filePath)
+        ? filePath
+        : join(projectRoot, filePath);
       if (!existsSync(absolutePath)) {
         throw new Error(`File not found: ${absolutePath}`);
       }

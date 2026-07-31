@@ -244,11 +244,22 @@ export class SmartREST {
     if (options.specContent) {
       specText = options.specContent;
     } else if (options.specUrl) {
-      // In real implementation, fetch from URL
-      // For now, throw error requiring specContent
-      throw new Error(
-        'specUrl fetching not yet implemented. Please provide specContent directly.'
-      );
+      // ACTUALLY FETCH IT.
+      //
+      // `specUrl` is advertised in this tool's input schema, and passing it
+      // threw "not yet implemented" -- a parameter the tool promises and
+      // refuses. Node has had a global fetch for several major versions; there
+      // was nothing to wait for.
+      const response = await fetch(options.specUrl, {
+        headers: { accept: 'application/json, application/yaml, text/yaml, */*' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Could not fetch the spec from ${options.specUrl}: ${response.status} ${response.statusText}`
+        );
+      }
+      specText = await response.text();
     } else {
       throw new Error('Either specUrl or specContent must be provided');
     }
