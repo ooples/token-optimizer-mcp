@@ -111,3 +111,58 @@ describe('SmartReadTool chunking', () => {
     expect(result.content).toMatch(/chunk 1 of \d+/);
   });
 });
+
+/**
+ * A "compact unified diff" that contains the whole file is a copy of the file.
+ *
+ * Found by using smart_edit for real work: changing 13 lines of a 750-line file
+ * returned 6,836 tokens and reported tokensSaved: 0. The context parameter was
+ * named `_contextLines` and ignored, so every unchanged line was emitted --
+ * making the tool cost MORE than the built-in edit on exactly the large files
+ * it exists for.
+ */
+describe('smart_edit returns a diff, not the file', () => {
+  const dirs2: string[] = [];
+  const caches2: CacheEngine[] = [];
+
+  afterEach(() => {
+    while (caches2.length) {
+      try { caches2.pop()?.close(); } catch { /* already closed */ }
+    }
+    while (dirs2.length) {
+      const d = dirs2.pop();
+      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+    }
+  });
+
+  it('elides long unchanged runs instead of echoing them', async () => {
+    const { mkdtempSync } = await import('fs');
+    const dir = mkdtempSync(join(tmpdir(), 'token-optimizer-diff-'));
+    dirs2.push(dir);
+    const cache = new CacheEngine(join(dir, 'c.db'));
+    caches2.push(cache);
+    const counter = new TokenCounter();
+    const tool = new (await import('../../../src/tools/file-operations/smart-edit.js')).SmartEditTool(
+      cache, counter, new MetricsCollector()
+    );
+
+    const body = Array.from({ length: 750 }, (_, i) => `const value${i} = ${i};`).join('\n');
+    const file = join(dir, 'big.js');
+    writeFileSync(file, body);
+
+    const result = await tool.edit(file, {
+      type: 'replace', startLine: 84, endLine: 94, content: 'const replaced = true;',
+    });
+
+    const paid = counter.count(JSON.stringify(result)).tokens;
+    const whole = counter.count(body).tokens;
+
+    // The response must be a small fraction of the file it edited.
+    expect(paid).toBeLessThan(whole * 0.25);
+    expect(result.diff?.unifiedDiff.split('\n').length).toBeLessThan(60);
+    expect(result.diff?.unifiedDiff).toMatch(/unchanged lines/);
+
+    // ...and the saving reported must be one that was actually delivered.
+    expect(result.metadata.tokensSaved).toBeGreaterThan(0);
+  });
+});

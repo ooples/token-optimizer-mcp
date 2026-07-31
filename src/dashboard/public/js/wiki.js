@@ -81,15 +81,18 @@ async function loadBalance() {
     return;
   }
 
+  // Plain language, because someone reading this page has no reason to know
+  // what "injected" means. The words describe what happened, not what the code
+  // calls it.
   const tiles = [
-    ['Findings injected', nf.format(balance.injections)],
-    ['Held back as control', nf.format(balance.holdouts)],
-    ['Tokens spent injecting', nf.format(balance.injectedTokens)],
+    ['Times memory was used', nf.format(balance.injections)],
+    ['Kept back for comparison', nf.format(balance.holdouts)],
+    ['Cost of remembering', `${nf.format(balance.injectedTokens)} tokens`],
     [
-      'Tokens avoided (est.)',
+      'Reading avoided',
       balance.estimatedTokensAvoided === null
         ? '—'
-        : nf.format(balance.estimatedTokensAvoided),
+        : `${nf.format(balance.estimatedTokensAvoided)} tokens`,
     ],
   ];
 

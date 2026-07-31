@@ -1,0 +1,400 @@
+/*
+ * Shared design tokens.
+ *
+ * Both pages consume these, so the dashboard and the knowledge graph read as
+ * one product rather than two tools that happen to be served by one process.
+ *
+ * The palette is built around ONE idea: what you kept is bright, what it would
+ * have cost is dim. Mint carries every "saved" quantity and nothing else;
+ * amber carries every "would have cost" quantity and nothing else. Because the
+ * two are used consistently, the before/after bar is readable without its
+ * labels -- but the labels are always there anyway, so colour is never the only
+ * encoding.
+ *
+ * Status colours (good/warn/bad) are deliberately separate from the accent, so
+ * a healthy verdict can never be confused with a savings figure.
+ */
+
+:root {
+  /* Ground. Near-black with a slight cyan bias so mint sits on it naturally
+     rather than vibrating against a pure neutral. */
+  --bg: #0a0f14;
+  --surface: #111922;
+  --surface-2: #18232e;
+  --surface-3: #21303e;
+  --line: #24333f;
+  --line-bright: #35485a;
+
+  /* Ink */
+  --ink: #eaf2f7;
+  --ink-2: #a3b6c4;
+  --ink-3: #6c8091;
+
+  /* The one bright thing on the page: what you kept. */
+  --saved: #2ee6a8;
+  --saved-dim: rgba(46, 230, 168, 0.16);
+  --saved-glow: rgba(46, 230, 168, 0.28);
+
+  /* What it would have cost. Always the dim half of a comparison. */
+  --spent: #f0a742;
+  --spent-dim: rgba(240, 167, 66, 0.18);
+
+  /* The graph is its own world -- a cool hue that belongs to neither side of
+     the savings comparison, so a node can never read as a quantity. */
+  --graph: #7aa2f7;
+  --graph-dim: rgba(122, 162, 247, 0.18);
+  --graph-2: #b48ef7;
+
+  /* Status, reserved. Never reused as a series colour. */
+  --ok: #2ee6a8;
+  --warn: #f0a742;
+  --bad: #f2545b;
+
+  --radius: 14px;
+  --radius-sm: 8px;
+  --gap: 20px;
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Digits that line up in columns must not jitter as they count. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+a {
+  color: var(--graph);
+}
+
+/* ---------------------------------------------------------------- shell -- */
+
+.shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 24px 72px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 26px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.brand .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--saved);
+  box-shadow: 0 0 12px var(--saved-glow);
+  align-self: center;
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.nav a:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.nav a[aria-current='page'] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.topbar .spacer {
+  flex: 1;
+}
+
+.meta {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.btn {
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 15px;
+  font-size: 13.5px;
+  font-weight: 550;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--surface-3);
+  border-color: var(--line-bright);
+}
+
+.btn:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--saved);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- cards -- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.card-sub {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  margin: 0 0 16px;
+}
+
+/* -------------------------------------------------------------- explain -- */
+
+/*
+ * The "?" that turns a number into something a beginner can act on. Kept as a
+ * real <button> so it is reachable by keyboard, and the text is in the DOM
+ * rather than a title attribute so screen readers get it too.
+ */
+.explain {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--line-bright);
+  background: none;
+  color: var(--ink-3);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: help;
+  padding: 0;
+  flex: none;
+}
+
+.explain:hover,
+.explain:focus-visible {
+  border-color: var(--saved);
+  color: var(--saved);
+}
+
+/*
+ * Tips open UPWARD by default, which put them off the top of the viewport for
+ * any control near the header -- seen in the first render, where the topmost
+ * explainer covered the page title instead of explaining it. `.tip-below`
+ * flips one that has no room above; the class is set in markup rather than
+ * measured at runtime, because which controls sit near the top is known.
+ */
+.explain .tip {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 250px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-bright);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.explain:hover .tip,
+.explain:focus-visible .tip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.explain .tip.tip-below {
+  bottom: auto;
+  top: calc(100% + 9px);
+}
+
+/* Near the right edge, a centred tip overflows the page. These pull it back. */
+.explain .tip.tip-right {
+  bottom: auto;
+  top: -6px;
+  left: calc(100% + 9px);
+  transform: none;
+}
+
+.explain .tip.tip-left {
+  left: auto;
+  right: -8px;
+  transform: none;
+}
+
+/* --------------------------------------------------------- empty states -- */
+
+/*
+ * An empty panel is the FIRST thing a new user sees, so it is the best chance
+ * to explain what the tool does. "No data available" wasted that chance.
+ */
+/*
+ * An empty panel should say its piece and get out of the way. The first render
+ * gave every empty state the same generous padding as a full one, so an idle
+ * page was several screens of near-blank cards.
+ */
+.empty {
+  text-align: center;
+  padding: 22px 26px;
+  color: var(--ink-2);
+}
+
+.empty.is-compact {
+  padding: 14px 18px;
+}
+
+.empty .mark {
+  font-size: 26px;
+  margin-bottom: 10px;
+  opacity: 0.75;
+}
+
+.empty h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.empty p {
+  margin: 0 auto;
+  max-width: 46ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.empty .next {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.empty code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: var(--ink);
+}
+
+/* -------------------------------------------------------------- verdict -- */
+
+.verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  margin-bottom: var(--gap);
+}
+
+.verdict .light {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-top: 7px;
+  flex: none;
+}
+
+.verdict.is-ok .light {
+  background: var(--ok);
+  box-shadow: 0 0 10px var(--saved-glow);
+}
+.verdict.is-warn .light {
+  background: var(--warn);
+}
+.verdict.is-bad .light {
+  background: var(--bad);
+}
+
+.verdict strong {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 620;
+}
+
+.verdict span {
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

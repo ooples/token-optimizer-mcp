@@ -77,7 +77,7 @@ export function generateUnifiedDiff(
   newContent: string,
   oldPath: string,
   newPath: string,
-  _contextLines: number = 3
+  contextLines: number = 3
 ): string {
   const diffs = diffLines(oldContent, newContent);
 
@@ -88,6 +88,17 @@ export function generateUnifiedDiff(
   let hunkLines: string[] = [];
   let hunkOldStart = 1;
   let hunkNewStart = 1;
+
+  // CONTEXT IS BOUNDED, which is the whole difference between a diff and a copy
+  // of the file. The parameter was named `_contextLines` and ignored, so every
+  // unchanged line was emitted as context: editing 13 lines of a 750-line file
+  // returned a 6,836-token "compact unified diff" and reported tokensSaved: 0.
+  // smart_edit's entire promise is that it returns the change rather than
+  // echoing the file, and on any file worth using it on, it did the opposite.
+  //
+  // Unchanged runs longer than 2*context are elided, keeping `contextLines` on
+  // each side of the change and marking what was dropped.
+  const context = Math.max(0, contextLines);
 
   for (const part of diffs) {
     const lines = part.value.split('\n');
@@ -103,6 +114,16 @@ export function generateUnifiedDiff(
         hunkLines.push(`-${line}`);
         oldLineNum++;
       }
+    } else if (lines.length > context * 2 + 1) {
+      // Keep the tail of this run as leading context for the next change, and
+      // the head as trailing context for the previous one.
+      const head = lines.slice(0, context);
+      const tail = lines.slice(-context);
+      for (const line of head) hunkLines.push(` ${line}`);
+      hunkLines.push(`@@ ${lines.length - context * 2} unchanged lines @@`);
+      for (const line of tail) hunkLines.push(` ${line}`);
+      oldLineNum += lines.length;
+      newLineNum += lines.length;
     } else {
       for (const line of lines) {
         hunkLines.push(` ${line}`);
