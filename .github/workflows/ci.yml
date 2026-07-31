@@ -23,54 +23,63 @@ jobs:
     # Skip redundant CI on release-please PRs: the version/changelog bump only
     # contains changes already validated in the PRs that were merged. Skipped
     # jobs still satisfy required status checks (unlike workflow-level filters).
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
 
     steps:
       - name: Checkout code
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Run ESLint
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm run lint
 
       - name: Check Prettier formatting
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm run format:check
 
       - name: Validate package.json
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm run build --dry-run || true
 
   build:
     name: Build
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
 
     steps:
       - name: Checkout code
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Build TypeScript
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm run build
 
       - name: Verify build artifacts
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: |
           if [ ! -d "dist" ]; then
             echo "Error: dist directory not created"
@@ -83,6 +92,7 @@ jobs:
           echo "Build artifacts verified successfully"
 
       - name: Upload build artifacts
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ github.sha }}
@@ -92,7 +102,6 @@ jobs:
   test:
     name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 15
 
     strategy:
@@ -102,30 +111,34 @@ jobs:
 
     steps:
       - name: Checkout code
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js ${{ matrix.node-version }}
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Run tests with coverage
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm run test:ci
         env:
           NODE_OPTIONS: --experimental-vm-modules
 
       - name: Generate coverage report
-        if: matrix.node-version == '20'
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (matrix.node-version == '20') }}
         run: npm run test:coverage
         env:
           NODE_OPTIONS: --experimental-vm-modules
 
       - name: Upload coverage to Codecov
-        if: matrix.node-version == '20'
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (matrix.node-version == '20') }}
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -135,7 +148,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Check coverage threshold
-        if: matrix.node-version == '20'
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (matrix.node-version == '20') }}
         run: |
           npm run test:coverage
           if [ $? -ne 0 ]; then
@@ -146,7 +159,7 @@ jobs:
           NODE_OPTIONS: --experimental-vm-modules
 
       - name: Upload coverage artifacts
-        if: matrix.node-version == '20' && always()
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (matrix.node-version == '20' && always()) }}
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ github.sha }}
@@ -156,7 +169,6 @@ jobs:
   performance-benchmarks:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -164,21 +176,26 @@ jobs:
 
     steps:
       - name: Checkout code
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Build project
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm run build
 
       - name: Run benchmark suite
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         id: benchmark
         run: |
           # Jest writes its summary to STDERR, not stdout. Piping only stdout
@@ -202,6 +219,7 @@ jobs:
           cat benchmark-results.txt
 
       - name: Compare against baseline
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         id: compare
         run: |
           BASELINE_FILE=".github/performance-baseline.json"
@@ -218,7 +236,7 @@ jobs:
           echo "Performance check passed (comparison logic to be implemented)"
 
       - name: Upload benchmark results
-        if: always()
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (always()) }}
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results-${{ github.sha }}
@@ -228,7 +246,7 @@ jobs:
       - name: Comment PR with performance results
         # Fork PRs get a read-only GITHUB_TOKEN, so commenting always fails
         # there; skip them and never fail the job over a missing comment.
-        if: github.event_name == 'pull_request' && steps.compare.outputs.performance_check != 'new_baseline' && github.event.pull_request.head.repo.full_name == github.repository
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (github.event_name == 'pull_request' && steps.compare.outputs.performance_check != 'new_baseline' && github.event.pull_request.head.repo.full_name == github.repository) }}
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -254,30 +272,34 @@ jobs:
   integration-test:
     name: Integration Tests
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 15
     needs: build
 
     steps:
       - name: Checkout code
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Download build artifacts
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/download-artifact@v4
         with:
           name: dist-${{ github.sha }}
           path: dist/
 
       - name: Start MCP server
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: |
           # Start the server in the background
           npm start &
@@ -296,6 +318,7 @@ jobs:
         timeout-minutes: 2
 
       - name: Run integration tests
+        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: |
           if [ -f "package.json" ] && npm run --silent test:integration 2>/dev/null; then
             npm run test:integration
@@ -307,14 +330,14 @@ jobs:
           NODE_OPTIONS: --experimental-vm-modules
 
       - name: Stop MCP server
-        if: always()
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (always()) }}
         run: |
           if [ -n "$SERVER_PID" ]; then
             kill $SERVER_PID || true
           fi
 
       - name: Upload integration test logs
-        if: failure()
+        if: ${{ !startsWith(github.head_ref, 'release-please') && (failure()) }}
         uses: actions/upload-artifact@v4
         with:
           name: integration-test-logs-${{ github.sha }}
@@ -330,7 +353,7 @@ jobs:
     # always() so a real failure is still reported, but skip entirely on
     # release-please PRs (its deps are skipped there, which would otherwise fail
     # the != "success" checks below).
-    if: ${{ always() && !startsWith(github.head_ref, 'release-please') }}
+    if: ${{ always() }}
 
     steps:
       - name: Check all job statuses
