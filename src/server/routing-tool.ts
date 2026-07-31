@@ -43,35 +43,62 @@ async function modules(): Promise<RoutingModules | null> {
   }
 }
 
-const say = (body: string, isError = false) => ({ content: [{ type: 'text', text: body }], isError });
+const say = (body: string, isError = false) => ({
+  content: [{ type: 'text', text: body }],
+  isError,
+});
 
-export async function modelRouting(input: { shape?: string; currentModel?: string }): Promise<{
-  content: Array<{ type: string; text: string }>; isError?: boolean;
+export async function modelRouting(input: {
+  shape?: string;
+  currentModel?: string;
+}): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
 }> {
   const mods = await modules();
-  if (!mods) return say('Routing is unavailable: the graph modules could not be loaded.', true);
+  if (!mods)
+    return say(
+      'Routing is unavailable: the graph modules could not be loaded.',
+      true
+    );
 
   const cwd = process.cwd();
   const transcript = mods.cache.transcriptFor(cwd);
   const episodes = mods.routing.readEpisodes(transcript);
 
   if (!episodes.length) {
-    return say([
-      'No routing history yet: this client\'s transcript could not be read, so there is nothing measured to route on.',
-      'Until there is, the shipped defaults apply:',
-      ...Object.entries(mods.routing.HEURISTIC).map(([shape, tier]) => `  ${shape} -> ${tier}`),
-    ].join('\n'));
+    return say(
+      [
+        "No routing history yet: this client's transcript could not be read, so there is nothing measured to route on.",
+        'Until there is, the shipped defaults apply:',
+        ...Object.entries(mods.routing.HEURISTIC).map(
+          ([shape, tier]) => `  ${shape} -> ${tier}`
+        ),
+      ].join('\n')
+    );
   }
 
   const table = mods.routing.outcomeTable(episodes);
-  const lines = [`Measured over ${episodes.length} episode(s) in this project:`, '', mods.routing.routingReport(table) || '  nothing measurable yet'];
+  const lines = [
+    `Measured over ${episodes.length} episode(s) in this project:`,
+    '',
+    mods.routing.routingReport(table) || '  nothing measurable yet',
+  ];
 
   if (input?.shape) {
     // The at-the-decision surface, including what the switch itself costs --
     // advice that ignores the warm prefix it discards is incomplete.
-    const switchCost = mods.cache.modelSwitchCost(mods.cache.readCacheUsage(transcript));
-    const note = mods.routing.routingNote(input.shape, table, { currentModel: input.currentModel, switchCost });
-    lines.push('', note ? note.text : `Already on the right tier for ${input.shape}.`);
+    const switchCost = mods.cache.modelSwitchCost(
+      mods.cache.readCacheUsage(transcript)
+    );
+    const note = mods.routing.routingNote(input.shape, table, {
+      currentModel: input.currentModel,
+      switchCost,
+    });
+    lines.push(
+      '',
+      note ? note.text : `Already on the right tier for ${input.shape}.`
+    );
   }
 
   return say(lines.join('\n'));
@@ -80,7 +107,7 @@ export async function modelRouting(input: { shape?: string; currentModel?: strin
 export const ROUTING_TOOL = {
   name: 'model_routing',
   description:
-    'Which model tier this project\'s work actually goes better on, measured from episode outcomes in the client transcript ' +
+    "Which model tier this project's work actually goes better on, measured from episode outcomes in the client transcript " +
     'rather than guessed from task size. Reports expected cost per tier including retries, and prices BOTH mistakes: what an ' +
     'overpowered model wastes and what an underpowered one costs in retries. Pass `shape` (multi-file-change, ' +
     'single-file-change, investigation, build-or-test, conversation) and `currentModel` for a decision note that also states ' +
@@ -88,8 +115,14 @@ export const ROUTING_TOOL = {
   inputSchema: {
     type: 'object',
     properties: {
-      shape: { type: 'string', description: 'The kind of work about to be done' },
-      currentModel: { type: 'string', description: 'The model in use now, e.g. claude-sonnet-5' },
+      shape: {
+        type: 'string',
+        description: 'The kind of work about to be done',
+      },
+      currentModel: {
+        type: 'string',
+        description: 'The model in use now, e.g. claude-sonnet-5',
+      },
     },
   },
 } as const;

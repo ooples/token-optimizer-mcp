@@ -30,7 +30,10 @@ async function modules() {
   }
 }
 
-const say = (body: string, isError = false) => ({ content: [{ type: 'text', text: body }], isError });
+const say = (body: string, isError = false) => ({
+  content: [{ type: 'text', text: body }],
+  isError,
+});
 
 export async function fleetAudit(input: {
   mode?: 'enumerate' | 'all' | 'explicit';
@@ -40,9 +43,16 @@ export async function fleetAudit(input: {
   dryRun?: boolean;
   tier?: string;
   sessionsPerMonth?: number;
-}): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+}): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}> {
   const mods = await modules();
-  if (!mods) return say('The fleet auditor is unavailable: the modules could not be loaded.', true);
+  if (!mods)
+    return say(
+      'The fleet auditor is unavailable: the modules could not be loaded.',
+      true
+    );
 
   const discovery = mods.fleet.discoverProjects({
     mode: input?.mode || (input?.projects?.length ? 'explicit' : 'enumerate'),
@@ -53,31 +63,48 @@ export async function fleetAudit(input: {
 
   // The consent step: show what would be opened, open nothing.
   if (input?.dryRun) {
-    return say([
-      `Would scan ${discovery.projects.length} project(s) in "${discovery.mode}" mode` +
-        `${discovery.root ? ` under ${discovery.root}` : ''}:`,
-      ...discovery.projects.map((p: any) => `  ${p.slug}${p.cwd ? ` -> ${p.cwd}` : ''}`),
-      ...(discovery.skipped.length ? ['', `Would skip ${discovery.skipped.length}:`,
-        ...discovery.skipped.slice(0, 10).map((s: any) => `  ${s.slug} (${s.why})`)] : []),
-      '',
-      'Nothing was read. Run again without dryRun to scan.',
-    ].join('\n'));
+    return say(
+      [
+        `Would scan ${discovery.projects.length} project(s) in "${discovery.mode}" mode` +
+          `${discovery.root ? ` under ${discovery.root}` : ''}:`,
+        ...discovery.projects.map(
+          (p: any) => `  ${p.slug}${p.cwd ? ` -> ${p.cwd}` : ''}`
+        ),
+        ...(discovery.skipped.length
+          ? [
+              '',
+              `Would skip ${discovery.skipped.length}:`,
+              ...discovery.skipped
+                .slice(0, 10)
+                .map((s: any) => `  ${s.slug} (${s.why})`),
+            ]
+          : []),
+        '',
+        'Nothing was read. Run again without dryRun to scan.',
+      ].join('\n')
+    );
   }
 
   if (!discovery.projects.length) {
-    return say(discovery.reason
-      ? `No projects to scan: ${discovery.reason}`
-      : 'No projects found to scan.');
+    return say(
+      discovery.reason
+        ? `No projects to scan: ${discovery.reason}`
+        : 'No projects found to scan.'
+    );
   }
 
-  const scans = discovery.projects.map((project: any) => mods.fleet.scanProject(project));
+  const scans = discovery.projects.map((project: any) =>
+    mods.fleet.scanProject(project)
+  );
 
-  return say(mods.fleet.renderFleet({
-    discovery,
-    scans,
-    tier: input?.tier || 'opus',
-    sessionsPerMonth: input?.sessionsPerMonth || 60,
-  }));
+  return say(
+    mods.fleet.renderFleet({
+      discovery,
+      scans,
+      tier: input?.tier || 'opus',
+      sessionsPerMonth: input?.sessionsPerMonth || 60,
+    })
+  );
 }
 
 export const FLEET_TOOL = {
@@ -91,13 +118,38 @@ export const FLEET_TOOL = {
   inputSchema: {
     type: 'object',
     properties: {
-      mode: { type: 'string', enum: ['enumerate', 'all', 'explicit'], description: 'enumerate (default, bounded), all (no cap), explicit (only what you list)' },
-      projects: { type: 'array', items: { type: 'string' }, description: 'Project directories, for explicit mode' },
-      exclude: { type: 'array', items: { type: 'string' }, description: 'Substrings to skip' },
-      limit: { type: 'number', description: 'Maximum projects in enumerate mode' },
-      dryRun: { type: 'boolean', description: 'List what would be read, and read nothing' },
-      tier: { type: 'string', description: 'Pricing tier for dollar figures. Default opus' },
-      sessionsPerMonth: { type: 'number', description: 'Assumption behind monthly figures. Default 60' },
+      mode: {
+        type: 'string',
+        enum: ['enumerate', 'all', 'explicit'],
+        description:
+          'enumerate (default, bounded), all (no cap), explicit (only what you list)',
+      },
+      projects: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Project directories, for explicit mode',
+      },
+      exclude: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Substrings to skip',
+      },
+      limit: {
+        type: 'number',
+        description: 'Maximum projects in enumerate mode',
+      },
+      dryRun: {
+        type: 'boolean',
+        description: 'List what would be read, and read nothing',
+      },
+      tier: {
+        type: 'string',
+        description: 'Pricing tier for dollar figures. Default opus',
+      },
+      sessionsPerMonth: {
+        type: 'number',
+        description: 'Assumption behind monthly figures. Default 60',
+      },
     },
   },
 } as const;

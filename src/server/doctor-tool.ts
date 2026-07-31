@@ -40,13 +40,23 @@ async function modules() {
   }
 }
 
-const say = (body: string, isError = false) => ({ content: [{ type: 'text', text: body }], isError });
+const say = (body: string, isError = false) => ({
+  content: [{ type: 'text', text: body }],
+  isError,
+});
 
-export async function installDoctor(input: { uninstallPlan?: boolean }): Promise<{
-  content: Array<{ type: string; text: string }>; isError?: boolean;
+export async function installDoctor(input: {
+  uninstallPlan?: boolean;
+}): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
 }> {
   const mods = await modules();
-  if (!mods) return say('The doctor is unavailable: the modules could not be loaded.', true);
+  if (!mods)
+    return say(
+      'The doctor is unavailable: the modules could not be loaded.',
+      true
+    );
 
   const root = path.join(here, '..', '..');
   const cwd = process.cwd();
@@ -54,27 +64,37 @@ export async function installDoctor(input: { uninstallPlan?: boolean }): Promise
   if (input?.uninstallPlan) {
     const plan = mods.manifest.removalPlan();
     if (!plan) {
-      return say('No installation record found, so there is nothing we can prove is ours to remove. ' +
-        'We will not guess: remove the token-optimizer entries from settings.json by hand if you installed manually.');
+      return say(
+        'No installation record found, so there is nothing we can prove is ours to remove. ' +
+          'We will not guess: remove the token-optimizer entries from settings.json by hand if you installed manually.'
+      );
     }
-    return say([
-      `Would remove ${plan.remove.length} file(s) we wrote and that are unchanged.`,
-      ...plan.remove.map((p: string) => `  - ${p}`),
-      ...(plan.keep.length ? ['', 'Leaving alone (edited since we wrote them):',
-        ...plan.keep.map((k: any) => `  ! ${k.path} -- ${k.why}`)] : []),
-      '',
-      plan.untouched,
-      '',
-      'Nothing has been changed. Run `node scripts/uninstall.mjs --apply` to carry it out.',
-    ].join('\n'));
+    return say(
+      [
+        `Would remove ${plan.remove.length} file(s) we wrote and that are unchanged.`,
+        ...plan.remove.map((p: string) => `  - ${p}`),
+        ...(plan.keep.length
+          ? [
+              '',
+              'Leaving alone (edited since we wrote them):',
+              ...plan.keep.map((k: any) => `  ! ${k.path} -- ${k.why}`),
+            ]
+          : []),
+        '',
+        plan.untouched,
+        '',
+        'Nothing has been changed. Run `node scripts/uninstall.mjs --apply` to carry it out.',
+      ].join('\n')
+    );
   }
 
   const result = mods.doctor.diagnose({
     root,
     workspace: path.join(os.tmpdir(), 'token-optimizer-doctor'),
     graphDir: mods.wiki.wikiDir(cwd),
-    settingsPath: process.env.TOKEN_OPTIMIZER_SETTINGS
-      || path.join(os.homedir(), '.claude', 'settings.json'),
+    settingsPath:
+      process.env.TOKEN_OPTIMIZER_SETTINGS ||
+      path.join(os.homedir(), '.claude', 'settings.json'),
     // We ARE the server. Spawning another copy to ask it questions deadlocks.
     skipServer: true,
   });
@@ -92,7 +112,10 @@ export const DOCTOR_TOOL = {
   inputSchema: {
     type: 'object',
     properties: {
-      uninstallPlan: { type: 'boolean', description: 'Show what uninstall would remove, changing nothing' },
+      uninstallPlan: {
+        type: 'boolean',
+        description: 'Show what uninstall would remove, changing nothing',
+      },
     },
   },
 } as const;

@@ -43,11 +43,21 @@ async function modules(): Promise<CacheModules | null> {
   }
 }
 
-const say = (body: string, isError = false) => ({ content: [{ type: 'text', text: body }], isError });
+const say = (body: string, isError = false) => ({
+  content: [{ type: 'text', text: body }],
+  isError,
+});
 
-export async function cacheAudit(): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+export async function cacheAudit(): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}> {
   const mods = await modules();
-  if (!mods) return say('The cache audit is unavailable: the graph modules could not be loaded.', true);
+  if (!mods)
+    return say(
+      'The cache audit is unavailable: the graph modules could not be loaded.',
+      true
+    );
 
   const cwd = process.cwd();
   const dir = mods.wiki.wikiDir(cwd);
@@ -57,43 +67,66 @@ export async function cacheAudit(): Promise<{ content: Array<{ type: string; tex
   const health = mods.cache.cacheHealth(turns);
 
   if (health) {
-    lines.push('Measured, from this client\'s own transcript:');
+    lines.push("Measured, from this client's own transcript:");
     lines.push(`  cache reads ......... ${health.read.toLocaleString()}`);
     lines.push(`  cache writes ........ ${health.written.toLocaleString()}`);
-    lines.push(`  hit rate ............ ${Math.round((health.hitRate || 0) * 100)}%`);
-    lines.push(`  warm prefix ......... ${health.prefixTokens.toLocaleString()} tokens`);
-    lines.push(`  saved vs no cache ... ${health.savedVersusNoCache.toLocaleString()} tokens`);
+    lines.push(
+      `  hit rate ............ ${Math.round((health.hitRate || 0) * 100)}%`
+    );
+    lines.push(
+      `  warm prefix ......... ${health.prefixTokens.toLocaleString()} tokens`
+    );
+    lines.push(
+      `  saved vs no cache ... ${health.savedVersusNoCache.toLocaleString()} tokens`
+    );
 
     const models = Object.keys(health.models);
     if (models.length > 1) {
       const cost = mods.cache.modelSwitchCost(turns);
-      lines.push(`  ! ${models.length} models used in this session -- each switch re-writes the prefix ` +
-        `(about ${cost.rewriteCost.toLocaleString()} tokens at its current size)`);
+      lines.push(
+        `  ! ${models.length} models used in this session -- each switch re-writes the prefix ` +
+          `(about ${cost.rewriteCost.toLocaleString()} tokens at its current size)`
+      );
     }
   } else {
-    lines.push('No cache measurements available: this client\'s transcript could not be read.');
+    lines.push(
+      "No cache measurements available: this client's transcript could not be read."
+    );
     lines.push('The attribution below still applies, without prices.');
   }
 
   // Attribution: the half a hit rate cannot give.
-  const blame = mods.cache.attributeInvalidation(cwd, health?.prefixTokens ?? null);
+  const blame = mods.cache.attributeInvalidation(
+    cwd,
+    health?.prefixTokens ?? null
+  );
   if (blame.length) {
     lines.push('', 'Attributed cause:');
     for (const hit of blame.slice(0, 6)) {
-      const price = hit.costPerSession != null
-        ? `about ${hit.costPerSession.toLocaleString()} tokens re-written per session`
-        : 'price unknown without a transcript measurement';
+      const price =
+        hit.costPerSession != null
+          ? `about ${hit.costPerSession.toLocaleString()} tokens re-written per session`
+          : 'price unknown without a transcript measurement';
       lines.push(`  ! ${hit.file}:${hit.line} has ${hit.why} -- ${price}`);
       lines.push(`      ${hit.excerpt}`);
     }
-    lines.push('  These are your files, so they are proposed and never edited: remove the changing');
-    lines.push('  value, or move that section to the end of the file so less sits behind it.');
+    lines.push(
+      '  These are your files, so they are proposed and never edited: remove the changing'
+    );
+    lines.push(
+      '  value, or move that section to the end of the file so less sits behind it.'
+    );
   } else {
-    lines.push('', 'Attributed cause: nothing volatile found in the project instruction files.');
+    lines.push(
+      '',
+      'Attributed cause: nothing volatile found in the project instruction files.'
+    );
   }
 
   // Keep-warm, decided rather than defaulted.
-  const decision = mods.keepwarm.shouldKeepWarm(dir, { prefixTokens: health?.prefixTokens });
+  const decision = mods.keepwarm.shouldKeepWarm(dir, {
+    prefixTokens: health?.prefixTokens,
+  });
   lines.push('', `Keep-warm: ${decision.action} -- ${decision.reason}`);
 
   const trip = mods.keepwarm.tripwire(dir);
@@ -106,7 +139,7 @@ export const CACHE_TOOL = {
   name: 'cache_audit',
   description:
     'Report prompt-cache economics for this project: measured hit rate, cache-write spend and warm prefix size read from ' +
-    'the client\'s own transcript, plus the file and line responsible for each invalidation priced by how much sits behind ' +
-    'it. Also reports whether keep-warm is worth buying at each TTL tier, decided from this project\'s observed gaps.',
+    "the client's own transcript, plus the file and line responsible for each invalidation priced by how much sits behind " +
+    "it. Also reports whether keep-warm is worth buying at each TTL tier, decided from this project's observed gaps.",
   inputSchema: { type: 'object', properties: {} },
 } as const;

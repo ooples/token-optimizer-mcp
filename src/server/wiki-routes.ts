@@ -136,7 +136,11 @@ function loadGraph(dir: string, wiki: any): any {
     return wiki.load(dir);
   }
 
-  if (graphCache && graphCache.mtimeMs === stamp.mtimeMs && graphCache.size === stamp.size) {
+  if (
+    graphCache &&
+    graphCache.mtimeMs === stamp.mtimeMs &&
+    graphCache.size === stamp.size
+  ) {
     return graphCache.graph;
   }
 
@@ -176,7 +180,8 @@ export function registerWikiRoutes(app: Express): void {
   /** Is there a graph at all? Lets the UI hide the section rather than error. */
   app.get('/api/wiki/status', async (req: Request, res: Response) => {
     const mods = await modules();
-    if (!mods) return res.json({ available: false, reason: 'graph modules not found' });
+    if (!mods)
+      return res.json({ available: false, reason: 'graph modules not found' });
 
     try {
       const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
@@ -210,11 +215,18 @@ export function registerWikiRoutes(app: Express): void {
       // Lexical filter, per the design's traversal-plus-lexical retrieval --
       // there is no embedding index to consult and deliberately so.
       if (query) {
-        findings = findings.filter((f: any) =>
-          String(f.claim || '').toLowerCase().includes(query) ||
-          String(f.key || '').toLowerCase().includes(query));
+        findings = findings.filter(
+          (f: any) =>
+            String(f.claim || '')
+              .toLowerCase()
+              .includes(query) ||
+            String(f.key || '')
+              .toLowerCase()
+              .includes(query)
+        );
       }
-      if (kind) findings = findings.filter((f: any) => (f.type || 'finding') === kind);
+      if (kind)
+        findings = findings.filter((f: any) => (f.type || 'finding') === kind);
 
       findings.sort((a: any, b: any) => {
         const weight = (f: any) =>
@@ -262,8 +274,15 @@ export function registerWikiRoutes(app: Express): void {
       // Provenance: which task established this, and from what. "Why do you
       // believe this?" is the question a knowledge graph has to answer.
       return res.json({
-        node: { ...summarise(node), snapshot: node.snapshot ? node.snapshot.slice(0, 4000) : undefined },
-        edges: edges.map((e: any) => ({ from: e.from, to: e.to, edge: e.edge })),
+        node: {
+          ...summarise(node),
+          snapshot: node.snapshot ? node.snapshot.slice(0, 4000) : undefined,
+        },
+        edges: edges.map((e: any) => ({
+          from: e.from,
+          to: e.to,
+          edge: e.edge,
+        })),
         neighbours: [...neighbours.values()],
         truncated: edges.length === cap,
       });
@@ -286,7 +305,8 @@ export function registerWikiRoutes(app: Express): void {
     const cap = Math.min(300, Number(req.query.cap) || 150);
     try {
       const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
-      const findings = mods.curate.activeFindings(graph)
+      const findings = mods.curate
+        .activeFindings(graph)
         .sort((a: any, b: any) => (b.confidence ?? 0) - (a.confidence ?? 0))
         .slice(0, cap);
 
@@ -294,11 +314,15 @@ export function registerWikiRoutes(app: Express): void {
       // Pull in the anchors those findings hang from, so the picture shows
       // structure rather than a cloud of disconnected points.
       for (const edge of graph.edges) {
-        if (edge.edge === 'derived_from' && keep.has(edge.from)) keep.add(edge.to);
+        if (edge.edge === 'derived_from' && keep.has(edge.from))
+          keep.add(edge.to);
       }
 
       return res.json({
-        nodes: [...keep].map((id) => graph.nodes.get(id)).filter(Boolean).map(summarise),
+        nodes: [...keep]
+          .map((id) => graph.nodes.get(id))
+          .filter(Boolean)
+          .map(summarise),
         edges: graph.edges
           .filter((e: any) => keep.has(e.from) && keep.has(e.to))
           .map((e: any) => ({ from: e.from, to: e.to, edge: e.edge })),
@@ -315,14 +339,19 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const result = mods.curate.audit(loadGraph(graphDir(req, mods.wiki), mods.wiki));
+      const result = mods.curate.audit(
+        loadGraph(graphDir(req, mods.wiki), mods.wiki)
+      );
       return res.json({
         contradicted: result.contradicted.map(summarise),
         orphaned: result.orphaned.map(summarise),
         lowConfidence: result.lowConfidence.map(summarise),
         stale: result.stale.map(summarise),
-        total: result.contradicted.length + result.orphaned.length +
-               result.lowConfidence.length + result.stale.length,
+        total:
+          result.contradicted.length +
+          result.orphaned.length +
+          result.lowConfidence.length +
+          result.stale.length,
       });
     } catch {
       return res.status(500).json({ error: 'audit failed' });
@@ -354,7 +383,9 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const markdown = mods.curate.exportMarkdown(loadGraph(graphDir(req, mods.wiki), mods.wiki));
+      const markdown = mods.curate.exportMarkdown(
+        loadGraph(graphDir(req, mods.wiki), mods.wiki)
+      );
       return res.type('text/markdown').send(markdown);
     } catch {
       return res.status(500).json({ error: 'export failed' });
@@ -386,19 +417,27 @@ export function registerWikiRoutes(app: Express): void {
           return res.json({ ok: mods.curate.retire(dir, key) });
         case 'correct': {
           if (!claim) return res.status(400).json({ error: 'claim required' });
-          const replacement = mods.curate.correct(dir, key, claim, { confidence });
+          const replacement = mods.curate.correct(dir, key, claim, {
+            confidence,
+          });
           return replacement
             ? res.json({ ok: true, key: replacement })
             : res.status(404).json({ error: 'no such finding' });
         }
         case 'create': {
-          const created = mods.curate.create(dir, { claim, anchors, confidence });
+          const created = mods.curate.create(dir, {
+            claim,
+            anchors,
+            confidence,
+          });
           // Anchors are required of humans for the same reason they are
           // required of the harvester: an unanchored claim can never be
           // re-checked against the code.
           return created
             ? res.json({ ok: true, key: created })
-            : res.status(400).json({ error: 'claim and at least one anchor are required' });
+            : res
+                .status(400)
+                .json({ error: 'claim and at least one anchor are required' });
         }
         default:
           return res.status(400).json({ error: 'unknown action' });

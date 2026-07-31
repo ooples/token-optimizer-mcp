@@ -52,29 +52,43 @@ async function modules(): Promise<AuditModules | null> {
   }
 }
 
-const say = (body: string, isError = false) => ({ content: [{ type: 'text', text: body }], isError });
+const say = (body: string, isError = false) => ({
+  content: [{ type: 'text', text: body }],
+  isError,
+});
 
 export async function tokenAudit(input: {
   full?: boolean;
   tier?: string;
   sessionsPerMonth?: number;
   decline?: string;
-}): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+}): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}> {
   const mods = await modules();
-  if (!mods) return say('The audit is unavailable: the graph modules could not be loaded.', true);
+  if (!mods)
+    return say(
+      'The audit is unavailable: the graph modules could not be loaded.',
+      true
+    );
 
   const cwd = process.cwd();
   const dir = mods.wiki.wikiDir(cwd);
 
   if (input?.decline) {
     mods.audit.decline(dir, input.decline);
-    return say(`Noted. ${input.decline} will stop being suggested after ${mods.audit.DECLINE_LIMIT} declines.`);
+    return say(
+      `Noted. ${input.decline} will stop being suggested after ${mods.audit.DECLINE_LIMIT} declines.`
+    );
   }
 
   let graph = null;
   try {
     graph = mods.wiki.load(dir);
-  } catch { /* no graph costs the question-level detectors and nothing else */ }
+  } catch {
+    /* no graph costs the question-level detectors and nothing else */
+  }
 
   const findings = [...mods.waste.detect(dir, graph)];
 
@@ -82,8 +96,13 @@ export async function tokenAudit(input: {
   // in the same queue rather than in a report of its own.
   try {
     const transcript = mods.cache.transcriptFor(cwd);
-    const health = mods.cache.cacheHealth(mods.cache.readCacheUsage(transcript));
-    for (const hit of mods.cache.attributeInvalidation(cwd, health?.prefixTokens ?? null)) {
+    const health = mods.cache.cacheHealth(
+      mods.cache.readCacheUsage(transcript)
+    );
+    for (const hit of mods.cache.attributeInvalidation(
+      cwd,
+      health?.prefixTokens ?? null
+    )) {
       findings.push({
         id: 'cache-invalidation',
         title: `${hit.file}:${hit.line} has ${hit.why}, invalidating everything after it`,
@@ -94,19 +113,24 @@ export async function tokenAudit(input: {
     }
 
     // Routing is advice rather than a fix, and is listed as such.
-    const table = mods.routing.outcomeTable(mods.routing.readEpisodes(transcript));
+    const table = mods.routing.outcomeTable(
+      mods.routing.readEpisodes(transcript)
+    );
     for (const shape of Object.keys(table)) {
       const decision = mods.routing.route(shape, table);
       if (decision.basis !== 'measured' || !decision.underpowered) continue;
       findings.push({
         id: 'model-routing',
-        title: `${shape} is being run on ${decision.underpowered.tier}, which needed a retry in ` +
+        title:
+          `${shape} is being run on ${decision.underpowered.tier}, which needed a retry in ` +
           `${Math.round(decision.underpowered.errorRate * 100)}% of episodes -- ${decision.recommend} costs less in expectation`,
         costPerSession: null,
         remedy: null,
       });
     }
-  } catch { /* no transcript: the detector findings still stand on their own */ }
+  } catch {
+    /* no transcript: the detector findings still stand on their own */
+  }
 
   // Standing context -- skills, instructions and memory -- is waste charged
   // every session, so it belongs in the same queue rather than in a report of
@@ -124,13 +148,27 @@ export async function tokenAudit(input: {
           // rather than a made-up one.
           costPerSession: action.action === 'fix' ? null : verdict.tokens,
           file: verdict.entry,
-          remedy: action.kind === 'ours'
-            ? { kind: 'ours', type: 'demote', anchor: verdict.entry, why: action.why }
-            : { kind: 'yours', type: 'edit', file: verdict.entry, why: action.why, diff: action.diff },
+          remedy:
+            action.kind === 'ours'
+              ? {
+                  kind: 'ours',
+                  type: 'demote',
+                  anchor: verdict.entry,
+                  why: action.why,
+                }
+              : {
+                  kind: 'yours',
+                  type: 'edit',
+                  file: verdict.entry,
+                  why: action.why,
+                  diff: action.diff,
+                },
         });
       }
     }
-  } catch { /* standing context is a bonus; never fail the audit over it */ }
+  } catch {
+    /* standing context is a bonus; never fail the audit over it */
+  }
 
   const out = mods.audit.renderAudit(dir, findings, {
     full: Boolean(input?.full),
@@ -141,7 +179,11 @@ export async function tokenAudit(input: {
   // Recording that a finding was raised is what makes the before-and-after
   // measurable later; without it the trend has no point to split on.
   for (const item of findings) {
-    try { mods.audit.raise(dir, item); } catch { /* never fail the audit over its own bookkeeping */ }
+    try {
+      mods.audit.raise(dir, item);
+    } catch {
+      /* never fail the audit over its own bookkeeping */
+    }
   }
 
   return say(out.text);
@@ -158,10 +200,24 @@ export const AUDIT_TOOL = {
   inputSchema: {
     type: 'object',
     properties: {
-      full: { type: 'boolean', description: 'Show every finding, including ones cheaper than printing them' },
-      tier: { type: 'string', description: 'Pricing tier for the dollar figures (haiku, sonnet, opus). Default opus' },
-      sessionsPerMonth: { type: 'number', description: 'Assumption behind the monthly figures. Default 60' },
-      decline: { type: 'string', description: 'A finding id you do not want raised again' },
+      full: {
+        type: 'boolean',
+        description:
+          'Show every finding, including ones cheaper than printing them',
+      },
+      tier: {
+        type: 'string',
+        description:
+          'Pricing tier for the dollar figures (haiku, sonnet, opus). Default opus',
+      },
+      sessionsPerMonth: {
+        type: 'number',
+        description: 'Assumption behind the monthly figures. Default 60',
+      },
+      decline: {
+        type: 'string',
+        description: 'A finding id you do not want raised again',
+      },
     },
   },
 } as const;

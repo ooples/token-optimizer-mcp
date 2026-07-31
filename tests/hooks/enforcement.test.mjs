@@ -13,6 +13,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
 import { dirname } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -103,17 +104,31 @@ describe('the shell bypass is closed', () => {
     expect(r.decision).toBe('allow');
   });
 
-  test('a Git-Bash/MSYS path is resolved, not silently skipped', () => {
-    // On Windows a Bash tool call carries `/c/Users/...`, which Node cannot
-    // stat -- so the size check found nothing and EVERY shell dump was allowed
-    // through on the platform this runs on most. The Read tool passes
-    // `C:\Users\...`, which is why the same file was refused one way and
-    // allowed the other. Found by pointing the optimizer at a real repository.
+  // WINDOWS ONLY, and skipped rather than deleted elsewhere. The `/c/Users/...`
+  // spelling is what Git Bash hands a Bash tool call ON WINDOWS; on Linux that
+  // is simply a path that does not exist, so the test could only ever fail
+  // there -- which is exactly what it did in CI while passing locally. The
+  // platform-independent half of the same guarantee is asserted below.
+  const onWindows = process.platform === 'win32' ? test : test.skip;
+
+  onWindows('a Git-Bash/MSYS path is resolved, not silently skipped', () => {
+    // A Bash tool call carries `/c/Users/...`, which Node cannot stat -- so the
+    // size check found nothing and EVERY shell dump was allowed through on the
+    // platform this runs on most. The Read tool passes `C:\Users\...`, which is
+    // why the same file was refused one way and allowed the other. Found by
+    // pointing the optimizer at a real repository.
     const drive = big[0];
     const msys = `/${drive.toLowerCase()}${big.slice(2).replace(/\\/g, '/')}`;
     const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${msys}` }, session_id: 'msys-1' });
     expect(r.decision).toBe('deny');
     expect(r.reason).toContain('smart_read');
+  });
+
+  test('the two spellings of one path are one identity, on every platform', () => {
+    // The half of the MSYS guarantee that is testable everywhere: whatever the
+    // host, a path written two ways must not become two different nodes.
+    expect(canonicalPath('/c/Users/me/auth.ts')).toBe(canonicalPath('C:\\Users\\me\\auth.ts'));
+    expect(canonicalPath('C:/Users/me/auth.ts')).toBe(canonicalPath('C:\\Users\\me\\auth.ts'));
   });
 
   test('cat of a SMALL file is untouched', () => {

@@ -77,7 +77,9 @@ function anchorsOf(args: Record<string, unknown> | undefined): string[] {
  * A search tool states its question in its arguments, which is exactly the
  * signal a positional truncator throws away.
  */
-function questionOf(args: Record<string, unknown> | undefined): string | undefined {
+function questionOf(
+  args: Record<string, unknown> | undefined
+): string | undefined {
   if (!args) return undefined;
   for (const key of ['query', 'pattern', 'question', 'search', 'q']) {
     const value = args[key];
@@ -131,10 +133,20 @@ export async function discloseResult(
 
     // The refit from this tool and shape's own expansion history, so previews
     // that keep getting expanded stop being the same previews.
-    const { boosts } = mods.expand.previewPolicy(dir, { tool: toolName, shape });
+    const { boosts } = mods.expand.previewPolicy(dir, {
+      tool: toolName,
+      shape,
+    });
 
     const graph = anchors.length ? mods.wiki.load(dir) : null;
-    const out = mods.disclose.disclose(dir, body, { graph, question, anchors, tool: toolName, boosts, ref });
+    const out = mods.disclose.disclose(dir, body, {
+      graph,
+      question,
+      anchors,
+      tool: toolName,
+      boosts,
+      ref,
+    });
     if (!out) return result;
 
     return {
@@ -157,24 +169,46 @@ export async function expandRef(input: {
 }): Promise<ToolResult> {
   const mods = await modules();
   if (!mods) {
-    return { content: [{ type: 'text', text: 'Expansion is unavailable: the graph modules could not be loaded.' }], isError: true };
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Expansion is unavailable: the graph modules could not be loaded.',
+        },
+      ],
+      isError: true,
+    };
   }
 
   const dir = mods.wiki.wikiDir(process.cwd());
   const out = mods.expand.resolve(dir, input.ref, { section: input.section });
   if (!out) {
     return {
-      content: [{ type: 'text', text: `No stored output for reference ${input.ref}. It may have been captured in another project.` }],
+      content: [
+        {
+          type: 'text',
+          text: `No stored output for reference ${input.ref}. It may have been captured in another project.`,
+        },
+      ],
       isError: true,
     };
   }
 
   // The labelled datum: the preview was wrong, and this is what was wanted.
-  mods.expand.recordExpansion(dir, { ref: input.ref, section: input.section, asked: input.section || input.reason || null });
+  mods.expand.recordExpansion(dir, {
+    ref: input.ref,
+    section: input.section,
+    asked: input.section || input.reason || null,
+  });
 
   // And the reason it does not happen twice.
   if (input.claim && input.anchor) {
-    mods.expand.promote(dir, { ref: input.ref, claim: input.claim, anchor: input.anchor, section: input.section });
+    mods.expand.promote(dir, {
+      ref: input.ref,
+      claim: input.claim,
+      anchor: input.anchor,
+      section: input.section,
+    });
   }
 
   return { content: [{ type: 'text', text: out.text }] };
@@ -190,10 +224,25 @@ export const EXPAND_TOOL = {
   inputSchema: {
     type: 'object',
     properties: {
-      ref: { type: 'string', description: 'The reference printed in the preview' },
-      section: { type: 'string', description: 'Which omitted section you needed (e.g. "passing tests", "library and runtime frames")' },
-      reason: { type: 'string', description: 'Why the preview was not enough, if no single section covers it' },
-      claim: { type: 'string', description: 'What the expanded content established, to carry forward as a finding' },
+      ref: {
+        type: 'string',
+        description: 'The reference printed in the preview',
+      },
+      section: {
+        type: 'string',
+        description:
+          'Which omitted section you needed (e.g. "passing tests", "library and runtime frames")',
+      },
+      reason: {
+        type: 'string',
+        description:
+          'Why the preview was not enough, if no single section covers it',
+      },
+      claim: {
+        type: 'string',
+        description:
+          'What the expanded content established, to carry forward as a finding',
+      },
       anchor: { type: 'string', description: 'The file that claim is about' },
     },
     required: ['ref'],

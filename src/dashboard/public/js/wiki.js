@@ -49,8 +49,11 @@ const state = {
 
 /** Kind colour, read from CSS so the validated palette has one home. */
 function colourFor(kind) {
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue(`--wiki-${kind}`).trim() || '#94a3b8';
+  return (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue(`--wiki-${kind}`)
+      .trim() || '#94a3b8'
+  );
 }
 
 async function api(path, options) {
@@ -82,21 +85,33 @@ async function loadBalance() {
     ['Findings injected', nf.format(balance.injections)],
     ['Held back as control', nf.format(balance.holdouts)],
     ['Tokens spent injecting', nf.format(balance.injectedTokens)],
-    ['Tokens avoided (est.)', balance.estimatedTokensAvoided === null ? '—' : nf.format(balance.estimatedTokensAvoided)],
+    [
+      'Tokens avoided (est.)',
+      balance.estimatedTokensAvoided === null
+        ? '—'
+        : nf.format(balance.estimatedTokensAvoided),
+    ],
   ];
 
-  el('balance-grid').innerHTML = tiles.map(([label, value]) => `
+  el('balance-grid').innerHTML = tiles
+    .map(
+      ([label, value]) => `
     <div class="stat-card">
       <div class="stat-content">
         <div class="stat-label">${label}</div>
         <div class="stat-value wiki-figure">${value}</div>
       </div>
-    </div>`).join('');
+    </div>`
+    )
+    .join('');
 
   const verdict = el('balance-verdict');
   verdict.textContent = balance.verdict;
-  verdict.dataset.state = !balance.sufficientData ? 'insufficient'
-    : (balance.netTokens > 0 ? 'positive' : 'negative');
+  verdict.dataset.state = !balance.sufficientData
+    ? 'insufficient'
+    : balance.netTokens > 0
+      ? 'positive'
+      : 'negative';
 
   if (balance.sufficientData) {
     el('balance-method').textContent =
@@ -121,18 +136,25 @@ function tagsFor(item) {
 /** Tag markup with every value escaped, shared by the list and audit views. */
 function renderTags(item) {
   return tagsFor(item)
-    .map((t) => `<span class="wiki-tag"${t.status ? ` data-status="${escapeHtml(t.status)}"` : ''}>${escapeHtml(t.text)}</span>`)
+    .map(
+      (t) =>
+        `<span class="wiki-tag"${t.status ? ` data-status="${escapeHtml(t.status)}"` : ''}>${escapeHtml(t.text)}</span>`
+    )
     .join('');
 }
 
 function renderList(append) {
   const list = el('wiki-list');
-  const html = state.items.map((item) => `
+  const html = state.items
+    .map(
+      (item) => `
     <li tabindex="0" data-id="${escapeHtml(item.id)}" data-key="${escapeHtml(item.key)}"
         aria-current="${state.selected === item.id}">
       <span class="wiki-claim">${escapeHtml(item.claim || item.key)}</span>
       <span class="wiki-tags">${renderTags(item)}</span>
-    </li>`).join('');
+    </li>`
+    )
+    .join('');
 
   if (append) list.insertAdjacentHTML('beforeend', html);
   else list.innerHTML = html;
@@ -148,8 +170,13 @@ function renderList(append) {
  * an unescaped `"` in `data-key` breaks out of the attribute entirely.
  */
 function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return String(text).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        c
+      ]
+  );
 }
 
 async function search(append = false) {
@@ -157,7 +184,12 @@ async function search(append = false) {
   const type = el('wiki-type').value;
   if (!append) state.offset = 0;
 
-  const params = new URLSearchParams({ q: query, type, offset: String(state.offset), limit: '50' });
+  const params = new URLSearchParams({
+    q: query,
+    type,
+    offset: String(state.offset),
+    limit: '50',
+  });
   const result = await api(`/api/wiki/search?${params}`);
 
   state.items = append ? state.items.concat(result.items) : result.items;
@@ -197,9 +229,10 @@ function drawNode(svg, node, x, y, isCentre) {
   const label = document.createElementNS(svgNS, 'text');
   label.setAttribute('x', String((RADIUS[node.kind] || 8) + 6));
   label.setAttribute('y', '4');
-  const caption = node.kind === 'finding'
-    ? (node.claim || node.key).slice(0, 46)
-    : (node.name || node.key.split(/[\\/]/).pop());
+  const caption =
+    node.kind === 'finding'
+      ? (node.claim || node.key).slice(0, 46)
+      : node.name || node.key.split(/[\\/]/).pop();
   // A retired node stays reachable through `supersedes` edges -- that is how the
   // history of a claim remains legible -- so it must be marked here. Unlabelled,
   // it renders identically to a live finding.
@@ -212,7 +245,10 @@ function drawNode(svg, node, x, y, isCentre) {
 
   group.addEventListener('click', () => selectNode(node.id));
   group.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectNode(node.id); }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      selectNode(node.id);
+    }
   });
 
   svg.appendChild(group);
@@ -222,8 +258,10 @@ function drawNode(svg, node, x, y, isCentre) {
 function drawEdge(svg, x1, y1, x2, y2, kind) {
   const line = document.createElementNS(svgNS, 'line');
   line.setAttribute('class', 'wiki-edge');
-  line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-  line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+  line.setAttribute('x1', x1);
+  line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2);
+  line.setAttribute('y2', y2);
   svg.insertBefore(line, svg.firstChild);
 
   if (kind) {
@@ -257,7 +295,9 @@ async function renderFocus(nodeId) {
     const angle = (index / data.neighbours.length) * Math.PI * 2 - Math.PI / 2;
     const x = cx + Math.cos(angle) * ring;
     const y = cy + Math.sin(angle) * ring;
-    const edge = data.edges.find((e) => e.from === neighbour.id || e.to === neighbour.id);
+    const edge = data.edges.find(
+      (e) => e.from === neighbour.id || e.to === neighbour.id
+    );
     drawEdge(svg, cx, cy, x, y, edge && edge.edge);
     drawNode(svg, neighbour, x, y, false);
   });
@@ -287,8 +327,15 @@ async function renderConstellation() {
     // Seeded from the index rather than randomly, so a refresh does not
     // reshuffle a layout the user has just learned to read.
     const angle = index * 2.39996;
-    const radius = 20 + (index / data.nodes.length) * Math.min(width - LABEL_GUTTER * 2, height) * 0.42;
-    positions.set(node.id, { x: width / 2 + Math.cos(angle) * radius, y: height / 2 + Math.sin(angle) * radius });
+    const radius =
+      20 +
+      (index / data.nodes.length) *
+        Math.min(width - LABEL_GUTTER * 2, height) *
+        0.42;
+    positions.set(node.id, {
+      x: width / 2 + Math.cos(angle) * radius,
+      y: height / 2 + Math.sin(angle) * radius,
+    });
   });
 
   const REPULSION = 2600;
@@ -318,8 +365,10 @@ async function renderConstellation() {
       const dy = b.y - a.y;
       const distance = Math.hypot(dx, dy) || 0.01;
       const pull = (distance - IDEAL) * SPRING * cooling;
-      a.x += (dx / distance) * pull; a.y += (dy / distance) * pull;
-      b.x -= (dx / distance) * pull; b.y -= (dy / distance) * pull;
+      a.x += (dx / distance) * pull;
+      a.y += (dy / distance) * pull;
+      b.x -= (dx / distance) * pull;
+      b.y -= (dy / distance) * pull;
     }
 
     for (const point of positions.values()) {
@@ -340,7 +389,7 @@ async function renderConstellation() {
   for (let i = 1; i < ordered.length; i++) {
     const [, previous] = ordered[i - 1];
     const [, current] = ordered[i];
-    const sameSide = (previous.x > width * 0.55) === (current.x > width * 0.55);
+    const sameSide = previous.x > width * 0.55 === current.x > width * 0.55;
     if (sameSide && current.y - previous.y < LABEL_HEIGHT) {
       current.y = Math.min(height - 24, previous.y + LABEL_HEIGHT);
     }
@@ -378,13 +427,25 @@ function fitLabels(svg) {
     let box = label.getBoundingClientRect();
 
     // Pass 1: if it runs off an edge, grow it the other way instead.
-    if (box.right > bounds.right - 4 && label.getAttribute('text-anchor') !== 'end') {
+    if (
+      box.right > bounds.right - 4 &&
+      label.getAttribute('text-anchor') !== 'end'
+    ) {
       label.setAttribute('text-anchor', 'end');
-      label.setAttribute('x', String(-Math.abs(Number(label.getAttribute('x')) || 14)));
+      label.setAttribute(
+        'x',
+        String(-Math.abs(Number(label.getAttribute('x')) || 14))
+      );
       box = label.getBoundingClientRect();
-    } else if (box.left < bounds.left + 4 && label.getAttribute('text-anchor') === 'end') {
+    } else if (
+      box.left < bounds.left + 4 &&
+      label.getAttribute('text-anchor') === 'end'
+    ) {
       label.removeAttribute('text-anchor');
-      label.setAttribute('x', String(Math.abs(Number(label.getAttribute('x')) || 14)));
+      label.setAttribute(
+        'x',
+        String(Math.abs(Number(label.getAttribute('x')) || 14))
+      );
       box = label.getBoundingClientRect();
     }
 
@@ -392,7 +453,11 @@ function fitLabels(svg) {
     // silently cut one -- the reader can see that there is more.
     let text = label.textContent;
     let guard = 0;
-    while ((box.right > bounds.right - 4 || box.left < bounds.left + 4) && text.length > 6 && guard++ < 60) {
+    while (
+      (box.right > bounds.right - 4 || box.left < bounds.left + 4) &&
+      text.length > 6 &&
+      guard++ < 60
+    ) {
       text = text.slice(0, -3);
       label.textContent = text.replace(/…?$/, '…');
       box = label.getBoundingClientRect();
@@ -409,7 +474,11 @@ function fitLabels(svg) {
     for (let j = 0; j < i; j++) {
       const a = ordered[j].box;
       const b = ordered[i].box;
-      const overlaps = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const overlaps =
+        a.left < b.right &&
+        b.left < a.right &&
+        a.top < b.bottom &&
+        b.top < a.bottom;
       if (!overlaps) continue;
       const shift = a.bottom - b.top + 2;
       const current = Number(ordered[i].label.getAttribute('y')) || 0;
@@ -448,7 +517,9 @@ function showDetail(node) {
       <dt>Status</dt><dd>${node.stale ? '⚠ stale' : 'current'}</dd>
     </dl>
     ${node.snapshot ? `<div class="wiki-diff">${escapeHtml(node.snapshot.slice(0, 2000))}</div>` : ''}
-    ${node.kind === 'finding' ? `
+    ${
+      node.kind === 'finding'
+        ? `
       <textarea id="detail-claim" placeholder="Correct this claim…"></textarea>
       <div class="wiki-actions">
         <button class="btn btn-primary" id="detail-correct">Save correction</button>
@@ -456,7 +527,9 @@ function showDetail(node) {
         <button class="btn" id="detail-retire">Retire</button>
       </div>
       <p class="wiki-muted">Corrections append: the original is retired and kept,
-      so the record shows what changed and when.</p>` : ''}`;
+      so the record shows what changed and when.</p>`
+        : ''
+    }`;
 
   el('detail-close').addEventListener('click', () => setDetailOpen(false));
 
@@ -465,7 +538,10 @@ function showDetail(node) {
   const curate = async (body) => {
     await api('/api/wiki/curate', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-token-optimizer': 'dashboard' },
+      headers: {
+        'content-type': 'application/json',
+        'x-token-optimizer': 'dashboard',
+      },
       body: JSON.stringify({ key: node.key, ...body }),
     });
     setDetailOpen(false);
@@ -476,8 +552,12 @@ function showDetail(node) {
     const claim = el('detail-claim').value.trim();
     if (claim) curate({ action: 'correct', claim });
   });
-  el('detail-pin').addEventListener('click', () => curate({ action: 'pin', pinned: !node.pinned }));
-  el('detail-retire').addEventListener('click', () => curate({ action: 'retire' }));
+  el('detail-pin').addEventListener('click', () =>
+    curate({ action: 'pin', pinned: !node.pinned })
+  );
+  el('detail-retire').addEventListener('click', () =>
+    curate({ action: 'retire' })
+  );
 }
 
 /**
@@ -502,18 +582,37 @@ async function selectNode(nodeId) {
   // Selecting a node IS a focus action, whatever mode was active before.
   setMode('focus');
   state.selected = nodeId;
-  document.querySelectorAll('.wiki-list li').forEach((li) =>
-    li.setAttribute('aria-current', String(li.dataset.id === nodeId)));
+  document
+    .querySelectorAll('.wiki-list li')
+    .forEach((li) =>
+      li.setAttribute('aria-current', String(li.dataset.id === nodeId))
+    );
   await renderFocus(nodeId);
 }
 
 /* ---- Audit ----------------------------------------------------------- */
 
 const AUDIT_GROUPS = [
-  ['contradicted', 'Contradicted', 'Two findings disagree. Nothing resolves this automatically — until someone decides, both are being served.'],
-  ['stale', 'Stale', 'The anchor changed. These are served with the invalidating diff attached.'],
-  ['orphaned', 'Unanchored', 'No anchor, so these can never be checked against the code again. The most dangerous nodes in the graph.'],
-  ['lowConfidence', 'Low confidence', 'Extracted with little support. Worth confirming or retiring.'],
+  [
+    'contradicted',
+    'Contradicted',
+    'Two findings disagree. Nothing resolves this automatically — until someone decides, both are being served.',
+  ],
+  [
+    'stale',
+    'Stale',
+    'The anchor changed. These are served with the invalidating diff attached.',
+  ],
+  [
+    'orphaned',
+    'Unanchored',
+    'No anchor, so these can never be checked against the code again. The most dangerous nodes in the graph.',
+  ],
+  [
+    'lowConfidence',
+    'Low confidence',
+    'Extracted with little support. Worth confirming or retiring.',
+  ],
 ];
 
 async function loadAudit() {
@@ -528,27 +627,36 @@ async function loadAudit() {
   badge.hidden = audit.total === 0;
   badge.textContent = String(audit.total);
 
-  el('audit-groups').innerHTML = AUDIT_GROUPS.map(([key, title, blurb]) => {
-    const items = audit[key] || [];
-    if (!items.length) return '';
-    return `
+  el('audit-groups').innerHTML =
+    AUDIT_GROUPS.map(([key, title, blurb]) => {
+      const items = audit[key] || [];
+      if (!items.length) return '';
+      return `
       <section class="wiki-balance">
         <h2>${title} <span class="wiki-muted">(${items.length})</span></h2>
         <p class="wiki-muted">${blurb}</p>
-        <ol class="wiki-list">${items.map((item) => `
+        <ol class="wiki-list">${items
+          .map(
+            (item) => `
           <li tabindex="0" data-id="${escapeHtml(item.id)}">
             <span class="wiki-claim">${escapeHtml(item.claim || item.key)}</span>
             <span class="wiki-tags">${renderTags(item)}</span>
-          </li>`).join('')}</ol>
+          </li>`
+          )
+          .join('')}</ol>
       </section>`;
-  }).join('') || '<p class="wiki-muted">Nothing needs attention. The graph is healthy.</p>';
+    }).join('') ||
+    '<p class="wiki-muted">Nothing needs attention. The graph is healthy.</p>';
 }
 
 /* ---- Wiring ---------------------------------------------------------- */
 
 function debounce(fn, ms) {
   let timer;
-  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
 }
 
 document.addEventListener('click', (event) => {
@@ -560,7 +668,10 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') setDetailOpen(false);
 });
 
-el('wiki-search').addEventListener('input', debounce(() => search(), 250));
+el('wiki-search').addEventListener(
+  'input',
+  debounce(() => search(), 250)
+);
 el('wiki-type').addEventListener('change', () => search());
 el('wiki-more-btn').addEventListener('click', () => search(true));
 
@@ -611,11 +722,17 @@ if (typeof ResizeObserver !== 'undefined') {
     // observer -- which re-rendered, which called showDetail, which RE-OPENED
     // the drawer a moment after the user had navigated away. Re-rendering
     // something nobody can see is wasted work even without that side effect.
-    if (width === 0 || el('tab-explore').hidden) { lastWidth = 0; return; }
+    if (width === 0 || el('tab-explore').hidden) {
+      lastWidth = 0;
+      return;
+    }
 
     // Width only: the drawer changes width, and reacting to sub-pixel height
     // jitter would re-render continuously.
-    if (Math.abs(width - lastWidth) > 8) { lastWidth = width; reRender(); }
+    if (Math.abs(width - lastWidth) > 8) {
+      lastWidth = width;
+      reRender();
+    }
   }).observe(el('wiki-graph'));
 }
 

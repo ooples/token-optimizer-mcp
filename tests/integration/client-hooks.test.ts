@@ -6,15 +6,18 @@ import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const repoRoot = resolve(process.cwd());
-const codexHook = join(
-  repoRoot,
-  'integrations/codex/plugin/hooks/token-optimizer-advisor.mjs'
-);
+// The adapter refactor replaced the per-client `token-optimizer-advisor.mjs`
+// scripts with thin entry files that call the shared core. These tests assert
+// the CURRENT architecture; they previously asserted the advisor files, which
+// is why they passed on a stale tree and failed in CI once the files were gone.
+const codexSessionStart = join(repoRoot, 'integrations/codex/hooks/session-start.mjs');
+const codexPreTool = join(repoRoot, 'integrations/codex/hooks/pre-tool.mjs');
+const geminiSessionStart = join(repoRoot, 'integrations/gemini/hooks/session-start.mjs');
+const geminiPostTool = join(repoRoot, 'integrations/gemini/hooks/post-tool.mjs');
 const copilotHook = join(
   repoRoot,
   'integrations/copilot/.github/hooks/token-optimizer-advisor.mjs'
 );
-const geminiHook = join(repoRoot, 'hooks/gemini-token-optimizer-advisor.mjs');
 
 function runHook(
   script: string,
@@ -52,7 +55,7 @@ describe('native CLI hook integrations', () => {
   });
 
   it('injects session guidance using each client output schema', () => {
-    const codex = runHook(codexHook, [], {
+    const codex = runHook(codexSessionStart, [], {
       hook_event_name: 'SessionStart',
       cwd: fixtureDir,
     });
@@ -60,7 +63,7 @@ describe('native CLI hook integrations', () => {
       source: 'startup',
       cwd: fixtureDir,
     });
-    const gemini = runHook(geminiHook, ['session-start'], {
+    const gemini = runHook(geminiSessionStart, [], {
       hook_event_name: 'SessionStart',
       cwd: fixtureDir,
     });
@@ -71,15 +74,15 @@ describe('native CLI hook integrations', () => {
   });
 
   it('keeps small and partial reads unchanged', () => {
-    const smallCodex = runHook(codexHook, [], {
+    const smallCodex = runHook(codexPreTool, [], {
       hook_event_name: 'PreToolUse',
       tool_name: 'Read',
       tool_input: { file_path: smallFile },
       cwd: fixtureDir,
     });
-    const partialGemini = runHook(geminiHook, ['after-read'], {
-      hook_event_name: 'AfterTool',
-      tool_name: 'read_file',
+    const partialGemini = runHook(geminiPostTool, [], {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Read',
       tool_input: { file_path: largeFile, limit: 20 },
       cwd: fixtureDir,
     });
@@ -88,9 +91,20 @@ describe('native CLI hook integrations', () => {
     expect(partialGemini).toBeUndefined();
   });
 
-  it('advises on large reads without blocking by default', () => {
-    const codex = runHook(codexHook, [], {
+  it('enforces where a pre-execution veto exists and advises where it does not', () => {
+    // THE TIER DISTINCTION, which is a statement of protocol fact rather than a
+    // preference: Codex has a pre-tool hook and can refuse before the tokens are
+    // spent; Gemini's only tool hook fires after the read is already paid for,
+    // so it can advise about the next call and nothing more.
+    const codex = runHook(codexPreTool, [], {
       hook_event_name: 'PreToolUse',
+      tool_name: 'Read',
+      tool_input: { file_path: largeFile },
+      cwd: fixtureDir,
+      session_id: 'tier-check',
+    });
+    const gemini = runHook(geminiPostTool, [], {
+      hook_event_name: 'PostToolUse',
       tool_name: 'Read',
       tool_input: { file_path: largeFile },
       cwd: fixtureDir,
@@ -100,78 +114,61 @@ describe('native CLI hook integrations', () => {
       toolArgs: JSON.stringify({ path: largeFile }),
       cwd: fixtureDir,
     });
-    const gemini = runHook(geminiHook, ['after-read'], {
-      hook_event_name: 'AfterTool',
-      tool_name: 'read_file',
-      tool_input: { file_path: largeFile },
-      cwd: fixtureDir,
-    });
-
-    expect(codex.hookSpecificOutput.additionalContext).toContain('29 KB');
-    expect(copilot.additionalContext).toContain('29 KB');
-    expect(gemini.hookSpecificOutput.additionalContext).toContain('29 KB');
-  });
-
-  it('uses each client native redirect mechanism when explicitly enabled', () => {
-    const env = { TOKEN_OPTIMIZER_REDIRECT_LARGE_READS: 'true' };
-    const codex = runHook(
-      codexHook,
-      [],
-      {
-        hook_event_name: 'PreToolUse',
-        tool_name: 'Read',
-        tool_input: { file_path: largeFile },
-        cwd: fixtureDir,
-      },
-      env
-    );
-    const copilot = runHook(
-      copilotHook,
-      ['before-read'],
-      {
-        toolName: 'view',
-        toolArgs: { path: largeFile },
-        cwd: fixtureDir,
-      },
-      env
-    );
-    const gemini = runHook(
-      geminiHook,
-      ['after-read'],
-      {
-        hook_event_name: 'AfterTool',
-        tool_name: 'read_file',
-        tool_input: { file_path: largeFile },
-        cwd: fixtureDir,
-      },
-      env
-    );
 
     expect(codex.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(copilot.permissionDecision).toBe('deny');
-    expect(gemini.hookSpecificOutput.tailToolCallRequest).toEqual({
-      name: 'mcp_token-optimizer_smart_read',
-      args: { path: largeFile },
-    });
+    expect(codex.hookSpecificOutput.permissionDecisionReason).toContain('smart_read');
+
+    expect(gemini.hookSpecificOutput.permissionDecision).toBeUndefined();
+    expect(gemini.hookSpecificOutput.additionalContext).toContain('smart_read');
+    expect(copilot.additionalContext).toContain('smart_read');
   });
 
-  it('ships matching Gemini hooks in the root and standalone extension', () => {
-    const rootHooks = readFileSync(join(repoRoot, 'hooks/hooks.json'), 'utf8');
-    const standaloneHooks = readFileSync(
-      join(repoRoot, 'integrations/gemini/hooks/hooks.json'),
-      'utf8'
-    );
-    const rootScript = readFileSync(geminiHook, 'utf8');
-    const standaloneScript = readFileSync(
-      join(
-        repoRoot,
-        'integrations/gemini/hooks/gemini-token-optimizer-advisor.mjs'
-      ),
-      'utf8'
-    );
+  it('states the escape hatch in every refusal', () => {
+    // Enforcement that hides its own disable is coercive, and the person who
+    // needs it is mid-refusal rather than reading the README.
+    const codex = runHook(codexPreTool, [], {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Read',
+      tool_input: { file_path: largeFile },
+      cwd: fixtureDir,
+      // A fresh session: a target is refused ONCE and a repeat is allowed
+      // through, so reusing a session id here would exercise loop-breaking
+      // rather than the refusal text.
+      session_id: 'escape-hatch',
+    });
 
-    expect(JSON.parse(rootHooks)).toEqual(JSON.parse(standaloneHooks));
-    expect(rootScript).toBe(standaloneScript);
+    expect(codex.hookSpecificOutput.permissionDecisionReason).toContain(
+      'TOKEN_OPTIMIZER_MODE=off'
+    );
+  });
+
+  it('ships one shared core to every client, byte for byte', () => {
+    // The invariant that replaced "these two advisor scripts are identical":
+    // every client runs the SAME decision logic, copied by scripts/sync-hook-core.mjs.
+    // A client whose lib has drifted is a client with its own thresholds.
+    // The synced copies carry a two-line "GENERATED FILE" banner, so the
+    // comparison is of the logic beneath it rather than of the whole file.
+    const stripBanner = (text: string) =>
+      text
+        .split('\n')
+        .filter(
+          (line, index) =>
+            !(index < 2 && (line.startsWith('// GENERATED FILE') || line.startsWith('// Source of truth')))
+        )
+        .join('\n');
+    const core = stripBanner(readFileSync(join(repoRoot, 'hooks-core/decide.mjs'), 'utf8'));
+    const clients = [
+      'plugin/hooks/lib/decide.mjs',
+      'integrations/codex/hooks/lib/decide.mjs',
+      'integrations/codex/plugin/hooks/lib/decide.mjs',
+      'integrations/gemini/hooks/lib/decide.mjs',
+      'integrations/opencode/hooks/lib/decide.mjs',
+      'integrations/qwen/hooks/lib/decide.mjs',
+    ];
+
+    for (const client of clients) {
+      expect(stripBanner(readFileSync(join(repoRoot, client), 'utf8'))).toBe(core);
+    }
   });
 
   it('loads valid hook manifests whose commands resolve to shipped scripts', () => {
@@ -187,12 +184,12 @@ describe('native CLI hook integrations', () => {
     }
   });
 
-  it('ships matching Codex plugin and standalone hook logic', () => {
-    const standalone = readFileSync(
-      join(repoRoot, 'integrations/codex/hooks/token-optimizer-advisor.mjs'),
-      'utf8'
-    );
-    expect(readFileSync(codexHook, 'utf8')).toBe(standalone);
+  it('ships matching Codex plugin and standalone entry points', () => {
+    for (const entry of ['session-start.mjs', 'pre-tool.mjs']) {
+      const standalone = readFileSync(join(repoRoot, 'integrations/codex/hooks', entry), 'utf8');
+      const plugin = readFileSync(join(repoRoot, 'integrations/codex/plugin/hooks', entry), 'utf8');
+      expect(plugin).toBe(standalone);
+    }
   });
 
   it('preserves guidance through OpenCode compaction and supports strict routing', async () => {
