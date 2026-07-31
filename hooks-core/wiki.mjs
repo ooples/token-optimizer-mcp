@@ -118,10 +118,19 @@ export function canonicalKey(kind, key) {
   return raw;
 }
 
-/** Content hash of a file, or null when unreadable. Drives staleness in P2. */
-export function contentHash(path) {
+/**
+ * Content hash of a file, or null when unreadable. Drives staleness in P2.
+ *
+ * `text` lets a caller that already holds the contents hash them without a
+ * second read from disk -- the hook touches every file on the critical path of
+ * an allowed tool call, so one avoidable read per file is one too many.
+ */
+export function contentHash(path, text) {
   try {
-    return createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16);
+    return createHash('sha256')
+      .update(text === undefined ? readFileSync(path) : text)
+      .digest('hex')
+      .slice(0, 16);
   } catch {
     return null;
   }
@@ -298,10 +307,13 @@ function score(node, now, DAY) {
  * content hash, by this task. No claims, no inference. The semantic layer that
  * extracts findings arrives in P3 and runs out-of-band.
  */
-export function harvest(dir, { filePath, sessionId, action }) {
+export function harvest(dir, { filePath, sessionId, action, hash: precomputed }) {
   if (!filePath) return null;
 
-  const hash = contentHash(filePath);
+  // The caller may already hold the file's hash. Recomputing it here meant the
+  // hook read every touched file TWICE -- once for this hash and once for
+  // indexFile -- on the critical path of every allowed tool call.
+  const hash = precomputed ?? contentHash(filePath);
   if (hash === null) return null;
 
   const fileNode = putNode(dir, { kind: 'file', key: filePath, hash, lastAction: action });

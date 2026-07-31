@@ -15,7 +15,7 @@ import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode,
   from './lib/policy.mjs';
 import { decide, remember, normalizePayload, readCostBytes, touchedPaths } from './lib/decide.mjs';
 import { recordRead } from './lib/metrics.mjs';
-import { wikiDir, load, harvest, projectRootFor } from './lib/wiki.mjs';
+import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { readFileSync } from 'node:fs';
@@ -83,10 +83,20 @@ try {
     for (const path of touched) {
       try {
         const dir = dirFor(path);
-        harvest(dir, { filePath: path, sessionId: payload.session_id, action: payload.tool_name });
+        // ONE read, not two. harvest() hashed the file and indexFile() then
+        // read it again, so every allowed call paid double the I/O on the
+        // hook's critical path. Reading once here and handing the text to both
+        // keeps the graph identical and halves the cost.
+        const source = readFileSync(path, 'utf8');
+        harvest(dir, {
+          filePath: path,
+          sessionId: payload.session_id,
+          action: payload.tool_name,
+          hash: contentHash(path, source),
+        });
         // Index on the way past, so the NEXT touch can be answered with
         // structure instead of the file. Bounded by the snapshot limit.
-        indexFile(dir, path);
+        indexFile(dir, path, source);
       } catch { /* never let bookkeeping break an allowed call */ }
     }
 
