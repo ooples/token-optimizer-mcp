@@ -19,6 +19,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { readManifest, verifyManifest, residue } from './manifest.mjs';
@@ -111,14 +112,22 @@ export function probeEnforcement({ root, workspace }) {
   }
 
   mkdirSync(workspace, { recursive: true });
-  const big = join(workspace, 'doctor-large.ts');
-  const small = join(workspace, 'doctor-small.ts');
+  // A FRESH SESSION AND FRESH FILENAMES PER RUN. The router remembers what a
+  // session has already seen and degrades a repeat refusal to an advisory
+  // (loop-breaking), and it refuses a file it has seen before (re-read
+  // detection). With a fixed session id and fixed paths, the SECOND doctor run
+  // on a machine therefore reported both probes as failures -- the product
+  // behaving correctly, scored as broken. A doctor that cries wolf on its own
+  // second run is worse than no doctor.
+  const probeId = `doctor-${process.pid}-${randomBytes(4).toString('hex')}`;
+  const big = join(workspace, `${probeId}-large.ts`);
+  const small = join(workspace, `${probeId}-small.ts`);
   writeFileSync(big, 'export const x = 1;\n'.repeat(20_000));
   writeFileSync(small, 'export const y = 2;\n');
 
   try {
     const denied = probe(binary, {
-      tool_name: 'Read', tool_input: { file_path: big }, cwd: workspace, session_id: 'doctor',
+      tool_name: 'Read', tool_input: { file_path: big }, cwd: workspace, session_id: probeId,
     });
     const deniedOk = typeof denied === 'string' && denied.includes('deny');
     checks.push(deniedOk
@@ -127,7 +136,7 @@ export function probeEnforcement({ root, workspace }) {
         'check TOKEN_OPTIMIZER_MODE is not "off" or "advise", then reinstall the hooks'));
 
     const allowed = probe(binary, {
-      tool_name: 'Read', tool_input: { file_path: small }, cwd: workspace, session_id: 'doctor',
+      tool_name: 'Read', tool_input: { file_path: small }, cwd: workspace, session_id: probeId,
     });
     const allowedOk = !allowed || !allowed.includes('deny');
     checks.push(allowedOk
