@@ -20,6 +20,7 @@ jobs:
     name: Bundle Size Analysis
     runs-on: ubuntu-latest
     # Skip on release-please PRs (only bump version/changelog already validated on merge).
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -27,28 +28,23 @@ jobs:
 
     steps:
       - name: Checkout code
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Build project
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm run build
 
       - name: Analyze bundle size
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         id: bundle_size
         run: |
           # Get current bundle size
@@ -93,7 +89,7 @@ jobs:
 
       - name: Comment PR with bundle size
         # Fork PRs get a read-only token; skip the comment and never fail the job over it.
-        if: ${{ !startsWith(github.head_ref, 'release-please') && (github.event_name == 'pull_request' && steps.bundle_size.outputs.baseline_exists == 'true' && github.event.pull_request.head.repo.full_name == github.repository) }}
+        if: github.event_name == 'pull_request' && steps.bundle_size.outputs.baseline_exists == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -127,6 +123,7 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -134,22 +131,18 @@ jobs:
 
     steps:
       - name: Checkout code
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Run npm audit
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         id: audit
         run: |
           # Gating audit — prod deps only. Dev deps (e.g. @semantic-release/npm,
@@ -196,7 +189,7 @@ jobs:
           fi
 
       - name: Upload audit results
-        if: ${{ !startsWith(github.head_ref, 'release-please') && (always()) }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: security-audit-${{ github.sha }}
@@ -207,7 +200,7 @@ jobs:
 
       - name: Comment PR with security audit
         # Fork PRs get a read-only token; skip the comment and never fail the job over it.
-        if: ${{ !startsWith(github.head_ref, 'release-please') && (github.event_name == 'pull_request' && (steps.audit.outputs.high_vulnerabilities != '0' || steps.audit.outputs.critical_vulnerabilities != '0') && github.event.pull_request.head.repo.full_name == github.repository) }}
+        if: github.event_name == 'pull_request' && (steps.audit.outputs.high_vulnerabilities != '0' || steps.audit.outputs.critical_vulnerabilities != '0') && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -238,6 +231,7 @@ jobs:
   license-compliance:
     name: License Compliance
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -245,26 +239,21 @@ jobs:
 
     steps:
       - name: Checkout code
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Install license checker
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm install -g license-checker
 
       - name: Check licenses
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         id: license_check
         run: |
           # Generate license report
@@ -301,7 +290,7 @@ jobs:
           fi
 
       - name: Upload license report
-        if: ${{ !startsWith(github.head_ref, 'release-please') && (always()) }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: license-report-${{ github.sha }}
@@ -313,7 +302,7 @@ jobs:
 
       - name: Comment PR with license info
         # Fork PRs get a read-only token; skip the comment and never fail the job over it.
-        if: ${{ !startsWith(github.head_ref, 'release-please') && (github.event_name == 'pull_request' && steps.license_check.outputs.has_copyleft == 'true' && github.event.pull_request.head.repo.full_name == github.repository) }}
+        if: github.event_name == 'pull_request' && steps.license_check.outputs.has_copyleft == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -340,26 +329,24 @@ jobs:
   dependency-vulnerabilities:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
 
     steps:
       - name: Checkout code
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Run Snyk security scan (if available)
-        if: ${{ !startsWith(github.head_ref, 'release-please') && (vars.SNYK_TOKEN != '') }}
+        if: vars.SNYK_TOKEN != ''
         run: |
           npm install -g snyk
           snyk test --json > snyk-results.json || true
@@ -368,7 +355,6 @@ jobs:
         continue-on-error: true
 
       - name: Check outdated dependencies
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         id: outdated
         run: |
           npm outdated --json > outdated-deps.json || true
@@ -382,7 +368,7 @@ jobs:
           fi
 
       - name: Upload vulnerability scan results
-        if: ${{ !startsWith(github.head_ref, 'release-please') && (always()) }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-scan-${{ github.sha }}
@@ -394,28 +380,25 @@ jobs:
   code-quality:
     name: Code Quality Metrics
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'release-please') }}
     timeout-minutes: 10
 
     steps:
       - name: Checkout code
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: npm ci
 
       - name: Analyze code complexity
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: |
           # Count TypeScript files
           TS_FILES=$(find src -name "*.ts" -not -name "*.test.ts" -not -name "*.spec.ts" | wc -l)
@@ -436,7 +419,6 @@ jobs:
           echo "- Test files: $TEST_FILES" >> $GITHUB_STEP_SUMMARY
 
       - name: Check for TODO/FIXME comments
-        if: ${{ !startsWith(github.head_ref, 'release-please') }}
         run: |
           TODO_COUNT=$(grep -r "TODO" src --include="*.ts" | wc -l || echo "0")
           FIXME_COUNT=$(grep -r "FIXME" src --include="*.ts" | wc -l || echo "0")
