@@ -68,7 +68,24 @@ export interface ProjectAnalysisResult {
 const DEFAULT_COST_PER_MILLION = 30; // GPT-4 Turbo pricing (USD)
 
 /**
- * Discover all session JSONL log files in the hooks data directory
+ * Discover session logs in the hooks data directory.
+ *
+ * READ WHAT THE HOOKS ACTUALLY WRITE.
+ *
+ * This looked only for `session-log-*.jsonl`. Nothing in this package has ever
+ * written that file: the PowerShell orchestrator logs every tool call to
+ * `operations-<sessionId>.csv` (header `timestamp,toolName,tokens,metadata`,
+ * see hooks/handlers/token-optimizer-orchestrator.ps1). So on a correctly
+ * installed machine with months of recorded usage -- 235 KB of it on the box
+ * this was found on -- analyze_project_tokens found nothing and answered
+ * "No session files found. Ensure PowerShell hooks are configured."
+ *
+ * Being told to configure something already working, while the data sits
+ * unread in the very directory named by the error, is worse than a crash: it
+ * sends the user to fix the one thing that was never broken.
+ *
+ * Both formats are accepted now. JSONL stays because the web server writes it
+ * for live sessions; CSV is added because it is what actually accumulates.
  */
 async function discoverSessionFiles(hooksDataPath: string): Promise<string[]> {
   try {
@@ -80,10 +97,91 @@ async function discoverSessionFiles(hooksDataPath: string): Promise<string[]> {
   const files = await fs.readdir(hooksDataPath);
   return files
     .filter(
-      (file) => file.startsWith('session-log-') && file.endsWith('.jsonl')
+      (file) =>
+        (file.startsWith('session-log-') && file.endsWith('.jsonl')) ||
+        (file.startsWith('operations-') && file.endsWith('.csv'))
     )
     .map((file) => path.join(hooksDataPath, file))
     .sort();
+}
+
+/**
+ * Splits one CSV record, honouring double quotes.
+ *
+ * The metadata column routinely contains commas -- Windows paths, key=value
+ * pairs -- so a naive split on ',' silently truncates it and misattributes the
+ * rest to columns that do not exist.
+ */
+function splitCsvRow(line: string): string[] {
+  const cells: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      cells.push(cell);
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  cells.push(cell);
+  return cells;
+}
+
+/**
+ * Parse an `operations-<sessionId>.csv` log -- the format the hooks write.
+ */
+async function parseCsvFile(filePath: string): Promise<TurnData[]> {
+  const content = (await fs.readFile(filePath, 'utf-8')).replace(/^﻿/, '');
+  const lines = content.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+
+  const header = splitCsvRow(lines[0]).map((h) => h.trim().toLowerCase());
+  const col = (name: string) => header.indexOf(name);
+  const iTime = col('timestamp');
+  const iTool = col('toolname');
+  const iTokens = col('tokens');
+  const iMeta = col('metadata');
+
+  // Without a timestamp and a tool name there is no operation to report. Say
+  // nothing rather than emit rows of undefined.
+  if (iTime === -1 || iTool === -1) return [];
+
+  const operations: TurnData[] = [];
+  for (const line of lines.slice(1)) {
+    const cells = splitCsvRow(line);
+    const toolName = cells[iTool]?.trim();
+    const timestamp = cells[iTime]?.trim();
+    if (!toolName || !timestamp) continue;
+
+    const tokens = Number(cells[iTokens]?.trim());
+    operations.push({
+      timestamp,
+      toolName,
+      tokens: Number.isFinite(tokens) ? tokens : 0,
+      metadata: iMeta === -1 ? '' : (cells[iMeta] ?? '').trim(),
+    });
+  }
+
+  return operations;
+}
+
+/**
+ * Parse a session log, whichever of the two formats it is in.
+ */
+async function parseSessionFile(filePath: string): Promise<TurnData[]> {
+  return filePath.endsWith('.csv')
+    ? parseCsvFile(filePath)
+    : parseJsonlFile(filePath);
 }
 
 /**
@@ -135,7 +233,9 @@ async function parseJsonlFile(filePath: string): Promise<TurnData[]> {
  */
 function extractSessionId(filePath: string): string {
   const filename = path.basename(filePath);
-  const match = filename.match(/session-log-(.+)\.jsonl$/);
+  const match =
+    filename.match(/session-log-(.+)\.jsonl$/) ??
+    filename.match(/operations-(.+)\.csv$/);
   return match ? match[1] : filename;
 }
 
@@ -446,7 +546,7 @@ export async function analyzeProjectTokens(
       batch.map(async (filePath) => {
         try {
           const sessionId = extractSessionId(filePath);
-          const operations = await parseJsonlFile(filePath);
+          const operations = await parseSessionFile(filePath);
           parsedSessions.set(sessionId, operations);
         } catch (error) {
           console.warn(

@@ -12,9 +12,10 @@
  */
 
 import { CacheEngine } from '../../core/cache-engine.js';
+import { readCompressedJson } from '../../utils/cache-helper.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
-import { compress, decompress } from '../shared/compression-utils.js';
+import { compress } from '../shared/compression-utils.js';
 import { createHash } from 'crypto';
 
 // Type definitions
@@ -224,15 +225,15 @@ export class CustomWidget {
         this.isReadOnlyOperation(options.operation)
       ) {
         const cached = this.cache.get(cacheKey);
-        if (cached) {
-          const decompressed = decompress(
-            Buffer.from(cached, 'base64'),
-            'gzip'
-          );
-          const cachedResult = JSON.parse(
-            decompressed.toString()
-          ) as CustomWidgetResult;
-
+        // An unreadable entry is a MISS, not a failure -- see
+        // readCompressedJson in utils/cache-helper.ts. A cache must never
+        // be able to make a correct answer impossible.
+        const cachedResult = readCompressedJson<CustomWidgetResult>(
+          this.cache,
+          cached,
+          cacheKey
+        );
+        if (cachedResult) {
           const tokensSaved = this.tokenCounter.count(
             JSON.stringify(cachedResult)
           ).tokens;

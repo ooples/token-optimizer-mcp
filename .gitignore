@@ -100,5 +100,5 @@ artifacts/
 edge-src/
 CHECKSUMS.sha256
 
-# smart_edit backups from older installed builds
+# smart_edit backups from older installed builds (current versions write to ~/.token-optimizer-backups)
 *.bak

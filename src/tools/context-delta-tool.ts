@@ -140,45 +140,40 @@ export const CONTEXT_DELTA_TOOL_DEFINITION = {
   name: 'context_delta',
   description:
     'Compute a unified-diff delta for a file in a given session so the model only sees changes since the last snapshot. Operations: compute-delta, seed, clear.',
-  // Discriminated inputSchema keyed on `operation` — compute-delta and
-  // seed require currentContent at runtime, so enforce that at schema
-  // validation time rather than letting a malformed payload reach the
-  // tool body.
+  // ONE OBJECT, NOT A TOP-LEVEL oneOf. See the same note on
+  // optimization_storage: MCP clients flatten a top-level oneOf to its first
+  // branch, so publishing three branches here meant `seed` and `clear` were
+  // invisible to any client reading the schema -- `operation` appeared to be
+  // fixed at the constant "compute-delta". Runtime validation is unchanged;
+  // ContextDeltaSchema is still a strict discriminated union that refuses a
+  // compute-delta or seed without currentContent.
   inputSchema: {
     type: 'object',
-    oneOf: [
-      {
-        type: 'object',
-        properties: {
-          operation: { type: 'string', const: 'compute-delta' },
-          sessionId: { type: 'string', minLength: 1 },
-          filePath: { type: 'string', minLength: 1 },
-          currentContent: { type: 'string' },
-        },
-        required: ['operation', 'sessionId', 'filePath', 'currentContent'],
-        additionalProperties: false,
+    properties: {
+      operation: {
+        type: 'string',
+        enum: ['compute-delta', 'seed', 'clear'],
+        description:
+          'compute-delta: diff currentContent against the last snapshot. ' +
+          'seed: record a baseline without producing a diff. ' +
+          'clear: forget the snapshot for this file.',
       },
-      {
-        type: 'object',
-        properties: {
-          operation: { type: 'string', const: 'seed' },
-          sessionId: { type: 'string', minLength: 1 },
-          filePath: { type: 'string', minLength: 1 },
-          currentContent: { type: 'string' },
-        },
-        required: ['operation', 'sessionId', 'filePath', 'currentContent'],
-        additionalProperties: false,
+      sessionId: {
+        type: 'string',
+        minLength: 1,
+        description: 'Session the snapshot belongs to. Required by every operation.',
       },
-      {
-        type: 'object',
-        properties: {
-          operation: { type: 'string', const: 'clear' },
-          sessionId: { type: 'string', minLength: 1 },
-          filePath: { type: 'string', minLength: 1 },
-        },
-        required: ['operation', 'sessionId', 'filePath'],
-        additionalProperties: false,
+      filePath: {
+        type: 'string',
+        minLength: 1,
+        description: 'File being tracked. Required by every operation.',
       },
-    ],
+      currentContent: {
+        type: 'string',
+        description: 'The file as it stands now. Required for compute-delta and seed.',
+      },
+    },
+    required: ['operation', 'sessionId', 'filePath'],
+    additionalProperties: false,
   },
 };

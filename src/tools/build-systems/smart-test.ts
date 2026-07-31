@@ -1,11 +1,15 @@
 /**
  * Smart Test Tool - 80% Token Reduction
  *
- * Wraps Jest to provide:
+ * Wraps the project's test runner to provide:
  * - Incremental test runs (only affected tests)
  * - Cached test results
  * - Failure summarization (not full logs)
  * - Coverage delta tracking
+ *
+ * Jest, Vitest, Mocha, AVA and `node --test` are all understood; the runner is
+ * detected from package.json and its report normalised into one shape. See
+ * test-frameworks.ts.
  */
 
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -16,6 +20,12 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawnNpm } from './run-node-bin.js';
+import {
+  ADAPTERS,
+  detectFramework,
+  parseAnyKnownFormat,
+  type FrameworkId,
+} from './test-frameworks.js';
 
 interface TestResult {
   numTotalTests: number;
@@ -43,6 +53,9 @@ interface TestResult {
   };
   startTime: number;
   endTime: number;
+
+  /** Which runner produced this. Cached alongside the result. */
+  framework?: FrameworkId;
 }
 
 interface SmartTestOptions {
@@ -80,6 +93,14 @@ interface SmartTestOptions {
    * Maximum cache age in seconds (default: 3600 = 1 hour)
    */
   maxCacheAge?: number;
+
+  /**
+   * Which test runner the project uses. Detected from package.json when
+   * omitted, which is right almost always; set it when the project's test
+   * script is indirect enough to hide the runner (a shell wrapper, a
+   * cross-env chain).
+   */
+  framework?: FrameworkId;
 }
 
 interface SmartTestOutput {
@@ -93,6 +114,9 @@ interface SmartTestOutput {
     skipped: number;
     duration: number;
     fromCache: boolean;
+
+    /** Which runner actually produced these numbers. */
+    framework: FrameworkId;
   };
 
   /**
@@ -135,6 +159,7 @@ export class SmartTest {
   private cacheNamespace = 'smart_test';
   private projectRoot: string;
   private readonly defaultProjectRoot: string;
+  private lastFramework: FrameworkId = 'unknown';
 
   constructor(
     cache: CacheEngine,
@@ -178,12 +203,13 @@ export class SmartTest {
       }
     }
 
-    // Run Jest
-    const result = await this.runJest({
+    // Run whatever runner this project actually uses
+    const result = await this.runTests({
       pattern,
       onlyChanged,
       coverage,
       watch,
+      framework: options.framework,
     });
 
     // Cache the result
@@ -196,90 +222,212 @@ export class SmartTest {
   }
 
   /**
-   * Run Jest and capture results
+   * Works out which runner this project uses.
+   *
+   * An explicit option wins; otherwise package.json decides. A project with no
+   * manifest at all is 'unknown', which is not fatal -- the run still happens
+   * and the output is parsed by shape afterwards.
    */
-  private async runJest(options: {
+  private resolveFramework(explicit?: FrameworkId): FrameworkId {
+    if (explicit && explicit !== 'unknown') return explicit;
+
+    const manifest = join(this.projectRoot, 'package.json');
+    if (!existsSync(manifest)) return 'unknown';
+    try {
+      return detectFramework(JSON.parse(readFileSync(manifest, 'utf8')));
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Flags for narrowing the run, which every runner spells differently.
+   *
+   * Only what a runner genuinely supports is passed. `onlyChanged` has no
+   * equivalent outside Jest and Vitest, and inventing one would mean silently
+   * running everything while reporting a narrowed run.
+   */
+  private selectionArgs(
+    framework: FrameworkId,
+    options: { pattern?: string; onlyChanged: boolean; watch: boolean }
+  ): string[] {
+    const args: string[] = [];
+    const plain = options.pattern?.replace(/\\/g, '/');
+
+    switch (framework) {
+      case 'jest': {
+        if (plain) {
+          // Escape every regex metacharacter (including backslash) in a single
+          // pass, then convert the user-facing `*` wildcard (escaped to `\*` by
+          // the previous step) into `.*` for Jest's regex pattern matching.
+          const asRegex = plain
+            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            .replace(/\\\*/g, '.*');
+          args.push('--testPathPattern=' + asRegex);
+        }
+        if (options.onlyChanged) args.push('--onlyChanged');
+        if (options.watch) args.push('--watch');
+        break;
+      }
+      case 'vitest': {
+        // Vitest takes a bare filename filter, not a flag.
+        if (plain) args.push(plain);
+        if (options.onlyChanged) args.push('--changed');
+        break;
+      }
+      case 'mocha': {
+        if (plain) args.push('--grep', plain);
+        if (options.watch) args.push('--watch');
+        break;
+      }
+      case 'node': {
+        // Nothing here on purpose: node --test reads its flags only before
+        // `--test`, so selection travels via NODE_OPTIONS instead.
+        break;
+      }
+      case 'ava': {
+        if (plain) args.push('--match', plain);
+        if (options.watch) args.push('--watch');
+        break;
+      }
+      default:
+        break;
+    }
+
+    return args;
+  }
+
+  /**
+   * Runs the project's tests and captures a normalised result.
+   */
+  private async runTests(options: {
     pattern?: string;
     onlyChanged: boolean;
     coverage: boolean;
     watch: boolean;
+    framework?: FrameworkId;
   }): Promise<TestResult> {
-    const args = ['--json'];
+    const framework = this.resolveFramework(options.framework);
+    const adapter = framework === 'unknown' ? null : ADAPTERS[framework];
 
-    if (options.pattern) {
-      // Convert Windows backslashes to forward slashes
-      let normalizedPattern = options.pattern.replace(/\\/g, '/');
+    const args = [
+      ...(adapter ? adapter.reportArgs({ coverage: options.coverage }) : []),
+      ...this.selectionArgs(framework, options),
+    ];
 
-      // Escape every regex metacharacter (including backslash) in a single
-      // pass, then convert the user-facing `*` wildcard (escaped to `\*` by
-      // the previous step) into `.*` for Jest's regex pattern matching.
-      normalizedPattern = normalizedPattern
-        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        .replace(/\\\*/g, '.*');
-
-      args.push('--testPathPattern=' + normalizedPattern);
-    }
-
-    if (options.onlyChanged) {
-      args.push('--onlyChanged');
-    }
-
-    if (options.coverage) {
-      args.push('--coverage', '--coverageReporters=json-summary');
-    }
-
-    if (options.watch) {
-      args.push('--watch');
-    }
-
-    args.push('--no-colors');
+    // Vitest defaults to watch mode when run non-interactively is ambiguous;
+    // reportArgs already pins --run, so only remove it if watching was asked for.
+    const finalArgs = options.watch && framework === 'vitest'
+      ? args.filter((a) => a !== '--run')
+      : args;
 
     return new Promise((resolve, reject) => {
       let stdout = '';
       let stderr = '';
+      const started = Date.now();
+
+      // Flags some runners will only accept through the environment, appended
+      // to whatever NODE_OPTIONS the user already set rather than replacing it.
+      const extraNodeOptions = adapter?.nodeOptions?.({ pattern: options.pattern }) ?? [];
+      const env = extraNodeOptions.length
+        ? {
+            ...process.env,
+            NODE_OPTIONS: [process.env.NODE_OPTIONS, ...extraNodeOptions]
+              .filter(Boolean)
+              .join(' '),
+          }
+        : process.env;
 
       // Runs npm's own JS entry through this Node binary. Still argv mode --
       // caller-controlled args are never seen by a shell -- but with no .cmd
       // shim, which Node 20.12+ refuses to spawn at all. See run-node-bin.ts.
-      const jest = spawnNpm(
-        ['run', 'test', '--', ...args],
-        { cwd: this.projectRoot },
+      const child = spawnNpm(
+        ['run', 'test', '--', ...finalArgs],
+        { cwd: this.projectRoot, env },
         'smart_test'
       );
 
-      jest.stdout.on('data', (data) => {
+      child.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      jest.stderr.on('data', (data) => {
+      child.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      jest.on('close', (_code) => {
-        try {
-          // Jest writes JSON to stdout even on failure
-          const jsonMatch = stdout.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const result = JSON.parse(jsonMatch[0]) as TestResult;
-            resolve(result);
-          } else {
-            reject(
-              new Error(`Failed to parse Jest output: ${stderr || stdout}`)
-            );
+      child.on('close', (_code) => {
+        // Some runners report to stderr (node --test's TAP goes to stdout, but
+        // AVA and mocha reporters vary), so parse the pair.
+        const combined = stdout + (stdout && stderr ? '\n' : '') + stderr;
+
+        let parsed = adapter ? adapter.parse(stdout, stderr) : null;
+        if (!parsed && adapter) parsed = adapter.parse(combined, '');
+
+        let usedFramework: FrameworkId = framework;
+        if (!parsed) {
+          // Detection can be wrong -- a test script that shells out, a runner
+          // swapped without the manifest catching up. Rather than refuse,
+          // accept any report whose shape we recognise.
+          const guessed = parseAnyKnownFormat(combined);
+          if (guessed) {
+            parsed = guessed.result;
+            usedFramework = guessed.framework;
           }
-        } catch (err) {
-          reject(
-            new Error(
-              `Failed to parse Jest output: ${err instanceof Error ? err.message : String(err)}`
-            )
-          );
         }
+
+        if (!parsed) {
+          // SAY WHICH PROBLEM IT IS.
+          //
+          // The old message was "Failed to parse Jest output: Expected property
+          // name or '}' in JSON at position 4", which describes a parser's
+          // disappointment rather than the user's situation.
+          const known = 'Jest, Vitest, Mocha, AVA and node --test';
+          const detected = framework === 'unknown'
+            ? 'No supported runner could be identified from package.json.'
+            : `Detected ${ADAPTERS[framework].label}, but its report could not be read.`;
+          const tail = (stderr || stdout).slice(0, 600).trim();
+          reject(new Error(
+            `smart_test understands ${known}. ${detected}` +
+            (tail ? `\n\nTest output was:\n${tail}` : '')
+          ));
+          return;
+        }
+
+        this.lastFramework = usedFramework;
+
+        resolve({
+          ...parsed,
+          coverageMap: this.readCoverageSummary(options.coverage),
+          startTime: started,
+          endTime: Date.now(),
+          framework: usedFramework,
+        });
       });
 
-      jest.on('error', (err) => {
+      child.on('error', (err) => {
         reject(err);
       });
     });
+  }
+
+  /**
+   * Coverage totals, read from the summary file runners agree on.
+   *
+   * Jest's --json inlines this; every other runner writes
+   * coverage/coverage-summary.json instead. Reading the file works for all of
+   * them, and returns nothing rather than zeros when coverage was not collected
+   * -- a coverage delta of 0% and "no coverage data" are different answers.
+   */
+  private readCoverageSummary(requested: boolean): TestResult['coverageMap'] {
+    if (!requested) return undefined;
+    const summaryPath = join(this.projectRoot, 'coverage', 'coverage-summary.json');
+    if (!existsSync(summaryPath)) return undefined;
+    try {
+      const parsed = JSON.parse(readFileSync(summaryPath, 'utf8'));
+      return parsed?.total ? { total: parsed.total } : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -369,6 +517,7 @@ export class SmartTest {
         skipped: result.numPendingTests,
         duration: result.endTime - result.startTime,
         fromCache,
+        framework: result.framework ?? this.lastFramework,
       },
       failures,
       coverageDelta,
@@ -406,22 +555,37 @@ export class SmartTest {
       location?: string;
     }> = [];
 
-    for (const testFile of result.testResults || []) {
-      if (testFile.status === 'failed') {
-        for (const assertion of testFile.assertionResults || []) {
-          if (assertion.status === 'failed') {
-            // Extract concise error message
-            const error = this.extractConciseError(assertion.failureMessages);
+    for (const entry of result.testResults || []) {
+      if (entry.status !== 'failed') continue;
 
-            failures.push({
-              testFile: testFile.name,
-              testName: assertion.title,
-              error,
-              location: this.extractErrorLocation(assertion.failureMessages),
-            });
-          }
+      // TWO SHAPES, BOTH REAL.
+      //
+      // Jest and Vitest report a FILE per entry, with the individual tests
+      // nested in assertionResults. Mocha, AVA and node --test report a TEST
+      // per entry, with no nesting at all. Walking only the nested shape --
+      // which is what this did -- means every flat runner produced a correct
+      // count of failures beside an EMPTY list of them: "1 failed" and nothing
+      // about which one, which is the only part anybody needs.
+      if (entry.assertionResults?.length) {
+        for (const assertion of entry.assertionResults) {
+          if (assertion.status !== 'failed') continue;
+          failures.push({
+            testFile: entry.name,
+            testName: assertion.title,
+            error: this.extractConciseError(assertion.failureMessages),
+            location: this.extractErrorLocation(assertion.failureMessages),
+          });
         }
+        continue;
       }
+
+      const messages = entry.failureMessage ? [entry.failureMessage] : [];
+      failures.push({
+        testFile: entry.name,
+        testName: entry.name,
+        error: this.extractConciseError(messages),
+        location: this.extractErrorLocation(messages),
+      });
     }
 
     return failures;
@@ -435,42 +599,58 @@ export class SmartTest {
       return 'Unknown error';
     }
 
-    // Join all messages
     const fullMessage = messages.join('\n');
-
-    // Extract the most important lines
     const lines = fullMessage.split('\n');
-    const importantLines = lines.filter((line) => {
-      // Keep expect() lines, received/expected, and error messages
-      return (
-        line.includes('expect') ||
-        line.includes('Received:') ||
-        line.includes('Expected:') ||
-        line.includes('Error:') ||
-        line.includes('at ')
-      );
-    });
 
-    // Limit to first 5 important lines
-    return (
-      importantLines.slice(0, 5).join('\n').trim() || fullMessage.slice(0, 200)
-    );
+    // THE MESSAGE, THEN ONE FRAME -- which is how anybody reads a failure.
+    //
+    // This used to keep only lines matching a whitelist of Jest's phrasing
+    // ('expect', 'Received:', 'Expected:'). Every other runner words the same
+    // facts differently: node --test says "Expected values to be strictly
+    // equal:" followed by "1 !== 2", and neither line survived the filter, so
+    // the one sentence explaining the failure was dropped while the stack
+    // around it was kept. Taking everything above the first stack frame is
+    // vocabulary-independent, and therefore right for runners not yet written.
+    const firstFrame = lines.findIndex((l) => l.trim().startsWith('at '));
+    const head = (firstFrame === -1 ? lines : lines.slice(0, firstFrame))
+      .join('\n')
+      .trim();
+
+    const frame = lines
+      .slice(firstFrame === -1 ? lines.length : firstFrame)
+      .find((l) => l.trim().startsWith('at ') && !l.includes('node_modules') && !/\bnode:/.test(l));
+
+    const parts = [head || fullMessage.slice(0, 200).trim(), frame?.trimEnd()].filter(Boolean);
+    return parts.join('\n').slice(0, 600) || 'Unknown error';
   }
 
   /**
    * Extract error location from stack trace
    */
   private extractErrorLocation(messages: string[]): string | undefined {
-    const fullMessage = messages.join('\n');
-    const lines = fullMessage.split('\n');
+    const lines = messages.join('\n').split('\n');
 
     for (const line of lines) {
-      if (line.trim().startsWith('at ') && !line.includes('node_modules')) {
-        // Extract file:line:column
-        const match = line.match(/\(([^)]+):(\d+):(\d+)\)/);
-        if (match) {
-          return `${match[1]}:${match[2]}:${match[3]}`;
-        }
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('at ')) continue;
+
+      // Skip frames that are not the user's code. `node_modules` was already
+      // skipped; `node:internal/...` was not, and since those frames DO carry
+      // parentheses while a bare `at C:\path\a.test.js:4:37` frame does not,
+      // the old parenthesised-only regex walked straight past the real
+      // location and reported node:internal/process/task_queues as the site of
+      // the user's failed assertion.
+      if (trimmed.includes('node_modules') || /\bnode:/.test(trimmed)) continue;
+
+      const parenthesised = trimmed.match(/\(([^)]+):(\d+):(\d+)\)/);
+      if (parenthesised) {
+        return `${parenthesised[1]}:${parenthesised[2]}:${parenthesised[3]}`;
+      }
+
+      // `at <file>:<line>:<col>` with no wrapping function name.
+      const bare = trimmed.match(/^at\s+(?:\S+\s+)?(.+?):(\d+):(\d+)\s*$/);
+      if (bare) {
+        return `${bare[1]}:${bare[2]}:${bare[3]}`;
       }
     }
 
@@ -647,13 +827,21 @@ export async function runSmartTest(
 export const SMART_TEST_TOOL_DEFINITION = {
   name: 'smart_test',
   description:
-    'Run tests with intelligent caching, coverage tracking, and incremental test execution',
+    'Run the project\'s tests (Jest, Vitest, Mocha, AVA or node --test) with ' +
+    'intelligent caching, coverage tracking, and incremental test execution',
   inputSchema: {
     type: 'object',
     properties: {
       pattern: {
         type: 'string',
         description: 'Pattern to match test files',
+      },
+      framework: {
+        type: 'string',
+        enum: ['jest', 'vitest', 'mocha', 'node', 'ava'],
+        description:
+          'Test runner to assume. Detected from package.json when omitted; ' +
+          'set it only when the test script hides the runner.',
       },
       onlyChanged: {
         type: 'boolean',

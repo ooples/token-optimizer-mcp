@@ -357,7 +357,10 @@ import {
   SMART_GREP_TOOL_DEFINITION,
   // Analytics tools
 } from '../tools/file-operations/smart-grep.js';
-import { parseSessionLog } from './session-log-parser.js';
+import {
+  parseSessionLog,
+  resolveSessionLogPath,
+} from './session-log-parser.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -1154,7 +1157,19 @@ async function handleToolCall(request: {
           };
         }
 
+        // CLEAR EVERYTHING THAT SERVES A READ, not just the persistent store.
+        //
+        // `cache.clear()` empties the SQLite store. smart_cache keeps its own
+        // L1/L2/L3 tiers in memory in front of it, and those survived -- so a
+        // user who cleared the cache kept being served the very entries they
+        // had just cleared. Measured: set a key, clear, read it back, and the
+        // value was still there while the call reported "Cache cleared
+        // successfully".
+        //
+        // smart_cache already had a correct clear that empties all three tiers
+        // AND the store; it simply was not on this path.
         cache.clear();
+        await smartCache.run({ operation: 'clear' });
 
         return {
           content: [
@@ -1231,51 +1246,68 @@ async function handleToolCall(request: {
             'data'
           );
 
-          // Read current session file
+          // AN EXPLICIT sessionId MUST NOT NEED AN ACTIVE SESSION.
+          //
+          // This read current-session.txt first and returned "No active session
+          // found" when it was absent -- before ever looking at the sessionId
+          // it had been handed. So the one documented parameter was unusable
+          // exactly when it mattered: asking about a session that has ENDED.
+          // The file is only needed to answer "which session do you mean", so
+          // it is only consulted when the caller did not say.
           const sessionFilePath = path.join(
             hooksDataPath,
             'current-session.txt'
           );
 
-          if (!fs.existsSync(sessionFilePath)) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: false,
-                    error: 'No active session found',
-                    sessionFilePath,
-                  }),
-                },
-              ],
-            };
+          let targetSessionId = sessionId;
+          if (!targetSessionId) {
+            if (!fs.existsSync(sessionFilePath)) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      success: false,
+                      error:
+                        'No active session found, and no sessionId was given.',
+                      sessionFilePath,
+                    }),
+                  },
+                ],
+              };
+            }
+
+            // Strip BOM and parse JSON
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^﻿/, '');
+            targetSessionId = JSON.parse(sessionContent).sessionId;
           }
 
-          // Strip BOM and parse JSON
-          const sessionContent = fs
-            .readFileSync(sessionFilePath, 'utf-8')
-            .replace(/^\uFEFF/, '');
-          const sessionData = JSON.parse(sessionContent);
-
-          const targetSessionId = sessionId || sessionData.sessionId;
-
-          // Read JSONL log
-          const jsonlFilePath = path.join(
-            hooksDataPath,
-            `session-log-${targetSessionId}.jsonl`
-          );
-
-          // Error handling: Throw to let MCP wrap errors consistently
-          if (!fs.existsSync(jsonlFilePath)) {
+          if (!targetSessionId || typeof targetSessionId !== 'string') {
             throw new Error(
-              `JSONL log not found for session ${targetSessionId}`
+              'No sessionId given and none recorded in current-session.txt.'
             );
           }
 
-          // Parse JSONL using shared utility (now async with streaming)
+          // Read the session log, in whichever format it exists. This used to
+          // build `session-log-<id>.jsonl` by hand and fail when it was absent
+          // -- which was always, since the hooks write operations-<id>.csv.
+          const logFilePath = resolveSessionLogPath(
+            hooksDataPath,
+            targetSessionId
+          );
+
+          // Error handling: Throw to let MCP wrap errors consistently
+          if (!logFilePath) {
+            throw new Error(
+              `No session log found for session ${targetSessionId} in ${hooksDataPath}`
+            );
+          }
+
+          // Parse using shared utility (now async with streaming)
           const { operations, toolTokens, systemReminderTokens } =
-            await parseSessionLog(jsonlFilePath);
+            await parseSessionLog(logFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
@@ -1306,8 +1338,13 @@ async function handleToolCall(request: {
                     success: true,
                     sessionId: targetSessionId,
                     sessionInfo: {
-                      startTime: sessionData.startTime,
-                      lastActivity: sessionData.lastActivity,
+                      // Taken from the log itself rather than from
+                      // current-session.txt, which only ever describes the
+                      // session running right now and says nothing about a
+                      // past one the caller asked about by id.
+                      startTime: operations[0]?.timestamp ?? '',
+                      lastActivity:
+                        operations[operations.length - 1]?.timestamp ?? '',
                       totalOperations: operations.length,
                     },
                     tokens: {
@@ -1392,36 +1429,36 @@ async function handleToolCall(request: {
             }
           }
 
-          // --- 2. Read JSONL Log (validated) ---
+          // --- 2. Read the session log (validated) ---
           // SECURITY: strict allowlist, kept in sync with SESSION_ID_RE in
           // web-server.ts — no dots or path separators, so `..` traversal
           // sequences are rejected before the path is built.
           if (!/^[A-Za-z0-9_-]{1,64}$/.test(targetSessionId)) {
             throw new Error('Invalid sessionId format.');
           }
-          const jsonlFilePath = path.join(
+          // Resolves .jsonl or the operations-<id>.csv the hooks actually
+          // write; the containment check below still runs on whatever it picks.
+          const logFilePath = resolveSessionLogPath(
             hooksDataPath,
-            `session-log-${targetSessionId}.jsonl`
+            targetSessionId
           );
+          if (!logFilePath) {
+            throw new Error(
+              `No session log found for session ${targetSessionId} in ${hooksDataPath}`
+            );
+          }
           // SECURITY: Ensure file path is contained within hooksDataPath
           const baseReal = fs.realpathSync(hooksDataPath);
-          const fileReal = fs.existsSync(jsonlFilePath)
-            ? fs.realpathSync(jsonlFilePath)
-            : path.resolve(jsonlFilePath);
+          const fileReal = fs.realpathSync(logFilePath);
           const rel0 = path.relative(baseReal, fileReal);
           if (rel0.startsWith('..') || path.isAbsolute(rel0)) {
             throw new Error(
-              'Resolved JSONL path escapes hooks data directory.'
-            );
-          }
-          if (!fs.existsSync(jsonlFilePath)) {
-            throw new Error(
-              `JSONL log not found for session ${targetSessionId}`
+              'Resolved session log path escapes hooks data directory.'
             );
           }
 
-          // Parse JSONL using shared utility
-          const { operations } = await parseSessionLog(jsonlFilePath);
+          // Parse using shared utility
+          const { operations } = await parseSessionLog(logFilePath);
 
           // --- 3. Filter and Process Operations ---
           let originalTokens = 0;

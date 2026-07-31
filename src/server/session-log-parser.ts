@@ -1,5 +1,6 @@
-import { createReadStream } from 'fs';
+import { createReadStream, existsSync } from 'fs';
 import { createInterface } from 'readline';
+import { join } from 'path';
 
 /**
  * Represents a parsed tool call operation from session logs
@@ -21,37 +22,135 @@ export interface SessionLogData {
 }
 
 /**
- * Parse a JSONL session log file and extract operations and token statistics
+ * Locates a session's log, in whichever format it exists.
  *
- * This utility extracts tool call operations and system reminder tokens from
- * session log files, normalizing metadata to strings for consistent handling.
+ * TWO NAMES FOR THE SAME THING, AND ONLY ONE WAS EVER LOOKED FOR.
+ *
+ * Callers built `session-log-<id>.jsonl` by hand and reported "JSONL log not
+ * found" when it was absent -- which is always, because nothing in this package
+ * writes that file. The installed PowerShell hooks log every tool call to
+ * `operations-<id>.csv` (hooks/handlers/token-optimizer-orchestrator.ps1), and
+ * that is what actually accumulates on a working machine.
+ *
+ * Resolving the name in one place means the next caller cannot get it wrong,
+ * and cannot drift.
+ *
+ * @returns the path to read, or null when this session genuinely has no log.
+ */
+export function resolveSessionLogPath(
+  hooksDataPath: string,
+  sessionId: string
+): string | null {
+  const candidates = [
+    join(hooksDataPath, `session-log-${sessionId}.jsonl`),
+    join(hooksDataPath, `operations-${sessionId}.csv`),
+  ];
+  return candidates.find((p) => existsSync(p)) ?? null;
+}
+
+/**
+ * Splits one CSV record, honouring double quotes.
+ *
+ * The metadata column routinely holds commas -- Windows paths, key=value pairs
+ * -- so splitting naively on ',' truncates it and shifts every later column.
+ */
+function splitCsvRow(line: string): string[] {
+  const cells: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      cells.push(cell);
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  cells.push(cell);
+  return cells;
+}
+
+/**
+ * Parse a session log and extract operations and token statistics.
+ *
+ * Accepts both formats: the JSONL the web server writes for live sessions, and
+ * the `operations-<id>.csv` the PowerShell hooks append to. The format is
+ * chosen by extension, so a caller that resolved its path with
+ * resolveSessionLogPath never has to know which it got.
  *
  * Uses streaming with readline to avoid blocking the event loop on large files.
  *
- * @param jsonlFilePath - Path to the session-log.jsonl file
+ * @param logFilePath - Path to a session-log-*.jsonl or operations-*.csv file
  * @returns Parsed operations and token counts
  *
  * @remarks
- * - Skips malformed JSONL lines silently
+ * - Skips malformed lines silently
  * - Normalizes object metadata to JSON strings
  * - Returns empty arrays/zeros if file is empty
- * - Uses streaming for memory efficiency on large logs
+ * - CSV logs carry no system-reminder rows, so that total is 0 for them
  */
 export async function parseSessionLog(
-  jsonlFilePath: string
+  logFilePath: string
 ): Promise<SessionLogData> {
   const operations: Operation[] = [];
   let systemReminderTokens = 0;
   let toolTokens = 0;
 
-  const fileStream = createReadStream(jsonlFilePath, { encoding: 'utf-8' });
+  const isCsv = logFilePath.toLowerCase().endsWith('.csv');
+
+  const fileStream = createReadStream(logFilePath, { encoding: 'utf-8' });
   const rl = createInterface({
     input: fileStream,
     crlfDelay: Infinity,
   });
 
-  for await (const line of rl) {
+  // CSV column positions, read from the header row rather than assumed, so a
+  // reordered or extended header still parses instead of silently misreading.
+  let csvCols: { time: number; tool: number; tokens: number; meta: number } | null = null;
+
+  for await (const rawLine of rl) {
+    const line = rawLine.replace(/^﻿/, '');
     if (!line.trim()) continue;
+
+    if (isCsv) {
+      const cells = splitCsvRow(line);
+      if (!csvCols) {
+        const header = cells.map((h) => h.trim().toLowerCase());
+        csvCols = {
+          time: header.indexOf('timestamp'),
+          tool: header.indexOf('toolname'),
+          tokens: header.indexOf('tokens'),
+          meta: header.indexOf('metadata'),
+        };
+        // No timestamp or tool name means there is no operation to report.
+        if (csvCols.time === -1 || csvCols.tool === -1) break;
+        continue;
+      }
+
+      const toolName = cells[csvCols.tool]?.trim();
+      const timestamp = cells[csvCols.time]?.trim();
+      if (!toolName || !timestamp) continue;
+
+      const parsed = Number(cells[csvCols.tokens]?.trim());
+      const tokens = Number.isFinite(parsed) ? parsed : 0;
+      operations.push({
+        timestamp,
+        toolName,
+        tokens,
+        metadata: csvCols.meta === -1 ? '' : (cells[csvCols.meta] ?? '').trim(),
+      });
+      toolTokens += tokens;
+      continue;
+    }
 
     try {
       const event = JSON.parse(line);

@@ -72,6 +72,7 @@ async function loadPrettier(): Promise<PrettierFormat | null> {
   return prettierFormat;
 }
 import { CacheEngine } from '../../core/cache-engine.js';
+import { readCompressedJson } from '../../utils/cache-helper.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { compress, decompress } from '../shared/compression-utils.js';
@@ -562,28 +563,51 @@ export class SmartPretty {
     });
 
     // Check cache
+    //
+    // AN UNREADABLE CACHE ENTRY IS A MISS, NOT A FAILURE.
+    //
+    // This tool used to write `compressed.toString()` -- no encoding, so utf8,
+    // which mangles binary gzip irreversibly -- and read it back as base64.
+    // The write was fixed; this read was not, and that left every installation
+    // that had already run it broken FOR EVER: the poisoned entry stayed in
+    // the cache, decompress threw "incorrect header check", and the error
+    // surfaced to the user on every call. Upgrading did not help, because
+    // nothing ever replaced the bad entry.
+    //
+    // Caught by running the tool against a cache that predated the fix.
+    // A cache exists to make correct answers cheaper; it must never be able to
+    // make a correct answer impossible. So a value that cannot be read is
+    // dropped and recomputed.
     if (useCache) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
-        const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
-        const cachedResult = JSON.parse(
-          decompressed.toString()
-        ) as HighlightResult;
+        let cachedResult: HighlightResult | null = null;
+        try {
+          const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
+          cachedResult = JSON.parse(decompressed.toString()) as HighlightResult;
+        } catch {
+          // Corrupt or written by an older, broken version. Forget it and fall
+          // through to recompute; the fresh value overwrites it below.
+          this.cache.delete(cacheKey);
+          cachedResult = null;
+        }
 
-        const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
-        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
+        if (cachedResult) {
+          const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
+          const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
-        return {
-          success: true,
-          operation: 'highlight-code',
-          data: { highlight: cachedResult },
-          metadata: {
-            tokensUsed,
-            tokensSaved: baselineTokens - tokensUsed,
-            cacheHit: true,
-            executionTime: Date.now() - startTime,
-          },
-        };
+          return {
+            success: true,
+            operation: 'highlight-code',
+            data: { highlight: cachedResult },
+            metadata: {
+              tokensUsed,
+              tokensSaved: baselineTokens - tokensUsed,
+              cacheHit: true,
+              executionTime: Date.now() - startTime,
+            },
+          };
+        }
       }
     }
 
@@ -852,12 +876,15 @@ export class SmartPretty {
     // Check cache (88% reduction for incremental format)
     if (useCache) {
       const cached = this.cache.get(cacheKey);
-      if (cached) {
-        const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
-        const cachedResult = JSON.parse(
-          decompressed.toString()
-        ) as FormatResult;
-
+        // An unreadable entry is a MISS, not a failure -- see
+        // readCompressedJson in utils/cache-helper.ts. A cache must never
+        // be able to make a correct answer impossible.
+      const cachedResult = readCompressedJson<FormatResult>(
+        this.cache,
+        cached,
+        cacheKey
+      );
+      if (cachedResult) {
         const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
         const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 

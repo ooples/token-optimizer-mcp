@@ -126,62 +126,55 @@ export const OPTIMIZATION_STORAGE_TOOL_DEFINITION = {
   name: 'optimization_storage',
   description:
     'Persist and retrieve brotli-compressed optimization results keyed by text hash. Operations: store, retrieve.',
-  // JSON Schema discriminated union — rejects a `store` payload that
-  // omits required fields at schema time instead of deep in the tool.
+  // ONE OBJECT, NOT A TOP-LEVEL oneOf.
+  //
+  // This was published as a two-branch `oneOf`. That is legal JSON Schema and
+  // the Zod discriminated union behind it still enforces both branches exactly
+  // -- but MCP clients flatten a top-level oneOf to its FIRST branch, and that
+  // branch pinned `operation` to the constant "store". Measured against a real
+  // client: `retrieve` vanished from the published contract entirely. The
+  // operation worked when called, because validation is separate; it just could
+  // not be DISCOVERED, which for a tool nobody has memorised is the same as not
+  // existing.
+  //
+  // So the shape below advertises every operation and says, per field, which
+  // ones need it. Rejection of a malformed payload is unchanged -- that is
+  // OptimizationStorageSchema's job, and it still refuses a `store` missing any
+  // of its fields.
   inputSchema: {
     type: 'object',
-    oneOf: [
-      {
-        type: 'object',
-        properties: {
-          operation: { type: 'string', const: 'store' },
-          originalTextHash: {
-            type: 'string',
-            minLength: 1,
-            description: 'Stable hash of the original uncompressed text',
-          },
-          optimizedText: {
-            type: 'string',
-            description: 'The optimized text to store',
-          },
-          originalTokens: {
-            type: 'number',
-            minimum: 0,
-            description: 'Token count of the original text',
-          },
-          optimizedTokens: {
-            type: 'number',
-            minimum: 0,
-            description: 'Token count after optimization',
-          },
-          tokensSaved: {
-            type: 'number',
-            description: 'Tokens saved by optimization',
-          },
-        },
-        required: [
-          'operation',
-          'originalTextHash',
-          'optimizedText',
-          'originalTokens',
-          'optimizedTokens',
-          'tokensSaved',
-        ],
-        additionalProperties: false,
+    properties: {
+      operation: {
+        type: 'string',
+        enum: ['store', 'retrieve'],
+        description:
+          'store: persist an optimization result. retrieve: read one back by hash.',
       },
-      {
-        type: 'object',
-        properties: {
-          operation: { type: 'string', const: 'retrieve' },
-          originalTextHash: {
-            type: 'string',
-            minLength: 1,
-            description: 'Stable hash of the original uncompressed text',
-          },
-        },
-        required: ['operation', 'originalTextHash'],
-        additionalProperties: false,
+      originalTextHash: {
+        type: 'string',
+        minLength: 1,
+        description: 'Stable hash of the original uncompressed text. Required by both operations.',
       },
-    ],
+      optimizedText: {
+        type: 'string',
+        description: 'The optimized text to store. Required for store.',
+      },
+      originalTokens: {
+        type: 'number',
+        minimum: 0,
+        description: 'Token count of the original text. Required for store.',
+      },
+      optimizedTokens: {
+        type: 'number',
+        minimum: 0,
+        description: 'Token count after optimization. Required for store.',
+      },
+      tokensSaved: {
+        type: 'number',
+        description: 'Tokens saved by optimization. Required for store.',
+      },
+    },
+    required: ['operation', 'originalTextHash'],
+    additionalProperties: false,
   },
 };
