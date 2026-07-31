@@ -23,7 +23,7 @@ jobs:
     # Skip redundant CI on release-please PRs: the version/changelog bump only
     # contains changes already validated in the PRs that were merged. Skipped
     # jobs still satisfy required status checks (unlike workflow-level filters).
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+    if: "${{ !startsWith(github.head_ref, 'release-please') && !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
     timeout-minutes: 10
 
     steps:
@@ -51,7 +51,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+    if: "${{ !startsWith(github.head_ref, 'release-please') && !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
     timeout-minutes: 10
 
     steps:
@@ -92,7 +92,7 @@ jobs:
   test:
     name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+    if: "${{ !startsWith(github.head_ref, 'release-please') && !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
     timeout-minutes: 15
 
     strategy:
@@ -156,7 +156,7 @@ jobs:
   performance-benchmarks:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+    if: "${{ !startsWith(github.head_ref, 'release-please') && !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
     timeout-minutes: 15
     permissions:
       contents: read
@@ -254,7 +254,7 @@ jobs:
   integration-test:
     name: Integration Tests
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release-please') }}
+    if: "${{ !startsWith(github.head_ref, 'release-please') && !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
     timeout-minutes: 15
     needs: build
 
