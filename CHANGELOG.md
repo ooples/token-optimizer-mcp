@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.2.0...v5.3.0) (2026-07-31)
+
+
+### Features
+
+* optimize tokens by default on install, across all 15 CLI clients ([#203](https://github.com/ooples/token-optimizer-mcp/issues/203)) ([44d633b](https://github.com/ooples/token-optimizer-mcp/commit/44d633b1ba4a5cb862d5ac3f0251351c4605b147))
+
+
+### Bug Fixes
+
+* **ci:** let release PRs satisfy required checks instead of skipping them ([#206](https://github.com/ooples/token-optimizer-mcp/issues/206)) ([97daa05](https://github.com/ooples/token-optimizer-mcp/commit/97daa05d1fe324744499ef445afb81ffadc09722))
+
 ## [5.2.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.1.3...v5.2.0) (2026-07-21)
 
 
