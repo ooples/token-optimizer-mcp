@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { touchedPaths, isContentDump } from '../../hooks-core/decide.mjs';
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
+import { isMachineOwned } from '../../hooks-core/policy.mjs';
 
 let home;
 let repoA;
@@ -149,6 +150,37 @@ describe('a cd that goes nowhere must not lose the touch', () => {
   test('a cd to a FILE is not treated as a directory', () => {
     const out = bash(`cd ${join(repoA, 'src/main.ts')}\nwc -l src/main.ts`, repoA);
     expect(names(out)).toEqual(['src/main.ts']);
+  });
+});
+
+describe('machine-owned paths are never knowledge', () => {
+  test('VCS internals, dependencies and build output are excluded', () => {
+    // Found live: a Read of a 1.3 MB binary git index was REFUSED with an offer
+    // of "structure and what is known about it", delivered an empty structure
+    // section because there is none, and pointed at smart_read -- which would
+    // have dumped the binary. The same call also wrote that index into the
+    // knowledge graph as a file node.
+    for (const p of ['/r/.git/index', '/r/node_modules/x/a.js', '/r/dist/main.js', '/r/obj/Debug/x.dll']) {
+      expect(isMachineOwned(p)).toBe(true);
+    }
+  });
+
+  test('authored files that merely start with a dot are kept', () => {
+    // .github/workflows is written by people and is worth remembering, so the
+    // rule cannot simply be "starts with a dot".
+    for (const p of ['/r/src/app.ts', '/r/.github/workflows/ci.yml', '/r/.eslintrc.json']) {
+      expect(isMachineOwned(p)).toBe(false);
+    }
+  });
+
+  test('windows separators are excluded too', () => {
+    expect(isMachineOwned('C:\\repo\\.git\\index')).toBe(true);
+  });
+
+  test('a machine-owned operand is not harvested', () => {
+    const vcs = join(repoA, '.git', 'index');
+    writeFileSync(vcs, 'binary-ish');
+    expect(bash(`head -1 ${vcs}`, repoA)).toEqual([]);
   });
 });
 

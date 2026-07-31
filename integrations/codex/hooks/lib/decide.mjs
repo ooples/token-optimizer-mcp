@@ -13,7 +13,7 @@
  * target for loop breaking, so a second attempt at the same thing gets through.
  */
 
-import { fileSize, isBinaryPath, largeFileBytes } from './policy.mjs';
+import { fileSize, isBinaryPath, isMachineOwned, largeFileBytes } from './policy.mjs';
 import { statSync } from 'node:fs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { activeRules } from './remedy.mjs';
@@ -137,7 +137,10 @@ export function touchedPaths(payload) {
     if (!candidate || typeof candidate !== 'string') return;
     for (const spelling of resolvableCandidates(candidate, cwd)) {
       if (fileSize(spelling) >= 0) {
-        out.add(canonicalPath(spelling, cwd));
+        // Nothing under .git/, node_modules/ or a build directory belongs in a
+        // knowledge graph: it is not authored, it churns constantly, and it
+        // would thrash staleness for every file that anchors to it.
+        if (!isMachineOwned(spelling)) out.add(canonicalPath(spelling, cwd));
         return;
       }
     }
@@ -276,7 +279,10 @@ export function decide(payload, state) {
   if (tool === 'Read') {
     const path = input.file_path;
     const shown = input.raw_file_path ?? path;
-    if (!path || isBinaryPath(path)) return null;
+    // Machine-owned paths are never refused: there is no structure to offer
+    // and no knowledge to carry, so a refusal would promise both and deliver
+    // neither.
+    if (!path || isBinaryPath(path) || isMachineOwned(path)) return null;
 
     // A paged read is already a deliberate act of token economy. Overriding it
     // would replace a bounded read with an unbounded one.

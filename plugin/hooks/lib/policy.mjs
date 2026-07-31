@@ -82,6 +82,27 @@ export function isBinaryPath(path) {
   return dot !== -1 && BINARY_EXTENSIONS.has(path.slice(dot).toLowerCase());
 }
 
+/**
+ * Directories owned by a machine rather than by a person.
+ *
+ * Found live: a `Read` of `.git/index` -- 1.3 MB of binary index -- was REFUSED
+ * with an offer of "structure and what is known about it", delivered an empty
+ * structure section because there is none, and pointed at smart_read, which
+ * would have dumped the binary. The same call also wrote `.git/index` into the
+ * knowledge graph as a file node.
+ *
+ * Extension-based binary detection cannot catch this: `.git/index` has no
+ * extension. These paths are excluded wholesale instead -- nothing here is
+ * knowledge, all of it churns constantly (so it would thrash staleness), and
+ * none of it is something a person reads.
+ */
+const MACHINE_OWNED = /(?:^|[/\\])(?:\.git|\.hg|\.svn|node_modules|\.venv|__pycache__|\.next|\.turbo|dist|obj|bin)[/\\]/i;
+
+/** Whether a path lives inside a directory the user never authored. */
+export function isMachineOwned(path) {
+  return MACHINE_OWNED.test(String(path || '').split('\\').join('/'));
+}
+
 /** Size in bytes, or -1 when the path is missing or is not a regular file. */
 export function fileSize(path) {
   try {
