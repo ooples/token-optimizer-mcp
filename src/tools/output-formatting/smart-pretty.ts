@@ -17,9 +17,60 @@
  * - Incremental highlighting (88% reduction)
  */
 
-import hljs from 'highlight';
-import { format as prettierFormat } from 'prettier';
 import chalk from 'chalk';
+import { optionalDependency } from '../shared/optional-dependency.js';
+
+/**
+ * Formatting and highlighting, loaded only when this tool is called.
+ *
+ * Both were top-level imports of packages absent from every user's install, so
+ * importing this module threw "Cannot find package" and the tool could never be
+ * registered at all. They are genuinely optional -- pretty-printing degrades to
+ * the unformatted source rather than failing -- so they load on demand and say
+ * what to install if they are wanted.
+ */
+type HljsResult = {
+  value: string;
+  language?: string;
+  secondBest?: { language?: string };
+};
+type HighlightApi = {
+  highlightAuto(code: string): HljsResult;
+  highlight(code: string, options: { language: string }): HljsResult;
+};
+type PrettierFormat = (source: string, options?: unknown) => string | Promise<string>;
+
+let hljs: HighlightApi | null = null;
+let prettierFormat: PrettierFormat | null = null;
+
+async function loadHighlighter(): Promise<HighlightApi | null> {
+  if (hljs) return hljs;
+  try {
+    hljs = await optionalDependency<HighlightApi>(
+      'highlight',
+      'smart_pretty',
+      'It adds syntax colouring; without it the code is returned uncoloured.'
+    );
+  } catch {
+    hljs = null;
+  }
+  return hljs;
+}
+
+async function loadPrettier(): Promise<PrettierFormat | null> {
+  if (prettierFormat) return prettierFormat;
+  try {
+    const mod = await optionalDependency<{ format: PrettierFormat }>(
+      'prettier',
+      'smart_pretty',
+      'It reformats the source; without it the source is returned unchanged.'
+    );
+    prettierFormat = mod.format;
+  } catch {
+    prettierFormat = null;
+  }
+  return prettierFormat;
+}
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -833,7 +884,9 @@ export class SmartPretty {
           ...options.prettierConfig,
         };
 
-        formattedCode = await prettierFormat(code, prettierOptions);
+        const format = await loadPrettier();
+        // No prettier installed: the source is still perfectly usable output.
+        formattedCode = format ? await format(code, prettierOptions) : code;
         formatted = true;
       }
       // Note: Other formatters (black, gofmt, rustfmt) would require CLI execution
@@ -910,7 +963,19 @@ export class SmartPretty {
 
     // Method 3: Content-based detection using highlight.js
     try {
-      const result = hljs.highlightAuto(code);
+      const highlighter = await loadHighlighter();
+      if (!highlighter) {
+        // Without the optional highlighter there is no content-based guess to
+        // make. Saying "plaintext, low confidence" is honest; the earlier
+        // extension and heuristic passes have already had their turn.
+        return {
+          language: 'plaintext',
+          confidence: 0.1,
+          alternatives: [],
+          detectionMethod: 'heuristic',
+        };
+      }
+      const result = highlighter.highlightAuto(code);
       const language = result.language || 'plaintext';
       const alternatives =
         result.secondBest && result.secondBest.language
@@ -949,6 +1014,10 @@ export class SmartPretty {
     options: SmartPrettyOptions
   ): string {
     try {
+      // Primed by runSmartPretty before any of this runs; null simply means
+      // the optional highlighter is not installed, so the code is returned
+      // uncoloured rather than not at all.
+      if (!hljs) return code;
       const result = hljs.highlight(code, { language });
       const ansiCodes = this.generateAnsiCodes(theme);
 
@@ -978,6 +1047,10 @@ export class SmartPretty {
     options: SmartPrettyOptions
   ): string {
     try {
+      // Primed by runSmartPretty before any of this runs; null simply means
+      // the optional highlighter is not installed, so the code is returned
+      // uncoloured rather than not at all.
+      if (!hljs) return code;
       const result = hljs.highlight(code, { language });
       const css = this.generateThemeCSS(theme);
 
@@ -1340,6 +1413,10 @@ export function getSmartPretty(
 export async function runSmartPretty(
   options: SmartPrettyOptions
 ): Promise<SmartPrettyResult> {
+  // Prime the optional highlighter once, so the synchronous helpers below can
+  // use it (or correctly find it absent) without each becoming async.
+  await loadHighlighter();
+
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

@@ -16,8 +16,11 @@
 import { readFileSync, existsSync } from 'fs';
 import { parse as parseTypescript } from '@typescript-eslint/typescript-estree';
 import { parse as parseBabel } from '@babel/parser';
-import pkg from 'glob';
-const { globSync } = pkg;
+// glob v10+ is native ESM and has no default export; the CJS-style
+// `import pkg from 'glob'` threw "does not provide an export named 'default'"
+// at import time, which is why this module could never be loaded. Every other
+// file in this codebase already imports it the working way.
+import { globSync } from 'glob';
 import { relative, resolve, dirname, extname, join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';

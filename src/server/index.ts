@@ -29,6 +29,70 @@ import {
   getCacheWarmupTool,
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
+// --- Previously unregistered tools ---------------------------------------
+// Each of these shipped with a definition, a runner and tests, and no line
+// anywhere that let a user reach it. Fifteen finished tools were invisible.
+import {
+  runSmartComplexity,
+  SMART_COMPLEXITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-complexity.js';
+import {
+  runSmartDependencies,
+  SMART_DEPENDENCIES_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-dependencies.js';
+import {
+  runSmartExports,
+  SMART_EXPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-exports.js';
+import {
+  runSmartImports,
+  SMART_IMPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-imports.js';
+import {
+  runSmartRefactor,
+  SMART_REFACTOR_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-refactor.js';
+import {
+  runSmartSecurity,
+  SMART_SECURITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-security.js';
+import {
+  runSmartSymbols,
+  SMART_SYMBOLS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-symbols.js';
+import {
+  runSmartTypescript,
+  SMART_TYPESCRIPT_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-typescript.js';
+import {
+  runSmartConfigRead,
+  SMART_CONFIG_READ_TOOL_DEFINITION,
+} from '../tools/configuration/smart-config-read.js';
+import {
+  runSmartEnv,
+  SMART_ENV_TOOL_DEFINITION,
+} from '../tools/configuration/smart-env.js';
+import {
+  runSmartPackageJson,
+  SMART_PACKAGE_JSON_TOOL_DEFINITION,
+} from '../tools/configuration/smart-package-json.js';
+import {
+  runSmartTsconfig,
+  SMART_TSCONFIG_TOOL_DEFINITION,
+} from '../tools/configuration/smart-tsconfig.js';
+import {
+  runSmartPretty,
+  SMART_PRETTY_TOOL_DEFINITION,
+} from '../tools/output-formatting/smart-pretty.js';
+import {
+  runSmartProcess,
+  SMART_PROCESS_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-process.js';
+import {
+  runSmartService,
+  SMART_SERVICE_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-service.js';
+
 // Code analysis tools
 import {
   getSmartAstGrepTool,
@@ -471,6 +535,21 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      SMART_COMPLEXITY_TOOL_DEFINITION,
+      SMART_DEPENDENCIES_TOOL_DEFINITION,
+      SMART_EXPORTS_TOOL_DEFINITION,
+      SMART_IMPORTS_TOOL_DEFINITION,
+      SMART_REFACTOR_TOOL_DEFINITION,
+      SMART_SECURITY_TOOL_DEFINITION,
+      SMART_SYMBOLS_TOOL_DEFINITION,
+      SMART_TYPESCRIPT_TOOL_DEFINITION,
+      SMART_CONFIG_READ_TOOL_DEFINITION,
+      SMART_ENV_TOOL_DEFINITION,
+      SMART_PACKAGE_JSON_TOOL_DEFINITION,
+      SMART_TSCONFIG_TOOL_DEFINITION,
+      SMART_PRETTY_TOOL_DEFINITION,
+      SMART_PROCESS_TOOL_DEFINITION,
+      SMART_SERVICE_TOOL_DEFINITION,
       AUDIT_TOOL,
       DOCTOR_TOOL,
       FLEET_TOOL,
@@ -1596,6 +1675,188 @@ async function handleToolCall(request: {
       }
 
       // Code analysis tools
+      case 'smart_complexity': {
+        const result = await runSmartComplexity(args as any, cache, tokenCounter, metrics);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_dependencies': {
+        const result = await runSmartDependencies(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_exports': {
+        const result = await runSmartExports(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_imports': {
+        const result = await runSmartImports(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_refactor': {
+        const result = await runSmartRefactor(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_security': {
+        const result = await runSmartSecurity(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_symbols': {
+        const result = await runSmartSymbols(args as any, cache, tokenCounter, metrics);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_typescript': {
+        const result = await runSmartTypescript(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_config_read': {
+        // Takes the file path first, then options -- not the shared cache.
+        const { filePath, ...configOptions } = args as any;
+        const result = await runSmartConfigRead(filePath, configOptions);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_env': {
+        const result = await runSmartEnv(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_package_json': {
+        const result = await runSmartPackageJson(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_tsconfig': {
+        const result = await runSmartTsconfig(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_pretty': {
+        const result = await runSmartPretty(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_process': {
+        const result = await runSmartProcess(args as any, cache, tokenCounter, metrics);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_service': {
+        const result = await runSmartService(args as any, cache, tokenCounter, metrics);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
       case 'smart_ast_grep': {
         const options = args as any;
         const result = await smartAstGrep.grep(options.pattern, options);
