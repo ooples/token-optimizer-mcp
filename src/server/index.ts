@@ -9,6 +9,7 @@ import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
 import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
 import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
 import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
+import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -472,6 +473,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       AUDIT_TOOL,
       DOCTOR_TOOL,
+      FLEET_TOOL,
       EXPAND_TOOL,
       WASTE_TOOL,
       CACHE_TOOL,
@@ -2430,6 +2432,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (request.params.name === 'install_doctor') {
     return installDoctor(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'fleet_audit') {
+    return fleetAudit(request.params.arguments as any);
   }
 
   const started = Date.now();
