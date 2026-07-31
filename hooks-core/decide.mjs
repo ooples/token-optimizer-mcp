@@ -91,8 +91,16 @@ function candidatePaths(operand, cwd) {
  */
 export function touchedPaths(payload) {
   const input = payload?.tool_input || {};
-  const cwd = payload?.cwd;
   const out = new Set();
+
+  // A `cd` INSIDE the command changes where its relative operands resolve, and
+  // the hook payload's cwd knows nothing about it. Observed live: a Bash call
+  // that began `cd /other/repo` had every one of its relative operands resolved
+  // against the session's directory instead, found nothing, and recorded no
+  // touch at all -- so work in a second repository was invisible.
+  const command = typeof input.command === 'string' ? input.command : '';
+  const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
+  const cwd = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : payload?.cwd;
 
   const add = (candidate) => {
     if (!candidate || typeof candidate !== 'string') return;
@@ -107,7 +115,16 @@ export function touchedPaths(payload) {
   add(input.file_path);
   add(input.path);
   add(input.notebook_path);
-  if (typeof input.command === 'string') for (const operand of fileOperands(input.command)) add(operand);
+
+  // EVERY pipeline segment, not just the first. `fileOperands` looks only at
+  // the head of the pipeline because that is where the COST is -- `git log |
+  // head` must not be mistaken for a file dump. But observation is a different
+  // question from cost: a file named after a pipe was still read, and dropping
+  // it loses a real touch. Non-files fall out anyway, since only operands that
+  // resolve are kept.
+  for (const segment of command.split('|')) {
+    for (const operand of fileOperands(segment)) add(operand);
+  }
 
   return [...out];
 }

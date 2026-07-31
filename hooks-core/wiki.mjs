@@ -18,7 +18,7 @@ import {
   appendFileSync, readFileSync, existsSync, mkdirSync, chmodSync,
   openSync, closeSync, unlinkSync, statSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { canonicalPath } from './paths.mjs';
 
@@ -56,6 +56,31 @@ export const EDGE_KINDS = [
 /** Resolves the graph directory for a project. Configurable, per the design. */
 export function wikiDir(cwd) {
   return process.env.TOKEN_OPTIMIZER_WIKI_DIR || join(cwd || process.cwd(), '.token-optimizer', 'wiki');
+}
+
+
+/**
+ * The project a FILE belongs to, which is not always the session's project.
+ *
+ * `wikiDir(cwd)` keys the graph on where the client happens to be running. That
+ * is wrong the moment a session touches a second repository -- the findings
+ * land in the wrong project's graph, or in none, and the per-project promise
+ * quietly breaks. Observed live: work in another checkout recorded nothing.
+ *
+ * Walks up for a repository marker and falls back to the session cwd when the
+ * file is not inside one, which is the honest answer for a scratch file.
+ */
+export function projectRootFor(filePath, fallback) {
+  let dir = dirname(canonicalPath(filePath));
+  for (let depth = 0; depth < 40 && dir; depth += 1) {
+    for (const marker of ['.git', 'package.json', '.hg', 'go.mod', 'Cargo.toml']) {
+      if (existsSync(join(dir, marker))) return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return fallback ? canonicalPath(fallback) : null;
 }
 
 const logPath = (dir) => join(dir, 'graph.jsonl');

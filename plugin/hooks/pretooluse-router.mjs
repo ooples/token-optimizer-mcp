@@ -15,7 +15,7 @@ import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode,
   from './lib/policy.mjs';
 import { decide, remember, normalizePayload, readCostBytes, touchedPaths } from './lib/decide.mjs';
 import { recordRead } from './lib/metrics.mjs';
-import { wikiDir, load, harvest } from './lib/wiki.mjs';
+import { wikiDir, load, harvest, projectRootFor } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { readFileSync } from 'node:fs';
@@ -50,12 +50,18 @@ try {
     // recorded, no node in the graph, so a shell-heavy session measured as
     // though nothing happened. `touchedPaths` covers every tool that names a
     // file, including Bash operands.
-    const dir = wikiDir(payload.cwd);
     const touched = touchedPaths(payload);
+
+    // THE GRAPH IS PER PROJECT, so it is keyed on where the FILE lives, not on
+    // where the client happens to be running. Keying it on the session's cwd
+    // put findings about another repository into this one's graph -- or, when
+    // the relative path did not resolve here, into no graph at all. A session
+    // that touches two checkouts now writes to two graphs, correctly.
+    const dirFor = (path) => wikiDir(projectRootFor(path, payload.cwd));
 
     const bytes = readCostBytes(payload);
     if (bytes) {
-      recordRead(dir, {
+      recordRead(dirFor(payload.tool_input.file_path), {
         anchor: payload.tool_input.file_path,
         sessionId: payload.session_id,
         bytes,
@@ -63,7 +69,7 @@ try {
     } else {
       for (const path of touched) {
         const size = fileSize(path);
-        if (size > 0) recordRead(dir, { anchor: path, sessionId: payload.session_id, bytes: size });
+        if (size > 0) recordRead(dirFor(path), { anchor: path, sessionId: payload.session_id, bytes: size });
       }
     }
 
@@ -76,6 +82,7 @@ try {
     // makes no claims.
     for (const path of touched) {
       try {
+        const dir = dirFor(path);
         harvest(dir, { filePath: path, sessionId: payload.session_id, action: payload.tool_name });
         // Index on the way past, so the NEXT touch can be answered with
         // structure instead of the file. Bounded by the snapshot limit.
@@ -97,7 +104,9 @@ try {
   let reason = verdict.reason;
   if (!repeat && payload.tool_name === 'Read' && payload.tool_input.file_path) {
     try {
-      const dir = wikiDir(payload.cwd);
+      // Same per-project rule as the allowed path: a refusal must consult the
+      // graph belonging to the FILE, or it answers from the wrong project.
+      const dir = wikiDir(projectRootFor(payload.tool_input.file_path, payload.cwd));
       const graph = load(dir);
       const carried = refusalPayload(graph, payload.tool_input.file_path);
       if (carried) {
