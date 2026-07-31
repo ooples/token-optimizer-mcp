@@ -10,7 +10,7 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedPaths, isContentDump, decide } from '../../hooks-core/decide.mjs';
+import { touchedPaths, isContentDump, decide, isRecursiveSearch } from '../../hooks-core/decide.mjs';
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
 import { isMachineOwned } from '../../hooks-core/policy.mjs';
 
@@ -197,6 +197,64 @@ describe('machine-owned paths are never knowledge', () => {
     const big = join(repoA, 'src', 'big.ts');
     writeFileSync(big, 'x'.repeat(200_000));
     expect(decide({ tool_name: 'Bash', tool_input: { command: `cat ${big}` }, cwd: repoA }, {})).toBeTruthy();
+  });
+});
+
+describe('a recursive search is a SEGMENT, not two words in the same string', () => {
+  // Caught live: a real build command was refused as a recursive search because
+  // the detector asked "is a search tool anywhere in this string?" and "is a
+  // -r-ish flag anywhere in this string?" as two INDEPENDENT questions. Any
+  // rm -rf / cp -r / chmod -R standing next to any grep matched both.
+  test('a -r flag belonging to a DIFFERENT command does not make a search', () => {
+    expect(isRecursiveSearch('rm -rf build && npm run verify | grep passed')).toBe(false);
+    expect(isRecursiveSearch('cp -r a b && grep needle notes.txt')).toBe(false);
+    expect(isRecursiveSearch('chmod -R 755 dir; grep x file')).toBe(false);
+    expect(isRecursiveSearch('tar -rf out.tar dir | grep added')).toBe(false);
+  });
+
+  test('a real recursive search is still caught, however it is spelled', () => {
+    for (const c of ['grep -rn foo src/', 'grep -R foo .', 'grep --recursive foo .',
+      'rg foo', 'ag foo', 'git grep -r foo', 'sudo grep -r foo /etc', '/usr/bin/grep -r x .']) {
+      expect(isRecursiveSearch(c)).toBe(true);
+    }
+  });
+
+  test('a search MENTIONED inside quotes is a string, not a command', () => {
+    // The mirror image, and the reason segmentation is quote-aware: this hook
+    // refused its own author's commit command because the message quoted a
+    // recursive grep.
+    expect(isRecursiveSearch('node -e "run(\'grep -r x .\')"')).toBe(false);
+    expect(isRecursiveSearch("git commit -m 'use grep -r for this'")).toBe(false);
+  });
+
+  test('a heredoc BODY is data, not a script the shell will run', () => {
+    // Three separate self-refusals in one afternoon traced to this: a test
+    // fixture quoting `cat .git/index`, then two commit messages describing the
+    // very greps they were fixing. `git commit -F - <<'MSG' ... MSG` is one
+    // command, and it runs git.
+    const message = [
+      "git commit -F - <<'MSG'",
+      'fix: stop matching greps that never run',
+      '',
+      '  grep -rn residual src/    still deny',
+      '  rg foo                    still deny',
+      'MSG',
+    ].join('\n');
+    expect(isRecursiveSearch(message)).toBe(false);
+    expect(isContentDump("git commit -F - <<'MSG'\ncat huge.log\nMSG")).toBe(false);
+
+    // ...but a real search AFTER the body has closed still counts.
+    expect(isRecursiveSearch(`${message}\ngrep -r needle src/`)).toBe(true);
+  });
+
+  test('a file named only inside a heredoc is not a touch', () => {
+    const doc = `cat <<'EOF'\nsee src/main.ts for details\nEOF`;
+    expect(bash(doc, repoA)).toEqual([]);
+  });
+
+  test('a non-recursive grep is left alone', () => {
+    expect(isRecursiveSearch('grep needle one-file.txt')).toBe(false);
+    expect(isRecursiveSearch('git log | grep fix')).toBe(false);
   });
 });
 

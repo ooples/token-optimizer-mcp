@@ -124,6 +124,10 @@ try {
   }
 
   const repeat = alreadyDenied(state, verdict.key);
+  // BEFORE `remember`, which is about to mark this very call as seen. What
+  // licenses a diff or an "unchanged" claim is what the session held on the way
+  // IN, not what this call adds.
+  const seenThisSession = Boolean(state.seen?.[payload.tool_input?.file_path]);
   remember(payload, state);
   saveState(payload.session_id, state);
 
@@ -138,7 +142,10 @@ try {
       // graph belonging to the FILE, or it answers from the wrong project.
       const dir = wikiDir(projectRootFor(payload.tool_input.file_path, payload.cwd));
       const graph = load(dir);
-      const carried = refusalPayload(graph, payload.tool_input.file_path);
+      // Only THIS session's own read history can license "unchanged since you
+      // read it" or a diff -- the graph is durable and per project, so its
+      // snapshot may predate this session entirely.
+      const carried = refusalPayload(graph, payload.tool_input.file_path, { seenThisSession });
       if (carried) {
         reason = carried;
       } else {

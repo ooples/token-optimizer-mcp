@@ -86,14 +86,14 @@ describe('file nodes carry a snapshot, so the zero-turn refusal actually works',
 
     writeFileSync(path, [...body.slice(0, 100), 'export const CHANGED = true;', ...body.slice(101)].join('\n'));
 
-    const payload = refusalPayload(load(dir), path);
+    const payload = refusalPayload(load(dir), path, { seenThisSession: true });
     expect(payload).toContain('+ export const CHANGED = true;');
   });
 
   test('an unchanged indexed file is reported as unchanged', () => {
     const path = write('a.ts', 'export const a = 1;\n');
     indexFile(dir, path);
-    expect(refusalPayload(load(dir), path)).toContain('UNCHANGED');
+    expect(refusalPayload(load(dir), path, { seenThisSession: true })).toContain('UNCHANGED');
   });
 });
 

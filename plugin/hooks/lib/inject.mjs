@@ -181,7 +181,22 @@ export function substitutionFor(dir, graph, rawPath, source) {
   return built.text;
 }
 
-export function refusalPayload(graph, rawPath, { maxDiffLines = 60 } = {}) {
+/**
+ * `seenThisSession` is not optional bookkeeping -- it is what makes both
+ * branches below TRUE statements.
+ *
+ * The graph is durable and per project; a snapshot in it may have been captured
+ * days ago by a different session. "Unchanged since you last read it" and "here
+ * is the diff" are both claims about what the READER already holds, and a
+ * session that never read the file holds nothing. Observed live: a brand-new
+ * session's FIRST EVER read of a file was refused with "use what you already
+ * have", which withheld content the model had never seen. Defaulting to false
+ * means a caller that cannot answer the question falls back to the annotated
+ * skeleton, which is true regardless of history.
+ */
+export function refusalPayload(graph, rawPath, { maxDiffLines = 60, seenThisSession = false } = {}) {
+  if (!seenThisSession) return null;
+
   const filePath = canonicalPath(rawPath);
   const anchor = graph.nodes.get(nodeId('file', filePath));
   if (!anchor || !anchor.snapshot) return null;

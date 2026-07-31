@@ -38,7 +38,11 @@ function isDirectory(path) {
  */
 export function isContentDump(command) {
   if (typeof command !== 'string') return false;
-  return DUMP_COMMANDS.test(command) || RECURSIVE_SEARCH.test(command);
+  // Heredoc bodies are data. A commit message that says `cat foo.ts` does not
+  // print foo.ts, and charging the session for its bytes would inflate the
+  // measured cost -- the one number this project must never overstate.
+  const runnable = stripHeredocs(command);
+  return DUMP_COMMANDS.test(runnable) || RECURSIVE_SEARCH.test(runnable);
 }
 
 /**
@@ -53,6 +57,128 @@ const DUMP_COMMANDS = /\b(?:cat|bat|head|tail|more|less|type|Get-Content|gc)\b/;
 
 /** Recursive searches, whose output is unbounded by construction. */
 const RECURSIVE_SEARCH = /\b(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)\b/;
+
+/** The search tools themselves, as a whole command word rather than a substring. */
+const SEARCH_TOOL = /^(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)$/i;
+
+/** Tools that walk directories with no flag asked for. */
+const RECURSES_BY_DEFAULT = /^(?:rg|ag|ack)$/i;
+
+/** Words that may precede the real command without changing what it is. */
+const COMMAND_PREFIX = /^(?:sudo|time|env|command|nice|ionice|nohup|xargs)$/;
+
+/**
+ * Removes heredoc BODIES, which are data the command carries rather than
+ * commands the shell will run.
+ *
+ * `git commit -F - <<'MSG' ... MSG` is one command that runs git. Every line of
+ * the message is text. This hook refused its own author three separate times
+ * over one afternoon -- a test body quoting `cat .git/index`, then two commit
+ * messages describing the greps they had just fixed -- because those lines were
+ * parsed as though the shell would execute them.
+ *
+ * Data is the safe reading. Treating a heredoc as commands produces refusals of
+ * things that will never run, which cost a turn each; treating it as data at
+ * worst misses an optimization on the rare `bash <<EOF` that really does pipe a
+ * script in.
+ */
+function stripHeredocs(command) {
+  const lines = String(command).split('\n');
+  const out = [];
+  let delimiter = null;
+
+  for (const line of lines) {
+    if (delimiter !== null) {
+      if (line.trim() === delimiter) delimiter = null;
+      continue;
+    }
+    out.push(line);
+    const opener = line.match(/<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/);
+    if (opener) delimiter = opener[2];
+  }
+
+  return out.join('\n');
+}
+
+/**
+ * Splits a command into its pipeline/list segments WITHOUT splitting inside
+ * quotes.
+ *
+ * Quote awareness is the whole point. A `node -e "...; grep -r x ."` is one
+ * command that runs node; the text after the semicolon is an argument, not a
+ * segment, and treating it as one makes the hook react to strings that are
+ * merely mentioned.
+ */
+function shellSegments(command) {
+  const out = [];
+  let current = '';
+  let quote = null;
+
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote && command[i - 1] !== '\\') quote = null;
+      current += c;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+    } else if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      if ((c === '|' || c === '&') && command[i + 1] === c) i++;
+      out.push(current);
+      current = '';
+    } else {
+      current += c;
+    }
+  }
+  out.push(current);
+  return out;
+}
+
+/**
+ * Is this command an unbounded recursive search?
+ *
+ * The question has to be asked PER SEGMENT, of the segment's head word. The
+ * previous version tested "does a search tool appear anywhere in the string"
+ * and "does a -r-ish flag appear anywhere in the string" INDEPENDENTLY, and
+ * denied when both were true anywhere. So this, caught live against a real
+ * build command, was refused as a recursive search:
+ *
+ *   rm -rf build && npm run verify | grep passed
+ *
+ * `rm -rf` supplied the flag, `grep passed` supplied the tool, and neither
+ * segment is a recursive search. Any `cp -r`, `chmod -R`, `ls -R` or `tar -rf`
+ * next to any grep hit the same false positive, and a wrongly refused command
+ * costs the user a whole turn to work around.
+ *
+ * Quote-aware segmentation fixes the mirror-image case at the same time: a
+ * `grep -rn` quoted inside a script body is a string, not a command.
+ */
+export function isRecursiveSearch(command) {
+  if (typeof command !== 'string') return false;
+
+  for (const segment of shellSegments(stripHeredocs(command))) {
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+
+    let i = 0;
+    while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) i++;
+    if (i >= tokens.length) continue;
+
+    // `/usr/bin/grep` is grep; `git grep` is grep with a word in front.
+    let head = tokens[i].replace(/^.*[/\\]/, '');
+    if (head === 'git' && tokens[i + 1] === 'grep') {
+      head = 'grep';
+      i++;
+    }
+    if (!SEARCH_TOOL.test(head)) continue;
+
+    if (RECURSES_BY_DEFAULT.test(head)) return true;
+
+    const flags = tokens.slice(i + 1);
+    if (flags.some((t) => t === '--recursive' || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(t))) return true;
+  }
+
+  return false;
+}
 
 /**
  * Pulls candidate file arguments out of a shell command.
@@ -121,7 +247,10 @@ export function touchedPaths(payload) {
   // that began `cd /other/repo` had every one of its relative operands resolved
   // against the session's directory instead, found nothing, and recorded no
   // touch at all -- so work in a second repository was invisible.
-  const command = typeof input.command === 'string' ? input.command : '';
+  // Heredoc bodies stripped first, for the same reason the cost path strips
+  // them: a file named inside a commit message or a test fixture was mentioned,
+  // not touched, and a node built from it is fiction.
+  const command = typeof input.command === 'string' ? stripHeredocs(input.command) : '';
   const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
   const cdTarget = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : null;
   // Only trust a `cd` that names a directory which EXISTS. `cd $REPO && cat
@@ -409,14 +538,7 @@ export function decide(payload, state) {
 
     // A recursive search has no bound on its output. One with an explicit file
     // operand does, so it is left alone.
-    // Recursive-search detection has to cover how people actually type it:
-    // `-r`, `-R`, `--recursive`, and BUNDLED short flags like `-rn` or `-nr`.
-    // The previous pattern required a lone `-r`/`-R`, so `grep -rn pattern .`
-    // -- among the most common forms there is -- was not recognised at all and
-    // passed straight through.
-    const recursiveFlag =
-      /(^|\s)-[A-Za-z]*[rR][A-Za-z]*(\s|$)|--recursive\b|\brg\b|\bag\b|\back\b/;
-    if (RECURSIVE_SEARCH.test(command) && recursiveFlag.test(command)) {
+    if (isRecursiveSearch(command)) {
       if (!largeOperand(command, payload.cwd)) {
         return {
           key: `bash:search:${command.slice(0, 80)}`,
