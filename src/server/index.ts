@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { installShutdownHandlers } from './lifecycle.js';
 import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
 import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
+import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -468,6 +469,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       EXPAND_TOOL,
       WASTE_TOOL,
+      CACHE_TOOL,
       {
         name: 'optimize_text',
         description:
@@ -2406,6 +2408,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // codebase, and its own output must not be disclosed away.
   if (request.params.name === 'waste_audit') {
     return wasteAudit(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'cache_audit') {
+    return cacheAudit();
   }
 
   const started = Date.now();

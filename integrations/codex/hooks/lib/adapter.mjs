@@ -31,6 +31,7 @@ import { decide, remember, normalizePayload, readCostBytes } from './decide.mjs'
 import { recordRead } from './metrics.mjs';
 import { wikiDir } from './wiki.mjs';
 import { briefing } from './remedy.mjs';
+import { stableText } from './cache.mjs';
 
 /**
  * Per-client capability.
@@ -118,7 +119,16 @@ call get_optimization_report. Small one-off reads are fine with the built-ins.${
 function projectBriefing() {
   try {
     const text = briefing(wikiDir(process.cwd()));
-    return text ? `\n\n## What we have learned about this project\n\n${text}` : '';
+    if (!text) return '';
+
+    // CACHE-SAFE BY CONSTRUCTION. This text sits near the front of the prompt
+    // prefix, so a single character that differs between sessions invalidates
+    // everything after it -- and an optimizer that costs more cache than it
+    // saves tokens is worse than no optimizer. A line that would vary is
+    // dropped rather than emitted: missing guidance costs a little, a volatile
+    // line costs the whole prefix.
+    const { text: safe } = stableText(text);
+    return safe.trim() ? `\n\n## What we have learned about this project\n\n${safe}` : '';
   } catch {
     // A briefing is a bonus. It must never be the reason a session starts badly.
     return '';
