@@ -277,10 +277,19 @@ That is a bigger ask than a normal dependency makes, so:
 signatures` ties the artifact to the workflow run and the commit, without
 trusting us. `CHECKSUMS.sha256` ships alongside for offline checking.
 
+**If nothing seems to be happening, the hooks are probably not wired.** npm 11
+gates lifecycle scripts behind `allow-scripts`, so on a default global install
+our postinstall never runs. Recovery is one line:
+
+```bash
+npx token-optimizer-install     # wire the hooks
+npx token-optimizer-doctor      # prove they work
+```
+
 **Check that it works — not that files exist.**
 
 ```bash
-npm run doctor
+npx token-optimizer-doctor      # or npm run doctor, from a clone
 ```
 
 It feeds a synthetic payload to the *real* hook binary and asserts a large read
