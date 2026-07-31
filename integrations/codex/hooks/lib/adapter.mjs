@@ -31,7 +31,8 @@ import { decide, remember, normalizePayload, readCostBytes } from './decide.mjs'
 import { recordRead } from './metrics.mjs';
 import { wikiDir } from './wiki.mjs';
 import { briefing } from './remedy.mjs';
-import { stableText } from './cache.mjs';
+import { stableText, transcriptFor } from './cache.mjs';
+import { cachedRoutingBriefing } from './routing.mjs';
 
 /**
  * Per-client capability.
@@ -118,7 +119,18 @@ call get_optimization_report. Small one-off reads are fine with the built-ins.${
  */
 function projectBriefing() {
   try {
-    const text = briefing(wikiDir(process.cwd()));
+    const cwd = process.cwd();
+
+    // Routing facts join the same briefing, and are number-free for the same
+    // reason the rest of it is: a count that ticks up as evidence accumulates
+    // would change the prefix every session and invalidate the cache behind it.
+    // The digits live in the model_routing tool, where changing costs nothing.
+    let routing = null;
+    try {
+      routing = cachedRoutingBriefing(wikiDir(cwd), transcriptFor(cwd));
+    } catch { /* no transcript, no routing facts; the rest still applies */ }
+
+    const text = briefing(wikiDir(cwd), { extra: routing ? [routing] : [] });
     if (!text) return '';
 
     // CACHE-SAFE BY CONSTRUCTION. This text sits near the front of the prompt

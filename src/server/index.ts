@@ -6,6 +6,7 @@ import { installShutdownHandlers } from './lifecycle.js';
 import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
 import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
 import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
+import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -470,6 +471,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       EXPAND_TOOL,
       WASTE_TOOL,
       CACHE_TOOL,
+      ROUTING_TOOL,
       {
         name: 'optimize_text',
         description:
@@ -2412,6 +2414,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (request.params.name === 'cache_audit') {
     return cacheAudit();
+  }
+
+  if (request.params.name === 'model_routing') {
+    return modelRouting(request.params.arguments as any);
   }
 
   const started = Date.now();

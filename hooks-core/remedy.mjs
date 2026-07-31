@@ -201,11 +201,11 @@ export function remedyLedger(dir) {
  * efficient is worth nothing; "schema.d.ts has never yielded a finding here" is
  * a fact about this project that changes a decision.
  */
-export function briefing(dir, { limit = 4 } = {}) {
+export function briefing(dir, { limit = 4, extra = [] } = {}) {
   const rules = activeRules(dir);
-  if (!rules.length) return null;
+  const lines = [...extra.filter(Boolean)];
+  if (!rules.length) return lines.length ? lines.join('\n') : null;
 
-  const lines = [];
   const skips = rules.filter((r) => r.type === 'skip' || r.type === 'skeleton-only');
   const clusters = rules.filter((r) => r.type === 'composite');
 
