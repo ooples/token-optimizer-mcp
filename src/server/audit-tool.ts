@@ -28,6 +28,7 @@ interface AuditModules {
   waste: any;
   cache: any;
   routing: any;
+  standing: any;
   wiki: any;
 }
 
@@ -36,14 +37,15 @@ let cached: AuditModules | null = null;
 async function modules(): Promise<AuditModules | null> {
   if (cached) return cached;
   try {
-    const [audit, waste, cache, routing, wiki] = await Promise.all([
+    const [audit, waste, cache, routing, standing, wiki] = await Promise.all([
       import(coreUrl('audit.mjs')),
       import(coreUrl('waste.mjs')),
       import(coreUrl('cache.mjs')),
       import(coreUrl('routing.mjs')),
+      import(coreUrl('standing.mjs')),
       import(coreUrl('wiki.mjs')),
     ]);
-    cached = { audit, waste, cache, routing, wiki };
+    cached = { audit, waste, cache, routing, standing, wiki };
     return cached;
   } catch {
     return null;
@@ -105,6 +107,30 @@ export async function tokenAudit(input: {
       });
     }
   } catch { /* no transcript: the detector findings still stand on their own */ }
+
+  // Standing context -- skills, instructions and memory -- is waste charged
+  // every session, so it belongs in the same queue rather than in a report of
+  // its own. A stale claim is listed even without a transcript, because it is
+  // provable from the code alone.
+  try {
+    const transcript = mods.cache.transcriptFor(cwd);
+    for (const verdict of mods.standing.auditStanding(cwd, transcript)) {
+      for (const action of verdict.actions) {
+        findings.push({
+          id: `standing-${action.action}`,
+          title: `${verdict.entry} (${verdict.tokens.toLocaleString()} tok/session): ${action.why}`,
+          // A per-session prefix cost IS the cost, for trim and demote. A stale
+          // claim costs correctness rather than tokens, so it carries no number
+          // rather than a made-up one.
+          costPerSession: action.action === 'fix' ? null : verdict.tokens,
+          file: verdict.entry,
+          remedy: action.kind === 'ours'
+            ? { kind: 'ours', type: 'demote', anchor: verdict.entry, why: action.why }
+            : { kind: 'yours', type: 'edit', file: verdict.entry, why: action.why, diff: action.diff },
+        });
+      }
+    }
+  } catch { /* standing context is a bonus; never fail the audit over it */ }
 
   const out = mods.audit.renderAudit(dir, findings, {
     full: Boolean(input?.full),

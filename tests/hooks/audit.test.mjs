@@ -209,6 +209,9 @@ describe('the audit is held to its own standard', () => {
     expect(out.withheld).toBe(0);
     expect(out.text).toContain('routed to a tier that keeps retrying');
     expect(out.text).toMatch(/cost not yet measurable/);
+    // And no price beside it. "$0.00" next to an unknown cost reads as "this
+    // costs nothing", which is a different claim -- and dollars get quoted.
+    expect(out.text).not.toMatch(/cost not yet measurable \(~\$0\.00/);
   });
 
   test('the first finding is always shown, however cheap', () => {

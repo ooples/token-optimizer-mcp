@@ -161,7 +161,11 @@ export function renderAudit(dir, findings = [], { tier = 'opus', full = false, s
 
   for (const item of queue) {
     const cost = item.costPerSession ?? 0;
-    const priced = monthly(cost, { tier, sessionsPerMonth });
+    // No price on an unmeasured cost. `monthly(0)` returns a real $0.00, which
+    // read as "this costs nothing" beside a finding whose cost we simply do not
+    // know -- the same unknown-becomes-zero error the rest of this project
+    // corrects, in the one unit that gets quoted to other people.
+    const priced = item.costPerSession == null ? null : monthly(cost, { tier, sessionsPerMonth });
     const action = item.remedy?.kind === 'ours' ? `apply: waste_audit action="apply" id="${item.id}"`
       : item.remedy?.kind === 'yours' ? 'proposed edit -- needs your yes, nothing changed'
         : 'advice only -- no automatic fix';
