@@ -10,7 +10,7 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedPaths, isContentDump } from '../../hooks-core/decide.mjs';
+import { touchedPaths, isContentDump, decide } from '../../hooks-core/decide.mjs';
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
 import { isMachineOwned } from '../../hooks-core/policy.mjs';
 
@@ -181,6 +181,22 @@ describe('machine-owned paths are never knowledge', () => {
     const vcs = join(repoA, '.git', 'index');
     writeFileSync(vcs, 'binary-ish');
     expect(bash(`head -1 ${vcs}`, repoA)).toEqual([]);
+  });
+
+  test('a machine-owned operand is not advised about either', () => {
+    // The COST path had its own copy of this hole. It guarded on
+    // isBinaryPath, which is extension-based, and `.git/index` has no
+    // extension -- so a `cat .git/index` was told to use smart_read on a
+    // binary index. Caught live, on this repository's own commit command.
+    const vcs = join(repoA, '.git', 'index');
+    writeFileSync(vcs, 'x'.repeat(200_000));
+    const verdict = decide({ tool_name: 'Bash', tool_input: { command: `cat ${vcs}` }, cwd: repoA }, {});
+    expect(verdict).toBeNull();
+
+    // ...while a large authored file in the same repository still is.
+    const big = join(repoA, 'src', 'big.ts');
+    writeFileSync(big, 'x'.repeat(200_000));
+    expect(decide({ tool_name: 'Bash', tool_input: { command: `cat ${big}` }, cwd: repoA }, {})).toBeTruthy();
   });
 });
 

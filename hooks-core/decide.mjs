@@ -167,7 +167,13 @@ function largeOperand(command, cwd) {
   for (const operand of fileOperands(command)) {
     for (const path of candidatePaths(operand, cwd)) {
       const size = fileSize(path);
-      if (size >= threshold && !isBinaryPath(path)) return { path: operand, size };
+      // Machine-owned too, not just binary-by-extension. `.git/index` has NO
+      // extension, so isBinaryPath cannot see it, and the advisory it produced
+      // named a 1.3 MB binary index and pointed at smart_read -- which would
+      // have dumped it. Observed live on this repository's own commit command.
+      if (size >= threshold && !isBinaryPath(path) && !isMachineOwned(path)) {
+        return { path: operand, size };
+      }
     }
   }
   return null;
