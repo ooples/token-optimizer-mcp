@@ -191,14 +191,22 @@ describe('one file is ONE identity, however it was spelled', () => {
     // Uses a real file, because the Read branch returns early when the path
     // does not resolve -- so a fake path can never exercise the seen-map.
     const real = join(ROOT, 'package.json');
-    const msys = `/${real[0].toLowerCase()}${real.slice(2).split('\\').join('/')}`;
+
+    // The second spelling has to be one that EXISTS on the host under test.
+    // `/c/Users/...` is what Git Bash hands a Windows process; on POSIX that is
+    // simply a path to nothing, so the same guarantee is exercised there with a
+    // redundant `./` and a doubled separator, which canonicalPath also collapses.
+    const alternate = process.platform === 'win32'
+      ? `/${real[0].toLowerCase()}${real.slice(2).split('\\').join('/')}`
+      : join(ROOT, '.', 'package.json').replace(`${ROOT}/`, `${ROOT}//`);
+
     const state = { seen: {}, denied: {} };
 
     const first = normalizePayload({ tool_name: 'Read', tool_input: { file_path: real }, cwd: ROOT });
     expect(decide(first, state)).toBeNull();
     state.seen[first.tool_input.file_path] = true;
 
-    const second = normalizePayload({ tool_name: 'Read', tool_input: { file_path: msys }, cwd: ROOT });
+    const second = normalizePayload({ tool_name: 'Read', tool_input: { file_path: alternate }, cwd: ROOT });
     const verdict = decide(second, state);
     expect(verdict).not.toBeNull();
     expect(verdict.reason).toMatch(/already read/i);
