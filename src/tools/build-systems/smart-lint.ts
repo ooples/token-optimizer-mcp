@@ -8,7 +8,6 @@
  * - Ignore previously acknowledged issues
  */
 
-import { spawn } from 'child_process';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -16,6 +15,7 @@ import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { spawnNodeBin } from './run-node-bin.js';
 
 interface LintMessage {
   ruleId: string;
@@ -230,16 +230,15 @@ export class SmartLint {
 
       // SECURITY: argv mode (shell:false) so caller-controlled file paths are
       // passed verbatim to eslint and cannot be reinterpreted by a shell.
-      const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      // --no-install: use only a locally/globally installed eslint. Without it,
-      // npx SILENTLY DOWNLOADS eslint from the registry when it isn't found —
-      // an unexpected network install the user never asked for. Now it fails
-      // cleanly instead, and the caller can install eslint deliberately.
-      const eslint = spawn(npx, ['--no-install', 'eslint', ...args], {
-        cwd: this.projectRoot,
-        shell: false,
-        windowsHide: true,
-      });
+      // Runs the project's own eslint as `node <eslint.js> ...` -- argv mode,
+      // no shell, no .cmd shim. See run-node-bin.ts.
+      const eslint = spawnNodeBin(
+        'eslint',
+        'eslint',
+        args,
+        { cwd: this.projectRoot },
+        'smart_lint'
+      );
 
       eslint.stdout.on('data', (data) => {
         stdout += data.toString();

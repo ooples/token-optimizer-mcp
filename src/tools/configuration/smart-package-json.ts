@@ -18,6 +18,7 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { homedir } from 'os';
+import { packageManagerInvocation } from '../build-systems/run-node-bin.js';
 
 interface PackageMetadata {
   name: string;
@@ -408,13 +409,18 @@ export class SmartPackageJson {
     try {
       const packageManager = this.detectPackageManager();
 
-      // Use package manager's native list command (argv mode, no shell).
-      const pmCmd =
-        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
+      // Runs the package manager's JS entry through this Node binary. Still
+      // argv mode with no shell, but never a `.cmd`, which Node 20.12+ refuses
+      // to spawn at all (EINVAL). See build-systems/run-node-bin.ts.
+      const { command: pmCmd, prefix: pmPrefix } = packageManagerInvocation(
+        packageManager,
+        this.projectRoot,
+        'smart_package_json'
+      );
       const depth = Math.max(0, Math.floor(Number(maxDepth)) || 0);
       const output = execFileSafeSync(
         pmCmd,
-        ['list', '--json', `--depth=${depth}`],
+        [...pmPrefix, 'list', '--json', `--depth=${depth}`],
         {
           cwd: this.projectRoot,
           maxBuffer: 10 * 1024 * 1024, // 10MB buffer
@@ -601,10 +607,13 @@ export class SmartPackageJson {
   private async scanSecurityIssues(): Promise<SecurityIssue[]> {
     try {
       const packageManager = this.detectPackageManager();
-      const pmCmd =
-        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
+      const { command: pmCmd, prefix: pmPrefix } = packageManagerInvocation(
+        packageManager,
+        this.projectRoot,
+        'smart_package_json'
+      );
 
-      const output = execFileSafeSync(pmCmd, ['audit', '--json'], {
+      const output = execFileSafeSync(pmCmd, [...pmPrefix, 'audit', '--json'], {
         cwd: this.projectRoot,
         timeout: 30000,
         maxBuffer: 10 * 1024 * 1024,
@@ -709,10 +718,13 @@ export class SmartPackageJson {
   ): Promise<void> {
     try {
       const packageManager = this.detectPackageManager();
-      const pmCmd =
-        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
+      const { command: pmCmd, prefix: pmPrefix } = packageManagerInvocation(
+        packageManager,
+        this.projectRoot,
+        'smart_package_json'
+      );
 
-      const output = execFileSafeSync(pmCmd, ['outdated', '--json'], {
+      const output = execFileSafeSync(pmCmd, [...pmPrefix, 'outdated', '--json'], {
         cwd: this.projectRoot,
         timeout: 30000,
         maxBuffer: 10 * 1024 * 1024,

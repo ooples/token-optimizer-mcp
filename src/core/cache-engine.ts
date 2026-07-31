@@ -114,8 +114,22 @@ export class CacheEngine {
       finalDbPath = path.join(cacheDir, 'cache.db');
     }
 
-    // Ensure cache directory exists
-    if (!fs.existsSync(cacheDir)) {
+    // Ensure cache directory exists.
+    //
+    // A parent that exists but is a FILE is the interesting case: existsSync is
+    // true, so the mkdir is skipped, and SQLite then fails to open a path whose
+    // parent is not a directory. That surfaced as three retries and
+    // "CRITICAL: Failed to initialize persistent cache database", which says
+    // nothing about the actual conflict. Naming it is the difference between a
+    // one-line fix and an afternoon.
+    if (fs.existsSync(cacheDir)) {
+      if (!fs.statSync(cacheDir).isDirectory()) {
+        throw new Error(
+          `Cannot create the cache at ${finalDbPath}: ${cacheDir} is a file, not a directory. ` +
+            `Something else is using that path -- remove or rename it, or pass a different cache location.`
+        );
+      }
+    } else {
       fs.mkdirSync(cacheDir, { recursive: true });
     }
 

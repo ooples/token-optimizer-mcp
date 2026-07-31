@@ -8,7 +8,6 @@
  * - Coverage delta tracking
  */
 
-import { spawn } from 'child_process';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -16,6 +15,7 @@ import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { spawnNpm } from './run-node-bin.js';
 
 interface TestResult {
   numTotalTests: number;
@@ -238,15 +238,14 @@ export class SmartTest {
       let stdout = '';
       let stderr = '';
 
-      // SECURITY: argv mode (shell:false) so caller-controlled args (e.g. the
-      // test path pattern) are passed verbatim and cannot be reinterpreted by a
-      // shell. On Windows npm is a .cmd shim named explicitly here.
-      const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-      const jest = spawn(npm, ['run', 'test', '--', ...args], {
-        cwd: this.projectRoot,
-        shell: false,
-        windowsHide: true,
-      });
+      // Runs npm's own JS entry through this Node binary. Still argv mode --
+      // caller-controlled args are never seen by a shell -- but with no .cmd
+      // shim, which Node 20.12+ refuses to spawn at all. See run-node-bin.ts.
+      const jest = spawnNpm(
+        ['run', 'test', '--', ...args],
+        { cwd: this.projectRoot },
+        'smart_test'
+      );
 
       jest.stdout.on('data', (data) => {
         stdout += data.toString();

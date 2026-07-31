@@ -8,13 +8,13 @@
  * - Token-optimized output
  */
 
-import { spawn } from 'child_process';
 import { assertAllowed } from '../../utils/safe-exec.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { spawnNpm, spawnNodeBin } from './run-node-bin.js';
 
 interface PackageInfo {
   name: string;
@@ -274,17 +274,21 @@ export class SmartInstall {
       let stdout = '';
       let stderr = '';
 
-      // SECURITY: argv mode (shell: false) so neither the package-manager name
-      // nor any package argument is interpreted by a shell. On Windows the
-      // package managers are `.cmd` shims that must be named explicitly when
-      // not going through a shell.
-      const command =
-        process.platform === 'win32' ? `${packageManager}.cmd` : packageManager;
-      const child = spawn(command, args, {
-        cwd: this.projectRoot,
-        shell: false,
-        windowsHide: true,
-      });
+      // Argv mode throughout -- no shell ever sees these arguments -- but
+      // routed through the package manager's JS entry rather than its `.cmd`
+      // shim, which Node 20.12+ refuses to spawn (EINVAL). npm ships with Node
+      // itself; yarn and pnpm are resolved out of the project. See
+      // run-node-bin.ts.
+      const child =
+        packageManager === 'npm'
+          ? spawnNpm(args, { cwd: this.projectRoot }, 'smart_install')
+          : spawnNodeBin(
+              packageManager,
+              packageManager,
+              args,
+              { cwd: this.projectRoot },
+              'smart_install'
+            );
 
       child.stdout.on('data', (data) => {
         stdout += data.toString();

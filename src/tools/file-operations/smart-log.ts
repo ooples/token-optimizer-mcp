@@ -38,6 +38,12 @@ export interface CommitInfo {
   refs?: string[]; // Branch/tag refs (if available)
 }
 
+/**
+ * The most this tool returns in one response (~4% of a 200k window).
+ * Callers who want more page through it with `offset`.
+ */
+const MAX_RESPONSE_TOKENS = 8_000;
+
 export interface SmartLogOptions {
   // Repository options
   cwd?: string; // Working directory (default: process.cwd())
@@ -170,13 +176,36 @@ export class SmartLogTool {
         opts.offset,
         opts.offset + opts.limit
       );
-      const truncated = totalCommits > paginatedCommits.length + opts.offset;
+      let truncated = totalCommits > paginatedCommits.length + opts.offset;
 
       // Filter fields if requested
-      const resultCommits =
+      let resultCommits =
         opts.fields.length > 0
           ? this.filterFields(paginatedCommits, opts.fields)
           : paginatedCommits;
+
+      // A CEILING ON THE RESPONSE.
+      //
+      // `limit` bounds the number of COMMITS, not their size, and a commit
+      // carries its message and body. Measured on this repository, a default
+      // invocation returned 81,410 tokens -- 40% of a 200k context window from
+      // one `git log`. The count was within its limit the whole time.
+      //
+      // Enforced on the serialised result, because that is what the caller
+      // pays, and whatever is dropped is reported through `truncated` below.
+      let budgetTruncated = false;
+      while (resultCommits.length > 1) {
+        const size = this.tokenCounter.count(JSON.stringify(resultCommits)).tokens;
+        if (size <= MAX_RESPONSE_TOKENS) break;
+        const keep = Math.max(
+          1,
+          Math.floor(resultCommits.length * Math.min(0.9, MAX_RESPONSE_TOKENS / size))
+        );
+        resultCommits = resultCommits.slice(0, keep);
+        budgetTruncated = true;
+      }
+
+      truncated = truncated || budgetTruncated;
 
       // Calculate tokens
       const resultTokens = this.tokenCounter.count(

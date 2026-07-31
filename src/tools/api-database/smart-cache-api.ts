@@ -876,10 +876,10 @@ export async function runSmartCacheApi(
   const { homedir } = await import('os');
   const { join } = await import('path');
   const { CacheEngine: CacheEngineClass } = await import(
-    '../../core/cache-engine'
+    '../../core/cache-engine.js'
   );
-  const { TokenCounter } = await import('../../core/token-counter');
-  const { MetricsCollector } = await import('../../core/metrics');
+  const { TokenCounter } = await import('../../core/token-counter.js');
+  const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngineClass(
     join(homedir(), '.hypercontext', 'cache'),

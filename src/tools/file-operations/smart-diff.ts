@@ -525,10 +525,15 @@ export function getSmartDiffTool(
 export async function runSmartDiff(
   options: SmartDiffOptions = {}
 ): Promise<SmartDiffResult> {
-  const cache = new CacheEngine(
-    join(homedir(), '.hypercontext', 'cache', 'cache.db'),
-    100
-  );
+  // The DIRECTORY, exactly as every sibling tool passes it.
+  //
+  // This alone passed `<dir>/cache.db`, and `~/.hypercontext/cache` is a
+  // database FILE created by the tools that pass the directory form. So its
+  // parent existed, `existsSync` said so, the mkdir was skipped, and SQLite
+  // failed to open a path whose parent is a file -- surfacing as
+  // "CRITICAL: Failed to initialize persistent cache database after 3 attempts"
+  // on every single call to smart_diff.
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 
