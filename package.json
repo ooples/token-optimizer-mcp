@@ -15,13 +15,14 @@
     "hooks/**/*",
     "install-hooks.ps1",
     "install-hooks.sh",
-    "scripts/postinstall.cjs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
     "CLI_WRAPPER_README.md",
     "hooks-core/**/*",
-    "integrations/**/*"
+    "integrations/**/*",
+    "plugin/**/*",
+    "scripts/**/*"
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",
