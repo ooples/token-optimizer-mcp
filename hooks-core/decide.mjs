@@ -290,6 +290,52 @@ export function touchedPaths(payload) {
   return [...out];
 }
 
+/** Dump commands as a whole word, for testing a segment's head. */
+const DUMP_HEAD = /^(?:cat|bat|head|tail|more|less|type|Get-Content|gc)$/i;
+
+/**
+ * The first large file this command will ACTUALLY PRINT.
+ *
+ * The dump check and the operand lookup have to be the same segment, or the
+ * hook refuses commands that print nothing. Measured live, on a command that
+ * merely counted the lines of a big file and tailed a log:
+ *
+ *   ls .token-optimizer/wiki/ && wc -l graph.jsonl
+ *   node web-server.js > dash.log &
+ *   grep -iE "listen|error" dash.log | head -5
+ *
+ * `head` (last segment, operating on a 4 KB log) satisfied a whole-string
+ * DUMP_COMMANDS test, and the operand search then returned graph.jsonl from the
+ * FIRST segment, producing "this command prints graph.jsonl (22840 KB) into the
+ * context". It prints a line count. Same defect as the recursive-search one
+ * fixed alongside it: two independent whole-string tests, joined by an `&&`
+ * that has nothing to do with either.
+ */
+function largeDumpedOperand(command, cwd) {
+  const threshold = largeFileBytes();
+
+  for (const segment of shellSegments(stripHeredocs(command))) {
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+
+    let i = 0;
+    while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) i++;
+    if (i >= tokens.length) continue;
+    if (!DUMP_HEAD.test(tokens[i].replace(/^.*[/\\]/, ''))) continue;
+
+    // Only THIS segment's operands, and only from the dump command onwards.
+    for (const operand of fileOperands(tokens.slice(i).join(' '))) {
+      for (const path of candidatePaths(operand, cwd)) {
+        const size = fileSize(path);
+        if (size >= threshold && !isBinaryPath(path) && !isMachineOwned(path)) {
+          return { path: operand, size };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 /** Resolves the first operand that is a real file over the size threshold. */
 function largeOperand(command, cwd) {
   const threshold = largeFileBytes();
@@ -539,8 +585,8 @@ export function decide(payload, state) {
   if (tool === 'Bash') {
     const command = input.command || '';
 
-    if (DUMP_COMMANDS.test(command)) {
-      const hit = largeOperand(command, payload.cwd);
+    {
+      const hit = largeDumpedOperand(command, payload.cwd);
       if (hit) {
         return {
           key: `bash:${hit.path}`,

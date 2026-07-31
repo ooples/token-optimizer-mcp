@@ -227,6 +227,32 @@ describe('a recursive search is a SEGMENT, not two words in the same string', ()
     expect(isRecursiveSearch("git commit -m 'use grep -r for this'")).toBe(false);
   });
 
+  test('a dump command in one segment does not indict an operand in another', () => {
+    // Caught live while starting the dashboard. `wc -l` prints a COUNT, and the
+    // only dump command in the line was a `head -5` tailing a 4 KB log in a
+    // different segment -- yet the refusal claimed the command would print a
+    // 22 MB graph file, because the dump test and the operand search were two
+    // independent whole-string tests joined by an unrelated `&&`.
+    const big = join(repoA, 'big.jsonl');
+    writeFileSync(big, 'x'.repeat(200_000));
+    const log = join(repoA, 'small.log');
+    writeFileSync(log, 'listening\n');
+
+    const counted = decide(
+      { tool_name: 'Bash', tool_input: { command: `wc -l ${big} && grep listen ${log} | head -5` }, cwd: repoA },
+      {}
+    );
+    expect(counted).toBeNull();
+
+    // ...but actually printing the big file is still caught.
+    const dumped = decide(
+      { tool_name: 'Bash', tool_input: { command: `cat ${big}` }, cwd: repoA },
+      {}
+    );
+    expect(dumped).toBeTruthy();
+    expect(dumped.reason).toContain('prints');
+  });
+
   test('a heredoc BODY is data, not a script the shell will run', () => {
     // Three separate self-refusals in one afternoon traced to this: a test
     // fixture quoting `cat .git/index`, then two commit messages describing the
