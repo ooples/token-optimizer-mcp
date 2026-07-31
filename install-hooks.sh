@@ -535,6 +535,11 @@ if [[ "$DRY_RUN" == "true" ]]; then
     write_status "DRY RUN COMPLETE - No changes were made" "SUCCESS"
 else
     if test_installation; then
+        # Record exactly what we put on this machine, so uninstall can be exact
+        # rather than best-effort and "what did this install" has an answer.
+        if command -v node >/dev/null 2>&1; then
+            node "$(dirname "${BASH_SOURCE[0]}")/scripts/record-install.mjs"                 "$HOOKS_DIR" "$CLAUDE_SETTINGS" 2>/dev/null                 || write_status "Could not record the install manifest (uninstall will be manual)" "WARN"
+        fi
         echo ""
         echo "╔═══════════════════════════════════════════════════════════╗"
         echo "║   Installation Complete!                                  ║"

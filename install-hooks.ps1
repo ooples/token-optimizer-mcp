@@ -565,6 +565,13 @@ try {
         $verified = Test-Installation
 
         if ($verified) {
+            # Record exactly what we put on this machine, so uninstall can be
+            # exact rather than best-effort.
+            try {
+                & node (Join-Path $PSScriptRoot 'scripts/record-install.mjs') $HOOKS_DIR $CLAUDE_SETTINGS
+            } catch {
+                Write-Status "Could not record the install manifest (uninstall will be manual)" "WARN"
+            }
             Write-Host ""
             Write-Host "=============================================================" -ForegroundColor Green
             Write-Host "   Installation Complete!                                    " -ForegroundColor Green

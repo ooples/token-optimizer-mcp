@@ -93,6 +93,19 @@ jobs:
           fi
           echo "Build artifacts verified successfully"
 
+      # Offline verification, alongside (not instead of) the provenance
+      # attestation the publish below produces. Generated from the built tree so
+      # it hashes exactly what ships.
+      - name: Generate CHECKSUMS.sha256
+        run: node scripts/checksums.mjs
+
+      - name: Attach CHECKSUMS.sha256 to the release
+        if: ${{ needs.release-please.outputs.tag_name != '' }}
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" CHECKSUMS.sha256 --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
       - name: Publish to npm (provenance; OIDC trusted publishing or NPM_TOKEN)
         # If a trusted publisher is configured on npmjs.com, npm uses OIDC and
         # NODE_AUTH_TOKEN can be empty. Until then, the NPM_TOKEN secret is used.

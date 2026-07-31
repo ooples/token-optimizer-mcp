@@ -25,7 +25,7 @@
  */
 
 import {
-  loadState, saveState, alreadyDenied, mode, MODE_OFF, MODE_ADVISE, largeFileBytes,
+  loadState, saveState, alreadyDenied, mode, MODE_OFF, MODE_ADVISE, largeFileBytes, withEscape,
 } from './policy.mjs';
 import { decide, remember, normalizePayload, readCostBytes } from './decide.mjs';
 import { recordRead } from './metrics.mjs';
@@ -201,11 +201,13 @@ export async function run(clientName, event) {
   const canRefuse = client.canDeny && event === 'pre-tool' && !repeat && mode() !== MODE_ADVISE;
 
   if (canRefuse) {
+    // Every client's refusal carries the off switch, for the same reason Claude
+    // Code's does: enforcement that hides its own disable is coercive.
     emit({
       hookSpecificOutput: {
         hookEventName: eventName,
         [client.denyField]: 'deny',
-        permissionDecisionReason: verdict.reason,
+        permissionDecisionReason: withEscape(verdict.reason),
       },
     });
   } else {

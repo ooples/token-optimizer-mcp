@@ -25,6 +25,9 @@
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",
+    "checksums": "node scripts/checksums.mjs",
+    "uninstall-hooks": "node scripts/uninstall.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "build": "tsc && npm run copy:assets",
     "copy:assets": "node -e \"require('fs').cpSync('src/dashboard/public','dist/dashboard/public',{recursive:true})\"",
     "start": "node dist/server/index.js",

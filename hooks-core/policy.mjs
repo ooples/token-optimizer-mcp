@@ -250,10 +250,29 @@ export function deny(reason) {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason: reason,
+      permissionDecisionReason: withEscape(reason),
     },
   }));
   process.exit(0);
+}
+
+/**
+ * The off switch, carried by the thing doing the blocking.
+ *
+ * ENFORCEMENT THAT HIDES ITS OWN DISABLE IS COERCIVE. We ask people to install
+ * hooks that refuse their tool calls; the least we can do is put the way out in
+ * the refusal itself, where somebody who is being blocked will actually see it,
+ * rather than in a README they are not reading at the moment they need it. It
+ * costs a dozen tokens and turns an imposition into a default they are choosing
+ * to keep.
+ *
+ * Appended once. A reason that already names it -- because it came from a
+ * remedy rule that says so -- is left as it is.
+ */
+export function withEscape(reason) {
+  const text = String(reason || '');
+  if (text.includes('TOKEN_OPTIMIZER_MODE')) return text;
+  return `${text} (Not what you wanted? TOKEN_OPTIMIZER_MODE=off disables enforcement.)`;
 }
 
 /** Lets the call through, attaching a note the model sees. */

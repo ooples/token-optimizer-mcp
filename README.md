@@ -648,6 +648,56 @@ Default local data locations include:
 
 Set `TOKEN_OPTIMIZER_CACHE_DIR` to override the cache location.
 
+## Verify it, check it, remove it
+
+This installs hooks that **refuse your tool calls**. That is a bigger ask than a
+normal dependency makes, so here is everything needed to check it and undo it.
+
+**Verify the release is genuine.** The package is published from CI with npm
+provenance, which signs an attestation binding the artifact to the workflow run
+and the commit that built it:
+
+```bash
+npm audit signatures
+```
+
+That verifies without trusting us. A `CHECKSUMS.sha256` is attached to each
+GitHub release for offline checking (`sha256sum -c CHECKSUMS.sha256`) — useful
+for mirrors, but weaker: it shares a trust root with the thing it hashes.
+
+**Check it actually works.** Not that the files are in place — that it *works*:
+
+```bash
+npm run doctor
+```
+
+This feeds a synthetic payload to the real hook binary and asserts a large read
+is refused and a small one is not, that session-start emits the policy, that the
+graph directory is writable, and that the MCP server starts and lists its tools.
+Every failure names its own fix. There is also an `install_doctor` MCP tool.
+
+**Turn enforcement off, instantly.** Every refusal says this, so you never have
+to come back here to find it:
+
+```bash
+TOKEN_OPTIMIZER_MODE=off      # no enforcement, no hooks
+TOKEN_OPTIMIZER_MODE=advise   # suggestions only, nothing is ever denied
+```
+
+**Remove it.** The installer records every file it wrote, with hashes, so
+removal is exact rather than best-effort:
+
+```bash
+npm run uninstall-hooks              # show the plan; changes nothing
+npm run uninstall-hooks -- --apply   # carry it out
+```
+
+It removes only files that still match what we wrote. Anything you have edited
+since is **left in place and named**, because removing it would destroy your
+work and removing it silently would be worse. Hooks you added yourself are not
+in the manifest and are never touched. Config entries we added are listed for
+you to remove — we do not rewrite your `settings.json`.
+
 ## Technical reference
 
 The detailed operational material below is intentionally retained for users who want to understand the complete tool surface, hooks pipeline, performance controls, analytics, and troubleshooting behavior.
