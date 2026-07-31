@@ -26,6 +26,7 @@
   "scripts": {
     "postinstall": "node scripts/postinstall.cjs",
     "checksums": "node scripts/checksums.mjs",
+    "screenshots": "node scripts/capture-screenshots.mjs",
     "uninstall-hooks": "node scripts/uninstall.mjs",
     "doctor": "node scripts/doctor.mjs",
     "build": "tsc && npm run copy:assets",

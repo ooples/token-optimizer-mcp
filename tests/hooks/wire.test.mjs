@@ -1,0 +1,138 @@
+/**
+ * Wiring hooks into someone else's settings file.
+ *
+ * These are regression tests for a bug that shipped: the installer overwrote
+ * the entire settings file when `jq` was absent, and replaced the whole `hooks`
+ * object when it was present. Either way every hook the user had configured was
+ * destroyed, silently, by a tool whose uninstaller promises it never touches
+ * anything it did not write.
+ *
+ * So the properties here are: additive, idempotent, and reversible to exactly
+ * the state we found.
+ */
+
+import { wire, unwire, wiredEntries, wirePlan, WIRING, MARKER } from '../../hooks-core/wire.mjs';
+
+const HOOKS = '/home/me/.claude-global/hooks/token-optimizer';
+
+/** A settings file with the user's own hooks and their own unrelated keys. */
+const userSettings = () => ({
+  hooks: {
+    PreToolUse: [
+      { matcher: 'Bash', hooks: [{ type: 'command', command: 'node /home/me/my-own-hook.mjs' }] },
+    ],
+    Stop: [{ hooks: [{ type: 'command', command: 'echo done' }] }],
+  },
+  theme: 'dark',
+  permissions: { allow: ['Bash(git:*)'] },
+});
+
+describe('wiring is additive', () => {
+  test('every event we need is wired', () => {
+    const out = wire({}, HOOKS);
+    expect(Object.keys(out.hooks).sort()).toEqual(WIRING.map((w) => w.event).sort());
+  });
+
+  test('SessionStart is among them, since that is where the policy is delivered', () => {
+    // The installer this replaces wired four events and not this one, so the
+    // standing policy and the project briefing never arrived.
+    expect(WIRING.map((w) => w.event)).toContain('SessionStart');
+    expect(JSON.stringify(wire({}, HOOKS).hooks.SessionStart)).toContain('session-start.mjs');
+  });
+
+  test('a user hook on the same event survives, in its original position', () => {
+    const out = wire(userSettings(), HOOKS);
+    expect(out.hooks.PreToolUse[0].hooks[0].command).toBe('node /home/me/my-own-hook.mjs');
+    expect(out.hooks.PreToolUse).toHaveLength(2);
+  });
+
+  test('events we do not touch are left exactly as they were', () => {
+    const out = wire(userSettings(), HOOKS);
+    expect(out.hooks.Stop).toEqual(userSettings().hooks.Stop);
+  });
+
+  test('unrelated settings keys are preserved', () => {
+    const out = wire(userSettings(), HOOKS);
+    expect(out.theme).toBe('dark');
+    expect(out.permissions).toEqual({ allow: ['Bash(git:*)'] });
+  });
+
+  test('the input object is not mutated', () => {
+    const before = userSettings();
+    wire(before, HOOKS);
+    expect(before.hooks.PreToolUse).toHaveLength(1);
+  });
+
+  test('the command carries the marker, which is what makes it findable later', () => {
+    expect(JSON.stringify(wire({}, HOOKS).hooks.PreToolUse)).toContain(MARKER);
+  });
+});
+
+describe('wiring is idempotent', () => {
+  test('running the installer twice leaves one set of entries, not two', () => {
+    const once = wire(userSettings(), HOOKS);
+    const twice = wire(once, HOOKS);
+    expect(wiredEntries(twice)).toHaveLength(wiredEntries(once).length);
+  });
+
+  test('and still only one of the user\'s', () => {
+    const twice = wire(wire(userSettings(), HOOKS), HOOKS);
+    expect(twice.hooks.PreToolUse.filter((e) => !JSON.stringify(e).includes(MARKER))).toHaveLength(1);
+  });
+
+  test('re-wiring to a new location replaces the old entry rather than stacking', () => {
+    const moved = wire(wire({}, HOOKS), '/somewhere/else/token-optimizer');
+    expect(moved.hooks.PreToolUse).toHaveLength(1);
+    expect(JSON.stringify(moved.hooks.PreToolUse)).toContain('/somewhere/else/');
+  });
+
+  test('an entry of ours that has MOVED in the array is still recognised as ours', () => {
+    // Identified by what it runs, not by where it sits: an entry someone else
+    // added at our old index is not ours, and ours is still ours if it moved.
+    const wired = wire(userSettings(), HOOKS);
+    wired.hooks.PreToolUse.reverse();
+    expect(wiredEntries(wire(wired, HOOKS))).toHaveLength(WIRING.length);
+  });
+});
+
+describe('unwiring restores what we found', () => {
+  test('our entries go and theirs stay', () => {
+    const out = unwire(wire(userSettings(), HOOKS));
+    expect(out.hooks.PreToolUse).toEqual(userSettings().hooks.PreToolUse);
+    expect(out.hooks.Stop).toEqual(userSettings().hooks.Stop);
+  });
+
+  test('an event that was only ours has its key removed, not left empty', () => {
+    // Leaving `"SessionStart": []` behind is litter that says we were here.
+    const out = unwire(wire({}, HOOKS));
+    expect(out.hooks).toBeUndefined();
+  });
+
+  test('a settings file with no hooks at all is returned unchanged', () => {
+    expect(unwire({ theme: 'dark' })).toEqual({ theme: 'dark' });
+  });
+
+  test('wire then unwire is the identity on the user\'s settings', () => {
+    expect(unwire(wire(userSettings(), HOOKS))).toEqual(userSettings());
+  });
+
+  test('non-array hook values are passed through rather than dropped', () => {
+    const odd = { hooks: { Weird: { not: 'an array' } } };
+    expect(unwire(odd).hooks.Weird).toEqual({ not: 'an array' });
+  });
+});
+
+describe('the plan says what it will do before it does it', () => {
+  test('it counts what is preserved as well as what is added', () => {
+    const plan = wirePlan(userSettings(), HOOKS);
+    expect(plan.adding).toBe(WIRING.length);
+    expect(plan.preserving).toBe(2);
+    expect(plan.replacing).toBe(0);
+  });
+
+  test('on a re-run it reports replacing rather than adding', () => {
+    const plan = wirePlan(wire(userSettings(), HOOKS), HOOKS);
+    expect(plan.replacing).toBe(WIRING.length);
+    expect(plan.adding).toBe(0);
+  });
+});

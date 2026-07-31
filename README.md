@@ -19,30 +19,42 @@
   <img src="https://img.shields.io/badge/commercial%20use-MIT%2C%20allowed-0d9488" alt="MIT, commercial use allowed">
 </p>
 
+<p align="center">
+  <img alt="The knowledge graph: findings, decisions and dead ends accreted from real agent work, with a token balance measured against a withheld control arm" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/constellation-dark.png" width="900">
+</p>
+
+<p align="center"><em>Everything your agent worked out, kept — and a savings figure measured against a withheld control arm, not estimated.</em></p>
+
 ---
 
 ## The 30-second version
 
-Agents burn context on work they already did: re-reading files that have not
-changed, dumping whole files to see three lines, running unbounded searches, and
-re-deriving conclusions they reached last session and then forgot.
+Your agent burns most of its context on work it already did: re-reading files
+that have not changed, dumping a whole file to see three lines, running
+unbounded searches, and re-deriving conclusions it reached last session and then
+forgot.
 
-Token Optimizer attacks both halves of that.
+Token Optimizer attacks that on three fronts.
 
 **1. It makes the expensive call impossible.** Install the plugin and a built-in
 `Read` of a 200 KB file is **denied**, with the refusal naming the cached,
-diffed replacement to call instead. Same for `Grep`, `Glob`, `Edit`, `Write`,
-and `cat` / `head` / `grep -r` through the shell. There is no setting to turn
-on. **Re-reading a file you already read this session returns only a diff** —
-usually the single biggest win, and one that size-based rules structurally
-cannot catch.
+diffed replacement. Same for `Grep`, `Glob`, `Edit`, `Write`, and `cat` /
+`head` / `grep -r` through the shell. **Re-reading a file you already read this
+session returns only a diff** — usually the single biggest win, and one that
+size-based rules structurally cannot catch. There is no setting to turn on.
 
 **2. It remembers what your agent worked out.** A per-project knowledge graph
-accumulates findings, decisions, and dead ends as a side effect of working, then
-feeds them back when the agent touches the relevant file. A finding costs ~150
-tokens to carry. Re-deriving it costs 5k–50k.
+accumulates findings, decisions and dead ends as a side effect of working, then
+feeds them back the moment the agent touches the relevant file. A finding costs
+~150 tokens to carry. Re-deriving it costs 5k–50k.
 
-No account, no telemetry, no hosted service.
+**3. It measures itself, in public, and tells you when it is losing.** A
+randomized control arm for savings. A forecast that keeps its own accuracy
+record. Cache economics read from your client's own transcript rather than
+modelled. Every number here is measured or absent — never estimated and
+presented as fact.
+
+No account, no telemetry, no hosted service. MIT, so it is usable at work.
 
 ## Quick start
 
@@ -57,61 +69,264 @@ what enforces; adding the server alone just gives the model tools it can ignore.
 
 That is the entire installation. [All fifteen clients →](#installation)
 
-## What makes this different
+Then, whenever you want to know what to do next:
 
-### It is enforced, not suggested
+```text
+token_audit
+```
 
-Most optimizers hand the model a set of tools and hope. Models don't take the
-hint — they are thinking about your bug, not their own token consumption. This
-one **refuses the wasteful call** and names its replacement.
+One ranked queue: what is costing the most, priced per session and per month,
+each line naming how to fix it. Not a dashboard, not six reports — a queue.
 
-Three properties make that safe to default on, and all three are tested:
+---
 
-- **Fail-open.** Any error allows the original call, exactly as if the plugin
-  were not installed.
-- **Loop-breaking.** A target is refused **once**; a repeat is allowed through.
-  If the MCP server is missing or broken, the cost is one wasted turn per file —
-  self-healing, no intervention.
-- **One-variable escape hatch.** `TOKEN_OPTIMIZER_MODE=advise` or `off`.
+## The knowledge graph — the part nothing else has
 
-### It proves its own savings against a control arm
+Every agent session ends the same way: the reasoning evaporates. The next
+session re-derives it, at full price, forever.
+
+This builds a **living per-project graph** — nodes for files, symbols, tasks and
+findings; edges for `derived_from`, `contains`, `supersedes`, `contradicts`,
+`related` — and it fills itself in from real work. No ingestion job, no
+embedding model, no rebuild step, no query to formulate.
+
+```
+you touch  src/auth.ts
+           │
+           ├─ verify() compares exp against the LOCAL clock          (finding, 0.9)
+           ├─ per-host retry budgets; global was rejected — deadlock (decision)
+           ├─ ! the skew fix was reverted once already               (dead end)
+           └─ [git] 47 changes in 90d, last three: "fix token expiry",
+                    "revert skew fix", "fix token expiry again"
+```
+
+None of that is in your repository. It exists only because an agent once burned
+tokens finding it out — and every other tool throws it away at the end of the
+session.
+
+### Why this is not RAG
+
+| Classic RAG | This |
+|---|---|
+| Retrieves **evidence**; the model re-derives meaning each time | Retrieves **verdicts** — the reasoning already happened |
+| Index built by a **batch ingestion job** | Accretes from **real agent traffic** — coverage follows attention |
+| **Similarity** search | **Traversal** — this symbol *and its callers* |
+| Model must **formulate a query** | Fires when the model **reaches for a file** |
+| Staleness **invisible**; serves rotted chunks confidently | Staleness **computed** from content hashes, served with the invalidating diff |
+| Returns only what is **in the documents** | Returns **dead ends**, which exist nowhere in your source tree |
+
+Traversal plus lexical search: deterministic, instant, explainable, and it works
+offline.
+
+### The zero-turn refusal
+
+A plain deny costs a full turn: the model calls `Read`, is refused, re-plans,
+calls `smart_read`. But at refusal time we already hold the file *and* the
+snapshot the graph stored — so the refusal **carries the answer inside it**.
+Nothing to re-plan, no second call. Turn cost drops from one to zero.
+
+And when the graph already holds the verdict a tool output would support, the
+output never enters context at all. Not compressed. Absent.
+
+---
+
+## The dashboard
+
+```bash
+npm run dashboard      # http://localhost:3100
+```
+
+<p align="center">
+  <img alt="Knowledge graph browser with focus view, token balance and audit tab" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/graph-dark.png" width="900">
+</p>
+
+<table>
+<tr><td width="50%">
+
+**Token balance**
+Earned, spent and net — with the control-arm method stated up front rather than
+buried. When the experiment cannot yet support a headline figure, it says so.
+
+**Knowledge graph browser**
+Focus view for one node and its neighbourhood; constellation view for the whole
+project. Click a finding to see what it was derived from, what superseded it,
+and what contradicts it.
+
+</td><td width="50%">
+
+**Audit tab**
+Contradictions, stale findings, and anything the graph believes that the code no
+longer supports — each with the diff that invalidated it.
+
+**One-click Markdown export**
+Your agent's accumulated knowledge as documentation you can review, edit and
+commit. The graph stops being a black box the moment you can read it as prose.
+
+</td></tr>
+</table>
+
+<p align="center">
+  <img alt="Audit tab surfacing contradictions, stale findings and low-confidence claims" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/audit-dark.png" width="900">
+</p>
+
+<p align="center"><em>The audit tab: two findings that contradict each other, surfaced automatically.</em></p>
+
+Server-side by design: the browser asks for a neighbourhood, a search result or
+a page. A mature graph holds thousands of nodes, and shipping it wholesale would
+make every page load a multi-megabyte download for a view that shows twenty
+things.
+
+---
+
+## What it does that other optimizers do not
+
+### Compaction is consolidation, not loss
+
+Everyone else checkpoints and restores what you *had* — which spends the
+scarcest budget in the session replaying context you already paid for.
+
+Selection here is **derived**, not a category list: `cost-to-rederive ×
+irrecoverability × reuse-probability`, with dead ends and decisions on a floor,
+because cheap-to-find is not the same as cheap-to-find-*again*. Restoration then
+adapts to the situation — mid-problem, cold resume, or in-flow — within a
+measured budget:
+
+> **Where you were:** does clock skew explain the 401s?
+> ruled out: token signing, clock drift on the client
+> untested: NTP skew on the server
+
+That is resuming a thought. A summary describes one.
+
+### Progressive disclosure that knows what you asked
+
+A large tool result becomes a preview chosen by the **session's actual
+question**, after parsing the output's shape (test report, diff, stack trace,
+log, JSON) — not the first 40 lines because they are first.
+
+```
+[selected against: "which shard fails?"]
+--- failures ---
+  FAILED  DBNetTests.BceOnRelu -- expected 0.0 got NaN
+  FAILED  TftGradientFlow -- gradient did not reach the encoder
+---- omitted: 1,760 lines of passing tests (expand 8bb6bd66) ----
+```
+
+Every cut is **named**, because a model reasoning over a silent truncation
+cannot know it is missing anything. `expand` serves from a content-addressed
+store — it never re-runs your test suite — and expanding both teaches the next
+preview and promotes what you needed into the graph, so the second expansion
+never happens.
+
+### Prompt-cache economics, measured from your own transcript
+
+A cache write costs 1.25× a plain token and a read costs 0.1×, so a prefix that
+keeps invalidating can cost more than every saving elsewhere. This reads the
+real numbers your client already recorded — then does the part a hit rate
+cannot:
+
+```
+! CLAUDE.md:2 has an embedded timestamp, invalidating everything after it
+    about 329,421 tokens re-written per session
+```
+
+Attributed to a line, priced by what sits *behind* it. Keep-warm is decided by
+expected value from your observed gaps, per TTL tier — and when neither tier
+pays, it says so.
+
+### Model routing decided by outcomes, not by task size
+
+Everyone guesses from task shape and never checks. This reads which model ran
+each episode and what happened — retries, errors, turns — and prices **both**
+mistakes: what an overpowered model wastes, and what an underpowered one costs
+in retries. A tier that needs a retry in more than half its episodes is excluded
+at any price, because four cheap turns that fail are not cheap.
+
+### Waste detection that becomes a ratchet
+
+A report is read once and forgotten. Here a detection produces a **durable,
+measured, reversible fix** — a skip rule, a composite touch — plus a ~50-token
+session-start briefing so the waste never starts. Detectors are a shipped floor
+*plus* patterns derived from your project's own history, each carrying what it
+has actually saved:
+
+```
+generated/schema.d.ts: read in 9/9 sessions, never the source of a finding
+    3,400 tokens/session (~$3.06/month); apply: waste_audit action="apply"
+```
+
+Anything that touches **your** files is proposed as a diff and never applied.
+
+### One audit across every project
+
+`fleet_audit` ranks your whole machine by measured cost, and does something a
+per-project scanner cannot: a fix proven in one project is offered to the others
+containing the **same file contents**, carrying the evidence from where it was
+measured. Matching is by content hash, never by filename.
+
+It also runs the natural experiment nobody else can — enforcing clients versus
+directive ones — and reports it whichever way it falls, with the confound
+stated.
+
+---
+
+## Trust: we ship hooks that refuse your tool calls
+
+That is a bigger ask than a normal dependency makes, so:
+
+**Verify the release.** Published from CI with npm provenance — `npm audit
+signatures` ties the artifact to the workflow run and the commit, without
+trusting us. `CHECKSUMS.sha256` ships alongside for offline checking.
+
+**Check that it works — not that files exist.**
+
+```bash
+npm run doctor
+```
+
+It feeds a synthetic payload to the *real* hook binary and asserts a large read
+is refused and a small one is not. A checklist would have passed on the exact
+bug this project once shipped, where the plugin was connected, visible in
+`/mcp`, and saving nothing. Every failure names its own fix.
+
+**Every refusal carries its own off switch.** Enforcement that hides its disable
+is coercive, and the person who needs it is mid-refusal, not reading a README:
+
+```
+auth.ts is 91 KB. Call smart_read instead.
+(Not what you wanted? TOKEN_OPTIMIZER_MODE=off disables enforcement.)
+```
+
+**Removal is exact.** The installer records every file it wrote, with hashes.
+Uninstall removes only what still matches; anything you edited since is left in
+place and named. Your own hooks are never touched, and we never rewrite your
+`settings.json` — we merge into it.
+
+```bash
+npm run uninstall-hooks              # show the plan; changes nothing
+npm run uninstall-hooks -- --apply   # carry it out
+```
+
+---
+
+## It proves its own savings against a control arm
 
 Every tool in this space reports "tokens saved" computed from its own
 assumptions. That number cannot be wrong, because nothing checks it.
 
-This one runs a **randomized holdout**: injection is silently withheld on a
-slice of file touches, stratified by file so the comparison is within-file, and
-the saving is the measured difference between the arms. It refuses to print a
+This runs a **randomized holdout**: injection is silently withheld on a slice of
+file touches, stratified by file so the comparison is within-file, and the
+saving is the measured difference between the arms. It refuses to print a
 headline figure until the experiment can support one, and it will tell you
 plainly:
 
 > the graph is NOT yet paying for itself
 
-A tool that can only ever report good news is not reporting.
+A tool that can only ever report good news is not reporting. The same discipline
+runs throughout: an unmeasurable saving renders as **unknown**, never as zero,
+and never as `$0.00` — because "cannot tell yet" printed as "saved nothing" is a
+silent false negative, and dollars get quoted to other people.
 
-### It retrieves verdicts, not passages
-
-Classic RAG chunks your code, embeds it, and stuffs raw passages back into
-context — so the model re-derives the same meaning every time. The knowledge
-graph inverts that:
-
-| Classic RAG | This |
-|---|---|
-| Retrieves **evidence**; the model re-derives meaning each time | Retrieves **verdicts**; the reasoning already happened |
-| Index built by a **batch ingestion job** | Accretes from **real agent traffic** — coverage follows attention |
-| **Similarity** search | **Traversal** — this symbol *and its callers* |
-| Model must **formulate a query** | Fires when the model **reaches for a file** |
-| Staleness **invisible**; serves rotted chunks confidently | Staleness **computed** from content hashes, served with the invalidating diff |
-| Returns only what is **in the documents** | Returns **dead ends** — which exist nowhere in your source tree |
-
-No embedding model, no vector index, no rebuild step. Traversal plus lexical
-search: deterministic, instant, explainable.
-
-That last row has no RAG equivalent. *"We tried this and it failed because X"*
-is not in your repository. It exists only because an agent once burned tokens
-finding out — and today, every tool throws it away at the end of the session.
-
-### It runs everywhere, and says which tier
+## It runs everywhere, and says which tier
 
 **Enforcing** — a pre-execution veto exists: Claude Code, Codex, OpenCode.
 
@@ -125,7 +340,7 @@ would be a lie you would discover on your first large file.
 Every config shape is confirmed against that client's published documentation,
 with the source URL recorded in its README.
 
-### Everything here is verified, and you can run it
+## Everything here is verified, and you can run it
 
 ```bash
 npm run verify:all
@@ -133,14 +348,16 @@ npm run verify:all
 
 | Suite | Checks | What it proves |
 |---|---|---|
-| `test` | 106 | Enforcement, staleness, injection, curation — driving the real hooks over stdin |
-| `verify:clients` | 114 | Every client config matches its documented schema |
+| `test` | 416 | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
+| `verify:clients` | 129 | Every client config matches its documented schema |
 | `verify:harvest` | 26 | Request shape, response parsing, and that **no secret from a tool result crosses the wire** |
 | `verify:ui` | 22 | Real headless Chromium: layout, label collisions, legibility |
+| `doctor` | 10 | The installed hooks actually refuse, and the server actually answers |
 
 These are not decoration. They found six client configs that would have failed
-**silently**, four UI defects invisible to every other check, and reproduced a
-documented historical bug within minutes of existing.
+**silently**, an installer that destroyed user hooks, a Windows path bug that
+made enforcement blind to half its own refusals, and an uninstaller that printed
+a plan and deleted nothing.
 
 ## Honest comparison
 
@@ -150,24 +367,14 @@ documented historical bug within minutes of existing.
 | Default behaviour | Refuses the wasteful call | Suggests a better tool |
 | Re-read of an unchanged file | Returns a diff | Returns the file again |
 | Savings figure | Measured against a withheld control | Computed from the tool's own assumptions |
-| Cross-session memory | Findings, decisions, dead ends | None |
+| Cross-session memory | Findings, decisions, dead ends | Usually none |
+| Compaction | Consolidation, ranked by cost-to-rederive | Checkpoint and replay |
+| Cache economics | Measured from the transcript, attributed to a line | Rarely addressed |
+| Model routing | Measured from episode outcomes | Guessed from task size |
+| Cross-project | Fixes transfer by content hash | Per-project only |
 | Clients | 15 | 3–6 typical |
 | Telemetry | None | Varies |
 
-Tools that audit your *configuration* for waste — stale skills, bloated memory,
-compaction loss — solve a different problem and compose fine with this one. They
-reduce what your setup wastes; this reduces what your work costs.
-
-## The dashboard
-
-```bash
-npm run dashboard
-```
-
-Token balance with its control-arm method stated up front, a knowledge-graph
-browser with focus and constellation views, an audit tab surfacing contradictions
-and stale findings, and one-click Markdown export — your agent's accumulated
-knowledge as documentation you can review and commit.
 
 ---
 
