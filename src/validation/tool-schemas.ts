@@ -579,7 +579,260 @@ export const ContextDeltaSchema = z.discriminatedUnion('operation', [
 ]);
 
 // Map tool names to their schemas for easy lookup
+
+/* ------------------------------------------------------------------------ *
+ * Tools that were advertised but could not be called.
+ *
+ * validateToolArgs looks every tools/call up in toolSchemaMap and throws
+ * "Unknown tool: X. No validation schema available." when there is no entry.
+ * A tool can therefore be imported, registered, listed by tools/list and
+ * dispatched -- and still be impossible to invoke. Fifteen were in exactly
+ * that state, and two more (cache_benchmark, smart_cache_api) advertised a
+ * HYPHENATED name while their schema and dispatch case both used underscores,
+ * so no client could ever reach them either.
+ *
+ * Each schema below is generated from the tool's OWN published inputSchema, so
+ * validation accepts precisely what the advertised schema promises rather than
+ * a guess at it.
+ * ------------------------------------------------------------------------ */
+
+// smart_complexity
+export const SmartComplexitySchema = z
+  .object({
+    filePath: z.string().optional(),
+    fileContent: z.string().optional(),
+    projectRoot: z.string().optional(),
+    includeHalstead: z.boolean().optional(),
+    includeMaintainability: z.boolean().optional(),
+    threshold: z.record(z.any()).optional(),
+    force: z.boolean().optional(),
+    maxCacheAge: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_dependencies
+export const SmartDependenciesSchema = z
+  .object({
+    cwd: z.string().optional(),
+    files: z.array(z.any()).optional(),
+    mode: z.enum(['graph', 'circular', 'unused', 'impact']).optional(),
+    targetFile: z.string().optional(),
+    includeExternal: z.boolean().optional(),
+    maxDepth: z.number().optional(),
+    useCache: z.boolean().optional(),
+    incrementalUpdate: z.boolean().optional(),
+    format: z.enum(['compact', 'detailed']).optional(),
+  })
+  .passthrough();
+
+// smart_exports
+export const SmartExportsSchema = z
+  .object({
+    filePath: z.string().optional(),
+    fileContent: z.string().optional(),
+    projectRoot: z.string().optional(),
+    force: z.boolean().optional(),
+    maxCacheAge: z.number().optional(),
+    checkUsage: z.boolean().optional(),
+    scanDepth: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_imports
+export const SmartImportsSchema = z
+  .object({
+    filePath: z.string().optional(),
+    fileContent: z.string().optional(),
+    projectRoot: z.string().optional(),
+    force: z.boolean().optional(),
+    maxCacheAge: z.number().optional(),
+    checkCircular: z.boolean().optional(),
+    suggestMissing: z.boolean().optional(),
+  })
+  .passthrough();
+
+// smart_refactor
+export const SmartRefactorSchema = z
+  .object({
+    filePath: z.string().optional(),
+    fileContent: z.string().optional(),
+    projectRoot: z.string().optional(),
+    refactorTypes: z.array(z.any()).optional(),
+    minComplexityForExtraction: z.number().optional(),
+    force: z.boolean().optional(),
+    maxCacheAge: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_security
+export const SmartSecuritySchema = z
+  .object({
+    force: z.boolean().optional(),
+    projectRoot: z.string().optional(),
+    targets: z.array(z.any()).optional(),
+    exclude: z.array(z.any()).optional(),
+    minSeverity: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
+    maxCacheAge: z.number().optional(),
+    includeLowSeverity: z.boolean().optional(),
+  })
+  .passthrough();
+
+// smart_symbols
+export const SmartSymbolsSchema = z
+  .object({
+    filePath: z.string(),
+    symbolTypes: z.array(z.any()).optional(),
+    includeExported: z.boolean().optional(),
+    includeImported: z.boolean().optional(),
+    projectRoot: z.string().optional(),
+    force: z.boolean().optional(),
+    maxCacheAge: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_typescript
+export const SmartTypescriptSchema = z
+  .object({
+    force: z.boolean().optional(),
+    projectRoot: z.string().optional(),
+    tsconfig: z.string().optional(),
+    maxCacheAge: z.number().optional(),
+    files: z.array(z.any()).optional(),
+    includeTypeInfo: z.boolean().optional(),
+  })
+  .passthrough();
+
+// smart_config_read
+export const SmartConfigReadSchema = z
+  .object({
+    path: z.string(),
+    format: z.enum(['json', 'yaml', 'yml', 'toml', 'auto']).optional(),
+    diffMode: z.boolean().optional(),
+    validateSchema: z.boolean().optional(),
+    inferSchema: z.boolean().optional(),
+    includeSuggestions: z.boolean().optional(),
+    validateOnly: z.boolean().optional(),
+    schema: z.record(z.any()).optional(),
+    strictMode: z.boolean().optional(),
+    ttl: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_env
+export const SmartEnvSchema = z
+  .object({
+    envFile: z.string().optional(),
+    envContent: z.string().optional(),
+    checkSecurity: z.boolean().optional(),
+    suggestMissing: z.boolean().optional(),
+    environment: z.enum(['development', 'staging', 'production']).optional(),
+    requiredVars: z.array(z.any()).optional(),
+    force: z.boolean().optional(),
+    ttl: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_package_json
+export const SmartPackageJsonSchema = z
+  .object({
+    projectRoot: z.string().optional(),
+    force: z.boolean().optional(),
+    checkOutdated: z.boolean().optional(),
+    checkSecurity: z.boolean().optional(),
+    includeDependencyTree: z.boolean().optional(),
+    maxCacheAge: z.number().optional(),
+    maxTreeDepth: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_tsconfig
+export const SmartTsconfigSchema = z
+  .object({
+    configPath: z.string().optional(),
+    projectRoot: z.string().optional(),
+    includeIssues: z.boolean().optional(),
+    includeSuggestions: z.boolean().optional(),
+    maxCacheAge: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_pretty
+export const SmartPrettySchema = z
+  .object({
+    operation: z.enum(['highlight-code', 'format-code', 'detect-language', 'apply-theme']),
+    code: z.string().optional(),
+    filePath: z.string().optional(),
+    language: z.string().optional(),
+    outputMode: z.enum(['ansi', 'html', 'plain']).optional(),
+    theme: z.enum(['default', 'monokai', 'github', 'solarized-dark', 'solarized-light', 'dracula', 'nord', 'atom-one-dark', 'atom-one-light', 'custom']).optional(),
+    customTheme: z.record(z.any()).optional(),
+    showLineNumbers: z.boolean().optional(),
+    highlightLines: z.array(z.any()).optional(),
+    startLine: z.number().optional(),
+    formatCode: z.boolean().optional(),
+    prettierConfig: z.record(z.any()).optional(),
+    tabWidth: z.number().optional(),
+    useTabs: z.boolean().optional(),
+    semi: z.boolean().optional(),
+    singleQuote: z.boolean().optional(),
+    trailingComma: z.enum(['none', 'es5', 'all']).optional(),
+    printWidth: z.number().optional(),
+    hints: z.array(z.any()).optional(),
+    includeBackground: z.boolean().optional(),
+    inlineStyles: z.boolean().optional(),
+    wrapCode: z.boolean().optional(),
+    useCache: z.boolean().optional(),
+    ttl: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_process
+export const SmartProcessSchema = z
+  .object({
+    operation: z.enum(['start', 'stop', 'status', 'monitor', 'tree', 'restart']),
+    pid: z.number().optional(),
+    name: z.string().optional(),
+    command: z.string().optional(),
+    args: z.array(z.any()).optional(),
+    cwd: z.string().optional(),
+    env: z.record(z.any()).optional(),
+    detached: z.boolean().optional(),
+    autoRestart: z.boolean().optional(),
+    interval: z.number().optional(),
+    duration: z.number().optional(),
+    useCache: z.boolean().optional(),
+    ttl: z.number().optional(),
+  })
+  .passthrough();
+
+// smart_service
+export const SmartServiceSchema = z
+  .object({
+    operation: z.enum(['start', 'stop', 'restart', 'status', 'enable', 'disable', 'health-check', 'list-dependencies']),
+    serviceType: z.enum(['systemd', 'windows', 'docker']).optional(),
+    serviceName: z.string(),
+    autoDetect: z.boolean().optional(),
+    useCache: z.boolean().optional(),
+    ttl: z.number().optional(),
+  })
+  .passthrough();
+
 export const toolSchemaMap: Record<string, z.ZodType<any>> = {
+  smart_complexity: SmartComplexitySchema,
+  smart_dependencies: SmartDependenciesSchema,
+  smart_exports: SmartExportsSchema,
+  smart_imports: SmartImportsSchema,
+  smart_refactor: SmartRefactorSchema,
+  smart_security: SmartSecuritySchema,
+  smart_symbols: SmartSymbolsSchema,
+  smart_typescript: SmartTypescriptSchema,
+  smart_config_read: SmartConfigReadSchema,
+  smart_env: SmartEnvSchema,
+  smart_package_json: SmartPackageJsonSchema,
+  smart_tsconfig: SmartTsconfigSchema,
+  smart_pretty: SmartPrettySchema,
+  smart_process: SmartProcessSchema,
+  smart_service: SmartServiceSchema,
   optimize_text: OptimizeTextSchema,
   get_cached: GetCachedSchema,
   count_tokens: CountTokensSchema,

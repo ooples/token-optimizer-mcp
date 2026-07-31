@@ -1502,7 +1502,7 @@ export async function runCacheBenchmark(
  * MCP Tool Definition
  */
 export const CACHE_BENCHMARK_TOOL_DEFINITION = {
-  name: 'cache-benchmark',
+  name: 'cache_benchmark',
   description: `Cache Performance Benchmarking with 89% token reduction through comprehensive testing and analysis.
 
 Features:

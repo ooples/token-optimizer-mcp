@@ -705,6 +705,15 @@ export async function runSmartSymbols(
   tokenCounter?: TokenCounter,
   metrics?: MetricsCollector
 ): Promise<string> {
+  // WHOEVER MAKES THE CACHE CLOSES IT.
+  //
+  // This closed `cacheInstance` in a `finally` regardless of where it came
+  // from. As a CLI that is right; as an MCP handler it is fatal, because the
+  // server passes its ONE shared CacheEngine to every tool. Proven live: a
+  // single smart_symbols call closed that handle and every subsequent
+  // tools/call in the process failed with "The database connection is not
+  // open" -- twenty tools down from one call, until the server was restarted.
+  const ownsCache = !cache;
   const cacheInstance =
     cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
@@ -767,7 +776,8 @@ export async function runSmartSymbols(
 
     return output;
   } finally {
-    tool.close();
+    // Only a cache this function created is a cache this function may close.
+    if (ownsCache) tool.close();
   }
 }
 

@@ -897,7 +897,7 @@ export async function runSmartCacheApi(
  * MCP Tool Definition
  */
 export const SMART_CACHE_API_TOOL_DEFINITION = {
-  name: 'smart-cache-api',
+  name: 'smart_cache_api',
   description: `API Response Caching with 83% token reduction through intelligent cache management.
 
 Features:
