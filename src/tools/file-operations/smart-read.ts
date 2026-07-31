@@ -34,6 +34,13 @@ export interface SmartReadOptions {
   diffMode?: boolean; // Return only diff if file was previously read
   maxSize?: number; // Maximum size to return (will truncate)
   chunkSize?: number; // Size of chunks for large files
+  /**
+   * Which chunk to return for a chunked file (0-based).
+   *
+   * Advertised in the tool schema from the start, but absent from this
+   * interface and never read, so asking for chunk 2 silently returned chunk 1.
+   */
+  chunkIndex?: number;
 
   // Optimization options
   preserveStructure?: boolean; // Keep important structural elements when truncating
@@ -57,8 +64,11 @@ export interface SmartReadResult {
     tokenCount: number;
     originalTokenCount: number;
     compressionRatio: number;
+    /** How many chunks the file was split into; present only when chunked. */
+    chunkCount?: number;
+    /** Which chunk this response carries; present only when chunked. */
+    chunkIndex?: number;
   };
-  chunks?: string[];
   diff?: {
     added: string[];
     removed: string[];
@@ -141,7 +151,8 @@ export class SmartReadTool {
     let isDiff = false;
     let truncated = false;
     let chunked = false;
-    let chunks: string[] | undefined;
+    let chunkCount = 0;
+    let chunkIndex = 0;
     let diffData:
       | { added: string[]; removed: string[]; unchanged: number }
       | undefined;
@@ -223,18 +234,34 @@ export class SmartReadTool {
     ) {
       // Only chunk if file fits within maxSize but is larger than chunkSize
       // This allows for structured navigation of medium-sized files
-      const chunkResult = chunkBySyntax(rawContent, chunkSize);
-      chunks = chunkResult.chunks;
+      const allChunks = chunkBySyntax(rawContent, chunkSize).chunks;
       chunked = true;
+      chunkCount = allChunks.length;
 
-      // Return first chunk with metadata about total chunks
+      // ONE chunk is returned, and it is the one that was ASKED for.
+      //
+      // `chunkIndex` was declared in the tool schema and named in the message
+      // this very branch emits -- "use chunk index to get more" -- but it was
+      // never read out of `options`, so the documented way to reach chunk 2 did
+      // nothing and returned chunk 1 again.
+      const requested = Number(options.chunkIndex);
+      chunkIndex =
+        Number.isInteger(requested) && requested >= 0 && requested < allChunks.length
+          ? requested
+          : 0;
+
       finalContent =
-        chunks[0] +
-        `\n\n// [${chunks.length} chunks total, use chunk index to get more]`;
+        allChunks[chunkIndex] +
+        `\n\n// [chunk ${chunkIndex + 1} of ${allChunks.length}. ` +
+        `Call smart_read again with chunkIndex=<n> for another.]`;
 
-      // Calculate token savings from chunking (only returning first chunk)
-      const firstChunkTokens = this.tokenCounter.count(finalContent).tokens;
-      tokensSaved = originalTokens - firstChunkTokens;
+      // The saving counted here is the saving actually DELIVERED. Previously the
+      // full `chunks` array was also attached to the response, so every chunk
+      // reached the caller while this arithmetic priced only the first -- the
+      // response cost MORE than reading the file and reported ~76% saved. An
+      // overstated saving is the one number this project must never produce.
+      const returnedTokens = this.tokenCounter.count(finalContent).tokens;
+      tokensSaved = originalTokens - returnedTokens;
     }
     if (enableCache && !fromCache) {
       cacheSet(this.cache, cacheKey, rawContent);
@@ -285,8 +312,10 @@ export class SmartReadTool {
         tokenCount: finalTokens,
         originalTokenCount: originalTokens,
         compressionRatio,
+        // Navigation, not content. Attaching every chunk here defeated the
+        // entire point of chunking: the caller received the whole file anyway.
+        ...(chunked ? { chunkCount, chunkIndex } : {}),
       },
-      chunks,
       diff: diffData,
     };
   }

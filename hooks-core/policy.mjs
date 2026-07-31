@@ -67,6 +67,24 @@ function intEnv(name, fallback) {
  */
 export const largeFileBytes = () => intEnv('TOKEN_OPTIMIZER_LARGE_READ_BYTES', 25_600);
 
+/**
+ * Size below which NO refusal can pay for itself.
+ *
+ * A refusal is not free: the message replacing the file is itself 50-110 tokens
+ * of context. Refusing a file smaller than that spends more than it saves, and
+ * a negative saving is the one number this project must never produce.
+ *
+ * Measured live: a re-read of a 9-byte `version.json` -- 2 tokens of content --
+ * was refused with a 57-token message, 28x worse than allowing the read. The
+ * re-read branch had reasoned that "the saving is proportional to the whole file
+ * regardless of how small it is", which is true of the SAVING and silently
+ * assumes the refusal costs nothing.
+ *
+ * 1 KB is about 256 tokens, comfortably above the largest refusal this hook
+ * emits, so a refusal above the floor always pays.
+ */
+export const refusalFloorBytes = () => intEnv('TOKEN_OPTIMIZER_REFUSAL_FLOOR_BYTES', 1_024);
+
 /** Extensions whose bytes are not tokens, so byte thresholds do not apply. */
 const BINARY_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.svg',

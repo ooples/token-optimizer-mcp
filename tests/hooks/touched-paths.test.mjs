@@ -258,6 +258,45 @@ describe('a recursive search is a SEGMENT, not two words in the same string', ()
   });
 });
 
+describe('a refusal must never cost more than the file it replaces', () => {
+  // Found by a live invariant sweep over 120 real files across four
+  // repositories: the refusal text is itself 50-110 tokens, so for a small
+  // enough file every branch spends more than the read would have. The re-read
+  // branch was the reachable one at DEFAULT settings -- it fired on any repeat
+  // read regardless of size, because it reasoned about the SAVING and treated
+  // the refusal as free.
+  const tiny = () => {
+    const p = join(repoA, 'version.json');
+    writeFileSync(p, '{"v":"1"}');
+    return p;
+  };
+
+  test('a re-read of a 9-byte file is allowed, not refused for 57 tokens', () => {
+    const path = tiny();
+    const state = { seen: { [path]: true }, denied: {} };
+    expect(decide({ tool_name: 'Read', tool_input: { file_path: path }, cwd: repoA }, state)).toBeNull();
+  });
+
+  test('a re-read above the floor still IS refused -- the fix must not disarm it', () => {
+    const path = join(repoA, 'big.ts');
+    writeFileSync(path, 'export const v = 1;\n'.repeat(400));
+    const state = { seen: { [path]: true }, denied: {} };
+    const verdict = decide({ tool_name: 'Read', tool_input: { file_path: path }, cwd: repoA }, state);
+    expect(verdict).toBeTruthy();
+    expect(verdict.reason).toContain('already read');
+  });
+
+  test('whatever a refusal says, it is cheaper than the file', () => {
+    // The invariant itself, stated directly.
+    const path = join(repoA, 'big.ts');
+    const body = 'export const v = 1;\n'.repeat(2000);
+    writeFileSync(path, body);
+    const state = { seen: { [path]: true }, denied: {} };
+    const verdict = decide({ tool_name: 'Read', tool_input: { file_path: path }, cwd: repoA }, state);
+    expect(verdict.reason.length).toBeLessThan(body.length / 2);
+  });
+});
+
 describe('only content dumps pay for the bytes', () => {
   test('cat and grep are dumps', () => {
     expect(isContentDump('cat src/main.ts')).toBe(true);

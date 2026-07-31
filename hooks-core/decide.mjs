@@ -11,7 +11,7 @@
  * target for loop breaking, so a second attempt at the same thing gets through.
  */
 
-import { fileSize, isBinaryPath, isMachineOwned, largeFileBytes } from './policy.mjs';
+import { fileSize, isBinaryPath, isMachineOwned, largeFileBytes, refusalFloorBytes } from './policy.mjs';
 import { statSync } from 'node:fs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { activeRules } from './remedy.mjs';
@@ -424,6 +424,13 @@ export function decide(payload, state) {
     const size = fileSize(path);
     if (size < 0) return null;
 
+    // A REFUSAL IS NOT FREE. The message that replaces the file is itself
+    // 50-110 tokens, so below the floor every branch here spends more than the
+    // read would have cost. Measured live: a re-read of a 9-byte version.json
+    // (2 tokens) was refused with a 57-token message. Allowing the read is
+    // strictly cheaper, so allow it.
+    if (size < refusalFloorBytes()) return null;
+
     // A FIX THAT HAS BEEN APPLIED HAS TO BITE, or it was a report with extra
     // steps. Rules are derived from this project's own measured history -- a
     // file read across many sessions that has never once been the source of a
@@ -441,7 +448,8 @@ export function decide(payload, state) {
 
     // THE RE-READ CASE, which size-gating alone never caught. On a repeat visit
     // smart_read returns only what CHANGED, so the saving is proportional to
-    // the whole file regardless of how small it is.
+    // the whole file rather than to how much of it is new -- but only above the
+    // floor, because below it the refusal costs more than the file it replaces.
     if (state.seen[path]) {
       return {
         key: `read:${path}`,

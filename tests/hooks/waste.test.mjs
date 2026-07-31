@@ -147,7 +147,9 @@ describe('a detection becomes a durable fix, not a line in a report', () => {
 
   test('the fix BITES at the routing decision, or it was a report with extra steps', () => {
     const path = join(workspace, 'schema.ts');
-    writeFileSync(path, 'export type X = 1;');
+    // Over the refusal floor: below it no branch issues a refusal at all,
+    // because the message would cost more than the file it replaces.
+    writeFileSync(path, 'export type X = 1;\n'.repeat(120));
     for (const s of ['s1', 's2', 's3']) read(s, path, 3000);
 
     const detection = derivedDetections(dir, graph()).find((d) => d.id === 'barren-anchor');
@@ -165,7 +167,9 @@ describe('a detection becomes a durable fix, not a line in a report', () => {
 
   test('reverting takes the rule out of force and out of the routing decision', () => {
     const path = join(workspace, 'schema.ts');
-    writeFileSync(path, 'export type X = 1;');
+    // Over the refusal floor: below it no branch issues a refusal at all,
+    // because the message would cost more than the file it replaces.
+    writeFileSync(path, 'export type X = 1;\n'.repeat(120));
     for (const s of ['s1', 's2', 's3']) read(s, path, 3000);
     const rule = applyRemedy(dir, derivedDetections(dir, graph()).find((d) => d.id === 'barren-anchor'));
 
