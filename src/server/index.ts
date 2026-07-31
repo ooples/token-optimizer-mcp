@@ -7,6 +7,7 @@ import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
 import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
 import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
 import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
+import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -468,6 +469,7 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      AUDIT_TOOL,
       EXPAND_TOOL,
       WASTE_TOOL,
       CACHE_TOOL,
@@ -2418,6 +2420,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (request.params.name === 'model_routing') {
     return modelRouting(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'token_audit') {
+    return tokenAudit(request.params.arguments as any);
   }
 
   const started = Date.now();
