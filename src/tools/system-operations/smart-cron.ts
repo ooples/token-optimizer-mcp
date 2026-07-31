@@ -303,7 +303,7 @@ export class SmartCron {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 15; // Estimate 15x baseline for job listings
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -966,7 +966,7 @@ export class SmartCron {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 12; // Estimate 12x baseline for execution history
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -1137,7 +1137,7 @@ export class SmartCron {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 10; // Estimate 10x baseline for predictions
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,

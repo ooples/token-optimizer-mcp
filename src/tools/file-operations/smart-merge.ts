@@ -188,11 +188,11 @@ export class SmartMergeTool {
 
           // Estimate original tokens (full git status + diff output)
           if (opts.summaryOnly) {
-            originalTokens = resultTokens * 50; // Summary vs full output
+            originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
           } else if (opts.conflictsOnly) {
-            originalTokens = resultTokens * 10; // Conflicts only vs full diff
+            originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
           } else {
-            originalTokens = resultTokens * 5; // Structured vs raw output
+            originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
           }
           break;
 
@@ -204,7 +204,7 @@ export class SmartMergeTool {
           resultTokens = this.tokenCounter.count(
             JSON.stringify(mergeResult)
           ).tokens;
-          originalTokens = resultTokens * 8; // Structured result vs full merge output
+          originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
           break;
 
         case 'abort':
@@ -219,7 +219,7 @@ export class SmartMergeTool {
           resultTokens = this.tokenCounter.count(
             JSON.stringify(mergeResult)
           ).tokens;
-          originalTokens = resultTokens * 5;
+          originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
           break;
 
         case 'continue':
@@ -227,7 +227,7 @@ export class SmartMergeTool {
           resultTokens = this.tokenCounter.count(
             JSON.stringify(mergeResult)
           ).tokens;
-          originalTokens = resultTokens * 8;
+          originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
           break;
 
         default:

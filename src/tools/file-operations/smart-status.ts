@@ -241,13 +241,18 @@ export class SmartStatusTool {
         ).tokens;
       }
 
-      // Estimate original tokens (if we had returned full git diff output)
-      const originalTokens = opts.summaryOnly
-        ? resultTokens * 50 // Summary mode: estimate diff would be 50x more
-        : resultTokens * 10; // File list mode: estimate diff would be 10x more
+      // THE RAW OUTPUT IS RIGHT HERE, so there is no reason to guess at it.
+      //
+      // This used `resultTokens * 50` in summary mode and `* 10` otherwise --
+      // two invented multipliers, reported as tokens saved. The actual
+      // alternative is the `git status --porcelain` output this tool parsed,
+      // which it already holds.
+      const rawTokens = this.tokenCounter.count(statusOutput).tokens;
+      const originalTokens = Math.max(resultTokens, rawTokens);
 
       const tokensSaved = originalTokens - resultTokens;
-      const compressionRatio = resultTokens / originalTokens;
+      const compressionRatio =
+        originalTokens > 0 ? resultTokens / originalTokens : 1;
 
       // Build result
       const result: SmartStatusResult = {

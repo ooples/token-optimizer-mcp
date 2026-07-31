@@ -171,7 +171,7 @@ export class SmartDiffTool {
         resultTokens = this.tokenCounter.count(
           JSON.stringify(paginatedStats)
         ).tokens;
-        originalTokens = resultTokens * 100; // Estimate full diff would be 100x larger
+        originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
       } else {
         // Full mode: get actual diffs
         diffs = this.getDiffs(
@@ -179,7 +179,7 @@ export class SmartDiffTool {
           opts
         );
         resultTokens = this.tokenCounter.count(JSON.stringify(diffs)).tokens;
-        originalTokens = resultTokens * 10; // Estimate full files would be 10x larger
+        originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
       }
 
       const tokensSaved = originalTokens - resultTokens;

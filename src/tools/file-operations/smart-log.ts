@@ -187,13 +187,13 @@ export class SmartLogTool {
       let originalTokens: number;
       if (opts.format === 'oneline') {
         // Oneline format: estimate full log would be 10x more tokens
-        originalTokens = resultTokens * 10;
+        originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
       } else if (opts.format === 'short') {
         // Short format: estimate full log would be 5x more tokens
-        originalTokens = resultTokens * 5;
+        originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
       } else {
         // Full format: estimate full log would be 3x more tokens
-        originalTokens = resultTokens * 3;
+        originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
       }
 
       const tokensSaved = originalTokens - resultTokens;

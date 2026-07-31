@@ -520,7 +520,7 @@ export class SmartPretty {
         ) as HighlightResult;
 
         const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
-        const baselineTokens = tokensUsed * 17; // Estimate 17x baseline for cache hit
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -803,7 +803,7 @@ export class SmartPretty {
         ) as FormatResult;
 
         const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
-        const baselineTokens = tokensUsed * 8.5; // Estimate 8.5x baseline
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           ...cachedResult,

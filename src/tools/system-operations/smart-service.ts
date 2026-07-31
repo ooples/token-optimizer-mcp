@@ -260,7 +260,7 @@ export class SmartService {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const tokensUsed = this.tokenCounter.count(cached).tokens;
-        const baselineTokens = tokensUsed * 7; // Estimate 7x baseline for service info
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -842,7 +842,7 @@ export class SmartService {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const tokensUsed = this.tokenCounter.count(cached).tokens;
-        const baselineTokens = tokensUsed * 8; // Estimate 8x baseline for dependency graph
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,

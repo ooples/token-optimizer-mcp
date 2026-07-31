@@ -225,13 +225,13 @@ export class SmartBranchTool {
       let originalTokens: number;
       if (opts.namesOnly) {
         // Name-only mode: estimate full output would be 10x more tokens
-        originalTokens = resultTokenCount * 10;
+        originalTokens = resultTokenCount; // measured, not assumed: a multiplier here would invent a saving
       } else if (!opts.includeCommit && !opts.includeTracking) {
         // Basic info mode: estimate full output would be 5x more tokens
-        originalTokens = resultTokenCount * 5;
+        originalTokens = resultTokenCount; // measured, not assumed: a multiplier here would invent a saving
       } else {
         // Full info mode: estimate full output would be 2.5x more tokens
-        originalTokens = resultTokenCount * 2.5;
+        originalTokens = resultTokenCount; // measured, not assumed: a multiplier here would invent a saving
       }
 
       const tokensSaved = originalTokens - resultTokenCount;

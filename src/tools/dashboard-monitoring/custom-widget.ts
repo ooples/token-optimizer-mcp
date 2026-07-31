@@ -641,15 +641,19 @@ export class CustomWidget {
     const schema =
       type === 'all' ? this.getAllSchemas() : this.getSchemaForType(type);
 
-    // Schema is static and highly cacheable (98% reduction)
-    const originalSize = this.tokenCounter.count(JSON.stringify(schema)).tokens;
-    const tokensSaved = Math.floor(originalSize * 0.98);
+    // NOTHING IS SAVED BY RETURNING A SCHEMA.
+    //
+    // This measured the schema and then claimed 98% of it as `tokensSaved`,
+    // which inverts the meaning: that figure is what the response COSTS, not
+    // what it avoided. Returning content is not a saving on that same content.
+    const tokensUsed = this.tokenCounter.count(JSON.stringify(schema)).tokens;
 
     return {
       success: true,
       data: { schema },
       metadata: {
-        tokensSaved,
+        tokensUsed,
+        tokensSaved: 0,
         cacheHit: false,
       },
     };
