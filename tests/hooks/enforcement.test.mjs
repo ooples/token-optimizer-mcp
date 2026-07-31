@@ -77,7 +77,13 @@ describe('re-read detection -- the case size-gating never caught', () => {
     expect(run(read(small, { session_id: session })).decision).toBe('allow');
     const second = run(read(small, { session_id: session }));
     expect(second.decision).toBe('deny');
-    expect(second.reason).toMatch(/already read/i);
+    // The refusal now CARRIES THE ANSWER rather than redirecting: because the
+    // first, allowed read indexes the file, the second one can be told the file
+    // is unchanged and that it already has the contents -- which costs zero
+    // turns, where "call smart_read instead" costs one. Asserting the property
+    // rather than the old wording.
+    expect(second.reason).toMatch(/unchanged since you last read it|already read/i);
+    expect(second.reason).toMatch(/nothing to re-read|smart_read/i);
   });
 });
 

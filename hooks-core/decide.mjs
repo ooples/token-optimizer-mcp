@@ -77,6 +77,41 @@ function candidatePaths(operand, cwd) {
   return resolvableCandidates(operand, cwd);
 }
 
+/**
+ * Every real file this call touches, canonicalised.
+ *
+ * THE GRAPH'S PRODUCER. Before this existed, only `tool_input.file_path` was
+ * ever observed -- so a session spent in the shell (`cat`, `grep -r`, reading a
+ * build log) produced no cost record and no graph node, and measured as though
+ * nothing had happened. Bash operands are real touches and belong in both.
+ *
+ * Only paths that RESOLVE are returned: an operand that is a flag, a glob or a
+ * heredoc marker is not a file, and inventing a node for it would put fiction
+ * in the graph.
+ */
+export function touchedPaths(payload) {
+  const input = payload?.tool_input || {};
+  const cwd = payload?.cwd;
+  const out = new Set();
+
+  const add = (candidate) => {
+    if (!candidate || typeof candidate !== 'string') return;
+    for (const spelling of resolvableCandidates(candidate, cwd)) {
+      if (fileSize(spelling) >= 0) {
+        out.add(canonicalPath(spelling, cwd));
+        return;
+      }
+    }
+  };
+
+  add(input.file_path);
+  add(input.path);
+  add(input.notebook_path);
+  if (typeof input.command === 'string') for (const operand of fileOperands(input.command)) add(operand);
+
+  return [...out];
+}
+
 /** Resolves the first operand that is a real file over the size threshold. */
 function largeOperand(command, cwd) {
   const threshold = largeFileBytes();

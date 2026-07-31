@@ -11,11 +11,11 @@
  * free to -- and routinely did -- ignore.
  */
 
-import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF }
+import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF, fileSize }
   from './lib/policy.mjs';
-import { decide, remember, normalizePayload, readCostBytes } from './lib/decide.mjs';
+import { decide, remember, normalizePayload, readCostBytes, touchedPaths } from './lib/decide.mjs';
 import { recordRead } from './lib/metrics.mjs';
-import { wikiDir, load } from './lib/wiki.mjs';
+import { wikiDir, load, harvest } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { readFileSync } from 'node:fs';
@@ -44,14 +44,45 @@ try {
 
     // And what the read COST, which is the signal the holdout comparison
     // consumes. Without a producer here the measurement subtracts two zeroes.
+    //
+    // TOUCHED FILES ARE NOT ONLY `Read` FILES. A session spent in the shell --
+    // `cat`, `grep -r`, a build log -- was previously invisible: no cost
+    // recorded, no node in the graph, so a shell-heavy session measured as
+    // though nothing happened. `touchedPaths` covers every tool that names a
+    // file, including Bash operands.
+    const dir = wikiDir(payload.cwd);
+    const touched = touchedPaths(payload);
+
     const bytes = readCostBytes(payload);
     if (bytes) {
-      recordRead(wikiDir(payload.cwd), {
+      recordRead(dir, {
         anchor: payload.tool_input.file_path,
         sessionId: payload.session_id,
         bytes,
       });
+    } else {
+      for (const path of touched) {
+        const size = fileSize(path);
+        if (size > 0) recordRead(dir, { anchor: path, sessionId: payload.session_id, bytes: size });
+      }
     }
+
+    // THE MEMORY HALF. `harvest` records that this file was touched, at this
+    // content hash, by this task -- and nothing had been calling it, anywhere.
+    // The graph therefore accumulated no nodes and no task edges from ordinary
+    // work, which left every downstream feature (injection, the zero-turn
+    // refusal, consolidation, re-derivation detection) fed by a producer that
+    // never ran. Structural only: it records what demonstrably happened and
+    // makes no claims.
+    for (const path of touched) {
+      try {
+        harvest(dir, { filePath: path, sessionId: payload.session_id, action: payload.tool_name });
+        // Index on the way past, so the NEXT touch can be answered with
+        // structure instead of the file. Bounded by the snapshot limit.
+        indexFile(dir, path);
+      } catch { /* never let bookkeeping break an allowed call */ }
+    }
+
     allow();
   }
 
