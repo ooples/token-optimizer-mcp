@@ -71,20 +71,40 @@ export { isValidSessionId } from '../utils/session-id.js';
  * error messages behave as before.
  */
 function resolveSessionLogPath(sessionId: string): string | null {
-  const base = path.resolve(getHooksDataPath());
-  const candidates = [
-    path.resolve(base, `session-log-${sessionId}.jsonl`),
-    path.resolve(base, `operations-${sessionId}.csv`),
-  ];
+  if (!isValidSessionId(sessionId)) return null;
 
-  for (const candidate of candidates) {
-    const rel = path.relative(base, candidate);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
-      return null;
-    }
+  const base = path.resolve(getHooksDataPath());
+
+  // THE PATH IS BUILT FROM A DIRECTORY ENTRY, NOT FROM THE REQUEST.
+  //
+  // This interpolated `sessionId` straight into `path.resolve` and then proved
+  // containment afterwards. The allowlist meant no traversal could actually get
+  // through -- but CodeQL kept flagging it (alerts 73-75), and it was right
+  // about the shape: request data flowed into a path expression, and the proof
+  // that this was safe lived somewhere else, holding only while every future
+  // reader followed it.
+  //
+  // Listing the directory and MATCHING a name inverts that. The only strings
+  // joined to `base` come from the filesystem itself, so the request can never
+  // shape a path -- only select one that already exists in exactly this
+  // directory. Nothing to prove afterwards, because nothing unsafe is
+  // constructed. It is also strictly stronger: a name that is not literally
+  // present cannot be reached, whatever it is spelled like.
+  const wanted = [`session-log-${sessionId}.jsonl`, `operations-${sessionId}.csv`];
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(base);
+  } catch {
+    return null;
   }
 
-  return candidates.find((p) => fs.existsSync(p)) ?? candidates[0];
+  // `wanted.indexOf` orders the result: a live JSONL log wins over the CSV.
+  const match = entries
+    .filter((name) => wanted.includes(name))
+    .sort((a, c) => wanted.indexOf(a) - wanted.indexOf(c))[0];
+
+  return match ? path.join(base, match) : null;
 }
 
 /**
@@ -116,14 +136,11 @@ function readSessionEventLines(sessionId: string): string[] | null {
   // Re-validated HERE, not trusted from the caller.
   if (!isValidSessionId(sessionId)) return null;
 
+  // resolveSessionLogPath returns either null or a name it read out of the
+  // hooks data directory, so there is no longer a path here to prove anything
+  // about.
   const logFilePath = resolveSessionLogPath(sessionId);
-  if (!logFilePath || !fs.existsSync(logFilePath)) return null;
-
-  // Containment re-proved at the point of the read, so the check cannot drift
-  // away from the operation it protects.
-  const base = path.resolve(getHooksDataPath());
-  const rel = path.relative(base, path.resolve(logFilePath));
-  if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  if (!logFilePath) return null;
 
   const content = fs.readFileSync(logFilePath, 'utf-8').replace(/^﻿/, '');
 

@@ -1,6 +1,7 @@
-import { createReadStream, existsSync } from 'fs';
+import { createReadStream, readdirSync } from 'fs';
 import { createInterface } from 'readline';
 import { join } from 'path';
+import { isValidSessionId } from '../utils/session-id.js';
 
 /**
  * Represents a parsed tool call operation from session logs
@@ -41,11 +42,30 @@ export function resolveSessionLogPath(
   hooksDataPath: string,
   sessionId: string
 ): string | null {
-  const candidates = [
-    join(hooksDataPath, `session-log-${sessionId}.jsonl`),
-    join(hooksDataPath, `operations-${sessionId}.csv`),
+  if (!isValidSessionId(sessionId)) return null;
+
+  // The path is built from a DIRECTORY ENTRY, not from the caller's string --
+  // the same shape the dashboard uses, for the same reason (CWE-22). The only
+  // values joined to `hooksDataPath` come from the filesystem, so a session id
+  // can select an existing log but can never shape a path. See the note in
+  // web-server.ts.
+  const wanted = [
+    `session-log-${sessionId}.jsonl`,
+    `operations-${sessionId}.csv`,
   ];
-  return candidates.find((p) => existsSync(p)) ?? null;
+
+  let entries: string[];
+  try {
+    entries = readdirSync(hooksDataPath);
+  } catch {
+    return null;
+  }
+
+  const match = entries
+    .filter((name) => wanted.includes(name))
+    .sort((a, c) => wanted.indexOf(a) - wanted.indexOf(c))[0];
+
+  return match ? join(hooksDataPath, match) : null;
 }
 
 /**
