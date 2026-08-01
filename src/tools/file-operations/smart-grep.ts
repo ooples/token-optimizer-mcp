@@ -19,6 +19,7 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
+import { fsGeneration } from '../../utils/fs-generation.js';
 import { detectFileType } from '../shared/syntax-utils.js';
 
 /**
@@ -71,7 +72,21 @@ export interface SmartGrepOptions {
   count?: boolean; // Only return match counts (default: false)
 
   // Cache options
-  useCache?: boolean; // Use cached results (default: true)
+  /**
+   * Serve a previously cached result for the same query.
+   *
+   * DEFAULT FALSE, and the default is the point. A cached search is keyed on
+   * the query, and a query does not describe the tree it ran against: create,
+   * edit or delete a matching file and the cached answer is simply wrong.
+   * Measured live -- a file created between two identical searches did not
+   * appear in the second.
+   *
+   * Enabling it says "nothing outside this server is changing these files",
+   * which only the caller can know. Writes made THROUGH this server are
+   * handled either way: they bump a generation counter that forms part of the
+   * key, so our own edits always invalidate.
+   */
+  useCache?: boolean;
   ttl?: number; // Cache TTL in seconds (default: 300)
 
   // Performance options
@@ -146,7 +161,7 @@ export class SmartGrepTool {
       offset: options.offset ?? 0,
       filesWithMatches: options.filesWithMatches ?? false,
       count: options.count ?? false,
-      useCache: options.useCache ?? true,
+      useCache: options.useCache ?? false,
       ttl: options.ttl ?? 300,
       maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB default
       encoding: options.encoding ?? 'utf-8',
@@ -154,7 +169,12 @@ export class SmartGrepTool {
 
     try {
       // Check cache first
-      const cacheKey = generateCacheKey('grep', { pattern, options: opts });
+      const cacheKey = generateCacheKey('grep', {
+        pattern,
+        options: opts,
+        // Any write through this server invalidates every cached search.
+        fsGeneration: fsGeneration(),
+      });
 
       if (opts.useCache) {
         const cached = this.cache.get(cacheKey);

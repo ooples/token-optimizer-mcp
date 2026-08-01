@@ -362,6 +362,7 @@ import {
   resolveSessionLogPath,
 } from './session-log-parser.js';
 import fs from 'fs';
+import { createHash } from 'crypto';
 import path from 'path';
 import os from 'os';
 
@@ -489,22 +490,63 @@ const contextDelta = new ContextDeltaTool(sessionManager);
 // #125: memoize the expensive read-only file-operation tools with an
 // LRU bounded by the user's cacheSettings. The memoRegistry hook lets
 // the cleanup handler below prune them all at once.
+//
+// A MEMO KEYED ONLY ON ARGUMENTS SERVES CONTENT THAT NO LONGER EXISTS.
+//
+// These were keyed on the arguments alone, with a one-hour TTL. Measured
+// live: read a file, edit it, read it again with the same arguments, and the
+// PRE-EDIT content came back -- for an hour. Read-edit-read is the most common
+// sequence there is, so this was reachable in nearly every session, and a tool
+// whose whole job is reporting file contents cannot report contents the file
+// does not have.
+//
+// The tools' own caches were never the problem: those hash the file. The
+// defect was this second layer in front of them, which had no idea the
+// filesystem had moved.
 const cacheSettings = optimizationConfig.cacheSettings;
+
+/**
+ * A cheap, exact stamp of the file a read is about.
+ *
+ * One stat: size and mtime, at nanosecond resolution where the platform
+ * offers it. Any edit changes at least one of them, so an edited file yields a
+ * different memo key and the entry is recomputed rather than replayed. A
+ * missing file stamps as 'absent', so creating it is a change too.
+ */
+function fileStamp(filePath: unknown): string {
+  if (typeof filePath !== 'string' || !filePath) return 'no-path';
+  try {
+    const st = fs.statSync(filePath);
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return 'absent';
+  }
+}
+
 const memoizedSmartRead = lruMemoize(runSmartRead, {
   name: 'smart_read',
   maxSize: cacheSettings.maxSize,
   ttlMs: cacheSettings.ttlSeconds * 1000,
+  // The file's identity is part of the question, not just its path.
+  keyFn: (args) =>
+    createHash('sha256')
+      .update(JSON.stringify(args))
+      .update(' ')
+      .update(fileStamp(args[0]))
+      .digest('hex'),
 });
-const memoizedSmartGrep = lruMemoize(runSmartGrep, {
-  name: 'smart_grep',
-  maxSize: cacheSettings.maxSize,
-  ttlMs: cacheSettings.ttlSeconds * 1000,
-});
-const memoizedSmartGlob = lruMemoize(runSmartGlob, {
-  name: 'smart_glob',
-  maxSize: cacheSettings.maxSize,
-  ttlMs: cacheSettings.ttlSeconds * 1000,
-});
+
+// smart_grep and smart_glob SCAN A TREE, and no single stat describes a tree:
+// a file added three directories down changes the answer while every stat we
+// could cheaply take stays identical. Both were verified serving pre-creation
+// results after a new matching file appeared.
+//
+// So they are not memoized here. Each already caches internally against the
+// content it read, which is the layer that can actually tell when it is stale;
+// this one could only guess, and guessed wrong. Re-scanning costs a directory
+// walk. Reporting that a file does not exist costs the user the afternoon.
+const memoizedSmartGrep = runSmartGrep;
+const memoizedSmartGlob = runSmartGlob;
 
 // Periodic prune + stats log. Runs every 5 minutes; unref so it doesn't
 // keep the process alive on its own.

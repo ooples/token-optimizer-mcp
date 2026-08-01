@@ -114,11 +114,49 @@ export function isBinaryPath(path) {
  * knowledge, all of it churns constantly (so it would thrash staleness), and
  * none of it is something a person reads.
  */
-const MACHINE_OWNED = /(?:^|[/\\])(?:\.git|\.hg|\.svn|node_modules|\.venv|__pycache__|\.next|\.turbo|dist|obj|bin)[/\\]/i;
+const MACHINE_OWNED = /(?:^|[/\\])(?:\.git|\.hg|\.svn|node_modules|\.venv|__pycache__|\.next|\.turbo|dist|obj|bin)(?:[/\\]|$)/i;
 
-/** Whether a path lives inside a directory the user never authored. */
+/**
+ * Collapses `.` and `..` textually, without touching the filesystem.
+ *
+ * `node_modules/../src/large.ts` is an AUTHORED file, but the raw string
+ * contains `node_modules/`, so matching before normalising excluded it from
+ * harvesting and let that spelling slip past Read enforcement. Resolving the
+ * segments first means classification depends on where a path POINTS, not on
+ * how it happens to be written.
+ *
+ * Textual, deliberately: these paths are frequently relative, and resolving
+ * against cwd would answer a different question -- and would answer it
+ * differently in the hook process than in the caller.
+ */
+function normalizeSegments(p) {
+  const drive = /^[a-z]:/i.test(p) ? p.slice(0, 2) : '';
+  const rest = drive ? p.slice(2) : p;
+  const rooted = rest.startsWith('/');
+
+  const out = [];
+  for (const seg of rest.split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') {
+      // Above the root is still the root; above a relative start is a real
+      // `..` that must be kept, or the path would silently change meaning.
+      if (out.length && out[out.length - 1] !== '..') out.pop();
+      else if (!rooted && !drive) out.push('..');
+      continue;
+    }
+    out.push(seg);
+  }
+
+  return drive + (rooted || drive ? '/' : '') + out.join('/');
+}
+
+/** Whether a path lives inside -- or IS -- something the user never authored. */
 export function isMachineOwned(path) {
-  return MACHINE_OWNED.test(String(path || '').split('\\').join('/'));
+  // The trailing `$` in MACHINE_OWNED matters: a git worktree or submodule
+  // stores `.git` as a FILE, so `/repo/.git` has no trailing separator and
+  // was classified as authored content -- putting git metadata through Read
+  // refusal and into the knowledge graph.
+  return MACHINE_OWNED.test(normalizeSegments(String(path || '').split('\\').join('/')));
 }
 
 /** Size in bytes, or -1 when the path is missing or is not a regular file. */

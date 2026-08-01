@@ -158,8 +158,20 @@ export class SmartReadTool {
       | undefined;
     let tokensSaved = 0;
 
-    // If we have cached data and diff mode is enabled
-    if (cachedData && diffMode) {
+    // If we have cached data and diff mode is enabled.
+    //
+    // AN EXPLICIT chunkIndex IS A REQUEST FOR THAT CHUNK, NOT FOR NEWS.
+    //
+    // Diff mode answers "what changed since you last read this". Chunk
+    // navigation answers "show me part 3". Both are useful; they are not the
+    // same question. Without the chunkIndex guard, the intended sequence --
+    // read the file, then ask for chunk 2 -- hit this branch on the second
+    // call, found nothing had changed, and returned `// No changes` instead of
+    // chunk 2. The documented way to page through a file worked exactly once.
+    //
+    // So an explicit chunkIndex bypasses the diff entirely. Omitting it keeps
+    // the previous behaviour, which is what a plain re-read should do.
+    if (cachedData && diffMode && options.chunkIndex === undefined) {
       try {
         // Check if content has meaningful changes
         if (hasMeaningfulChanges(cachedData, rawContent)) {

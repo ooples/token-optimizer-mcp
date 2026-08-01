@@ -21,6 +21,7 @@ import { MetricsCollector } from '../../../src/core/metrics.js';
 describe('smart_edit line endings', () => {
   const dirs: string[] = [];
   const caches: CacheEngine[] = [];
+  const backupDirs: string[] = [];
 
   afterEach(() => {
     while (caches.length) {
@@ -28,6 +29,14 @@ describe('smart_edit line endings', () => {
     }
     while (dirs.length) {
       const d = dirs.pop();
+      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+    }
+    // Every successful edit writes a backup under the user's HOME directory,
+    // outside the temp fixture. Removing only the fixture left one directory
+    // per test behind on the machine running the suite, for ever -- a test
+    // suite that litters the developer's home is its own small defect.
+    while (backupDirs.length) {
+      const d = backupDirs.pop();
       if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
     }
   });
@@ -39,6 +48,10 @@ describe('smart_edit line endings', () => {
     caches.push(cache);
     const file = join(dir, 'file.ts');
     writeFileSync(file, body);
+    // Keyed exactly as writeBackup keys it, so teardown removes the real one.
+    backupDirs.push(
+      join(BACKUP_ROOT, createHash('sha256').update(file).digest('hex').slice(0, 16))
+    );
     return { tool: new SmartEditTool(cache, new TokenCounter(), new MetricsCollector()), file };
   }
 

@@ -23,6 +23,7 @@ import { homedir } from 'os';
 import { join, basename } from 'path';
 import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine.js';
+import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -55,7 +56,11 @@ const BACKUPS_PER_FILE = 5;
  * so they cannot grow without bound. Failure to write one is never allowed to
  * fail the edit -- the backup is a convenience, the edit is the job.
  */
-function writeBackup(filePath: string, content: string, encoding: BufferEncoding): void {
+function writeBackup(
+  filePath: string,
+  content: string,
+  encoding: BufferEncoding
+): boolean {
   try {
     const key = createHash('sha256').update(filePath).digest('hex').slice(0, 16);
     const dir = join(BACKUP_ROOT, key);
@@ -72,8 +77,15 @@ function writeBackup(filePath: string, content: string, encoding: BufferEncoding
         // A backup we cannot prune is not worth failing an edit over.
       }
     }
+
+    return true;
   } catch {
-    // Nor is one we cannot write.
+    // Nor is one we cannot write -- but the caller must not be told a backup
+    // exists when none does. `wasBackedUp` used to echo the REQUEST
+    // (opts.createBackup) rather than the outcome, so a full disk or a
+    // read-only home directory produced a result claiming a backup that was
+    // never written. That is precisely the moment somebody relies on it.
+    return false;
   }
 }
 
@@ -314,13 +326,17 @@ export class SmartEditTool {
         };
       }
 
-      // Create backup if requested
-      if (opts.createBackup) {
-        writeBackup(filePath, originalContent, opts.encoding);
-      }
+      // Create backup if requested, and remember whether it actually happened
+      const backedUp = opts.createBackup
+        ? writeBackup(filePath, originalContent, opts.encoding)
+        : false;
 
       // Apply changes to file
       writeFileSync(filePath, editedContent, opts.encoding);
+      // Tell the search tools the tree moved, so no cached grep or glob
+      // result can describe a state that no longer exists.
+      bumpFsGeneration();
+
 
       // Update cache
       if (opts.updateCache) {
@@ -360,7 +376,8 @@ export class SmartEditTool {
           compressionRatio: diffTokens / originalTokens,
           duration,
           verified: opts.verifyBeforeApply,
-          wasBackedUp: opts.createBackup,
+          // The outcome, not the request. See writeBackup.
+          wasBackedUp: backedUp,
         },
         diff: effectiveReturnDiff ? diff : undefined,
       };

@@ -85,13 +85,32 @@ describe('SmartReadTool chunking', () => {
   });
 
   it('honours chunkIndex -- the escape hatch it tells the caller to use', async () => {
+    // DEFAULT CACHING, because that is what a caller has.
+    //
+    // This passed `enableCache: false` on the second read, which is the one
+    // setting that made it pass. With caching on -- the default -- the second
+    // call met the diff-mode branch, found the file unchanged since the first
+    // call, and returned `// No changes` instead of chunk 2. So the documented
+    // way to page through a file worked exactly once per file, and the test
+    // written to prove it worked was quietly opting out of the failure.
     const { tool, file } = makeFixture();
     const first = await tool.read(file, { chunkIndex: 0 });
-    const second = await tool.read(file, { chunkIndex: 1, enableCache: false });
+    const second = await tool.read(file, { chunkIndex: 1 });
 
     expect(first.metadata.chunkIndex).toBe(0);
     expect(second.metadata.chunkIndex).toBe(1);
     expect(second.content).not.toBe(first.content);
+    expect(second.content).not.toContain('No changes');
+  });
+
+  it('still collapses to a diff on a plain re-read, when no chunk was asked for', async () => {
+    // The other half of the same gate: omitting chunkIndex must keep the
+    // diff-mode saving. Fixing chunk navigation by disabling diff mode
+    // outright would trade one regression for another.
+    const { tool, file } = makeFixture();
+    await tool.read(file);
+    const again = await tool.read(file);
+    expect(again.metadata.fromCache).toBe(true);
   });
 
   it('falls back to the first chunk when the index is out of range or absent', async () => {

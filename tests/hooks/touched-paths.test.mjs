@@ -354,6 +354,16 @@ describe('only content dumps pay for the bytes', () => {
     // Charging these a full-file read inflated the cost the holdout comparison
     // is built on, and an overstated saving is the one number to never produce.
     expect(isContentDump('wc -l src/main.ts')).toBe(false);
+
+    // The test is NAMED for edits, so it has to contain one. Without these, a
+    // regression classifying `sed -i` as a content dump passed here untouched:
+    // the assertions covered wc, an empty string and undefined, and no edit at
+    // all. A test that does not exercise the case in its own title is worse
+    // than no test, because it reads as coverage.
+    expect(isContentDump('sed -i "s/x/y/" src/main.ts')).toBe(false);
+    expect(isContentDump("perl -pi -e 's/a/b/' src/main.ts")).toBe(false);
+    expect(isContentDump('tee src/main.ts')).toBe(false);
+
     expect(isContentDump('')).toBe(false);
     expect(isContentDump(undefined)).toBe(false);
   });

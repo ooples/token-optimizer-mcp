@@ -19,6 +19,7 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
+import { fsGeneration } from '../../utils/fs-generation.js';
 import { detectFileType } from '../shared/syntax-utils.js';
 
 export interface FileMetadata {
@@ -71,7 +72,21 @@ export interface SmartGlobOptions {
   sortOrder?: 'asc' | 'desc'; // Sort direction (default: asc)
 
   // Cache options
-  useCache?: boolean; // Use cached results (default: true)
+  /**
+   * Serve a previously cached result for the same query.
+   *
+   * DEFAULT FALSE, and the default is the point. A cached search is keyed on
+   * the query, and a query does not describe the tree it ran against: create,
+   * edit or delete a matching file and the cached answer is simply wrong.
+   * Measured live -- a file created between two identical searches did not
+   * appear in the second.
+   *
+   * Enabling it says "nothing outside this server is changing these files",
+   * which only the caller can know. Writes made THROUGH this server are
+   * handled either way: they bump a generation counter that forms part of the
+   * key, so our own edits always invalidate.
+   */
+  useCache?: boolean;
   ttl?: number; // Cache TTL in seconds (default: 300)
 }
 
@@ -149,13 +164,18 @@ export class SmartGlobTool {
       offset: options.offset ?? 0,
       sortBy: options.sortBy ?? 'path',
       sortOrder: options.sortOrder ?? 'asc',
-      useCache: options.useCache ?? true,
+      useCache: options.useCache ?? false,
       ttl: options.ttl ?? 300,
     };
 
     try {
       // Check cache first
-      const cacheKey = generateCacheKey('glob', { pattern, options: opts });
+      const cacheKey = generateCacheKey('glob', {
+        pattern,
+        options: opts,
+        // Any write through this server invalidates every cached search.
+        fsGeneration: fsGeneration(),
+      });
 
       if (opts.useCache) {
         const cached = this.cache.get(cacheKey);
@@ -187,15 +207,29 @@ export class SmartGlobTool {
         nodir: opts.onlyFiles,
       });
 
-      // How many REAL matches the ignore patterns withheld. Costs one extra
-      // walk only when something was actually hidden, and turns a silent
+      // Whether the exclusions in force are OURS or the caller's -- the note
+      // below names them, and naming them wrongly misdirects anyone hunting a
+      // file that did not come back.
+      const usingDefaultIgnore = options.ignore === undefined;
+
+      // How many REAL matches the ignore patterns withheld. Turns a silent
       // omission into a number the caller can act on.
-      const unignored = globSync(pattern, {
-        cwd: opts.cwd,
-        absolute: opts.absolute,
-        nodir: opts.onlyFiles,
-      });
-      const ignoredMatches = Math.max(0, unignored.length - matches.length);
+      //
+      // With `ignore: []` there is nothing to withhold and `matches` is
+      // already the unignored set, so the second walk would traverse the whole
+      // tree synchronously to rediscover a list we are holding -- pure cost on
+      // the exact call that opted out of filtering.
+      const ignoredMatches =
+        opts.ignore.length === 0
+          ? 0
+          : Math.max(
+              0,
+              globSync(pattern, {
+                cwd: opts.cwd,
+                absolute: opts.absolute,
+                nodir: opts.onlyFiles,
+              }).length - matches.length
+            );
 
       // Filter and collect file info
       let files: Array<{ path: string; metadata?: FileMetadata }> = [];
@@ -351,9 +385,14 @@ export class SmartGlobTool {
           ...(ignoredMatches > 0
             ? {
                 ignoredMatches,
+                // "default" only when they ARE the defaults. A caller who
+                // passed their own ignore array was told their exclusions came
+                // from patterns they had just overridden, which sends anybody
+                // debugging a missing file to the wrong list.
                 ignoreNote:
-                  `${ignoredMatches} file(s) matched but were excluded by the default ` +
-                  `ignore patterns (${opts.ignore.join(', ')}). Pass ignore: [] to include them.`,
+                  `${ignoredMatches} file(s) matched but were excluded by the ` +
+                  `${usingDefaultIgnore ? 'default' : 'configured'} ignore patterns ` +
+                  `(${opts.ignore.join(', ')}). Pass ignore: [] to include them.`,
               }
             : {}),
         },
