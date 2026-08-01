@@ -10,7 +10,7 @@
  * - Configurable cache path via environment variable
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { CacheEngine, CacheStats } from '../../src/core/cache-engine.js';
 import fs from 'fs';
 import path from 'path';
@@ -513,17 +513,45 @@ describe('CacheEngine', () => {
     it('should fall back to os.homedir() when environment variable not set', () => {
       delete process.env.TOKEN_OPTIMIZER_CACHE_DIR;
 
-      const cacheWithoutEnv = new CacheEngine(undefined, 100);
-      const dbPath = cacheWithoutEnv.getDatabasePath();
+      // POINT os.homedir() AT A DIRECTORY WE OWN. Constructing the engine with no
+      // path used to open the developer's REAL ~/.token-optimizer-cache -- a live
+      // database a running MCP server holds open in WAL mode -- purely to assert
+      // how a path gets resolved. The old comment here conceded the file "may be
+      // in use by other tests or processes" and cleaned up nothing, which is a
+      // test reaching into a user's data to check a string.
+      //
+      // Spied rather than redirected via USERPROFILE/HOME: os.homedir() is a
+      // native binding that reads the real process environment, and under Jest
+      // `process.env` is a sandbox copy, so assigning to it changes nothing that
+      // os.homedir() can see. (TOKEN_OPTIMIZER_CACHE_DIR above works because the
+      // engine reads it from that same JS object.)
+      const fakeHome = path.join(os.tmpdir(), `homedir-fallback-${Date.now()}`);
+      fs.mkdirSync(fakeHome, { recursive: true });
+      const homedirSpy = jest.spyOn(os, 'homedir').mockReturnValue(fakeHome);
 
-      expect(dbPath).toContain('.token-optimizer-cache');
-      expect(dbPath).toContain(os.homedir());
+      let cacheWithoutEnv: CacheEngine | undefined;
+      try {
+        cacheWithoutEnv = new CacheEngine(undefined, 100);
+        const dbPath = cacheWithoutEnv.getDatabasePath();
 
-      cacheWithoutEnv.close();
+        expect(dbPath).toContain('.token-optimizer-cache');
+        // Asserting the SPIED home, not os.homedir(), is what makes this test
+        // able to fail: were the fallback to stop consulting os.homedir(), the
+        // path would resolve elsewhere and this would catch it. Comparing
+        // against os.homedir() would pass either way.
+        expect(dbPath).toContain(fakeHome);
+      } finally {
+        cacheWithoutEnv?.close();
+        homedirSpy.mockRestore();
 
-      // Note: We intentionally do not clean up the default home directory cache
-      // as it may be in use by other tests or processes, and this is the
-      // expected location for the cache in normal operation.
+        // force:true ignores an absent path; a briefly-held Windows handle is the
+        // only other failure and must not fail the test.
+        try {
+          fs.rmSync(fakeHome, { recursive: true, force: true });
+        } catch {
+          /* temp directory, reclaimed by the OS */
+        }
+      }
     });
 
     it('should prioritize explicit dbPath parameter over environment variable', () => {
