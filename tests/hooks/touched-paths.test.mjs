@@ -7,10 +7,10 @@
  * agent works in a real shell, does anything get recorded at all?
  */
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedPaths } from '../../hooks-core/decide.mjs';
+import { touchedPaths, touchedFiles } from '../../hooks-core/decide.mjs';
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
 
 let home;
@@ -94,5 +94,39 @@ describe('the graph a touch belongs to is the FILE\'s project', () => {
   test('the marker search does not run away up the tree', () => {
     // A bounded walk, so a path on a huge filesystem cannot cost a hook call.
     expect(projectRootFor(join(repoA, 'src/main.ts'), repoA)).toBe(repoA.split('\\').join('/'));
+  });
+});
+
+describe('a touch carries the size that was measured to find it', () => {
+  // Resolving a candidate ALREADY stats it -- `fileSize(spelling) >= 0` is how
+  // a real file is told from a flag or a glob. Throwing that answer away meant
+  // the router stat'd every path a second time, on a hook that runs before
+  // EVERY tool call.
+  test('the size comes back with the path', () => {
+    const out = touchedFiles({
+      tool_name: 'Bash',
+      tool_input: { command: 'wc -l src/main.ts' },
+      cwd: repoA,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].size).toBe(statSync(join(repoA, 'src/main.ts')).size);
+  });
+
+  test('touchedPaths still returns exactly the same paths', () => {
+    // The sizes are additional information, not a different answer.
+    const payload = {
+      tool_name: 'Bash',
+      tool_input: { command: 'wc -l src/main.ts' },
+      cwd: repoA,
+    };
+    expect(touchedFiles(payload).map((f) => f.path)).toEqual(touchedPaths(payload));
+  });
+
+  test('a path that does not resolve carries no size, because it is not there', () => {
+    expect(touchedFiles({
+      tool_name: 'Bash',
+      tool_input: { command: 'wc -l src/nope.ts' },
+      cwd: repoA,
+    })).toEqual([]);
   });
 });

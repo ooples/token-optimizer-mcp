@@ -1,0 +1,2949 @@
+#!/usr/bin/env node
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { installShutdownHandlers } from './lifecycle.js';
+import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
+import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
+import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
+import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
+import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
+import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
+import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+
+import { CacheEngine } from '../core/cache-engine.js';
+import { TokenCounter } from '../core/token-counter.js';
+import { CompressionEngine } from '../core/compression-engine.js';
+import { analyzeProjectTokens } from '../analysis/project-analyzer.js';
+import { MetricsCollector } from '../core/metrics.js';
+import { validateToolArgs } from '../validation/validator.js';
+import {
+  getPredictiveCacheTool,
+  PREDICTIVE_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/predictive-cache.js';
+import {
+  getCacheWarmupTool,
+  CACHE_WARMUP_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-warmup.js';
+// --- Previously unregistered tools ---------------------------------------
+// Each of these shipped with a definition, a runner and tests, and no line
+// anywhere that let a user reach it. Fifteen finished tools were invisible.
+import {
+  runSmartComplexity,
+  SMART_COMPLEXITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-complexity.js';
+import {
+  runSmartDependencies,
+  SMART_DEPENDENCIES_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-dependencies.js';
+import {
+  runSmartExports,
+  SMART_EXPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-exports.js';
+import {
+  runSmartImports,
+  SMART_IMPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-imports.js';
+import {
+  runSmartRefactor,
+  SMART_REFACTOR_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-refactor.js';
+import {
+  runSmartSecurity,
+  SMART_SECURITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-security.js';
+import {
+  runSmartSymbols,
+  SMART_SYMBOLS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-symbols.js';
+import {
+  runSmartTypescript,
+  SMART_TYPESCRIPT_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-typescript.js';
+import {
+  runSmartConfigRead,
+  SMART_CONFIG_READ_TOOL_DEFINITION,
+} from '../tools/configuration/smart-config-read.js';
+import {
+  runSmartEnv,
+  SMART_ENV_TOOL_DEFINITION,
+} from '../tools/configuration/smart-env.js';
+import {
+  runSmartPackageJson,
+  SMART_PACKAGE_JSON_TOOL_DEFINITION,
+} from '../tools/configuration/smart-package-json.js';
+import {
+  runSmartTsconfig,
+  SMART_TSCONFIG_TOOL_DEFINITION,
+} from '../tools/configuration/smart-tsconfig.js';
+import {
+  runSmartPretty,
+  SMART_PRETTY_TOOL_DEFINITION,
+} from '../tools/output-formatting/smart-pretty.js';
+import {
+  runSmartProcess,
+  SMART_PROCESS_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-process.js';
+import {
+  runSmartService,
+  SMART_SERVICE_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-service.js';
+
+// Code analysis tools
+import {
+  getSmartAstGrepTool,
+  SMART_AST_GREP_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-ast-grep.js';
+import {
+  getCacheAnalyticsTool,
+  CACHE_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-analytics.js';
+import {
+  runCacheBenchmark,
+  CACHE_BENCHMARK_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-benchmark.js';
+import {
+  runCacheCompression,
+  CACHE_COMPRESSION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-compression.js';
+import {
+  getCacheInvalidationTool,
+  CACHE_INVALIDATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-invalidation.js';
+import {
+  getCacheOptimizerTool,
+  CACHE_OPTIMIZER_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-optimizer.js';
+import {
+  getCachePartitionTool,
+  CACHE_PARTITION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-partition.js';
+import {
+  getCacheReplicationTool,
+  CACHE_REPLICATION_TOOL_DEFINITION,
+} from '../tools/advanced-caching/cache-replication.js';
+import {
+  getSmartCacheTool,
+  SMART_CACHE_TOOL_DEFINITION,
+} from '../tools/advanced-caching/smart-cache.js';
+import {
+  getAlertManager,
+  ALERT_MANAGER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/alert-manager.js';
+import {
+  getMetricCollector,
+  METRIC_COLLECTOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/metric-collector.js';
+import {
+  getMonitoringIntegration,
+  MONITORING_INTEGRATION_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/monitoring-integration.js';
+import {
+  getCustomWidget,
+  CUSTOM_WIDGET_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/custom-widget.js';
+import {
+  getDataVisualizer,
+  DATA_VISUALIZER_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/data-visualizer.js';
+import {
+  getHealthMonitor,
+  HEALTH_MONITOR_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/health-monitor.js';
+import {
+  getLogDashboard,
+  LOG_DASHBOARD_TOOL_DEFINITION,
+} from '../tools/dashboard-monitoring/log-dashboard.js';
+
+// Intelligence tools
+import {
+  runIntelligentAssistant,
+  INTELLIGENTASSISTANTTOOL,
+} from '../tools/intelligence/intelligent-assistant.js';
+import {
+  runNaturalLanguageQuery,
+  NATURALLANGUAGEQUERYTOOL,
+} from '../tools/intelligence/natural-language-query.js';
+import {
+  runPatternRecognition,
+  PATTERNRECOGNITIONTOOL,
+} from '../tools/intelligence/pattern-recognition.js';
+import {
+  runPredictiveAnalytics,
+  PREDICTIVEANALYTICSTOOL,
+} from '../tools/intelligence/predictive-analytics.js';
+import {
+  runRecommendationEngine,
+  RECOMMENDATIONENGINETOOL,
+} from '../tools/intelligence/recommendation-engine.js';
+import {
+  runSmartSummarization,
+  SMARTSUMMARIZATIONTOOL,
+} from '../tools/intelligence/smart-summarization.js';
+
+// Analytics tools
+import {
+  getHookAnalyticsTool,
+  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/get-hook-analytics.js';
+import {
+  getActionAnalyticsTool,
+  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/get-action-analytics.js';
+import {
+  getMcpServerAnalyticsTool,
+  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/get-mcp-server-analytics.js';
+import {
+  getExportAnalyticsTool,
+  EXPORT_ANALYTICS_TOOL_DEFINITION,
+} from '../tools/analytics/export-analytics.js';
+import {
+  getOptimizationReportTool,
+  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
+} from '../tools/analytics/get-optimization-report.js';
+import { recordToolAnalytics } from '../analytics/record-tool-analytics.js';
+import {
+  OptimizationStorageTool,
+  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+} from '../tools/optimization-storage-tool.js';
+import {
+  ContextDeltaTool,
+  CONTEXT_DELTA_TOOL_DEFINITION,
+} from '../tools/context-delta-tool.js';
+import { SessionManager } from '../core/session-manager.js';
+import { createSummarizerFromEnv } from '../core/summarization.js';
+import { TokenizerFactory } from '../core/tokenizers/tokenizer-factory.js';
+import { ConfigManager } from '../core/config.js';
+import { lruMemoize, memoRegistry } from '../utils/lru-memoize.js';
+import { AnalyticsManager } from '../analytics/analytics-manager.js';
+
+// API & Database tools
+import {
+  getSmartSql,
+  SMART_SQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-sql.js';
+import {
+  getSmartSchema,
+  SMART_SCHEMA_TOOL_DEFINITION,
+} from '../tools/api-database/smart-schema.js';
+import {
+  getSmartApiFetch,
+  SMART_API_FETCH_TOOL_DEFINITION,
+} from '../tools/api-database/smart-api-fetch.js';
+import {
+  getSmartCacheApi,
+  SMART_CACHE_API_TOOL_DEFINITION,
+} from '../tools/api-database/smart-cache-api.js';
+import {
+  getSmartDatabase,
+  SMART_DATABASE_TOOL_DEFINITION,
+} from '../tools/api-database/smart-database.js';
+import {
+  getSmartGraphQL,
+  SMART_GRAPHQL_TOOL_DEFINITION,
+} from '../tools/api-database/smart-graphql.js';
+import {
+  getSmartMigration,
+  SMART_MIGRATION_TOOL_DEFINITION,
+} from '../tools/api-database/smart-migration.js';
+import {
+  getSmartOrm,
+  SMART_ORM_TOOL_DEFINITION,
+} from '../tools/api-database/smart-orm.js';
+import {
+  getSmartRest,
+  SMART_REST_TOOL_DEFINITION,
+} from '../tools/api-database/smart-rest.js';
+import {
+  getSmartWebSocket,
+  SMART_WEBSOCKET_TOOL_DEFINITION,
+} from '../tools/api-database/smart-websocket.js';
+
+// Build Systems tools
+import {
+  getSmartProcessesTool,
+  SMART_PROCESSES_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-processes.js';
+import {
+  getSmartNetwork,
+  SMART_NETWORK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-network.js';
+import {
+  getSmartLogs,
+  SMART_LOGS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-logs.js';
+import {
+  getSmartLintTool,
+  SMART_LINT_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-lint.js';
+import {
+  getSmartInstall,
+  SMART_INSTALL_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-install.js';
+import {
+  getSmartDocker,
+  SMART_DOCKER_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-docker.js';
+import {
+  getSmartBuildTool,
+  SMART_BUILD_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-build.js';
+import {
+  getSmartSystemMetrics,
+  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-system-metrics.js';
+import {
+  getSmartTestTool,
+  SMART_TEST_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-test.js';
+import {
+  getSmartTypeCheckTool,
+  SMART_TYPECHECK_TOOL_DEFINITION,
+} from '../tools/build-systems/smart-typecheck.js';
+// System Operations tools
+import {
+  getSmartCron,
+  SMART_CRON_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-cron.js';
+import {
+  getSmartUser,
+  SMART_USER_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-user.js';
+
+// File operations tools
+import {
+  getSmartDiffTool,
+  SMART_DIFF_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-diff.js';
+import {
+  getSmartBranchTool,
+  SMART_BRANCH_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-branch.js';
+import {
+  getSmartMergeTool,
+  SMART_MERGE_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-merge.js';
+import {
+  getSmartStatusTool,
+  SMART_STATUS_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-status.js';
+import {
+  getSmartLogTool,
+  SMART_LOG_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-log.js';
+import {
+  runSmartRead,
+  SMART_READ_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-read.js';
+import {
+  runSmartWrite,
+  SMART_WRITE_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-write.js';
+import {
+  runSmartEdit,
+  SMART_EDIT_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-edit.js';
+import {
+  runSmartGlob,
+  SMART_GLOB_TOOL_DEFINITION,
+} from '../tools/file-operations/smart-glob.js';
+import {
+  runSmartGrep,
+  SMART_GREP_TOOL_DEFINITION,
+  // Analytics tools
+} from '../tools/file-operations/smart-grep.js';
+import {
+  parseSessionLog,
+  resolveSessionLogPath,
+} from './session-log-parser.js';
+import fs from 'fs';
+import { createHash } from 'crypto';
+import { isValidSessionId } from '../utils/session-id.js';
+import path from 'path';
+import os from 'os';
+
+// Type imports for file-operations tools
+import type { SmartDiffOptions } from '../tools/file-operations/smart-diff.js';
+import type { SmartBranchOptions } from '../tools/file-operations/smart-branch.js';
+import type { SmartMergeOptions } from '../tools/file-operations/smart-merge.js';
+import type { SmartStatusOptions } from '../tools/file-operations/smart-status.js';
+import type { SmartLogOptions } from '../tools/file-operations/smart-log.js';
+
+// Configuration constants
+const COMPRESSION_CONFIG = {
+  MIN_SIZE_THRESHOLD: 500, // bytes - minimum size before attempting compression
+} as const;
+
+// Initialize core modules
+const cache = new CacheEngine();
+const tokenCounter = new TokenCounter();
+const compression = new CompressionEngine();
+const metrics = new MetricsCollector();
+
+const analyticsManager = new AnalyticsManager();
+
+/**
+ * Helper function to cache uncompressed text
+ * Used when compression is skipped (file too small or compression doesn't help)
+ */
+function cacheUncompressed(key: string, text: string, size: number): void {
+  // Store uncompressed text with size=0 for compressedSize to indicate no compression
+  cache.set(key, text, size, 0);
+}
+
+// Initialize advanced caching tools
+const predictiveCache = getPredictiveCacheTool(cache, tokenCounter, metrics);
+const cacheWarmup = getCacheWarmupTool(cache, tokenCounter, metrics);
+// Code analysis tool instances
+const smartAstGrep = getSmartAstGrepTool(cache, tokenCounter, metrics);
+const cacheAnalytics = getCacheAnalyticsTool(cache, tokenCounter, metrics);
+const cacheInvalidation = getCacheInvalidationTool(
+  cache,
+  tokenCounter,
+  metrics
+);
+const cacheOptimizer = getCacheOptimizerTool(cache, tokenCounter, metrics);
+const cachePartition = getCachePartitionTool(cache, tokenCounter, metrics);
+const cacheReplication = getCacheReplicationTool(cache, tokenCounter, metrics);
+const smartCache = getSmartCacheTool(cache, tokenCounter, metrics);
+
+// Initialize API & Database tools
+const smartSql = getSmartSql(cache, tokenCounter, metrics);
+const smartSchema = getSmartSchema(cache, tokenCounter, metrics);
+const smartApiFetch = getSmartApiFetch(cache, tokenCounter, metrics);
+const smartCacheApi = getSmartCacheApi(cache, tokenCounter, metrics);
+const smartDatabase = getSmartDatabase(cache, tokenCounter, metrics);
+const smartGraphQL = getSmartGraphQL(cache, tokenCounter, metrics);
+const smartMigration = getSmartMigration(cache, tokenCounter, metrics);
+const smartOrm = getSmartOrm(cache, tokenCounter, metrics);
+const smartRest = getSmartRest(cache, tokenCounter, metrics);
+const smartWebSocket = getSmartWebSocket(cache, tokenCounter, metrics);
+
+// Initialize monitoring tools
+const alertManager = getAlertManager(cache, tokenCounter, metrics);
+const metricCollectorTool = getMetricCollector(cache, tokenCounter, metrics);
+const monitoringIntegration = getMonitoringIntegration(
+  cache,
+  tokenCounter,
+  metrics
+);
+const customWidget = getCustomWidget(cache, tokenCounter, metrics);
+const dataVisualizer = getDataVisualizer(cache, tokenCounter, metrics);
+const healthMonitor = getHealthMonitor(cache, tokenCounter, metrics);
+const logDashboard = getLogDashboard(cache, tokenCounter, metrics);
+
+// Initialize Build Systems tools
+const smartProcesses = getSmartProcessesTool(cache, tokenCounter, metrics);
+const smartNetwork = getSmartNetwork(cache);
+const smartLogs = getSmartLogs(cache);
+const smartLint = getSmartLintTool(cache, tokenCounter, metrics);
+const smartInstall = getSmartInstall(cache);
+const smartDocker = getSmartDocker(cache);
+const smartBuild = getSmartBuildTool(cache, tokenCounter, metrics);
+const smartSystemMetrics = getSmartSystemMetrics(cache);
+const smartTest = getSmartTestTool(cache, tokenCounter, metrics);
+const smartTypeCheck = getSmartTypeCheckTool(cache, tokenCounter, metrics);
+
+// Initialize System Operations tools
+const smartCron = getSmartCron(cache, tokenCounter, metrics);
+const smartUser = getSmartUser(cache, tokenCounter, metrics);
+
+const smartDiff = getSmartDiffTool(cache, tokenCounter, metrics);
+const smartBranch = getSmartBranchTool(cache, tokenCounter, metrics);
+const smartMerge = getSmartMergeTool(cache, tokenCounter, metrics);
+const smartStatus = getSmartStatusTool(cache, tokenCounter, metrics);
+const smartLog = getSmartLogTool(cache, tokenCounter, metrics);
+
+// Initialize Analytics tools
+const getHookAnalytics = getHookAnalyticsTool(analyticsManager);
+const getActionAnalytics = getActionAnalyticsTool(analyticsManager);
+const getMcpServerAnalytics = getMcpServerAnalyticsTool(analyticsManager);
+const exportAnalytics = getExportAnalyticsTool(analyticsManager);
+const getOptimizationReport = getOptimizationReportTool(analyticsManager);
+const optimizationStorage = new OptimizationStorageTool();
+
+// #120: load user config (creates ~/.token-optimizer/config.json with
+// defaults on first run) and derive session-level knobs.
+const configManager = new ConfigManager();
+const optimizationConfig = configManager.getOptimizationConfig();
+const sessionTokenizer = TokenizerFactory.createFromEnv();
+const modelLimit =
+  configManager.getModelTokenLimit(sessionTokenizer.modelName) ??
+  // Fall back to an aggressive default for unknown models.
+  128000;
+const chatDefaultMaxTokens =
+  optimizationConfig.chatCompression.tokenLimit ??
+  Math.floor(modelLimit * optimizationConfig.compressionTokenThreshold);
+
+const sessionManager = new SessionManager({
+  persistencePath: path.join(os.homedir(), '.token-optimizer', 'sessions.json'),
+  tokenizer: sessionTokenizer,
+  defaultMaxTokens: chatDefaultMaxTokens,
+  summarizer: createSummarizerFromEnv(),
+});
+const contextDelta = new ContextDeltaTool(sessionManager);
+
+// #125: memoize the expensive read-only file-operation tools with an
+// LRU bounded by the user's cacheSettings. The memoRegistry hook lets
+// the cleanup handler below prune them all at once.
+//
+// A MEMO KEYED ONLY ON ARGUMENTS SERVES CONTENT THAT NO LONGER EXISTS.
+//
+// These were keyed on the arguments alone, with a one-hour TTL. Measured
+// live: read a file, edit it, read it again with the same arguments, and the
+// PRE-EDIT content came back -- for an hour. Read-edit-read is the most common
+// sequence there is, so this was reachable in nearly every session, and a tool
+// whose whole job is reporting file contents cannot report contents the file
+// does not have.
+//
+// The tools' own caches were never the problem: those hash the file. The
+// defect was this second layer in front of them, which had no idea the
+// filesystem had moved.
+const cacheSettings = optimizationConfig.cacheSettings;
+
+/**
+ * A cheap, exact stamp of the file a read is about.
+ *
+ * One stat: size and mtime, at nanosecond resolution where the platform
+ * offers it. Any edit changes at least one of them, so an edited file yields a
+ * different memo key and the entry is recomputed rather than replayed. A
+ * missing file stamps as 'absent', so creating it is a change too.
+ */
+function fileStamp(filePath: unknown): string {
+  if (typeof filePath !== 'string' || !filePath) return 'no-path';
+  try {
+    const st = fs.statSync(filePath);
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return 'absent';
+  }
+}
+
+const memoizedSmartRead = lruMemoize(runSmartRead, {
+  name: 'smart_read',
+  maxSize: cacheSettings.maxSize,
+  ttlMs: cacheSettings.ttlSeconds * 1000,
+  // The file's identity is part of the question, not just its path.
+  keyFn: (args) =>
+    createHash('sha256')
+      .update(JSON.stringify(args))
+      .update(' ')
+      .update(fileStamp(args[0]))
+      .digest('hex'),
+});
+
+// smart_grep and smart_glob SCAN A TREE, and no single stat describes a tree:
+// a file added three directories down changes the answer while every stat we
+// could cheaply take stays identical. Both were verified serving pre-creation
+// results after a new matching file appeared.
+//
+// So they are not memoized here. Each already caches internally against the
+// content it read, which is the layer that can actually tell when it is stale;
+// this one could only guess, and guessed wrong. Re-scanning costs a directory
+// walk. Reporting that a file does not exist costs the user the afternoon.
+const memoizedSmartGrep = runSmartGrep;
+const memoizedSmartGlob = runSmartGlob;
+
+// Periodic prune + stats log. Runs every 5 minutes; unref so it doesn't
+// keep the process alive on its own.
+const MEMO_PRUNE_INTERVAL_MS = 5 * 60 * 1000;
+const memoPruneTimer = setInterval(() => {
+  const removed = memoRegistry.pruneAll();
+  if (removed > 0) {
+    console.error(
+      `[memo] pruned ${removed} expired cache entries; stats: ${JSON.stringify(memoRegistry.stats())}`
+    );
+  }
+}, MEMO_PRUNE_INTERVAL_MS);
+if (typeof memoPruneTimer.unref === 'function') {
+  memoPruneTimer.unref();
+}
+
+// Create MCP server
+const server = new Server(
+  {
+    name: 'token-optimizer-mcp',
+    version: '0.2.0',
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Define tools
+/**
+ * Every tool this server advertises.
+ *
+ * Named, rather than inline in the handler, so ONE list is both what the
+ * client is shown and what requests are validated against. When they were
+ * two things, a tool could declare `required: [ormCode, ormType]` in the
+ * schema a caller reads while its Zod entry was the permissive
+ * GenericToolOptionsSchema -- and 43 of them use that. Omitting a required
+ * field then reached the tool body, where smart_orm answered:
+ *
+ *     The "data" argument must be of type string or an instance of Buffer,
+ *     TypedArray, or DataView. Received undefined
+ *
+ * which tells the caller nothing about the field they left out.
+ */
+const TOOL_DEFINITIONS = [
+      SMART_COMPLEXITY_TOOL_DEFINITION,
+      SMART_DEPENDENCIES_TOOL_DEFINITION,
+      SMART_EXPORTS_TOOL_DEFINITION,
+      SMART_IMPORTS_TOOL_DEFINITION,
+      SMART_REFACTOR_TOOL_DEFINITION,
+      SMART_SECURITY_TOOL_DEFINITION,
+      SMART_SYMBOLS_TOOL_DEFINITION,
+      SMART_TYPESCRIPT_TOOL_DEFINITION,
+      SMART_CONFIG_READ_TOOL_DEFINITION,
+      SMART_ENV_TOOL_DEFINITION,
+      SMART_PACKAGE_JSON_TOOL_DEFINITION,
+      SMART_TSCONFIG_TOOL_DEFINITION,
+      SMART_PRETTY_TOOL_DEFINITION,
+      SMART_PROCESS_TOOL_DEFINITION,
+      SMART_SERVICE_TOOL_DEFINITION,
+      AUDIT_TOOL,
+      DOCTOR_TOOL,
+      FLEET_TOOL,
+      EXPAND_TOOL,
+      WASTE_TOOL,
+      CACHE_TOOL,
+      ROUTING_TOOL,
+      {
+        name: 'optimize_text',
+        description:
+          'Compress and cache text to reduce token usage. Returns compressed version and saves to cache for future use.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            text: {
+              type: 'string',
+              description: 'Text to optimize',
+            },
+            key: {
+              type: 'string',
+              description: 'Cache key for storing the optimized text',
+            },
+            quality: {
+              type: 'number',
+              description: 'Compression quality (0-11, default 11)',
+              minimum: 0,
+              maximum: 11,
+            },
+          },
+          required: ['text', 'key'],
+        },
+      },
+      {
+        name: 'get_cached',
+        description:
+          'Retrieve previously cached and optimized text. Returns the original text if found in cache.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            key: {
+              type: 'string',
+              description: 'Cache key to retrieve',
+            },
+          },
+          required: ['key'],
+        },
+      },
+      {
+        name: 'count_tokens',
+        description:
+          'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            text: {
+              type: 'string',
+              description: 'Text to count tokens for',
+            },
+            modelName: {
+              type: 'string',
+              description:
+                'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
+            },
+          },
+          required: ['text'],
+        },
+      },
+      {
+        name: 'compress_text',
+        description:
+          'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            text: {
+              type: 'string',
+              description: 'Text to compress',
+            },
+            quality: {
+              type: 'number',
+              description: 'Compression quality (0-11, default 11)',
+              minimum: 0,
+              maximum: 11,
+            },
+          },
+          required: ['text'],
+        },
+      },
+      {
+        name: 'decompress_text',
+        description: 'Decompress base64-encoded Brotli-compressed text.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            compressed: {
+              type: 'string',
+              description: 'Base64-encoded compressed text',
+            },
+          },
+          required: ['compressed'],
+        },
+      },
+      {
+        name: 'get_cache_stats',
+        description:
+          'Get cache statistics including hit rate, compression ratio, and token savings.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'clear_cache',
+        description: 'Clear all cached data. Use with caution.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            confirm: {
+              type: 'boolean',
+              description: 'Must be true to confirm cache clearing',
+            },
+          },
+          required: ['confirm'],
+        },
+      },
+      {
+        name: 'analyze_optimization',
+        description:
+          'Analyze text and provide recommendations for optimization including compression benefits and token savings.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            text: {
+              type: 'string',
+              description: 'Text to analyze',
+            },
+          },
+          required: ['text'],
+        },
+      },
+      {
+        name: 'get_session_stats',
+        description:
+          'Get comprehensive statistics from the PowerShell wrapper session tracker including system reminders, tool operations, and total tokens with accurate tiktoken-based counting.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: {
+              type: 'string',
+              description:
+                'Optional session ID to query. If not provided, uses current session.',
+            },
+          },
+        },
+      },
+      {
+        name: 'optimize_session',
+        description:
+          'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sessionId: {
+              type: 'string',
+              description:
+                'Optional session ID to optimize. If not provided, uses the current active session.',
+            },
+            min_token_threshold: {
+              type: 'number',
+              description:
+                'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+            },
+          },
+        },
+      },
+      // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
+      // This tool (analyze_project_tokens) is a new addition to the MCP server
+      {
+        name: 'analyze_project_tokens',
+        description:
+          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log-*.jsonl files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectPath: {
+              type: 'string',
+              description:
+                'Path to the project directory. If not provided, uses the hooks data directory.',
+            },
+            startDate: {
+              type: 'string',
+              format: 'date',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+              description: 'Optional start date filter (YYYY-MM-DD format).',
+            },
+            endDate: {
+              type: 'string',
+              format: 'date',
+              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+              description: 'Optional end date filter (YYYY-MM-DD format).',
+            },
+            costPerMillionTokens: {
+              type: 'number',
+              description:
+                'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
+              default: 30,
+              exclusiveMinimum: 0,
+            },
+          },
+        },
+      },
+      PREDICTIVE_CACHE_TOOL_DEFINITION,
+      CACHE_WARMUP_TOOL_DEFINITION,
+      // Code analysis tools
+      SMART_AST_GREP_TOOL_DEFINITION,
+      CACHE_ANALYTICS_TOOL_DEFINITION,
+      CACHE_BENCHMARK_TOOL_DEFINITION,
+      CACHE_COMPRESSION_TOOL_DEFINITION,
+      CACHE_INVALIDATION_TOOL_DEFINITION,
+      CACHE_OPTIMIZER_TOOL_DEFINITION,
+      CACHE_PARTITION_TOOL_DEFINITION,
+      CACHE_REPLICATION_TOOL_DEFINITION,
+      SMART_CACHE_TOOL_DEFINITION,
+      // API & Database tools
+      SMART_SQL_TOOL_DEFINITION,
+      SMART_SCHEMA_TOOL_DEFINITION,
+      SMART_API_FETCH_TOOL_DEFINITION,
+      SMART_CACHE_API_TOOL_DEFINITION,
+      SMART_DATABASE_TOOL_DEFINITION,
+      SMART_GRAPHQL_TOOL_DEFINITION,
+      SMART_MIGRATION_TOOL_DEFINITION,
+      SMART_ORM_TOOL_DEFINITION,
+      SMART_REST_TOOL_DEFINITION,
+      SMART_WEBSOCKET_TOOL_DEFINITION,
+      // Dashboard & Monitoring tools
+      ALERT_MANAGER_TOOL_DEFINITION,
+      METRIC_COLLECTOR_TOOL_DEFINITION,
+      MONITORING_INTEGRATION_TOOL_DEFINITION,
+      CUSTOM_WIDGET_TOOL_DEFINITION,
+      DATA_VISUALIZER_TOOL_DEFINITION,
+      HEALTH_MONITOR_TOOL_DEFINITION,
+      LOG_DASHBOARD_TOOL_DEFINITION,
+      // Intelligence tools
+      INTELLIGENTASSISTANTTOOL,
+      NATURALLANGUAGEQUERYTOOL,
+      PATTERNRECOGNITIONTOOL,
+      PREDICTIVEANALYTICSTOOL,
+      RECOMMENDATIONENGINETOOL,
+      SMARTSUMMARIZATIONTOOL,
+      // Build Systems tools
+      SMART_PROCESSES_TOOL_DEFINITION,
+      SMART_NETWORK_TOOL_DEFINITION,
+      SMART_LOGS_TOOL_DEFINITION,
+      SMART_LINT_TOOL_DEFINITION,
+      SMART_INSTALL_TOOL_DEFINITION,
+      SMART_DOCKER_TOOL_DEFINITION,
+      SMART_BUILD_TOOL_DEFINITION,
+      SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+      SMART_TEST_TOOL_DEFINITION,
+      SMART_TYPECHECK_TOOL_DEFINITION,
+      // System Operations tools
+      SMART_CRON_TOOL_DEFINITION,
+      SMART_USER_TOOL_DEFINITION,
+      // File operations tools
+
+      SMART_DIFF_TOOL_DEFINITION,
+      SMART_BRANCH_TOOL_DEFINITION,
+      SMART_MERGE_TOOL_DEFINITION,
+      SMART_STATUS_TOOL_DEFINITION,
+      SMART_LOG_TOOL_DEFINITION,
+      SMART_READ_TOOL_DEFINITION,
+      SMART_WRITE_TOOL_DEFINITION,
+      SMART_EDIT_TOOL_DEFINITION,
+      SMART_GLOB_TOOL_DEFINITION,
+      SMART_GREP_TOOL_DEFINITION,
+      // Analytics tools
+      GET_HOOK_ANALYTICS_TOOL_DEFINITION,
+      GET_ACTION_ANALYTICS_TOOL_DEFINITION,
+      GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
+      EXPORT_ANALYTICS_TOOL_DEFINITION,
+      GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
+      OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+      CONTEXT_DELTA_TOOL_DEFINITION,
+];
+
+/**
+ * The fields each tool's own published schema says are mandatory.
+ *
+ * Derived from TOOL_DEFINITIONS, so it cannot drift from what callers read.
+ */
+const REQUIRED_FIELDS = new Map<string, string[]>(
+  TOOL_DEFINITIONS.map((t) => [
+    (t as { name: string }).name,
+    ((t as { inputSchema?: { required?: string[] } }).inputSchema?.required ?? []),
+  ])
+);
+
+/**
+ * Rejects a call that omits a field the tool advertises as required.
+ *
+ * Named the missing fields, so the answer is actionable -- which is the
+ * whole difference from the internal TypeError this replaces.
+ */
+function assertRequiredFields(name: string, args: unknown): void {
+  const required = REQUIRED_FIELDS.get(name);
+  if (!required?.length) return;
+
+  const provided = (args ?? {}) as Record<string, unknown>;
+  const missing = required.filter(
+    (f) => provided[f] === undefined || provided[f] === null
+  );
+  if (missing.length) {
+    throw new Error(
+      `${name} requires ${missing.join(", ")}. ` +
+        `Required: ${required.join(", ")}.`
+    );
+  }
+}
+
+// Define tools
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: TOOL_DEFINITIONS,
+    ],
+  };
+});
+
+// Handle tool calls
+async function handleToolCall(request: {
+  params: { name: string; arguments?: unknown };
+}) {
+  const { name } = request.params;
+
+  // Validate tool arguments using Zod schemas. The validated (and, for tightened
+  // schemas, sanitized) result REPLACES the raw args so every downstream tool
+  // case operates on validated input — closing the prior gap where the handler
+  // computed `validatedArgs` but then routed the unvalidated raw `args`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let args: any = request.params.arguments;
+
+  // A field the published schema calls required must actually be required.
+  // 43 tools share the permissive GenericToolOptionsSchema, so without this
+  // their `required` arrays were documentation only.
+  assertRequiredFields(name, args);
+
+  try {
+    args = validateToolArgs(name, args || {});
+  } catch (validationError) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            error:
+              validationError instanceof Error
+                ? validationError.message
+                : String(validationError),
+          }),
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  try {
+    switch (name) {
+      case 'optimize_text': {
+        const { text, key, quality } = args as {
+          text: string;
+          key: string;
+          quality?: number;
+        };
+
+        // Count original tokens
+        const originalCount = tokenCounter.count(text);
+        const originalSize = Buffer.byteLength(text, 'utf8');
+
+        // Minimum size threshold: don't compress small files
+        if (originalSize < COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD) {
+          // Cache uncompressed for small files
+          cacheUncompressed(key, text, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `File too small (${originalSize} bytes < ${COMPRESSION_CONFIG.MIN_SIZE_THRESHOLD} bytes threshold)`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
+        // Compress text
+        const compressionResult = compression.compressToBase64(text, {
+          quality,
+        });
+
+        // Count compressed tokens
+        const compressedCount = tokenCounter.count(
+          compressionResult.compressed
+        );
+
+        // Check if compression actually reduces tokens
+        if (compressedCount.tokens >= originalCount.tokens) {
+          // Compression doesn't help with tokens, cache uncompressed
+          cacheUncompressed(key, text, originalSize);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    key,
+                    originalTokens: originalCount.tokens,
+                    compressedTokens: originalCount.tokens,
+                    tokensSaved: 0,
+                    percentSaved: 0,
+                    originalSize,
+                    compressedSize: originalSize,
+                    cached: true,
+                    compressionSkipped: true,
+                    reason: `Compression would increase tokens (${originalCount.tokens} → ${compressedCount.tokens})`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+
+        // Compression helps! Cache the compressed version
+        cache.set(
+          key,
+          compressionResult.compressed,
+          compressionResult.compressedSize,
+          compressionResult.originalSize
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  success: true,
+                  key,
+                  originalTokens: originalCount.tokens,
+                  compressedTokens: compressedCount.tokens,
+                  tokensSaved: originalCount.tokens - compressedCount.tokens,
+                  percentSaved: compressionResult.percentSaved,
+                  originalSize: compressionResult.originalSize,
+                  compressedSize: compressionResult.compressedSize,
+                  cached: true,
+                  compressionUsed: true,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case 'get_cached': {
+        const { key } = args as { key: string };
+
+        const cachedEntry = cache.getWithMetadata(key);
+        if (!cachedEntry) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: 'Cache miss - key not found',
+                  key,
+                }),
+              },
+            ],
+          };
+        }
+
+        // DO NOT INFER THE FORMAT FROM A SIZE.
+        //
+        // This decided "was it compressed?" from `compressedSize === 0`. But
+        // the writers disagree about that field: smart_cache stores PLAIN text
+        // and passes `value.length` as the compressed size, so the flag says
+        // "compressed" for content that never was. get_cached then tried to
+        // gunzip plain text and returned a bare "Decompression failed" for an
+        // entry written moments earlier by a sibling tool.
+        //
+        // The content itself is the only reliable evidence. Decompressing is
+        // attempted, and content that is not compressed is returned as it was
+        // stored -- which is also what makes this robust to a THIRD writer with
+        // its own convention.
+        let text: string;
+        try {
+          text = compression.decompressFromBase64(cachedEntry.content);
+        } catch {
+          text = cachedEntry.content;
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                key,
+                text,
+                fromCache: true,
+              }),
+            },
+          ],
+        };
+      }
+
+      case 'count_tokens': {
+        const { text, modelName } = args as {
+          text: string;
+          modelName?: string;
+        };
+        const counter = modelName ? new TokenCounter(modelName) : tokenCounter;
+        try {
+          const result = modelName
+            ? await counter.countAsync(text)
+            : counter.count(text);
+          // Return the full result JSON under a dedicated `metadata`
+          // key while the primary `text` payload stays the scalar token
+          // count string — preserves the integer-parse contract that
+          // the PowerShell orchestrator relies on
+          // (e.g. token-optimizer-orchestrator.ps1 L931/1910/2092 cast
+          // `content[0].text -as [int]`) and still surfaces the richer
+          // object for TS callers.
+          return {
+            content: [
+              {
+                type: 'text',
+                text: String(result.tokens),
+              },
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  { ...result, model: modelName ?? counter.model },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } finally {
+          // Always free one-shot counters — even when countAsync throws,
+          // leaving the tiktoken encoder allocated was leaking native
+          // resources.
+          if (modelName) {
+            counter.free();
+          }
+        }
+      }
+
+      case 'compress_text': {
+        const { text, quality } = args as { text: string; quality?: number };
+        const result = compression.compressToBase64(text, { quality });
+
+        // Brotli+base64 reduces BYTES (~50%) but base64 tokenizes poorly, so
+        // the output usually has MORE LLM tokens than the input. Surface both
+        // token counts and a warning so callers don't feed the result back
+        // into a model context expecting savings — this tool is for at-rest
+        // storage, not for shrinking context.
+        const originalTokens = tokenCounter.count(text).tokens;
+        const compressedTokens = tokenCounter.count(result.compressed).tokens;
+        const increasesTokens = compressedTokens >= originalTokens;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  ...result,
+                  originalTokens,
+                  compressedTokens,
+                  increasesTokens,
+                  ...(increasesTokens
+                    ? {
+                        warning:
+                          'Base64 output has MORE LLM tokens than the input. This tool reduces BYTES for at-rest storage/caching; do NOT inject the result into a model context expecting token savings (use optimize_text with a cache key for that).',
+                      }
+                    : {}),
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case 'decompress_text': {
+        const { compressed } = args as { compressed: string };
+        const text = compression.decompressFromBase64(compressed);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ text }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_cache_stats': {
+        const stats = cache.getStats();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(stats, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'clear_cache': {
+        const { confirm } = args as { confirm: boolean };
+
+        if (!confirm) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: 'Must set confirm=true to clear cache',
+                }),
+              },
+            ],
+          };
+        }
+
+        // CLEAR EVERYTHING THAT SERVES A READ, not just the persistent store.
+        //
+        // `cache.clear()` empties the SQLite store. smart_cache keeps its own
+        // L1/L2/L3 tiers in memory in front of it, and those survived -- so a
+        // user who cleared the cache kept being served the very entries they
+        // had just cleared. Measured: set a key, clear, read it back, and the
+        // value was still there while the call reported "Cache cleared
+        // successfully".
+        //
+        // smart_cache already had a correct clear that empties all three tiers
+        // AND the store; it simply was not on this path.
+        cache.clear();
+        await smartCache.run({ operation: 'clear' });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                message: 'Cache cleared successfully',
+              }),
+            },
+          ],
+        };
+      }
+
+      case 'analyze_optimization': {
+        const { text } = args as { text: string };
+
+        // Get token count
+        const tokenResult = tokenCounter.count(text);
+
+        // Get compression stats
+        const compStats = compression.getCompressionStats(text);
+
+        // Estimate potential savings
+        const compressedTokens = tokenCounter.count(
+          compression.compressToBase64(text).compressed
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  tokens: {
+                    current: tokenResult.tokens,
+                    afterCompression: compressedTokens.tokens,
+                    saved: tokenResult.tokens - compressedTokens.tokens,
+                    percentSaved:
+                      ((tokenResult.tokens - compressedTokens.tokens) /
+                        tokenResult.tokens) *
+                      100,
+                  },
+                  size: {
+                    current: compStats.uncompressed,
+                    compressed: compStats.compressed,
+                    ratio: compStats.ratio,
+                    percentSaved: compStats.percentSaved,
+                  },
+                  recommendations: {
+                    shouldCompress: compStats.recommended,
+                    reason: compStats.recommended
+                      ? 'Compression will provide significant token savings'
+                      : 'Text is too small or compression benefit is minimal',
+                  },
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+
+      case 'get_session_stats': {
+        const { sessionId } = args as { sessionId?: string };
+
+        try {
+          // Path to hooks data directory
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
+
+          // AN EXPLICIT sessionId MUST NOT NEED AN ACTIVE SESSION.
+          //
+          // This read current-session.txt first and returned "No active session
+          // found" when it was absent -- before ever looking at the sessionId
+          // it had been handed. So the one documented parameter was unusable
+          // exactly when it mattered: asking about a session that has ENDED.
+          // The file is only needed to answer "which session do you mean", so
+          // it is only consulted when the caller did not say.
+          const sessionFilePath = path.join(
+            hooksDataPath,
+            'current-session.txt'
+          );
+
+          let targetSessionId = sessionId;
+          if (!targetSessionId) {
+            if (!fs.existsSync(sessionFilePath)) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      success: false,
+                      error:
+                        'No active session found, and no sessionId was given.',
+                      sessionFilePath,
+                    }),
+                  },
+                ],
+              };
+            }
+
+            // Strip BOM and parse JSON
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^﻿/, '');
+            targetSessionId = JSON.parse(sessionContent).sessionId;
+          }
+
+          if (!targetSessionId || typeof targetSessionId !== 'string') {
+            throw new Error(
+              'No sessionId given and none recorded in current-session.txt.'
+            );
+          }
+
+          // Read the session log, in whichever format it exists. This used to
+          // build `session-log-<id>.jsonl` by hand and fail when it was absent
+          // -- which was always, since the hooks write operations-<id>.csv.
+          const logFilePath = resolveSessionLogPath(
+            hooksDataPath,
+            targetSessionId
+          );
+
+          // Error handling: Throw to let MCP wrap errors consistently
+          if (!logFilePath) {
+            throw new Error(
+              `No session log found for session ${targetSessionId} in ${hooksDataPath}`
+            );
+          }
+
+          // Parse using shared utility (now async with streaming)
+          const { operations, toolTokens, systemReminderTokens } =
+            await parseSessionLog(logFilePath);
+
+          // Calculate statistics
+          const totalTokens = systemReminderTokens + toolTokens;
+          const systemReminderPercent =
+            totalTokens > 0 ? (systemReminderTokens / totalTokens) * 100 : 0;
+          const toolPercent =
+            totalTokens > 0 ? (toolTokens / totalTokens) * 100 : 0;
+
+          // Group operations by tool
+          const toolBreakdown: Record<
+            string,
+            { count: number; tokens: number }
+          > = {};
+          for (const op of operations) {
+            if (!toolBreakdown[op.toolName]) {
+              toolBreakdown[op.toolName] = { count: 0, tokens: 0 };
+            }
+            toolBreakdown[op.toolName].count++;
+            toolBreakdown[op.toolName].tokens += op.tokens;
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    sessionId: targetSessionId,
+                    sessionInfo: {
+                      // Taken from the log itself rather than from
+                      // current-session.txt, which only ever describes the
+                      // session running right now and says nothing about a
+                      // past one the caller asked about by id.
+                      startTime: operations[0]?.timestamp ?? '',
+                      lastActivity:
+                        operations[operations.length - 1]?.timestamp ?? '',
+                      totalOperations: operations.length,
+                    },
+                    tokens: {
+                      total: totalTokens,
+                      systemReminders: systemReminderTokens,
+                      tools: toolTokens,
+                      breakdown: {
+                        systemReminders: {
+                          tokens: systemReminderTokens,
+                          percent: systemReminderPercent,
+                        },
+                        tools: {
+                          tokens: toolTokens,
+                          percent: toolPercent,
+                        },
+                      },
+                    },
+                    operations: {
+                      total: operations.length,
+                      byTool: toolBreakdown,
+                    },
+                    tracking: {
+                      method: 'tiktoken-based (accurate)',
+                      note: 'System reminders tracked with tiktoken via Node.js helper, tool costs use fixed estimates',
+                    },
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'optimize_session': {
+        const { sessionId, min_token_threshold = 30 } = args as {
+          sessionId?: string;
+          min_token_threshold?: number;
+        };
+
+        try {
+          // --- 1. Identify Target Session ---
+          const hooksDataPath = path.join(
+            os.homedir(),
+            '.claude-global',
+            'hooks',
+            'data'
+          );
+          let targetSessionId = sessionId;
+
+          if (!targetSessionId) {
+            const sessionFilePath = path.join(
+              hooksDataPath,
+              'current-session.txt'
+            );
+            if (!fs.existsSync(sessionFilePath)) {
+              throw new Error('No active session found to optimize.');
+            }
+            // Strip BOM and parse JSON
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^\uFEFF/, '');
+            const sessionData = JSON.parse(sessionContent);
+            targetSessionId = sessionData.sessionId;
+
+            if (!targetSessionId || typeof targetSessionId !== 'string') {
+              throw new Error('Invalid sessionId in current-session.txt');
+            }
+          }
+
+          // --- 2. Read the session log (validated) ---
+          // SECURITY: strict allowlist, kept in sync with SESSION_ID_RE in
+          // web-server.ts — no dots or path separators, so `..` traversal
+          // sequences are rejected before the path is built.
+          // Same allowlist the dashboard uses -- one definition, not two
+          // copies kept in step by comment. See utils/session-id.ts.
+          if (!isValidSessionId(targetSessionId)) {
+            throw new Error('Invalid sessionId format.');
+          }
+          // Resolves .jsonl or the operations-<id>.csv the hooks actually
+          // write; the containment check below still runs on whatever it picks.
+          const logFilePath = resolveSessionLogPath(
+            hooksDataPath,
+            targetSessionId
+          );
+          if (!logFilePath) {
+            throw new Error(
+              `No session log found for session ${targetSessionId} in ${hooksDataPath}`
+            );
+          }
+          // SECURITY: Ensure file path is contained within hooksDataPath
+          const baseReal = fs.realpathSync(hooksDataPath);
+          const fileReal = fs.realpathSync(logFilePath);
+          const rel0 = path.relative(baseReal, fileReal);
+          if (rel0.startsWith('..') || path.isAbsolute(rel0)) {
+            throw new Error(
+              'Resolved session log path escapes hooks data directory.'
+            );
+          }
+
+          // Parse using shared utility
+          const { operations } = await parseSessionLog(logFilePath);
+
+          // --- 3. Filter and Process Operations ---
+          let originalTokens = 0;
+          let compressedTokens = 0;
+          let operationsCompressed = 0;
+          const fileOpsToCompress = new Set<string>();
+
+          // DEBUG: Track filtering and security logic
+          const debugInfo = {
+            totalOperations: operations.length,
+            securityRejected: 0,
+          };
+
+          const fileToolNames = ['Read', 'Write', 'Edit'];
+
+          // SECURITY: Define secure base directory for file access
+          // Resolve to absolute path to prevent bypasses
+          const secureBaseDir = path.resolve(os.homedir());
+
+          for (const op of operations) {
+            const toolName = op.toolName;
+            const tokens = op.tokens;
+            let metadata = op.metadata;
+
+            // Strip surrounding quotes from file path
+            metadata = metadata.trim().replace(/^"(.*)"$/, '$1');
+
+            if (
+              fileToolNames.includes(toolName) &&
+              tokens > min_token_threshold &&
+              metadata
+            ) {
+              // SECURITY FIX: Validate file path to prevent path traversal
+              // Resolve the file path to absolute path
+              const resolvedFilePath = path.resolve(metadata);
+
+              // Check if the resolved path is within the secure base directory using path.relative
+              const rel = path.relative(secureBaseDir, resolvedFilePath);
+              if (rel.startsWith('..') || path.isAbsolute(rel)) {
+                // Log security event for rejected access attempt
+                console.error(
+                  `[SECURITY] Path traversal attempt detected and blocked: ${metadata}`
+                );
+                console.error(`[SECURITY] Resolved path: ${resolvedFilePath}`);
+                console.error(
+                  `[SECURITY] Secure base directory: ${secureBaseDir}`
+                );
+                debugInfo.securityRejected++;
+                continue;
+              }
+
+              fileOpsToCompress.add(resolvedFilePath);
+            }
+          }
+
+          // --- 4. Batch Compress and Cache ---
+          for (const filePath of fileOpsToCompress) {
+            // Additional security check before file access
+            const resolvedPath = path.resolve(filePath);
+            // Use realpath when file exists to defeat symlink escapes
+            const baseReal = fs.realpathSync(secureBaseDir);
+            if (!fs.existsSync(resolvedPath)) continue;
+            const fileReal = fs.realpathSync(resolvedPath);
+            const rel = path.relative(baseReal, fileReal);
+            if (rel.startsWith('..') || path.isAbsolute(rel)) {
+              console.error(
+                `[SECURITY] Path traversal attempt in compression stage blocked: ${filePath}`
+              );
+              debugInfo.securityRejected++;
+              continue;
+            }
+
+            const fileContent = fs.readFileSync(filePath, 'utf-8');
+            if (!fileContent) continue;
+
+            const originalCount = tokenCounter.count(fileContent);
+            originalTokens += originalCount.tokens;
+
+            const compressionResult = compression.compressToBase64(fileContent);
+            const compressedCount = tokenCounter.count(
+              compressionResult.compressed
+            );
+
+            // Only cache if compression actually reduces tokens
+            if (compressedCount.tokens < originalCount.tokens) {
+              cache.set(
+                filePath,
+                compressionResult.compressed,
+                compressionResult.compressedSize,
+                compressionResult.originalSize
+              );
+              compressedTokens += compressedCount.tokens;
+              operationsCompressed++;
+            } else {
+              // Compression increased tokens, skip caching
+              compressedTokens += originalCount.tokens;
+            }
+          }
+
+          // --- 5. Return Summary with Debug Info ---
+          const tokensSaved = originalTokens - compressedTokens;
+          const percentSaved =
+            originalTokens > 0 ? (tokensSaved / originalTokens) * 100 : 0;
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    sessionId: targetSessionId,
+                    operationsAnalyzed: operations.length,
+                    operationsCompressed,
+                    tokens: {
+                      before: originalTokens,
+                      after: compressedTokens,
+                      saved: tokensSaved,
+                      percentSaved: percentSaved,
+                    },
+                    security: {
+                      pathsRejected: debugInfo.securityRejected,
+                      secureBaseDir: secureBaseDir,
+                    },
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'analyze_project_tokens': {
+        const { projectPath, startDate, endDate, costPerMillionTokens } =
+          args as {
+            projectPath?: string;
+            startDate?: string;
+            endDate?: string;
+            costPerMillionTokens?: number;
+          };
+
+        try {
+          // Validate costPerMillionTokens input
+          const validatedCost =
+            costPerMillionTokens != null &&
+            Number.isFinite(costPerMillionTokens) &&
+            costPerMillionTokens >= 0
+              ? costPerMillionTokens
+              : undefined;
+
+          // Use provided path or default to global hooks directory
+          const targetPath = projectPath ?? os.homedir();
+
+          const result = await analyzeProjectTokens({
+            projectPath: targetPath,
+            startDate,
+            endDate,
+            costPerMillionTokens: validatedCost,
+          });
+
+          // Generate token-optimized summary
+          const summary = {
+            success: true,
+            projectPath: result.projectPath,
+            analysisTimestamp: result.analysisTimestamp,
+            dateRange: result.dateRange,
+            summary: result.summary,
+            topContributingSessions: result.topContributingSessions
+              .slice(0, 5)
+              .map((s) => ({
+                sessionId: s.sessionId,
+                totalTokens: s.totalTokens,
+                duration: s.duration,
+                topTool: s.topTools[0]?.toolName || 'N/A',
+              })),
+            topTools: result.topTools.slice(0, 10).map((t) => ({
+              toolName: t.toolName,
+              totalTokens: t.totalTokens,
+              sessionCount: t.sessionCount,
+            })),
+            serverBreakdown: result.serverBreakdown,
+            costEstimation: result.costEstimation,
+            recommendations: result.recommendations,
+          };
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(summary),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      case 'predictive_cache': {
+        const options = args as any;
+        const result = await predictiveCache.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_warmup': {
+        const options = args as any;
+        const result = await cacheWarmup.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      // Code analysis tools
+      case 'smart_complexity': {
+        const result = await runSmartComplexity(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_dependencies': {
+        const result = await runSmartDependencies(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_exports': {
+        const result = await runSmartExports(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_imports': {
+        const result = await runSmartImports(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_refactor': {
+        const result = await runSmartRefactor(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_security': {
+        const result = await runSmartSecurity(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_symbols': {
+        const result = await runSmartSymbols(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_typescript': {
+        const result = await runSmartTypescript(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_config_read': {
+        // The ADVERTISED parameter is `path`, and the runner takes the file
+        // first and options second. Destructuring `filePath` here -- a name the
+        // published schema never mentions -- meant a caller passing exactly
+        // what the schema documents got "Config file not found: undefined".
+        const { path: configPath, ...configOptions } = args as any;
+        const result = await runSmartConfigRead(configPath, configOptions);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_env': {
+        const result = await runSmartEnv(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_package_json': {
+        const result = await runSmartPackageJson(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_tsconfig': {
+        const result = await runSmartTsconfig(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_pretty': {
+        const result = await runSmartPretty(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_process': {
+        const result = await runSmartProcess(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_service': {
+        const result = await runSmartService(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_ast_grep': {
+        const options = args as any;
+        const result = await smartAstGrep.grep(options.pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_analytics': {
+        const options = args as any;
+        const result = await cacheAnalytics.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_benchmark': {
+        const options = args as any;
+        const result = await runCacheBenchmark(
+          options,
+          cache,
+          tokenCounter,
+          metrics
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_compression': {
+        const options = args as any;
+        const result = await runCacheCompression(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_invalidation': {
+        const options = args as any;
+        const result = await cacheInvalidation.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_optimizer': {
+        const options = args as any;
+        const result = await cacheOptimizer.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_partition': {
+        const options = args as any;
+        const result = await cachePartition.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'cache_replication': {
+        const options = args as any;
+        const result = await cacheReplication.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache': {
+        const options = args as any;
+        const result = await smartCache.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_sql': {
+        const options = args as any;
+        const result = await smartSql.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_schema': {
+        const options = args as any;
+        const result = await smartSchema.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_api_fetch': {
+        const options = args as any;
+        const result = await smartApiFetch.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cache_api': {
+        const options = args as any;
+        const result = await smartCacheApi.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_database': {
+        const options = args as any;
+        const result = await smartDatabase.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_graphql': {
+        const options = args as any;
+        const result = await smartGraphQL.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_migration': {
+        const options = args as any;
+        const result = await smartMigration.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_orm': {
+        const options = args as any;
+        const result = await smartOrm.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_rest': {
+        const options = args as any;
+        const result = await smartRest.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_websocket': {
+        const options = args as any;
+        const result = await smartWebSocket.run(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_processes': {
+        const options = args as any;
+        const result = await smartProcesses.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_network': {
+        const options = args as any;
+        const result = await smartNetwork.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_logs': {
+        const options = args as any;
+        const result = await smartLogs.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_lint': {
+        const options = args as any;
+        const result = await smartLint.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_install': {
+        const options = args as any;
+        const result = await smartInstall.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_docker': {
+        const options = args as any;
+        const result = await smartDocker.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_build': {
+        const options = args as any;
+        const result = await smartBuild.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_system_metrics': {
+        const options = args as any;
+        const result = await smartSystemMetrics.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_test': {
+        const options = args as any;
+        const result = await smartTest.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_typecheck': {
+        const options = args as any;
+        const result = await smartTypeCheck.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_cron': {
+        const options = args as any;
+        const result = await smartCron.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_user': {
+        const options = args as any;
+        const result = await smartUser.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_diff': {
+        const options = args as SmartDiffOptions;
+        const result = await smartDiff.diff(options);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_branch': {
+        const options = args as SmartBranchOptions;
+        const result = await smartBranch.branch(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_merge': {
+        const options = args as SmartMergeOptions;
+        const result = await smartMerge.merge(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_status': {
+        const options = args as SmartStatusOptions;
+        const result = await smartStatus.status(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_log': {
+        const options = args as SmartLogOptions;
+        const result = await smartLog.log(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_read': {
+        const { path, ...options } = args as any;
+        const result = await memoizedSmartRead(path, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_write': {
+        const { path, content, ...options } = args as any;
+        const result = await runSmartWrite(path, content, options);
+        // Filesystem was mutated — drop every memoized read-only cache
+        // entry so the next smart_read/grep/glob reflects the new state
+        // instead of waiting for TTL expiry.
+        memoRegistry.clearAll();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_edit': {
+        const { path, operations, ...options } = args as any;
+        const result = await runSmartEdit(path, operations, options);
+        memoRegistry.clearAll();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_glob': {
+        const { pattern, ...options } = args as any;
+        const result = await memoizedSmartGlob(pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_grep': {
+        const { pattern, ...options } = args as any;
+        const result = await memoizedSmartGrep(pattern, options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'optimization_storage': {
+        const result = optimizationStorage.run(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'context_delta': {
+        const result = contextDelta.run(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'alert_manager': {
+        const options = args as any;
+        const result = await alertManager.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'metric_collector': {
+        const options = args as any;
+        const result = await metricCollectorTool.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'monitoring_integration': {
+        const options = args as any;
+        const result = await monitoringIntegration.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'custom_widget': {
+        const options = args as any;
+        const result = await customWidget.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'data_visualizer': {
+        const options = args as any;
+        const result = await dataVisualizer.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'health_monitor': {
+        const options = args as any;
+        const result = await healthMonitor.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'log_dashboard': {
+        const options = args as any;
+        const result = await logDashboard.run(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'intelligent-assistant': {
+        const options = args as any;
+        const result = await runIntelligentAssistant(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'natural-language-query': {
+        const options = args as any;
+        const result = await runNaturalLanguageQuery(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'pattern-recognition': {
+        const options = args as any;
+        const result = await runPatternRecognition(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'predictive-analytics': {
+        const options = args as any;
+        const result = await runPredictiveAnalytics(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'recommendation-engine': {
+        const options = args as any;
+        const result = await runRecommendationEngine(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart-summarization': {
+        const options = args as any;
+        const result = await runSmartSummarization(options);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_hook_analytics': {
+        const result = await getHookAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      case 'get_action_analytics': {
+        const result = await getActionAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      case 'get_mcp_server_analytics': {
+        const result = await getMcpServerAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      case 'export_analytics': {
+        const result = await exportAnalytics(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      case 'get_optimization_report': {
+        const result = await getOptimizationReport(args as any);
+        return {
+          content: [{ type: 'text', text: result }],
+        };
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  // Following a pointer is handled here rather than in the tool switch, because
+  // it is not an operation on the codebase -- it is an operation on what we
+  // already said about it.
+  if (request.params.name === 'expand') {
+    return expandRef(request.params.arguments as any);
+  }
+
+  // Likewise the audit: it reports on the tool log rather than operating on the
+  // codebase, and its own output must not be disclosed away.
+  if (request.params.name === 'waste_audit') {
+    return wasteAudit(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'cache_audit') {
+    return cacheAudit();
+  }
+
+  if (request.params.name === 'model_routing') {
+    return modelRouting(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'token_audit') {
+    return tokenAudit(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'install_doctor') {
+    return installDoctor(request.params.arguments as any);
+  }
+
+  if (request.params.name === 'fleet_audit') {
+    return fleetAudit(request.params.arguments as any);
+  }
+
+  const started = Date.now();
+  const result = await handleToolCall(request);
+  // Best-effort: feed savings into analytics so the report/breakdown tools have
+  // real data. Never blocks meaningfully or breaks the tool call.
+  await recordToolAnalytics(analyticsManager, request.params.name, result);
+
+  // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
+  // per-tool is what keeps it a single policy instead of ninety. The elapsed
+  // time is passed along because it is what later decides whether a stale
+  // artifact is worth regenerating or worth serving with a marker.
+  return discloseResult(
+    request.params.name,
+    request.params.arguments as Record<string, unknown> | undefined,
+    result as any,
+    Date.now() - started
+  ) as any;
+});
+
+// Helper to run cleanup operations with error handling
+async function runCleanupOperations(
+  operations: { fn: () => void | Promise<void>; name: string }[]
+) {
+  for (const op of operations) {
+    try {
+      await op.fn();
+    } catch (err) {
+      console.error(`Error during cleanup (${op.name}):`, err);
+    }
+  }
+}
+
+// Shared cleanup function to avoid duplication between signal handlers
+async function cleanup() {
+  await runCleanupOperations([
+    {
+      fn: async () => await analyticsManager.close(),
+      name: 'flushing analytics',
+    },
+    { fn: () => cache?.close(), name: 'closing cache' },
+    { fn: () => tokenCounter?.free(), name: 'freeing tokenCounter' },
+    { fn: async () => await sessionManager.flush(), name: 'flushing sessions' },
+    { fn: () => TokenizerFactory.disposeAll(), name: 'disposing tokenizers' },
+    {
+      fn: () => optimizationStorage.close(),
+      name: 'closing optimization storage',
+    },
+    {
+      fn: () => {
+        clearInterval(memoPruneTimer);
+        memoRegistry.clearAll();
+      },
+      name: 'clearing memo caches',
+    },
+    // Note: predictiveCache and cacheWarmup do not implement dispose() methods
+    // Removed dispose() calls to prevent runtime errors during cleanup
+  ]);
+}
+
+// Start server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
+  // through one guarded shutdown. See ./lifecycle.ts for the full rationale
+  // (the stdin handlers are the Windows orphan-leak fix from PR #177).
+  installShutdownHandlers({ cleanup });
+}
+
+main().catch((error) => {
+  console.error('Server error:', error);
+  process.exit(1);
+});

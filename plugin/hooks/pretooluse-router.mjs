@@ -11,9 +11,9 @@
  * free to -- and routinely did -- ignore.
  */
 
-import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF, fileSize }
+import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF }
   from './lib/policy.mjs';
-import { decide, remember, normalizePayload, readCostBytes, touchedPaths } from './lib/decide.mjs';
+import { decide, remember, normalizePayload, readCostBytes, touchedFiles } from './lib/decide.mjs';
 import { recordRead } from './lib/metrics.mjs';
 import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor } from './lib/inject.mjs';
@@ -48,9 +48,11 @@ try {
     // TOUCHED FILES ARE NOT ONLY `Read` FILES. A session spent in the shell --
     // `cat`, `grep -r`, a build log -- was previously invisible: no cost
     // recorded, no node in the graph, so a shell-heavy session measured as
-    // though nothing happened. `touchedPaths` covers every tool that names a
+    // though nothing happened. `touchedFiles` covers every tool that names a
     // file, including Bash operands.
-    const touched = touchedPaths(payload);
+    // Each entry carries the size measured while resolving it, so nothing
+    // below needs to stat the same file again.
+    const touched = touchedFiles(payload);
 
     // THE GRAPH IS PER PROJECT, so it is keyed on where the FILE lives, not on
     // where the client happens to be running. Keying it on the session's cwd
@@ -67,8 +69,10 @@ try {
         bytes,
       });
     } else {
-      for (const path of touched) {
-        const size = fileSize(path);
+      for (const { path, size } of touched) {
+        // The size came from touchedFiles, which had to stat the file to know
+        // it was one. Statting it again here was pure duplication on the hook's
+        // critical path -- it runs before every tool call, for every operand.
         if (size > 0) recordRead(dirFor(path), { anchor: path, sessionId: payload.session_id, bytes: size });
       }
     }
@@ -80,7 +84,7 @@ try {
     // refusal, consolidation, re-derivation detection) fed by a producer that
     // never ran. Structural only: it records what demonstrably happened and
     // makes no claims.
-    for (const path of touched) {
+    for (const { path } of touched) {
       try {
         const dir = dirFor(path);
         // ONE read, not two. harvest() hashed the file and indexFile() then
