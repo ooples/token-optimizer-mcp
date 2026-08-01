@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.3](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.2...v5.3.3) (2026-08-01)
+
+
+### Bug Fixes
+
+* consolidate every live-test fix into one verified release ([#217](https://github.com/ooples/token-optimizer-mcp/issues/217)) ([ea8d1aa](https://github.com/ooples/token-optimizer-mcp/commit/ea8d1aa1b11ca8a6a180362fe53d3a3a898ca033))
+* **doctor:** give each run a fresh session, so it stops failing its own second run ([#213](https://github.com/ooples/token-optimizer-mcp/issues/213)) ([8761b1f](https://github.com/ooples/token-optimizer-mcp/commit/8761b1f22ee21d75aa86deedea4cebf8a98493cb))
+* **graph:** wire the memory half — harvest had no call site anywhere ([#215](https://github.com/ooples/token-optimizer-mcp/issues/215)) ([efa10ab](https://github.com/ooples/token-optimizer-mcp/commit/efa10ab9284cb8bcbc491907d61870d6109ce313))
+* **install:** make wiring recoverable when npm blocks postinstall ([#214](https://github.com/ooples/token-optimizer-mcp/issues/214)) ([f6e146c](https://github.com/ooples/token-optimizer-mcp/commit/f6e146c0dfd510b3425efc1880a16abc94f405d2))
+
 ## [5.3.2](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.1...v5.3.2) (2026-07-31)
 
 
