@@ -111,6 +111,26 @@ describe('wmic CSV parsing', () => {
   });
 });
 
+describe('output that yields no processes', () => {
+  // wmic can exit 0 having printed an error, or a format this parser does not
+  // recognise. Every row is then dropped and the result is an empty array --
+  // indistinguishable from a machine with no processes. The parser reports that
+  // honestly; getWindowsProcesses treats a zero count as a COLLECTION FAILURE
+  // and falls through to the CIM path rather than returning it as an answer.
+
+  it('returns an empty array for an error message', () => {
+    expect(parseWmicProcessCsv('ERROR: Description = Invalid query\n', NOW)).toEqual([]);
+  });
+
+  it('returns an empty array for an unrecognised format', () => {
+    expect(parseWmicProcessCsv('Name  ProcessId\nexplorer.exe  15748\n', NOW)).toEqual([]);
+  });
+
+  it('does not invent a process from a header alone', () => {
+    expect(parseWmicProcessCsv(HEADER, NOW)).toEqual([]);
+  });
+});
+
 describe('WMI datetime parsing', () => {
   it('reads the fixed-width fields', () => {
     expect(parseWmiDate('20260720023604.916473+000')).toBe(Date.UTC(2026, 6, 20, 2, 36, 4, 916));

@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, writeFileSync, existsSync, rmSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { createHash } from 'crypto';
 import { SmartWriteTool } from '../../../src/tools/file-operations/smart-write.js';
-import { SmartEditTool, BACKUP_ROOT } from '../../../src/tools/file-operations/smart-edit.js';
+import { SmartEditTool } from '../../../src/tools/file-operations/smart-edit.js';
+import { backupDirFor } from '../../../src/utils/file-backup.js';
 import { CacheEngine } from '../../../src/core/cache-engine.js';
 import { TokenCounter } from '../../../src/core/token-counter.js';
 import { MetricsCollector } from '../../../src/core/metrics.js';
@@ -22,19 +22,30 @@ import { MetricsCollector } from '../../../src/core/metrics.js';
  * happened the first time.
  */
 
-const backupDirFor = (filePath: string): string =>
-  join(BACKUP_ROOT, createHash('sha256').update(filePath).digest('hex').slice(0, 16));
-
 describe('backups never land next to the file', () => {
   let home: string;
+  let backups: string;
   let file: string;
   let cache: CacheEngine;
   let counter: TokenCounter;
+  let originalBackupDir: string | undefined;
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'backup-location-'));
     file = join(home, 'target.ts');
     writeFileSync(file, 'const original = 1;\n');
+
+    // REDIRECTED, not cleaned up afterwards. These tests used to write into the
+    // real ~/.token-optimizer/backups and remove the directory by hand, which
+    // works only as long as every test remembers -- and one did not, leaking a
+    // permanent directory under the developer's home on every run.
+    //
+    // A SIBLING of `home`, not a child: one test below asserts that the edited
+    // directory gains no new entries, and a backup root inside it is a new
+    // entry.
+    backups = mkdtempSync(join(tmpdir(), 'backup-location-store-'));
+    originalBackupDir = process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
+    process.env.TOKEN_OPTIMIZER_BACKUP_DIR = backups;
 
     cache = new CacheEngine(join(home, 'cache.db'), 100);
     counter = new TokenCounter();
@@ -43,11 +54,16 @@ describe('backups never land next to the file', () => {
   afterEach(() => {
     cache.close();
     counter.free();
-    try {
-      rmSync(backupDirFor(file), { recursive: true, force: true });
-      rmSync(home, { recursive: true, force: true });
-    } catch {
-      /* temp dirs, reclaimed by the OS */
+
+    if (originalBackupDir === undefined) delete process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
+    else process.env.TOKEN_OPTIMIZER_BACKUP_DIR = originalBackupDir;
+
+    for (const dir of [home, backups]) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* temp dirs, reclaimed by the OS */
+      }
     }
   });
 

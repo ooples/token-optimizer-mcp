@@ -20,6 +20,18 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { join } from 'path';
 import { homedir, cpus, totalmem } from 'os';
 
+/**
+ * Ceiling on a single process-table query.
+ *
+ * Neither command was bounded, so a stalled `wmic` or `powershell` blocked the
+ * caller forever. That is not hypothetical here: three snapshots take 6.5s on
+ * an idle 64-core box and over 60s with every core saturated, so a slow
+ * invocation is an ordinary condition. 90s is ~40x the idle cost of one call
+ * and well above the worst measured, so it fires only when something is
+ * genuinely stuck -- at which point the CIM fallback gets its turn.
+ */
+const PROCESS_QUERY_TIMEOUT_MS = 90_000;
+
 interface ProcessInfo {
   pid: number;
   name: string;
@@ -262,22 +274,29 @@ export class SmartProcesses {
   private async getWindowsProcesses(): Promise<ProcessInfo[]> {
     let firstError: unknown;
     try {
-      return this.parseWmicCsv(
-        (
-          await execFileSafe(
-            'wmic',
-            [
-              'process',
-              'get',
-              // Requested order is irrelevant -- the parser anchors to the END
-              // of each row rather than trusting any column index.
-              WMIC_PROCESS_COLUMNS,
-              '/format:csv',
-            ],
-            { maxBuffer: 32 * 1024 * 1024 }
-          )
-        ).stdout
+      const { stdout } = await execFileSafe(
+        'wmic',
+        [
+          'process',
+          'get',
+          // Requested order is irrelevant -- the parser anchors to the END
+          // of each row rather than trusting any column index.
+          WMIC_PROCESS_COLUMNS,
+          '/format:csv',
+        ],
+        { maxBuffer: 32 * 1024 * 1024, timeout: PROCESS_QUERY_TIMEOUT_MS }
       );
+
+      const processes = this.parseWmicCsv(stdout);
+
+      // ZERO ROWS IS A FAILURE, NOT AN ANSWER. wmic can exit 0 having printed
+      // an error ("Invalid query", "Invalid class") or a format this parser
+      // does not recognise, and every row is then dropped -- leaving an empty
+      // array that is indistinguishable from a machine with no processes. It
+      // falls through to CIM instead, which is the whole point of having a
+      // second path.
+      if (processes.length > 0) return processes;
+      firstError = new Error('wmic returned no parseable rows');
     } catch (err) {
       firstError = err;
     }
@@ -286,12 +305,17 @@ export class SmartProcesses {
     // simply "not recognised". Falling through to CIM keeps the tool working
     // there; JSON also sidesteps CSV quoting entirely.
     try {
-      return await this.getWindowsProcessesViaCim();
-    } catch (cimError) {
+      const processes = await this.getWindowsProcessesViaCim();
+
       // NEVER return [] HERE. An empty list is indistinguishable from "this
       // machine has no processes", and downstream that became a report of 100%
       // tokens saved for an answer that contained nothing. A collection failure
       // has to surface as a failure.
+      if (processes.length === 0) {
+        throw new Error('Get-CimInstance returned no processes');
+      }
+      return processes;
+    } catch (cimError) {
       throw new Error(
         `Could not read the process table. wmic failed (${String(firstError)}) ` +
           `and the Get-CimInstance fallback failed (${String(cimError)}).`
@@ -318,7 +342,7 @@ export class SmartProcesses {
     const { stdout } = await execFileSafe(
       'powershell',
       ['-NoProfile', '-NonInteractive', '-Command', script],
-      { maxBuffer: 32 * 1024 * 1024 }
+      { maxBuffer: 32 * 1024 * 1024, timeout: PROCESS_QUERY_TIMEOUT_MS }
     );
 
     const parsed: unknown = JSON.parse(stdout);

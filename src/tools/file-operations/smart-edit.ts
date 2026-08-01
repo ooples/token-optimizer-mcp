@@ -433,7 +433,8 @@ export class SmartEditTool {
     // Sort operations by line number (descending) to avoid index shifting
     const sortedOps = [...operations].sort((a, b) => b.startLine - a.startLine);
 
-    let result = [...lines];
+    // Only ever mutated through splice, never reassigned.
+    const result = [...lines];
     const unmatched: string[] = [];
 
     for (const op of sortedOps) {
@@ -458,12 +459,32 @@ export class SmartEditTool {
             // result back means a replacement may legitimately change the line
             // count, which the per-line version could not express either.
             const target = result.slice(startIdx, lastIdx + 1).join('\n');
-            const replaced = target.replace(pattern, op.replacement);
 
-            if (replaced === target) {
+            // ASK WHETHER IT MATCHED, don't infer it from the output changing.
+            // Comparing `replaced === target` conflated two different things: a
+            // pattern that never matched, and one that matched but whose
+            // replacement reproduced the same text. Measured: replacing
+            // `const a = 1;` with itself, and a `$1 $2` capture-group rebuild,
+            // both matched and both were reported as "matched nothing" -- so an
+            // idempotent edit failed the whole operation.
+            //
+            // Tested on a fresh regex: a /g pattern carries lastIndex between
+            // calls, so probing with the same object would make the result
+            // depend on what was tested before it.
+            const probe =
+              typeof op.pattern === 'string'
+                ? new RegExp(op.pattern)
+                : new RegExp(
+                    op.pattern.source,
+                    op.pattern.flags.replace('g', '')
+                  );
+
+            if (!probe.test(target)) {
               unmatched.push(String(op.pattern));
               break;
             }
+
+            const replaced = target.replace(pattern, op.replacement);
 
             result.splice(
               startIdx,

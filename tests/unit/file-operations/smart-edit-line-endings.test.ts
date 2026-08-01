@@ -10,11 +10,11 @@ import {
 } from 'fs';
 import { tmpdir } from 'os';
 import { join, dirname } from 'path';
-import {
-  SmartEditTool,
-  BACKUP_ROOT,
-} from '../../../src/tools/file-operations/smart-edit.js';
-import { createHash } from 'crypto';
+import { SmartEditTool } from '../../../src/tools/file-operations/smart-edit.js';
+// backupDirFor resolves the ACTIVE root, which the suite redirects to a temp
+// directory. Computing it from the BACKUP_ROOT constant looked in the real home
+// instead, so these assertions missed the file that had just been written.
+import { backupDirFor } from '../../../src/utils/file-backup.js';
 import { SmartGlobTool } from '../../../src/tools/file-operations/smart-glob.js';
 import { CacheEngine } from '../../../src/core/cache-engine.js';
 import { TokenCounter } from '../../../src/core/token-counter.js';
@@ -75,13 +75,10 @@ describe('smart_edit line endings', () => {
     caches.push(cache);
     const file = join(dir, 'file.ts');
     writeFileSync(file, body);
-    // Keyed exactly as writeBackup keys it, so teardown removes the real one.
-    backupDirs.push(
-      join(
-        BACKUP_ROOT,
-        createHash('sha256').update(file).digest('hex').slice(0, 16)
-      )
-    );
+    // Resolved by the module itself, so it follows the ACTIVE backup root --
+    // which the suite redirects to a temp directory. Rebuilding the path from
+    // the BACKUP_ROOT constant looked in the real home instead.
+    backupDirs.push(backupDirFor(file));
     return {
       tool: new SmartEditTool(
         cache,
@@ -176,8 +173,7 @@ describe('smart_edit line endings', () => {
       content: 'changed',
     });
 
-    const key = createHash('sha256').update(file).digest('hex').slice(0, 16);
-    const stash = join(BACKUP_ROOT, key);
+    const stash = backupDirFor(file);
     expect(existsSync(stash)).toBe(true);
     const saved = readdirSync(stash).map((f) =>
       readFileSync(join(stash, f), 'utf8')

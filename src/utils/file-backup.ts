@@ -20,13 +20,43 @@
 import { mkdirSync, writeFileSync, readdirSync, unlinkSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
-/** Outside every working tree, so a backup can never be committed. */
+/**
+ * Overrides the backup location.
+ *
+ * Without it the root is a fixed constant, so every test that exercises
+ * `writeBackup` writes into the developer's or CI runner's REAL home directory
+ * and has to remember to clean up by hand. One test forgot, and each run left a
+ * permanent directory behind -- the same category of defect (a backup landing
+ * where it should not) that this module exists to fix.
+ */
+const BACKUP_DIR_ENV = 'TOKEN_OPTIMIZER_BACKUP_DIR';
+
+/** Default root: outside every working tree, so a backup can never be committed. */
 export const BACKUP_ROOT = join(homedir(), '.token-optimizer', 'backups');
+
+/**
+ * The root to write to right now.
+ *
+ * Read per call rather than captured at import, so a test can redirect it after
+ * this module has already been loaded.
+ */
+export function backupRoot(): string {
+  return process.env[BACKUP_DIR_ENV] || BACKUP_ROOT;
+}
+
+/** The directory holding one file's backups. Exported so tests can assert on it. */
+export function backupDirFor(filePath: string): string {
+  const key = createHash('sha256').update(filePath).digest('hex').slice(0, 16);
+  return join(backupRoot(), key);
+}
 
 /** How many past versions of one file are kept before the oldest is dropped. */
 const BACKUPS_PER_FILE = 5;
+
+/** Monotonic within this process, so two calls in one millisecond still differ. */
+let sequence = 0;
 
 /**
  * Saves content somewhere it cannot do harm.
@@ -46,16 +76,21 @@ export function writeBackup(
   encoding: BufferEncoding = 'utf-8'
 ): boolean {
   try {
-    const key = createHash('sha256')
-      .update(filePath)
-      .digest('hex')
-      .slice(0, 16);
-    const dir = join(BACKUP_ROOT, key);
+    const dir = backupDirFor(filePath);
     mkdirSync(dir, { recursive: true });
 
+    // NOT the timestamp alone. `toISOString()` has millisecond resolution, and
+    // one call takes ~1.09 ms, so sequential calls only just miss each other --
+    // but concurrent ones do not. Measured: five concurrent backups of one file
+    // produced four files, silently losing a version.
+    //
+    // The sequence keeps callers in THIS process apart; the random suffix keeps
+    // separate processes apart. The timestamp stays first so the lexical sort
+    // used for pruning still orders by age.
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const unique = `${String(sequence++).padStart(4, '0')}-${randomBytes(3).toString('hex')}`;
     writeFileSync(
-      join(dir, `${stamp}__${basename(filePath)}`),
+      join(dir, `${stamp}__${unique}__${basename(filePath)}`),
       content,
       encoding
     );

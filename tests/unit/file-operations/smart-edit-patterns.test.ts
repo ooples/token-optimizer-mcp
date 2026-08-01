@@ -23,10 +23,12 @@ import { MetricsCollector } from '../../../src/core/metrics.js';
 
 describe('smart_edit pattern operations', () => {
   let home: string;
+  let backups: string;
   let file: string;
   let tool: SmartEditTool;
   let cache: CacheEngine;
   let counter: TokenCounter;
+  let originalBackupDir: string | undefined;
 
   const ORIGINAL = ['const a = 1;', 'const b = 2;', 'const c = 3;'].join('\n');
 
@@ -34,6 +36,14 @@ describe('smart_edit pattern operations', () => {
     home = mkdtempSync(join(tmpdir(), 'smart-edit-patterns-'));
     file = join(home, 'sample.ts');
     writeFileSync(file, ORIGINAL);
+
+    // The `createBackup: true` case below wrote into the REAL
+    // ~/.token-optimizer/backups, and `afterEach` only removed `home` -- so
+    // every run of this suite left a new permanent directory under the
+    // developer's home. Exactly the defect this file's subject matter is about.
+    backups = mkdtempSync(join(tmpdir(), 'smart-edit-patterns-store-'));
+    originalBackupDir = process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
+    process.env.TOKEN_OPTIMIZER_BACKUP_DIR = backups;
 
     cache = new CacheEngine(join(home, 'cache.db'), 100);
     counter = new TokenCounter();
@@ -43,10 +53,16 @@ describe('smart_edit pattern operations', () => {
   afterEach(() => {
     cache.close();
     counter.free();
-    try {
-      rmSync(home, { recursive: true, force: true });
-    } catch {
-      /* temp dir, reclaimed by the OS */
+
+    if (originalBackupDir === undefined) delete process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
+    else process.env.TOKEN_OPTIMIZER_BACKUP_DIR = originalBackupDir;
+
+    for (const dir of [home, backups]) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* temp dirs, reclaimed by the OS */
+      }
     }
   });
 
@@ -137,6 +153,59 @@ describe('smart_edit pattern operations', () => {
 
       expect(result.operation).toBe('applied');
       expect(result.metadata.editsApplied).toBe(1);
+    });
+  });
+
+  describe('a pattern that matches but reproduces the same text', () => {
+    // `replaced === target` was used as a proxy for "did not match". That
+    // conflates a pattern that never matched with one that matched and whose
+    // replacement rebuilt the same content, so an idempotent edit failed the
+    // whole operation. Matching is now asked directly.
+
+    it('is a no-op, not a failure', async () => {
+      const result = await tool.edit(
+        file,
+        [{ type: 'replace', startLine: 1, pattern: 'const a = 1;', replacement: 'const a = 1;' }],
+        { createBackup: false }
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.operation).toBe('unchanged');
+    });
+
+    it('handles a capture-group substitution that rebuilds the original', async () => {
+      const result = await tool.edit(
+        file,
+        [{ type: 'replace', startLine: 1, pattern: '(const) (a)', replacement: '$1 $2' }],
+        { createBackup: false }
+      );
+
+      expect(result.success).toBe(true);
+      expect(readFileSync(file, 'utf8')).toBe(ORIGINAL);
+    });
+
+    it('still fails when the pattern genuinely does not match', async () => {
+      // The distinction has to cut both ways, or the fix just disables the guard.
+      const result = await tool.edit(
+        file,
+        [{ type: 'replace', startLine: 1, pattern: 'NOT_HERE', replacement: 'NOT_HERE' }],
+        { createBackup: false }
+      );
+
+      expect(result.success).toBe(false);
+    });
+
+    it('does not let a /g pattern carry lastIndex between operations', async () => {
+      // A global regex is stateful. Probing with the same object would make the
+      // outcome depend on what was tested before it.
+      const ops = [
+        { type: 'replace' as const, startLine: 1, pattern: 'const', replacement: 'const' },
+        { type: 'replace' as const, startLine: 2, pattern: 'const', replacement: 'const' },
+        { type: 'replace' as const, startLine: 3, pattern: 'const', replacement: 'const' },
+      ];
+      const result = await tool.edit(file, ops, { createBackup: false });
+
+      expect(result.success).toBe(true);
     });
   });
 
