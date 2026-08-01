@@ -114,13 +114,35 @@ describe('backup filenames', () => {
     expect(contents).toEqual(versions);
   });
 
-  it('still sorts oldest-first so pruning drops the right one', () => {
-    // The timestamp stays the leading component precisely so the lexical sort
-    // used for pruning remains an age order after adding a uniqueness suffix.
-    for (const v of ['1', '2', '3']) writeBackup(file, v);
+  it('names sort oldest-first, so pruning drops the right one', () => {
+    // The timestamp stays the LEADING component precisely so the lexical sort
+    // `writeBackup` uses for pruning remains an age order after the uniqueness
+    // suffix was added.
+    //
+    // Asserting that `readdirSync` returns entries already sorted would test
+    // the filesystem, not the naming scheme -- Node guarantees no order for it.
+    // Sorting the names and checking the CONTENTS come back in write order
+    // tests the scheme itself, whatever order the directory was read in.
+    const written = ['first', 'second', 'third'];
+    for (const v of written) writeBackup(file, v);
 
-    const names = readdirSync(backupDirFor(file));
-    expect([...names].sort()).toEqual(names);
+    const dir = backupDirFor(file);
+    const byName = readdirSync(dir).sort();
+    const contents = byName.map((f) => readFileSync(join(dir, f), 'utf8'));
+
+    expect(contents).toEqual(written);
+
+    // AND the timestamp must come FIRST, asserted structurally.
+    //
+    // The behavioural check above passes either way, because the sequence
+    // counter is monotonic within one process -- so it would happily accept a
+    // name like `0000-ab12__2026-...`. That ordering breaks ACROSS processes:
+    // a freshly started process restarts the counter at 0000, its newest backup
+    // sorts before an existing 0004, and pruning then deletes the newest file
+    // instead of the oldest. Only the timestamp is comparable between runs.
+    for (const name of byName) {
+      expect(name).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    }
   });
 
   it('keeps only the newest five versions', () => {
