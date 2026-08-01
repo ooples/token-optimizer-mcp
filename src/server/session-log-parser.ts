@@ -135,7 +135,12 @@ export async function parseSessionLog(
 
   // CSV column positions, read from the header row rather than assumed, so a
   // reordered or extended header still parses instead of silently misreading.
-  let csvCols: { time: number; tool: number; tokens: number; meta: number } | null = null;
+  let csvCols: {
+    time: number;
+    tool: number;
+    tokens: number;
+    meta: number;
+  } | null = null;
 
   for await (const rawLine of rl) {
     const line = rawLine.replace(/^﻿/, '');

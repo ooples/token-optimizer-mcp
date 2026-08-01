@@ -46,11 +46,14 @@ describe('published tool schemas', () => {
       // Look only at the top level of each inputSchema: the two lines that
       // follow `inputSchema: {` and its `type: 'object',`. A oneOf NESTED
       // inside a property is fine -- clients render those.
-      const pattern = /inputSchema:\s*\{\s*(?:\/\/[^\n]*\n\s*)*type:\s*'object',\s*(oneOf|anyOf)\s*:/g;
+      const pattern =
+        /inputSchema:\s*\{\s*(?:\/\/[^\n]*\n\s*)*type:\s*'object',\s*(oneOf|anyOf)\s*:/g;
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(text)) !== null) {
         const line = text.slice(0, match.index).split('\n').length;
-        offenders.push(`${file.replace(SRC, 'src')}:${line} uses top-level ${match[1]}`);
+        offenders.push(
+          `${file.replace(SRC, 'src')}:${line} uses top-level ${match[1]}`
+        );
       }
     }
 
@@ -70,19 +73,24 @@ describe('published tool schemas', () => {
       // "Operations: a, b, c." in the description is the tool's own claim.
       const claim = text.match(/Operations:\s*([a-z0-9,\-\s]+)\./i);
       if (!claim) continue;
-      const claimed = claim[1].split(',').map((s) => s.trim()).filter(Boolean);
+      const claimed = claim[1]
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (claimed.length < 2) continue;
 
       const enumMatch = text.match(/operation:\s*\{[^}]*enum:\s*\[([^\]]+)\]/);
       const advertised = enumMatch
-        ? enumMatch[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+        ? enumMatch[1]
+            .split(',')
+            .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
         : [];
 
       const missing = claimed.filter((op) => !advertised.includes(op));
       if (missing.length) {
         offenders.push(
           `${file.replace(SRC, 'src')} claims [${claimed.join(', ')}] ` +
-          `but advertises [${advertised.join(', ') || 'none'}]`
+            `but advertises [${advertised.join(', ') || 'none'}]`
         );
       }
     }

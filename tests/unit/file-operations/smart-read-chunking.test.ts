@@ -57,7 +57,15 @@ describe('SmartReadTool chunking', () => {
     const file = join(dir, 'big.ts');
     writeFileSync(file, body);
 
-    return { tool: new SmartReadTool(cache, new TokenCounter(), new MetricsCollector()), file, body };
+    return {
+      tool: new SmartReadTool(
+        cache,
+        new TokenCounter(),
+        new MetricsCollector()
+      ),
+      file,
+      body,
+    };
   }
 
   it('returns ONE chunk, not every chunk', async () => {
@@ -129,7 +137,10 @@ describe('SmartReadTool chunking', () => {
   it('falls back to the first chunk when the index is out of range or absent', async () => {
     const { tool, file } = makeFixture();
     for (const bad of [undefined, -1, 9999, Number.NaN]) {
-      const r = await tool.read(file, { chunkIndex: bad as number, enableCache: false });
+      const r = await tool.read(file, {
+        chunkIndex: bad as number,
+        enableCache: false,
+      });
       expect(r.metadata.chunkIndex).toBe(0);
     }
   });
@@ -159,11 +170,21 @@ describe('smart_edit returns a diff, not the file', () => {
 
   afterEach(() => {
     while (caches2.length) {
-      try { caches2.pop()?.close(); } catch { /* already closed */ }
+      try {
+        caches2.pop()?.close();
+      } catch {
+        /* already closed */
+      }
     }
     while (dirs2.length) {
       const d = dirs2.pop();
-      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+      if (d) {
+        try {
+          rmSync(d, { recursive: true, force: true });
+        } catch {
+          /* windows */
+        }
+      }
     }
   });
 
@@ -174,16 +195,22 @@ describe('smart_edit returns a diff, not the file', () => {
     const cache = new CacheEngine(join(dir, 'c.db'));
     caches2.push(cache);
     const counter = new TokenCounter();
-    const tool = new (await import('../../../src/tools/file-operations/smart-edit.js')).SmartEditTool(
-      cache, counter, new MetricsCollector()
-    );
+    const tool = new (
+      await import('../../../src/tools/file-operations/smart-edit.js')
+    ).SmartEditTool(cache, counter, new MetricsCollector());
 
-    const body = Array.from({ length: 750 }, (_, i) => `const value${i} = ${i};`).join('\n');
+    const body = Array.from(
+      { length: 750 },
+      (_, i) => `const value${i} = ${i};`
+    ).join('\n');
     const file = join(dir, 'big.js');
     writeFileSync(file, body);
 
     const result = await tool.edit(file, {
-      type: 'replace', startLine: 84, endLine: 94, content: 'const replaced = true;',
+      type: 'replace',
+      startLine: 84,
+      endLine: 94,
+      content: 'const replaced = true;',
     });
 
     const paid = counter.count(JSON.stringify(result)).tokens;

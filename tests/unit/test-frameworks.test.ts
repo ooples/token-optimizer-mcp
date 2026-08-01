@@ -120,15 +120,25 @@ const JEST_JSON = JSON.stringify({
       startTime: 1000,
       endTime: 1250,
       assertionResults: [
-        { title: 'alpha passes', fullName: 'alpha passes', status: 'passed', failureMessages: [] },
-        { title: 'beta passes', fullName: 'beta passes', status: 'passed', failureMessages: [] },
+        {
+          title: 'alpha passes',
+          fullName: 'alpha passes',
+          status: 'passed',
+          failureMessages: [],
+        },
+        {
+          title: 'beta passes',
+          fullName: 'beta passes',
+          status: 'passed',
+          failureMessages: [],
+        },
         {
           title: 'gamma fails',
           fullName: 'gamma fails',
           status: 'failed',
           failureMessages: [
             'Error: expect(received).toBe(expected)\n\nExpected: 2\nReceived: 1\n' +
-            '    at Object.<anonymous> (C:\\work\\test\\a.test.js:3:37)',
+              '    at Object.<anonymous> (C:\\work\\test\\a.test.js:3:37)',
           ],
         },
       ],
@@ -140,28 +150,42 @@ describe('test framework detection', () => {
   it('reads the runner off the test script, which is what npm test executes', () => {
     expect(detectFramework({ scripts: { test: 'jest --ci' } })).toBe('jest');
     expect(detectFramework({ scripts: { test: 'vitest run' } })).toBe('vitest');
-    expect(detectFramework({ scripts: { test: 'mocha --recursive' } })).toBe('mocha');
+    expect(detectFramework({ scripts: { test: 'mocha --recursive' } })).toBe(
+      'mocha'
+    );
     expect(detectFramework({ scripts: { test: 'ava' } })).toBe('ava');
-    expect(detectFramework({ scripts: { test: 'node --test tests/' } })).toBe('node');
+    expect(detectFramework({ scripts: { test: 'node --test tests/' } })).toBe(
+      'node'
+    );
   });
 
   it('falls back to the dependency list when the script says nothing useful', () => {
-    expect(detectFramework({ scripts: { test: 'run-s lint spec' }, devDependencies: { vitest: '^2' } }))
-      .toBe('vitest');
-    expect(detectFramework({ devDependencies: { mocha: '^10' } })).toBe('mocha');
+    expect(
+      detectFramework({
+        scripts: { test: 'run-s lint spec' },
+        devDependencies: { vitest: '^2' },
+      })
+    ).toBe('vitest');
+    expect(detectFramework({ devDependencies: { mocha: '^10' } })).toBe(
+      'mocha'
+    );
   });
 
   it('prefers vitest over jest when a project has both installed', () => {
     // Projects mid-migration keep jest in devDependencies while the script
     // already runs vitest. The SCRIPT is what actually executes.
-    expect(detectFramework({
-      scripts: { test: 'vitest run' },
-      devDependencies: { jest: '^29', vitest: '^2' },
-    })).toBe('vitest');
+    expect(
+      detectFramework({
+        scripts: { test: 'vitest run' },
+        devDependencies: { jest: '^29', vitest: '^2' },
+      })
+    ).toBe('vitest');
   });
 
   it('says unknown rather than guessing jest', () => {
-    expect(detectFramework({ scripts: { test: 'echo no tests' } })).toBe('unknown');
+    expect(detectFramework({ scripts: { test: 'echo no tests' } })).toBe(
+      'unknown'
+    );
     expect(detectFramework({})).toBe('unknown');
   });
 });
@@ -183,7 +207,9 @@ describe('report parsing, per runner', () => {
     // A line filter over the raw block drops exactly this, which is the only
     // part that explains the failure.
     const r = ADAPTERS.node.parse(NODE_TAP, '')!;
-    const message = r.testResults.find((t) => t.status === 'failed')!.failureMessage!;
+    const message = r.testResults.find(
+      (t) => t.status === 'failed'
+    )!.failureMessage!;
     expect(message).toContain('Expected values to be strictly equal');
     expect(message).toContain('1 !== 2');
     expect(message).toContain('a.test.js:5:1');
@@ -195,7 +221,9 @@ describe('report parsing, per runner', () => {
     expect(r.numTotalTests).toBe(3);
     expect(r.numPassedTests).toBe(2);
     expect(r.numFailedTests).toBe(1);
-    expect(r.testResults.find((t) => t.status === 'failed')!.name).toBe('gamma fails');
+    expect(r.testResults.find((t) => t.status === 'failed')!.name).toBe(
+      'gamma fails'
+    );
   });
 
   it('reads mocha json, keeping the stack so the location survives', () => {
@@ -213,7 +241,9 @@ describe('report parsing, per runner', () => {
     expect(r.numTotalTests).toBe(3);
     const file = r.testResults[0];
     expect(file.assertionResults).toHaveLength(3);
-    expect(file.assertionResults!.find((a) => a.status === 'failed')!.title).toBe('gamma fails');
+    expect(
+      file.assertionResults!.find((a) => a.status === 'failed')!.title
+    ).toBe('gamma fails');
   });
 
   it('reads vitest through the same jest-shaped parser', () => {
@@ -265,7 +295,11 @@ describe('runner flags', () => {
   });
 
   it('requests json-summary when coverage is asked for, since that writes the file read back', () => {
-    expect(ADAPTERS.jest.reportArgs({ coverage: true }).join(' ')).toContain('json-summary');
-    expect(ADAPTERS.vitest.reportArgs({ coverage: true }).join(' ')).toContain('json-summary');
+    expect(ADAPTERS.jest.reportArgs({ coverage: true }).join(' ')).toContain(
+      'json-summary'
+    );
+    expect(ADAPTERS.vitest.reportArgs({ coverage: true }).join(' ')).toContain(
+      'json-summary'
+    );
   });
 });

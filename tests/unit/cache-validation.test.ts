@@ -153,7 +153,12 @@ describe('Token Caching Validation', () => {
       const text = 'Repeated content. '.repeat(100);
       const compressed = compression.compress(text);
 
-      cache.set('compressed-key', compressed.compressed.toString('base64'), text.length, compressed.compressedSize);
+      cache.set(
+        'compressed-key',
+        compressed.compressed.toString('base64'),
+        text.length,
+        compressed.compressedSize
+      );
 
       const stats = cache.getStats();
       expect(stats.compressionRatio).toBeLessThan(0.1); // Less than 10% of original
@@ -208,7 +213,12 @@ describe('Token Caching Validation', () => {
         compressedSize: 100,
       };
 
-      cache.set(testData.key, testData.value, testData.originalSize, testData.compressedSize);
+      cache.set(
+        testData.key,
+        testData.value,
+        testData.originalSize,
+        testData.compressedSize
+      );
       cache.close();
 
       // Create new instance
@@ -226,13 +236,13 @@ describe('Token Caching Validation', () => {
       cache.get('key1');
 
       let entries = cache.getAllEntries();
-      const hitCount1 = entries.find(e => e.key === 'key1')?.hitCount;
+      const hitCount1 = entries.find((e) => e.key === 'key1')?.hitCount;
 
       cache.close();
 
       const cache2 = new CacheEngine(testDbPath, 100);
       entries = cache2.getAllEntries();
-      const hitCount2 = entries.find(e => e.key === 'key1')?.hitCount;
+      const hitCount2 = entries.find((e) => e.key === 'key1')?.hitCount;
 
       expect(hitCount2).toBe(hitCount1);
       cache2.close();
@@ -336,7 +346,7 @@ describe('Token Caching Validation', () => {
 
       // Simulate time-based filtering by checking entries
       const entries = cache.getAllEntries();
-      const oldEntries = entries.filter(e => e.lastAccessedAt < oldTimestamp);
+      const oldEntries = entries.filter((e) => e.lastAccessedAt < oldTimestamp);
 
       expect(oldEntries.length).toBe(0); // None are old yet
     });
@@ -345,16 +355,19 @@ describe('Token Caching Validation', () => {
       cache.set('time-test', 'value', 10, 5);
 
       const entries1 = cache.getAllEntries();
-      const time1 = entries1.find(e => e.key === 'time-test')?.lastAccessedAt;
+      const time1 = entries1.find((e) => e.key === 'time-test')?.lastAccessedAt;
 
       // Small delay
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(10).then(() => {
         cache.get('time-test');
 
         const entries2 = cache.getAllEntries();
-        const time2 = entries2.find(e => e.key === 'time-test')?.lastAccessedAt;
+        const time2 = entries2.find(
+          (e) => e.key === 'time-test'
+        )?.lastAccessedAt;
 
         expect(time2).toBeGreaterThan(time1!);
       });
@@ -471,7 +484,7 @@ describe('Token Caching Validation', () => {
         'interface Config { port: number; host: string; }',
         'interface Config { port: number; host: string; }',
         'interface Config { port: number; host: string; }',
-      ].map(code => code.repeat(100));
+      ].map((code) => code.repeat(100));
 
       let totalOriginalTokens = 0;
       let totalCompressedSize = 0;
@@ -485,11 +498,17 @@ describe('Token Caching Validation', () => {
         totalOriginalSize += compressed.originalSize;
         totalCompressedSize += compressed.compressedSize;
 
-        cache.set(`file-${index}`, compressed.compressed.toString('base64'), compressed.originalSize, compressed.compressedSize);
+        cache.set(
+          `file-${index}`,
+          compressed.compressed.toString('base64'),
+          compressed.originalSize,
+          compressed.compressedSize
+        );
       });
 
       const overallCompressionRatio = totalCompressedSize / totalOriginalSize;
-      const percentSaved = ((totalOriginalSize - totalCompressedSize) / totalOriginalSize) * 100;
+      const percentSaved =
+        ((totalOriginalSize - totalCompressedSize) / totalOriginalSize) * 100;
 
       // Verify 95%+ reduction target
       expect(percentSaved).toBeGreaterThan(95);

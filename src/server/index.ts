@@ -1758,7 +1758,12 @@ async function handleToolCall(request: {
 
       // Code analysis tools
       case 'smart_complexity': {
-        const result = await runSmartComplexity(args as any, cache, tokenCounter, metrics);
+        const result = await runSmartComplexity(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
         return {
           content: [
             {
@@ -1830,7 +1835,12 @@ async function handleToolCall(request: {
       }
 
       case 'smart_symbols': {
-        const result = await runSmartSymbols(args as any, cache, tokenCounter, metrics);
+        const result = await runSmartSymbols(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
         return {
           content: [
             {
@@ -1919,7 +1929,12 @@ async function handleToolCall(request: {
       }
 
       case 'smart_process': {
-        const result = await runSmartProcess(args as any, cache, tokenCounter, metrics);
+        const result = await runSmartProcess(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
         return {
           content: [
             {
@@ -1931,7 +1946,12 @@ async function handleToolCall(request: {
       }
 
       case 'smart_service': {
-        const result = await runSmartService(args as any, cache, tokenCounter, metrics);
+        const result = await runSmartService(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
         return {
           content: [
             {

@@ -17,7 +17,13 @@
  * into the one shape the rest of the tool understands.
  */
 
-export type FrameworkId = 'jest' | 'vitest' | 'mocha' | 'node' | 'ava' | 'unknown';
+export type FrameworkId =
+  | 'jest'
+  | 'vitest'
+  | 'mocha'
+  | 'node'
+  | 'ava'
+  | 'unknown';
 
 export interface NormalisedTestResult {
   numTotalTests: number;
@@ -80,7 +86,12 @@ function parseJestLike(stdout: string): NormalisedTestResult | null {
         endTime?: number;
         startTime?: number;
         message?: string;
-        assertionResults?: Array<{ title?: string; fullName?: string; status?: string; failureMessages?: string[] }>;
+        assertionResults?: Array<{
+          title?: string;
+          fullName?: string;
+          status?: string;
+          failureMessages?: string[];
+        }>;
       }>;
     };
     if (typeof raw.numTotalTests !== 'number') return null;
@@ -91,7 +102,9 @@ function parseJestLike(stdout: string): NormalisedTestResult | null {
       numPendingTests: raw.numPendingTests ?? 0,
       testResults: (raw.testResults ?? []).map((t) => ({
         name: t.name ?? 'test',
-        status: (t.status as NormalisedTestResult['testResults'][number]['status']) ?? 'passed',
+        status:
+          (t.status as NormalisedTestResult['testResults'][number]['status']) ??
+          'passed',
         duration: Math.max(0, (t.endTime ?? 0) - (t.startTime ?? 0)),
         failureMessage: t.message,
         // Kept, not flattened: this is where the individual test NAMES live,
@@ -115,8 +128,17 @@ function parseMocha(stdout: string): NormalisedTestResult | null {
   if (!match) return null;
   try {
     const raw = JSON.parse(match[0]) as {
-      stats?: { tests?: number; passes?: number; failures?: number; pending?: number };
-      failures?: Array<{ fullTitle?: string; err?: { message?: string; stack?: string }; duration?: number }>;
+      stats?: {
+        tests?: number;
+        passes?: number;
+        failures?: number;
+        pending?: number;
+      };
+      failures?: Array<{
+        fullTitle?: string;
+        err?: { message?: string; stack?: string };
+        duration?: number;
+      }>;
       passes?: Array<{ fullTitle?: string; duration?: number }>;
     };
     if (!raw.stats) return null;
@@ -155,11 +177,16 @@ function parseMocha(stdout: string): NormalisedTestResult | null {
  * around it. This pulls the message, the assertion facts, and the source
  * location, and renders them the way a stack trace reads.
  */
-function readTapDiagnostic(block: string[]): { message?: string; duration: number } {
+function readTapDiagnostic(block: string[]): {
+  message?: string;
+  duration: number;
+} {
   if (!block.length) return { duration: 0 };
 
   const scalar = (key: string): string | null => {
-    const at = block.findIndex((l) => new RegExp(`^\\s*${key}:\\s*\\|-?\\s*$`).test(l));
+    const at = block.findIndex((l) =>
+      new RegExp(`^\\s*${key}:\\s*\\|-?\\s*$`).test(l)
+    );
     if (at === -1) return null;
     const indent = (block[at].match(/^\s*/) ?? [''])[0].length;
     const body: string[] = [];
@@ -187,7 +214,7 @@ function readTapDiagnostic(block: string[]): { message?: string; duration: numbe
   if (expected !== null && actual !== null) {
     parts.push(
       `${name ?? 'AssertionError'}: expected ${expected}, actual ${actual}` +
-      (operator ? ` (${operator})` : '')
+        (operator ? ` (${operator})` : '')
     );
   }
 
@@ -198,7 +225,12 @@ function readTapDiagnostic(block: string[]): { message?: string; duration: numbe
 
   const stack = scalar('stack');
   if (stack) {
-    parts.push(...stack.split('\n').slice(0, 4).map((l) => `    at ${l.trim()}`));
+    parts.push(
+      ...stack
+        .split('\n')
+        .slice(0, 4)
+        .map((l) => `    at ${l.trim()}`)
+    );
   }
 
   return {
@@ -216,7 +248,9 @@ function readTapDiagnostic(block: string[]): { message?: string; duration: numbe
  */
 function parseTap(stdout: string): NormalisedTestResult | null {
   const lines = stdout.split('\n');
-  const looksLikeTap = lines.some((l) => /^\s*(ok|not ok)\b/.test(l) || /^\s*TAP version/.test(l));
+  const looksLikeTap = lines.some(
+    (l) => /^\s*(ok|not ok)\b/.test(l) || /^\s*TAP version/.test(l)
+  );
   if (!looksLikeTap) return null;
 
   const results: NormalisedTestResult['testResults'] = [];
@@ -234,7 +268,10 @@ function parseTap(stdout: string): NormalisedTestResult | null {
     let block: string[] = [];
     if (lines[i + 1]?.trim() === '---') {
       let j = i + 2;
-      while (j < lines.length && lines[j].trim() !== '...') { block.push(lines[j]); j++; }
+      while (j < lines.length && lines[j].trim() !== '...') {
+        block.push(lines[j]);
+        j++;
+      }
     }
     const diag = readTapDiagnostic(block);
 
@@ -251,9 +288,12 @@ function parseTap(stdout: string): NormalisedTestResult | null {
     return m ? Number(m[1]) : null;
   };
 
-  const passed = summary('pass') ?? results.filter((r) => r.status === 'passed').length;
-  const failed = summary('fail') ?? results.filter((r) => r.status === 'failed').length;
-  const skipped = summary('skipped') ?? results.filter((r) => r.status === 'skipped').length;
+  const passed =
+    summary('pass') ?? results.filter((r) => r.status === 'passed').length;
+  const failed =
+    summary('fail') ?? results.filter((r) => r.status === 'failed').length;
+  const skipped =
+    summary('skipped') ?? results.filter((r) => r.status === 'skipped').length;
   const total = summary('tests') ?? results.length;
 
   if (total === 0 && results.length === 0) return null;
@@ -286,7 +326,11 @@ function parseNodeSpec(stdout: string): NormalisedTestResult | null {
   const INFO = 'ℹ';
   const SKIP = '︎';
 
-  if (!stdout.includes(INFO) && !stdout.includes(PASS) && !stdout.includes(FAIL)) {
+  if (
+    !stdout.includes(INFO) &&
+    !stdout.includes(PASS) &&
+    !stdout.includes(FAIL)
+  ) {
     return null;
   }
 
@@ -309,7 +353,10 @@ function parseNodeSpec(stdout: string): NormalisedTestResult | null {
     const line = rawLines[i].trim();
     const mark = line[0];
     if (mark !== PASS && mark !== FAIL && mark !== SKIP) continue;
-    const name = line.slice(1).replace(/\s*\([\d.]+m?s\)\s*$/, '').trim();
+    const name = line
+      .slice(1)
+      .replace(/\s*\([\d.]+m?s\)\s*$/, '')
+      .trim();
     if (!name) continue;
 
     // The error follows a failing line, indented, until the next test mark.
@@ -317,7 +364,11 @@ function parseNodeSpec(stdout: string): NormalisedTestResult | null {
     if (mark === FAIL) {
       const block: string[] = [];
       let j = i + 1;
-      while (j < rawLines.length && !isMark(rawLines[j]) && !rawLines[j].trim().startsWith(INFO)) {
+      while (
+        j < rawLines.length &&
+        !isMark(rawLines[j]) &&
+        !rawLines[j].trim().startsWith(INFO)
+      ) {
         block.push(rawLines[j]);
         j++;
       }
@@ -343,7 +394,10 @@ function parseNodeSpec(stdout: string): NormalisedTestResult | null {
 
 /* ------------------------------------------------------------ adapters --- */
 
-export const ADAPTERS: Record<Exclude<FrameworkId, 'unknown'>, FrameworkAdapter> = {
+export const ADAPTERS: Record<
+  Exclude<FrameworkId, 'unknown'>,
+  FrameworkAdapter
+> = {
   jest: {
     id: 'jest',
     label: 'Jest',
@@ -428,7 +482,9 @@ export function detectFramework(pkg: {
  * and accept whichever one actually fits. A report that parses is a report,
  * whoever produced it.
  */
-export function parseAnyKnownFormat(stdout: string): { result: NormalisedTestResult; framework: FrameworkId } | null {
+export function parseAnyKnownFormat(
+  stdout: string
+): { result: NormalisedTestResult; framework: FrameworkId } | null {
   const jestLike = parseJestLike(stdout);
   if (jestLike) return { result: jestLike, framework: 'jest' };
   const mocha = parseMocha(stdout);

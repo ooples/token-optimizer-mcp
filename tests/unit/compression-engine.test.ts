@@ -11,7 +11,10 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { CompressionEngine, CompressionResult } from '../../src/core/compression-engine.js';
+import {
+  CompressionEngine,
+  CompressionResult,
+} from '../../src/core/compression-engine.js';
 
 describe('CompressionEngine', () => {
   let compression: CompressionEngine;
@@ -22,7 +25,8 @@ describe('CompressionEngine', () => {
 
   describe('Basic Compression', () => {
     it('should compress and decompress text correctly', () => {
-      const original = 'This is a test text that should be compressed using Brotli.';
+      const original =
+        'This is a test text that should be compressed using Brotli.';
       const result = compression.compress(original);
 
       const decompressed = compression.decompress(result.compressed);
@@ -127,7 +131,8 @@ describe('CompressionEngine', () => {
       const result = compression.compress(original);
 
       const expectedPercent =
-        ((result.originalSize - result.compressedSize) / result.originalSize) * 100;
+        ((result.originalSize - result.compressedSize) / result.originalSize) *
+        100;
 
       expect(result.percentSaved).toBeCloseTo(expectedPercent, 5);
     });
@@ -151,7 +156,9 @@ describe('CompressionEngine', () => {
       const resultRandom = compression.compress(random);
 
       expect(resultRepetitive.ratio).toBeLessThan(resultRandom.ratio);
-      expect(resultRepetitive.percentSaved).toBeGreaterThan(resultRandom.percentSaved);
+      expect(resultRepetitive.percentSaved).toBeGreaterThan(
+        resultRandom.percentSaved
+      );
     });
 
     it('should handle zero-size compression edge case', () => {
@@ -188,7 +195,9 @@ describe('CompressionEngine', () => {
       const defaultQuality = compression.compress(text);
       const explicitQuality11 = compression.compress(text, { quality: 11 });
 
-      expect(defaultQuality.compressedSize).toBe(explicitQuality11.compressedSize);
+      expect(defaultQuality.compressedSize).toBe(
+        explicitQuality11.compressedSize
+      );
     });
 
     it('should handle quality level 0 (minimum)', () => {
@@ -248,7 +257,9 @@ describe('CompressionEngine', () => {
       const original = 'Test text for base64 compression';
       const compressed = compression.compressToBase64(original);
 
-      const decompressed = compression.decompressFromBase64(compressed.compressed);
+      const decompressed = compression.decompressFromBase64(
+        compressed.compressed
+      );
 
       expect(decompressed).toBe(original);
     });
@@ -265,7 +276,9 @@ describe('CompressionEngine', () => {
       const original = '世界 🚀 Hello ñ café';
       const compressed = compression.compressToBase64(original);
 
-      const decompressed = compression.decompressFromBase64(compressed.compressed);
+      const decompressed = compression.decompressFromBase64(
+        compressed.compressed
+      );
       expect(decompressed).toBe(original);
     });
 
@@ -326,7 +339,9 @@ describe('CompressionEngine', () => {
     });
 
     it('should handle large batch', () => {
-      const texts = Array.from({ length: 100 }, (_, i) => `Text ${i} `.repeat(10));
+      const texts = Array.from({ length: 100 }, (_, i) =>
+        `Text ${i} `.repeat(10)
+      );
       const results = compression.compressBatch(texts);
 
       expect(results.length).toBe(100);
@@ -524,7 +539,10 @@ describe('CompressionEngine', () => {
       // Warm the path so the first-call cost is not attributed to size.
       compression.decompress(small.compressed);
 
-      const smallNs = Math.max(1, time(() => compression.decompress(small.compressed)));
+      const smallNs = Math.max(
+        1,
+        time(() => compression.decompress(small.compressed))
+      );
       const largeNs = time(() => compression.decompress(large.compressed));
 
       // Ten times the data should not cost anywhere near a hundred times the

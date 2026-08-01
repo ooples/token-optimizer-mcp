@@ -330,7 +330,12 @@ export class SmartGrepTool {
         if (size <= MAX_RESPONSE_TOKENS) break;
         // Drop the tail proportionally rather than one at a time, so a huge
         // result set converges in a few passes instead of thousands.
-        const keep = Math.max(1, Math.floor(paginatedMatches.length * Math.min(0.9, MAX_RESPONSE_TOKENS / size)));
+        const keep = Math.max(
+          1,
+          Math.floor(
+            paginatedMatches.length * Math.min(0.9, MAX_RESPONSE_TOKENS / size)
+          )
+        );
         paginatedMatches = paginatedMatches.slice(0, keep);
         budgetTruncated = true;
       }
@@ -386,12 +391,16 @@ export class SmartGrepTool {
       }
       // ~4 bytes per token is the same conversion used elsewhere in this
       // codebase for byte-denominated budgets.
-      const originalTokens = Math.max(resultTokens, Math.round(searchedBytes / 4));
+      const originalTokens = Math.max(
+        resultTokens,
+        Math.round(searchedBytes / 4)
+      );
 
       const tokensSaved = Math.max(0, originalTokens - resultTokens);
       // An honest baseline can now equal the result (nothing was withheld), so
       // the ratio must not divide by zero or report a nonsense figure.
-      const compressionRatio = originalTokens > 0 ? resultTokens / originalTokens : 1;
+      const compressionRatio =
+        originalTokens > 0 ? resultTokens / originalTokens : 1;
 
       // Build result
       const result: SmartGrepResult = {

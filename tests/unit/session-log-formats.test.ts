@@ -37,9 +37,17 @@ const CSV =
   '2026-07-24 18:03:57,mcp__token-optimizer__smart_grep,300,""\n';
 
 const JSONL =
-  JSON.stringify({ type: 'session_start', timestamp: '2026-07-24 18:00:00' }) + '\n' +
-  JSON.stringify({ type: 'tool_call', timestamp: '2026-07-24 18:01:04', toolName: 'Write', estimatedTokens: 5726 }) + '\n' +
-  JSON.stringify({ type: 'system_reminder', tokens: 900 }) + '\n';
+  JSON.stringify({ type: 'session_start', timestamp: '2026-07-24 18:00:00' }) +
+  '\n' +
+  JSON.stringify({
+    type: 'tool_call',
+    timestamp: '2026-07-24 18:01:04',
+    toolName: 'Write',
+    estimatedTokens: 5726,
+  }) +
+  '\n' +
+  JSON.stringify({ type: 'system_reminder', tokens: 900 }) +
+  '\n';
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'sesslog-'));
@@ -48,7 +56,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  try { rmSync(dir, { recursive: true, force: true }); } catch { /* */ }
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* */
+  }
 });
 
 describe('finding a session log', () => {
@@ -59,7 +71,9 @@ describe('finding a session log', () => {
   });
 
   it('still finds a session-log-*.jsonl when one exists', () => {
-    expect(resolveSessionLogPath(dir, 'def456')).toMatch(/session-log-def456\.jsonl$/);
+    expect(resolveSessionLogPath(dir, 'def456')).toMatch(
+      /session-log-def456\.jsonl$/
+    );
   });
 
   it('returns null for a session with no log, rather than a path that does not exist', () => {
@@ -71,7 +85,9 @@ describe('finding a session log', () => {
 
 describe('reading a CSV session log', () => {
   it('reads every operation', async () => {
-    const { operations } = await parseSessionLog(join(dir, 'operations-abc123.csv'));
+    const { operations } = await parseSessionLog(
+      join(dir, 'operations-abc123.csv')
+    );
     expect(operations).toHaveLength(3);
     expect(operations.map((o) => o.toolName)).toEqual([
       'Write',
@@ -81,19 +97,27 @@ describe('reading a CSV session log', () => {
   });
 
   it('sums the tokens', async () => {
-    const { toolTokens } = await parseSessionLog(join(dir, 'operations-abc123.csv'));
+    const { toolTokens } = await parseSessionLog(
+      join(dir, 'operations-abc123.csv')
+    );
     expect(toolTokens).toBe(5726 + 1200 + 300);
   });
 
   it('keeps a metadata field that contains commas intact', async () => {
     // Splitting naively on ',' truncates this at "b.ts" and shifts every later
     // column, so the row silently reports the wrong thing rather than failing.
-    const { operations } = await parseSessionLog(join(dir, 'operations-abc123.csv'));
-    expect(operations[1].metadata).toBe('filePath=C:\\Users\\me\\b.ts,lines=40');
+    const { operations } = await parseSessionLog(
+      join(dir, 'operations-abc123.csv')
+    );
+    expect(operations[1].metadata).toBe(
+      'filePath=C:\\Users\\me\\b.ts,lines=40'
+    );
   });
 
   it('survives the BOM PowerShell writes', async () => {
-    const { operations } = await parseSessionLog(join(dir, 'operations-abc123.csv'));
+    const { operations } = await parseSessionLog(
+      join(dir, 'operations-abc123.csv')
+    );
     // A surviving BOM would corrupt the first header cell and lose the
     // timestamp column, dropping every row.
     expect(operations[0].timestamp).toBe('2026-07-24 18:01:04');

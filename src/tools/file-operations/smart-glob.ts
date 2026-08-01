@@ -355,7 +355,9 @@ export class SmartGlobTool {
       // the response: the paths that matched and were not returned. That is
       // countable, so it is counted. When everything matched fits in the
       // response, the honest answer is that nothing was saved.
-      const withheldPaths = files.slice(opts.offset + paginatedFiles.length).map((f) => f.path);
+      const withheldPaths = files
+        .slice(opts.offset + paginatedFiles.length)
+        .map((f) => f.path);
       const withheldTokens = withheldPaths.length
         ? this.tokenCounter.count(JSON.stringify(withheldPaths)).tokens
         : 0;
@@ -364,7 +366,8 @@ export class SmartGlobTool {
       const tokensSaved = withheldTokens;
       // An honest baseline can now equal the result (nothing was withheld), so
       // the ratio must not divide by zero or report a nonsense figure.
-      const compressionRatio = originalTokens > 0 ? resultTokens / originalTokens : 1;
+      const compressionRatio =
+        originalTokens > 0 ? resultTokens / originalTokens : 1;
 
       // Build result
       const result: SmartGlobResult = {

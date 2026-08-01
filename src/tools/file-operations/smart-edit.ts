@@ -62,15 +62,25 @@ function writeBackup(
   encoding: BufferEncoding
 ): boolean {
   try {
-    const key = createHash('sha256').update(filePath).digest('hex').slice(0, 16);
+    const key = createHash('sha256')
+      .update(filePath)
+      .digest('hex')
+      .slice(0, 16);
     const dir = join(BACKUP_ROOT, key);
     mkdirSync(dir, { recursive: true });
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    writeFileSync(join(dir, `${stamp}__${basename(filePath)}`), content, encoding);
+    writeFileSync(
+      join(dir, `${stamp}__${basename(filePath)}`),
+      content,
+      encoding
+    );
 
     const existing = readdirSync(dir).sort();
-    for (const stale of existing.slice(0, Math.max(0, existing.length - BACKUPS_PER_FILE))) {
+    for (const stale of existing.slice(
+      0,
+      Math.max(0, existing.length - BACKUPS_PER_FILE)
+    )) {
       try {
         unlinkSync(join(dir, stale));
       } catch {
@@ -336,7 +346,6 @@ export class SmartEditTool {
       // Tell the search tools the tree moved, so no cached grep or glob
       // result can describe a state that no longer exists.
       bumpFsGeneration();
-
 
       // Update cache
       if (opts.updateCache) {

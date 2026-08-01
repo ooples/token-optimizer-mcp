@@ -317,9 +317,10 @@ export class SmartTest {
 
     // Vitest defaults to watch mode when run non-interactively is ambiguous;
     // reportArgs already pins --run, so only remove it if watching was asked for.
-    const finalArgs = options.watch && framework === 'vitest'
-      ? args.filter((a) => a !== '--run')
-      : args;
+    const finalArgs =
+      options.watch && framework === 'vitest'
+        ? args.filter((a) => a !== '--run')
+        : args;
 
     return new Promise((resolve, reject) => {
       let stdout = '';
@@ -328,7 +329,8 @@ export class SmartTest {
 
       // Flags some runners will only accept through the environment, appended
       // to whatever NODE_OPTIONS the user already set rather than replacing it.
-      const extraNodeOptions = adapter?.nodeOptions?.({ pattern: options.pattern }) ?? [];
+      const extraNodeOptions =
+        adapter?.nodeOptions?.({ pattern: options.pattern }) ?? [];
       const env = extraNodeOptions.length
         ? {
             ...process.env,
@@ -382,14 +384,17 @@ export class SmartTest {
           // name or '}' in JSON at position 4", which describes a parser's
           // disappointment rather than the user's situation.
           const known = 'Jest, Vitest, Mocha, AVA and node --test';
-          const detected = framework === 'unknown'
-            ? 'No supported runner could be identified from package.json.'
-            : `Detected ${ADAPTERS[framework].label}, but its report could not be read.`;
+          const detected =
+            framework === 'unknown'
+              ? 'No supported runner could be identified from package.json.'
+              : `Detected ${ADAPTERS[framework].label}, but its report could not be read.`;
           const tail = (stderr || stdout).slice(0, 600).trim();
-          reject(new Error(
-            `smart_test understands ${known}. ${detected}` +
-            (tail ? `\n\nTest output was:\n${tail}` : '')
-          ));
+          reject(
+            new Error(
+              `smart_test understands ${known}. ${detected}` +
+                (tail ? `\n\nTest output was:\n${tail}` : '')
+            )
+          );
           return;
         }
 
@@ -420,7 +425,11 @@ export class SmartTest {
    */
   private readCoverageSummary(requested: boolean): TestResult['coverageMap'] {
     if (!requested) return undefined;
-    const summaryPath = join(this.projectRoot, 'coverage', 'coverage-summary.json');
+    const summaryPath = join(
+      this.projectRoot,
+      'coverage',
+      'coverage-summary.json'
+    );
     if (!existsSync(summaryPath)) return undefined;
     try {
       const parsed = JSON.parse(readFileSync(summaryPath, 'utf8'));
@@ -618,9 +627,17 @@ export class SmartTest {
 
     const frame = lines
       .slice(firstFrame === -1 ? lines.length : firstFrame)
-      .find((l) => l.trim().startsWith('at ') && !l.includes('node_modules') && !/\bnode:/.test(l));
+      .find(
+        (l) =>
+          l.trim().startsWith('at ') &&
+          !l.includes('node_modules') &&
+          !/\bnode:/.test(l)
+      );
 
-    const parts = [head || fullMessage.slice(0, 200).trim(), frame?.trimEnd()].filter(Boolean);
+    const parts = [
+      head || fullMessage.slice(0, 200).trim(),
+      frame?.trimEnd(),
+    ].filter(Boolean);
     return parts.join('\n').slice(0, 600) || 'Unknown error';
   }
 
@@ -827,7 +844,7 @@ export async function runSmartTest(
 export const SMART_TEST_TOOL_DEFINITION = {
   name: 'smart_test',
   description:
-    'Run the project\'s tests (Jest, Vitest, Mocha, AVA or node --test) with ' +
+    "Run the project's tests (Jest, Vitest, Mocha, AVA or node --test) with " +
     'intelligent caching, coverage tracking, and incremental test execution',
   inputSchema: {
     type: 'object',

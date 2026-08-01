@@ -143,7 +143,10 @@ describe('Claude Desktop Integration Harness', () => {
             command: 'node',
             args: [path.join(process.cwd(), 'dist', 'index.js')],
             env: {
-              TOKEN_OPTIMIZER_CACHE_DIR: path.join(os.homedir(), '.token-optimizer-cache'),
+              TOKEN_OPTIMIZER_CACHE_DIR: path.join(
+                os.homedir(),
+                '.token-optimizer-cache'
+              ),
             },
           },
         },
@@ -155,7 +158,11 @@ describe('Claude Desktop Integration Harness', () => {
     });
 
     it('should validate configuration structure', () => {
-      const configPath = path.join(process.cwd(), 'examples', 'claude_desktop_config.json');
+      const configPath = path.join(
+        process.cwd(),
+        'examples',
+        'claude_desktop_config.json'
+      );
       const configExists = fs.existsSync(configPath);
 
       if (configExists) {
@@ -168,17 +175,18 @@ describe('Claude Desktop Integration Harness', () => {
     });
 
     it('should use correct environment variables', () => {
-      const expectedVars = [
-        'TOKEN_OPTIMIZER_CACHE_DIR',
-      ];
+      const expectedVars = ['TOKEN_OPTIMIZER_CACHE_DIR'];
 
       const config = {
         env: {
-          TOKEN_OPTIMIZER_CACHE_DIR: path.join(os.homedir(), '.token-optimizer-cache'),
+          TOKEN_OPTIMIZER_CACHE_DIR: path.join(
+            os.homedir(),
+            '.token-optimizer-cache'
+          ),
         },
       };
 
-      expectedVars.forEach(varName => {
+      expectedVars.forEach((varName) => {
         expect(config.env).toHaveProperty(varName);
       });
     });
@@ -191,7 +199,12 @@ describe('Claude Desktop Integration Harness', () => {
         const key = 'test-key';
 
         const result = compression.compress(text);
-        cache.set(key, result.compressed.toString('base64'), result.originalSize, result.compressedSize);
+        cache.set(
+          key,
+          result.compressed.toString('base64'),
+          result.originalSize,
+          result.compressedSize
+        );
 
         const retrieved = cache.get(key);
         expect(retrieved).not.toBeNull();
@@ -334,7 +347,12 @@ describe('Claude Desktop Integration Harness', () => {
 
       // First access - cache miss
       const compressedText = compression.compress(text);
-      cache.set(key, compressedText.compressed.toString('base64'), compressedText.originalSize, compressedText.compressedSize);
+      cache.set(
+        key,
+        compressedText.compressed.toString('base64'),
+        compressedText.originalSize,
+        compressedText.compressedSize
+      );
 
       // A repeated read must be served from memory, which is checkable
       // directly. The previous version timed two cache.get calls and required
@@ -357,7 +375,12 @@ describe('Claude Desktop Integration Harness', () => {
       // Store all
       testData.forEach(({ key, value }) => {
         const compressed = compression.compress(value);
-        cache.set(key, compressed.compressed.toString('base64'), compressed.originalSize, compressed.compressedSize);
+        cache.set(
+          key,
+          compressed.compressed.toString('base64'),
+          compressed.originalSize,
+          compressed.compressedSize
+        );
       });
 
       // Retrieve and verify all
@@ -402,7 +425,12 @@ describe('Claude Desktop Integration Harness', () => {
 
       const tokenCount = tokenCounter.count(text);
       const compressed = compression.compress(text);
-      cache.set('perf-key', compressed.compressed.toString('base64'), compressed.originalSize, compressed.compressedSize);
+      cache.set(
+        'perf-key',
+        compressed.compressed.toString('base64'),
+        compressed.originalSize,
+        compressed.compressedSize
+      );
       const retrieved = cache.get('perf-key');
 
       const duration = Date.now() - start;
@@ -416,11 +444,16 @@ describe('Claude Desktop Integration Harness', () => {
       const operations = Array.from({ length: 50 }, (_, i) => {
         const text = `Concurrent operation ${i}`;
         const compressed = compression.compress(text);
-        cache.set(`concurrent-${i}`, compressed.compressed.toString('base64'), compressed.originalSize, compressed.compressedSize);
+        cache.set(
+          `concurrent-${i}`,
+          compressed.compressed.toString('base64'),
+          compressed.originalSize,
+          compressed.compressedSize
+        );
         return cache.get(`concurrent-${i}`);
       });
 
-      operations.forEach(result => {
+      operations.forEach((result) => {
         expect(result).not.toBeNull();
       });
     });

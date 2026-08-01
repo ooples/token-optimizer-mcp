@@ -38,7 +38,10 @@ type HighlightApi = {
   highlightAuto(code: string): HljsResult;
   highlight(code: string, options: { language: string }): HljsResult;
 };
-type PrettierFormat = (source: string, options?: unknown) => string | Promise<string>;
+type PrettierFormat = (
+  source: string,
+  options?: unknown
+) => string | Promise<string>;
 
 let hljs: HighlightApi | null = null;
 let prettierFormat: PrettierFormat | null = null;
@@ -583,7 +586,10 @@ export class SmartPretty {
       if (cached) {
         let cachedResult: HighlightResult | null = null;
         try {
-          const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
+          const decompressed = decompress(
+            Buffer.from(cached, 'base64'),
+            'gzip'
+          );
           cachedResult = JSON.parse(decompressed.toString()) as HighlightResult;
         } catch {
           // Corrupt or written by an older, broken version. Forget it and fall
@@ -876,9 +882,9 @@ export class SmartPretty {
     // Check cache (88% reduction for incremental format)
     if (useCache) {
       const cached = this.cache.get(cacheKey);
-        // An unreadable entry is a MISS, not a failure -- see
-        // readCompressedJson in utils/cache-helper.ts. A cache must never
-        // be able to make a correct answer impossible.
+      // An unreadable entry is a MISS, not a failure -- see
+      // readCompressedJson in utils/cache-helper.ts. A cache must never
+      // be able to make a correct answer impossible.
       const cachedResult = readCompressedJson<FormatResult>(
         this.cache,
         cached,

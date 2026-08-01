@@ -1,8 +1,19 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, readdirSync, existsSync } from 'fs';
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  mkdirSync,
+  readdirSync,
+  existsSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import { join, dirname } from 'path';
-import { SmartEditTool, BACKUP_ROOT } from '../../../src/tools/file-operations/smart-edit.js';
+import {
+  SmartEditTool,
+  BACKUP_ROOT,
+} from '../../../src/tools/file-operations/smart-edit.js';
 import { createHash } from 'crypto';
 import { SmartGlobTool } from '../../../src/tools/file-operations/smart-glob.js';
 import { CacheEngine } from '../../../src/core/cache-engine.js';
@@ -25,11 +36,21 @@ describe('smart_edit line endings', () => {
 
   afterEach(() => {
     while (caches.length) {
-      try { caches.pop()?.close(); } catch { /* already closed */ }
+      try {
+        caches.pop()?.close();
+      } catch {
+        /* already closed */
+      }
     }
     while (dirs.length) {
       const d = dirs.pop();
-      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+      if (d) {
+        try {
+          rmSync(d, { recursive: true, force: true });
+        } catch {
+          /* windows */
+        }
+      }
     }
     // Every successful edit writes a backup under the user's HOME directory,
     // outside the temp fixture. Removing only the fixture left one directory
@@ -37,7 +58,13 @@ describe('smart_edit line endings', () => {
     // suite that litters the developer's home is its own small defect.
     while (backupDirs.length) {
       const d = backupDirs.pop();
-      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+      if (d) {
+        try {
+          rmSync(d, { recursive: true, force: true });
+        } catch {
+          /* windows */
+        }
+      }
     }
   });
 
@@ -50,9 +77,19 @@ describe('smart_edit line endings', () => {
     writeFileSync(file, body);
     // Keyed exactly as writeBackup keys it, so teardown removes the real one.
     backupDirs.push(
-      join(BACKUP_ROOT, createHash('sha256').update(file).digest('hex').slice(0, 16))
+      join(
+        BACKUP_ROOT,
+        createHash('sha256').update(file).digest('hex').slice(0, 16)
+      )
     );
-    return { tool: new SmartEditTool(cache, new TokenCounter(), new MetricsCollector()), file };
+    return {
+      tool: new SmartEditTool(
+        cache,
+        new TokenCounter(),
+        new MetricsCollector()
+      ),
+      file,
+    };
   }
 
   const counts = (s: string) => {
@@ -64,7 +101,12 @@ describe('smart_edit line endings', () => {
     const lines = ['line 1', 'line 2', 'line 3', 'line 4', 'line 5'];
     const { tool, file } = fixture(lines.join('\r\n'));
 
-    await tool.edit(file, { type: 'replace', startLine: 3, endLine: 3, content: 'REPLACED' });
+    await tool.edit(file, {
+      type: 'replace',
+      startLine: 3,
+      endLine: 3,
+      content: 'REPLACED',
+    });
 
     const after = readFileSync(file, 'utf8');
     expect(after).toContain('REPLACED');
@@ -75,7 +117,12 @@ describe('smart_edit line endings', () => {
   it('keeps an LF file entirely LF', async () => {
     const { tool, file } = fixture(['a', 'b', 'c'].join('\n'));
 
-    await tool.edit(file, { type: 'replace', startLine: 2, endLine: 2, content: 'B' });
+    await tool.edit(file, {
+      type: 'replace',
+      startLine: 2,
+      endLine: 2,
+      content: 'B',
+    });
 
     const after = readFileSync(file, 'utf8');
     expect(after).toBe(['a', 'B', 'c'].join('\n'));
@@ -86,7 +133,11 @@ describe('smart_edit line endings', () => {
     // The caller types '\n' regardless of the file's convention.
     const { tool, file } = fixture(['x', 'y', 'z'].join('\r\n'));
 
-    await tool.edit(file, { type: 'insert', startLine: 2, content: 'one\ntwo' });
+    await tool.edit(file, {
+      type: 'insert',
+      startLine: 2,
+      content: 'one\ntwo',
+    });
 
     const after = readFileSync(file, 'utf8');
     expect(after).toContain('one');
@@ -103,7 +154,12 @@ describe('smart_edit line endings', () => {
     const dir = dirname(file);
     const before = readdirSync(dir);
 
-    await tool.edit(file, { type: 'replace', startLine: 1, endLine: 1, content: 'A' });
+    await tool.edit(file, {
+      type: 'replace',
+      startLine: 1,
+      endLine: 1,
+      content: 'A',
+    });
 
     const after = readdirSync(dir);
     expect(after.filter((f) => f.endsWith('.bak'))).toEqual([]);
@@ -113,12 +169,19 @@ describe('smart_edit line endings', () => {
   it('still keeps the previous content somewhere recoverable', async () => {
     const { tool, file } = fixture(['keep', 'me'].join('\n'));
 
-    await tool.edit(file, { type: 'replace', startLine: 1, endLine: 1, content: 'changed' });
+    await tool.edit(file, {
+      type: 'replace',
+      startLine: 1,
+      endLine: 1,
+      content: 'changed',
+    });
 
     const key = createHash('sha256').update(file).digest('hex').slice(0, 16);
     const stash = join(BACKUP_ROOT, key);
     expect(existsSync(stash)).toBe(true);
-    const saved = readdirSync(stash).map((f) => readFileSync(join(stash, f), 'utf8'));
+    const saved = readdirSync(stash).map((f) =>
+      readFileSync(join(stash, f), 'utf8')
+    );
     expect(saved.some((s) => s.includes('keep'))).toBe(true);
     rmSync(stash, { recursive: true, force: true });
   });
@@ -127,7 +190,12 @@ describe('smart_edit line endings', () => {
     // Dominance, not first-match: a mostly-LF file stays LF.
     const { tool, file } = fixture('a\nb\r\nc\nd\ne\n');
 
-    await tool.edit(file, { type: 'replace', startLine: 4, endLine: 4, content: 'D' });
+    await tool.edit(file, {
+      type: 'replace',
+      startLine: 4,
+      endLine: 4,
+      content: 'D',
+    });
 
     expect(counts(readFileSync(file, 'utf8')).crlf).toBe(0);
   });
@@ -148,11 +216,21 @@ describe('smart_glob reports what it withheld', () => {
 
   afterEach(() => {
     while (caches.length) {
-      try { caches.pop()?.close(); } catch { /* already closed */ }
+      try {
+        caches.pop()?.close();
+      } catch {
+        /* already closed */
+      }
     }
     while (dirs.length) {
       const d = dirs.pop();
-      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+      if (d) {
+        try {
+          rmSync(d, { recursive: true, force: true });
+        } catch {
+          /* windows */
+        }
+      }
     }
   });
 
@@ -162,12 +240,23 @@ describe('smart_glob reports what it withheld', () => {
     const cache = new CacheEngine(join(dir, 'c.db'));
     caches.push(cache);
     const work = join(dir, 'work');
-    for (const rel of ['src/a.csproj', 'build/LicenseValidator/b.csproj', 'src/nested/c.csproj']) {
+    for (const rel of [
+      'src/a.csproj',
+      'build/LicenseValidator/b.csproj',
+      'src/nested/c.csproj',
+    ]) {
       const full = join(work, rel);
       mkdirSync(dirname(full), { recursive: true });
       writeFileSync(full, '<Project />');
     }
-    return { tool: new SmartGlobTool(cache, new TokenCounter(), new MetricsCollector()), cwd: work };
+    return {
+      tool: new SmartGlobTool(
+        cache,
+        new TokenCounter(),
+        new MetricsCollector()
+      ),
+      cwd: work,
+    };
   }
 
   it('names the count and the way to see them', async () => {
@@ -189,7 +278,11 @@ describe('smart_glob reports what it withheld', () => {
 
   it('an explicit empty ignore really does return everything', async () => {
     const { tool, cwd } = repo();
-    const r = await tool.glob('**/*.csproj', { cwd, ignore: [], useCache: false });
+    const r = await tool.glob('**/*.csproj', {
+      cwd,
+      ignore: [],
+      useCache: false,
+    });
 
     expect((r.files ?? []).length).toBe(3);
   });

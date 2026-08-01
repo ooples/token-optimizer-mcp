@@ -355,10 +355,10 @@ export class SmartWriteTool {
 
       // Atomic rename (guaranteed on POSIX, best-effort on Windows)
       renameSync(tempPath, filePath);
-        // Same, for the atomic path -- after the RENAME, which is the
-        // point the file actually changes. Bumping after the temp write
-        // would announce a change that a failed rename never made.
-        bumpFsGeneration();
+      // Same, for the atomic path -- after the RENAME, which is the
+      // point the file actually changes. Bumping after the temp write
+      // would announce a change that a failed rename never made.
+      bumpFsGeneration();
 
       return Buffer.from(content).length;
     } catch (error) {

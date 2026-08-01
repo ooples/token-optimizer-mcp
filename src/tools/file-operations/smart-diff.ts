@@ -437,8 +437,18 @@ export class SmartDiffTool {
           args.push('-M');
         }
 
-        if (!opts.includeBinary) {
-          args.push('--no-binary');
+        // `--binary` is opt-IN; git omits binary patches by default. The
+        // previous line pushed `--no-binary`, which git does not accept:
+        //
+        //     error: invalid option: --no-binary
+        //
+        // git exited 255, the catch below swallowed it, and EVERY file was
+        // skipped -- so `diffs` came back `[]` on every call the tool has ever
+        // served. The stats said "1 file changed, +1" while the content that
+        // makes a diff a diff was silently absent, and nothing in the response
+        // said why.
+        if (opts.includeBinary) {
+          args.push('--binary');
         }
 
         // Add comparison targets
@@ -462,9 +472,17 @@ export class SmartDiffTool {
         if (diff.trim()) {
           diffs.push({ file, diff });
         }
-      } catch {
-        // Skip files that can't be diffed
-        continue;
+      } catch (err) {
+        // A file that cannot be diffed is worth SAYING, not skipping in
+        // silence. Swallowing this is what let an invalid flag empty every
+        // result without a single visible symptom: an empty array reads as
+        // "nothing changed", which is a different claim from "I could not
+        // look".
+        const reason = err instanceof Error ? err.message : String(err);
+        diffs.push({
+          file,
+          diff: `[diff unavailable: ${reason.split(/\r?\n/)[0]}]`,
+        });
       }
     }
 

@@ -218,7 +218,6 @@ export class SmartConfigReadTool {
         schemaCacheKey
       );
       if (cachedSchemaObj) {
-
         // Compare schemas to detect structural changes
         if (!this.schemasMatch(cachedSchemaObj, inferredSchema)) {
           suggestions.push(

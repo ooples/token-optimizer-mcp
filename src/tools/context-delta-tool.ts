@@ -161,7 +161,8 @@ export const CONTEXT_DELTA_TOOL_DEFINITION = {
       sessionId: {
         type: 'string',
         minLength: 1,
-        description: 'Session the snapshot belongs to. Required by every operation.',
+        description:
+          'Session the snapshot belongs to. Required by every operation.',
       },
       filePath: {
         type: 'string',
@@ -170,7 +171,8 @@ export const CONTEXT_DELTA_TOOL_DEFINITION = {
       },
       currentContent: {
         type: 'string',
-        description: 'The file as it stands now. Required for compute-delta and seed.',
+        description:
+          'The file as it stands now. Required for compute-delta and seed.',
       },
     },
     required: ['operation', 'sessionId', 'filePath'],

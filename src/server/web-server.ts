@@ -90,7 +90,10 @@ function resolveSessionLogPath(sessionId: string): string | null {
   // directory. Nothing to prove afterwards, because nothing unsafe is
   // constructed. It is also strictly stronger: a name that is not literally
   // present cannot be reached, whatever it is spelled like.
-  const wanted = [`session-log-${sessionId}.jsonl`, `operations-${sessionId}.csv`];
+  const wanted = [
+    `session-log-${sessionId}.jsonl`,
+    `operations-${sessionId}.csv`,
+  ];
 
   let entries: string[];
   try {

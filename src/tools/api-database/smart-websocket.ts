@@ -267,7 +267,11 @@ export class SmartWebSocket {
     await new Promise<void>((resolve, reject) => {
       const socket = new globalThis.WebSocket(options.url);
       const timer = setTimeout(() => {
-        try { socket.close(); } catch { /* already closing */ }
+        try {
+          socket.close();
+        } catch {
+          /* already closing */
+        }
         reject(new Error(`Timed out connecting to ${options.url}`));
       }, 10_000);
 
@@ -388,9 +392,7 @@ export class SmartWebSocket {
     // message that a throwing send never delivered.
     const socket = this.sockets.get(urlKey);
     if (!socket) {
-      throw new Error(
-        `No open socket for ${options.url}. Call connect first.`
-      );
+      throw new Error(`No open socket for ${options.url}. Call connect first.`);
     }
     if (socket.readyState !== 1 /* OPEN */) {
       throw new Error(

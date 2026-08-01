@@ -32,8 +32,16 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  try { cache.close(); } catch { /* */ }
-  try { rmSync(dir, { recursive: true, force: true }); } catch { /* */ }
+  try {
+    cache.close();
+  } catch {
+    /* */
+  }
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* */
+  }
 });
 
 /** Writes an entry exactly the way the broken version did. */
@@ -45,7 +53,9 @@ function poison(key: string, value: unknown): void {
 describe('the encoding itself', () => {
   it('utf8 destroys gzip, and base64 does not', () => {
     // The premise of the whole bug, stated as a fact rather than assumed.
-    const gz = gzipSync(Buffer.from(JSON.stringify({ hello: 'world'.repeat(20) })));
+    const gz = gzipSync(
+      Buffer.from(JSON.stringify({ hello: 'world'.repeat(20) }))
+    );
 
     const viaUtf8 = Buffer.from(gz.toString(), 'utf-8');
     expect(viaUtf8.equals(gz)).toBe(false);
@@ -60,8 +70,9 @@ describe('reading a compressed cache entry', () => {
     const gz = gzipSync(Buffer.from(JSON.stringify({ answer: 42 })));
     cache.set('good', gz.toString('base64'), 0, gz.length);
 
-    expect(readCompressedJson<{ answer: number }>(cache, cache.get('good'), 'good'))
-      .toEqual({ answer: 42 });
+    expect(
+      readCompressedJson<{ answer: number }>(cache, cache.get('good'), 'good')
+    ).toEqual({ answer: 42 });
   });
 
   it('reports a MISS rather than throwing on an entry the old version wrote', () => {
@@ -70,7 +81,9 @@ describe('reading a compressed cache entry', () => {
     expect(() =>
       readCompressedJson(cache, cache.get('poisoned'), 'poisoned')
     ).not.toThrow();
-    expect(readCompressedJson(cache, cache.get('poisoned'), 'poisoned')).toBeNull();
+    expect(
+      readCompressedJson(cache, cache.get('poisoned'), 'poisoned')
+    ).toBeNull();
   });
 
   it('FORGETS the unreadable entry, so the next write can replace it', () => {
@@ -88,7 +101,9 @@ describe('reading a compressed cache entry', () => {
 
   it('reports a miss for a value that is not compressed at all', () => {
     cache.set('garbage', 'this is not gzip', 0, 16);
-    expect(readCompressedJson(cache, cache.get('garbage'), 'garbage')).toBeNull();
+    expect(
+      readCompressedJson(cache, cache.get('garbage'), 'garbage')
+    ).toBeNull();
   });
 });
 
@@ -100,15 +115,25 @@ describe('no tool stringifies a compressed buffer without an encoding', () => {
     const walk = (d: string): void => {
       for (const entry of readdirSync(d, { withFileTypes: true })) {
         const full = join(d, entry.name);
-        if (entry.isDirectory()) { walk(full); continue; }
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
         if (!entry.name.endsWith('.ts')) continue;
 
         const text = readFileSync(full, 'utf8');
         text.split('\n').forEach((line, i) => {
-          if (line.trim().startsWith('//') || line.trim().startsWith('*')) return;
-          if (/\bcompress(ionResult)?(\.compressed)?\.toString\(\s*\)/.test(line) ||
-              /\b\w*Compressed\.toString\(\s*\)/.test(line)) {
-            offenders.push(`${full.replace(process.cwd(), '')}:${i + 1}: ${line.trim()}`);
+          if (line.trim().startsWith('//') || line.trim().startsWith('*'))
+            return;
+          if (
+            /\bcompress(ionResult)?(\.compressed)?\.toString\(\s*\)/.test(
+              line
+            ) ||
+            /\b\w*Compressed\.toString\(\s*\)/.test(line)
+          ) {
+            offenders.push(
+              `${full.replace(process.cwd(), '')}:${i + 1}: ${line.trim()}`
+            );
           }
         });
       }

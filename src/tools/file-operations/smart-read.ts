@@ -258,7 +258,9 @@ export class SmartReadTool {
       // nothing and returned chunk 1 again.
       const requested = Number(options.chunkIndex);
       chunkIndex =
-        Number.isInteger(requested) && requested >= 0 && requested < allChunks.length
+        Number.isInteger(requested) &&
+        requested >= 0 &&
+        requested < allChunks.length
           ? requested
           : 0;
 

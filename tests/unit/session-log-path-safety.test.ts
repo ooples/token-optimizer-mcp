@@ -34,9 +34,9 @@ describe('session id validation', () => {
       '/etc/passwd',
       'sess/../..',
       'sess\\..\\..',
-      'sess.jsonl',            // a dot is enough to build an extension or a segment
-      'sess\u0000.txt',        // null byte truncation
-      'sess%2F..%2F',          // encoded separator, if ever decoded upstream
+      'sess.jsonl', // a dot is enough to build an extension or a segment
+      'sess\u0000.txt', // null byte truncation
+      'sess%2F..%2F', // encoded separator, if ever decoded upstream
     ]) {
       expect(isValidSessionId(evil)).toBe(false);
     }

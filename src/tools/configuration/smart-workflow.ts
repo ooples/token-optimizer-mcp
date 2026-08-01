@@ -162,9 +162,9 @@ export class SmartWorkflowTool {
     let fromCache = false;
     if (enableCache) {
       const cachedData = this.cache.get(cacheKey);
-        // An unreadable entry is a MISS, not a failure -- see
-        // readCompressedJson in utils/cache-helper.ts. A cache must never
-        // be able to make a correct answer impossible.
+      // An unreadable entry is a MISS, not a failure -- see
+      // readCompressedJson in utils/cache-helper.ts. A cache must never
+      // be able to make a correct answer impossible.
       const cached = readCompressedJson<SmartWorkflowResult>(
         this.cache,
         cachedData,

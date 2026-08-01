@@ -153,7 +153,8 @@ export const OPTIMIZATION_STORAGE_TOOL_DEFINITION = {
       originalTextHash: {
         type: 'string',
         minLength: 1,
-        description: 'Stable hash of the original uncompressed text. Required by both operations.',
+        description:
+          'Stable hash of the original uncompressed text. Required by both operations.',
       },
       optimizedText: {
         type: 'string',

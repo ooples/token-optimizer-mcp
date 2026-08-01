@@ -28,7 +28,9 @@ import { SmartEditTool } from '../../../src/tools/file-operations/smart-edit.js'
 let dir: string;
 let cache: CacheEngine;
 const deps = (): [CacheEngine, TokenCounter, MetricsCollector] => [
-  cache, new TokenCounter(), new MetricsCollector(),
+  cache,
+  new TokenCounter(),
+  new MetricsCollector(),
 ];
 
 beforeEach(() => {
@@ -39,8 +41,16 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  try { cache.close(); } catch { /* */ }
-  try { rmSync(dir, { recursive: true, force: true }); } catch { /* windows */ }
+  try {
+    cache.close();
+  } catch {
+    /* */
+  }
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* windows */
+  }
 });
 
 describe('smart_glob freshness', () => {
@@ -82,7 +92,9 @@ describe('smart_grep freshness', () => {
     writeFileSync(join(dir, 'src', 'c.ts'), 'export const NEEDLE = 3;\n');
     const after = await tool.grep('NEEDLE', { cwd: dir });
 
-    expect(after.metadata.totalMatches).toBeGreaterThan(before.metadata.totalMatches);
+    expect(after.metadata.totalMatches).toBeGreaterThan(
+      before.metadata.totalMatches
+    );
   });
 
   it('reflects an edit that removed the only match', async () => {
@@ -113,7 +125,10 @@ describe('the opt-in cache', () => {
 
     await glob.glob('src/*.ts', { cwd: dir, useCache: true });
     await edit.edit(join(dir, 'src', 'a.ts'), {
-      type: 'replace', startLine: 1, endLine: 1, content: 'export const CHANGED = 1;',
+      type: 'replace',
+      startLine: 1,
+      endLine: 1,
+      content: 'export const CHANGED = 1;',
     });
 
     const after = await glob.glob('src/*.ts', { cwd: dir, useCache: true });

@@ -44,7 +44,9 @@ beforeAll(async () => {
   server.on('upgrade', (req, socket) => {
     upgraded.push(socket);
     const accept = createHash('sha1')
-      .update(`${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+      .update(
+        `${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`
+      )
       .digest('base64');
     socket.write(
       'HTTP/1.1 101 Switching Protocols\r\n' +
@@ -58,8 +60,13 @@ beforeAll(async () => {
         const opcode = buf[i] & 0x0f;
         let len = buf[i + 1] & 0x7f;
         let off = i + 2;
-        if (len === 126) { len = buf.readUInt16BE(off); off += 2; }
-        else if (len === 127) { len = Number(buf.readBigUInt64BE(off)); off += 8; }
+        if (len === 126) {
+          len = buf.readUInt16BE(off);
+          off += 2;
+        } else if (len === 127) {
+          len = Number(buf.readBigUInt64BE(off));
+          off += 8;
+        }
         const mask = buf.subarray(off, off + 4);
         off += 4;
         const payload = Buffer.alloc(len);
@@ -69,7 +76,9 @@ beforeAll(async () => {
         i = off + len;
       }
     });
-    socket.on('error', () => { /* client vanished */ });
+    socket.on('error', () => {
+      /* client vanished */
+    });
   });
 
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
@@ -82,17 +91,49 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  try { cache.close(); } catch { /* */ }
+  try {
+    cache.close();
+  } catch {
+    /* */
+  }
   for (const s of upgraded) {
-    try { s.destroy(); } catch { /* already gone */ }
+    try {
+      s.destroy();
+    } catch {
+      /* already gone */
+    }
   }
   await new Promise<void>((r) => server.close(() => r()));
-  try { rmSync(dir, { recursive: true, force: true }); } catch { /* */ }
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* */
+  }
 });
 
 const settle = () => new Promise((r) => setTimeout(r, 300));
 
-describe('smart_websocket really talks to the server', () => {
+/**
+ * The tool needs a global WebSocket, which Node gained in v22. On 18 and 20 the
+ * honest behaviour is to REFUSE, and that is what gets checked there -- rather
+ * than skipping, which would leave the older runtimes untested, or asserting a
+ * connection that cannot exist, which is what failed CI.
+ */
+const hasWebSocket =
+  typeof (globalThis as { WebSocket?: unknown }).WebSocket === 'function';
+const whenSupported = hasWebSocket ? describe : describe.skip;
+
+describe('smart_websocket without a global WebSocket', () => {
+  const test = hasWebSocket ? it.skip : it;
+
+  test('refuses plainly instead of reporting a connection it cannot make', async () => {
+    await expect(tool.run({ action: 'connect', url })).rejects.toThrow(
+      /Node 22|WebSocket/i
+    );
+  });
+});
+
+whenSupported('smart_websocket really talks to the server', () => {
   it('delivers a message it reports as sent', async () => {
     await tool.run({ action: 'connect', url });
     await tool.run({ action: 'send', url, message: 'THE-SENTINEL-PAYLOAD' });
