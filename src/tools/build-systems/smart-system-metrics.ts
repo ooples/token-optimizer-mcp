@@ -10,6 +10,10 @@
 
 import { spawn } from 'child_process';
 import { assertSafePathArg } from '../../utils/safe-exec.js';
+import {
+  parseWindowsDiskOutput,
+  parseUnixDiskOutput,
+} from '../../utils/disk-output.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { createHash } from 'crypto';
 import { homedir } from 'os';
@@ -414,52 +418,12 @@ export class SmartSystemMetrics {
    * Parse disk output
    */
   private parseDiskOutput(output: string, path: string): DiskMetrics | null {
-    if (process.platform === 'win32') {
-      // Parse Windows wmic output
-      const lines = output.split('\n').filter((l) => l.trim());
-      // Format: Caption  FreeSpace  Size
-      const dataLine = lines.find((l) => l.includes('C:'));
-      if (dataLine) {
-        const parts = dataLine.trim().split(/\s+/);
-        if (parts.length >= 3) {
-          const free = parseInt(parts[1], 10);
-          const total = parseInt(parts[2], 10);
-          const used = total - free;
-          const usagePercent = (used / total) * 100;
-
-          return {
-            path: parts[0],
-            total,
-            used,
-            free,
-            usagePercent: Math.round(usagePercent * 100) / 100,
-          };
-        }
-      }
-    } else {
-      // Parse Unix df output
-      const lines = output.split('\n').filter((l) => l.trim());
-      const dataLine = lines[1]; // First line is header
-      if (dataLine) {
-        const parts = dataLine.trim().split(/\s+/);
-        if (parts.length >= 6) {
-          const total = parseInt(parts[1], 10) * 1024; // Convert KB to bytes
-          const used = parseInt(parts[2], 10) * 1024;
-          const free = parseInt(parts[3], 10) * 1024;
-          const usagePercent = parseFloat(parts[4].replace('%', ''));
-
-          return {
-            path,
-            total,
-            used,
-            free,
-            usagePercent,
-          };
-        }
-      }
-    }
-
-    return null;
+    // Parsing lives in utils/disk-output.ts so it can be tested on a Linux CI
+    // runner, which is the only kind this project has. See that file for what
+    // both branches used to get wrong.
+    return process.platform === 'win32'
+      ? parseWindowsDiskOutput(output, path)
+      : parseUnixDiskOutput(output, path);
   }
 
   /**

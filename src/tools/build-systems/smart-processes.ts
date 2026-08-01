@@ -8,6 +8,10 @@
  * - Anomaly detection
  */
 
+import {
+  parseWmicProcessCsv,
+  WMIC_PROCESS_COLUMNS,
+} from './wmic-process-parser.js';
 import { execFileSafe } from '../../utils/safe-exec.js';
 import { measured, unmeasured } from '../shared/savings.js';
 import { CacheEngine } from '../../core/cache-engine.js';
@@ -15,6 +19,18 @@ import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { join } from 'path';
 import { homedir, cpus, totalmem } from 'os';
+
+/**
+ * Ceiling on a single process-table query.
+ *
+ * Neither command was bounded, so a stalled `wmic` or `powershell` blocked the
+ * caller forever. That is not hypothetical here: three snapshots take 6.5s on
+ * an idle 64-core box and over 60s with every core saturated, so a slow
+ * invocation is an ordinary condition. 90s is ~40x the idle cost of one call
+ * and well above the worst measured, so it fires only when something is
+ * genuinely stuck -- at which point the CIM fallback gets its turn.
+ */
+const PROCESS_QUERY_TIMEOUT_MS = 90_000;
 
 interface ProcessInfo {
   pid: number;
@@ -239,53 +255,127 @@ export class SmartProcesses {
   }
 
   /**
-   * Get processes on Windows
+   * Get processes on Windows.
+   *
+   * WMIC RETURNS COLUMNS ALPHABETICALLY, not in the order they were requested,
+   * and the previous mapping assumed request order. Measured against a real
+   * table on this machine, four of five fields were reading the wrong column:
+   *
+   *   header:  Node,CommandLine,CreationDate,KernelModeTime,Name,ProcessId,...
+   *   name    <- CommandLine        ("C:\WINDOWS\Explorer.EXE", not explorer.exe)
+   *   cpu     <- parseInt(Name)     always NaN -> 0, for every process
+   *   memory  <- UserModeTime       explorer.exe reported as 414,398 MB
+   *   command <- Node               the HOSTNAME, identical for every row
+   *
+   * `cpu` being pinned at 0 is why a default cpuThreshold filtered the entire
+   * table away -- the thresholds were lowered to compensate, which treated the
+   * symptom. Only `pid` was right.
    */
   private async getWindowsProcesses(): Promise<ProcessInfo[]> {
+    let firstError: unknown;
     try {
       const { stdout } = await execFileSafe(
         'wmic',
         [
           'process',
           'get',
-          'ProcessId,Name,UserModeTime,WorkingSetSize,CommandLine',
+          // Requested order is irrelevant -- the parser anchors to the END
+          // of each row rather than trusting any column index.
+          WMIC_PROCESS_COLUMNS,
           '/format:csv',
         ],
-        { maxBuffer: 10 * 1024 * 1024 }
+        { maxBuffer: 32 * 1024 * 1024, timeout: PROCESS_QUERY_TIMEOUT_MS }
       );
 
-      const processes: ProcessInfo[] = [];
-      const lines = stdout.split('\n').slice(1); // Skip header
+      const processes = this.parseWmicCsv(stdout);
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-
-        const parts = line.split(',');
-        if (parts.length < 5) continue;
-
-        const pid = parseInt(parts[3], 10);
-        const name = parts[1];
-        const memory = parseInt(parts[4], 10) / 1024 / 1024; // Convert to MB
-        const cpu = parseInt(parts[2], 10) / 10000; // Rough approximation
-
-        if (isNaN(pid) || isNaN(memory)) continue;
-
-        processes.push({
-          pid,
-          name: name || 'Unknown',
-          cpu: isNaN(cpu) ? 0 : cpu,
-          memory,
-          command: parts[0] || name,
-          user: 'current', // Windows WMIC doesn't easily provide user
-        });
-      }
-
-      return processes;
+      // ZERO ROWS IS A FAILURE, NOT AN ANSWER. wmic can exit 0 having printed
+      // an error ("Invalid query", "Invalid class") or a format this parser
+      // does not recognise, and every row is then dropped -- leaving an empty
+      // array that is indistinguishable from a machine with no processes. It
+      // falls through to CIM instead, which is the whole point of having a
+      // second path.
+      if (processes.length > 0) return processes;
+      firstError = new Error('wmic returned no parseable rows');
     } catch (err) {
-      console.error('Error getting Windows processes:', err);
-      return [];
+      firstError = err;
+    }
+
+    // wmic is deprecated and absent from recent Windows builds, where it is
+    // simply "not recognised". Falling through to CIM keeps the tool working
+    // there; JSON also sidesteps CSV quoting entirely.
+    try {
+      const processes = await this.getWindowsProcessesViaCim();
+
+      // NEVER return [] HERE. An empty list is indistinguishable from "this
+      // machine has no processes", and downstream that became a report of 100%
+      // tokens saved for an answer that contained nothing. A collection failure
+      // has to surface as a failure.
+      if (processes.length === 0) {
+        throw new Error('Get-CimInstance returned no processes');
+      }
+      return processes;
+    } catch (cimError) {
+      throw new Error(
+        `Could not read the process table. wmic failed (${String(firstError)}) ` +
+          `and the Get-CimInstance fallback failed (${String(cimError)}).`
+      );
     }
   }
+
+  /** @see parseWmicProcessCsv -- the parsing rules and why they are what they are. */
+  private parseWmicCsv(stdout: string): ProcessInfo[] {
+    return parseWmicProcessCsv(stdout);
+  }
+
+  /**
+   * Supported replacement for wmic. Emits JSON, so no CSV parsing is involved.
+   */
+  private async getWindowsProcessesViaCim(): Promise<ProcessInfo[]> {
+    const script =
+      'Get-CimInstance Win32_Process | ForEach-Object { [pscustomobject]@{' +
+      'pid=$_.ProcessId; name=$_.Name; cmd=$_.CommandLine; ' +
+      'cpu100ns=([double]$_.KernelModeTime + [double]$_.UserModeTime); ' +
+      'startMs=$(if ($_.CreationDate) { [long]([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() } else { 0 }); ' +
+      'ws=$_.WorkingSetSize } } | ConvertTo-Json -Compress -Depth 2';
+
+    const { stdout } = await execFileSafe(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { maxBuffer: 32 * 1024 * 1024, timeout: PROCESS_QUERY_TIMEOUT_MS }
+    );
+
+    const parsed: unknown = JSON.parse(stdout);
+    // A single process serialises as an object rather than an array.
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    const now = Date.now();
+
+    const processes: ProcessInfo[] = [];
+    for (const row of rows as Array<Record<string, unknown>>) {
+      const pid = Number(row?.pid);
+      const bytes = Number(row?.ws);
+      if (!Number.isFinite(pid) || !Number.isFinite(bytes)) continue;
+
+      const startMs = Number(row?.startMs);
+      const lifetimeMs =
+        Number.isFinite(startMs) && startMs > 0 ? now - startMs : 0;
+      const cpuSeconds = Number(row?.cpu100ns) / 1e7;
+
+      processes.push({
+        pid,
+        name: String(row?.name ?? 'Unknown'),
+        cpu: lifetimeMs > 0 ? (cpuSeconds / (lifetimeMs / 1000)) * 100 : 0,
+        memory: bytes / 1024 / 1024,
+        command: String(row?.cmd ?? row?.name ?? ''),
+        user: 'current',
+      });
+    }
+
+    return processes;
+  }
+
+  // lifetimeCpuPercent / parseWmiDate now live in wmic-process-parser.ts, so
+  // they can be tested on a Linux CI runner that has no wmic to call.
 
   /**
    * Get processes on Unix/Linux/macOS

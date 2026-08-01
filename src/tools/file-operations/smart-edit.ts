@@ -11,23 +11,23 @@
  * Target: 90% reduction vs reading full file + writing changes
  */
 
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  unlinkSync,
-} from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { homedir } from 'os';
-import { join, basename } from 'path';
-import { createHash } from 'crypto';
+import { join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { bumpFsGeneration } from '../../utils/fs-generation.js';
+import { writeBackup } from '../../utils/file-backup.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import { generateUnifiedDiff } from '../shared/diff-utils.js';
+
+// Backups live in utils/file-backup.ts, shared with smart_write. They were
+// implemented here only, so smart_write went on writing `<file>.bak` into the
+// user's working tree long after the defect was understood and fixed here.
+// Re-exported because tests and callers already import BACKUP_ROOT from this
+// module.
+export { BACKUP_ROOT } from '../../utils/file-backup.js';
 
 /**
  * The line ending a file actually uses, so an edit can put back what it found.
@@ -36,68 +36,6 @@ import { generateUnifiedDiff } from '../shared/diff-utils.js';
  * have the whole file rewritten to match the stray. A file with no newline at
  * all gets '\n', which is what a new line in a one-line file should be.
  */
-/** Where backups live: outside every working tree, so they cannot be committed. */
-export const BACKUP_ROOT = join(homedir(), '.token-optimizer', 'backups');
-
-/** How many past versions of one file are kept before the oldest is dropped. */
-const BACKUPS_PER_FILE = 5;
-
-/**
- * Saves the pre-edit content somewhere it cannot do harm.
- *
- * The backup used to be written as `<file>.bak` NEXT TO THE ORIGINAL, inside
- * the user's repository. Measured live: one edit to a real checkout left an
- * untracked README.md.bak sitting in `git status`, one `git add -A` away from
- * being committed, and nothing ever deleted it. A safety net that dirties the
- * tree it is protecting is a poor trade.
- *
- * Backups now live under the user's home directory, keyed by a hash of the
- * absolute path so two files with the same basename cannot collide, and capped
- * so they cannot grow without bound. Failure to write one is never allowed to
- * fail the edit -- the backup is a convenience, the edit is the job.
- */
-function writeBackup(
-  filePath: string,
-  content: string,
-  encoding: BufferEncoding
-): boolean {
-  try {
-    const key = createHash('sha256')
-      .update(filePath)
-      .digest('hex')
-      .slice(0, 16);
-    const dir = join(BACKUP_ROOT, key);
-    mkdirSync(dir, { recursive: true });
-
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    writeFileSync(
-      join(dir, `${stamp}__${basename(filePath)}`),
-      content,
-      encoding
-    );
-
-    const existing = readdirSync(dir).sort();
-    for (const stale of existing.slice(
-      0,
-      Math.max(0, existing.length - BACKUPS_PER_FILE)
-    )) {
-      try {
-        unlinkSync(join(dir, stale));
-      } catch {
-        // A backup we cannot prune is not worth failing an edit over.
-      }
-    }
-
-    return true;
-  } catch {
-    // Nor is one we cannot write -- but the caller must not be told a backup
-    // exists when none does. `wasBackedUp` used to echo the REQUEST
-    // (opts.createBackup) rather than the outcome, so a full disk or a
-    // read-only home directory produced a result claiming a backup that was
-    // never written. That is precisely the moment somebody relies on it.
-    return false;
-  }
-}
 
 function detectLineEnding(text: string): string {
   const crlf = (text.match(/\r\n/g) || []).length;
@@ -466,13 +404,38 @@ export class SmartEditTool {
   }
 
   /**
-   * Apply edit operations to lines
+   * Apply edit operations to lines.
+   *
+   * TWO DEFECTS LIVED HERE, and they compounded into one another.
+   *
+   * The pattern replace ran per LINE (`result[i].replace(...)`), so any pattern
+   * containing a newline could never match anything -- the text it was written
+   * against did not exist on any single line. The replace is now applied to the
+   * JOINED range, which is what a caller passing a multi-line pattern already
+   * believes is happening.
+   *
+   * And a pattern that matched nothing was silently ignored: the edit returned
+   * success with `editsApplied: 0` and `operation: 'unchanged'`, which is
+   * indistinguishable from "your edit was a legitimate no-op". A caller whose
+   * regex was subtly wrong got told it worked. Unmatched patterns now throw,
+   * which the caller renders as `operation: 'failed'` with the offending
+   * patterns named.
+   *
+   * The throw is deliberately all-or-nothing. If three patterns are supplied
+   * and one misses, applying the other two leaves the file in a state the
+   * caller never asked for and did not expect -- worse than doing nothing.
+   *
+   * Note this is only about PATTERN operations. A line-based edit whose content
+   * happens to equal what was already there is a genuine no-op and still
+   * returns success/unchanged.
    */
   private applyEdits(lines: string[], operations: EditOperation[]): string[] {
     // Sort operations by line number (descending) to avoid index shifting
     const sortedOps = [...operations].sort((a, b) => b.startLine - a.startLine);
 
-    let result = [...lines];
+    // Only ever mutated through splice, never reassigned.
+    const result = [...lines];
+    const unmatched: string[] = [];
 
     for (const op of sortedOps) {
       const startIdx = op.startLine - 1; // Convert to 0-based
@@ -481,15 +444,53 @@ export class SmartEditTool {
       switch (op.type) {
         case 'replace':
           if (op.pattern && op.replacement !== undefined) {
-            // Pattern-based replacement
             const pattern =
               typeof op.pattern === 'string'
                 ? new RegExp(op.pattern, 'g')
                 : op.pattern;
 
-            for (let i = startIdx; i <= endIdx && i < result.length; i++) {
-              result[i] = result[i].replace(pattern, op.replacement);
+            const lastIdx = Math.min(endIdx, result.length - 1);
+            if (startIdx < 0 || startIdx > lastIdx) {
+              unmatched.push(String(op.pattern));
+              break;
             }
+
+            // Joined, so a pattern spanning lines can match. Splitting the
+            // result back means a replacement may legitimately change the line
+            // count, which the per-line version could not express either.
+            const target = result.slice(startIdx, lastIdx + 1).join('\n');
+
+            // ASK WHETHER IT MATCHED, don't infer it from the output changing.
+            // Comparing `replaced === target` conflated two different things: a
+            // pattern that never matched, and one that matched but whose
+            // replacement reproduced the same text. Measured: replacing
+            // `const a = 1;` with itself, and a `$1 $2` capture-group rebuild,
+            // both matched and both were reported as "matched nothing" -- so an
+            // idempotent edit failed the whole operation.
+            //
+            // Tested on a fresh regex: a /g pattern carries lastIndex between
+            // calls, so probing with the same object would make the result
+            // depend on what was tested before it.
+            const probe =
+              typeof op.pattern === 'string'
+                ? new RegExp(op.pattern)
+                : new RegExp(
+                    op.pattern.source,
+                    op.pattern.flags.replace('g', '')
+                  );
+
+            if (!probe.test(target)) {
+              unmatched.push(String(op.pattern));
+              break;
+            }
+
+            const replaced = target.replace(pattern, op.replacement);
+
+            result.splice(
+              startIdx,
+              lastIdx - startIdx + 1,
+              ...replaced.split('\n')
+            );
           } else if (op.content !== undefined) {
             // Line replacement
             const newLines = op.content.split('\n');
@@ -508,6 +509,15 @@ export class SmartEditTool {
           result.splice(startIdx, endIdx - startIdx + 1);
           break;
       }
+    }
+
+    if (unmatched.length > 0) {
+      const list = unmatched.map((p) => JSON.stringify(p)).join(', ');
+      throw new Error(
+        `Pattern matched nothing, so no edit was made: ${list}. ` +
+          `The requested line range is searched as a whole, so a pattern may span lines; ` +
+          `check for escaping, or use a line-based edit with \`content\` instead.`
+      );
     }
 
     return result;

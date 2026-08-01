@@ -22,6 +22,7 @@ import { dirname, join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { bumpFsGeneration } from '../../utils/fs-generation.js';
+import { writeBackup } from '../../utils/file-backup.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -31,7 +32,9 @@ import { detectFileType } from '../shared/syntax-utils.js';
 export interface SmartWriteOptions {
   // Verification options
   verifyBeforeWrite?: boolean; // Skip write if content identical (default: true)
-  createBackup?: boolean; // Create .bak file before overwrite (default: false)
+  // Save the pre-write content before overwriting (default: false). Backups go
+  // to ~/.token-optimizer/backups, NOT next to the file -- see writeBackup.
+  createBackup?: boolean;
 
   // Atomic operation options
   atomic?: boolean; // Use atomic write with temp file (default: true)
@@ -208,10 +211,16 @@ export class SmartWriteTool {
         }
       }
 
-      // Step 4: Create backup if requested
+      // Step 4: Create backup if requested.
+      //
+      // NOT `${filePath}.bak`. That put the backup inside the user's working
+      // tree -- three stray .bak files were sitting in this repository, one
+      // beside a test fixture and one beside a hook a sync script regenerates,
+      // each untracked and one `git add -A` from being committed. smart_edit
+      // was moved to a home-directory backup root; this call site was missed,
+      // so the same defect kept shipping from a second tool.
       if (opts.createBackup && fileExists) {
-        const backupPath = `${filePath}.bak`;
-        writeFileSync(backupPath, originalContent, opts.encoding);
+        writeBackup(filePath, originalContent, opts.encoding);
       }
 
       // Step 5: Perform atomic write

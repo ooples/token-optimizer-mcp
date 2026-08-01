@@ -259,7 +259,7 @@ export function derivedDetections(dir, graph, events = readMetrics(dir)) {
     const list = [...set].sort();
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
-        const key = `${list[i]} ${list[j]}`;
+        const key = `${list[i]}\0${list[j]}`;
         pairs.set(key, (pairs.get(key) || 0) + 1);
       }
     }
@@ -267,7 +267,7 @@ export function derivedDetections(dir, graph, events = readMetrics(dir)) {
 
   for (const [key, count] of pairs) {
     if (count < MIN_SESSIONS) continue;
-    const [a, b] = key.split(' ');
+    const [a, b] = key.split('\0');
     const aSessions = perAnchor.get(a)?.sessions.size || 0;
     const bSessions = perAnchor.get(b)?.sessions.size || 0;
     // Only a cluster if they are essentially never opened apart.

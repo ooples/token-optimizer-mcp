@@ -26,6 +26,7 @@ import {
   spawnSafe,
   assertSafeArg,
 } from '../../utils/safe-exec.js';
+import { parseCsvWithHeader } from '../../utils/csv-with-header.js';
 
 /**
  * SECURITY (CWE-78): all scheduler commands run in argv mode via
@@ -425,14 +426,16 @@ export class SmartCron {
         'CSV',
         '/v',
       ]);
+
       const jobs: CronJob[] = [];
-      const lines = stdout.split('\n').slice(1); // Skip header
+      // schtasks emits several rows per task -- one per trigger -- and repeats
+      // the header before each folder. 294 rows here describe 214 tasks.
+      const seen = new Set<string>();
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-
-        const job = this.parseWindowsTaskLine(line);
-        if (job) {
+      for (const row of parseCsvWithHeader(stdout)) {
+        const job = this.parseWindowsTaskLine(row);
+        if (job && !seen.has(job.name)) {
+          seen.add(job.name);
           jobs.push(job);
         }
       }
@@ -446,21 +449,28 @@ export class SmartCron {
   }
 
   /**
-   * Parse a Windows task CSV line
+   * Parse a Windows task CSV line, resolving columns BY NAME.
+   *
+   * `schtasks /query /fo CSV /v` begins with HostName, not TaskName, so
+   * indexing from zero read the hostname as the task name for every row.
+   * Measured on this machine: 404 jobs returned, every one named
+   * "SUPER-COMPUTER", none matching a real task; `command` was the last exit
+   * code and `user` was a timestamp.
+   *
+   * Worse, the system-task filter below tests taskName against '\\Microsoft' --
+   * and a hostname never starts with that, so the filter could never fire and
+   * all ~270 Microsoft tasks were returned alongside the 24 real ones.
    */
-  private parseWindowsTaskLine(line: string): CronJob | null {
-    // CSV parsing - handle quoted values
-    const fields = this.parseCSVLine(line);
+  private parseWindowsTaskLine(row: Record<string, string>): CronJob | null {
+    const at = (name: string): string => row[name.toLowerCase()] ?? '';
 
-    if (fields.length < 10) return null;
-
-    const taskName = fields[0]?.replace(/^"(.*)"$/, '$1') || '';
-    const nextRunTime = fields[1]?.replace(/^"(.*)"$/, '$1') || '';
-    const status = fields[2]?.replace(/^"(.*)"$/, '$1') || '';
-    const lastRunTime = fields[3]?.replace(/^"(.*)"$/, '$1') || '';
-    const lastResult = fields[4]?.replace(/^"(.*)"$/, '$1') || '';
-    const author = fields[5]?.replace(/^"(.*)"$/, '$1') || '';
-    const taskToRun = fields[6]?.replace(/^"(.*)"$/, '$1') || '';
+    const taskName = at('TaskName');
+    const nextRunTime = at('Next Run Time');
+    const status = at('Status');
+    const lastRunTime = at('Last Run Time');
+    const lastResult = at('Last Result');
+    const author = at('Author');
+    const taskToRun = at('Task To Run');
 
     if (!taskName || taskName.startsWith('\\Microsoft')) {
       return null; // Skip system tasks
@@ -501,35 +511,6 @@ export class SmartCron {
     }
 
     return job;
-  }
-
-  /**
-   * Simple CSV line parser that handles quoted values
-   */
-  private parseCSVLine(line: string): string[] {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-
-      if (char === '"') {
-        inQuotes = !inQuotes;
-        current += char;
-      } else if (char === ',' && !inQuotes) {
-        result.push(current);
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-
-    if (current) {
-      result.push(current);
-    }
-
-    return result;
   }
 
   /**
