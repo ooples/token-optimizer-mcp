@@ -363,6 +363,7 @@ import {
 } from './session-log-parser.js';
 import fs from 'fs';
 import { createHash } from 'crypto';
+import { isValidSessionId } from '../utils/session-id.js';
 import path from 'path';
 import os from 'os';
 
@@ -1475,7 +1476,9 @@ async function handleToolCall(request: {
           // SECURITY: strict allowlist, kept in sync with SESSION_ID_RE in
           // web-server.ts — no dots or path separators, so `..` traversal
           // sequences are rejected before the path is built.
-          if (!/^[A-Za-z0-9_-]{1,64}$/.test(targetSessionId)) {
+          // Same allowlist the dashboard uses -- one definition, not two
+          // copies kept in step by comment. See utils/session-id.ts.
+          if (!isValidSessionId(targetSessionId)) {
             throw new Error('Invalid sessionId format.');
           }
           // Resolves .jsonl or the operations-<id>.csv the hooks actually
