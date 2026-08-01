@@ -453,6 +453,56 @@ export class SmartSql {
       });
     }
 
+    // THREE CAUSES THIS DID NOT LOOK FOR.
+    //
+    // The five rules above are all real, but they left out the most common
+    // reasons a query is slow. Measured against queries whose problem was
+    // stated in advance, the tool returned NO suggestions for an unbounded
+    // scan, a leading-wildcard LIKE, and an unbounded sort -- three false
+    // negatives in a tool whose entire job is spotting slow queries.
+
+    // An unbounded SELECT: no WHERE, no LIMIT, no aggregate to justify it.
+    const isSelect = /^\s*SELECT/i.test(query);
+    const hasWhere = /\sWHERE\s/i.test(query);
+    const hasLimit = /\s(LIMIT|TOP|FETCH\s+FIRST)\s/i.test(query);
+    const isAggregate = /\b(COUNT|SUM|AVG|MIN|MAX|GROUP\s+BY)\b/i.test(query);
+
+    if (isSelect && !hasWhere && !hasLimit && !isAggregate) {
+      suggestions.push({
+        type: 'performance',
+        severity: 'warning',
+        message:
+          'No WHERE or LIMIT - this reads every row in the table. Add a ' +
+          'predicate, or a LIMIT if you only need a sample.',
+      });
+    }
+
+    // A leading wildcard cannot use a B-tree index: the engine has no prefix
+    // to seek on, so it scans. A TRAILING wildcard is fine, and saying so
+    // matters -- flagging `LIKE 'smith%'` would be the false positive.
+    if (/LIKE\s+'%/i.test(query) || /LIKE\s+"%/i.test(query)) {
+      suggestions.push({
+        type: 'index',
+        severity: 'warning',
+        message:
+          "A leading wildcard in LIKE ('%term') cannot use an index - the " +
+          'engine has no prefix to seek on. Use a trailing wildcard, or a ' +
+          'full-text index for substring search.',
+      });
+    }
+
+    // Sorting the whole table to return the whole table. Cheap to fix, and
+    // usually a mistake rather than a decision.
+    if (/\sORDER\s+BY\s/i.test(query) && !hasLimit) {
+      suggestions.push({
+        type: 'performance',
+        severity: 'info',
+        message:
+          'ORDER BY without LIMIT sorts every matching row. Add a LIMIT if ' +
+          'you only need the top results.',
+      });
+    }
+
     // Limit to top 5 suggestions
     const topSuggestions = suggestions.slice(0, 5);
 

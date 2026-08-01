@@ -74,8 +74,8 @@ interface ComplexityMetrics {
 interface FragmentSuggestion {
   name: string;
   fields: string[];
+  /** How many places select this exact field set. */
   usage: number;
-  reason: string;
 }
 
 interface FieldReduction {
@@ -141,6 +141,22 @@ interface Selection {
   name: string;
   fields: Selection[];
   depth: number;
+  /**
+   * The arguments the field was called with, by name.
+   *
+   * Pagination arguments are the only reliable signal that a field returns a
+   * LIST when no schema is available, and telling lists from objects is the
+   * whole basis of N+1 detection.
+   */
+  args?: string[];
+  /**
+   * Those arguments' literal values, where they are literals.
+   *
+   * `first: 20` on the outer list and `first: 10` on the inner one is what
+   * turns "there is an N+1 here" into "this costs up to 200 resolutions",
+   * which is the sentence somebody acts on.
+   */
+  argValues?: Record<string, string>;
 }
 
 interface Fragment {
@@ -263,8 +279,8 @@ export class SmartGraphQL {
     // Extract fragments
     const fragments = this.extractFragments(query);
 
-    // Parse selections (simplified)
-    const selections = this.parseSelections(query, 0);
+    // The operation's own selection set, parsed as a tree.
+    const selections = this.parseOperationBody(query);
 
     return {
       operation,
@@ -292,76 +308,176 @@ export class SmartGraphQL {
     return fragments;
   }
 
-  private parseSelections(query: string, depth: number): Selection[] {
+  /**
+   * Parses a selection set into a real tree.
+   *
+   * THE OLD PARSER HAD NO TREE, AND EVERY ANALYSIS DEPENDED ON ONE.
+   *
+   * It ran one regex across the WHOLE query, deduplicated field names globally
+   * with a `seenFields` set, and returned every identifier it found as a
+   * top-level selection. So nesting was invented rather than observed: for
+   *
+   *     user { posts(first: 20) { comments(first: 10) { author { name } } }
+   *            settings { theme locale notifications { email push sms } } }
+   *
+   * it reported `settings` as a top-level list with an N+1 problem, and never
+   * saw the real one -- 20 posts each fetching 10 comments. It also collapsed
+   * every repeat of a field, which is exactly the repetition the fragment
+   * suggestions exist to find.
+   *
+   * GraphQL selection syntax is small enough to parse properly: alias, name,
+   * arguments, directives, and an optional nested set. Doing so fixes all four
+   * consumers -- complexity, field extraction, fragments and N+1 -- at once.
+   *
+   * @param body the INSIDE of a selection set, without its braces
+   */
+  private parseSelections(body: string, depth: number): Selection[] {
     const selections: Selection[] = [];
+    let i = 0;
 
-    // Find all field selections (simplified approach)
-    // This regex finds field names that are followed by { or are standalone
-    const fieldRegex = /\b(\w+)\s*(?:\{|(?:\s|,|}))/g;
-    let match;
-    const seenFields = new Set<string>();
+    const skipTrivia = (): void => {
+      while (i < body.length) {
+        const c = body[i];
+        if (c === '#') {
+          while (i < body.length && body[i] !== '\n') i++;
+        } else if (c === ',' || /\s/.test(c)) {
+          i++;
+        } else {
+          break;
+        }
+      }
+    };
 
-    while ((match = fieldRegex.exec(query)) !== null) {
-      const fieldName = match[1];
+    /** Consumes a balanced (...) or {...} and returns its inside. */
+    const consumeBalanced = (open: string, close: string): string => {
+      if (body[i] !== open) return '';
+      const from = i + 1;
+      let level = 0;
+      let inString: string | null = null;
+      while (i < body.length) {
+        const c = body[i];
+        if (inString) {
+          if (c === '\\') i++;
+          else if (c === inString) inString = null;
+        } else if (c === '"' || c === "'") {
+          inString = c;
+        } else if (c === open) {
+          level++;
+        } else if (c === close) {
+          level--;
+          if (level === 0) {
+            const inside = body.slice(from, i);
+            i++;
+            return inside;
+          }
+        }
+        i++;
+      }
+      return body.slice(from);
+    };
 
-      // Skip GraphQL keywords
-      if (
-        ['query', 'mutation', 'subscription', 'fragment', 'on'].includes(
-          fieldName
-        )
-      ) {
+    while (i < body.length) {
+      skipTrivia();
+      if (i >= body.length) break;
+
+      // A fragment spread or inline fragment. `... on Type { ... }` contributes
+      // its selections at this level, which is where they actually apply.
+      if (body.startsWith('...', i)) {
+        i += 3;
+        skipTrivia();
+        while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
+        skipTrivia();
+        if (body[i] === '{') {
+          const inner = consumeBalanced('{', '}');
+          selections.push(...this.parseSelections(inner, depth));
+        }
         continue;
       }
 
-      // Avoid duplicates
-      if (seenFields.has(fieldName)) {
+      // name, or alias: name
+      const nameStart = i;
+      while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
+      if (i === nameStart) {
+        i++; // unrecognised character; do not spin
         continue;
       }
-      seenFields.add(fieldName);
+      let name = body.slice(nameStart, i);
 
-      // Check if this field has nested selections
-      const fieldStart = match.index;
-      const nestedFields = this.findNestedSelections(
-        query,
-        fieldStart,
-        depth + 1
-      );
+      skipTrivia();
+      if (body[i] === ':') {
+        // What preceded the colon was the alias; the real field follows.
+        i++;
+        skipTrivia();
+        const realStart = i;
+        while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
+        if (i > realStart) name = body.slice(realStart, i);
+      }
+
+      // Arguments, kept by name so list-ness can be judged from them.
+      let args: string[] | undefined;
+      let argValues: Record<string, string> | undefined;
+      skipTrivia();
+      if (body[i] === '(') {
+        const inside = consumeBalanced('(', ')');
+        const pairs = [
+          ...inside.matchAll(
+            /(?:^|[,\s(])([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^,()\s]+)/g
+          ),
+        ];
+        if (pairs.length) {
+          args = pairs.map((m) => m[1]);
+          argValues = Object.fromEntries(pairs.map((m) => [m[1], m[2]]));
+        }
+      }
+
+      // Directives: skipped, but their arguments must not be mistaken for the
+      // field's own selection set.
+      skipTrivia();
+      while (body[i] === '@') {
+        i++;
+        while (i < body.length && /[A-Za-z0-9_]/.test(body[i])) i++;
+        skipTrivia();
+        if (body[i] === '(') consumeBalanced('(', ')');
+        skipTrivia();
+      }
+
+      let fields: Selection[] = [];
+      if (body[i] === '{') {
+        const inner = consumeBalanced('{', '}');
+        fields = this.parseSelections(inner, depth + 1);
+      }
 
       selections.push({
-        name: fieldName,
-        fields: nestedFields,
+        name,
+        fields,
         depth,
+        ...(args ? { args } : {}),
+        ...(argValues ? { argValues } : {}),
       });
     }
 
     return selections;
   }
 
-  private findNestedSelections(
-    query: string,
-    startIndex: number,
-    depth: number
-  ): Selection[] {
-    const openBrace = query.indexOf('{', startIndex);
-    if (openBrace === -1) {
-      return [];
-    }
+  /**
+   * The selection set of the operation itself, without its header.
+   */
+  private parseOperationBody(query: string): Selection[] {
+    const stripped = query.replace(/#[^\n]*/g, '');
+    const open = stripped.indexOf('{');
+    if (open === -1) return [];
 
-    // Find matching closing brace
-    let braceCount = 1;
-    let i = openBrace + 1;
-    while (i < query.length && braceCount > 0) {
-      if (query[i] === '{') braceCount++;
-      if (query[i] === '}') braceCount--;
-      i++;
+    let level = 0;
+    for (let j = open; j < stripped.length; j++) {
+      if (stripped[j] === '{') level++;
+      else if (stripped[j] === '}') {
+        level--;
+        if (level === 0) {
+          return this.parseSelections(stripped.slice(open + 1, j), 0);
+        }
+      }
     }
-
-    if (braceCount !== 0) {
-      return [];
-    }
-
-    const nestedQuery = query.substring(openBrace + 1, i - 1);
-    return this.parseSelections(nestedQuery, depth);
+    return this.parseSelections(stripped.slice(open + 1), 0);
   }
 
   private calculateComplexity(parsed: ParsedQuery): ComplexityMetrics {
@@ -416,52 +532,65 @@ export class SmartGraphQL {
     return fields;
   }
 
+  /**
+   * Repeated field groups worth extracting into a fragment.
+   *
+   * THREE THINGS WERE WRONG, AND ALL THREE WERE VISIBLE IN ONE RESPONSE.
+   *
+   * The key was `${parentName}:${fields}`, so the SAME field set reached by two
+   * differently-named parents produced two suggestions -- a real query returned
+   * `idFragment [avatarUrl, id, name] usage 23` and `bodyFragment [avatarUrl,
+   * id, name] usage 23`, which are one finding printed twice. The name came
+   * from whichever parent was seen first, so `bodyFragment` described a group
+   * containing no `body`. And `reason: "Field group repeated 23 times"`
+   * restated `usage: 23` in prose, costing tokens to say nothing.
+   *
+   * Keying on the field SET fixes the duplication, naming from the content
+   * fixes the label, and dropping `reason` removes the restatement.
+   */
   private detectFragmentOpportunities(
     parsed: ParsedQuery
   ): FragmentSuggestion[] {
-    const suggestions: FragmentSuggestion[] = [];
-    const fieldGroups = new Map<string, string[]>();
+    // key: the sorted leaf-field set. value: every path that selects it.
+    const groups = new Map<string, { fields: string[]; paths: string[] }>();
 
-    // Group repeated field patterns
-    const traverse = (selections: Selection[], path: string[] = []) => {
+    const traverse = (selections: Selection[], path: string[]): void => {
       for (const selection of selections) {
-        const fieldPath = [...path, selection.name].join('.');
+        const here = [...path, selection.name];
 
-        if (selection.fields.length > 0) {
-          const fieldNames = selection.fields
-            .map((f) => f.name)
-            .sort()
-            .join(',');
-          const key = `${selection.name}:${fieldNames}`;
-
-          if (!fieldGroups.has(key)) {
-            fieldGroups.set(key, []);
-          }
-          fieldGroups.get(key)!.push(fieldPath);
-
-          traverse(selection.fields, [...path, selection.name]);
+        if (selection.fields.length > 1) {
+          const fields = selection.fields.map((f) => f.name).sort();
+          const key = fields.join(',');
+          const entry = groups.get(key) ?? { fields, paths: [] };
+          entry.paths.push(here.join('.'));
+          groups.set(key, entry);
         }
+
+        traverse(selection.fields, here);
       }
     };
 
-    traverse(parsed.selections);
+    traverse(parsed.selections, []);
 
-    // Create suggestions for repeated patterns
-    for (const [key, paths] of fieldGroups) {
-      if (paths.length >= 2) {
-        const [typeName, fieldNames] = key.split(':');
-        const fields = fieldNames.split(',');
+    const suggestions: FragmentSuggestion[] = [];
+    for (const { fields, paths } of groups.values()) {
+      if (paths.length < 2) continue;
 
-        suggestions.push({
-          name: `${typeName}Fragment`,
-          fields,
-          usage: paths.length,
-          reason: `Field group repeated ${paths.length} times`,
-        });
-      }
+      suggestions.push({
+        // Named for what it CONTAINS. A fragment of {avatarUrl,id,name} is an
+        // avatarUrlIdName fragment, whoever happens to select it.
+        name: `${fields
+          .slice(0, 3)
+          .map((f, idx) => (idx === 0 ? f : f[0].toUpperCase() + f.slice(1)))
+          .join('')}Fragment`,
+        fields,
+        usage: paths.length,
+      });
     }
 
-    return suggestions.slice(0, 5); // Return top 5 suggestions
+    // Most-repeated first: that is the order in which acting on them pays.
+    suggestions.sort((a, b) => b.usage - a.usage);
+    return suggestions.slice(0, 5);
   }
 
   private detectFieldReductions(parsed: ParsedQuery): FieldReduction[] {
@@ -523,46 +652,115 @@ export class SmartGraphQL {
     return opportunities;
   }
 
+  /**
+   * Arguments that only ever appear on a field returning a LIST.
+   *
+   * Without a schema this is the strongest evidence available, and it is
+   * evidence rather than a guess: `posts(first: 20)` is a list because it is
+   * being paginated.
+   */
+  private static readonly PAGINATION_ARGS = new Set([
+    'first',
+    'last',
+    'limit',
+    'after',
+    'before',
+    'offset',
+    'skip',
+    'take',
+  ]);
+
+  /** Selection-set names that are list containers by convention. */
+  private static readonly LIST_CONTAINERS = new Set([
+    'edges',
+    'nodes',
+    'items',
+    'results',
+    'list',
+  ]);
+
+  /**
+   * Whether a field returns a list.
+   *
+   * `name.endsWith('s')` was the whole test. It calls `settings`, `status`,
+   * `address` and `analysis` lists, and that false positive was reported to
+   * users as a high-severity N+1 problem on a plain object.
+   */
+  private isListField(selection: Selection): boolean {
+    if (selection.fields.length === 0) return false;
+
+    if (selection.args?.some((a) => SmartGraphQL.PAGINATION_ARGS.has(a))) {
+      return true;
+    }
+    if (SmartGraphQL.LIST_CONTAINERS.has(selection.name.toLowerCase())) {
+      return true;
+    }
+    // A Relay connection: `posts { edges { node { ... } } }`.
+    if (
+      selection.fields.some((f) =>
+        SmartGraphQL.LIST_CONTAINERS.has(f.name.toLowerCase())
+      )
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Finds the N+1 shape: a list whose members each pull another list.
+   *
+   * This used to flag ANY field ending in 's' that had nested objects, which
+   * reported `settings -> theme, locale, notifications` as high severity while
+   * missing `posts(first: 20) { comments(first: 10) }` -- the actual N+1, and
+   * the one the query was written to demonstrate.
+   *
+   * Reporting the multiplication is what makes it actionable: 20 posts each
+   * fetching 10 comments is 200 round trips, and that number is the argument
+   * for a DataLoader.
+   */
   private detectN1Problems(parsed: ParsedQuery): N1Problem[] {
     const problems: N1Problem[] = [];
 
-    // Detect list fields with nested object selections (potential N+1)
-    const checkSelection = (selection: Selection, path: string = '') => {
-      const currentPath = path ? `${path}.${selection.name}` : selection.name;
+    const countOf = (selection: Selection): number | null => {
+      const raw =
+        selection.argValues?.first ??
+        selection.argValues?.last ??
+        selection.argValues?.limit ??
+        selection.argValues?.take;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
 
-      // Check if field name suggests it's a list (plural or common list names)
-      const isLikelyList =
-        selection.name.endsWith('s') ||
-        ['items', 'edges', 'nodes', 'list'].includes(
-          selection.name.toLowerCase()
-        );
+    const walk = (selection: Selection, path: string[]): void => {
+      const here = [...path, selection.name];
 
-      if (isLikelyList && selection.fields.length > 0) {
-        // Check if nested fields have further nesting (classic N+1 indicator)
-        const hasNestedObjects = selection.fields.some(
-          (f) => f.fields.length > 0
-        );
+      if (this.isListField(selection)) {
+        // Any list nested inside this one repeats per parent element.
+        const nestedLists = selection.fields.filter((f) => this.isListField(f));
+        for (const nested of nestedLists) {
+          const outer = countOf(selection);
+          const inner = countOf(nested);
+          const multiplier =
+            outer && inner
+              ? ` -- up to ${outer} x ${inner} = ${outer * inner} resolutions`
+              : '';
 
-        if (hasNestedObjects) {
           problems.push({
-            field: currentPath,
-            location: `${selection.name} -> ${selection.fields.map((f) => f.name).join(', ')}`,
-            severity: 'high',
+            field: [...here, nested.name].join('.'),
+            location: `${here.join('.')} -> ${nested.name}${multiplier}`,
+            severity:
+              outer && inner && outer * inner >= 100 ? 'high' : 'medium',
             suggestion:
-              'Consider using DataLoader or batching to prevent N+1 queries',
+              `Each ${selection.name} element resolves ${nested.name} separately. ` +
+              'Batch with a DataLoader, or fetch the join in one round trip.',
           });
         }
       }
 
-      // Recursively check nested fields
-      for (const field of selection.fields) {
-        checkSelection(field, currentPath);
-      }
+      for (const field of selection.fields) walk(field, here);
     };
 
-    for (const selection of parsed.selections) {
-      checkSelection(selection);
-    }
+    for (const selection of parsed.selections) walk(selection, []);
 
     return problems;
   }
