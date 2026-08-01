@@ -578,308 +578,364 @@ const server = new Server(
 );
 
 // Define tools
+/**
+ * Every tool this server advertises.
+ *
+ * Named, rather than inline in the handler, so ONE list is both what the
+ * client is shown and what requests are validated against. When they were
+ * two things, a tool could declare `required: [ormCode, ormType]` in the
+ * schema a caller reads while its Zod entry was the permissive
+ * GenericToolOptionsSchema -- and 43 of them use that. Omitting a required
+ * field then reached the tool body, where smart_orm answered:
+ *
+ *     The "data" argument must be of type string or an instance of Buffer,
+ *     TypedArray, or DataView. Received undefined
+ *
+ * which tells the caller nothing about the field they left out.
+ */
+const TOOL_DEFINITIONS = [
+  SMART_COMPLEXITY_TOOL_DEFINITION,
+  SMART_DEPENDENCIES_TOOL_DEFINITION,
+  SMART_EXPORTS_TOOL_DEFINITION,
+  SMART_IMPORTS_TOOL_DEFINITION,
+  SMART_REFACTOR_TOOL_DEFINITION,
+  SMART_SECURITY_TOOL_DEFINITION,
+  SMART_SYMBOLS_TOOL_DEFINITION,
+  SMART_TYPESCRIPT_TOOL_DEFINITION,
+  SMART_CONFIG_READ_TOOL_DEFINITION,
+  SMART_ENV_TOOL_DEFINITION,
+  SMART_PACKAGE_JSON_TOOL_DEFINITION,
+  SMART_TSCONFIG_TOOL_DEFINITION,
+  SMART_PRETTY_TOOL_DEFINITION,
+  SMART_PROCESS_TOOL_DEFINITION,
+  SMART_SERVICE_TOOL_DEFINITION,
+  AUDIT_TOOL,
+  DOCTOR_TOOL,
+  FLEET_TOOL,
+  EXPAND_TOOL,
+  WASTE_TOOL,
+  CACHE_TOOL,
+  ROUTING_TOOL,
+  {
+    name: 'optimize_text',
+    description:
+      'Compress and cache text to reduce token usage. Returns compressed version and saves to cache for future use.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to optimize',
+        },
+        key: {
+          type: 'string',
+          description: 'Cache key for storing the optimized text',
+        },
+        quality: {
+          type: 'number',
+          description: 'Compression quality (0-11, default 11)',
+          minimum: 0,
+          maximum: 11,
+        },
+      },
+      required: ['text', 'key'],
+    },
+  },
+  {
+    name: 'get_cached',
+    description:
+      'Retrieve previously cached and optimized text. Returns the original text if found in cache.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        key: {
+          type: 'string',
+          description: 'Cache key to retrieve',
+        },
+      },
+      required: ['key'],
+    },
+  },
+  {
+    name: 'count_tokens',
+    description:
+      'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to count tokens for',
+        },
+        modelName: {
+          type: 'string',
+          description:
+            'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'compress_text',
+    description:
+      'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to compress',
+        },
+        quality: {
+          type: 'number',
+          description: 'Compression quality (0-11, default 11)',
+          minimum: 0,
+          maximum: 11,
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'decompress_text',
+    description: 'Decompress base64-encoded Brotli-compressed text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        compressed: {
+          type: 'string',
+          description: 'Base64-encoded compressed text',
+        },
+      },
+      required: ['compressed'],
+    },
+  },
+  {
+    name: 'get_cache_stats',
+    description:
+      'Get cache statistics including hit rate, compression ratio, and token savings.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'clear_cache',
+    description: 'Clear all cached data. Use with caution.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to confirm cache clearing',
+        },
+      },
+      required: ['confirm'],
+    },
+  },
+  {
+    name: 'analyze_optimization',
+    description:
+      'Analyze text and provide recommendations for optimization including compression benefits and token savings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to analyze',
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'get_session_stats',
+    description:
+      'Get comprehensive statistics from the PowerShell wrapper session tracker including system reminders, tool operations, and total tokens with accurate tiktoken-based counting.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description:
+            'Optional session ID to query. If not provided, uses current session.',
+        },
+      },
+    },
+  },
+  {
+    name: 'optimize_session',
+    description:
+      'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description:
+            'Optional session ID to optimize. If not provided, uses the current active session.',
+        },
+        min_token_threshold: {
+          type: 'number',
+          description:
+            'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+        },
+      },
+    },
+  },
+  // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
+  // This tool (analyze_project_tokens) is a new addition to the MCP server
+  {
+    name: 'analyze_project_tokens',
+    description:
+      'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log-*.jsonl files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description:
+            'Path to the project directory. If not provided, uses the hooks data directory.',
+        },
+        startDate: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'Optional start date filter (YYYY-MM-DD format).',
+        },
+        endDate: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'Optional end date filter (YYYY-MM-DD format).',
+        },
+        costPerMillionTokens: {
+          type: 'number',
+          description:
+            'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
+          default: 30,
+          exclusiveMinimum: 0,
+        },
+      },
+    },
+  },
+  PREDICTIVE_CACHE_TOOL_DEFINITION,
+  CACHE_WARMUP_TOOL_DEFINITION,
+  // Code analysis tools
+  SMART_AST_GREP_TOOL_DEFINITION,
+  CACHE_ANALYTICS_TOOL_DEFINITION,
+  CACHE_BENCHMARK_TOOL_DEFINITION,
+  CACHE_COMPRESSION_TOOL_DEFINITION,
+  CACHE_INVALIDATION_TOOL_DEFINITION,
+  CACHE_OPTIMIZER_TOOL_DEFINITION,
+  CACHE_PARTITION_TOOL_DEFINITION,
+  CACHE_REPLICATION_TOOL_DEFINITION,
+  SMART_CACHE_TOOL_DEFINITION,
+  // API & Database tools
+  SMART_SQL_TOOL_DEFINITION,
+  SMART_SCHEMA_TOOL_DEFINITION,
+  SMART_API_FETCH_TOOL_DEFINITION,
+  SMART_CACHE_API_TOOL_DEFINITION,
+  SMART_DATABASE_TOOL_DEFINITION,
+  SMART_GRAPHQL_TOOL_DEFINITION,
+  SMART_MIGRATION_TOOL_DEFINITION,
+  SMART_ORM_TOOL_DEFINITION,
+  SMART_REST_TOOL_DEFINITION,
+  SMART_WEBSOCKET_TOOL_DEFINITION,
+  // Dashboard & Monitoring tools
+  ALERT_MANAGER_TOOL_DEFINITION,
+  METRIC_COLLECTOR_TOOL_DEFINITION,
+  MONITORING_INTEGRATION_TOOL_DEFINITION,
+  CUSTOM_WIDGET_TOOL_DEFINITION,
+  DATA_VISUALIZER_TOOL_DEFINITION,
+  HEALTH_MONITOR_TOOL_DEFINITION,
+  LOG_DASHBOARD_TOOL_DEFINITION,
+  // Intelligence tools
+  INTELLIGENTASSISTANTTOOL,
+  NATURALLANGUAGEQUERYTOOL,
+  PATTERNRECOGNITIONTOOL,
+  PREDICTIVEANALYTICSTOOL,
+  RECOMMENDATIONENGINETOOL,
+  SMARTSUMMARIZATIONTOOL,
+  // Build Systems tools
+  SMART_PROCESSES_TOOL_DEFINITION,
+  SMART_NETWORK_TOOL_DEFINITION,
+  SMART_LOGS_TOOL_DEFINITION,
+  SMART_LINT_TOOL_DEFINITION,
+  SMART_INSTALL_TOOL_DEFINITION,
+  SMART_DOCKER_TOOL_DEFINITION,
+  SMART_BUILD_TOOL_DEFINITION,
+  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+  SMART_TEST_TOOL_DEFINITION,
+  SMART_TYPECHECK_TOOL_DEFINITION,
+  // System Operations tools
+  SMART_CRON_TOOL_DEFINITION,
+  SMART_USER_TOOL_DEFINITION,
+  // File operations tools
+
+  SMART_DIFF_TOOL_DEFINITION,
+  SMART_BRANCH_TOOL_DEFINITION,
+  SMART_MERGE_TOOL_DEFINITION,
+  SMART_STATUS_TOOL_DEFINITION,
+  SMART_LOG_TOOL_DEFINITION,
+  SMART_READ_TOOL_DEFINITION,
+  SMART_WRITE_TOOL_DEFINITION,
+  SMART_EDIT_TOOL_DEFINITION,
+  SMART_GLOB_TOOL_DEFINITION,
+  SMART_GREP_TOOL_DEFINITION,
+  // Analytics tools
+  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
+  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
+  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
+  EXPORT_ANALYTICS_TOOL_DEFINITION,
+  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
+  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+  CONTEXT_DELTA_TOOL_DEFINITION,
+];
+
+/**
+ * The fields each tool's own published schema says are mandatory.
+ *
+ * Derived from TOOL_DEFINITIONS, so it cannot drift from what callers read.
+ */
+const REQUIRED_FIELDS = new Map<string, string[]>(
+  TOOL_DEFINITIONS.map((t) => [
+    (t as { name: string }).name,
+    (t as { inputSchema?: { required?: string[] } }).inputSchema?.required ??
+      [],
+  ])
+);
+
+/**
+ * Rejects a call that omits a field the tool advertises as required.
+ *
+ * Named the missing fields, so the answer is actionable -- which is the
+ * whole difference from the internal TypeError this replaces.
+ */
+function assertRequiredFields(name: string, args: unknown): void {
+  const required = REQUIRED_FIELDS.get(name);
+  if (!required?.length) return;
+
+  const provided = (args ?? {}) as Record<string, unknown>;
+  const missing = required.filter(
+    (f) => provided[f] === undefined || provided[f] === null
+  );
+  if (!missing.length) return;
+
+  // Name what is MISSING, and list the full set only when that adds something
+  // -- repeating an identical list twice reads like a template, not an answer.
+  const full =
+    missing.length === required.length
+      ? ''
+      : ` (required: ${required.join(', ')})`;
+  throw new Error(`${name} requires ${missing.join(', ')}${full}.`);
+}
+
+// Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [
-      SMART_COMPLEXITY_TOOL_DEFINITION,
-      SMART_DEPENDENCIES_TOOL_DEFINITION,
-      SMART_EXPORTS_TOOL_DEFINITION,
-      SMART_IMPORTS_TOOL_DEFINITION,
-      SMART_REFACTOR_TOOL_DEFINITION,
-      SMART_SECURITY_TOOL_DEFINITION,
-      SMART_SYMBOLS_TOOL_DEFINITION,
-      SMART_TYPESCRIPT_TOOL_DEFINITION,
-      SMART_CONFIG_READ_TOOL_DEFINITION,
-      SMART_ENV_TOOL_DEFINITION,
-      SMART_PACKAGE_JSON_TOOL_DEFINITION,
-      SMART_TSCONFIG_TOOL_DEFINITION,
-      SMART_PRETTY_TOOL_DEFINITION,
-      SMART_PROCESS_TOOL_DEFINITION,
-      SMART_SERVICE_TOOL_DEFINITION,
-      AUDIT_TOOL,
-      DOCTOR_TOOL,
-      FLEET_TOOL,
-      EXPAND_TOOL,
-      WASTE_TOOL,
-      CACHE_TOOL,
-      ROUTING_TOOL,
-      {
-        name: 'optimize_text',
-        description:
-          'Compress and cache text to reduce token usage. Returns compressed version and saves to cache for future use.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to optimize',
-            },
-            key: {
-              type: 'string',
-              description: 'Cache key for storing the optimized text',
-            },
-            quality: {
-              type: 'number',
-              description: 'Compression quality (0-11, default 11)',
-              minimum: 0,
-              maximum: 11,
-            },
-          },
-          required: ['text', 'key'],
-        },
-      },
-      {
-        name: 'get_cached',
-        description:
-          'Retrieve previously cached and optimized text. Returns the original text if found in cache.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            key: {
-              type: 'string',
-              description: 'Cache key to retrieve',
-            },
-          },
-          required: ['key'],
-        },
-      },
-      {
-        name: 'count_tokens',
-        description:
-          'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to count tokens for',
-            },
-            modelName: {
-              type: 'string',
-              description:
-                'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
-            },
-          },
-          required: ['text'],
-        },
-      },
-      {
-        name: 'compress_text',
-        description:
-          'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to compress',
-            },
-            quality: {
-              type: 'number',
-              description: 'Compression quality (0-11, default 11)',
-              minimum: 0,
-              maximum: 11,
-            },
-          },
-          required: ['text'],
-        },
-      },
-      {
-        name: 'decompress_text',
-        description: 'Decompress base64-encoded Brotli-compressed text.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            compressed: {
-              type: 'string',
-              description: 'Base64-encoded compressed text',
-            },
-          },
-          required: ['compressed'],
-        },
-      },
-      {
-        name: 'get_cache_stats',
-        description:
-          'Get cache statistics including hit rate, compression ratio, and token savings.',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'clear_cache',
-        description: 'Clear all cached data. Use with caution.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            confirm: {
-              type: 'boolean',
-              description: 'Must be true to confirm cache clearing',
-            },
-          },
-          required: ['confirm'],
-        },
-      },
-      {
-        name: 'analyze_optimization',
-        description:
-          'Analyze text and provide recommendations for optimization including compression benefits and token savings.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to analyze',
-            },
-          },
-          required: ['text'],
-        },
-      },
-      {
-        name: 'get_session_stats',
-        description:
-          'Get comprehensive statistics from the PowerShell wrapper session tracker including system reminders, tool operations, and total tokens with accurate tiktoken-based counting.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sessionId: {
-              type: 'string',
-              description:
-                'Optional session ID to query. If not provided, uses current session.',
-            },
-          },
-        },
-      },
-      {
-        name: 'optimize_session',
-        description:
-          'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sessionId: {
-              type: 'string',
-              description:
-                'Optional session ID to optimize. If not provided, uses the current active session.',
-            },
-            min_token_threshold: {
-              type: 'number',
-              description:
-                'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
-            },
-          },
-        },
-      },
-      // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
-      // This tool (analyze_project_tokens) is a new addition to the MCP server
-      {
-        name: 'analyze_project_tokens',
-        description:
-          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log-*.jsonl files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            projectPath: {
-              type: 'string',
-              description:
-                'Path to the project directory. If not provided, uses the hooks data directory.',
-            },
-            startDate: {
-              type: 'string',
-              format: 'date',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              description: 'Optional start date filter (YYYY-MM-DD format).',
-            },
-            endDate: {
-              type: 'string',
-              format: 'date',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              description: 'Optional end date filter (YYYY-MM-DD format).',
-            },
-            costPerMillionTokens: {
-              type: 'number',
-              description:
-                'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
-              default: 30,
-              exclusiveMinimum: 0,
-            },
-          },
-        },
-      },
-      PREDICTIVE_CACHE_TOOL_DEFINITION,
-      CACHE_WARMUP_TOOL_DEFINITION,
-      // Code analysis tools
-      SMART_AST_GREP_TOOL_DEFINITION,
-      CACHE_ANALYTICS_TOOL_DEFINITION,
-      CACHE_BENCHMARK_TOOL_DEFINITION,
-      CACHE_COMPRESSION_TOOL_DEFINITION,
-      CACHE_INVALIDATION_TOOL_DEFINITION,
-      CACHE_OPTIMIZER_TOOL_DEFINITION,
-      CACHE_PARTITION_TOOL_DEFINITION,
-      CACHE_REPLICATION_TOOL_DEFINITION,
-      SMART_CACHE_TOOL_DEFINITION,
-      // API & Database tools
-      SMART_SQL_TOOL_DEFINITION,
-      SMART_SCHEMA_TOOL_DEFINITION,
-      SMART_API_FETCH_TOOL_DEFINITION,
-      SMART_CACHE_API_TOOL_DEFINITION,
-      SMART_DATABASE_TOOL_DEFINITION,
-      SMART_GRAPHQL_TOOL_DEFINITION,
-      SMART_MIGRATION_TOOL_DEFINITION,
-      SMART_ORM_TOOL_DEFINITION,
-      SMART_REST_TOOL_DEFINITION,
-      SMART_WEBSOCKET_TOOL_DEFINITION,
-      // Dashboard & Monitoring tools
-      ALERT_MANAGER_TOOL_DEFINITION,
-      METRIC_COLLECTOR_TOOL_DEFINITION,
-      MONITORING_INTEGRATION_TOOL_DEFINITION,
-      CUSTOM_WIDGET_TOOL_DEFINITION,
-      DATA_VISUALIZER_TOOL_DEFINITION,
-      HEALTH_MONITOR_TOOL_DEFINITION,
-      LOG_DASHBOARD_TOOL_DEFINITION,
-      // Intelligence tools
-      INTELLIGENTASSISTANTTOOL,
-      NATURALLANGUAGEQUERYTOOL,
-      PATTERNRECOGNITIONTOOL,
-      PREDICTIVEANALYTICSTOOL,
-      RECOMMENDATIONENGINETOOL,
-      SMARTSUMMARIZATIONTOOL,
-      // Build Systems tools
-      SMART_PROCESSES_TOOL_DEFINITION,
-      SMART_NETWORK_TOOL_DEFINITION,
-      SMART_LOGS_TOOL_DEFINITION,
-      SMART_LINT_TOOL_DEFINITION,
-      SMART_INSTALL_TOOL_DEFINITION,
-      SMART_DOCKER_TOOL_DEFINITION,
-      SMART_BUILD_TOOL_DEFINITION,
-      SMART_SYSTEM_METRICS_TOOL_DEFINITION,
-      SMART_TEST_TOOL_DEFINITION,
-      SMART_TYPECHECK_TOOL_DEFINITION,
-      // System Operations tools
-      SMART_CRON_TOOL_DEFINITION,
-      SMART_USER_TOOL_DEFINITION,
-      // File operations tools
-
-      SMART_DIFF_TOOL_DEFINITION,
-      SMART_BRANCH_TOOL_DEFINITION,
-      SMART_MERGE_TOOL_DEFINITION,
-      SMART_STATUS_TOOL_DEFINITION,
-      SMART_LOG_TOOL_DEFINITION,
-      SMART_READ_TOOL_DEFINITION,
-      SMART_WRITE_TOOL_DEFINITION,
-      SMART_EDIT_TOOL_DEFINITION,
-      SMART_GLOB_TOOL_DEFINITION,
-      SMART_GREP_TOOL_DEFINITION,
-      // Analytics tools
-      GET_HOOK_ANALYTICS_TOOL_DEFINITION,
-      GET_ACTION_ANALYTICS_TOOL_DEFINITION,
-      GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
-      EXPORT_ANALYTICS_TOOL_DEFINITION,
-      GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
-      OPTIMIZATION_STORAGE_TOOL_DEFINITION,
-      CONTEXT_DELTA_TOOL_DEFINITION,
-    ],
+    tools: TOOL_DEFINITIONS,
   };
 });
 
@@ -895,6 +951,12 @@ async function handleToolCall(request: {
   // computed `validatedArgs` but then routed the unvalidated raw `args`.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let args: any = request.params.arguments;
+
+  // A field the published schema calls required must actually be required.
+  // 43 tools share the permissive GenericToolOptionsSchema, so without this
+  // their `required` arrays were documentation only.
+  assertRequiredFields(name, args);
+
   try {
     args = validateToolArgs(name, args || {});
   } catch (validationError) {
@@ -1051,13 +1113,24 @@ async function handleToolCall(request: {
           };
         }
 
+        // DO NOT INFER THE FORMAT FROM A SIZE.
+        //
+        // This decided "was it compressed?" from `compressedSize === 0`. But
+        // the writers disagree about that field: smart_cache stores PLAIN text
+        // and passes `value.length` as the compressed size, so the flag says
+        // "compressed" for content that never was. get_cached then tried to
+        // gunzip plain text and returned a bare "Decompression failed" for an
+        // entry written moments earlier by a sibling tool.
+        //
+        // The content itself is the only reliable evidence. Decompressing is
+        // attempted, and content that is not compressed is returned as it was
+        // stored -- which is also what makes this robust to a THIRD writer with
+        // its own convention.
         let text: string;
-        // Check if the item was stored uncompressed (indicated by compressedSize === 0)
-        if (cachedEntry.compressedSize === 0) {
-          text = cachedEntry.content;
-        } else {
-          // Otherwise, it was compressed, so decompress it
+        try {
           text = compression.decompressFromBase64(cachedEntry.content);
+        } catch {
+          text = cachedEntry.content;
         }
 
         return {

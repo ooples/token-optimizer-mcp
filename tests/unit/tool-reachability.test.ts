@@ -34,8 +34,23 @@ const ROOT = process.cwd();
 /** Every tool name the server advertises, read from the definitions it lists. */
 function advertisedNames(): string[] {
   const server = readFileSync(join(ROOT, 'src/server/index.ts'), 'utf8');
-  const listStart = server.indexOf('tools: [');
-  const listBlock = server.slice(listStart, server.indexOf('};', listStart));
+
+  // The advertised list lives in `const TOOL_DEFINITIONS = [ ... ]`, which the
+  // ListTools handler returns and the required-field guard reads. It used to be
+  // an inline `tools: [ ... ]`; both spellings are accepted here so this test
+  // pins the CONTENT of the list rather than where it happens to be written.
+  const listStart = (() => {
+    const named = server.indexOf('const TOOL_DEFINITIONS = [');
+    return named !== -1 ? named : server.indexOf('tools: [');
+  })();
+  const listEnd = (() => {
+    const closing = server.indexOf(`${'\n'}];`, listStart);
+    const legacy = server.indexOf('};', listStart);
+    if (closing === -1) return legacy;
+    if (legacy === -1) return closing;
+    return Math.min(closing, legacy);
+  })();
+  const listBlock = server.slice(listStart, listEnd);
   const defs = new Set(
     [...listBlock.matchAll(/([A-Z0-9_]+_TOOL_DEFINITION)/g)].map((m) => m[1])
   );
@@ -91,7 +106,10 @@ describe('a tool must not close a cache it was handed', () => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
-        else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+        else if (
+          entry.name.endsWith('.ts') &&
+          !entry.name.endsWith('.test.ts')
+        ) {
           const src = readFileSync(full, 'utf8');
           for (const m of src.matchAll(
             /export async function (run[A-Za-z0-9]+)\(([\s\S]{0,400}?)\)\s*:/g
@@ -103,7 +121,10 @@ describe('a tool must not close a cache it was handed', () => {
             const next = src.indexOf('\nexport ', start + 10);
             const body = src.slice(start, next === -1 ? src.length : next);
 
-            const injected = /=\s*cache\s*\|\|\s*new CacheEngine|cache\s*\?\?\s*new CacheEngine/.test(body);
+            const injected =
+              /=\s*cache\s*\|\|\s*new CacheEngine|cache\s*\?\?\s*new CacheEngine/.test(
+                body
+              );
             const closes = /finally\s*\{[\s\S]{0,200}?\.close\(\)/.test(body);
             const guarded = /ownsCache|createdCache/.test(body);
 
