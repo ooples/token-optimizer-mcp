@@ -532,7 +532,7 @@ const memoizedSmartRead = lruMemoize(runSmartRead, {
   keyFn: (args) =>
     createHash('sha256')
       .update(JSON.stringify(args))
-      .update(' ')
+      .update('\0')
       .update(fileStamp(args[0]))
       .digest('hex'),
 });

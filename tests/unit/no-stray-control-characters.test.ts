@@ -28,13 +28,34 @@ const SKIP = new Set([
   '.token-optimizer',
 ]);
 
-/** Control characters that are never intentional in source. */
-const FORBIDDEN: Array<[number, string]> = [
-  [7, 'bell'],
-  [8, 'backspace'],
-  [11, 'vertical tab'],
-  [12, 'form feed'],
-];
+/**
+ * Control characters that are never intentional in source.
+ *
+ * NUL WAS MISSING FROM THIS LIST, and a raw NUL byte duly turned up in
+ * src/server/index.ts: `.update('\0')` had been written with a literal byte
+ * instead of the escape. Same mangling as the backspace above, same
+ * invisibility -- but worse in one specific way, because a NUL makes tools treat
+ * the whole FILE as binary. `grep` stopped searching src/server/index.ts and
+ * printed "Binary file matches" instead, which is how it was noticed at all.
+ *
+ * The lesson is in the omission, not the byte: this list was written from the
+ * one character that had bitten us, so it caught exactly that one. It now
+ * covers every C0 control that is not tab, newline, or carriage return.
+ */
+const ALLOWED_CONTROLS = new Set([9, 10, 13]); // tab, LF, CR
+
+const CONTROL_NAMES: Record<number, string> = {
+  0: 'NUL',
+  7: 'bell',
+  8: 'backspace',
+  11: 'vertical tab',
+  12: 'form feed',
+  27: 'escape',
+};
+
+const FORBIDDEN: Array<[number, string]> = Array.from({ length: 32 }, (_, code) => code)
+  .filter((code) => !ALLOWED_CONTROLS.has(code))
+  .map((code) => [code, CONTROL_NAMES[code] ?? `control 0x${code.toString(16)}`]);
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
