@@ -7,10 +7,10 @@
  * agent works in a real shell, does anything get recorded at all?
  */
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedPaths, isContentDump, decide, isRecursiveSearch, normalizePayload } from '../../hooks-core/decide.mjs';
+import { touchedPaths, touchedFiles, isContentDump, decide, isRecursiveSearch, normalizePayload } from '../../hooks-core/decide.mjs';
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
 import { isMachineOwned } from '../../hooks-core/policy.mjs';
 
@@ -366,5 +366,38 @@ describe('only content dumps pay for the bytes', () => {
 
     expect(isContentDump('')).toBe(false);
     expect(isContentDump(undefined)).toBe(false);
+  });
+});
+
+describe('a touch carries the size that was measured to find it', () => {
+  // Resolving a candidate ALREADY stats it -- `fileSize(spelling) >= 0` is how
+  // a real file is told from a flag or a glob. Throwing that answer away made
+  // the router stat every path twice more: once for the read cost, once for the
+  // harvest size cap. On a hook that runs before EVERY tool call, for every
+  // operand of every command.
+  const bashFiles = (command, cwd) =>
+    touchedFiles({ tool_name: 'Bash', tool_input: { command }, cwd });
+
+  test('the size comes back with the path', () => {
+    const out = bashFiles('wc -l src/main.ts', repoA);
+    expect(out).toHaveLength(1);
+    expect(out[0].size).toBe(statSync(join(repoA, 'src/main.ts')).size);
+  });
+
+  test('touchedPaths returns exactly the same paths as before', () => {
+    // The sizes are additional information, not a different answer.
+    const payload = { tool_name: 'Bash', tool_input: { command: 'wc -l src/main.ts' }, cwd: repoA };
+    expect(touchedFiles(payload).map((f) => f.path)).toEqual(touchedPaths(payload));
+  });
+
+  test('a path that does not resolve carries no size, because it is not there', () => {
+    expect(bashFiles('wc -l src/nope.ts', repoA)).toEqual([]);
+  });
+
+  test('a machine-owned path is still excluded, sizes or not', () => {
+    // The size must not become a reason to keep something the graph rejects.
+    mkdirSync(join(repoA, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(join(repoA, 'node_modules', 'pkg', 'index.js'), 'module.exports = 1;');
+    expect(bashFiles('wc -l node_modules/pkg/index.js', repoA)).toEqual([]);
   });
 });

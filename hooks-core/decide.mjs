@@ -238,9 +238,13 @@ function candidatePaths(operand, cwd) {
  * heredoc marker is not a file, and inventing a node for it would put fiction
  * in the graph.
  */
-export function touchedPaths(payload) {
+export function touchedFiles(payload) {
   const input = payload?.tool_input || {};
-  const out = new Set();
+  // path -> size. Resolving a candidate ALREADY stats it -- `fileSize() >= 0`
+  // is how a real file is told from a flag, a glob or a heredoc marker -- and
+  // throwing that answer away made every caller measure the same file again,
+  // on a hook that runs before EVERY tool call.
+  const out = new Map();
 
   // A `cd` INSIDE the command changes where its relative operands resolve, and
   // the hook payload's cwd knows nothing about it. Observed live: a Bash call
@@ -263,11 +267,12 @@ export function touchedPaths(payload) {
   const add = (candidate) => {
     if (!candidate || typeof candidate !== 'string') return;
     for (const spelling of resolvableCandidates(candidate, cwd)) {
-      if (fileSize(spelling) >= 0) {
+      const size = fileSize(spelling);
+      if (size >= 0) {
         // Nothing under .git/, node_modules/ or a build directory belongs in a
         // knowledge graph: it is not authored, it churns constantly, and it
         // would thrash staleness for every file that anchors to it.
-        if (!isMachineOwned(spelling)) out.add(canonicalPath(spelling, cwd));
+        if (!isMachineOwned(spelling)) out.set(canonicalPath(spelling, cwd), size);
         return;
       }
     }
@@ -287,7 +292,17 @@ export function touchedPaths(payload) {
     for (const operand of fileOperands(segment)) add(operand);
   }
 
-  return [...out];
+  return [...out].map(([path, size]) => ({ path, size }));
+}
+
+/**
+ * The touched paths alone, for callers that do not need the sizes.
+ *
+ * Kept so every existing caller and test reads exactly the same, while the
+ * ones on the hook's critical path can take the size measured on the way in.
+ */
+export function touchedPaths(payload) {
+  return touchedFiles(payload).map((f) => f.path);
 }
 
 /** Dump commands as a whole word, for testing a segment's head. */
