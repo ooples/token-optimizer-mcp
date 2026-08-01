@@ -336,18 +336,16 @@ describe('Claude Desktop Integration Harness', () => {
       const compressedText = compression.compress(text);
       cache.set(key, compressedText.compressed.toString('base64'), compressedText.originalSize, compressedText.compressedSize);
 
-      const start1 = Date.now();
-      cache.get(key);
-      const duration1 = Date.now() - start1;
+      // A repeated read must be served from memory, which is checkable
+      // directly. The previous version timed two cache.get calls and required
+      // each under 100 ms -- a statement about the machine, not the cache.
+      expect(cache.get(key)).toBeTruthy();
 
-      // Second access - cache hit
-      const start2 = Date.now();
-      cache.get(key);
-      const duration2 = Date.now() - start2;
+      // @ts-expect-error - accessing private member for testing
+      expect(cache.memoryCache.get(key)).toBeDefined();
 
-      // Both should be fast
-      expect(duration1).toBeLessThan(100);
-      expect(duration2).toBeLessThan(100);
+      // And repeated reads agree with each other.
+      expect(cache.get(key)).toBe(cache.get(key));
     });
 
     it('should maintain data integrity across operations', () => {

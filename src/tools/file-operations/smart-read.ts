@@ -272,8 +272,14 @@ export class SmartReadTool {
       // reached the caller while this arithmetic priced only the first -- the
       // response cost MORE than reading the file and reported ~76% saved. An
       // overstated saving is the one number this project must never produce.
+      // Never negative. A single chunk plus its navigation footer can exceed
+      // the whole file when the file is barely over chunkSize, and the
+      // subtraction then yields a NEGATIVE saving -- which is not clamped
+      // downstream precisely because it is non-zero. "-14 tokens saved" is a
+      // cost reported as a saving with a minus sign in front of it; the honest
+      // number for a call that saved nothing is zero.
       const returnedTokens = this.tokenCounter.count(finalContent).tokens;
-      tokensSaved = originalTokens - returnedTokens;
+      tokensSaved = Math.max(0, originalTokens - returnedTokens);
     }
     if (enableCache && !fromCache) {
       cacheSet(this.cache, cacheKey, rawContent);

@@ -363,24 +363,32 @@ describe('Token Caching Validation', () => {
 
   describe('Memory vs Disk Cache Performance', () => {
     it('should serve from memory cache on repeated access', () => {
+      // ASSERT THE BEHAVIOUR, NOT THE WALL CLOCK.
+      //
+      // This measured `Date.now()` around two cache reads and required each to
+      // finish inside 50 ms. Jest runs suites in parallel, so that number is a
+      // statement about the machine's load, not about the cache: it passed
+      // alone and failed in the full run. A suite that reports the load
+      // average as a defect teaches everyone to re-run until green, which is
+      // how a real failure gets waved through.
+      //
+      // What the test is actually for is that a repeated read is served from
+      // memory. That is checkable directly, and stays true on a busy machine.
       const key = 'memory-test';
       const value = 'test-value';
 
       cache.set(key, value, 10, 5);
 
-      // First access loads to memory
-      const start1 = Date.now();
-      cache.get(key);
-      const duration1 = Date.now() - start1;
+      // @ts-expect-error - accessing private member for testing
+      cache.memoryCache.clear();
 
-      // Second access from memory should be equally fast or faster
-      const start2 = Date.now();
-      cache.get(key);
-      const duration2 = Date.now() - start2;
+      expect(cache.get(key)).toBe(value);
 
-      // Both should be very fast
-      expect(duration1).toBeLessThan(50);
-      expect(duration2).toBeLessThan(50);
+      // @ts-expect-error - accessing private member for testing
+      expect(cache.memoryCache.get(key)).toBeDefined();
+
+      // And the second read agrees with the first.
+      expect(cache.get(key)).toBe(value);
     });
 
     it('should populate memory cache from disk on first access', () => {

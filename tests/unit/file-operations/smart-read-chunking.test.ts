@@ -84,6 +84,19 @@ describe('SmartReadTool chunking', () => {
     expect(new TokenCounter().count(result.content).tokens).toBe(tokenCount);
   });
 
+  it('never reports a NEGATIVE saving', async () => {
+    // A single chunk plus its navigation footer can cost more than the whole
+    // file when the file is barely over chunkSize, and the subtraction then
+    // produced a negative -- which nothing downstream clamped, precisely
+    // because it was non-zero. "-14 tokens saved" is a cost wearing a minus
+    // sign; the honest number for a call that saved nothing is zero.
+    const { tool, file } = makeFixture();
+    for (const chunkSize of [200, 400, 800]) {
+      const r = await tool.read(file, { chunkSize, enableCache: false });
+      expect(r.metadata.tokensSaved).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   it('honours chunkIndex -- the escape hatch it tells the caller to use', async () => {
     // DEFAULT CACHING, because that is what a caller has.
     //

@@ -117,8 +117,14 @@ export function generateUnifiedDiff(
     } else if (lines.length > context * 2 + 1) {
       // Keep the tail of this run as leading context for the next change, and
       // the head as trailing context for the previous one.
-      const head = lines.slice(0, context);
-      const tail = lines.slice(-context);
+      //
+      // `slice(-context)` is wrong at context 0: -0 === 0, so it becomes
+      // slice(0) -- the WHOLE run. Asking for no context therefore emitted
+      // every unchanged line plus an elision marker claiming they had been
+      // elided, which is both larger than the unabridged diff and untrue about
+      // what it contains. The worse the run, the worse the blow-up.
+      const head = context > 0 ? lines.slice(0, context) : [];
+      const tail = context > 0 ? lines.slice(-context) : [];
       for (const line of head) hunkLines.push(` ${line}`);
       hunkLines.push(`@@ ${lines.length - context * 2} unchanged lines @@`);
       for (const line of tail) hunkLines.push(` ${line}`);

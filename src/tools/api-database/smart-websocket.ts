@@ -273,7 +273,10 @@ export class SmartWebSocket {
 
       socket.addEventListener('open', () => {
         clearTimeout(timer);
-        this.sockets.set(options.url, socket);
+        // Keyed by urlKey, matching `connections`. Keyed by the raw url it
+        // could never be found again by the other methods, which look the
+        // state up by urlKey.
+        this.sockets.set(urlKey, socket);
         resolve();
       });
       socket.addEventListener('error', () => {
@@ -307,9 +310,31 @@ export class SmartWebSocket {
 
     state.state = 'disconnecting' as const;
 
-    // NOTE: Placeholder for Phase 3
-    // Real implementation will close WebSocket connection
-    await this.sleep(10);
+    // ACTUALLY CLOSE IT.
+    //
+    // This slept for 10 ms and set the state to 'disconnected'. The socket
+    // stayed open, so the tool reported a closed connection while holding a
+    // live one -- and since nothing else ever closed it, every connect leaked
+    // a socket until the process exited. connect() was fixed to dial for real
+    // and this half was left simulated, which is the worse of the two states:
+    // the connection is now genuine, so the leak is too.
+    const socket = this.sockets.get(urlKey);
+    if (socket) {
+      await new Promise<void>((resolve) => {
+        const done = setTimeout(resolve, 2_000);
+        socket.addEventListener('close', () => {
+          clearTimeout(done);
+          resolve();
+        });
+        try {
+          socket.close();
+        } catch {
+          clearTimeout(done);
+          resolve();
+        }
+      });
+      this.sockets.delete(urlKey);
+    }
 
     state.state = 'disconnected' as const;
     state.disconnectedAt = Date.now();
@@ -348,11 +373,31 @@ export class SmartWebSocket {
       throw new Error('Message is required for send action');
     }
 
-    // Create message record
     const messageContent =
       typeof options.message === 'string'
         ? options.message
         : JSON.stringify(options.message);
+
+    // ACTUALLY SEND IT, and send it BEFORE recording it as sent.
+    //
+    // This built a message record, pushed it into the history and returned it
+    // with direction 'sent' -- having transmitted nothing. A caller reading
+    // that history saw a conversation that never happened.
+    //
+    // The send has to come first: recording then sending would still log a
+    // message that a throwing send never delivered.
+    const socket = this.sockets.get(urlKey);
+    if (!socket) {
+      throw new Error(
+        `No open socket for ${options.url}. Call connect first.`
+      );
+    }
+    if (socket.readyState !== 1 /* OPEN */) {
+      throw new Error(
+        `Socket for ${options.url} is not open (readyState ${socket.readyState}).`
+      );
+    }
+    socket.send(messageContent);
 
     const message: Message = {
       id: `msg-${++this.messageIdCounter}`,

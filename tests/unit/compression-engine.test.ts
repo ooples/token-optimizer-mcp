@@ -503,15 +503,33 @@ describe('CompressionEngine', () => {
       expect(duration).toBeLessThan(1000); // Should complete in under 1 second
     });
 
-    it('should decompress quickly', () => {
-      const text = 'Test '.repeat(10000);
-      const compressed = compression.compress(text);
+    it('should decompress in time proportional to the input', () => {
+      // RATIO, NOT WALL CLOCK.
+      //
+      // An absolute millisecond bound inside a parallel jest runner asserts
+      // the machine's load, not the code: the same pattern at 50 ms passed
+      // alone and failed in the full run. What matters here is that the work
+      // is proportional -- doing it N times costs about N times once -- which
+      // stays true however busy the box is. Head-room is deliberately large;
+      // the test exists to catch an accidental O(n^2), not to benchmark.
+      const small = compression.compress('Test '.repeat(1000));
+      const large = compression.compress('Test '.repeat(10000));
 
-      const start = Date.now();
-      compression.decompress(compressed.compressed);
-      const duration = Date.now() - start;
+      const time = (fn: () => void): number => {
+        const t = process.hrtime.bigint();
+        fn();
+        return Number(process.hrtime.bigint() - t);
+      };
 
-      expect(duration).toBeLessThan(500);
+      // Warm the path so the first-call cost is not attributed to size.
+      compression.decompress(small.compressed);
+
+      const smallNs = Math.max(1, time(() => compression.decompress(small.compressed)));
+      const largeNs = time(() => compression.decompress(large.compressed));
+
+      // Ten times the data should not cost anywhere near a hundred times the
+      // work. Fifty times is generous head-room over the ~10x that is real.
+      expect(largeNs / smallNs).toBeLessThan(50);
     });
 
     it('should handle batch compression efficiently', () => {
