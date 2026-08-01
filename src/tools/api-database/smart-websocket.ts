@@ -13,6 +13,7 @@
 
 import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine.js';
+import { measured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 
@@ -619,20 +620,19 @@ export class SmartWebSocket {
   ): SmartWebSocketResult {
     const fullOutput = JSON.stringify(result);
     const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    let compactedTokens: number;
-    let reductionPercentage: number;
+    // RETURN WHAT WAS MEASURED. Same shape as smart-rest and smart-graphql:
+    // four branches each built a compact payload and counted it, then the
+    // function returned `...result` -- the full thing -- while reporting a
+    // hardcoded 95/85/80/90% reduction that the numbers beside it did not
+    // support.
+    let compact: Record<string, unknown>;
 
     if (fromCache) {
-      // Cached: minimal state (95% reduction)
-      const minimalOutput = JSON.stringify({
-        connection: { state: result.connection.state },
-        cached: true,
-      });
-      compactedTokens = this.tokenCounter.count(minimalOutput).tokens;
-      reductionPercentage = 95;
+      // Cached: connection state only
+      compact = { connection: { state: result.connection.state } };
     } else if (result.history) {
-      // History scenario: recent messages only (85% reduction)
-      const historyOutput = JSON.stringify({
+      // History: totals plus the 5 most recent messages
+      compact = {
         connection: result.connection,
         history: {
           total: result.history.total,
@@ -645,50 +645,42 @@ export class SmartWebSocket {
             size: m.size,
           })),
         },
-      });
-      compactedTokens = this.tokenCounter.count(historyOutput).tokens;
-      reductionPercentage = 85;
+      };
     } else if (result.patterns) {
-      // Analysis scenario: summary stats (80% reduction)
-      const analysisOutput = JSON.stringify({
+      // Analysis: summary statistics
+      compact = {
         connection: result.connection,
         patterns: {
           messageTypes: result.patterns.messageTypes
             .slice(0, 3)
-            .map((mt: MessageType) => ({
-              type: mt.type,
-              count: mt.count,
-            })),
+            .map((mt: MessageType) => ({ type: mt.type, count: mt.count })),
+          totalMessageTypes: result.patterns.messageTypes.length,
           averageSize: result.patterns.averageSize,
           frequency: Math.round(result.patterns.frequency * 100) / 100,
         },
         health: result.health
-          ? {
-              score: result.health.score,
-              latency: result.health.latency,
-            }
+          ? { score: result.health.score, latency: result.health.latency }
           : undefined,
-      });
-      compactedTokens = this.tokenCounter.count(analysisOutput).tokens;
-      reductionPercentage = 80;
+      };
     } else {
-      // Basic action: connection state only (90% reduction)
-      const basicOutput = JSON.stringify({
-        connection: result.connection,
-      });
-      compactedTokens = this.tokenCounter.count(basicOutput).tokens;
-      reductionPercentage = 90;
+      // Basic action: the connection, which is the whole answer
+      compact = { connection: result.connection };
     }
 
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(compact)
+    ).tokens;
+    const savings = measured(originalTokens, compactedTokens);
+
     return {
-      ...result,
+      ...compact,
       cached: fromCache,
       metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage,
+        originalTokens: savings.originalTokenCount,
+        compactedTokens: savings.tokenCount,
+        reductionPercentage: Math.round((1 - savings.compressionRatio) * 100),
       },
-    };
+    } as SmartWebSocketResult;
   }
 
   // ========================================================================

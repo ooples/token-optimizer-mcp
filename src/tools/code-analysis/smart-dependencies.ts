@@ -23,6 +23,7 @@ import { parse as parseBabel } from '@babel/parser';
 import { globSync } from 'glob';
 import { relative, resolve, dirname, extname, join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
+import { measured, unmeasured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashFileMetadata, generateCacheKey } from '../shared/hash-utils.js';
@@ -304,10 +305,12 @@ export class SmartDependenciesTool {
                 analyzedFiles: 0,
                 externalDependencies: this.countExternalDeps(cachedGraph),
                 internalDependencies: this.countInternalDeps(cachedGraph),
-                tokensSaved: this.estimateGraphTokens(cachedGraph),
-                tokenCount: 0,
-                originalTokenCount: this.estimateGraphTokens(cachedGraph),
-                compressionRatio: 0,
+                // A cache hit never recorded what the original analysis
+                // cost, so there is no baseline to compare against. This set
+                // tokensSaved and originalTokenCount to the SAME value, which
+                // is a claim to have saved 100% of the content it returned.
+                // `unmeasured()` claims nothing, which is the truth here.
+                ...unmeasured(this.measureGraphTokens(cachedGraph)),
                 duration: 0,
                 cacheHit: true,
                 incrementalUpdate: false,
@@ -324,9 +327,15 @@ export class SmartDependenciesTool {
             // Cache updated graph
             this.cacheGraph(cacheKey, updatedGraph, opts.ttl);
 
-            const originalTokens = this.estimateFullFileTokens(changedFiles);
-            const graphTokens = this.estimateGraphTokens(updatedGraph);
-            const tokensSaved = originalTokens - graphTokens;
+            const originalTokens = this.measureFullFileTokens(
+              changedFiles,
+              opts.cwd
+            );
+            const graphTokens = this.measureGraphTokens(updatedGraph);
+            const tokensSaved = measured(
+              originalTokens,
+              graphTokens
+            ).tokensSaved;
 
             return {
               success: true,
@@ -358,10 +367,8 @@ export class SmartDependenciesTool {
               analyzedFiles: 0,
               externalDependencies: this.countExternalDeps(cachedGraph),
               internalDependencies: this.countInternalDeps(cachedGraph),
-              tokensSaved: this.estimateGraphTokens(cachedGraph),
-              tokenCount: 0,
-              originalTokenCount: this.estimateGraphTokens(cachedGraph),
-              compressionRatio: 0,
+              // See above: a cache hit has no measured baseline.
+              ...unmeasured(this.measureGraphTokens(cachedGraph)),
               duration: 0,
               cacheHit: true,
               incrementalUpdate: false,
@@ -379,11 +386,12 @@ export class SmartDependenciesTool {
       this.cacheGraph(cacheKey, graph, opts.ttl);
     }
 
-    const originalTokens = this.estimateFullFileTokens(
-      Array.from(graph.keys())
+    const originalTokens = this.measureFullFileTokens(
+      Array.from(graph.keys()),
+      opts.cwd
     );
-    const graphTokens = this.estimateGraphTokens(graph);
-    const tokensSaved = originalTokens - graphTokens;
+    const graphTokens = this.measureGraphTokens(graph);
+    const tokensSaved = measured(originalTokens, graphTokens).tokensSaved;
 
     return {
       success: true,
@@ -799,10 +807,11 @@ export class SmartDependenciesTool {
     const resultTokens = this.tokenCounter.count(
       JSON.stringify(resultData)
     ).tokens;
-    const originalTokens = this.estimateFullFileTokens(
-      Array.from(graph.keys())
+    const originalTokens = this.measureFullFileTokens(
+      Array.from(graph.keys()),
+      _opts.cwd
     );
-    const tokensSaved = originalTokens - resultTokens;
+    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
 
     return {
       success: true,
@@ -874,10 +883,11 @@ export class SmartDependenciesTool {
     const resultTokens = this.tokenCounter.count(
       JSON.stringify(resultData)
     ).tokens;
-    const originalTokens = this.estimateFullFileTokens(
-      Array.from(graph.keys())
+    const originalTokens = this.measureFullFileTokens(
+      Array.from(graph.keys()),
+      _opts.cwd
     );
-    const tokensSaved = originalTokens - resultTokens;
+    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
 
     return {
       success: true,
@@ -1005,12 +1015,11 @@ export class SmartDependenciesTool {
     const resultTokens = this.tokenCounter.count(
       JSON.stringify(resultData)
     ).tokens;
-    const originalTokens = this.estimateFullFileTokens([
-      opts.targetFile,
-      ...directDependents,
-      ...indirectDependents,
-    ]);
-    const tokensSaved = originalTokens - resultTokens;
+    const originalTokens = this.measureFullFileTokens(
+      [opts.targetFile, ...directDependents, ...indirectDependents],
+      opts.cwd
+    );
+    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
 
     return {
       success: true,
@@ -1062,10 +1071,11 @@ export class SmartDependenciesTool {
     const resultTokens = this.tokenCounter.count(
       JSON.stringify(graphData)
     ).tokens;
-    const originalTokens = this.estimateFullFileTokens(
-      Array.from(graph.keys())
+    const originalTokens = this.measureFullFileTokens(
+      Array.from(graph.keys()),
+      opts.cwd
     );
-    const tokensSaved = originalTokens - resultTokens;
+    const tokensSaved = measured(originalTokens, resultTokens).tokensSaved;
 
     return {
       success: true,
@@ -1186,19 +1196,53 @@ export class SmartDependenciesTool {
   /**
    * Estimate tokens for graph representation
    */
-  private estimateGraphTokens(graph: Map<string, DependencyNode>): number {
-    // Compact representation: ~50 tokens per file + ~10 tokens per edge
-    const fileTokens = graph.size * 50;
-    const edgeTokens = this.countInternalDeps(graph) * 10;
-    return fileTokens + edgeTokens;
+  /**
+   * What the graph this tool returns actually costs, tokenised.
+   *
+   * This multiplied: `graph.size * 50 + edges * 10`. Those constants were not
+   * measured from anything, and they fed the headline `tokensSaved`.
+   */
+  private measureGraphTokens(graph: Map<string, DependencyNode>): number {
+    return this.tokenCounter.count(JSON.stringify(Array.from(graph.entries())))
+      .tokens;
   }
 
   /**
    * Estimate tokens for full file contents
    */
-  private estimateFullFileTokens(files: string[]): number {
-    // Average file: ~2000 tokens
-    return files.length * 2000;
+  /**
+   * What reading these files would ACTUALLY have cost.
+   *
+   * THE BASELINE WAS INVENTED.
+   *
+   * This returned `files.length * 2000` -- an assumed 2,000 tokens per file,
+   * measured from nothing. It was the baseline for every saving this tool
+   * reported, so the analytics showed smart_dependencies saving 790,200 tokens
+   * per call at 95.97%, a figure that would have been identical had the files
+   * been empty.
+   *
+   * An overstated saving is the one number this project must never produce
+   * (see tools/shared/savings.ts). So the files are read and counted. A file
+   * that cannot be read contributes nothing rather than an assumed average --
+   * understating is the safe direction to be wrong in.
+   */
+  private measureFullFileTokens(files: string[], cwd: string): number {
+    let total = 0;
+    for (const file of files) {
+      try {
+        // RESOLVED AGAINST THE PROJECT, not the process. The graph is keyed by
+        // paths relative to `cwd` (see analyzeFile), so reading them as-is
+        // looks for them under wherever the server happens to be running and
+        // finds nothing -- which measured every baseline as 0 and turned every
+        // saving negative.
+        total += this.tokenCounter.count(
+          readFileSync(resolve(cwd, file), 'utf-8')
+        ).tokens;
+      } catch {
+        // Unreadable: contributes 0, never an assumed average.
+      }
+    }
+    return total;
   }
 
   /**
@@ -1211,9 +1255,11 @@ export class SmartDependenciesTool {
   ): void {
     const serialized = this.serializeGraph(graph);
     const ttlSeconds = ttlDays * 24 * 60 * 60;
-    const tokensSaved =
-      this.estimateFullFileTokens(Array.from(graph.keys())) -
-      this.estimateGraphTokens(graph);
+    // No baseline is available here: cacheGraph is a write, and nothing at
+    // this point knows what reading the files would have cost. Storing a
+    // computed-looking number would put an unmeasured figure into the metrics,
+    // so the stored saving is the honest zero.
+    const { tokensSaved } = unmeasured(this.measureGraphTokens(graph));
 
     this.cache.set(cacheKey, serialized as any, ttlSeconds, tokensSaved);
   }

@@ -12,6 +12,7 @@
  */
 
 import { CacheEngine } from '../../core/cache-engine.js';
+import { measured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -602,59 +603,62 @@ export class SmartGraphQL {
   ): SmartGraphQLResult {
     const fullOutput = JSON.stringify(result);
     const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    let compactedTokens: number;
-    let reductionPercentage: number;
+    // RETURN WHAT WAS MEASURED. See the note in smart-rest.ts -- this had the
+    // same shape: three branches each built a compact payload and counted it,
+    // then the function returned the full query/optimizations/schema anyway.
+    // The last branch is the clearest: it measured "the complete data" and
+    // reported an 80% reduction against itself.
+    let compact: Record<string, unknown>;
 
     if (fromCache) {
-      // Cached run: Return only minimal data (95% reduction)
-      const minimalOutput = JSON.stringify({
+      // Cached run: operation and complexity score only
+      compact = {
         query: {
           operation: result.query.operation,
           complexity: { score: result.query.complexity.score },
         },
-        cached: true,
-      });
-      compactedTokens = this.tokenCounter.count(minimalOutput).tokens;
-      reductionPercentage = 95;
+      };
     } else if (
       result.optimizations &&
       result.optimizations.fragmentSuggestions.length > 0
     ) {
-      // Optimization scenario: Return top 3 suggestions (85% reduction)
-      const optimizedOutput = JSON.stringify({
+      // Optimization scenario: top 3 suggestions, top 2 N+1 problems
+      compact = {
         query: result.query,
         optimizations: {
           fragmentSuggestions: result.optimizations.fragmentSuggestions.slice(
             0,
             3
           ),
+          totalFragmentSuggestions:
+            result.optimizations.fragmentSuggestions.length,
           n1Problems: result.optimizations.n1Problems.slice(0, 2),
+          totalN1Problems: result.optimizations.n1Problems.length,
         },
-      });
-      compactedTokens = this.tokenCounter.count(optimizedOutput).tokens;
-      reductionPercentage = 85;
+      };
     } else {
-      // Full analysis: Return complete data (80% reduction)
-      const fullAnalysis = JSON.stringify({
+      // Nothing to trim: the analysis IS the answer, so no saving is claimed.
+      compact = {
         query: result.query,
         optimizations: result.optimizations,
         schema: result.schema,
-      });
-      compactedTokens = this.tokenCounter.count(fullAnalysis).tokens;
-      reductionPercentage = 80;
+      };
     }
 
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(compact)
+    ).tokens;
+    const savings = measured(originalTokens, compactedTokens);
+
     return {
-      query: result.query,
-      optimizations: result.optimizations,
-      schema: result.schema,
+      ...compact,
       cached: fromCache,
       metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage,
+        originalTokens: savings.originalTokenCount,
+        compactedTokens: savings.tokenCount,
+        reductionPercentage: Math.round((1 - savings.compressionRatio) * 100),
       },
-    };
+    } as SmartGraphQLResult;
   }
 
   private generateCacheKey(options: SmartGraphQLOptions): string {
