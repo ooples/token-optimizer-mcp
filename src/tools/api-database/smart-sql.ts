@@ -11,6 +11,7 @@
  */
 
 import { CacheEngine } from '../../core/cache-engine.js';
+import { measured, unmeasured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { createHash } from 'crypto';
@@ -90,6 +91,14 @@ export interface OptimizationSuggestion {
 export interface Optimization {
   suggestions: OptimizationSuggestion[];
   potentialSpeedup: string;
+  /**
+   * How many suggestions were found before trimming to the top 5.
+   *
+   * Without this the saving cannot be measured: the trim happens inside the
+   * analysis and the untrimmed size was discarded, so the code downstream was
+   * left multiplying the ALREADY-TRIMMED result by an assumed percentage.
+   */
+  totalSuggestions?: number;
 }
 
 export interface ValidationError {
@@ -444,6 +453,56 @@ export class SmartSql {
       });
     }
 
+    // THREE CAUSES THIS DID NOT LOOK FOR.
+    //
+    // The five rules above are all real, but they left out the most common
+    // reasons a query is slow. Measured against queries whose problem was
+    // stated in advance, the tool returned NO suggestions for an unbounded
+    // scan, a leading-wildcard LIKE, and an unbounded sort -- three false
+    // negatives in a tool whose entire job is spotting slow queries.
+
+    // An unbounded SELECT: no WHERE, no LIMIT, no aggregate to justify it.
+    const isSelect = /^\s*SELECT/i.test(query);
+    const hasWhere = /\sWHERE\s/i.test(query);
+    const hasLimit = /\s(LIMIT|TOP|FETCH\s+FIRST)\s/i.test(query);
+    const isAggregate = /\b(COUNT|SUM|AVG|MIN|MAX|GROUP\s+BY)\b/i.test(query);
+
+    if (isSelect && !hasWhere && !hasLimit && !isAggregate) {
+      suggestions.push({
+        type: 'performance',
+        severity: 'warning',
+        message:
+          'No WHERE or LIMIT - this reads every row in the table. Add a ' +
+          'predicate, or a LIMIT if you only need a sample.',
+      });
+    }
+
+    // A leading wildcard cannot use a B-tree index: the engine has no prefix
+    // to seek on, so it scans. A TRAILING wildcard is fine, and saying so
+    // matters -- flagging `LIKE 'smith%'` would be the false positive.
+    if (/LIKE\s+'%/i.test(query) || /LIKE\s+"%/i.test(query)) {
+      suggestions.push({
+        type: 'index',
+        severity: 'warning',
+        message:
+          "A leading wildcard in LIKE ('%term') cannot use an index - the " +
+          'engine has no prefix to seek on. Use a trailing wildcard, or a ' +
+          'full-text index for substring search.',
+      });
+    }
+
+    // Sorting the whole table to return the whole table. Cheap to fix, and
+    // usually a mistake rather than a decision.
+    if (/\sORDER\s+BY\s/i.test(query) && !hasLimit) {
+      suggestions.push({
+        type: 'performance',
+        severity: 'info',
+        message:
+          'ORDER BY without LIMIT sorts every matching row. Add a LIMIT if ' +
+          'you only need the top results.',
+      });
+    }
+
     // Limit to top 5 suggestions
     const topSuggestions = suggestions.slice(0, 5);
 
@@ -456,6 +515,7 @@ export class SmartSql {
     return {
       suggestions: topSuggestions,
       potentialSpeedup: speedup,
+      totalSuggestions: suggestions.length,
     };
   }
 
@@ -522,48 +582,47 @@ export class SmartSql {
     },
     fromCache: boolean
   ): SmartSqlOutput {
-    const fullOutput = JSON.stringify(result);
-    const originalTokensResult = this.tokenCounter.count(fullOutput);
-    const originalTokens = originalTokensResult.tokens;
-    let compactedTokens: number;
-    let reductionPercentage: number;
+    // MEASURE WHAT WAS RETURNED. DO NOT DECIDE WHAT WAS SAVED.
+    //
+    // This measured the result, then picked a reduction from a table -- 95%
+    // when cached, 80% for a plan, 86% for optimization ("increased from 85%",
+    // says the comment, which is somebody tuning a number that was never
+    // measured) -- and derived `compactedTokens` from it. The full result was
+    // returned either way, so the response the caller paid for was the same
+    // size the metrics claimed had been reduced by 86%.
+    //
+    // Worse, `originalTokens` was measured from the ALREADY-TRIMMED result:
+    // the top-5 and top-10 slices happen inside the analysis above. So the
+    // baseline was the answer, and the "compacted" figure was a fraction of it.
+    //
+    // The honest quantities: what the caller receives, and -- where the trim
+    // count survived -- what they would have received untrimmed. Where it did
+    // not survive, `unmeasured()` claims nothing.
+    const returnedTokens = this.tokenCounter.count(
+      JSON.stringify(result)
+    ).tokens;
 
-    if (fromCache) {
-      // Cached: Minimal output (95% reduction)
-      reductionPercentage = 95;
-      compactedTokens = Math.max(
-        1,
-        Math.floor(originalTokens * (1 - reductionPercentage / 100))
-      );
-    } else if (result.executionPlan) {
-      // Execution plan: Top 10 steps (80% reduction)
-      reductionPercentage = 80;
-      compactedTokens = Math.max(
-        1,
-        Math.floor(originalTokens * (1 - reductionPercentage / 100))
-      );
-    } else if (result.optimization) {
-      // Optimization: Top 5 suggestions (86% reduction - increased from 85%)
-      reductionPercentage = 86;
-      compactedTokens = Math.max(
-        1,
-        Math.floor(originalTokens * (1 - reductionPercentage / 100))
-      );
-    } else if (result.history) {
-      // History: Last 20 queries (80% reduction)
-      reductionPercentage = 80;
-      compactedTokens = Math.max(
-        1,
-        Math.floor(originalTokens * (1 - reductionPercentage / 100))
-      );
-    } else {
-      // Analysis only (86% reduction - increased from 85%)
-      reductionPercentage = 86;
-      compactedTokens = Math.max(
-        1,
-        Math.floor(originalTokens * (1 - reductionPercentage / 100))
-      );
-    }
+    const trimmed = result.optimization?.totalSuggestions;
+    const kept = result.optimization?.suggestions.length;
+
+    const savings =
+      typeof trimmed === 'number' &&
+      typeof kept === 'number' &&
+      kept > 0 &&
+      trimmed > kept
+        ? // The suggestions were the trimmed part, so scale that section back up
+          // to what it would have cost untrimmed. Everything else is unchanged.
+          measured(
+            Math.round(returnedTokens * (trimmed / kept)),
+            returnedTokens
+          )
+        : unmeasured(returnedTokens);
+
+    const originalTokens = savings.originalTokenCount;
+    const compactedTokens = savings.tokenCount;
+    const reductionPercentage = Math.round(
+      (1 - savings.compressionRatio) * 100
+    );
 
     return {
       ...result,

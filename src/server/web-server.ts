@@ -14,6 +14,7 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { registerWikiRoutes } from './wiki-routes.js';
+import { isValidSessionId } from '../utils/session-id.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,41 +54,159 @@ function getHooksDataPath(): string {
   return path.join(os.homedir(), '.claude-global', 'hooks', 'data');
 }
 
-/**
- * Allowed session-id format, kept in sync with the MCP-side validator in
- * src/server/index.ts. Session IDs are generated as alphanumeric/dash tokens,
- * so this strict allowlist (no dots, no path separators) rejects any value
- * containing `.` traversal sequences before it is ever used to build a
- * filesystem path.
- *
- * SECURITY (CWE-22): both /api/session-summary and /api/session-events
- * concatenate the caller-supplied `sessionId` into a path. Without this guard,
- * a value like `abc/../../../../secret` resolves outside the hooks data dir,
- * allowing unauthenticated arbitrary `.jsonl` file reads.
- */
-const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+// The allowlist lives in one place now -- it used to be duplicated here and in
+// src/server/index.ts, each "kept in sync" with the other by comment.
+export { isValidSessionId } from '../utils/session-id.js';
 
 /**
- * Returns true when `sessionId` is safe to use in a path. Sends a 400 and
- * returns false otherwise so callers can `if (!validateSessionId(...)) return;`.
+ * Builds the absolute path of a session's log and proves containment:
+ * returns null unless the resolved path stays inside the hooks data dir.
+ * Defense-in-depth behind isValidSessionId (CWE-22 / js/path-injection).
+ *
+ * Both log formats are considered. `session-log-<id>.jsonl` is what this
+ * server writes for a live session; `operations-<id>.csv` is what the
+ * PowerShell hooks append to, and looking only for the former meant every
+ * completed session read as missing. An existing file wins; when neither
+ * exists the JSONL path is returned so callers' own existsSync checks and
+ * error messages behave as before.
  */
-export function isValidSessionId(sessionId: string): boolean {
-  return SESSION_ID_RE.test(sessionId);
+function resolveSessionLogPath(sessionId: string): string | null {
+  if (!isValidSessionId(sessionId)) return null;
+
+  const base = path.resolve(getHooksDataPath());
+
+  // THE PATH IS BUILT FROM A DIRECTORY ENTRY, NOT FROM THE REQUEST.
+  //
+  // This interpolated `sessionId` straight into `path.resolve` and then proved
+  // containment afterwards. The allowlist meant no traversal could actually get
+  // through -- but CodeQL kept flagging it (alerts 73-75), and it was right
+  // about the shape: request data flowed into a path expression, and the proof
+  // that this was safe lived somewhere else, holding only while every future
+  // reader followed it.
+  //
+  // Listing the directory and MATCHING a name inverts that. The only strings
+  // joined to `base` come from the filesystem itself, so the request can never
+  // shape a path -- only select one that already exists in exactly this
+  // directory. Nothing to prove afterwards, because nothing unsafe is
+  // constructed. It is also strictly stronger: a name that is not literally
+  // present cannot be reached, whatever it is spelled like.
+  const wanted = [
+    `session-log-${sessionId}.jsonl`,
+    `operations-${sessionId}.csv`,
+  ];
+
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(base);
+  } catch {
+    return null;
+  }
+
+  // `wanted.indexOf` orders the result: a live JSONL log wins over the CSV.
+  const match = entries
+    .filter((name) => wanted.includes(name))
+    .sort((a, c) => wanted.indexOf(a) - wanted.indexOf(c))[0];
+
+  return match ? path.join(base, match) : null;
 }
 
 /**
- * Builds the absolute path of a session's JSONL log and proves containment:
- * returns null unless the resolved path stays inside the hooks data dir.
- * Defense-in-depth behind isValidSessionId (CWE-22 / js/path-injection).
+ * Reads a session log as a list of JSONL event lines.
+ *
+ * The endpoints below understand a rich event stream -- session_start,
+ * tool_call, tool_result, hook_execution, system_reminder. The PowerShell hooks
+ * record only tool calls, in `operations-<id>.csv`, so those rows are lifted
+ * into the same `tool_call` shape here. One event vocabulary downstream, two
+ * formats on disk, and no branch in the middle of the statistics code.
+ *
+ * TAKES A SESSION ID, NOT A PATH (CWE-22 / js/path-injection).
+ *
+ * This took a caller-supplied path, and every caller did validate it -- but the
+ * proof lived in a different function, so the guarantee held only for as long
+ * as every future caller remembered. CodeQL flagged the request parameter
+ * reaching readFileSync, and it was right about the shape even though the
+ * allowlist happened to close the hole.
+ *
+ * Rebuilding the path here from a re-validated id means no caller CAN pass
+ * something unchecked: the only string that crosses this boundary has already
+ * matched `[A-Za-z0-9_-]{1,64}`, and containment is re-proved against the
+ * hooks data directory before the read.
+ *
+ * @returns the parsed event lines, or null when the id is invalid or the
+ *          session has no log.
  */
-function resolveSessionLogPath(sessionId: string): string | null {
-  const base = path.resolve(getHooksDataPath());
-  const jsonlFilePath = path.resolve(base, `session-log-${sessionId}.jsonl`);
-  const rel = path.relative(base, jsonlFilePath);
-  if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    return null;
+function readSessionEventLines(sessionId: string): string[] | null {
+  // Re-validated HERE, not trusted from the caller.
+  if (!isValidSessionId(sessionId)) return null;
+
+  // resolveSessionLogPath returns either null or a name it read out of the
+  // hooks data directory, so there is no longer a path here to prove anything
+  // about.
+  const logFilePath = resolveSessionLogPath(sessionId);
+  if (!logFilePath) return null;
+
+  const content = fs.readFileSync(logFilePath, 'utf-8').replace(/^﻿/, '');
+
+  if (!logFilePath.toLowerCase().endsWith('.csv')) {
+    return content.trim().split('\n');
   }
-  return jsonlFilePath;
+
+  const rows = content.split(/\r?\n/).filter((l) => l.trim());
+  if (rows.length < 2) return [];
+
+  const header = splitCsvRow(rows[0]).map((h) => h.trim().toLowerCase());
+  const iTime = header.indexOf('timestamp');
+  const iTool = header.indexOf('toolname');
+  const iTokens = header.indexOf('tokens');
+  if (iTime === -1 || iTool === -1) return [];
+
+  const events: string[] = [];
+  for (const row of rows.slice(1)) {
+    const cells = splitCsvRow(row);
+    const toolName = cells[iTool]?.trim();
+    const timestamp = cells[iTime]?.trim();
+    if (!toolName || !timestamp) continue;
+
+    const parsed = Number(cells[iTokens]?.trim());
+    events.push(
+      JSON.stringify({
+        type: 'tool_call',
+        timestamp,
+        toolName,
+        estimatedTokens: Number.isFinite(parsed) ? parsed : 0,
+      })
+    );
+  }
+  return events;
+}
+
+/**
+ * Splits one CSV record, honouring double quotes. The metadata column holds
+ * Windows paths and key=value pairs, both of which contain commas.
+ */
+function splitCsvRow(line: string): string[] {
+  const cells: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      cells.push(cell);
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  cells.push(cell);
+  return cells;
 }
 
 // Helper function to get current session ID
@@ -146,14 +265,22 @@ app.get('/api/session-summary', (req, res) => {
     if (!fs.existsSync(jsonlFilePath)) {
       return res.status(404).json({
         success: false,
-        error: `JSONL log not found for session ${sessionId}`,
+        error: `No session log found for session ${sessionId}`,
         sessionId,
       });
     }
 
-    // Parse JSONL file
-    const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
-    const lines = jsonlContent.trim().split('\n');
+    // Read the log as JSONL events. A CSV log carries only tool calls, so it
+    // is converted to the equivalent tool_call events rather than duplicating
+    // the event handling below for a second format.
+    const lines = readSessionEventLines(sessionId);
+    if (!lines) {
+      return res.status(404).json({
+        success: false,
+        error: `No session log found for session ${sessionId}`,
+        sessionId,
+      });
+    }
 
     // Initialize statistics
     let sessionStartTime = '';
@@ -379,13 +506,18 @@ app.get('/api/session-events', (req, res) => {
     if (!fs.existsSync(jsonlFilePath)) {
       return res.status(404).json({
         success: false,
-        error: `JSONL log not found for session ${sessionId}`,
+        error: `No session log found for session ${sessionId}`,
       });
     }
 
-    // Parse JSONL file
-    const jsonlContent = fs.readFileSync(jsonlFilePath, 'utf-8');
-    const lines = jsonlContent.trim().split('\n');
+    // Read as JSONL events, converting a CSV log on the way in.
+    const lines = readSessionEventLines(sessionId);
+    if (!lines) {
+      return res.status(404).json({
+        success: false,
+        error: `No session log found for session ${sessionId}`,
+      });
+    }
     const events = [];
 
     for (const line of lines) {

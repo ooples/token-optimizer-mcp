@@ -19,6 +19,7 @@ import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
+import { fsGeneration } from '../../utils/fs-generation.js';
 import { detectFileType } from '../shared/syntax-utils.js';
 
 export interface FileMetadata {
@@ -38,7 +39,10 @@ export interface SmartGlobOptions {
   absolute?: boolean; // Return absolute paths (default: false)
 
   // Filtering options
-  ignore?: string[]; // Patterns to ignore (default: node_modules, .git)
+  // Defaults are node_modules, .git, dist AND build -- the last two are real
+  // source directories in plenty of projects, so `metadata.ignoredMatches`
+  // reports whatever they withheld. Pass `[]` to search everything.
+  ignore?: string[];
   onlyFiles?: boolean; // Only return files, not directories (default: true)
   onlyDirectories?: boolean; // Only return directories (default: false)
 
@@ -68,7 +72,21 @@ export interface SmartGlobOptions {
   sortOrder?: 'asc' | 'desc'; // Sort direction (default: asc)
 
   // Cache options
-  useCache?: boolean; // Use cached results (default: true)
+  /**
+   * Serve a previously cached result for the same query.
+   *
+   * DEFAULT FALSE, and the default is the point. A cached search is keyed on
+   * the query, and a query does not describe the tree it ran against: create,
+   * edit or delete a matching file and the cached answer is simply wrong.
+   * Measured live -- a file created between two identical searches did not
+   * appear in the second.
+   *
+   * Enabling it says "nothing outside this server is changing these files",
+   * which only the caller can know. Writes made THROUGH this server are
+   * handled either way: they bump a generation counter that forms part of the
+   * key, so our own edits always invalidate.
+   */
+  useCache?: boolean;
   ttl?: number; // Cache TTL in seconds (default: 300)
 }
 
@@ -85,6 +103,10 @@ export interface SmartGlobResult {
     compressionRatio: number;
     duration: number;
     cacheHit: boolean;
+    /** Real matches withheld by the ignore patterns; absent when none were. */
+    ignoredMatches?: number;
+    /** Plain-language explanation of what was withheld and how to see it. */
+    ignoreNote?: string;
   };
   files?: Array<string | FileMetadata>;
   error?: string;
@@ -110,6 +132,17 @@ export class SmartGlobTool {
     const opts: Required<SmartGlobOptions> = {
       cwd: options.cwd ?? process.cwd(),
       absolute: options.absolute ?? false,
+      // `dist` and `build` are conventions, not guarantees. Real projects keep
+      // real source in both -- AiDotNet.Tensors has two .csproj files under
+      // build/, and a search for '**/*.csproj' silently returned 16 of its 18.
+      // The hook DENIES the built-in Glob and sends the caller here, so a
+      // silent omission is not a smaller result set, it is the caller
+      // concluding their file does not exist.
+      //
+      // The defaults are kept, because they are right far more often than not.
+      // What is removed is the SILENCE: `ignoredMatches` below reports how many
+      // real matches these patterns withheld, so the omission is visible and
+      // the caller can pass their own `ignore` to see them.
       ignore: options.ignore ?? [
         '**/node_modules/**',
         '**/.git/**',
@@ -131,13 +164,18 @@ export class SmartGlobTool {
       offset: options.offset ?? 0,
       sortBy: options.sortBy ?? 'path',
       sortOrder: options.sortOrder ?? 'asc',
-      useCache: options.useCache ?? true,
+      useCache: options.useCache ?? false,
       ttl: options.ttl ?? 300,
     };
 
     try {
       // Check cache first
-      const cacheKey = generateCacheKey('glob', { pattern, options: opts });
+      const cacheKey = generateCacheKey('glob', {
+        pattern,
+        options: opts,
+        // Any write through this server invalidates every cached search.
+        fsGeneration: fsGeneration(),
+      });
 
       if (opts.useCache) {
         const cached = this.cache.get(cacheKey);
@@ -168,6 +206,30 @@ export class SmartGlobTool {
         ignore: opts.ignore,
         nodir: opts.onlyFiles,
       });
+
+      // Whether the exclusions in force are OURS or the caller's -- the note
+      // below names them, and naming them wrongly misdirects anyone hunting a
+      // file that did not come back.
+      const usingDefaultIgnore = options.ignore === undefined;
+
+      // How many REAL matches the ignore patterns withheld. Turns a silent
+      // omission into a number the caller can act on.
+      //
+      // With `ignore: []` there is nothing to withhold and `matches` is
+      // already the unignored set, so the second walk would traverse the whole
+      // tree synchronously to rediscover a list we are holding -- pure cost on
+      // the exact call that opted out of filtering.
+      const ignoredMatches =
+        opts.ignore.length === 0
+          ? 0
+          : Math.max(
+              0,
+              globSync(pattern, {
+                cwd: opts.cwd,
+                absolute: opts.absolute,
+                nodir: opts.onlyFiles,
+              }).length - matches.length
+            );
 
       // Filter and collect file info
       let files: Array<{ path: string; metadata?: FileMetadata }> = [];
@@ -282,18 +344,30 @@ export class SmartGlobTool {
         JSON.stringify(results)
       ).tokens;
 
-      // Estimate original tokens (if we had returned all content)
-      let originalTokens = resultTokens;
-      if (!opts.includeContent && !opts.includeMetadata) {
-        // Path-only mode: estimate content would be 50x more tokens
-        originalTokens = resultTokens * 50;
-      } else if (!opts.includeContent) {
-        // Metadata mode: estimate content would be 10x more tokens
-        originalTokens = resultTokens * 10;
-      }
+      // WHAT WAS ACTUALLY WITHHELD, not a multiplier.
+      //
+      // This used to report `resultTokens * 50` as the baseline in path-only
+      // mode -- so listing 2,400 files claimed to have saved 117,943 tokens
+      // without having read a single one. Nothing was read, so nothing about
+      // file CONTENT was saved; the 50x came from nowhere.
+      //
+      // A listing's real saving is what pagination and filtering kept out of
+      // the response: the paths that matched and were not returned. That is
+      // countable, so it is counted. When everything matched fits in the
+      // response, the honest answer is that nothing was saved.
+      const withheldPaths = files
+        .slice(opts.offset + paginatedFiles.length)
+        .map((f) => f.path);
+      const withheldTokens = withheldPaths.length
+        ? this.tokenCounter.count(JSON.stringify(withheldPaths)).tokens
+        : 0;
 
-      const tokensSaved = originalTokens - resultTokens;
-      const compressionRatio = resultTokens / originalTokens;
+      const originalTokens = resultTokens + withheldTokens;
+      const tokensSaved = withheldTokens;
+      // An honest baseline can now equal the result (nothing was withheld), so
+      // the ratio must not divide by zero or report a nonsense figure.
+      const compressionRatio =
+        originalTokens > 0 ? resultTokens / originalTokens : 1;
 
       // Build result
       const result: SmartGlobResult = {
@@ -309,6 +383,21 @@ export class SmartGlobTool {
           compressionRatio,
           duration: 0, // Will be set below
           cacheHit: false,
+          // Only present when something was actually withheld, so a normal
+          // search stays as quiet as it was.
+          ...(ignoredMatches > 0
+            ? {
+                ignoredMatches,
+                // "default" only when they ARE the defaults. A caller who
+                // passed their own ignore array was told their exclusions came
+                // from patterns they had just overridden, which sends anybody
+                // debugging a missing file to the wrong list.
+                ignoreNote:
+                  `${ignoredMatches} file(s) matched but were excluded by the ` +
+                  `${usingDefaultIgnore ? 'default' : 'configured'} ignore patterns ` +
+                  `(${opts.ignore.join(', ')}). Pass ignore: [] to include them.`,
+              }
+            : {}),
         },
         files: results,
       };

@@ -11,12 +11,39 @@
  * target for loop breaking, so a second attempt at the same thing gets through.
  */
 
-import { fileSize, isBinaryPath, largeFileBytes } from './policy.mjs';
+import { fileSize, isBinaryPath, isMachineOwned, largeFileBytes, refusalFloorBytes } from './policy.mjs';
+import { statSync } from 'node:fs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { activeRules } from './remedy.mjs';
 import { wikiDir } from './wiki.mjs';
 
 const KB = (bytes) => Math.round(bytes / 1024);
+
+/** Whether a path names an existing directory. Never throws. */
+function isDirectory(path) {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Does this command DUMP file contents, rather than merely naming a file?
+ *
+ * `cat`, `head` and `grep` pay for the bytes; `Write`, `Edit` and a bare
+ * `wc -l` do not. Charging a full-file read for all of them overstated the very
+ * cost the holdout comparison is built on, and an inflated saving is the one
+ * failure this project cannot afford.
+ */
+export function isContentDump(command) {
+  if (typeof command !== 'string') return false;
+  // Heredoc bodies are data. A commit message that says `cat foo.ts` does not
+  // print foo.ts, and charging the session for its bytes would inflate the
+  // measured cost -- the one number this project must never overstate.
+  const runnable = stripHeredocs(command);
+  return DUMP_COMMANDS.test(runnable) || RECURSIVE_SEARCH.test(runnable);
+}
 
 /**
  * Commands that print a whole file to stdout.
@@ -30,6 +57,128 @@ const DUMP_COMMANDS = /\b(?:cat|bat|head|tail|more|less|type|Get-Content|gc)\b/;
 
 /** Recursive searches, whose output is unbounded by construction. */
 const RECURSIVE_SEARCH = /\b(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)\b/;
+
+/** The search tools themselves, as a whole command word rather than a substring. */
+const SEARCH_TOOL = /^(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)$/i;
+
+/** Tools that walk directories with no flag asked for. */
+const RECURSES_BY_DEFAULT = /^(?:rg|ag|ack)$/i;
+
+/** Words that may precede the real command without changing what it is. */
+const COMMAND_PREFIX = /^(?:sudo|time|env|command|nice|ionice|nohup|xargs)$/;
+
+/**
+ * Removes heredoc BODIES, which are data the command carries rather than
+ * commands the shell will run.
+ *
+ * `git commit -F - <<'MSG' ... MSG` is one command that runs git. Every line of
+ * the message is text. This hook refused its own author three separate times
+ * over one afternoon -- a test body quoting `cat .git/index`, then two commit
+ * messages describing the greps they had just fixed -- because those lines were
+ * parsed as though the shell would execute them.
+ *
+ * Data is the safe reading. Treating a heredoc as commands produces refusals of
+ * things that will never run, which cost a turn each; treating it as data at
+ * worst misses an optimization on the rare `bash <<EOF` that really does pipe a
+ * script in.
+ */
+function stripHeredocs(command) {
+  const lines = String(command).split('\n');
+  const out = [];
+  let delimiter = null;
+
+  for (const line of lines) {
+    if (delimiter !== null) {
+      if (line.trim() === delimiter) delimiter = null;
+      continue;
+    }
+    out.push(line);
+    const opener = line.match(/<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/);
+    if (opener) delimiter = opener[2];
+  }
+
+  return out.join('\n');
+}
+
+/**
+ * Splits a command into its pipeline/list segments WITHOUT splitting inside
+ * quotes.
+ *
+ * Quote awareness is the whole point. A `node -e "...; grep -r x ."` is one
+ * command that runs node; the text after the semicolon is an argument, not a
+ * segment, and treating it as one makes the hook react to strings that are
+ * merely mentioned.
+ */
+function shellSegments(command) {
+  const out = [];
+  let current = '';
+  let quote = null;
+
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+    if (quote) {
+      if (c === quote && command[i - 1] !== '\\') quote = null;
+      current += c;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+      current += c;
+    } else if (c === ';' || c === '\n' || c === '|' || c === '&') {
+      if ((c === '|' || c === '&') && command[i + 1] === c) i++;
+      out.push(current);
+      current = '';
+    } else {
+      current += c;
+    }
+  }
+  out.push(current);
+  return out;
+}
+
+/**
+ * Is this command an unbounded recursive search?
+ *
+ * The question has to be asked PER SEGMENT, of the segment's head word. The
+ * previous version tested "does a search tool appear anywhere in the string"
+ * and "does a -r-ish flag appear anywhere in the string" INDEPENDENTLY, and
+ * denied when both were true anywhere. So this, caught live against a real
+ * build command, was refused as a recursive search:
+ *
+ *   rm -rf build && npm run verify | grep passed
+ *
+ * `rm -rf` supplied the flag, `grep passed` supplied the tool, and neither
+ * segment is a recursive search. Any `cp -r`, `chmod -R`, `ls -R` or `tar -rf`
+ * next to any grep hit the same false positive, and a wrongly refused command
+ * costs the user a whole turn to work around.
+ *
+ * Quote-aware segmentation fixes the mirror-image case at the same time: a
+ * `grep -rn` quoted inside a script body is a string, not a command.
+ */
+export function isRecursiveSearch(command) {
+  if (typeof command !== 'string') return false;
+
+  for (const segment of shellSegments(stripHeredocs(command))) {
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+
+    let i = 0;
+    while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) i++;
+    if (i >= tokens.length) continue;
+
+    // `/usr/bin/grep` is grep; `git grep` is grep with a word in front.
+    let head = tokens[i].replace(/^.*[/\\]/, '');
+    if (head === 'git' && tokens[i + 1] === 'grep') {
+      head = 'grep';
+      i++;
+    }
+    if (!SEARCH_TOOL.test(head)) continue;
+
+    if (RECURSES_BY_DEFAULT.test(head)) return true;
+
+    const flags = tokens.slice(i + 1);
+    if (flags.some((t) => t === '--recursive' || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(t))) return true;
+  }
+
+  return false;
+}
 
 /**
  * Pulls candidate file arguments out of a shell command.
@@ -91,9 +240,9 @@ function candidatePaths(operand, cwd) {
  */
 export function touchedFiles(payload) {
   const input = payload?.tool_input || {};
-  // path -> size. The size is kept because resolving a candidate ALREADY
-  // stats it: `fileSize(spelling) >= 0` is how a real file is told from a flag
-  // or a glob. Discarding the answer meant every caller stat'd each path again,
+  // path -> size. Resolving a candidate ALREADY stats it -- `fileSize() >= 0`
+  // is how a real file is told from a flag, a glob or a heredoc marker -- and
+  // throwing that answer away made every caller measure the same file again,
   // on a hook that runs before EVERY tool call.
   const out = new Map();
 
@@ -102,16 +251,28 @@ export function touchedFiles(payload) {
   // that began `cd /other/repo` had every one of its relative operands resolved
   // against the session's directory instead, found nothing, and recorded no
   // touch at all -- so work in a second repository was invisible.
-  const command = typeof input.command === 'string' ? input.command : '';
+  // Heredoc bodies stripped first, for the same reason the cost path strips
+  // them: a file named inside a commit message or a test fixture was mentioned,
+  // not touched, and a node built from it is fiction.
+  const command = typeof input.command === 'string' ? stripHeredocs(input.command) : '';
   const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
-  const cwd = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : payload?.cwd;
+  const cdTarget = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : null;
+  // Only trust a `cd` that names a directory which EXISTS. `cd $REPO && cat
+  // src/app.ts` -- an unexpanded variable, or a plain typo -- otherwise re-bases
+  // every relative operand onto a path resolving to nothing, so the call records
+  // no touch at all. Falling back to the session cwd is strictly better than
+  // losing the observation.
+  const cwd = cdTarget && isDirectory(cdTarget) ? cdTarget : payload?.cwd;
 
   const add = (candidate) => {
     if (!candidate || typeof candidate !== 'string') return;
     for (const spelling of resolvableCandidates(candidate, cwd)) {
       const size = fileSize(spelling);
       if (size >= 0) {
-        out.set(canonicalPath(spelling, cwd), size);
+        // Nothing under .git/, node_modules/ or a build directory belongs in a
+        // knowledge graph: it is not authored, it churns constantly, and it
+        // would thrash staleness for every file that anchors to it.
+        if (!isMachineOwned(spelling)) out.set(canonicalPath(spelling, cwd), size);
         return;
       }
     }
@@ -137,11 +298,57 @@ export function touchedFiles(payload) {
 /**
  * The touched paths alone, for callers that do not need the sizes.
  *
- * Kept so every existing caller and test reads the same, while the ones on the
- * hook's critical path can take the size that was measured on the way in.
+ * Kept so every existing caller and test reads exactly the same, while the
+ * ones on the hook's critical path can take the size measured on the way in.
  */
 export function touchedPaths(payload) {
   return touchedFiles(payload).map((f) => f.path);
+}
+
+/** Dump commands as a whole word, for testing a segment's head. */
+const DUMP_HEAD = /^(?:cat|bat|head|tail|more|less|type|Get-Content|gc)$/i;
+
+/**
+ * The first large file this command will ACTUALLY PRINT.
+ *
+ * The dump check and the operand lookup have to be the same segment, or the
+ * hook refuses commands that print nothing. Measured live, on a command that
+ * merely counted the lines of a big file and tailed a log:
+ *
+ *   ls .token-optimizer/wiki/ && wc -l graph.jsonl
+ *   node web-server.js > dash.log &
+ *   grep -iE "listen|error" dash.log | head -5
+ *
+ * `head` (last segment, operating on a 4 KB log) satisfied a whole-string
+ * DUMP_COMMANDS test, and the operand search then returned graph.jsonl from the
+ * FIRST segment, producing "this command prints graph.jsonl (22840 KB) into the
+ * context". It prints a line count. Same defect as the recursive-search one
+ * fixed alongside it: two independent whole-string tests, joined by an `&&`
+ * that has nothing to do with either.
+ */
+function largeDumpedOperand(command, cwd) {
+  const threshold = largeFileBytes();
+
+  for (const segment of shellSegments(stripHeredocs(command))) {
+    const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
+
+    let i = 0;
+    while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) i++;
+    if (i >= tokens.length) continue;
+    if (!DUMP_HEAD.test(tokens[i].replace(/^.*[/\\]/, ''))) continue;
+
+    // Only THIS segment's operands, and only from the dump command onwards.
+    for (const operand of fileOperands(tokens.slice(i).join(' '))) {
+      for (const path of candidatePaths(operand, cwd)) {
+        const size = fileSize(path);
+        if (size >= threshold && !isBinaryPath(path) && !isMachineOwned(path)) {
+          return { path: operand, size };
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 /** Resolves the first operand that is a real file over the size threshold. */
@@ -150,7 +357,13 @@ function largeOperand(command, cwd) {
   for (const operand of fileOperands(command)) {
     for (const path of candidatePaths(operand, cwd)) {
       const size = fileSize(path);
-      if (size >= threshold && !isBinaryPath(path)) return { path: operand, size };
+      // Machine-owned too, not just binary-by-extension. `.git/index` has NO
+      // extension, so isBinaryPath cannot see it, and the advisory it produced
+      // named a 1.3 MB binary index and pointed at smart_read -- which would
+      // have dumped it. Observed live on this repository's own commit command.
+      if (size >= threshold && !isBinaryPath(path) && !isMachineOwned(path)) {
+        return { path: operand, size };
+      }
     }
   }
   return null;
@@ -201,7 +414,15 @@ export function normalizeTool(name) {
  * so both are resolved once here rather than in each decision branch.
  */
 export function normalizePayload(raw) {
-  const input = raw.tool_input || raw.tool_args || raw.arguments || raw.args || {};
+  // camelCase is accepted for the CONTAINER too, not just for `toolName` and
+  // `sessionId`. Accepting `toolName` but not `toolArgs` meant a client that
+  // spoke camelCase throughout had its arguments silently dropped: the payload
+  // still carried a tool name, so the hook ran, found no path and no command,
+  // and allowed every call. A total no-op with nothing in stderr and no failing
+  // check anywhere -- the worst way for an integration to be broken.
+  const input =
+    raw.tool_input || raw.toolInput || raw.tool_args || raw.toolArgs ||
+    raw.arguments || raw.args || raw.parameters || {};
   const filePath = input.file_path ?? input.path ?? input.absolute_path ?? input.filePath ?? input.target_file;
   const command = input.command ?? input.cmd ?? input.script;
 
@@ -260,7 +481,10 @@ export function decide(payload, state) {
   if (tool === 'Read') {
     const path = input.file_path;
     const shown = input.raw_file_path ?? path;
-    if (!path || isBinaryPath(path)) return null;
+    // Machine-owned paths are never refused: there is no structure to offer
+    // and no knowledge to carry, so a refusal would promise both and deliver
+    // neither.
+    if (!path || isBinaryPath(path) || isMachineOwned(path)) return null;
 
     // A paged read is already a deliberate act of token economy. Overriding it
     // would replace a bounded read with an unbounded one.
@@ -268,6 +492,13 @@ export function decide(payload, state) {
 
     const size = fileSize(path);
     if (size < 0) return null;
+
+    // A REFUSAL IS NOT FREE. The message that replaces the file is itself
+    // 50-110 tokens, so below the floor every branch here spends more than the
+    // read would have cost. Measured live: a re-read of a 9-byte version.json
+    // (2 tokens) was refused with a 57-token message. Allowing the read is
+    // strictly cheaper, so allow it.
+    if (size < refusalFloorBytes()) return null;
 
     // A FIX THAT HAS BEEN APPLIED HAS TO BITE, or it was a report with extra
     // steps. Rules are derived from this project's own measured history -- a
@@ -286,7 +517,8 @@ export function decide(payload, state) {
 
     // THE RE-READ CASE, which size-gating alone never caught. On a repeat visit
     // smart_read returns only what CHANGED, so the saving is proportional to
-    // the whole file regardless of how small it is.
+    // the whole file rather than to how much of it is new -- but only above the
+    // floor, because below it the refusal costs more than the file it replaces.
     if (state.seen[path]) {
       return {
         key: `read:${path}`,
@@ -368,8 +600,8 @@ export function decide(payload, state) {
   if (tool === 'Bash') {
     const command = input.command || '';
 
-    if (DUMP_COMMANDS.test(command)) {
-      const hit = largeOperand(command, payload.cwd);
+    {
+      const hit = largeDumpedOperand(command, payload.cwd);
       if (hit) {
         return {
           key: `bash:${hit.path}`,
@@ -383,14 +615,7 @@ export function decide(payload, state) {
 
     // A recursive search has no bound on its output. One with an explicit file
     // operand does, so it is left alone.
-    // Recursive-search detection has to cover how people actually type it:
-    // `-r`, `-R`, `--recursive`, and BUNDLED short flags like `-rn` or `-nr`.
-    // The previous pattern required a lone `-r`/`-R`, so `grep -rn pattern .`
-    // -- among the most common forms there is -- was not recognised at all and
-    // passed straight through.
-    const recursiveFlag =
-      /(^|\s)-[A-Za-z]*[rR][A-Za-z]*(\s|$)|--recursive\b|\brg\b|\bag\b|\back\b/;
-    if (RECURSIVE_SEARCH.test(command) && recursiveFlag.test(command)) {
+    if (isRecursiveSearch(command)) {
       if (!largeOperand(command, payload.cwd)) {
         return {
           key: `bash:search:${command.slice(0, 80)}`,

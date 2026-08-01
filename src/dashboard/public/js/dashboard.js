@@ -1,531 +1,467 @@
-/**
- * Token Optimizer Dashboard - Client-side JavaScript
- * Handles real-time updates, Chart.js visualizations, and timeline rendering
+/*
+ * The overview page.
+ *
+ * Two rules shape everything here.
+ *
+ * 1. LEAD WITH WHAT THEY GAINED. The old page opened with "Total Tokens",
+ *    which is consumption -- the thing the product exists to reduce. The
+ *    headline is now what was saved, with what it would otherwise have cost
+ *    beside it, on one shared scale.
+ *
+ * 2. NEVER MAKE THE READER INTERPRET. Every number carries a plain-language
+ *    label and can explain itself; a verdict at the top says in words whether
+ *    this is working; and an empty panel teaches instead of apologising.
  */
 
-// State management
-let sessionData = null;
-let sessionEvents = [];
-let charts = {
-  categoryChart: null,
-  serverChart: null,
+import { donut, comparison, compact, fmt, escapeHtml } from './charts.js';
+
+const API = '/api';
+
+/** Published Claude input rate. Shown as a scale, never as an invoice. */
+const USD_PER_MILLION_TOKENS = 3;
+
+const CATEGORY_COLORS = {
+  tools: 'var(--graph)',
+  hooks: 'var(--saved)',
+  system_reminders: 'var(--graph-2)',
+  responses: 'var(--spent)',
 };
 
-// Configuration
-const API_BASE = 'http://localhost:3100/api';
-const REFRESH_INTERVAL = 5000; // 5 seconds
-const NO_SERVER_DATA_LABEL = 'No MCP Server Data'; // Placeholder label when no server attribution data is available
-const NO_SERVER_DATA_COLOR = '#334155'; // Gray color for placeholder data
-let refreshTimer = null;
+const CATEGORY_LABELS = {
+  tools: 'Tools Claude ran',
+  hooks: 'Automatic checks',
+  system_reminders: 'Background notes',
+  responses: 'Claude’s replies',
+};
 
-// Initialize dashboard
+const SERVER_COLORS = [
+  'var(--graph)',
+  'var(--saved)',
+  'var(--graph-2)',
+  'var(--spent)',
+  'var(--bad)',
+  '#06b6d4',
+  '#ec4899',
+  '#8b5cf6',
+];
+
+const $ = (id) => document.getElementById(id);
+
 document.addEventListener('DOMContentLoaded', () => {
-  initializeCharts();
-  loadDashboardData();
-  startAutoRefresh();
-
-  // Set up refresh button
-  document.getElementById('refresh-btn').addEventListener('click', () => {
-    loadDashboardData();
-  });
+  $('refresh-btn').addEventListener('click', load);
+  load();
+  setInterval(load, 30_000);
 });
 
-/**
- * Initialize Chart.js charts
- */
-function initializeCharts() {
-  // Token Category Chart (Doughnut)
-  const categoryCtx = document
-    .getElementById('token-category-chart')
-    .getContext('2d');
-  charts.categoryChart = new Chart(categoryCtx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Tools', 'Hooks', 'System Reminders', 'Responses'],
-      datasets: [
-        {
-          data: [0, 0, 0, 0],
-          backgroundColor: ['#10b981', '#f59e0b', '#7c3aed', '#2563eb'],
-          borderColor: '#1e293b',
-          borderWidth: 2,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: '#cbd5e1',
-            padding: 15,
-            font: {
-              size: 12,
-            },
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: function (context) {
-              const label = context.label || '';
-              const value = context.parsed || 0;
-              const total = context.dataset.data.reduce((a, b) => a + b, 0);
-              const percentage =
-                total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-              return `${label}: ${value.toLocaleString()} tokens (${percentage}%)`;
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // Server Attribution Chart (Pie)
-  const serverCtx = document
-    .getElementById('server-attribution-chart')
-    .getContext('2d');
-  charts.serverChart = new Chart(serverCtx, {
-    type: 'pie',
-    data: {
-      labels: [],
-      datasets: [
-        {
-          data: [],
-          backgroundColor: [
-            '#2563eb',
-            '#7c3aed',
-            '#10b981',
-            '#f59e0b',
-            '#ef4444',
-            '#06b6d4',
-            '#8b5cf6',
-            '#ec4899',
-          ],
-          borderColor: '#1e293b',
-          borderWidth: 2,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: '#cbd5e1',
-            padding: 15,
-            font: {
-              size: 12,
-            },
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: function (context) {
-              const label = context.label || '';
-              const value = context.parsed || 0;
-              const total = context.dataset.data.reduce((a, b) => a + b, 0);
-              const percentage =
-                total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-              return `${label}: ${value.toLocaleString()} tokens (${percentage}%)`;
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-/**
- * Load dashboard data from API
- */
-async function loadDashboardData() {
+async function get(path) {
   try {
-    // Show loading state
-    setLoadingState(true);
-
-    // Fetch session summary
-    const summaryResponse = await fetch(`${API_BASE}/session-summary`);
-    if (!summaryResponse.ok) {
-      throw new Error(`HTTP error! status: ${summaryResponse.status}`);
-    }
-    sessionData = await summaryResponse.json();
-
-    if (!sessionData.success) {
-      showError(sessionData.error || 'Failed to load session data');
-      return;
-    }
-
-    // Fetch session events
-    const eventsResponse = await fetch(`${API_BASE}/session-events?limit=100`);
-    if (eventsResponse.ok) {
-      const eventsData = await eventsResponse.json();
-      if (eventsData.success) {
-        sessionEvents = eventsData.events;
-      }
-    }
-
-    // Update UI
-    updateSummaryStats();
-    updateCharts();
-    updateTimeline();
-    updateToolBreakdown();
-    updatePerformanceMetrics();
-    updateLastUpdated();
-
-    setLoadingState(false);
-  } catch (error) {
-    console.error('Error loading dashboard data:', error);
-    showError(`Failed to load dashboard: ${error.message}`);
-    setLoadingState(false);
+    const res = await fetch(`${API}${path}`);
+    const body = await res.json().catch(() => null);
+    return { ok: res.ok, body };
+  } catch {
+    return { ok: false, body: null };
   }
 }
 
-/**
- * Update summary statistics
- */
-function updateSummaryStats() {
-  if (!sessionData) return;
+async function load() {
+  // Every panel is independent: the graph is worth showing even when there is
+  // no active session, and vice versa. One missing answer must not blank the
+  // whole page.
+  const [summary, events, balance, status, constellation] = await Promise.all([
+    get('/session-summary'),
+    get('/session-events?limit=100'),
+    get('/wiki/balance'),
+    get('/wiki/status'),
+    get('/wiki/constellation?cap=90'),
+  ]);
 
-  document.getElementById('session-id').textContent =
-    `Session: ${sessionData.sessionId.substring(0, 8)}...`;
-  document.getElementById('total-tokens').textContent =
-    sessionData.totalTokens.toLocaleString();
-  document.getElementById('total-turns').textContent =
-    sessionData.totalTurns.toLocaleString();
-  document.getElementById('total-tools').textContent =
-    sessionData.totalTools.toLocaleString();
-  document.getElementById('session-duration').textContent =
-    sessionData.duration;
+  renderSavings(balance.body, status.body);
+  renderVerdict(balance.body, status.body);
+  renderGraph(constellation.body, status.body);
+
+  const session = summary.ok && summary.body?.success ? summary.body : null;
+  renderKpis(session);
+  renderCategories(session);
+  renderServers(session);
+  renderTimeline(events.ok ? events.body?.events : null);
+  renderBreakdown(session);
+
+  $('last-updated').textContent = new Date().toLocaleTimeString();
 }
 
-/**
- * Update charts with new data
- */
-function updateCharts() {
-  if (!sessionData) return;
+/* ------------------------------------------------------------- the hero -- */
 
-  // Update category chart
-  const categoryData = sessionData.tokensByCategory;
-  charts.categoryChart.data.datasets[0].data = [
-    categoryData.tools.tokens,
-    categoryData.hooks.tokens,
-    categoryData.system_reminders.tokens,
-    categoryData.responses.tokens,
-  ];
-  charts.categoryChart.update();
+function renderSavings(balance, status) {
+  const saved = Number(balance?.estimatedTokensAvoided);
+  const foot = $('saved-foot');
 
-  // Update server attribution chart
-  const serverData = sessionData.tokensByServer;
-  const serverLabels = Object.keys(serverData);
-  const serverValues = Object.values(serverData);
+  if (!balance?.sufficientData || !Number.isFinite(saved) || saved <= 0) {
+    // Before there is a measurement, say what will appear and why -- and do
+    // NOT show a zero, which reads as failure rather than as "not yet".
+    $('saved-tokens').textContent = '—';
+    $('saved-money').textContent = '—';
+    $('saved-percent').textContent = '—';
+    $('comparison').innerHTML = '';
 
-  if (serverLabels.length === 0) {
-    // No server data, show placeholder
-    charts.serverChart.data.labels = [NO_SERVER_DATA_LABEL];
-    charts.serverChart.data.datasets[0].data = [1];
-    charts.serverChart.data.datasets[0].backgroundColor = [
-      NO_SERVER_DATA_COLOR,
-    ];
-  } else {
-    charts.serverChart.data.labels = serverLabels;
-    charts.serverChart.data.datasets[0].data = serverValues;
-  }
-  charts.serverChart.update();
-}
-
-/**
- * Update timeline with session events
- */
-function updateTimeline() {
-  const container = document.getElementById('timeline-container');
-
-  if (!sessionEvents || sessionEvents.length === 0) {
-    container.innerHTML =
-      '<div class="timeline-placeholder">No events to display</div>';
+    const learned = Number(status?.nodes) || 0;
+    foot.innerHTML = learned
+      ? `Still measuring. ${fmt(learned)} things learned so far — the savings ` +
+        `figure appears once there is enough of a comparison to be honest about.`
+      : `Nothing measured yet. Work normally in Claude Code for a few minutes ` +
+        `and this fills itself in.`;
     return;
   }
 
-  // Create timeline events
-  let html = '';
-  sessionEvents.forEach((event) => {
-    const eventClass = getEventClass(event.type);
-    const eventLabel = getEventLabel(event);
-    const eventDetails = getEventDetails(event);
+  const spentAnyway =
+    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
+  const wouldHave = saved + spentAnyway;
+  const percent = wouldHave > 0 ? (saved / wouldHave) * 100 : 0;
 
-    html += `
-            <div class="timeline-event ${eventClass}">
-                <div class="event-header">
-                    <span class="event-type">${eventLabel}</span>
-                    <span class="event-timestamp">${formatTimestamp(event.timestamp)}</span>
-                </div>
-                <div class="event-details">${eventDetails}</div>
-            </div>
-        `;
+  countUp($('saved-tokens'), saved);
+  $('saved-money').textContent =
+    `$${((saved / 1e6) * USD_PER_MILLION_TOKENS).toFixed(2)}`;
+  $('saved-percent').textContent = `${percent.toFixed(0)}%`;
+
+  comparison($('comparison'), {
+    withoutLabel: 'without this',
+    withoutValue: wouldHave,
+    withLabel: 'with it',
+    withValue: spentAnyway,
   });
 
-  container.innerHTML = html;
+  foot.textContent =
+    `Measured against ${fmt(balance.holdouts)} reads deliberately left alone, ` +
+    `so this is a comparison rather than a guess.`;
 }
 
-/**
- * Update tool breakdown table
- */
-function updateToolBreakdown() {
-  if (!sessionData || !sessionData.toolBreakdown) return;
+/** A number that lands rather than appearing. Skipped when motion is reduced. */
+function countUp(node, target) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) {
+    node.textContent = fmt(target);
+    return;
+  }
+  const started = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - started) / 900);
+    const eased = 1 - Math.pow(1 - t, 3);
+    node.textContent = fmt(Math.round(target * eased));
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 
-  const tbody = document.getElementById('tool-breakdown-body');
-  const breakdown = sessionData.toolBreakdown;
+function renderVerdict(balance, status) {
+  const box = $('verdict');
+  const title = $('verdict-title');
+  const detail = $('verdict-detail');
+  box.hidden = false;
+  box.classList.remove('is-ok', 'is-warn', 'is-bad');
 
-  if (Object.keys(breakdown).length === 0) {
-    tbody.innerHTML =
-      '<tr><td colspan="4" class="no-data">No data available</td></tr>';
+  if (!balance?.sufficientData) {
+    box.classList.add('is-warn');
+    title.textContent = 'Still learning';
+    const need = balance
+      ? `${balance.injections || 0} of 20 measured reads, ${balance.holdouts || 0} of 5 comparisons`
+      : 'no measurements yet';
+    detail.textContent = `Not enough evidence to claim a number yet (${need}). Keep working — it gets there on its own.`;
     return;
   }
 
-  // Sort by token count (descending)
-  const sortedTools = Object.entries(breakdown).sort(
-    (a, b) => b[1].tokens - a[1].tokens
+  const net = Number(balance.netTokens || 0);
+  const cost =
+    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
+  const ratio = cost > 0 ? (net + cost) / cost : Infinity;
+
+  if (net > 0) {
+    box.classList.add('is-ok');
+    title.textContent = 'Working well';
+    detail.textContent = Number.isFinite(ratio)
+      ? `Saving about ${ratio.toFixed(0)}× what it costs to run, across ${fmt(status?.nodes || 0)} things it has learned.`
+      : `Saving context at no measurable cost.`;
+  } else {
+    box.classList.add('is-bad');
+    title.textContent = 'Not paying off here';
+    detail.textContent =
+      `Costing more than it saves on this project so far. Small codebases with ` +
+      `few repeat reads are the usual reason.`;
+  }
+}
+
+function renderGraph(constellation, status) {
+  const host = $('constellation');
+  const stats = $('graph-stats');
+  const nodes = constellation?.nodes || [];
+  const remembered = Number(status?.nodes) || 0;
+
+  if (!nodes.length) {
+    // TWO DIFFERENT EMPTIES, and conflating them produced a page that
+    // contradicted itself: the verdict said "across 475 things it has learned"
+    // while this panel said "Nothing learned yet". The constellation surfaces
+    // findings; the count of remembered files is a different question, and when
+    // files exist the honest message is that nothing has been CONCLUDED yet.
+    host.innerHTML = remembered
+      ? '<div class="empty is-compact"><div class="mark">◍</div>' +
+        `<h3>${fmt(remembered)} files remembered</h3>` +
+        '<p>Nothing has been concluded about them yet. Findings appear here as ' +
+        'Claude works out how the pieces fit together.</p></div>'
+      : '<div class="empty is-compact"><div class="mark">◌</div>' +
+        '<h3>Nothing learned yet</h3>' +
+        '<p>As Claude reads your code, each file is remembered here so it never ' +
+        'has to be read twice.</p>' +
+        '<p class="next">Open a file in Claude Code, then refresh.</p></div>';
+
+    // The counts are still true and still worth showing.
+    stats.innerHTML = remembered ? statRows(status) : '';
+    return;
+  }
+
+  host.innerHTML = '';
+  host.appendChild(nodeField(nodes));
+  stats.innerHTML = statRows(status);
+}
+
+function statRows(status) {
+  const rows = [
+    ['files remembered', status?.nodes],
+    ['connections', status?.edges],
+    ['things discovered', status?.findings],
+  ];
+  return rows
+    .map(
+      ([label, value]) =>
+        `<div><span class="gs-value num">${compact(value || 0)}</span>` +
+        `<span class="gs-label">${label}</span></div>`
+    )
+    .join('');
+}
+
+/**
+ * A calm, deterministic constellation.
+ *
+ * Deterministic on purpose: positions are derived from each node's id, so the
+ * picture is stable between refreshes. A layout that reshuffles every 30
+ * seconds reads as noise rather than as a map of something real.
+ */
+function nodeField(nodes) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const w = 320;
+  const h = 190;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute(
+    'aria-label',
+    `${nodes.length} things this project has learned`
   );
 
-  let html = '';
-  sortedTools.forEach(([toolName, data]) => {
-    const avgDuration =
-      data.count > 0 ? Math.round(data.totalDuration / data.count) : 0;
-    html += `
-            <tr>
-                <td><strong>${toolName}</strong></td>
-                <td>${data.count}</td>
-                <td>${data.tokens.toLocaleString()}</td>
-                <td>${avgDuration.toLocaleString()}</td>
-            </tr>
-        `;
+  const hash = (s) => {
+    let x = 0;
+    for (let i = 0; i < s.length; i++) x = (x * 31 + s.charCodeAt(i)) >>> 0;
+    return x;
+  };
+
+  const placed = nodes.slice(0, 60).map((n) => {
+    const key = String(n.id || n.key || '');
+    const a = hash(key);
+    const b = hash(`${key}~`);
+    return {
+      x: 18 + ((a % 1000) / 1000) * (w - 36),
+      y: 16 + ((b % 1000) / 1000) * (h - 32),
+      kind: n.kind,
+    };
   });
 
-  tbody.innerHTML = html;
-}
-
-/**
- * Update performance metrics
- */
-function updatePerformanceMetrics() {
-  if (!sessionData || !sessionData.performance) return;
-
-  const perf = sessionData.performance;
-  document.getElementById('avg-tool-duration').textContent =
-    `${perf.avgToolDuration_ms.toLocaleString()} ms`;
-  document.getElementById('tools-with-duration').textContent =
-    perf.toolsWithDuration.toLocaleString();
-}
-
-/**
- * Update last updated timestamp
- */
-function updateLastUpdated() {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString();
-  document.getElementById('last-updated').textContent =
-    `Last Updated: ${timeStr}`;
-}
-
-/**
- * Get CSS class for event type
- */
-function getEventClass(type) {
-  switch (type) {
-    case 'tool_call':
-    case 'tool_result':
-      return 'tool-call';
-    case 'hook_execution':
-      return 'hook-execution';
-    case 'system_reminder':
-      return 'system-reminder';
-    default:
-      return '';
-  }
-}
-
-/**
- * Get human-readable label for event
- */
-function getEventLabel(event) {
-  switch (event.type) {
-    case 'tool_call':
-      return `Tool: ${event.toolName}`;
-    case 'tool_result':
-      return `Result: ${event.toolName}`;
-    case 'hook_execution':
-      return `Hook: ${event.hookName}`;
-    case 'system_reminder':
-      return 'System Reminder';
-    case 'session_start':
-      return 'Session Started';
-    case 'session_end':
-      return 'Session Ended';
-    default:
-      return event.type;
-  }
-}
-
-/**
- * Get event details
- */
-function getEventDetails(event) {
-  let details = [];
-
-  if (event.estimatedTokens) {
-    details.push(`${event.estimatedTokens.toLocaleString()} tokens`);
-  }
-
-  if (event.duration_ms) {
-    details.push(`${event.duration_ms.toLocaleString()} ms`);
-  }
-
-  if (event.turn) {
-    details.push(`Turn ${event.turn}`);
-  }
-
-  return details.join(' • ') || 'No additional details';
-}
-
-/**
- * Format timestamp for display
- */
-function formatTimestamp(timestamp) {
-  if (!timestamp) return 'Unknown time';
-
-  try {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString();
-  } catch (error) {
-    return timestamp;
-  }
-}
-
-/**
- * Set loading state
- */
-function setLoadingState(isLoading) {
-  const refreshBtn = document.getElementById('refresh-btn');
-  if (isLoading) {
-    refreshBtn.disabled = true;
-    refreshBtn.textContent = 'Loading...';
-    refreshBtn.classList.add('loading');
-  } else {
-    refreshBtn.disabled = false;
-    refreshBtn.textContent = 'Refresh';
-    refreshBtn.classList.remove('loading');
-  }
-}
-
-/**
- * Show error message with non-blocking UI
- */
-function showError(message) {
-  console.error('Dashboard Error:', message);
-
-  // Create or get error container
-  let errorContainer = document.getElementById('error-container');
-  if (!errorContainer) {
-    errorContainer = document.createElement('div');
-    errorContainer.id = 'error-container';
-    errorContainer.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            max-width: 400px;
-            z-index: 9999;
-        `;
-    document.body.appendChild(errorContainer);
-  }
-
-  // Create error notification
-  const errorDiv = document.createElement('div');
-  errorDiv.className = 'error-notification';
-  errorDiv.style.cssText = `
-        background-color: #ef4444;
-        color: white;
-        padding: 16px;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        animation: slideIn 0.3s ease-out;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    `;
-
-  errorDiv.innerHTML = `
-        <div style="flex: 1;">
-            <strong>Error</strong><br/>
-            <span style="font-size: 14px;">${escapeHtml(message)}</span>
-        </div>
-        <button onclick="this.parentElement.remove()" style="
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-left: 10px;
-        ">&times;</button>
-    `;
-
-  errorContainer.appendChild(errorDiv);
-
-  // Auto-remove after 5 seconds
-  setTimeout(() => {
-    if (errorDiv.parentElement) {
-      errorDiv.style.animation = 'slideOut 0.3s ease-out';
-      setTimeout(() => errorDiv.remove(), 300);
+  // Short links between near neighbours, so it reads as a structure rather
+  // than as scattered dots.
+  for (let i = 0; i < placed.length; i++) {
+    for (let j = i + 1; j < placed.length; j++) {
+      const dx = placed[i].x - placed[j].x;
+      const dy = placed[i].y - placed[j].y;
+      if (Math.hypot(dx, dy) < 36) {
+        const line = document.createElementNS(NS, 'line');
+        line.setAttribute('x1', placed[i].x);
+        line.setAttribute('y1', placed[i].y);
+        line.setAttribute('x2', placed[j].x);
+        line.setAttribute('y2', placed[j].y);
+        line.setAttribute('stroke', 'var(--graph-dim)');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+      }
     }
-  }, 5000);
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-/**
- * Start auto-refresh
- */
-function startAutoRefresh() {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
   }
 
-  refreshTimer = setInterval(() => {
-    loadDashboardData();
-  }, REFRESH_INTERVAL);
+  placed.forEach((p, i) => {
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('cx', p.x);
+    dot.setAttribute('cy', p.y);
+    dot.setAttribute('r', p.kind === 'finding' ? 3.6 : 2.4);
+    dot.setAttribute(
+      'fill',
+      p.kind === 'finding' ? 'var(--saved)' : 'var(--graph)'
+    );
+    dot.setAttribute('class', 'node-dot');
+    dot.style.setProperty('--i', String(i % 12));
+    svg.appendChild(dot);
+  });
+
+  return svg;
 }
 
-/**
- * Stop auto-refresh
- */
-function stopAutoRefresh() {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
+/* ------------------------------------------------------------- the rest -- */
+
+function renderKpis(s) {
+  const host = $('kpis');
+  if (!s) {
+    host.innerHTML =
+      '<div class="card empty-span"><div class="empty is-compact"><div class="mark">◔</div>' +
+      '<h3>No active session</h3>' +
+      '<p>These fill in while you are working in Claude Code. The savings above ' +
+      'are kept per project, so they stay accurate between sessions.</p>' +
+      '<p class="next">Start a session, then refresh.</p></div></div>';
+    return;
   }
+
+  const cards = [
+    {
+      label: 'Context used',
+      value: compact(s.totalTokens),
+      tip:
+        'How much of Claude’s limited workspace this session has taken up. ' +
+        'The smaller this is for the same work, the better.',
+    },
+    {
+      label: 'Messages exchanged',
+      value: fmt(s.totalTurns),
+      tip: 'How many back-and-forth turns you have had in this session.',
+    },
+    {
+      label: 'Actions taken',
+      value: fmt(s.totalTools),
+      tip:
+        'Reads, edits, searches and commands Claude ran on your behalf. ' +
+        'Each one is a chance to save context.',
+    },
+    {
+      label: 'Session length',
+      value: s.duration || '—',
+      tip: 'How long this session has been going.',
+    },
+  ];
+
+  host.innerHTML = cards
+    .map(
+      (c) => `
+      <div class="card kpi">
+        <p class="kpi-label">${escapeHtml(c.label)}
+          <button class="explain" type="button" aria-label="What is ${escapeHtml(c.label)}?">?
+            <span class="tip" role="tooltip">${escapeHtml(c.tip)}</span>
+          </button>
+        </p>
+        <div class="kpi-value num">${escapeHtml(c.value)}</div>
+      </div>`
+    )
+    .join('');
 }
 
-// Handle page visibility changes
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    stopAutoRefresh();
-  } else {
-    startAutoRefresh();
-    loadDashboardData();
+function renderCategories(s) {
+  const host = $('category-chart');
+  if (!s?.tokensByCategory) {
+    host.innerHTML = teach(
+      'Nothing to break down yet',
+      'Once Claude runs a few actions, this shows which kinds of thing filled the workspace.'
+    );
+    return;
   }
-});
+  const slices = Object.entries(s.tokensByCategory).map(([key, v]) => ({
+    label: CATEGORY_LABELS[key] || key,
+    value: v?.tokens || 0,
+    color: CATEGORY_COLORS[key] || 'var(--graph)',
+  }));
+  donut(host, slices, {
+    centerLabel: 'context used',
+    centerValue: compact(s.totalTokens),
+  });
+}
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-  stopAutoRefresh();
-});
+function renderServers(s) {
+  const host = $('server-chart');
+  const entries = Object.entries(s?.tokensByServer || {}).filter(
+    ([, v]) => (v?.tokens || v) > 0
+  );
+  if (!entries.length) {
+    host.innerHTML = teach(
+      'No tool servers yet',
+      'When Claude uses a connected tool, its share of the workspace shows up here.'
+    );
+    return;
+  }
+  const slices = entries
+    .map(([name, v], i) => ({
+      label: name,
+      value: v?.tokens ?? v,
+      color: SERVER_COLORS[i % SERVER_COLORS.length],
+    }))
+    .sort((a, b) => b.value - a.value);
+  donut(host, slices, {
+    centerLabel: 'across tools',
+    centerValue: compact(slices.reduce((t, x) => t + x.value, 0)),
+  });
+}
+
+function renderTimeline(events) {
+  const host = $('timeline-container');
+  if (!events?.length) {
+    host.innerHTML = teach(
+      'Nothing has happened yet',
+      'Every read, edit and command Claude runs will appear here in order, newest first.'
+    );
+    return;
+  }
+  host.innerHTML = events
+    .slice(0, 40)
+    .map(
+      (e) => `
+      <div class="event">
+        <span class="ev-dot"></span>
+        <span class="ev-name">${escapeHtml(e.name || e.tool || 'action')}</span>
+        <span class="ev-meta num">${e.tokens ? `${compact(e.tokens)} tokens` : ''}</span>
+        <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
+      </div>`
+    )
+    .join('');
+}
+
+function renderBreakdown(s) {
+  const body = $('tool-breakdown-body');
+  const rows = s?.toolBreakdown || s?.tools || [];
+  if (!rows.length) {
+    body.innerHTML =
+      '<tr><td colspan="3">' +
+      teach(
+        'No actions counted yet',
+        'Each kind of action Claude takes gets a row here, so repeat costs are easy to spot.'
+      ) +
+      '</td></tr>';
+    return;
+  }
+  body.innerHTML = rows
+    .map(
+      (t) => `
+      <tr>
+        <td>${escapeHtml(t.name || t.tool)}</td>
+        <td class="right num">${fmt(t.count)}</td>
+        <td class="right num">${fmt(t.tokens)}</td>
+      </tr>`
+    )
+    .join('');
+}
+
+/** An empty state that teaches. Never "No data available". */
+function teach(title, body) {
+  return (
+    `<div class="empty is-compact"><div class="mark">◌</div>` +
+    `<h3>${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></div>`
+  );
+}

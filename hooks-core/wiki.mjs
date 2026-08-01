@@ -71,9 +71,24 @@ export function wikiDir(cwd) {
  * file is not inside one, which is the honest answer for a scratch file.
  */
 export function projectRootFor(filePath, fallback) {
+  // VCS markers ONLY, and the whole tree is walked before falling back.
+  //
+  // `package.json` was in this list and it is the wrong marker: in a monorepo
+  // every workspace has one, so a file under packages/foo routed to that
+  // package instead of the repository, splitting one project's graph into as
+  // many graphs as it has manifests. A repository marker has to be something
+  // only the repository root has.
+  //
+  // `.git` is matched whether it is a directory or a FILE, because a submodule
+  // and a `git worktree` checkout both write a `.git` file pointing elsewhere --
+  // and those are exactly the layouts where getting the root wrong is easiest.
+  const MARKERS = ['.git', '.hg', '.svn'];
+
   let dir = dirname(canonicalPath(filePath));
+  // Bounded so a pathological path on a deep filesystem cannot turn one hook
+  // call into an unbounded walk.
   for (let depth = 0; depth < 40 && dir; depth += 1) {
-    for (const marker of ['.git', 'package.json', '.hg', 'go.mod', 'Cargo.toml']) {
+    for (const marker of MARKERS) {
       if (existsSync(join(dir, marker))) return dir;
     }
     const parent = dirname(dir);

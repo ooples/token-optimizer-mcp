@@ -28,7 +28,10 @@ beforeAll(() => {
   big = join(workspace, 'big.ts');
   small = join(workspace, 'small.ts');
   writeFileSync(big, 'x'.repeat(80_000));
-  writeFileSync(small, 'x'.repeat(200));
+  // Comfortably under the LARGE threshold (25 KB) -- which is what these tests
+  // are about -- but over the refusal floor, below which a refusal costs more
+  // than the file it replaces and so is never issued at all.
+  writeFileSync(small, 'x'.repeat(2_000));
 });
 
 afterAll(() => rmSync(workspace, { recursive: true, force: true }));

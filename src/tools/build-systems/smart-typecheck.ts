@@ -8,7 +8,6 @@
  * - Suggestion prioritization
  */
 
-import { spawn } from 'child_process';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -16,6 +15,7 @@ import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { spawnNodeBin } from './run-node-bin.js';
 
 interface TypeCheckError {
   file: string;
@@ -199,14 +199,15 @@ export class SmartTypeCheck {
 
       // SECURITY: argv mode (shell:false) so caller-controlled args are passed
       // verbatim and cannot be reinterpreted by a shell.
-      const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      // --no-install: use only a locally/globally installed tsc rather than
-      // letting npx silently download typescript from the registry.
-      const tsc = spawn(npx, ['--no-install', 'tsc', ...args], {
-        cwd: this.projectRoot,
-        shell: false,
-        windowsHide: true,
-      });
+      // Runs the project's own tsc as `node <tsc.js> ...` -- argv mode, no
+      // shell, and no .cmd shim for Node to refuse. See run-node-bin.ts.
+      const tsc = spawnNodeBin(
+        'typescript',
+        'tsc',
+        args,
+        { cwd: this.projectRoot },
+        'smart_build'
+      );
 
       tsc.stdout.on('data', (data) => {
         stdout += data.toString();

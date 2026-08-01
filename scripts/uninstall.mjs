@@ -17,6 +17,14 @@
  */
 
 import { readManifest, removalPlan, uninstall, residue, manifestPath } from '../hooks-core/manifest.mjs';
+import { unwire, wiredEntries } from '../hooks-core/wire.mjs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+/** The settings file this machine actually uses. */
+const settingsPath = process.env.TOKEN_OPTIMIZER_SETTINGS
+  || join(homedir(), '.claude', 'settings.json');
 
 const apply = process.argv.includes('--apply');
 const manifest = readManifest();
@@ -54,7 +62,7 @@ if (plan.gone.length) {
 
 if (plan.entries.length) {
   console.log('');
-  console.log('Config entries we added (remove these by hand, so we never rewrite your settings):');
+  console.log('Hook entries we added, which will be removed from your settings:');
   for (const entry of plan.entries) console.log(`  - ${entry.file}: ${entry.path}${entry.description ? ` (${entry.description})` : ''}`);
 }
 
@@ -70,6 +78,45 @@ if (!apply) {
 const result = uninstall({ apply: true, manifest });
 console.log('');
 console.log(`Removed ${result.removed.length} file(s).`);
+
+/*
+ * AND THE SETTINGS ENTRIES.
+ *
+ * This used to print "remove these by hand, so we never rewrite your settings"
+ * and stop. The intention was conservative, but the effect was that
+ * `uninstall --apply` left the product fully switched on: the hooks stayed in
+ * settings.json and kept intercepting every tool call, now possibly pointing at
+ * files the same command had just deleted. An uninstall that leaves the thing
+ * running is not an uninstall.
+ *
+ * The asymmetry was the real problem -- the installer is willing to WRITE this
+ * file, so refusing to write it on the way out is not caution, it is a
+ * one-way door.
+ *
+ * `unwire` was already written, documented as the uninstall path, and tested;
+ * it simply had no caller. It removes only entries carrying our marker, drops
+ * an event key left empty rather than leaving an empty array behind, and
+ * touches nothing else -- the same standard used for files above.
+ */
+if (existsSync(settingsPath)) {
+  try {
+    const before = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    const ours = wiredEntries(before).length;
+
+    if (ours > 0) {
+      const after = unwire(before);
+      writeFileSync(settingsPath, `${JSON.stringify(after, null, 2)}
+`);
+      console.log(`Removed ${ours} hook entr${ours === 1 ? 'y' : 'ies'} from ${settingsPath}.`);
+    } else {
+      console.log(`No token-optimizer hook entries in ${settingsPath}.`);
+    }
+  } catch (error) {
+    // A settings file we cannot parse is one we must not rewrite.
+    console.log(`Could not update ${settingsPath}: ${error.message}`);
+    console.log('Remove the token-optimizer hook entries by hand.');
+  }
+}
 if (result.failed?.length) {
   console.log(`${result.failed.length} could not be removed:`);
   for (const failure of result.failed) console.log(`  ! ${failure.path}: ${failure.error}`);
@@ -77,10 +124,9 @@ if (result.failed?.length) {
 
 // Confirm rather than assert. The claim "your machine is clean" should be
 // checked by looking, not by having intended it.
-const settings = process.env.TOKEN_OPTIMIZER_SETTINGS;
-if (settings) {
-  const found = residue(settings);
+if (existsSync(settingsPath)) {
+  const found = residue(settingsPath);
   console.log(found.clean
     ? 'Verified: no token-optimizer entries remain in the settings file.'
-    : `${found.entries.length} entry/entries remain in ${settings} -- remove them by hand.`);
+    : `${found.entries.length} entry/entries remain in ${settingsPath} -- remove them by hand.`);
 }

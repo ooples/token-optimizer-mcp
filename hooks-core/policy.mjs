@@ -67,6 +67,24 @@ function intEnv(name, fallback) {
  */
 export const largeFileBytes = () => intEnv('TOKEN_OPTIMIZER_LARGE_READ_BYTES', 25_600);
 
+/**
+ * Size below which NO refusal can pay for itself.
+ *
+ * A refusal is not free: the message replacing the file is itself 50-110 tokens
+ * of context. Refusing a file smaller than that spends more than it saves, and
+ * a negative saving is the one number this project must never produce.
+ *
+ * Measured live: a re-read of a 9-byte `version.json` -- 2 tokens of content --
+ * was refused with a 57-token message, 28x worse than allowing the read. The
+ * re-read branch had reasoned that "the saving is proportional to the whole file
+ * regardless of how small it is", which is true of the SAVING and silently
+ * assumes the refusal costs nothing.
+ *
+ * 1 KB is about 256 tokens, comfortably above the largest refusal this hook
+ * emits, so a refusal above the floor always pays.
+ */
+export const refusalFloorBytes = () => intEnv('TOKEN_OPTIMIZER_REFUSAL_FLOOR_BYTES', 1_024);
+
 /** Extensions whose bytes are not tokens, so byte thresholds do not apply. */
 const BINARY_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.svg',
@@ -78,6 +96,65 @@ const BINARY_EXTENSIONS = new Set([
 export function isBinaryPath(path) {
   const dot = path.lastIndexOf('.');
   return dot !== -1 && BINARY_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
+/**
+ * Directories owned by a machine rather than by a person.
+ *
+ * Found live: a `Read` of `.git/index` -- 1.3 MB of binary index -- was REFUSED
+ * with an offer of "structure and what is known about it", delivered an empty
+ * structure section because there is none, and pointed at smart_read, which
+ * would have dumped the binary. The same call also wrote `.git/index` into the
+ * knowledge graph as a file node.
+ *
+ * Extension-based binary detection cannot catch this: `.git/index` has no
+ * extension. These paths are excluded wholesale instead -- nothing here is
+ * knowledge, all of it churns constantly (so it would thrash staleness), and
+ * none of it is something a person reads.
+ */
+const MACHINE_OWNED = /(?:^|[/\\])(?:\.git|\.hg|\.svn|node_modules|\.venv|__pycache__|\.next|\.turbo|dist|obj|bin)(?:[/\\]|$)/i;
+
+/**
+ * Collapses `.` and `..` textually, without touching the filesystem.
+ *
+ * `node_modules/../src/large.ts` is an AUTHORED file, but the raw string
+ * contains `node_modules/`, so matching before normalising excluded it from
+ * harvesting and let that spelling slip past Read enforcement. Resolving the
+ * segments first means classification depends on where a path POINTS, not on
+ * how it happens to be written.
+ *
+ * Textual, deliberately: these paths are frequently relative, and resolving
+ * against cwd would answer a different question -- and would answer it
+ * differently in the hook process than in the caller.
+ */
+function normalizeSegments(p) {
+  const drive = /^[a-z]:/i.test(p) ? p.slice(0, 2) : '';
+  const rest = drive ? p.slice(2) : p;
+  const rooted = rest.startsWith('/');
+
+  const out = [];
+  for (const seg of rest.split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') {
+      // Above the root is still the root; above a relative start is a real
+      // `..` that must be kept, or the path would silently change meaning.
+      if (out.length && out[out.length - 1] !== '..') out.pop();
+      else if (!rooted && !drive) out.push('..');
+      continue;
+    }
+    out.push(seg);
+  }
+
+  return drive + (rooted || drive ? '/' : '') + out.join('/');
+}
+
+/** Whether a path lives inside -- or IS -- something the user never authored. */
+export function isMachineOwned(path) {
+  // The trailing `$` in MACHINE_OWNED matters: a git worktree or submodule
+  // stores `.git` as a FILE, so `/repo/.git` has no trailing separator and
+  // was classified as authored content -- putting git metadata through Read
+  // refusal and into the knowledge graph.
+  return MACHINE_OWNED.test(normalizeSegments(String(path || '').split('\\').join('/')));
 }
 
 /** Size in bytes, or -1 when the path is missing or is not a regular file. */

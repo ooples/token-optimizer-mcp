@@ -21,6 +21,7 @@ import {
 import { dirname, join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
+import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
@@ -336,6 +337,9 @@ export class SmartWriteTool {
     if (!atomic) {
       // Direct write (non-atomic)
       writeFileSync(filePath, content, { encoding, mode });
+      // Tell the search tools the tree moved, so no cached grep or glob
+      // result can describe a state that no longer exists.
+      bumpFsGeneration();
       return Buffer.from(content).length;
     }
 
@@ -351,6 +355,10 @@ export class SmartWriteTool {
 
       // Atomic rename (guaranteed on POSIX, best-effort on Windows)
       renameSync(tempPath, filePath);
+      // Same, for the atomic path -- after the RENAME, which is the
+      // point the file actually changes. Bumping after the temp write
+      // would announce a change that a failed rename never made.
+      bumpFsGeneration();
 
       return Buffer.from(content).length;
     } catch (error) {

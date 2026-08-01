@@ -919,8 +919,17 @@ export class CacheInvalidationTool extends EventEmitter {
     this.stats.totalExecutionTime += executionTime;
     this.stats.totalKeysInvalidated += affectedKeys.length;
 
-    // Calculate token savings (88% reduction target)
-    const tokensSaved = affectedKeys.length * 1000 * 0.88; // Assume 1000 tokens per key, 88% saved
+    // NO SAVING IS CLAIMED FOR INVALIDATION.
+    //
+    // This read `affectedKeys.length * 1000 * 0.88` -- "assume 1000 tokens per
+    // key, 88% saved", in its own words -- and accumulated the result into a
+    // running total reported to the user. Both numbers were invented, and
+    // invalidating an entry does not save anything in any case: it REMOVES a
+    // cached value, so the next read pays full price.
+    //
+    // The count of keys invalidated is real and is already tracked above; that
+    // is what this operation actually did.
+    const tokensSaved = 0;
     this.stats.tokensSaved += tokensSaved;
 
     return record;

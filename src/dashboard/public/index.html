@@ -1,120 +1,166 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Token Optimizer Dashboard</title>
-    <link rel="stylesheet" href="/css/styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>Token Optimizer Dashboard</h1>
-            <div class="header-info">
-                <span id="session-id" class="badge">Session: Loading...</span>
-                <span id="last-updated" class="badge">Last Updated: Never</span>
-                <button id="refresh-btn" class="btn btn-primary">Refresh</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Token Optimizer</title>
+    <link rel="stylesheet" href="/css/tokens.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand"><span class="dot"></span> Token Optimizer</div>
+        <nav class="nav">
+          <a href="/" aria-current="page">Overview</a>
+          <a href="/wiki">What it knows</a>
+        </nav>
+        <div class="spacer"></div>
+        <div class="meta" id="session-id">&nbsp;</div>
+        <button class="btn" id="refresh-btn" type="button">Refresh</button>
+      </header>
+
+      <div id="error-container"></div>
+
+      <!-- One sentence, in words, saying whether this is working. A beginner
+           should not have to interpret a ratio to know if things are healthy. -->
+      <section class="verdict" id="verdict" hidden>
+        <span class="light"></span>
+        <div>
+          <strong id="verdict-title"></strong>
+          <span id="verdict-detail"></span>
+        </div>
+      </section>
+
+      <!-- THE HERO. What you kept, beside what it learned. -->
+      <section class="hero">
+        <div class="card hero-saved">
+          <p class="card-title">
+            Saved so far
+            <button class="explain" type="button" aria-label="What does saved mean?">
+              ?
+              <span class="tip tip-right" role="tooltip">
+                Claude reads your code into a limited workspace called the
+                context window. Fill it up and it starts forgetting earlier work.
+                This is how much of that workspace you got back &mdash; measured
+                against a holdout group of reads deliberately left alone, so it
+                is a comparison, not an estimate.
+              </span>
+            </button>
+          </p>
+
+          <div class="big num" id="saved-tokens">&mdash;</div>
+          <div class="big-unit">tokens you did not have to spend</div>
+
+          <div class="saved-side">
+            <div>
+              <span class="ss-value num" id="saved-money">&mdash;</span>
+              <span class="ss-label">
+                estimated
+                <button class="explain" type="button" aria-label="How is the cost estimated?">
+                  ?
+                  <span class="tip" role="tooltip">
+                    Tokens priced at $3 per million, the published rate for
+                    Claude input tokens. Your real bill depends on your plan and
+                    model, so treat this as a scale, not an invoice.
+                  </span>
+                </button>
+              </span>
             </div>
-        </header>
+            <div>
+              <span class="ss-value num" id="saved-percent">&mdash;</span>
+              <span class="ss-label">smaller than it would have been</span>
+            </div>
+          </div>
 
-        <main>
-            <!-- Summary Stats Section -->
-            <section class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon">&#128200;</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Total Tokens</div>
-                        <div class="stat-value" id="total-tokens">0</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">&#128221;</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Total Turns</div>
-                        <div class="stat-value" id="total-turns">0</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">&#128295;</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Tool Calls</div>
-                        <div class="stat-value" id="total-tools">0</div>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">&#9201;</div>
-                    <div class="stat-content">
-                        <div class="stat-label">Duration</div>
-                        <div class="stat-value" id="session-duration">0m 0s</div>
-                    </div>
-                </div>
-            </section>
+          <div class="cmp" id="comparison"></div>
 
-            <!-- Charts Section -->
-            <section class="charts-section">
-                <div class="chart-container">
-                    <h2>Token Distribution by Category</h2>
-                    <canvas id="token-category-chart"></canvas>
-                </div>
+          <p class="hero-foot" id="saved-foot"></p>
+        </div>
 
-                <div class="chart-container">
-                    <h2>Token Attribution by MCP Server</h2>
-                    <canvas id="server-attribution-chart"></canvas>
-                </div>
-            </section>
+        <div class="card hero-graph">
+          <p class="card-title">
+            What it has learned
+            <button class="explain" type="button" aria-label="What is this graph?">
+              ?
+              <span class="tip tip-below tip-left" role="tooltip">
+                Every file Claude reads is remembered here &mdash; its structure,
+                and anything discovered about it. Next time, that memory is
+                offered instead of the file, which is where most of the saving
+                comes from.
+              </span>
+            </button>
+          </p>
+          <div class="constellation" id="constellation"></div>
+          <div class="graph-stats" id="graph-stats"></div>
+          <a class="graph-link" href="/wiki">Explore what it knows &rarr;</a>
+        </div>
+      </section>
 
-            <!-- Tool Timeline Section -->
-            <section class="timeline-section">
-                <h2>Tool Call Timeline</h2>
-                <div id="timeline-container" class="timeline">
-                    <div class="timeline-placeholder">No events to display</div>
-                </div>
-            </section>
+      <!-- Plain-language metrics. Every label says what it is, not what the
+           code calls it, and every one can explain itself. -->
+      <section class="kpis" id="kpis"></section>
 
-            <!-- Tool Breakdown Section -->
-            <section class="breakdown-section">
-                <h2>Tool Breakdown</h2>
-                <div id="tool-breakdown" class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Tool Name</th>
-                                <th>Count</th>
-                                <th>Tokens</th>
-                                <th>Avg Duration (ms)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tool-breakdown-body">
-                            <tr>
-                                <td colspan="4" class="no-data">No data available</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+      <section class="panels">
+        <div class="card">
+          <p class="card-title">
+            Where the context went
+            <button class="explain" type="button" aria-label="What is this breakdown?">
+              ?
+              <span class="tip" role="tooltip">
+                Which kinds of thing filled the workspace. Big slices are where
+                there is most left to win.
+              </span>
+            </button>
+          </p>
+          <p class="card-sub">Bigger slices are the best places to save more.</p>
+          <div class="chart" id="category-chart"></div>
+        </div>
 
-            <!-- Performance Metrics Section -->
-            <section class="performance-section">
-                <h2>Performance Metrics</h2>
-                <div class="performance-grid">
-                    <div class="performance-card">
-                        <div class="performance-label">Avg Tool Duration</div>
-                        <div class="performance-value" id="avg-tool-duration">0 ms</div>
-                    </div>
-                    <div class="performance-card">
-                        <div class="performance-label">Tools with Duration</div>
-                        <div class="performance-value" id="tools-with-duration">0</div>
-                    </div>
-                </div>
-            </section>
-        </main>
+        <div class="card">
+          <p class="card-title">
+            Which tools cost the most
+            <button class="explain" type="button" aria-label="What is this breakdown?">
+              ?
+              <span class="tip" role="tooltip">
+                Context used by each connected tool server. A tool near the top
+                every session is worth a closer look.
+              </span>
+            </button>
+          </p>
+          <p class="card-sub">Ranked by how much of the workspace each one used.</p>
+          <div class="chart" id="server-chart"></div>
+        </div>
+      </section>
 
-        <footer>
-            <p>&copy; 2025 Token Optimizer MCP - Real-time Session Monitoring</p>
-        </footer>
+      <section class="card">
+        <p class="card-title">What Claude did</p>
+        <p class="card-sub">Most recent actions first.</p>
+        <div id="timeline-container" class="timeline"></div>
+      </section>
+
+      <section class="card">
+        <p class="card-title">Every action, counted</p>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Action</th>
+                <th scope="col" class="right">Times used</th>
+                <th scope="col" class="right">Context used</th>
+              </tr>
+            </thead>
+            <tbody id="tool-breakdown-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <p class="footer-note">
+        Updated <span id="last-updated">never</span>. Everything here is measured
+        on this machine and never leaves it.
+      </p>
     </div>
 
-    <script src="/js/dashboard.js"></script>
-</body>
+    <script type="module" src="/js/dashboard.js"></script>
+  </body>
 </html>

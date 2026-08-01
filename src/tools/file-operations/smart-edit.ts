@@ -11,14 +11,99 @@
  * Target: 90% reduction vs reading full file + writing changes
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+} from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, basename } from 'path';
+import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine.js';
+import { bumpFsGeneration } from '../../utils/fs-generation.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import { generateUnifiedDiff } from '../shared/diff-utils.js';
+
+/**
+ * The line ending a file actually uses, so an edit can put back what it found.
+ *
+ * Dominance rather than first-match: a file with one stray ending should not
+ * have the whole file rewritten to match the stray. A file with no newline at
+ * all gets '\n', which is what a new line in a one-line file should be.
+ */
+/** Where backups live: outside every working tree, so they cannot be committed. */
+export const BACKUP_ROOT = join(homedir(), '.token-optimizer', 'backups');
+
+/** How many past versions of one file are kept before the oldest is dropped. */
+const BACKUPS_PER_FILE = 5;
+
+/**
+ * Saves the pre-edit content somewhere it cannot do harm.
+ *
+ * The backup used to be written as `<file>.bak` NEXT TO THE ORIGINAL, inside
+ * the user's repository. Measured live: one edit to a real checkout left an
+ * untracked README.md.bak sitting in `git status`, one `git add -A` away from
+ * being committed, and nothing ever deleted it. A safety net that dirties the
+ * tree it is protecting is a poor trade.
+ *
+ * Backups now live under the user's home directory, keyed by a hash of the
+ * absolute path so two files with the same basename cannot collide, and capped
+ * so they cannot grow without bound. Failure to write one is never allowed to
+ * fail the edit -- the backup is a convenience, the edit is the job.
+ */
+function writeBackup(
+  filePath: string,
+  content: string,
+  encoding: BufferEncoding
+): boolean {
+  try {
+    const key = createHash('sha256')
+      .update(filePath)
+      .digest('hex')
+      .slice(0, 16);
+    const dir = join(BACKUP_ROOT, key);
+    mkdirSync(dir, { recursive: true });
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    writeFileSync(
+      join(dir, `${stamp}__${basename(filePath)}`),
+      content,
+      encoding
+    );
+
+    const existing = readdirSync(dir).sort();
+    for (const stale of existing.slice(
+      0,
+      Math.max(0, existing.length - BACKUPS_PER_FILE)
+    )) {
+      try {
+        unlinkSync(join(dir, stale));
+      } catch {
+        // A backup we cannot prune is not worth failing an edit over.
+      }
+    }
+
+    return true;
+  } catch {
+    // Nor is one we cannot write -- but the caller must not be told a backup
+    // exists when none does. `wasBackedUp` used to echo the REQUEST
+    // (opts.createBackup) rather than the outcome, so a full disk or a
+    // read-only home directory produced a result claiming a backup that was
+    // never written. That is precisely the moment somebody relies on it.
+    return false;
+  }
+}
+
+function detectLineEnding(text: string): string {
+  const crlf = (text.match(/\r\n/g) || []).length;
+  const lf = (text.match(/\n/g) || []).length - crlf;
+  return crlf > lf ? '\r\n' : '\n';
+}
 
 export interface EditOperation {
   type: 'replace' | 'insert' | 'delete';
@@ -35,7 +120,9 @@ export interface SmartEditOptions {
   dryRun?: boolean; // Preview changes without applying (default: false)
 
   // Backup options
-  createBackup?: boolean; // Create .bak file before editing (default: true)
+  // Save the pre-edit content before writing (default: true). Backups go to
+  // ~/.token-optimizer/backups, NOT next to the file -- see writeBackup.
+  createBackup?: boolean;
 
   // Multi-edit options
   batchEdits?: boolean; // Apply all edits atomically (default: true)
@@ -117,7 +204,19 @@ export class SmartEditTool {
 
       // Read original content
       const originalContent = readFileSync(filePath, opts.encoding);
-      const originalLines = originalContent.split('\n');
+      // SPLIT ON EITHER ENDING, AND PUT BACK THE ONE THE FILE USES.
+      //
+      // `split('\n')` leaves a trailing '\r' on every line of a CRLF file, so
+      // the lines an edit did NOT touch kept their '\r' and the lines it
+      // replaced did not. `join('\n')` then wrote a file with mixed endings --
+      // measured on Windows, where every source file is CRLF: a one-line
+      // replace in a 5-line file turned 4 CRLF into 3 CRLF + 1 bare LF.
+      //
+      // Nothing errors, so it is invisible until git reports the line as
+      // changed, an editor warns about mixed endings, or a .gitattributes
+      // check fails -- and it compounds with every subsequent edit.
+      const eol = detectLineEnding(originalContent);
+      const originalLines = originalContent.split(/\r?\n/);
       const originalTokens = this.tokenCounter.count(originalContent).tokens;
 
       // Small-file guard: for tiny files the unified-diff + metadata payload
@@ -138,7 +237,12 @@ export class SmartEditTool {
 
       // Apply edits
       const editedLines = this.applyEdits(originalLines, ops);
-      const editedContent = editedLines.join('\n');
+      // Caller-supplied content may be multi-line and will use whatever ending
+      // the caller happened to type, so each line is re-normalised before the
+      // whole file is joined with the ending it actually uses.
+      const editedContent = editedLines
+        .map((line) => line.split(/\r?\n/).join(eol))
+        .join(eol);
 
       // Check if content actually changed
       if (editedContent === originalContent) {
@@ -232,14 +336,16 @@ export class SmartEditTool {
         };
       }
 
-      // Create backup if requested
-      if (opts.createBackup) {
-        const backupPath = `${filePath}.bak`;
-        writeFileSync(backupPath, originalContent, opts.encoding);
-      }
+      // Create backup if requested, and remember whether it actually happened
+      const backedUp = opts.createBackup
+        ? writeBackup(filePath, originalContent, opts.encoding)
+        : false;
 
       // Apply changes to file
       writeFileSync(filePath, editedContent, opts.encoding);
+      // Tell the search tools the tree moved, so no cached grep or glob
+      // result can describe a state that no longer exists.
+      bumpFsGeneration();
 
       // Update cache
       if (opts.updateCache) {
@@ -279,7 +385,8 @@ export class SmartEditTool {
           compressionRatio: diffTokens / originalTokens,
           duration,
           verified: opts.verifyBeforeApply,
-          wasBackedUp: opts.createBackup,
+          // The outcome, not the request. See writeBackup.
+          wasBackedUp: backedUp,
         },
         diff: effectiveReturnDiff ? diff : undefined,
       };

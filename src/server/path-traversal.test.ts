@@ -249,16 +249,32 @@ describe('Path Traversal Security Tests - optimize_session', () => {
         path.join(SECURE_BASE_DIR, 'project', `file${i}.txt`)
       );
 
-      const startTime = Date.now();
-      testPaths.forEach((testPath) => {
-        const isValid = validateFilePath(testPath, SECURE_BASE_DIR);
-        expect(isValid).toBe(true);
-      });
-      const endTime = Date.now();
+      // NOT A WALL-CLOCK ASSERTION.
+      //
+      // This measured elapsed milliseconds against a fixed bound, inside a
+      // parallel test runner. It passed alone and failed in the full suite --
+      // repeatedly -- because the number it measures is mostly a function of
+      // what ELSE is running on the machine, not of this code. A test that
+      // reports the load average as a defect is worse than no test: it trains
+      // everyone to ignore a red suite.
+      //
+      // What actually matters is that validation is O(1) per path and does no
+      // I/O, so the meaningful check is that a thousand paths cost about a
+      // thousand times one path -- a RATIO, which stays true whatever else the
+      // box is doing.
+      const one = process.hrtime.bigint();
+      validateFilePath(testPaths[0], SECURE_BASE_DIR);
+      const perPath = Number(process.hrtime.bigint() - one);
 
-      // Should complete in reasonable time (allow for slower CI environments)
-      // Increased timeout to 500ms to account for CI variability
-      expect(endTime - startTime).toBeLessThan(500);
+      const many = process.hrtime.bigint();
+      for (const testPath of testPaths) {
+        expect(validateFilePath(testPath, SECURE_BASE_DIR)).toBe(true);
+      }
+      const total = Number(process.hrtime.bigint() - many);
+
+      // Linear, not quadratic: a generous 50x head-room over the ideal 1000x
+      // absorbs scheduling noise while still catching an accidental O(n^2).
+      expect(total).toBeLessThan(Math.max(perPath, 1_000) * 1000 * 50);
     });
 
     test('should efficiently reject large batch of malicious paths', () => {
@@ -266,16 +282,18 @@ describe('Path Traversal Security Tests - optimize_session', () => {
         path.join(SECURE_BASE_DIR, '..', '..', `malicious${i}.txt`)
       );
 
-      const startTime = Date.now();
-      maliciousPaths.forEach((maliciousPath) => {
-        const isValid = validateFilePath(maliciousPath, SECURE_BASE_DIR);
-        expect(isValid).toBe(false);
-      });
-      const endTime = Date.now();
+      // Same reasoning as above: a ratio, not a stopwatch.
+      const one = process.hrtime.bigint();
+      validateFilePath(maliciousPaths[0], SECURE_BASE_DIR);
+      const perPath = Number(process.hrtime.bigint() - one);
 
-      // Should complete in reasonable time (allow for slower CI environments)
-      // Increased timeout to 500ms to account for CI variability
-      expect(endTime - startTime).toBeLessThan(500);
+      const many = process.hrtime.bigint();
+      for (const maliciousPath of maliciousPaths) {
+        expect(validateFilePath(maliciousPath, SECURE_BASE_DIR)).toBe(false);
+      }
+      const total = Number(process.hrtime.bigint() - many);
+
+      expect(total).toBeLessThan(Math.max(perPath, 1_000) * 1000 * 50);
     });
   });
 

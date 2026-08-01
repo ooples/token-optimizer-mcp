@@ -171,7 +171,7 @@ export class SmartDiffTool {
         resultTokens = this.tokenCounter.count(
           JSON.stringify(paginatedStats)
         ).tokens;
-        originalTokens = resultTokens * 100; // Estimate full diff would be 100x larger
+        originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
       } else {
         // Full mode: get actual diffs
         diffs = this.getDiffs(
@@ -179,7 +179,7 @@ export class SmartDiffTool {
           opts
         );
         resultTokens = this.tokenCounter.count(JSON.stringify(diffs)).tokens;
-        originalTokens = resultTokens * 10; // Estimate full files would be 10x larger
+        originalTokens = resultTokens; // measured, not assumed: a multiplier here would invent a saving
       }
 
       const tokensSaved = originalTokens - resultTokens;
@@ -437,8 +437,18 @@ export class SmartDiffTool {
           args.push('-M');
         }
 
-        if (!opts.includeBinary) {
-          args.push('--no-binary');
+        // `--binary` is opt-IN; git omits binary patches by default. The
+        // previous line pushed `--no-binary`, which git does not accept:
+        //
+        //     error: invalid option: --no-binary
+        //
+        // git exited 255, the catch below swallowed it, and EVERY file was
+        // skipped -- so `diffs` came back `[]` on every call the tool has ever
+        // served. The stats said "1 file changed, +1" while the content that
+        // makes a diff a diff was silently absent, and nothing in the response
+        // said why.
+        if (opts.includeBinary) {
+          args.push('--binary');
         }
 
         // Add comparison targets
@@ -462,9 +472,17 @@ export class SmartDiffTool {
         if (diff.trim()) {
           diffs.push({ file, diff });
         }
-      } catch {
-        // Skip files that can't be diffed
-        continue;
+      } catch (err) {
+        // A file that cannot be diffed is worth SAYING, not skipping in
+        // silence. Swallowing this is what let an invalid flag empty every
+        // result without a single visible symptom: an empty array reads as
+        // "nothing changed", which is a different claim from "I could not
+        // look".
+        const reason = err instanceof Error ? err.message : String(err);
+        diffs.push({
+          file,
+          diff: `[diff unavailable: ${reason.split(/\r?\n/)[0]}]`,
+        });
       }
     }
 
@@ -525,10 +543,15 @@ export function getSmartDiffTool(
 export async function runSmartDiff(
   options: SmartDiffOptions = {}
 ): Promise<SmartDiffResult> {
-  const cache = new CacheEngine(
-    join(homedir(), '.hypercontext', 'cache', 'cache.db'),
-    100
-  );
+  // The DIRECTORY, exactly as every sibling tool passes it.
+  //
+  // This alone passed `<dir>/cache.db`, and `~/.hypercontext/cache` is a
+  // database FILE created by the tools that pass the directory form. So its
+  // parent existed, `existsSync` said so, the mkdir was skipped, and SQLite
+  // failed to open a path whose parent is a file -- surfacing as
+  // "CRITICAL: Failed to initialize persistent cache database after 3 attempts"
+  // on every single call to smart_diff.
+  const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();
 

@@ -245,7 +245,7 @@ Benchmark results include:
 - Throughput (operations/second)
 - Memory usage
 
-Results are saved to `tests/benchmarks/results.json` and can be compared across runs to detect regressions.
+Results are saved to `tests/benchmarks/results.json` and can be compared across runs to detect regressions. The file is git-ignored: timings are specific to the machine that produced them, so it is a local artifact rather than a shared one.
 
 ## Test Data
 

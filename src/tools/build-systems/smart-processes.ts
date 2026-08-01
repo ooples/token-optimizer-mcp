@@ -9,6 +9,7 @@
  */
 
 import { execFileSafe } from '../../utils/safe-exec.js';
+import { measured, unmeasured } from '../shared/savings.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
@@ -163,8 +164,17 @@ export class SmartProcesses {
   ): Promise<SmartProcessesOutput> {
     const {
       filter,
-      cpuThreshold = 10,
-      memoryThreshold = 100,
+      // A LISTING TOOL MUST LIST SOMETHING.
+      //
+      // These defaulted to 10% CPU and 100 MB, so on any machine that is not
+      // on fire every process was filtered out and the tool answered with an
+      // empty list -- 509 processes counted, none reported. The output is
+      // already bounded by `limit` and by the top-10 slices, so the thresholds
+      // are not what keeps the response small; they only decided whether there
+      // was a response at all. They remain available for callers hunting a
+      // runaway process.
+      cpuThreshold = 0,
+      memoryThreshold = 0,
       includeSystem = false,
       limit = 20,
       useCache = true,
@@ -400,7 +410,7 @@ export class SmartProcesses {
   private cacheSnapshot(snapshot: ProcessSnapshot): void {
     const key = `${this.cacheNamespace}:snapshot`;
     const dataToCache = JSON.stringify(snapshot);
-    const originalSize = this.estimateOriginalOutputSize(snapshot);
+    const originalSize = this.measureOriginalOutputSize(snapshot);
     const compactSize = dataToCache.length;
 
     this.cache.set(key, dataToCache, originalSize, compactSize);
@@ -524,7 +534,7 @@ export class SmartProcesses {
     const highCpuCount = filtered.filter((p) => p.cpu > 50).length;
     const highMemoryCount = filtered.filter((p) => p.memory > 500).length;
 
-    const originalSize = this.estimateOriginalOutputSize(snapshot);
+    const originalSize = this.measureOriginalOutputSize(snapshot);
     const compactSize = this.estimateCompactSize(filtered, anomalies);
 
     return {
@@ -551,22 +561,40 @@ export class SmartProcesses {
       },
       anomalies,
       trends,
-      metrics: {
-        originalTokens: Math.ceil(originalSize / 4),
-        compactedTokens: Math.ceil(compactSize / 4),
-        reductionPercentage: Math.round(
-          ((originalSize - compactSize) / originalSize) * 100
-        ),
-      },
+      // Both sides measured, and the percentage derived from them rather than
+      // computed alongside them -- so the three numbers can never disagree.
+      metrics: (() => {
+        // A saving requires that the answer is still THERE. When the filters
+        // remove every process, nothing was compressed -- it was omitted -- and
+        // the old code reported that as a 100% reduction. `unmeasured()` claims
+        // nothing, which is what an empty answer has earned.
+        const s =
+          filtered.length === 0 && snapshot.processes.length > 0
+            ? unmeasured(Math.ceil(compactSize / 4))
+            : measured(Math.ceil(originalSize / 4), Math.ceil(compactSize / 4));
+        return {
+          originalTokens: s.originalTokenCount,
+          compactedTokens: s.tokenCount,
+          reductionPercentage: Math.round((1 - s.compressionRatio) * 100),
+        };
+      })(),
     };
   }
 
   /**
-   * Estimate original output size (full process list)
+   * What the full process listing actually costs.
+   *
+   * THE BASELINE WAS INVENTED. This returned
+   * `snapshot.processes.length * 200 + 500` -- an assumed 200 characters per
+   * process, measured from nothing. Paired with the default `cpuThreshold` of
+   * 10, which filters out everything on a machine that is not on fire, the
+   * tool reported a 100% reduction for returning an EMPTY list: 25,825 tokens
+   * "saved" by omitting the answer.
+   *
+   * The snapshot is right here, so it is measured.
    */
-  private estimateOriginalOutputSize(snapshot: ProcessSnapshot): number {
-    // Each process is ~200 chars in full ps/tasklist output
-    return snapshot.processes.length * 200 + 500;
+  private measureOriginalOutputSize(snapshot: ProcessSnapshot): number {
+    return JSON.stringify(snapshot.processes).length;
   }
 
   /**

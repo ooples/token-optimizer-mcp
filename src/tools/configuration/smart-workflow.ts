@@ -17,10 +17,11 @@ import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
 import { parse as parseYAML } from 'yaml';
 import { join } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
+import { readCompressedJson } from '../../utils/cache-helper.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashFile, generateCacheKey } from '../shared/hash-utils.js';
-import { compress, decompress } from '../shared/compression-utils.js';
+import { compress } from '../shared/compression-utils.js';
 
 export type WorkflowFormat =
   | 'github'
@@ -161,15 +162,16 @@ export class SmartWorkflowTool {
     let fromCache = false;
     if (enableCache) {
       const cachedData = this.cache.get(cacheKey);
-      if (cachedData) {
+      // An unreadable entry is a MISS, not a failure -- see
+      // readCompressedJson in utils/cache-helper.ts. A cache must never
+      // be able to make a correct answer impossible.
+      const cached = readCompressedJson<SmartWorkflowResult>(
+        this.cache,
+        cachedData,
+        cacheKey
+      );
+      if (cached) {
         fromCache = true;
-        const decompressed = decompress(
-          Buffer.from(cachedData, 'base64'),
-          'gzip'
-        );
-        const cached = JSON.parse(
-          decompressed.toString()
-        ) as SmartWorkflowResult;
         this.metrics.record({
           operation: 'smart_workflow_analyze',
           duration: Date.now() - startTime,

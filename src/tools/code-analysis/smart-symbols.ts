@@ -14,7 +14,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { createHash } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
-import { join, relative } from 'path';
+import { join, relative, isAbsolute } from 'path';
 import { homedir } from 'os';
 import * as ts from 'typescript';
 
@@ -144,7 +144,14 @@ export class SmartSymbolsTool {
     } = options;
 
     const startTime = Date.now();
-    const absolutePath = join(this.projectRoot, filePath);
+    // An ABSOLUTE filePath must be used as given.
+    // join(projectRoot, filePath) on an absolute path produces nonsense --
+    // a project root with a drive letter glued onto it -- and the tool then
+    // reports "File not found" for a file that is plainly there. Measured
+    // live: every call with an absolute path failed exactly this way.
+    const absolutePath = isAbsolute(filePath)
+      ? filePath
+      : join(this.projectRoot, filePath);
 
     // Validate file exists
     if (!existsSync(absolutePath)) {
@@ -705,6 +712,15 @@ export async function runSmartSymbols(
   tokenCounter?: TokenCounter,
   metrics?: MetricsCollector
 ): Promise<string> {
+  // WHOEVER MAKES THE CACHE CLOSES IT.
+  //
+  // This closed `cacheInstance` in a `finally` regardless of where it came
+  // from. As a CLI that is right; as an MCP handler it is fatal, because the
+  // server passes its ONE shared CacheEngine to every tool. Proven live: a
+  // single smart_symbols call closed that handle and every subsequent
+  // tools/call in the process failed with "The database connection is not
+  // open" -- twenty tools down from one call, until the server was restarted.
+  const ownsCache = !cache;
   const cacheInstance =
     cache || new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounterInstance = tokenCounter || new TokenCounter();
@@ -767,7 +783,8 @@ export async function runSmartSymbols(
 
     return output;
   } finally {
-    tool.close();
+    // Only a cache this function created is a cache this function may close.
+    if (ownsCache) tool.close();
   }
 }
 

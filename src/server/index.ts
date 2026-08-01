@@ -29,6 +29,70 @@ import {
   getCacheWarmupTool,
   CACHE_WARMUP_TOOL_DEFINITION,
 } from '../tools/advanced-caching/cache-warmup.js';
+// --- Previously unregistered tools ---------------------------------------
+// Each of these shipped with a definition, a runner and tests, and no line
+// anywhere that let a user reach it. Fifteen finished tools were invisible.
+import {
+  runSmartComplexity,
+  SMART_COMPLEXITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-complexity.js';
+import {
+  runSmartDependencies,
+  SMART_DEPENDENCIES_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-dependencies.js';
+import {
+  runSmartExports,
+  SMART_EXPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-exports.js';
+import {
+  runSmartImports,
+  SMART_IMPORTS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-imports.js';
+import {
+  runSmartRefactor,
+  SMART_REFACTOR_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-refactor.js';
+import {
+  runSmartSecurity,
+  SMART_SECURITY_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-security.js';
+import {
+  runSmartSymbols,
+  SMART_SYMBOLS_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-symbols.js';
+import {
+  runSmartTypescript,
+  SMART_TYPESCRIPT_TOOL_DEFINITION,
+} from '../tools/code-analysis/smart-typescript.js';
+import {
+  runSmartConfigRead,
+  SMART_CONFIG_READ_TOOL_DEFINITION,
+} from '../tools/configuration/smart-config-read.js';
+import {
+  runSmartEnv,
+  SMART_ENV_TOOL_DEFINITION,
+} from '../tools/configuration/smart-env.js';
+import {
+  runSmartPackageJson,
+  SMART_PACKAGE_JSON_TOOL_DEFINITION,
+} from '../tools/configuration/smart-package-json.js';
+import {
+  runSmartTsconfig,
+  SMART_TSCONFIG_TOOL_DEFINITION,
+} from '../tools/configuration/smart-tsconfig.js';
+import {
+  runSmartPretty,
+  SMART_PRETTY_TOOL_DEFINITION,
+} from '../tools/output-formatting/smart-pretty.js';
+import {
+  runSmartProcess,
+  SMART_PROCESS_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-process.js';
+import {
+  runSmartService,
+  SMART_SERVICE_TOOL_DEFINITION,
+} from '../tools/system-operations/smart-service.js';
+
 // Code analysis tools
 import {
   getSmartAstGrepTool,
@@ -293,8 +357,13 @@ import {
   SMART_GREP_TOOL_DEFINITION,
   // Analytics tools
 } from '../tools/file-operations/smart-grep.js';
-import { parseSessionLog } from './session-log-parser.js';
+import {
+  parseSessionLog,
+  resolveSessionLogPath,
+} from './session-log-parser.js';
 import fs from 'fs';
+import { createHash } from 'crypto';
+import { isValidSessionId } from '../utils/session-id.js';
 import path from 'path';
 import os from 'os';
 
@@ -422,22 +491,63 @@ const contextDelta = new ContextDeltaTool(sessionManager);
 // #125: memoize the expensive read-only file-operation tools with an
 // LRU bounded by the user's cacheSettings. The memoRegistry hook lets
 // the cleanup handler below prune them all at once.
+//
+// A MEMO KEYED ONLY ON ARGUMENTS SERVES CONTENT THAT NO LONGER EXISTS.
+//
+// These were keyed on the arguments alone, with a one-hour TTL. Measured
+// live: read a file, edit it, read it again with the same arguments, and the
+// PRE-EDIT content came back -- for an hour. Read-edit-read is the most common
+// sequence there is, so this was reachable in nearly every session, and a tool
+// whose whole job is reporting file contents cannot report contents the file
+// does not have.
+//
+// The tools' own caches were never the problem: those hash the file. The
+// defect was this second layer in front of them, which had no idea the
+// filesystem had moved.
 const cacheSettings = optimizationConfig.cacheSettings;
+
+/**
+ * A cheap, exact stamp of the file a read is about.
+ *
+ * One stat: size and mtime, at nanosecond resolution where the platform
+ * offers it. Any edit changes at least one of them, so an edited file yields a
+ * different memo key and the entry is recomputed rather than replayed. A
+ * missing file stamps as 'absent', so creating it is a change too.
+ */
+function fileStamp(filePath: unknown): string {
+  if (typeof filePath !== 'string' || !filePath) return 'no-path';
+  try {
+    const st = fs.statSync(filePath);
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return 'absent';
+  }
+}
+
 const memoizedSmartRead = lruMemoize(runSmartRead, {
   name: 'smart_read',
   maxSize: cacheSettings.maxSize,
   ttlMs: cacheSettings.ttlSeconds * 1000,
+  // The file's identity is part of the question, not just its path.
+  keyFn: (args) =>
+    createHash('sha256')
+      .update(JSON.stringify(args))
+      .update(' ')
+      .update(fileStamp(args[0]))
+      .digest('hex'),
 });
-const memoizedSmartGrep = lruMemoize(runSmartGrep, {
-  name: 'smart_grep',
-  maxSize: cacheSettings.maxSize,
-  ttlMs: cacheSettings.ttlSeconds * 1000,
-});
-const memoizedSmartGlob = lruMemoize(runSmartGlob, {
-  name: 'smart_glob',
-  maxSize: cacheSettings.maxSize,
-  ttlMs: cacheSettings.ttlSeconds * 1000,
-});
+
+// smart_grep and smart_glob SCAN A TREE, and no single stat describes a tree:
+// a file added three directories down changes the answer while every stat we
+// could cheaply take stays identical. Both were verified serving pre-creation
+// results after a new matching file appeared.
+//
+// So they are not memoized here. Each already caches internally against the
+// content it read, which is the layer that can actually tell when it is stale;
+// this one could only guess, and guessed wrong. Re-scanning costs a directory
+// walk. Reporting that a file does not exist costs the user the afternoon.
+const memoizedSmartGrep = runSmartGrep;
+const memoizedSmartGlob = runSmartGlob;
 
 // Periodic prune + stats log. Runs every 5 minutes; unref so it doesn't
 // keep the process alive on its own.
@@ -468,293 +578,364 @@ const server = new Server(
 );
 
 // Define tools
+/**
+ * Every tool this server advertises.
+ *
+ * Named, rather than inline in the handler, so ONE list is both what the
+ * client is shown and what requests are validated against. When they were
+ * two things, a tool could declare `required: [ormCode, ormType]` in the
+ * schema a caller reads while its Zod entry was the permissive
+ * GenericToolOptionsSchema -- and 43 of them use that. Omitting a required
+ * field then reached the tool body, where smart_orm answered:
+ *
+ *     The "data" argument must be of type string or an instance of Buffer,
+ *     TypedArray, or DataView. Received undefined
+ *
+ * which tells the caller nothing about the field they left out.
+ */
+const TOOL_DEFINITIONS = [
+  SMART_COMPLEXITY_TOOL_DEFINITION,
+  SMART_DEPENDENCIES_TOOL_DEFINITION,
+  SMART_EXPORTS_TOOL_DEFINITION,
+  SMART_IMPORTS_TOOL_DEFINITION,
+  SMART_REFACTOR_TOOL_DEFINITION,
+  SMART_SECURITY_TOOL_DEFINITION,
+  SMART_SYMBOLS_TOOL_DEFINITION,
+  SMART_TYPESCRIPT_TOOL_DEFINITION,
+  SMART_CONFIG_READ_TOOL_DEFINITION,
+  SMART_ENV_TOOL_DEFINITION,
+  SMART_PACKAGE_JSON_TOOL_DEFINITION,
+  SMART_TSCONFIG_TOOL_DEFINITION,
+  SMART_PRETTY_TOOL_DEFINITION,
+  SMART_PROCESS_TOOL_DEFINITION,
+  SMART_SERVICE_TOOL_DEFINITION,
+  AUDIT_TOOL,
+  DOCTOR_TOOL,
+  FLEET_TOOL,
+  EXPAND_TOOL,
+  WASTE_TOOL,
+  CACHE_TOOL,
+  ROUTING_TOOL,
+  {
+    name: 'optimize_text',
+    description:
+      'Compress and cache text to reduce token usage. Returns compressed version and saves to cache for future use.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to optimize',
+        },
+        key: {
+          type: 'string',
+          description: 'Cache key for storing the optimized text',
+        },
+        quality: {
+          type: 'number',
+          description: 'Compression quality (0-11, default 11)',
+          minimum: 0,
+          maximum: 11,
+        },
+      },
+      required: ['text', 'key'],
+    },
+  },
+  {
+    name: 'get_cached',
+    description:
+      'Retrieve previously cached and optimized text. Returns the original text if found in cache.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        key: {
+          type: 'string',
+          description: 'Cache key to retrieve',
+        },
+      },
+      required: ['key'],
+    },
+  },
+  {
+    name: 'count_tokens',
+    description:
+      'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to count tokens for',
+        },
+        modelName: {
+          type: 'string',
+          description:
+            'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'compress_text',
+    description:
+      'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to compress',
+        },
+        quality: {
+          type: 'number',
+          description: 'Compression quality (0-11, default 11)',
+          minimum: 0,
+          maximum: 11,
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'decompress_text',
+    description: 'Decompress base64-encoded Brotli-compressed text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        compressed: {
+          type: 'string',
+          description: 'Base64-encoded compressed text',
+        },
+      },
+      required: ['compressed'],
+    },
+  },
+  {
+    name: 'get_cache_stats',
+    description:
+      'Get cache statistics including hit rate, compression ratio, and token savings.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'clear_cache',
+    description: 'Clear all cached data. Use with caution.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to confirm cache clearing',
+        },
+      },
+      required: ['confirm'],
+    },
+  },
+  {
+    name: 'analyze_optimization',
+    description:
+      'Analyze text and provide recommendations for optimization including compression benefits and token savings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          description: 'Text to analyze',
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'get_session_stats',
+    description:
+      'Get comprehensive statistics from the PowerShell wrapper session tracker including system reminders, tool operations, and total tokens with accurate tiktoken-based counting.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description:
+            'Optional session ID to query. If not provided, uses current session.',
+        },
+      },
+    },
+  },
+  {
+    name: 'optimize_session',
+    description:
+      'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: {
+          type: 'string',
+          description:
+            'Optional session ID to optimize. If not provided, uses the current active session.',
+        },
+        min_token_threshold: {
+          type: 'number',
+          description:
+            'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
+        },
+      },
+    },
+  },
+  // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
+  // This tool (analyze_project_tokens) is a new addition to the MCP server
+  {
+    name: 'analyze_project_tokens',
+    description:
+      'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log-*.jsonl files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description:
+            'Path to the project directory. If not provided, uses the hooks data directory.',
+        },
+        startDate: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'Optional start date filter (YYYY-MM-DD format).',
+        },
+        endDate: {
+          type: 'string',
+          format: 'date',
+          pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+          description: 'Optional end date filter (YYYY-MM-DD format).',
+        },
+        costPerMillionTokens: {
+          type: 'number',
+          description:
+            'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
+          default: 30,
+          exclusiveMinimum: 0,
+        },
+      },
+    },
+  },
+  PREDICTIVE_CACHE_TOOL_DEFINITION,
+  CACHE_WARMUP_TOOL_DEFINITION,
+  // Code analysis tools
+  SMART_AST_GREP_TOOL_DEFINITION,
+  CACHE_ANALYTICS_TOOL_DEFINITION,
+  CACHE_BENCHMARK_TOOL_DEFINITION,
+  CACHE_COMPRESSION_TOOL_DEFINITION,
+  CACHE_INVALIDATION_TOOL_DEFINITION,
+  CACHE_OPTIMIZER_TOOL_DEFINITION,
+  CACHE_PARTITION_TOOL_DEFINITION,
+  CACHE_REPLICATION_TOOL_DEFINITION,
+  SMART_CACHE_TOOL_DEFINITION,
+  // API & Database tools
+  SMART_SQL_TOOL_DEFINITION,
+  SMART_SCHEMA_TOOL_DEFINITION,
+  SMART_API_FETCH_TOOL_DEFINITION,
+  SMART_CACHE_API_TOOL_DEFINITION,
+  SMART_DATABASE_TOOL_DEFINITION,
+  SMART_GRAPHQL_TOOL_DEFINITION,
+  SMART_MIGRATION_TOOL_DEFINITION,
+  SMART_ORM_TOOL_DEFINITION,
+  SMART_REST_TOOL_DEFINITION,
+  SMART_WEBSOCKET_TOOL_DEFINITION,
+  // Dashboard & Monitoring tools
+  ALERT_MANAGER_TOOL_DEFINITION,
+  METRIC_COLLECTOR_TOOL_DEFINITION,
+  MONITORING_INTEGRATION_TOOL_DEFINITION,
+  CUSTOM_WIDGET_TOOL_DEFINITION,
+  DATA_VISUALIZER_TOOL_DEFINITION,
+  HEALTH_MONITOR_TOOL_DEFINITION,
+  LOG_DASHBOARD_TOOL_DEFINITION,
+  // Intelligence tools
+  INTELLIGENTASSISTANTTOOL,
+  NATURALLANGUAGEQUERYTOOL,
+  PATTERNRECOGNITIONTOOL,
+  PREDICTIVEANALYTICSTOOL,
+  RECOMMENDATIONENGINETOOL,
+  SMARTSUMMARIZATIONTOOL,
+  // Build Systems tools
+  SMART_PROCESSES_TOOL_DEFINITION,
+  SMART_NETWORK_TOOL_DEFINITION,
+  SMART_LOGS_TOOL_DEFINITION,
+  SMART_LINT_TOOL_DEFINITION,
+  SMART_INSTALL_TOOL_DEFINITION,
+  SMART_DOCKER_TOOL_DEFINITION,
+  SMART_BUILD_TOOL_DEFINITION,
+  SMART_SYSTEM_METRICS_TOOL_DEFINITION,
+  SMART_TEST_TOOL_DEFINITION,
+  SMART_TYPECHECK_TOOL_DEFINITION,
+  // System Operations tools
+  SMART_CRON_TOOL_DEFINITION,
+  SMART_USER_TOOL_DEFINITION,
+  // File operations tools
+
+  SMART_DIFF_TOOL_DEFINITION,
+  SMART_BRANCH_TOOL_DEFINITION,
+  SMART_MERGE_TOOL_DEFINITION,
+  SMART_STATUS_TOOL_DEFINITION,
+  SMART_LOG_TOOL_DEFINITION,
+  SMART_READ_TOOL_DEFINITION,
+  SMART_WRITE_TOOL_DEFINITION,
+  SMART_EDIT_TOOL_DEFINITION,
+  SMART_GLOB_TOOL_DEFINITION,
+  SMART_GREP_TOOL_DEFINITION,
+  // Analytics tools
+  GET_HOOK_ANALYTICS_TOOL_DEFINITION,
+  GET_ACTION_ANALYTICS_TOOL_DEFINITION,
+  GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
+  EXPORT_ANALYTICS_TOOL_DEFINITION,
+  GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
+  OPTIMIZATION_STORAGE_TOOL_DEFINITION,
+  CONTEXT_DELTA_TOOL_DEFINITION,
+];
+
+/**
+ * The fields each tool's own published schema says are mandatory.
+ *
+ * Derived from TOOL_DEFINITIONS, so it cannot drift from what callers read.
+ */
+const REQUIRED_FIELDS = new Map<string, string[]>(
+  TOOL_DEFINITIONS.map((t) => [
+    (t as { name: string }).name,
+    (t as { inputSchema?: { required?: string[] } }).inputSchema?.required ??
+      [],
+  ])
+);
+
+/**
+ * Rejects a call that omits a field the tool advertises as required.
+ *
+ * Named the missing fields, so the answer is actionable -- which is the
+ * whole difference from the internal TypeError this replaces.
+ */
+function assertRequiredFields(name: string, args: unknown): void {
+  const required = REQUIRED_FIELDS.get(name);
+  if (!required?.length) return;
+
+  const provided = (args ?? {}) as Record<string, unknown>;
+  const missing = required.filter(
+    (f) => provided[f] === undefined || provided[f] === null
+  );
+  if (!missing.length) return;
+
+  // Name what is MISSING, and list the full set only when that adds something
+  // -- repeating an identical list twice reads like a template, not an answer.
+  const full =
+    missing.length === required.length
+      ? ''
+      : ` (required: ${required.join(', ')})`;
+  throw new Error(`${name} requires ${missing.join(', ')}${full}.`);
+}
+
+// Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [
-      AUDIT_TOOL,
-      DOCTOR_TOOL,
-      FLEET_TOOL,
-      EXPAND_TOOL,
-      WASTE_TOOL,
-      CACHE_TOOL,
-      ROUTING_TOOL,
-      {
-        name: 'optimize_text',
-        description:
-          'Compress and cache text to reduce token usage. Returns compressed version and saves to cache for future use.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to optimize',
-            },
-            key: {
-              type: 'string',
-              description: 'Cache key for storing the optimized text',
-            },
-            quality: {
-              type: 'number',
-              description: 'Compression quality (0-11, default 11)',
-              minimum: 0,
-              maximum: 11,
-            },
-          },
-          required: ['text', 'key'],
-        },
-      },
-      {
-        name: 'get_cached',
-        description:
-          'Retrieve previously cached and optimized text. Returns the original text if found in cache.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            key: {
-              type: 'string',
-              description: 'Cache key to retrieve',
-            },
-          },
-          required: ['key'],
-        },
-      },
-      {
-        name: 'count_tokens',
-        description:
-          'Count tokens in text using the pluggable tokenizer framework (#124). Picks a model-specific tokenizer (tiktoken for GPT/Claude, Google AI REST for Gemini, content-aware heuristic fallback).',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to count tokens for',
-            },
-            modelName: {
-              type: 'string',
-              description:
-                'Model name (e.g. gpt-4, claude-opus-4-7, gemini-2.5-flash). Defaults to the server-configured model when omitted.',
-            },
-          },
-          required: ['text'],
-        },
-      },
-      {
-        name: 'compress_text',
-        description:
-          'Compress text using Brotli, returned as a base64 string. Intended for AT-REST STORAGE/caching (reduces bytes ~50%). NOTE: base64 tokenizes poorly, so the output usually has MORE LLM tokens than the input — do NOT feed the result into a model context expecting savings. The response includes originalTokens/compressedTokens and a warning when the output would increase tokens.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to compress',
-            },
-            quality: {
-              type: 'number',
-              description: 'Compression quality (0-11, default 11)',
-              minimum: 0,
-              maximum: 11,
-            },
-          },
-          required: ['text'],
-        },
-      },
-      {
-        name: 'decompress_text',
-        description: 'Decompress base64-encoded Brotli-compressed text.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            compressed: {
-              type: 'string',
-              description: 'Base64-encoded compressed text',
-            },
-          },
-          required: ['compressed'],
-        },
-      },
-      {
-        name: 'get_cache_stats',
-        description:
-          'Get cache statistics including hit rate, compression ratio, and token savings.',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'clear_cache',
-        description: 'Clear all cached data. Use with caution.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            confirm: {
-              type: 'boolean',
-              description: 'Must be true to confirm cache clearing',
-            },
-          },
-          required: ['confirm'],
-        },
-      },
-      {
-        name: 'analyze_optimization',
-        description:
-          'Analyze text and provide recommendations for optimization including compression benefits and token savings.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              description: 'Text to analyze',
-            },
-          },
-          required: ['text'],
-        },
-      },
-      {
-        name: 'get_session_stats',
-        description:
-          'Get comprehensive statistics from the PowerShell wrapper session tracker including system reminders, tool operations, and total tokens with accurate tiktoken-based counting.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sessionId: {
-              type: 'string',
-              description:
-                'Optional session ID to query. If not provided, uses current session.',
-            },
-          },
-        },
-      },
-      {
-        name: 'optimize_session',
-        description:
-          'Analyzes operations in the current session from the session JSONL log, identifies large text blocks from file-based tools (Read, Write, Edit), compresses them, and stores them in the cache to reduce future token usage. Returns a summary of the optimization.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sessionId: {
-              type: 'string',
-              description:
-                'Optional session ID to optimize. If not provided, uses the current active session.',
-            },
-            min_token_threshold: {
-              type: 'number',
-              description:
-                'Minimum token count for a file operation to be considered for compression. Defaults to 30.',
-            },
-          },
-        },
-      },
-      // NOTE: 'lookup_cache' tool never existed in master branch - this is NOT a breaking change
-      // This tool (analyze_project_tokens) is a new addition to the MCP server
-      {
-        name: 'analyze_project_tokens',
-        description:
-          'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log-*.jsonl files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            projectPath: {
-              type: 'string',
-              description:
-                'Path to the project directory. If not provided, uses the hooks data directory.',
-            },
-            startDate: {
-              type: 'string',
-              format: 'date',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              description: 'Optional start date filter (YYYY-MM-DD format).',
-            },
-            endDate: {
-              type: 'string',
-              format: 'date',
-              pattern: '^\\d{4}-\\d{2}-\\d{2}$',
-              description: 'Optional end date filter (YYYY-MM-DD format).',
-            },
-            costPerMillionTokens: {
-              type: 'number',
-              description:
-                'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
-              default: 30,
-              exclusiveMinimum: 0,
-            },
-          },
-        },
-      },
-      PREDICTIVE_CACHE_TOOL_DEFINITION,
-      CACHE_WARMUP_TOOL_DEFINITION,
-      // Code analysis tools
-      SMART_AST_GREP_TOOL_DEFINITION,
-      CACHE_ANALYTICS_TOOL_DEFINITION,
-      CACHE_BENCHMARK_TOOL_DEFINITION,
-      CACHE_COMPRESSION_TOOL_DEFINITION,
-      CACHE_INVALIDATION_TOOL_DEFINITION,
-      CACHE_OPTIMIZER_TOOL_DEFINITION,
-      CACHE_PARTITION_TOOL_DEFINITION,
-      CACHE_REPLICATION_TOOL_DEFINITION,
-      SMART_CACHE_TOOL_DEFINITION,
-      // API & Database tools
-      SMART_SQL_TOOL_DEFINITION,
-      SMART_SCHEMA_TOOL_DEFINITION,
-      SMART_API_FETCH_TOOL_DEFINITION,
-      SMART_CACHE_API_TOOL_DEFINITION,
-      SMART_DATABASE_TOOL_DEFINITION,
-      SMART_GRAPHQL_TOOL_DEFINITION,
-      SMART_MIGRATION_TOOL_DEFINITION,
-      SMART_ORM_TOOL_DEFINITION,
-      SMART_REST_TOOL_DEFINITION,
-      SMART_WEBSOCKET_TOOL_DEFINITION,
-      // Dashboard & Monitoring tools
-      ALERT_MANAGER_TOOL_DEFINITION,
-      METRIC_COLLECTOR_TOOL_DEFINITION,
-      MONITORING_INTEGRATION_TOOL_DEFINITION,
-      CUSTOM_WIDGET_TOOL_DEFINITION,
-      DATA_VISUALIZER_TOOL_DEFINITION,
-      HEALTH_MONITOR_TOOL_DEFINITION,
-      LOG_DASHBOARD_TOOL_DEFINITION,
-      // Intelligence tools
-      INTELLIGENTASSISTANTTOOL,
-      NATURALLANGUAGEQUERYTOOL,
-      PATTERNRECOGNITIONTOOL,
-      PREDICTIVEANALYTICSTOOL,
-      RECOMMENDATIONENGINETOOL,
-      SMARTSUMMARIZATIONTOOL,
-      // Build Systems tools
-      SMART_PROCESSES_TOOL_DEFINITION,
-      SMART_NETWORK_TOOL_DEFINITION,
-      SMART_LOGS_TOOL_DEFINITION,
-      SMART_LINT_TOOL_DEFINITION,
-      SMART_INSTALL_TOOL_DEFINITION,
-      SMART_DOCKER_TOOL_DEFINITION,
-      SMART_BUILD_TOOL_DEFINITION,
-      SMART_SYSTEM_METRICS_TOOL_DEFINITION,
-      SMART_TEST_TOOL_DEFINITION,
-      SMART_TYPECHECK_TOOL_DEFINITION,
-      // System Operations tools
-      SMART_CRON_TOOL_DEFINITION,
-      SMART_USER_TOOL_DEFINITION,
-      // File operations tools
-
-      SMART_DIFF_TOOL_DEFINITION,
-      SMART_BRANCH_TOOL_DEFINITION,
-      SMART_MERGE_TOOL_DEFINITION,
-      SMART_STATUS_TOOL_DEFINITION,
-      SMART_LOG_TOOL_DEFINITION,
-      SMART_READ_TOOL_DEFINITION,
-      SMART_WRITE_TOOL_DEFINITION,
-      SMART_EDIT_TOOL_DEFINITION,
-      SMART_GLOB_TOOL_DEFINITION,
-      SMART_GREP_TOOL_DEFINITION,
-      // Analytics tools
-      GET_HOOK_ANALYTICS_TOOL_DEFINITION,
-      GET_ACTION_ANALYTICS_TOOL_DEFINITION,
-      GET_MCP_SERVER_ANALYTICS_TOOL_DEFINITION,
-      EXPORT_ANALYTICS_TOOL_DEFINITION,
-      GET_OPTIMIZATION_REPORT_TOOL_DEFINITION,
-      OPTIMIZATION_STORAGE_TOOL_DEFINITION,
-      CONTEXT_DELTA_TOOL_DEFINITION,
-    ],
+    tools: TOOL_DEFINITIONS,
   };
 });
 
@@ -770,6 +951,12 @@ async function handleToolCall(request: {
   // computed `validatedArgs` but then routed the unvalidated raw `args`.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let args: any = request.params.arguments;
+
+  // A field the published schema calls required must actually be required.
+  // 43 tools share the permissive GenericToolOptionsSchema, so without this
+  // their `required` arrays were documentation only.
+  assertRequiredFields(name, args);
+
   try {
     args = validateToolArgs(name, args || {});
   } catch (validationError) {
@@ -926,13 +1113,24 @@ async function handleToolCall(request: {
           };
         }
 
+        // DO NOT INFER THE FORMAT FROM A SIZE.
+        //
+        // This decided "was it compressed?" from `compressedSize === 0`. But
+        // the writers disagree about that field: smart_cache stores PLAIN text
+        // and passes `value.length` as the compressed size, so the flag says
+        // "compressed" for content that never was. get_cached then tried to
+        // gunzip plain text and returned a bare "Decompression failed" for an
+        // entry written moments earlier by a sibling tool.
+        //
+        // The content itself is the only reliable evidence. Decompressing is
+        // attempted, and content that is not compressed is returned as it was
+        // stored -- which is also what makes this robust to a THIRD writer with
+        // its own convention.
         let text: string;
-        // Check if the item was stored uncompressed (indicated by compressedSize === 0)
-        if (cachedEntry.compressedSize === 0) {
-          text = cachedEntry.content;
-        } else {
-          // Otherwise, it was compressed, so decompress it
+        try {
           text = compression.decompressFromBase64(cachedEntry.content);
+        } catch {
+          text = cachedEntry.content;
         }
 
         return {
@@ -1075,7 +1273,19 @@ async function handleToolCall(request: {
           };
         }
 
+        // CLEAR EVERYTHING THAT SERVES A READ, not just the persistent store.
+        //
+        // `cache.clear()` empties the SQLite store. smart_cache keeps its own
+        // L1/L2/L3 tiers in memory in front of it, and those survived -- so a
+        // user who cleared the cache kept being served the very entries they
+        // had just cleared. Measured: set a key, clear, read it back, and the
+        // value was still there while the call reported "Cache cleared
+        // successfully".
+        //
+        // smart_cache already had a correct clear that empties all three tiers
+        // AND the store; it simply was not on this path.
         cache.clear();
+        await smartCache.run({ operation: 'clear' });
 
         return {
           content: [
@@ -1152,51 +1362,68 @@ async function handleToolCall(request: {
             'data'
           );
 
-          // Read current session file
+          // AN EXPLICIT sessionId MUST NOT NEED AN ACTIVE SESSION.
+          //
+          // This read current-session.txt first and returned "No active session
+          // found" when it was absent -- before ever looking at the sessionId
+          // it had been handed. So the one documented parameter was unusable
+          // exactly when it mattered: asking about a session that has ENDED.
+          // The file is only needed to answer "which session do you mean", so
+          // it is only consulted when the caller did not say.
           const sessionFilePath = path.join(
             hooksDataPath,
             'current-session.txt'
           );
 
-          if (!fs.existsSync(sessionFilePath)) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success: false,
-                    error: 'No active session found',
-                    sessionFilePath,
-                  }),
-                },
-              ],
-            };
+          let targetSessionId = sessionId;
+          if (!targetSessionId) {
+            if (!fs.existsSync(sessionFilePath)) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      success: false,
+                      error:
+                        'No active session found, and no sessionId was given.',
+                      sessionFilePath,
+                    }),
+                  },
+                ],
+              };
+            }
+
+            // Strip BOM and parse JSON
+            const sessionContent = fs
+              .readFileSync(sessionFilePath, 'utf-8')
+              .replace(/^﻿/, '');
+            targetSessionId = JSON.parse(sessionContent).sessionId;
           }
 
-          // Strip BOM and parse JSON
-          const sessionContent = fs
-            .readFileSync(sessionFilePath, 'utf-8')
-            .replace(/^\uFEFF/, '');
-          const sessionData = JSON.parse(sessionContent);
-
-          const targetSessionId = sessionId || sessionData.sessionId;
-
-          // Read JSONL log
-          const jsonlFilePath = path.join(
-            hooksDataPath,
-            `session-log-${targetSessionId}.jsonl`
-          );
-
-          // Error handling: Throw to let MCP wrap errors consistently
-          if (!fs.existsSync(jsonlFilePath)) {
+          if (!targetSessionId || typeof targetSessionId !== 'string') {
             throw new Error(
-              `JSONL log not found for session ${targetSessionId}`
+              'No sessionId given and none recorded in current-session.txt.'
             );
           }
 
-          // Parse JSONL using shared utility (now async with streaming)
+          // Read the session log, in whichever format it exists. This used to
+          // build `session-log-<id>.jsonl` by hand and fail when it was absent
+          // -- which was always, since the hooks write operations-<id>.csv.
+          const logFilePath = resolveSessionLogPath(
+            hooksDataPath,
+            targetSessionId
+          );
+
+          // Error handling: Throw to let MCP wrap errors consistently
+          if (!logFilePath) {
+            throw new Error(
+              `No session log found for session ${targetSessionId} in ${hooksDataPath}`
+            );
+          }
+
+          // Parse using shared utility (now async with streaming)
           const { operations, toolTokens, systemReminderTokens } =
-            await parseSessionLog(jsonlFilePath);
+            await parseSessionLog(logFilePath);
 
           // Calculate statistics
           const totalTokens = systemReminderTokens + toolTokens;
@@ -1227,8 +1454,13 @@ async function handleToolCall(request: {
                     success: true,
                     sessionId: targetSessionId,
                     sessionInfo: {
-                      startTime: sessionData.startTime,
-                      lastActivity: sessionData.lastActivity,
+                      // Taken from the log itself rather than from
+                      // current-session.txt, which only ever describes the
+                      // session running right now and says nothing about a
+                      // past one the caller asked about by id.
+                      startTime: operations[0]?.timestamp ?? '',
+                      lastActivity:
+                        operations[operations.length - 1]?.timestamp ?? '',
                       totalOperations: operations.length,
                     },
                     tokens: {
@@ -1313,36 +1545,38 @@ async function handleToolCall(request: {
             }
           }
 
-          // --- 2. Read JSONL Log (validated) ---
+          // --- 2. Read the session log (validated) ---
           // SECURITY: strict allowlist, kept in sync with SESSION_ID_RE in
           // web-server.ts — no dots or path separators, so `..` traversal
           // sequences are rejected before the path is built.
-          if (!/^[A-Za-z0-9_-]{1,64}$/.test(targetSessionId)) {
+          // Same allowlist the dashboard uses -- one definition, not two
+          // copies kept in step by comment. See utils/session-id.ts.
+          if (!isValidSessionId(targetSessionId)) {
             throw new Error('Invalid sessionId format.');
           }
-          const jsonlFilePath = path.join(
+          // Resolves .jsonl or the operations-<id>.csv the hooks actually
+          // write; the containment check below still runs on whatever it picks.
+          const logFilePath = resolveSessionLogPath(
             hooksDataPath,
-            `session-log-${targetSessionId}.jsonl`
+            targetSessionId
           );
+          if (!logFilePath) {
+            throw new Error(
+              `No session log found for session ${targetSessionId} in ${hooksDataPath}`
+            );
+          }
           // SECURITY: Ensure file path is contained within hooksDataPath
           const baseReal = fs.realpathSync(hooksDataPath);
-          const fileReal = fs.existsSync(jsonlFilePath)
-            ? fs.realpathSync(jsonlFilePath)
-            : path.resolve(jsonlFilePath);
+          const fileReal = fs.realpathSync(logFilePath);
           const rel0 = path.relative(baseReal, fileReal);
           if (rel0.startsWith('..') || path.isAbsolute(rel0)) {
             throw new Error(
-              'Resolved JSONL path escapes hooks data directory.'
-            );
-          }
-          if (!fs.existsSync(jsonlFilePath)) {
-            throw new Error(
-              `JSONL log not found for session ${targetSessionId}`
+              'Resolved session log path escapes hooks data directory.'
             );
           }
 
-          // Parse JSONL using shared utility
-          const { operations } = await parseSessionLog(jsonlFilePath);
+          // Parse using shared utility
+          const { operations } = await parseSessionLog(logFilePath);
 
           // --- 3. Filter and Process Operations ---
           let originalTokens = 0;
@@ -1596,6 +1830,211 @@ async function handleToolCall(request: {
       }
 
       // Code analysis tools
+      case 'smart_complexity': {
+        const result = await runSmartComplexity(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_dependencies': {
+        const result = await runSmartDependencies(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_exports': {
+        const result = await runSmartExports(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_imports': {
+        const result = await runSmartImports(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_refactor': {
+        const result = await runSmartRefactor(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_security': {
+        const result = await runSmartSecurity(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_symbols': {
+        const result = await runSmartSymbols(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_typescript': {
+        const result = await runSmartTypescript(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_config_read': {
+        // The ADVERTISED parameter is `path`, and the runner takes the file
+        // first and options second. Destructuring `filePath` here -- a name the
+        // published schema never mentions -- meant a caller passing exactly
+        // what the schema documents got "Config file not found: undefined".
+        const { path: configPath, ...configOptions } = args as any;
+        const result = await runSmartConfigRead(configPath, configOptions);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_env': {
+        const result = await runSmartEnv(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_package_json': {
+        const result = await runSmartPackageJson(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_tsconfig': {
+        const result = await runSmartTsconfig(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_pretty': {
+        const result = await runSmartPretty(args as any);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_process': {
+        const result = await runSmartProcess(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'smart_service': {
+        const result = await runSmartService(
+          args as any,
+          cache,
+          tokenCounter,
+          metrics
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
       case 'smart_ast_grep': {
         const options = args as any;
         const result = await smartAstGrep.grep(options.pattern, options);

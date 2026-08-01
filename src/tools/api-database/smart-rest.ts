@@ -13,6 +13,7 @@ import { createHash } from 'crypto';
 
 // Core imports
 import { CacheEngine } from '../../core/cache-engine.js';
+import { measured } from '../shared/savings.js';
 import type { TokenCounter } from '../../core/token-counter.js';
 import type { MetricsCollector } from '../../core/metrics.js';
 
@@ -244,11 +245,24 @@ export class SmartREST {
     if (options.specContent) {
       specText = options.specContent;
     } else if (options.specUrl) {
-      // In real implementation, fetch from URL
-      // For now, throw error requiring specContent
-      throw new Error(
-        'specUrl fetching not yet implemented. Please provide specContent directly.'
-      );
+      // ACTUALLY FETCH IT.
+      //
+      // `specUrl` is advertised in this tool's input schema, and passing it
+      // threw "not yet implemented" -- a parameter the tool promises and
+      // refuses. Node has had a global fetch for several major versions; there
+      // was nothing to wait for.
+      const response = await fetch(options.specUrl, {
+        headers: {
+          accept: 'application/json, application/yaml, text/yaml, */*',
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Could not fetch the spec from ${options.specUrl}: ${response.status} ${response.statusText}`
+        );
+      }
+      specText = await response.text();
     } else {
       throw new Error('Either specUrl or specContent must be provided');
     }
@@ -625,56 +639,68 @@ export class SmartREST {
     const fullResult = JSON.stringify(result);
     const originalTokens = this.tokenCounter.count(fullResult).tokens;
 
-    let compactedTokens: number;
-    let reductionPercentage: number;
+    // RETURN WHAT WAS MEASURED.
+    //
+    // Each branch below built a `compact` object, counted ITS tokens, reported
+    // that as `compactedTokens` -- and then the function returned `...result`,
+    // the full thing. So the metrics described a payload that was never sent,
+    // and the caller paid the original price while being told they had saved
+    // 80%. The percentage was hardcoded too, so it did not even agree with the
+    // numbers printed beside it.
+    //
+    // The compaction is real and is what this tool exists for, so it is what
+    // gets returned now, and the saving is the measured difference between the
+    // two -- the same contract as tools/shared/savings.ts.
+    let compact: Record<string, unknown>;
 
     if (fromCache) {
-      // Cached: API counts only (95% reduction)
-      const compact = {
+      // Cached: API counts only
+      compact = {
         api: {
           endpoints: result.api.endpoints,
           resources: result.api.resources,
         },
-        cached: true,
       };
-      compactedTokens = this.tokenCounter.count(JSON.stringify(compact)).tokens;
-      reductionPercentage = 95;
     } else if (result.health) {
-      // Health scenario: Score + top 3 issues (85% reduction)
-      const compact = {
+      // Health scenario: score + top 3 issues
+      compact = {
         api: result.api,
         health: {
           score: result.health.score,
           issues: result.health.issues.slice(0, 3),
+          totalIssues: result.health.issues.length,
         },
       };
-      compactedTokens = this.tokenCounter.count(JSON.stringify(compact)).tokens;
-      reductionPercentage = 85;
     } else {
-      // Full analysis: Top 10 endpoints + top 5 resources (80% reduction)
-      const compact = {
+      // Full analysis: top 10 endpoints + top 5 resources
+      compact = {
         api: result.api,
         endpoints: result.endpoints?.slice(0, 10),
+        totalEndpoints: result.endpoints?.length,
         resources: result.resources?.slice(0, 5).map((r: ResourceGroup) => ({
           name: r.name,
           path: r.path,
           endpoints: r.endpoints,
           methods: r.methods,
         })),
+        totalResources: result.resources?.length,
       };
-      compactedTokens = this.tokenCounter.count(JSON.stringify(compact)).tokens;
-      reductionPercentage = 80;
     }
 
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(compact)
+    ).tokens;
+    const savings = measured(originalTokens, compactedTokens);
+
     return {
-      ...result,
+      ...compact,
       cached: fromCache,
       metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage,
+        originalTokens: savings.originalTokenCount,
+        compactedTokens: savings.tokenCount,
+        reductionPercentage: Math.round((1 - savings.compressionRatio) * 100),
       },
-    };
+    } as SmartRESTResult;
   }
 
   private generateCacheKey(options: SmartRESTOptions): string {
@@ -743,10 +769,10 @@ export async function runSmartREST(options: SmartRESTOptions): Promise<string> {
   const { homedir } = await import('os');
   const { join } = await import('path');
   const { CacheEngine: CacheEngineClass } = await import(
-    '../../core/cache-engine'
+    '../../core/cache-engine.js'
   );
-  const { TokenCounter } = await import('../../core/token-counter');
-  const { MetricsCollector } = await import('../../core/metrics');
+  const { TokenCounter } = await import('../../core/token-counter.js');
+  const { MetricsCollector } = await import('../../core/metrics.js');
 
   const cache = new CacheEngineClass(
     join(homedir(), '.hypercontext', 'cache'),

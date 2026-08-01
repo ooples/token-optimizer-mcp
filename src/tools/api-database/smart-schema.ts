@@ -396,111 +396,157 @@ export class SmartSchema {
     }
   }
 
+  /**
+   * PostgreSQL introspection, which this package cannot do.
+   *
+   * This used to FABRICATE a schema: ten tables named table_1..table_10, five
+   * invented columns each, fifteen invented indexes, version "15.0" -- returned
+   * with success against any connection string. A user asking what is in their
+   * database received a complete fiction and no indication of it.
+   *
+   * There is no PostgreSQL driver in this package's dependencies, so the honest
+   * answer is that it cannot be done here, said plainly, naming what would make
+   * it possible.
+   */
   private async introspectPostgreSQL(
     _connectionString: string,
     _options: SmartSchemaOptions
   ): Promise<DatabaseSchema> {
-    // Placeholder: Would use pg client
-    // Query information_schema and pg_catalog
-
-    // Create mock schema with realistic data to demonstrate token reduction
-    const mockTables: TableInfo[] = Array.from({ length: 10 }, (_, i) => ({
-      name: `table_${i + 1}`,
-      schema: 'public',
-      type: 'TABLE' as const,
-      rowCount: 1000 + i * 100,
-      sizeBytes: 50000 + i * 10000,
-      columns: Array.from({ length: 5 }, (_, j) => ({
-        name: `column_${j + 1}`,
-        type: j === 0 ? 'integer' : j === 1 ? 'varchar(255)' : 'text',
-        nullable: j > 0,
-        defaultValue: j === 0 ? "nextval('seq')" : undefined,
-        isPrimaryKey: j === 0,
-        isForeignKey: false,
-      })),
-    }));
-
-    const mockIndexes: IndexInfo[] = Array.from({ length: 15 }, (_, i) => ({
-      schema: 'public',
-      table: `table_${Math.floor(i / 2) + 1}`,
-      name: `idx_table_${Math.floor(i / 2) + 1}_col_${(i % 5) + 1}`,
-      columns: [`column_${(i % 5) + 1}`],
-      isUnique: i % 3 === 0,
-      isPrimary: false,
-    }));
-
-    const mockSchema: DatabaseSchema = {
-      databaseType: 'postgresql',
-      version: '15.0',
-      schemaVersion: this.generateSchemaVersionHash('mock-pg-schema'),
-      tables: mockTables,
-      views: [],
-      indexes: mockIndexes,
-      constraints: [],
-      relationships: [],
-    };
-
-    // In production, would execute queries like:
-    // SELECT * FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-    // SELECT * FROM information_schema.columns
-    // SELECT * FROM pg_indexes
-    // SELECT * FROM information_schema.table_constraints
-    // SELECT * FROM information_schema.key_column_usage
-
-    return mockSchema;
+    throw new Error(
+      'PostgreSQL introspection is not available: this package ships no PostgreSQL driver. ' +
+        'Install `pg` and use it directly, or point smart_schema at a SQLite database, ' +
+        'which is fully supported. (It previously returned an invented schema here; it no longer does.)'
+    );
   }
-
+  /**
+   * MySQL introspection, likewise unavailable and no longer invented.
+   */
   private async introspectMySQL(
     _connectionString: string,
     _options: SmartSchemaOptions
   ): Promise<DatabaseSchema> {
-    // Placeholder: Would use mysql2 client
-
-    const mockSchema: DatabaseSchema = {
-      databaseType: 'mysql',
-      version: '8.0',
-      schemaVersion: this.generateSchemaVersionHash('mock-mysql-schema'),
-      tables: [],
-      views: [],
-      indexes: [],
-      constraints: [],
-      relationships: [],
-    };
-
-    // In production, would execute queries like:
-    // SELECT * FROM information_schema.TABLES
-    // SELECT * FROM information_schema.COLUMNS
-    // SELECT * FROM information_schema.STATISTICS
-    // SELECT * FROM information_schema.TABLE_CONSTRAINTS
-    // SELECT * FROM information_schema.KEY_COLUMN_USAGE
-
-    return mockSchema;
+    throw new Error(
+      'MySQL introspection is not available: this package ships no MySQL driver. ' +
+        'Install `mysql2` and use it directly, or point smart_schema at a SQLite database, ' +
+        'which is fully supported. (It previously returned an invented schema here; it no longer does.)'
+    );
   }
-
   private async introspectSQLite(
-    _connectionString: string,
+    connectionString: string,
     _options: SmartSchemaOptions
   ): Promise<DatabaseSchema> {
-    // Placeholder: Would use better-sqlite3
+    const file = connectionString
+      .replace(/^sqlite:(\/\/)?/i, '')
+      .replace(/^file:/i, '');
 
-    const mockSchema: DatabaseSchema = {
-      databaseType: 'sqlite',
-      version: '3.40.0',
-      schemaVersion: this.generateSchemaVersionHash('mock-sqlite-schema'),
-      tables: [],
-      views: [],
-      indexes: [],
-      constraints: [],
-      relationships: [],
-    };
+    const { default: Database } = await import('better-sqlite3');
+    const db = new Database(file, { readonly: true, fileMustExist: true });
 
-    // In production, would execute queries like:
-    // SELECT * FROM sqlite_master WHERE type='table'
-    // PRAGMA table_info(table_name)
-    // PRAGMA index_list(table_name)
-    // PRAGMA foreign_key_list(table_name)
+    try {
+      const version = (
+        db.prepare('select sqlite_version() as v').get() as { v: string }
+      ).v;
 
-    return mockSchema;
+      const tableRows = db
+        .prepare(
+          "select name, sql from sqlite_master where type = 'table' and name not like 'sqlite_%' order by name"
+        )
+        .all() as Array<{ name: string; sql: string }>;
+
+      const tables: TableInfo[] = [];
+      const indexes: IndexInfo[] = [];
+      const relationships: Relationship[] = [];
+
+      for (const { name } of tableRows) {
+        const cols = db
+          .prepare(`pragma table_info(${JSON.stringify(name)})`)
+          .all() as Array<{
+          name: string;
+          type: string;
+          notnull: number;
+          dflt_value: string | null;
+          pk: number;
+        }>;
+
+        const foreignKeys = db
+          .prepare(`pragma foreign_key_list(${JSON.stringify(name)})`)
+          .all() as Array<{ from: string; to: string; table: string }>;
+        const fkColumns = new Set(foreignKeys.map((f) => f.from));
+
+        tables.push({
+          schema: 'main',
+          name,
+          rowCount: (
+            db
+              .prepare(`select count(*) as n from ${JSON.stringify(name)}`)
+              .get() as { n: number }
+          ).n,
+          columns: cols.map((c) => ({
+            name: c.name,
+            type: c.type || 'BLOB',
+            nullable: c.notnull === 0,
+            defaultValue: c.dflt_value ?? undefined,
+            isPrimaryKey: c.pk > 0,
+            isForeignKey: fkColumns.has(c.name),
+          })),
+        });
+
+        for (const fk of foreignKeys) {
+          relationships.push({
+            fromTable: name,
+            fromSchema: 'main',
+            fromColumns: [fk.from],
+            toTable: fk.table,
+            toSchema: 'main',
+            toColumns: [fk.to],
+            constraintName: `fk_${name}_${fk.from}`,
+          });
+        }
+
+        for (const idx of db
+          .prepare(`pragma index_list(${JSON.stringify(name)})`)
+          .all() as Array<{ name: string; unique: number; origin: string }>) {
+          const info = db
+            .prepare(`pragma index_info(${JSON.stringify(idx.name)})`)
+            .all() as Array<{ name: string }>;
+          indexes.push({
+            schema: 'main',
+            table: name,
+            name: idx.name,
+            columns: info.map((c) => c.name),
+            isUnique: idx.unique === 1,
+            isPrimary: idx.origin === 'pk',
+          });
+        }
+      }
+
+      const views: ViewInfo[] = (
+        db
+          .prepare(
+            "select name, sql from sqlite_master where type = 'view' order by name"
+          )
+          .all() as Array<{ name: string; sql: string }>
+      ).map(
+        (v) => ({ schema: 'main', name: v.name, definition: v.sql }) as ViewInfo
+      );
+
+      return {
+        databaseType: 'sqlite',
+        version,
+        // Hashed from the REAL schema, so it changes when the schema does --
+        // which is the entire point of a schema version.
+        schemaVersion: this.generateSchemaVersionHash(
+          JSON.stringify({ tables, views, indexes })
+        ),
+        tables,
+        views,
+        indexes,
+        constraints: [],
+        relationships,
+      };
+    } finally {
+      db.close();
+    }
   }
 
   // ============================================================================

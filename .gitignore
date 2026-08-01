@@ -100,5 +100,11 @@ artifacts/
 edge-src/
 CHECKSUMS.sha256
 
-# smart_edit backups from older installed builds
+# smart_edit backups from older installed builds (current versions write to ~/.token-optimizer-backups)
 *.bak
+
+# Benchmark timings: rewritten by every `npm test` run and read by no code, so
+# tracking it meant each run left ~234 lines of machine-specific noise in the
+# working tree. Kept locally for the across-run comparison tests/README.md
+# describes -- one machine's numbers are not a shared artifact.
+tests/benchmarks/results.json

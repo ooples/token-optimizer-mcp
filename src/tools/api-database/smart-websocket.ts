@@ -13,6 +13,7 @@
 
 import { createHash } from 'crypto';
 import { CacheEngine } from '../../core/cache-engine.js';
+import { measured } from '../shared/savings.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 
@@ -134,6 +135,9 @@ interface ConnectionState {
 // ============================================================================
 
 export class SmartWebSocket {
+  /** Real, open sockets, keyed by url. Empty until something actually connects. */
+  private sockets = new Map<string, WebSocket>();
+
   private connections = new Map<string, ConnectionState>();
   private messageIdCounter = 0;
 
@@ -238,13 +242,54 @@ export class SmartWebSocket {
       state.reconnectAttempts++;
     }
 
-    // NOTE: Placeholder for Phase 3
-    // Real implementation will use 'ws' package
-    // Simulate connection with exponential backoff
+    // ACTUALLY CONNECT.
+    //
+    // This slept for a moment and then set state to 'connected' -- reporting a
+    // live WebSocket to a server it had never contacted. Every downstream
+    // answer built on that was fiction, and a caller has no way to tell a
+    // simulated connection from a real one.
+    //
+    // Node has had a global WebSocket since v22, so no extra dependency is
+    // needed. A connection that does not open is now reported as failed,
+    // with the reason.
     const backoffTime = this.calculateBackoff(state.reconnectAttempts);
-    await this.sleep(Math.min(backoffTime, 100)); // Cap at 100ms for testing
+    if (state.reconnectAttempts > 0) {
+      await this.sleep(Math.min(backoffTime, 100));
+    }
 
-    // Simulate successful connection
+    if (typeof globalThis.WebSocket !== 'function') {
+      state.state = 'error' as const;
+      throw new Error(
+        'WebSocket connections need Node 22 or newer (globalThis.WebSocket). ' +
+          'This tool no longer reports a simulated connection.'
+      );
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const socket = new globalThis.WebSocket(options.url);
+      const timer = setTimeout(() => {
+        try {
+          socket.close();
+        } catch {
+          /* already closing */
+        }
+        reject(new Error(`Timed out connecting to ${options.url}`));
+      }, 10_000);
+
+      socket.addEventListener('open', () => {
+        clearTimeout(timer);
+        // Keyed by urlKey, matching `connections`. Keyed by the raw url it
+        // could never be found again by the other methods, which look the
+        // state up by urlKey.
+        this.sockets.set(urlKey, socket);
+        resolve();
+      });
+      socket.addEventListener('error', () => {
+        clearTimeout(timer);
+        reject(new Error(`Could not connect to ${options.url}`));
+      });
+    });
+
     state.state = 'connected' as const;
     state.connectedAt = Date.now();
     state.protocol = options.protocols?.[0] || 'websocket';
@@ -270,9 +315,31 @@ export class SmartWebSocket {
 
     state.state = 'disconnecting' as const;
 
-    // NOTE: Placeholder for Phase 3
-    // Real implementation will close WebSocket connection
-    await this.sleep(10);
+    // ACTUALLY CLOSE IT.
+    //
+    // This slept for 10 ms and set the state to 'disconnected'. The socket
+    // stayed open, so the tool reported a closed connection while holding a
+    // live one -- and since nothing else ever closed it, every connect leaked
+    // a socket until the process exited. connect() was fixed to dial for real
+    // and this half was left simulated, which is the worse of the two states:
+    // the connection is now genuine, so the leak is too.
+    const socket = this.sockets.get(urlKey);
+    if (socket) {
+      await new Promise<void>((resolve) => {
+        const done = setTimeout(resolve, 2_000);
+        socket.addEventListener('close', () => {
+          clearTimeout(done);
+          resolve();
+        });
+        try {
+          socket.close();
+        } catch {
+          clearTimeout(done);
+          resolve();
+        }
+      });
+      this.sockets.delete(urlKey);
+    }
 
     state.state = 'disconnected' as const;
     state.disconnectedAt = Date.now();
@@ -311,11 +378,29 @@ export class SmartWebSocket {
       throw new Error('Message is required for send action');
     }
 
-    // Create message record
     const messageContent =
       typeof options.message === 'string'
         ? options.message
         : JSON.stringify(options.message);
+
+    // ACTUALLY SEND IT, and send it BEFORE recording it as sent.
+    //
+    // This built a message record, pushed it into the history and returned it
+    // with direction 'sent' -- having transmitted nothing. A caller reading
+    // that history saw a conversation that never happened.
+    //
+    // The send has to come first: recording then sending would still log a
+    // message that a throwing send never delivered.
+    const socket = this.sockets.get(urlKey);
+    if (!socket) {
+      throw new Error(`No open socket for ${options.url}. Call connect first.`);
+    }
+    if (socket.readyState !== 1 /* OPEN */) {
+      throw new Error(
+        `Socket for ${options.url} is not open (readyState ${socket.readyState}).`
+      );
+    }
+    socket.send(messageContent);
 
     const message: Message = {
       id: `msg-${++this.messageIdCounter}`,
@@ -535,20 +620,19 @@ export class SmartWebSocket {
   ): SmartWebSocketResult {
     const fullOutput = JSON.stringify(result);
     const originalTokens = this.tokenCounter.count(fullOutput).tokens;
-    let compactedTokens: number;
-    let reductionPercentage: number;
+    // RETURN WHAT WAS MEASURED. Same shape as smart-rest and smart-graphql:
+    // four branches each built a compact payload and counted it, then the
+    // function returned `...result` -- the full thing -- while reporting a
+    // hardcoded 95/85/80/90% reduction that the numbers beside it did not
+    // support.
+    let compact: Record<string, unknown>;
 
     if (fromCache) {
-      // Cached: minimal state (95% reduction)
-      const minimalOutput = JSON.stringify({
-        connection: { state: result.connection.state },
-        cached: true,
-      });
-      compactedTokens = this.tokenCounter.count(minimalOutput).tokens;
-      reductionPercentage = 95;
+      // Cached: connection state only
+      compact = { connection: { state: result.connection.state } };
     } else if (result.history) {
-      // History scenario: recent messages only (85% reduction)
-      const historyOutput = JSON.stringify({
+      // History: totals plus the 5 most recent messages
+      compact = {
         connection: result.connection,
         history: {
           total: result.history.total,
@@ -561,50 +645,42 @@ export class SmartWebSocket {
             size: m.size,
           })),
         },
-      });
-      compactedTokens = this.tokenCounter.count(historyOutput).tokens;
-      reductionPercentage = 85;
+      };
     } else if (result.patterns) {
-      // Analysis scenario: summary stats (80% reduction)
-      const analysisOutput = JSON.stringify({
+      // Analysis: summary statistics
+      compact = {
         connection: result.connection,
         patterns: {
           messageTypes: result.patterns.messageTypes
             .slice(0, 3)
-            .map((mt: MessageType) => ({
-              type: mt.type,
-              count: mt.count,
-            })),
+            .map((mt: MessageType) => ({ type: mt.type, count: mt.count })),
+          totalMessageTypes: result.patterns.messageTypes.length,
           averageSize: result.patterns.averageSize,
           frequency: Math.round(result.patterns.frequency * 100) / 100,
         },
         health: result.health
-          ? {
-              score: result.health.score,
-              latency: result.health.latency,
-            }
+          ? { score: result.health.score, latency: result.health.latency }
           : undefined,
-      });
-      compactedTokens = this.tokenCounter.count(analysisOutput).tokens;
-      reductionPercentage = 80;
+      };
     } else {
-      // Basic action: connection state only (90% reduction)
-      const basicOutput = JSON.stringify({
-        connection: result.connection,
-      });
-      compactedTokens = this.tokenCounter.count(basicOutput).tokens;
-      reductionPercentage = 90;
+      // Basic action: the connection, which is the whole answer
+      compact = { connection: result.connection };
     }
 
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify(compact)
+    ).tokens;
+    const savings = measured(originalTokens, compactedTokens);
+
     return {
-      ...result,
+      ...compact,
       cached: fromCache,
       metrics: {
-        originalTokens,
-        compactedTokens,
-        reductionPercentage,
+        originalTokens: savings.originalTokenCount,
+        compactedTokens: savings.tokenCount,
+        reductionPercentage: Math.round((1 - savings.compressionRatio) * 100),
       },
-    };
+    } as SmartWebSocketResult;
   }
 
   // ========================================================================

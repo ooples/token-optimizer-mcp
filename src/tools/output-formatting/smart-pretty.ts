@@ -17,10 +17,65 @@
  * - Incremental highlighting (88% reduction)
  */
 
-import hljs from 'highlight';
-import { format as prettierFormat } from 'prettier';
 import chalk from 'chalk';
+import { optionalDependency } from '../shared/optional-dependency.js';
+
+/**
+ * Formatting and highlighting, loaded only when this tool is called.
+ *
+ * Both were top-level imports of packages absent from every user's install, so
+ * importing this module threw "Cannot find package" and the tool could never be
+ * registered at all. They are genuinely optional -- pretty-printing degrades to
+ * the unformatted source rather than failing -- so they load on demand and say
+ * what to install if they are wanted.
+ */
+type HljsResult = {
+  value: string;
+  language?: string;
+  secondBest?: { language?: string };
+};
+type HighlightApi = {
+  highlightAuto(code: string): HljsResult;
+  highlight(code: string, options: { language: string }): HljsResult;
+};
+type PrettierFormat = (
+  source: string,
+  options?: unknown
+) => string | Promise<string>;
+
+let hljs: HighlightApi | null = null;
+let prettierFormat: PrettierFormat | null = null;
+
+async function loadHighlighter(): Promise<HighlightApi | null> {
+  if (hljs) return hljs;
+  try {
+    hljs = await optionalDependency<HighlightApi>(
+      'highlight',
+      'smart_pretty',
+      'It adds syntax colouring; without it the code is returned uncoloured.'
+    );
+  } catch {
+    hljs = null;
+  }
+  return hljs;
+}
+
+async function loadPrettier(): Promise<PrettierFormat | null> {
+  if (prettierFormat) return prettierFormat;
+  try {
+    const mod = await optionalDependency<{ format: PrettierFormat }>(
+      'prettier',
+      'smart_pretty',
+      'It reformats the source; without it the source is returned unchanged.'
+    );
+    prettierFormat = mod.format;
+  } catch {
+    prettierFormat = null;
+  }
+  return prettierFormat;
+}
 import { CacheEngine } from '../../core/cache-engine.js';
+import { readCompressedJson } from '../../utils/cache-helper.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { compress, decompress } from '../shared/compression-utils.js';
@@ -511,28 +566,54 @@ export class SmartPretty {
     });
 
     // Check cache
+    //
+    // AN UNREADABLE CACHE ENTRY IS A MISS, NOT A FAILURE.
+    //
+    // This tool used to write `compressed.toString()` -- no encoding, so utf8,
+    // which mangles binary gzip irreversibly -- and read it back as base64.
+    // The write was fixed; this read was not, and that left every installation
+    // that had already run it broken FOR EVER: the poisoned entry stayed in
+    // the cache, decompress threw "incorrect header check", and the error
+    // surfaced to the user on every call. Upgrading did not help, because
+    // nothing ever replaced the bad entry.
+    //
+    // Caught by running the tool against a cache that predated the fix.
+    // A cache exists to make correct answers cheaper; it must never be able to
+    // make a correct answer impossible. So a value that cannot be read is
+    // dropped and recomputed.
     if (useCache) {
       const cached = this.cache.get(cacheKey);
       if (cached) {
-        const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
-        const cachedResult = JSON.parse(
-          decompressed.toString()
-        ) as HighlightResult;
+        let cachedResult: HighlightResult | null = null;
+        try {
+          const decompressed = decompress(
+            Buffer.from(cached, 'base64'),
+            'gzip'
+          );
+          cachedResult = JSON.parse(decompressed.toString()) as HighlightResult;
+        } catch {
+          // Corrupt or written by an older, broken version. Forget it and fall
+          // through to recompute; the fresh value overwrites it below.
+          this.cache.delete(cacheKey);
+          cachedResult = null;
+        }
 
-        const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
-        const baselineTokens = tokensUsed * 17; // Estimate 17x baseline for cache hit
+        if (cachedResult) {
+          const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
+          const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
-        return {
-          success: true,
-          operation: 'highlight-code',
-          data: { highlight: cachedResult },
-          metadata: {
-            tokensUsed,
-            tokensSaved: baselineTokens - tokensUsed,
-            cacheHit: true,
-            executionTime: Date.now() - startTime,
-          },
-        };
+          return {
+            success: true,
+            operation: 'highlight-code',
+            data: { highlight: cachedResult },
+            metadata: {
+              tokensUsed,
+              tokensSaved: baselineTokens - tokensUsed,
+              cacheHit: true,
+              executionTime: Date.now() - startTime,
+            },
+          };
+        }
       }
     }
 
@@ -605,7 +686,12 @@ export class SmartPretty {
       const resultTokens = this.tokenCounter.count(highlightedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressionResult.compressed.toString(),
+        // BASE64, to match the base64 the read path decodes.
+        // `.toString()` with no encoding is utf8, which mangles binary gzip
+        // bytes irreversibly. The entry was then unreadable forever: every
+        // later call returned "incorrect header check" until the cache was
+        // cleared by hand. One call was enough to break the tool permanently.
+        compressionResult.compressed.toString('base64'),
         resultTokens,
         compressionResult.compressedSize
       );
@@ -796,14 +882,17 @@ export class SmartPretty {
     // Check cache (88% reduction for incremental format)
     if (useCache) {
       const cached = this.cache.get(cacheKey);
-      if (cached) {
-        const decompressed = decompress(Buffer.from(cached, 'base64'), 'gzip');
-        const cachedResult = JSON.parse(
-          decompressed.toString()
-        ) as FormatResult;
-
+      // An unreadable entry is a MISS, not a failure -- see
+      // readCompressedJson in utils/cache-helper.ts. A cache must never
+      // be able to make a correct answer impossible.
+      const cachedResult = readCompressedJson<FormatResult>(
+        this.cache,
+        cached,
+        cacheKey
+      );
+      if (cachedResult) {
         const tokensUsed = this.tokenCounter.count(cachedResult.code).tokens;
-        const baselineTokens = tokensUsed * 8.5; // Estimate 8.5x baseline
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           ...cachedResult,
@@ -833,7 +922,9 @@ export class SmartPretty {
           ...options.prettierConfig,
         };
 
-        formattedCode = await prettierFormat(code, prettierOptions);
+        const format = await loadPrettier();
+        // No prettier installed: the source is still perfectly usable output.
+        formattedCode = format ? await format(code, prettierOptions) : code;
         formatted = true;
       }
       // Note: Other formatters (black, gofmt, rustfmt) would require CLI execution
@@ -865,7 +956,12 @@ export class SmartPretty {
       const resultTokens = this.tokenCounter.count(formattedCode).tokens;
       this.cache.set(
         cacheKey,
-        compressionResult.compressed.toString(),
+        // BASE64, to match the base64 the read path decodes.
+        // `.toString()` with no encoding is utf8, which mangles binary gzip
+        // bytes irreversibly. The entry was then unreadable forever: every
+        // later call returned "incorrect header check" until the cache was
+        // cleared by hand. One call was enough to break the tool permanently.
+        compressionResult.compressed.toString('base64'),
         resultTokens,
         compressionResult.compressedSize
       );
@@ -910,7 +1006,19 @@ export class SmartPretty {
 
     // Method 3: Content-based detection using highlight.js
     try {
-      const result = hljs.highlightAuto(code);
+      const highlighter = await loadHighlighter();
+      if (!highlighter) {
+        // Without the optional highlighter there is no content-based guess to
+        // make. Saying "plaintext, low confidence" is honest; the earlier
+        // extension and heuristic passes have already had their turn.
+        return {
+          language: 'plaintext',
+          confidence: 0.1,
+          alternatives: [],
+          detectionMethod: 'heuristic',
+        };
+      }
+      const result = highlighter.highlightAuto(code);
       const language = result.language || 'plaintext';
       const alternatives =
         result.secondBest && result.secondBest.language
@@ -949,6 +1057,10 @@ export class SmartPretty {
     options: SmartPrettyOptions
   ): string {
     try {
+      // Primed by runSmartPretty before any of this runs; null simply means
+      // the optional highlighter is not installed, so the code is returned
+      // uncoloured rather than not at all.
+      if (!hljs) return code;
       const result = hljs.highlight(code, { language });
       const ansiCodes = this.generateAnsiCodes(theme);
 
@@ -978,6 +1090,10 @@ export class SmartPretty {
     options: SmartPrettyOptions
   ): string {
     try {
+      // Primed by runSmartPretty before any of this runs; null simply means
+      // the optional highlighter is not installed, so the code is returned
+      // uncoloured rather than not at all.
+      if (!hljs) return code;
       const result = hljs.highlight(code, { language });
       const css = this.generateThemeCSS(theme);
 
@@ -1340,6 +1456,10 @@ export function getSmartPretty(
 export async function runSmartPretty(
   options: SmartPrettyOptions
 ): Promise<SmartPrettyResult> {
+  // Prime the optional highlighter once, so the synchronous helpers below can
+  // use it (or correctly find it absent) without each becoming async.
+  await loadHighlighter();
+
   const cache = new CacheEngine(join(homedir(), '.hypercontext', 'cache'), 100);
   const tokenCounter = new TokenCounter();
   const metrics = new MetricsCollector();

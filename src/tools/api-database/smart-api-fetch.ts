@@ -659,9 +659,9 @@ export async function runSmartApiFetch(
   options: SmartApiFetchOptions
 ): Promise<string> {
   // Create local instances
-  const { TokenCounter } = await import('../../core/token-counter');
-  const { MetricsCollector } = await import('../../core/metrics');
-  const { CacheEngine } = await import('../../core/cache-engine');
+  const { TokenCounter } = await import('../../core/token-counter.js');
+  const { MetricsCollector } = await import('../../core/metrics.js');
+  const { CacheEngine } = await import('../../core/cache-engine.js');
   const { homedir } = await import('os');
   const { join } = await import('path');
 

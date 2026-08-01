@@ -269,7 +269,7 @@ export class SmartProcess {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 20; // Estimate baseline
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -286,9 +286,27 @@ export class SmartProcess {
     }
 
     // Fresh status check
-    const processes = await this.listProcesses(options.pid, options.name);
+    const allProcesses = await this.listProcesses(options.pid, options.name);
+
+    // A MACHINE'S PROCESS TABLE IS NOT A BOUNDED THING.
+    //
+    // Asked for a plain status with no pid or name filter, this returned every
+    // process on the box: 27,895 tokens in one response on an ordinary
+    // workstation, roughly 14% of a 200k context window spent on a listing.
+    // The caller almost never wants all of it, and the ones who do can page.
+    const LIST_CAP = 200;
+    const processes = allProcesses.slice(0, LIST_CAP);
+    const omitted = allProcesses.length - processes.length;
+
     const dataStr = JSON.stringify({ processes });
     const tokensUsed = this.tokenCounter.count(dataStr).tokens;
+
+    // What the full table would have cost, measured from the table itself --
+    // so the saving is real and the omission is stated rather than silent.
+    const fullTokens = omitted
+      ? this.tokenCounter.count(JSON.stringify({ processes: allProcesses }))
+          .tokens
+      : tokensUsed;
 
     // Cache the result
     if (useCache) {
@@ -298,10 +316,21 @@ export class SmartProcess {
     return {
       success: true,
       operation: 'status',
-      data: { processes },
+      data: {
+        processes,
+        ...(omitted
+          ? {
+              truncated: true,
+              totalProcesses: allProcesses.length,
+              note:
+                `Showing ${processes.length} of ${allProcesses.length} processes. ` +
+                `Pass a pid or name to narrow the result.`,
+            }
+          : {}),
+      },
       metadata: {
         tokensUsed,
-        tokensSaved: 0,
+        tokensSaved: Math.max(0, fullTokens - tokensUsed),
         cacheHit: false,
         executionTime: 0,
       },
@@ -370,7 +399,7 @@ export class SmartProcess {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 20; // Estimate baseline
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,

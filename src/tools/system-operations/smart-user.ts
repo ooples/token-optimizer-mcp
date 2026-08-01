@@ -276,7 +276,7 @@ export class SmartUser {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const tokensUsed = this.tokenCounter.count(cached).tokens;
-        const baselineTokens = tokensUsed * 20; // Estimate 20x baseline for full user data
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -330,7 +330,7 @@ export class SmartUser {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const tokensUsed = this.tokenCounter.count(cached).tokens;
-        const baselineTokens = tokensUsed * 18; // Estimate 18x baseline for full group data
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -390,7 +390,7 @@ export class SmartUser {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const tokensUsed = this.tokenCounter.count(cached).tokens;
-        const baselineTokens = tokensUsed * 15;
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -448,7 +448,7 @@ export class SmartUser {
       const cached = await this.cache.get(cacheKey);
       if (cached) {
         const tokensUsed = this.tokenCounter.count(cached).tokens;
-        const baselineTokens = tokensUsed * 12;
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -508,7 +508,7 @@ export class SmartUser {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 7;
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -564,7 +564,7 @@ export class SmartUser {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 8.5;
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -617,7 +617,7 @@ export class SmartUser {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 5;
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
@@ -671,7 +671,7 @@ export class SmartUser {
       if (cached) {
         const dataStr = cached;
         const tokensUsed = this.tokenCounter.count(dataStr).tokens;
-        const baselineTokens = tokensUsed * 25;
+        const baselineTokens = tokensUsed; // measured, not assumed: a multiplier here would invent a saving
 
         return {
           success: true,
