@@ -18,7 +18,7 @@ import {
   appendFileSync, readFileSync, existsSync, mkdirSync, chmodSync,
   openSync, closeSync, unlinkSync, statSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { canonicalPath } from './paths.mjs';
 
@@ -58,6 +58,31 @@ export function wikiDir(cwd) {
   return process.env.TOKEN_OPTIMIZER_WIKI_DIR || join(cwd || process.cwd(), '.token-optimizer', 'wiki');
 }
 
+
+/**
+ * The project a FILE belongs to, which is not always the session's project.
+ *
+ * `wikiDir(cwd)` keys the graph on where the client happens to be running. That
+ * is wrong the moment a session touches a second repository -- the findings
+ * land in the wrong project's graph, or in none, and the per-project promise
+ * quietly breaks. Observed live: work in another checkout recorded nothing.
+ *
+ * Walks up for a repository marker and falls back to the session cwd when the
+ * file is not inside one, which is the honest answer for a scratch file.
+ */
+export function projectRootFor(filePath, fallback) {
+  let dir = dirname(canonicalPath(filePath));
+  for (let depth = 0; depth < 40 && dir; depth += 1) {
+    for (const marker of ['.git', 'package.json', '.hg', 'go.mod', 'Cargo.toml']) {
+      if (existsSync(join(dir, marker))) return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return fallback ? canonicalPath(fallback) : null;
+}
+
 const logPath = (dir) => join(dir, 'graph.jsonl');
 
 /**
@@ -93,10 +118,19 @@ export function canonicalKey(kind, key) {
   return raw;
 }
 
-/** Content hash of a file, or null when unreadable. Drives staleness in P2. */
-export function contentHash(path) {
+/**
+ * Content hash of a file, or null when unreadable. Drives staleness in P2.
+ *
+ * `text` lets a caller that already holds the contents hash them without a
+ * second read from disk -- the hook touches every file on the critical path of
+ * an allowed tool call, so one avoidable read per file is one too many.
+ */
+export function contentHash(path, text) {
   try {
-    return createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16);
+    return createHash('sha256')
+      .update(text === undefined ? readFileSync(path) : text)
+      .digest('hex')
+      .slice(0, 16);
   } catch {
     return null;
   }
@@ -273,10 +307,13 @@ function score(node, now, DAY) {
  * content hash, by this task. No claims, no inference. The semantic layer that
  * extracts findings arrives in P3 and runs out-of-band.
  */
-export function harvest(dir, { filePath, sessionId, action }) {
+export function harvest(dir, { filePath, sessionId, action, hash: precomputed }) {
   if (!filePath) return null;
 
-  const hash = contentHash(filePath);
+  // The caller may already hold the file's hash. Recomputing it here meant the
+  // hook read every touched file TWICE -- once for this hash and once for
+  // indexFile -- on the critical path of every allowed tool call.
+  const hash = precomputed ?? contentHash(filePath);
   if (hash === null) return null;
 
   const fileNode = putNode(dir, { kind: 'file', key: filePath, hash, lastAction: action });

@@ -79,6 +79,73 @@ function candidatePaths(operand, cwd) {
   return resolvableCandidates(operand, cwd);
 }
 
+/**
+ * Every real file this call touches, canonicalised.
+ *
+ * THE GRAPH'S PRODUCER. Before this existed, only `tool_input.file_path` was
+ * ever observed -- so a session spent in the shell (`cat`, `grep -r`, reading a
+ * build log) produced no cost record and no graph node, and measured as though
+ * nothing had happened. Bash operands are real touches and belong in both.
+ *
+ * Only paths that RESOLVE are returned: an operand that is a flag, a glob or a
+ * heredoc marker is not a file, and inventing a node for it would put fiction
+ * in the graph.
+ */
+export function touchedFiles(payload) {
+  const input = payload?.tool_input || {};
+  // path -> size. The size is kept because resolving a candidate ALREADY
+  // stats it: `fileSize(spelling) >= 0` is how a real file is told from a flag
+  // or a glob. Discarding the answer meant every caller stat'd each path again,
+  // on a hook that runs before EVERY tool call.
+  const out = new Map();
+
+  // A `cd` INSIDE the command changes where its relative operands resolve, and
+  // the hook payload's cwd knows nothing about it. Observed live: a Bash call
+  // that began `cd /other/repo` had every one of its relative operands resolved
+  // against the session's directory instead, found nothing, and recorded no
+  // touch at all -- so work in a second repository was invisible.
+  const command = typeof input.command === 'string' ? input.command : '';
+  const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
+  const cwd = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : payload?.cwd;
+
+  const add = (candidate) => {
+    if (!candidate || typeof candidate !== 'string') return;
+    for (const spelling of resolvableCandidates(candidate, cwd)) {
+      const size = fileSize(spelling);
+      if (size >= 0) {
+        out.set(canonicalPath(spelling, cwd), size);
+        return;
+      }
+    }
+  };
+
+  add(input.file_path);
+  add(input.path);
+  add(input.notebook_path);
+
+  // EVERY pipeline segment, not just the first. `fileOperands` looks only at
+  // the head of the pipeline because that is where the COST is -- `git log |
+  // head` must not be mistaken for a file dump. But observation is a different
+  // question from cost: a file named after a pipe was still read, and dropping
+  // it loses a real touch. Non-files fall out anyway, since only operands that
+  // resolve are kept.
+  for (const segment of command.split('|')) {
+    for (const operand of fileOperands(segment)) add(operand);
+  }
+
+  return [...out].map(([path, size]) => ({ path, size }));
+}
+
+/**
+ * The touched paths alone, for callers that do not need the sizes.
+ *
+ * Kept so every existing caller and test reads the same, while the ones on the
+ * hook's critical path can take the size that was measured on the way in.
+ */
+export function touchedPaths(payload) {
+  return touchedFiles(payload).map((f) => f.path);
+}
+
 /** Resolves the first operand that is a real file over the size threshold. */
 function largeOperand(command, cwd) {
   const threshold = largeFileBytes();

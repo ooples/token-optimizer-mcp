@@ -24,6 +24,9 @@ import { dirname } from 'path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+/** One server process is one session. See the capture call below. */
+const SESSION_ID = `mcp-${process.pid}-${Date.now().toString(36)}`;
+
 function coreUrl(name: string): string {
   return pathToFileURL(path.join(here, '..', '..', 'hooks-core', name)).href;
 }
@@ -128,6 +131,12 @@ export async function discloseResult(
       tool: toolName,
       shape,
       anchors,
+      // Captures were recorded with sessionId: null, so preview quality and
+      // expansion history could not be grouped by session at all -- every
+      // capture looked like it came from nowhere. The MCP server has no session
+      // id from the client, but one process IS one session, so a per-process id
+      // is both true and sufficient for grouping.
+      sessionId: SESSION_ID,
       costMs: Number.isFinite(costMs) ? costMs : null,
     });
 

@@ -13,9 +13,9 @@
 
 import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF }
   from './lib/policy.mjs';
-import { decide, remember, normalizePayload, readCostBytes } from './lib/decide.mjs';
+import { decide, remember, normalizePayload, readCostBytes, touchedFiles } from './lib/decide.mjs';
 import { recordRead } from './lib/metrics.mjs';
-import { wikiDir, load } from './lib/wiki.mjs';
+import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { readFileSync } from 'node:fs';
@@ -44,14 +44,66 @@ try {
 
     // And what the read COST, which is the signal the holdout comparison
     // consumes. Without a producer here the measurement subtracts two zeroes.
+    //
+    // TOUCHED FILES ARE NOT ONLY `Read` FILES. A session spent in the shell --
+    // `cat`, `grep -r`, a build log -- was previously invisible: no cost
+    // recorded, no node in the graph, so a shell-heavy session measured as
+    // though nothing happened. `touchedFiles` covers every tool that names a
+    // file, including Bash operands.
+    // Each entry carries the size measured while resolving it, so nothing
+    // below needs to stat the same file again.
+    const touched = touchedFiles(payload);
+
+    // THE GRAPH IS PER PROJECT, so it is keyed on where the FILE lives, not on
+    // where the client happens to be running. Keying it on the session's cwd
+    // put findings about another repository into this one's graph -- or, when
+    // the relative path did not resolve here, into no graph at all. A session
+    // that touches two checkouts now writes to two graphs, correctly.
+    const dirFor = (path) => wikiDir(projectRootFor(path, payload.cwd));
+
     const bytes = readCostBytes(payload);
     if (bytes) {
-      recordRead(wikiDir(payload.cwd), {
+      recordRead(dirFor(payload.tool_input.file_path), {
         anchor: payload.tool_input.file_path,
         sessionId: payload.session_id,
         bytes,
       });
+    } else {
+      for (const { path, size } of touched) {
+        // The size came from touchedFiles, which had to stat the file to know
+        // it was one. Statting it again here was pure duplication on the hook's
+        // critical path -- it runs before every tool call, for every operand.
+        if (size > 0) recordRead(dirFor(path), { anchor: path, sessionId: payload.session_id, bytes: size });
+      }
     }
+
+    // THE MEMORY HALF. `harvest` records that this file was touched, at this
+    // content hash, by this task -- and nothing had been calling it, anywhere.
+    // The graph therefore accumulated no nodes and no task edges from ordinary
+    // work, which left every downstream feature (injection, the zero-turn
+    // refusal, consolidation, re-derivation detection) fed by a producer that
+    // never ran. Structural only: it records what demonstrably happened and
+    // makes no claims.
+    for (const { path } of touched) {
+      try {
+        const dir = dirFor(path);
+        // ONE read, not two. harvest() hashed the file and indexFile() then
+        // read it again, so every allowed call paid double the I/O on the
+        // hook's critical path. Reading once here and handing the text to both
+        // keeps the graph identical and halves the cost.
+        const source = readFileSync(path, 'utf8');
+        harvest(dir, {
+          filePath: path,
+          sessionId: payload.session_id,
+          action: payload.tool_name,
+          hash: contentHash(path, source),
+        });
+        // Index on the way past, so the NEXT touch can be answered with
+        // structure instead of the file. Bounded by the snapshot limit.
+        indexFile(dir, path, source);
+      } catch { /* never let bookkeeping break an allowed call */ }
+    }
+
     allow();
   }
 
@@ -66,7 +118,9 @@ try {
   let reason = verdict.reason;
   if (!repeat && payload.tool_name === 'Read' && payload.tool_input.file_path) {
     try {
-      const dir = wikiDir(payload.cwd);
+      // Same per-project rule as the allowed path: a refusal must consult the
+      // graph belonging to the FILE, or it answers from the wrong project.
+      const dir = wikiDir(projectRootFor(payload.tool_input.file_path, payload.cwd));
       const graph = load(dir);
       const carried = refusalPayload(graph, payload.tool_input.file_path);
       if (carried) {
