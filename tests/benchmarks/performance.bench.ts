@@ -171,7 +171,11 @@ describe('Performance Benchmarks', () => {
       );
 
       expect(result.avgDuration).toBeLessThan(budget(10));
-      expect(result.p95).toBeLessThan(20);
+      // budget(), like every other latency bound here. This was the one bare
+      // literal left after the bounds were calibrated, and it is the assertion
+      // that failed under load: 21.6ms against a fixed 20ms ceiling, measuring
+      // how busy the machine was rather than whether the code had regressed.
+      expect(result.p95).toBeLessThan(budget(20));
     });
 
     it('should benchmark large text token counting', () => {

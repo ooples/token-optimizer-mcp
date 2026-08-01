@@ -65,8 +65,20 @@ function tool(): SmartProcesses {
  * than one per assertion keeps the suite honest about what it is measuring --
  * every test below reasons about the same numbers -- and keeps seven OS calls
  * from becoming a timeout under parallel load.
+ *
+ * SIZED FROM MEASUREMENT, NOT GUESSED. These three snapshots take 6.5s on an
+ * idle 64-core box. Saturating every core (64 spinners against jest's own ~63
+ * workers) pushed the same three past 60s and failed all seven tests in this
+ * file -- `wmic` degrades sharply when there is no spare core to schedule it
+ * on, and a developer running this suite alongside a build is the ordinary
+ * case, not a contrived one.
+ *
+ * 180s is ~28x the idle cost and ~3x the worst measured. It is deliberately
+ * not a tight bound: nothing here is asserting speed, so the only thing a
+ * tighter timeout can do is fail for reasons that have nothing to do with the
+ * code under test.
  */
-const TIMEOUT = 60_000;
+const TIMEOUT = 180_000;
 
 let normal: SmartProcessesOutput;
 let highFloor: SmartProcessesOutput;
