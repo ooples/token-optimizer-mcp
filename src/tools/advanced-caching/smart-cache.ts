@@ -1216,8 +1216,33 @@ export class SmartCacheTool extends EventEmitter {
   /**
    * Determine if operation is cacheable
    */
-  private isCacheableOperation(operation: string): boolean {
-    return ['stats', 'get', 'batch-get'].includes(operation);
+  /**
+   * Whether an operation's RESULT may be memoized under its arguments.
+   *
+   * NOTHING HERE, AND THE EMPTY LIST IS THE FIX.
+   *
+   * This listed `stats`, `get` and `batch-get` -- which are precisely the three
+   * operations that describe LIVE STATE. Their results were stored in the
+   * CacheEngine under `smart-cache:{operation, params}` with no invalidation
+   * when a `set` or `delete` changed the entry underneath. Measured live:
+   *
+   *   set k = ORIGINAL; get k; set k = UPDATED; get k  ->  ORIGINAL
+   *   set k; get k; delete k; get k                    ->  the deleted value
+   *
+   * A cache that returns values it has been told to overwrite or forget is
+   * broken at the one thing it does, and the memo is what broke it.
+   *
+   * It was not even buying speed. A `get` is a lookup in the in-memory L1/L2/L3
+   * maps; memoizing it replaced that with a SQLite read and a JSON.parse. The
+   * layer cost latency, cost correctness, and polluted `get_cache_stats` -- every
+   * distinct `get` wrote an entry, so reads inflated the entry count and were
+   * each counted as a MISS, pinning the reported hit rate at zero.
+   *
+   * The mechanism is left in place for an operation that is genuinely a pure,
+   * expensive function of its arguments. None of the current ones are.
+   */
+  private isCacheableOperation(_operation: string): boolean {
+    return false;
   }
 
   /**

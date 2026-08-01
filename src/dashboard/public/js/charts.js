@@ -39,7 +39,11 @@ export function compact(n) {
  * `slices` is [{ label, value, color }]. Slices too thin to label are folded
  * into the legend only, rather than being drawn with text on top of text.
  */
-export function donut(host, slices, { centerLabel = '', centerValue = '' } = {}) {
+export function donut(
+  host,
+  slices,
+  { centerLabel = '', centerValue = '' } = {}
+) {
   host.innerHTML = '';
   const data = slices.filter((s) => Number(s.value) > 0);
   const total = data.reduce((sum, s) => sum + Number(s.value), 0);
@@ -66,7 +70,14 @@ export function donut(host, slices, { centerLabel = '', centerValue = '' } = {})
 
   // Track, so a single-slice chart still reads as a proportion of a whole.
   svg.appendChild(
-    el('circle', { cx, cy, r, fill: 'none', stroke: 'var(--surface-3)', 'stroke-width': stroke })
+    el('circle', {
+      cx,
+      cy,
+      r,
+      fill: 'none',
+      stroke: 'var(--surface-3)',
+      'stroke-width': stroke,
+    })
   );
 
   for (const slice of data) {
@@ -148,7 +159,10 @@ function legend(data, total) {
  * Two bars on ONE scale -- never two scales -- so the difference between them
  * is the difference in the numbers and nothing else.
  */
-export function comparison(host, { withoutValue, withValue, withoutLabel, withLabel }) {
+export function comparison(
+  host,
+  { withoutValue, withValue, withoutLabel, withLabel }
+) {
   host.innerHTML = '';
   const max = Math.max(Number(withoutValue) || 0, Number(withValue) || 0, 1);
 
@@ -181,13 +195,26 @@ export function sparkline(host, values, color = 'var(--saved)') {
   const x = (i) => (i / (data.length - 1)) * w;
   const y = (v) => h - ((v - min) / span) * (h - 4) - 2;
 
-  const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, width: w, height: h, 'aria-hidden': 'true' });
-  const d = data.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const svg = el('svg', {
+    viewBox: `0 0 ${w} ${h}`,
+    width: w,
+    height: h,
+    'aria-hidden': 'true',
+  });
+  const d = data
+    .map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`)
+    .join(' ');
 
   svg.appendChild(
-    el('path', { d: `${d} L${w} ${h} L0 ${h} Z`, fill: 'var(--saved-dim)', stroke: 'none' })
+    el('path', {
+      d: `${d} L${w} ${h} L0 ${h} Z`,
+      fill: 'var(--saved-dim)',
+      stroke: 'none',
+    })
   );
-  svg.appendChild(el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2 }));
+  svg.appendChild(
+    el('path', { d, fill: 'none', stroke: color, 'stroke-width': 2 })
+  );
   svg.appendChild(
     el('circle', { cx: w, cy: y(data[data.length - 1]), r: 3, fill: color })
   );
@@ -197,7 +224,10 @@ export function sparkline(host, values, color = 'var(--saved)') {
 export function escapeHtml(s) {
   return String(s ?? '').replace(
     /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+    (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        c
+      ]
   );
 }
 

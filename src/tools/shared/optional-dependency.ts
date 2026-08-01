@@ -75,14 +75,18 @@ export async function optionalDependency<T = unknown>(
     // pretending it is missing would send the user to reinstall something they
     // already have.
     if (!/Cannot find (package|module)/i.test(message)) {
-      throw new Error(`${toolName} could not load "${packageName}": ${message}`);
+      throw new Error(
+        `${toolName} could not load "${packageName}": ${message}`
+      );
     }
     throw new MissingOptionalDependency(packageName, toolName, why);
   }
 }
 
 /** Whether an optional package is available, without throwing. */
-export async function hasOptionalDependency(packageName: string): Promise<boolean> {
+export async function hasOptionalDependency(
+  packageName: string
+): Promise<boolean> {
   try {
     await optionalDependency(packageName, 'availability check', '');
     return true;

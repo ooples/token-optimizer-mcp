@@ -112,12 +112,14 @@ function renderSavings(balance, status) {
     return;
   }
 
-  const spentAnyway = Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
+  const spentAnyway =
+    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
   const wouldHave = saved + spentAnyway;
   const percent = wouldHave > 0 ? (saved / wouldHave) * 100 : 0;
 
   countUp($('saved-tokens'), saved);
-  $('saved-money').textContent = `$${((saved / 1e6) * USD_PER_MILLION_TOKENS).toFixed(2)}`;
+  $('saved-money').textContent =
+    `$${((saved / 1e6) * USD_PER_MILLION_TOKENS).toFixed(2)}`;
   $('saved-percent').textContent = `${percent.toFixed(0)}%`;
 
   comparison($('comparison'), {
@@ -167,7 +169,8 @@ function renderVerdict(balance, status) {
   }
 
   const net = Number(balance.netTokens || 0);
-  const cost = Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
+  const cost =
+    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
   const ratio = cost > 0 ? (net + cost) / cost : Infinity;
 
   if (net > 0) {
@@ -248,7 +251,10 @@ function nodeField(nodes) {
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.setAttribute('width', '100%');
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `${nodes.length} things this project has learned`);
+  svg.setAttribute(
+    'aria-label',
+    `${nodes.length} things this project has learned`
+  );
 
   const hash = (s) => {
     let x = 0;
@@ -261,8 +267,8 @@ function nodeField(nodes) {
     const a = hash(key);
     const b = hash(`${key}~`);
     return {
-      x: 18 + (a % 1000) / 1000 * (w - 36),
-      y: 16 + (b % 1000) / 1000 * (h - 32),
+      x: 18 + ((a % 1000) / 1000) * (w - 36),
+      y: 16 + ((b % 1000) / 1000) * (h - 32),
       kind: n.kind,
     };
   });
@@ -291,7 +297,10 @@ function nodeField(nodes) {
     dot.setAttribute('cx', p.x);
     dot.setAttribute('cy', p.y);
     dot.setAttribute('r', p.kind === 'finding' ? 3.6 : 2.4);
-    dot.setAttribute('fill', p.kind === 'finding' ? 'var(--saved)' : 'var(--graph)');
+    dot.setAttribute(
+      'fill',
+      p.kind === 'finding' ? 'var(--saved)' : 'var(--graph)'
+    );
     dot.setAttribute('class', 'node-dot');
     dot.style.setProperty('--i', String(i % 12));
     svg.appendChild(dot);
@@ -370,12 +379,17 @@ function renderCategories(s) {
     value: v?.tokens || 0,
     color: CATEGORY_COLORS[key] || 'var(--graph)',
   }));
-  donut(host, slices, { centerLabel: 'context used', centerValue: compact(s.totalTokens) });
+  donut(host, slices, {
+    centerLabel: 'context used',
+    centerValue: compact(s.totalTokens),
+  });
 }
 
 function renderServers(s) {
   const host = $('server-chart');
-  const entries = Object.entries(s?.tokensByServer || {}).filter(([, v]) => (v?.tokens || v) > 0);
+  const entries = Object.entries(s?.tokensByServer || {}).filter(
+    ([, v]) => (v?.tokens || v) > 0
+  );
   if (!entries.length) {
     host.innerHTML = teach(
       'No tool servers yet',

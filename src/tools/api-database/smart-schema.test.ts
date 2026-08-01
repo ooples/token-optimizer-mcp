@@ -3,7 +3,14 @@
  * Testing import corrections and core functionality
  */
 
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from '@jest/globals';
 import { SmartSchema, getSmartSchema, runSmartSchema } from './smart-schema.js';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -11,7 +18,6 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { tmpdir } from 'os';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
-
 
 /** A real SQLite database with two tables, for tests that need one. */
 async function sqliteFixture(): Promise<{ file: string; cleanup: () => void }> {
@@ -24,7 +30,13 @@ async function sqliteFixture(): Promise<{ file: string; cleanup: () => void }> {
   db.close();
   return {
     file,
-    cleanup: () => { try { rmSync(dir, { recursive: true, force: true }); } catch { /* windows */ } },
+    cleanup: () => {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* windows */
+      }
+    },
   };
 }
 
@@ -43,7 +55,6 @@ describe('Smart Schema - Import Type Corrections', () => {
   });
 
   afterAll(() => sharedCleanup());
-
 
   let cacheEngine: CacheEngine;
   let tokenCounter: TokenCounter;
@@ -125,8 +136,12 @@ describe('Smart Schema - Import Type Corrections', () => {
 
       const { default: Database } = await import('better-sqlite3');
       const db = new Database(file);
-      db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);');
-      db.exec('CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id));');
+      db.exec(
+        'CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);'
+      );
+      db.exec(
+        'CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id));'
+      );
       db.prepare('INSERT INTO users (name) VALUES (?)').run('ada');
       db.close();
 
@@ -144,7 +159,11 @@ describe('Smart Schema - Import Type Corrections', () => {
         // A real version string, not the hardcoded "3.40.0".
         expect(text).toMatch(/\d+\.\d+\.\d+/);
       } finally {
-        try { rmSync(dir, { recursive: true, force: true }); } catch { /* windows */ }
+        try {
+          rmSync(dir, { recursive: true, force: true });
+        } catch {
+          /* windows */
+        }
       }
     });
   });

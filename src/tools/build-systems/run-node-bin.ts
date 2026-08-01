@@ -52,7 +52,9 @@ export function resolveBinScript(
         };
         const bin = pkg.bin;
         const relative =
-          typeof bin === 'string' ? bin : bin?.[binName] ?? Object.values(bin ?? {})[0];
+          typeof bin === 'string'
+            ? bin
+            : (bin?.[binName] ?? Object.values(bin ?? {})[0]);
         if (relative) {
           const script = join(pkgDir, relative);
           if (existsSync(script)) return script;

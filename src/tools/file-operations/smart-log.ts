@@ -195,11 +195,15 @@ export class SmartLogTool {
       // pays, and whatever is dropped is reported through `truncated` below.
       let budgetTruncated = false;
       while (resultCommits.length > 1) {
-        const size = this.tokenCounter.count(JSON.stringify(resultCommits)).tokens;
+        const size = this.tokenCounter.count(
+          JSON.stringify(resultCommits)
+        ).tokens;
         if (size <= MAX_RESPONSE_TOKENS) break;
         const keep = Math.max(
           1,
-          Math.floor(resultCommits.length * Math.min(0.9, MAX_RESPONSE_TOKENS / size))
+          Math.floor(
+            resultCommits.length * Math.min(0.9, MAX_RESPONSE_TOKENS / size)
+          )
         );
         resultCommits = resultCommits.slice(0, keep);
         budgetTruncated = true;

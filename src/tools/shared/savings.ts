@@ -39,18 +39,25 @@ export interface Savings {
  *   read, the raw output that was received, the rows that were filtered out.
  * @param returnedTokens what the response actually costs.
  */
-export function measured(baselineTokens: number, returnedTokens: number): Savings {
+export function measured(
+  baselineTokens: number,
+  returnedTokens: number
+): Savings {
   const tokenCount = Math.max(0, Math.round(returnedTokens) || 0);
   // A baseline below what was returned means the "alternative" was cheaper, so
   // there was no saving. Clamping keeps the reported figure from going
   // negative, which downstream reports would sum into nonsense.
-  const originalTokenCount = Math.max(tokenCount, Math.round(baselineTokens) || 0);
+  const originalTokenCount = Math.max(
+    tokenCount,
+    Math.round(baselineTokens) || 0
+  );
 
   return {
     originalTokenCount,
     tokenCount,
     tokensSaved: originalTokenCount - tokenCount,
-    compressionRatio: originalTokenCount > 0 ? tokenCount / originalTokenCount : 1,
+    compressionRatio:
+      originalTokenCount > 0 ? tokenCount / originalTokenCount : 1,
   };
 }
 

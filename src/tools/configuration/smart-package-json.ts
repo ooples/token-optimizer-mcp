@@ -724,11 +724,15 @@ export class SmartPackageJson {
         'smart_package_json'
       );
 
-      const output = execFileSafeSync(pmCmd, [...pmPrefix, 'outdated', '--json'], {
-        cwd: this.projectRoot,
-        timeout: 30000,
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      const output = execFileSafeSync(
+        pmCmd,
+        [...pmPrefix, 'outdated', '--json'],
+        {
+          cwd: this.projectRoot,
+          timeout: 30000,
+          maxBuffer: 10 * 1024 * 1024,
+        }
+      );
 
       const outdatedData = JSON.parse(output);
       this.markOutdatedPackages(result.packages, outdatedData, packageManager);

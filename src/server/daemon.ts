@@ -424,8 +424,12 @@ function startDaemon(): void {
   // nothing, says why, and leaves the running one strictly alone.
   const running = liveDaemonPid();
   if (running !== null) {
-    console.error(`[DAEMON] Already running (PID ${running}) -- this instance is exiting.`);
-    console.error(`[DAEMON] Stop it first if you meant to restart: kill ${running}`);
+    console.error(
+      `[DAEMON] Already running (PID ${running}) -- this instance is exiting.`
+    );
+    console.error(
+      `[DAEMON] Stop it first if you meant to restart: kill ${running}`
+    );
     process.exit(0);
   }
 

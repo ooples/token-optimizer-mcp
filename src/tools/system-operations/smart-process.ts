@@ -304,7 +304,8 @@ export class SmartProcess {
     // What the full table would have cost, measured from the table itself --
     // so the saving is real and the omission is stated rather than silent.
     const fullTokens = omitted
-      ? this.tokenCounter.count(JSON.stringify({ processes: allProcesses })).tokens
+      ? this.tokenCounter.count(JSON.stringify({ processes: allProcesses }))
+          .tokens
       : tokensUsed;
 
     // Cache the result

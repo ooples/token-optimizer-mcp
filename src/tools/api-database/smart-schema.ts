@@ -443,7 +443,9 @@ export class SmartSchema {
     const db = new Database(file, { readonly: true, fileMustExist: true });
 
     try {
-      const version = (db.prepare('select sqlite_version() as v').get() as { v: string }).v;
+      const version = (
+        db.prepare('select sqlite_version() as v').get() as { v: string }
+      ).v;
 
       const tableRows = db
         .prepare(
@@ -456,8 +458,14 @@ export class SmartSchema {
       const relationships: Relationship[] = [];
 
       for (const { name } of tableRows) {
-        const cols = db.prepare(`pragma table_info(${JSON.stringify(name)})`).all() as Array<{
-          name: string; type: string; notnull: number; dflt_value: string | null; pk: number;
+        const cols = db
+          .prepare(`pragma table_info(${JSON.stringify(name)})`)
+          .all() as Array<{
+          name: string;
+          type: string;
+          notnull: number;
+          dflt_value: string | null;
+          pk: number;
         }>;
 
         const foreignKeys = db
@@ -469,7 +477,9 @@ export class SmartSchema {
           schema: 'main',
           name,
           rowCount: (
-            db.prepare(`select count(*) as n from ${JSON.stringify(name)}`).get() as { n: number }
+            db
+              .prepare(`select count(*) as n from ${JSON.stringify(name)}`)
+              .get() as { n: number }
           ).n,
           columns: cols.map((c) => ({
             name: c.name,
@@ -512,9 +522,13 @@ export class SmartSchema {
 
       const views: ViewInfo[] = (
         db
-          .prepare("select name, sql from sqlite_master where type = 'view' order by name")
+          .prepare(
+            "select name, sql from sqlite_master where type = 'view' order by name"
+          )
           .all() as Array<{ name: string; sql: string }>
-      ).map((v) => ({ schema: 'main', name: v.name, definition: v.sql }) as ViewInfo);
+      ).map(
+        (v) => ({ schema: 'main', name: v.name, definition: v.sql }) as ViewInfo
+      );
 
       return {
         databaseType: 'sqlite',

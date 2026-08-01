@@ -671,7 +671,9 @@ export const SmartSecuritySchema = z
     projectRoot: z.string().optional(),
     targets: z.array(z.any()).optional(),
     exclude: z.array(z.any()).optional(),
-    minSeverity: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
+    minSeverity: z
+      .enum(['critical', 'high', 'medium', 'low', 'info'])
+      .optional(),
     maxCacheAge: z.number().optional(),
     includeLowSeverity: z.boolean().optional(),
   })
@@ -759,12 +761,30 @@ export const SmartTsconfigSchema = z
 // smart_pretty
 export const SmartPrettySchema = z
   .object({
-    operation: z.enum(['highlight-code', 'format-code', 'detect-language', 'apply-theme']),
+    operation: z.enum([
+      'highlight-code',
+      'format-code',
+      'detect-language',
+      'apply-theme',
+    ]),
     code: z.string().optional(),
     filePath: z.string().optional(),
     language: z.string().optional(),
     outputMode: z.enum(['ansi', 'html', 'plain']).optional(),
-    theme: z.enum(['default', 'monokai', 'github', 'solarized-dark', 'solarized-light', 'dracula', 'nord', 'atom-one-dark', 'atom-one-light', 'custom']).optional(),
+    theme: z
+      .enum([
+        'default',
+        'monokai',
+        'github',
+        'solarized-dark',
+        'solarized-light',
+        'dracula',
+        'nord',
+        'atom-one-dark',
+        'atom-one-light',
+        'custom',
+      ])
+      .optional(),
     customTheme: z.record(z.any()).optional(),
     showLineNumbers: z.boolean().optional(),
     highlightLines: z.array(z.any()).optional(),
@@ -789,7 +809,14 @@ export const SmartPrettySchema = z
 // smart_process
 export const SmartProcessSchema = z
   .object({
-    operation: z.enum(['start', 'stop', 'status', 'monitor', 'tree', 'restart']),
+    operation: z.enum([
+      'start',
+      'stop',
+      'status',
+      'monitor',
+      'tree',
+      'restart',
+    ]),
     pid: z.number().optional(),
     name: z.string().optional(),
     command: z.string().optional(),
@@ -808,7 +835,16 @@ export const SmartProcessSchema = z
 // smart_service
 export const SmartServiceSchema = z
   .object({
-    operation: z.enum(['start', 'stop', 'restart', 'status', 'enable', 'disable', 'health-check', 'list-dependencies']),
+    operation: z.enum([
+      'start',
+      'stop',
+      'restart',
+      'status',
+      'enable',
+      'disable',
+      'health-check',
+      'list-dependencies',
+    ]),
     serviceType: z.enum(['systemd', 'windows', 'docker']).optional(),
     serviceName: z.string(),
     autoDetect: z.boolean().optional(),
