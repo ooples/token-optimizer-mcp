@@ -304,10 +304,14 @@ export class SmartDependenciesTool {
     opts: Required<SmartDependenciesOptions>,
     _startTime: number
   ): Promise<
-    // `graph` is the JSON payload; `rawGraph` is the Map later stages need.
-    // They used to be the same field, which is how a Map ended up being
-    // JSON.stringify'd into `{}`.
-    SmartDependenciesResult & { rawGraph?: Map<string, DependencyNode> }
+    // ONLY `rawGraph`. This used to return the Map as `graph`, which
+    // JSON.stringify turns into `{}` -- the defect this change fixes. The first
+    // fix built the JSON payload here as well, but analyze() reads only
+    // `rawGraph`, and every mode handler builds its own result from it, so that
+    // payload was computed and thrown away on all four paths -- including the
+    // cached fast path, turning an O(1) reference return into an O(n) traversal
+    // for a value nobody read.
+    SmartDependenciesResult & { rawGraph: Map<string, DependencyNode> }
   > {
     const cacheKey = generateCacheKey('dependency_graph', { cwd: opts.cwd });
 
@@ -326,7 +330,6 @@ export class SmartDependenciesTool {
             return {
               success: true,
               mode: 'graph',
-              graph: this.compactGraphRepresentation(cachedGraph),
               rawGraph: cachedGraph,
               metadata: {
                 totalFiles: cachedGraph.size,
@@ -368,7 +371,6 @@ export class SmartDependenciesTool {
             return {
               success: true,
               mode: 'graph',
-              graph: this.compactGraphRepresentation(updatedGraph),
               rawGraph: updatedGraph,
               metadata: {
                 totalFiles: updatedGraph.size,
@@ -390,7 +392,6 @@ export class SmartDependenciesTool {
           return {
             success: true,
             mode: 'graph',
-            graph: this.compactGraphRepresentation(cachedGraph),
             rawGraph: cachedGraph,
             metadata: {
               totalFiles: cachedGraph.size,
@@ -426,7 +427,6 @@ export class SmartDependenciesTool {
     return {
       success: true,
       mode: 'graph',
-      graph: this.compactGraphRepresentation(graph),
       rawGraph: graph,
       metadata: {
         totalFiles: graph.size,
