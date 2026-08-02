@@ -8,7 +8,14 @@
       "include-component-in-tag": false,
       "bump-minor-pre-major": false,
       "draft": false,
-      "prerelease": false
+      "prerelease": false,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "plugin/.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   },
   "changelog-sections": [

@@ -40,6 +40,19 @@ const banner = (name) =>
   `// GENERATED FILE -- do not edit.\n` +
   `// Source of truth: hooks-core/${name}. Regenerate with \`npm run sync:hooks\`.\n`;
 
+/**
+ * Compare CONTENT, not the line endings git happened to check the file out with.
+ *
+ * `.gitattributes` sets `* text=auto`, so these files are stored with LF and
+ * written to the working tree with CRLF on Windows. The banner above is built
+ * with '\n' regardless, so a byte comparison declared all 180 vendored files
+ * drifted on any Windows checkout -- `npm test` failed immediately after a
+ * fresh clone, while Linux CI stayed green because its checkout leaves LF
+ * alone. Nothing was actually out of sync; only the two banner lines differed,
+ * and only in how their newline was spelled.
+ */
+const normalize = (text) => text.replace(/\r\n/g, '\n');
+
 let drifted = 0;
 
 for (const target of TARGETS) {
@@ -49,7 +62,7 @@ for (const target of TARGETS) {
 
     if (check) {
       const current = existsSync(destination) ? readFileSync(destination, 'utf8') : null;
-      if (current !== contents) {
+      if (current === null || normalize(current) !== normalize(contents)) {
         console.error(`DRIFT: ${destination.slice(ROOT.length + 1)}`);
         drifted++;
       }
