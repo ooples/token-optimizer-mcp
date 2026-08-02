@@ -268,7 +268,18 @@ const VULNERABILITY_PATTERNS: VulnerabilityPattern[] = [
     name: 'Hardcoded API Key',
     category: 'secrets',
     severity: 'critical',
-    pattern: /(?:api[_-]?key|apikey)\s*[=:]\s*['"][a-zA-Z0-9]{16,}['"]/gi,
+    // THE VALUE CLASS MUST ALLOW THE SEPARATORS REAL KEYS USE. This was
+    // [a-zA-Z0-9]{16,}, which excludes '_', '-' and '.' -- and essentially every
+    // issued credential carries one as a prefix separator. Measured against
+    // twelve documented formats, only three matched, and all three were the
+    // incidentally-alphanumeric ones (AWS). Stripe `sk_live_...`, GitHub
+    // `ghp_...`, Slack `xoxb-...`, Google `AIza...`, SendGrid `SG....`, OpenAI
+    // `sk-proj-...` and Anthropic `sk-ant-...` were all invisible -- so the
+    // scanner reported "Secure" over a file holding a live-format key.
+    //
+    // ':' stays excluded, which keeps a URL assigned to one of these variables
+    // from matching.
+    pattern: /(?:api[_-]?key|apikey)\s*[=:]\s*['"][A-Za-z0-9_\-.]{16,}['"]/gi,
     fileExtensions: [
       '.js',
       '.ts',
@@ -318,8 +329,11 @@ const VULNERABILITY_PATTERNS: VulnerabilityPattern[] = [
     name: 'Hardcoded Token',
     category: 'secrets',
     severity: 'critical',
+    // Same widening as hardcoded-api-key. The class allowed base64 characters
+    // but not '_', '-' or '.', so a prefixed credential or a JWT (which is
+    // dot-separated) assigned to `token` or `secret` went unreported.
     pattern:
-      /(?:token|secret|private[_-]?key)\s*[=:]\s*['"][a-zA-Z0-9+/=]{20,}['"]/gi,
+      /(?:token|secret|private[_-]?key)\s*[=:]\s*['"][A-Za-z0-9_\-.+/=]{20,}['"]/gi,
     fileExtensions: [
       '.js',
       '.ts',
@@ -550,6 +564,7 @@ const VULNERABILITY_PATTERNS: VulnerabilityPattern[] = [
 
 export class SmartSecurity {
   private cache: CacheEngine;
+  private tokenCounter: TokenCounter;
   private metrics: MetricsCollector;
   private cacheNamespace = 'smart_security';
   private projectRoot: string;
@@ -557,11 +572,14 @@ export class SmartSecurity {
 
   constructor(
     cache: CacheEngine,
-    _tokenCounter: TokenCounter,
+    tokenCounter: TokenCounter,
     metrics: MetricsCollector,
     projectRoot?: string
   ) {
     this.cache = cache;
+    // Kept, not discarded. It was `_tokenCounter` and thrown away, which is why
+    // the reported savings had to be invented from per-finding guesses.
+    this.tokenCounter = tokenCounter;
     this.metrics = metrics;
     this.projectRoot = projectRoot || process.cwd();
   }
@@ -883,8 +901,20 @@ export class SmartSecurity {
     );
 
     // Calculate token metrics
-    const originalTokens = this.estimateOriginalOutputSize(result);
-    const compactedTokens = this.estimateCompactSize(result);
+    // BOTH SIDES MEASURED. These were `findings.length * 300` and a hand-built
+    // sum of per-section guesses -- two invented numbers, whose difference was
+    // then reported as a percentage saved. The full result and the compact one
+    // are both right here, so neither has to be guessed at.
+    const originalTokens = this.tokenCounter.count(
+      JSON.stringify(result)
+    ).tokens;
+    const compactedTokens = this.tokenCounter.count(
+      JSON.stringify({
+        findingsBySeverity,
+        findingsByCategory,
+        remediationPriorities,
+      })
+    ).tokens;
 
     return {
       summary: {
@@ -1218,46 +1248,6 @@ export class SmartSecurity {
     const compressedSize = Math.ceil(originalSize * 0.3);
 
     this.cache.set(key, json, originalSize, compressedSize);
-  }
-
-  /**
-   * Estimate original output size (full scan results)
-   */
-  private estimateOriginalOutputSize(result: SecurityScanResult): number {
-    // Each finding is ~300 chars with full details
-    let size = result.findings.length * 300;
-
-    // Add file list
-    size += result.filesScanned.length * 50;
-
-    // Add base overhead
-    size += 1000;
-
-    return Math.ceil(size / 4); // Convert to tokens
-  }
-
-  /**
-   * Estimate compact output size
-   */
-  private estimateCompactSize(result: SecurityScanResult): number {
-    // Summary: ~200 chars
-    let size = 200;
-
-    // Top 5 findings per severity: ~150 chars each
-    const severities: VulnerabilitySeverity[] = ['critical', 'high', 'medium'];
-    for (const severity of severities) {
-      const count = result.findingsBySeverity[severity];
-      size += Math.min(count, 5) * 150;
-    }
-
-    // Category summaries: ~100 chars each
-    const categories = Object.keys(result.findingsByCategory);
-    size += categories.length * 100;
-
-    // Remediation priorities: ~200 chars for top 5
-    size += 5 * 200;
-
-    return Math.ceil(size / 4); // Convert to tokens
   }
 
   /**
