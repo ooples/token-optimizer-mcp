@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.5](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.4...v5.3.5) (2026-08-02)
+
+
+### Bug Fixes
+
+* a fresh windows clone failed its own test suite and format check ([#220](https://github.com/ooples/token-optimizer-mcp/issues/220)) ([9709c12](https://github.com/ooples/token-optimizer-mcp/commit/9709c12db8f689bd4961989b8f31375052db0d88))
+
 ## [5.3.4](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.3...v5.3.4) (2026-08-01)
 
 
