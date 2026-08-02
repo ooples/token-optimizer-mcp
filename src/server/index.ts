@@ -1061,12 +1061,21 @@ async function handleToolCall(request: {
           };
         }
 
-        // Compression helps! Cache the compressed version
+        // Compression helps! Cache the compressed version.
+        //
+        // ARGUMENT ORDER: set(key, value, originalSize, compressedSize). These
+        // two were transposed, so every cached entry recorded its sizes
+        // backwards. Measured: writing 5,000 characters reported
+        // `totalOriginalSize: 13, totalCompressedSize: 5000` -- and
+        // compressionRatio, computed as compressed/original, came out at 384.6.
+        // A compression ratio above 1 is expansion, so the statistic said the
+        // cache was making data 384x LARGER while it was in fact compressing it
+        // ~384x smaller.
         cache.set(
           key,
           compressionResult.compressed,
-          compressionResult.compressedSize,
-          compressionResult.originalSize
+          compressionResult.originalSize,
+          compressionResult.compressedSize
         );
 
         return {
@@ -1662,11 +1671,13 @@ async function handleToolCall(request: {
 
             // Only cache if compression actually reduces tokens
             if (compressedCount.tokens < originalCount.tokens) {
+              // set(key, value, originalSize, compressedSize) -- see the
+              // matching fix above; these were transposed here too.
               cache.set(
                 filePath,
                 compressionResult.compressed,
-                compressionResult.compressedSize,
-                compressionResult.originalSize
+                compressionResult.originalSize,
+                compressionResult.compressedSize
               );
               compressedTokens += compressedCount.tokens;
               operationsCompressed++;
