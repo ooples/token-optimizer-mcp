@@ -563,14 +563,22 @@ export class SmartAstGrepTool {
         }
       }
     } catch (error) {
-      // ast-grep returns non-zero exit code when no matches found
+      // Exit code 1 means "ran fine, matched nothing" -- a real, empty answer.
       if (error instanceof Error && 'status' in error && error.status === 1) {
-        // No matches found, return empty array
         return matches;
       }
 
-      // Other errors, log and continue
-      console.warn('ast-grep execution error:', error);
+      // ANYTHING ELSE MUST SURFACE. This logged to console.warn and returned an
+      // empty array, which on a stdio MCP server means stderr the client never
+      // sees -- so "I could not run" was delivered as "0 matches", the exact
+      // confusion this file's other fix exists to end. Worse, the informative
+      // error thrown above for a missing CLI was itself caught here and
+      // swallowed: a plain Error has no `.status`, so it fell straight to the
+      // warn. The message was written and then thrown away.
+      throw new Error(
+        `ast-grep could not be run: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
+      );
     }
 
     return matches;
