@@ -12,12 +12,26 @@
  */
 
 import { execFileSafeSync } from '../../utils/safe-exec.js';
+import {
+  resolveBinScript,
+  resolveNpmScript,
+} from '../build-systems/run-node-bin.js';
 import { existsSync, statSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
 import { MetricsCollector } from '../../core/metrics.js';
 import { hashFile } from '../shared/hash-utils.js';
+
+/**
+ * The ast-grep CLI package, pinned by name.
+ *
+ * NOT `ast-grep` -- that npm name belongs to an unrelated stub at 0.1.0. The
+ * tool this file drives is `@ast-grep/cli`, which ships the `ast-grep` and `sg`
+ * binaries. Pinning the minor keeps a future breaking release from silently
+ * changing what a search returns.
+ */
+const AST_GREP_PACKAGE = '@ast-grep/cli';
 
 export interface SmartAstGrepOptions {
   // Pattern options
@@ -458,12 +472,62 @@ export class SmartAstGrepTool {
     // cannot be interpreted by a shell (previously they were concatenated into
     // a command string and run through execSync — a command-injection sink).
     try {
-      const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      const output = execFileSafeSync(npx, ['ast-grep', ...args], {
-        cwd: index.projectPath,
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        timeout: 120000, // 2 minutes timeout
-      });
+      // NEVER SPAWN A .cmd. Node 20.12 refuses to spawn `.cmd`/`.bat` without a
+      // shell -- the fix for CVE-2024-27980 -- so `spawnSync npx.cmd` fails with
+      // EINVAL on every Windows machine. The error went to console.warn, which
+      // on a stdio MCP server is stderr the client never sees, so the tool
+      // returned "0 matches" instead of "I could not run".
+      //
+      // Six sibling tools already route through run-node-bin.ts for exactly
+      // this; this one was missed. Measured: with the fix, `function $NAME`
+      // finds all three fixture functions where it previously found none.
+      //
+      // The package is `@ast-grep/cli`. Plain `ast-grep` on npm is an unrelated
+      // stub at 0.1.0 that errors on any real input, so `npx ast-grep` -- even
+      // where it could spawn -- ran the wrong program.
+      const script = resolveBinScript(
+        AST_GREP_PACKAGE,
+        'ast-grep',
+        index.projectPath
+      );
+
+      let output: string;
+      if (script) {
+        // Installed locally: run its JS entry directly. No shim, no shell.
+        output = execFileSafeSync(process.execPath, [script, ...args], {
+          cwd: index.projectPath,
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 120000,
+        });
+      } else {
+        // Not installed. npx can fetch it, but must be reached through npm's own
+        // JS entry rather than npx.cmd.
+        const npmScript = resolveNpmScript();
+        if (!npmScript) {
+          throw new Error(
+            `${AST_GREP_PACKAGE} is not installed in ${index.projectPath}, and npm ` +
+              `could not be located to fetch it. Install it with: npm i -D ${AST_GREP_PACKAGE}`
+          );
+        }
+        output = execFileSafeSync(
+          process.execPath,
+          [
+            npmScript,
+            'exec',
+            '--yes',
+            '--package',
+            AST_GREP_PACKAGE,
+            '--',
+            'ast-grep',
+            ...args,
+          ],
+          {
+            cwd: index.projectPath,
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 120000,
+          }
+        );
+      }
 
       // Parse JSON stream output
       const lines = output
