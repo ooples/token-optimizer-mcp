@@ -34,10 +34,41 @@ export interface SmartEnvOptions {
 
 export interface EnvVariable {
   key: string;
+  /**
+   * REDACTED IN RESPONSES. Present while parsing, because the security checks
+   * genuinely need it -- weak-password detection, localhost URLs, unquoted
+   * whitespace -- but replaced with a placeholder before the result leaves this
+   * module. See {@link redactValues}.
+   */
   value: string;
   line: number;
   hasQuotes: boolean;
   isEmpty: boolean;
+  /** Characters the value had, so "is it set and plausible" is still answerable. */
+  length?: number;
+}
+
+/**
+ * A .env is where credentials live, so its VALUES must never be returned.
+ *
+ * Measured live: the tool echoed `"value": "CANARY_password_hunter2_correct"`
+ * for every variable, including DB_PASSWORD, JWT_SECRET and STRIPE_KEY, and
+ * `checkSecurity: true` made no difference. Every secret in a project therefore
+ * landed in the model's context on a single call -- and off the machine
+ * entirely for anyone using a hosted model.
+ *
+ * The key, line, quoting, emptiness and length are all preserved, which is what
+ * every legitimate use of this tool actually needs: knowing WHICH variables are
+ * defined, not what they are set to.
+ */
+const REDACTED = '[redacted]';
+
+function redactValues(vars: EnvVariable[]): EnvVariable[] {
+  return vars.map((v) => ({
+    ...v,
+    length: v.value.length,
+    value: v.isEmpty ? '' : REDACTED,
+  }));
 }
 
 export interface SecurityIssue {
@@ -341,7 +372,9 @@ export class SmartEnv {
       success: true,
       environment,
       variables: { total, loaded, empty, commented },
-      parsed,
+      // REDACTED HERE, after the security analysis above has used the real
+      // values and before anything leaves this module.
+      parsed: redactValues(parsed),
       missing,
       security,
       suggestions,
@@ -530,7 +563,9 @@ export class SmartEnv {
               issues.push({
                 severity: 'critical',
                 variable: variable.key,
-                issue: `Weak or common ${weakPattern.name}: "${variable.value}"`,
+                // The VALUE is exactly what must not be repeated back. Naming the
+                // variable and the pattern it matched is enough to act on.
+                issue: `Weak or common ${weakPattern.name} in ${variable.key}`,
                 recommendation:
                   'Use a strong, unique value. Never use default or test values in production',
                 line: variable.line,
