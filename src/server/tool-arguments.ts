@@ -130,13 +130,32 @@ export function createToolArgumentChecker(
       if (!fields?.size) return;
 
       const provided = Object.keys((args ?? {}) as Record<string, unknown>);
-      const unknown = provided.filter((f) => !fields.has(f));
-      if (!unknown.length) return;
+      if (!provided.length) return;
 
-      const described = unknown.map((f) => {
-        const near = nearestKnownField(f, fields);
-        return near ? `${f} (did you mean ${near}?)` : f;
-      });
+      // ONLY NEAR MISSES ARE REFUSED, and that limit is measured rather than
+      // timid. Rejecting every undeclared field looked right until the published
+      // schemas were audited against what the implementations actually read: 22
+      // tools accept options they do not advertise. smart_grep itself reads
+      // wholeWord, skipBinary and ignore; smart_edit reads contextLines and
+      // batchEdits. A blanket rule would have broken working calls across a
+      // fifth of the surface in order to catch typos on the rest.
+      //
+      // A near miss is recoverable information: `filePattern` is one
+      // letter-group from `pattern`, and that is what silently searched 17 files
+      // instead of the 1 requested. An unrelated name is far likelier to be a
+      // real option this schema has never documented, and refusing it would mean
+      // enforcing a contract the implementation does not actually have.
+      //
+      // Those undocumented options are a genuine gap and should be declared, but
+      // that is a schema-completeness change, not a licence to fail callers in
+      // the meantime.
+      const typos = provided
+        .filter((field) => !fields.has(field))
+        .map((field) => ({ field, near: nearestKnownField(field, fields) }))
+        .filter((candidate) => candidate.near !== null);
+      if (!typos.length) return;
+
+      const described = typos.map((t) => `${t.field} (did you mean ${t.near}?)`);
       throw new Error(
         `${name} does not accept ${described.join(', ')}. ` +
           `Accepted: ${[...fields].sort().join(', ')}.`

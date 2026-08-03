@@ -88,19 +88,34 @@ describe('assertKnownFields', () => {
     ).not.toThrow();
   });
 
-  it('names each unknown field, not just the first', () => {
+  it('names each near-miss field, not just the first', () => {
     let message = '';
     try {
       checker.assertKnownFields('smart_grep', {
         pattern: 'x',
-        nope: 1,
-        alsoNope: 2,
+        filePattern: 1,
+        contextBefor: 2, // one character short of contextBefore
       });
     } catch (error) {
       message = (error as Error).message;
     }
-    expect(message).toMatch(/nope/);
-    expect(message).toMatch(/alsoNope/);
+    expect(message).toMatch(/filePattern/);
+    expect(message).toMatch(/contextBefor/);
+  });
+
+  it('allows an undeclared option that is NOT a near miss', () => {
+    // The published schemas are incomplete: an audit found 22 tools reading
+    // options they never advertise -- smart_grep really does honour wholeWord,
+    // skipBinary and ignore. Refusing those would break working calls to enforce
+    // a contract the implementation does not have, so only typos are refused.
+    expect(() =>
+      checker.assertKnownFields('smart_grep', {
+        pattern: 'x',
+        wholeWord: true,
+        skipBinary: true,
+        maxMatchesPerFile: 3,
+      })
+    ).not.toThrow();
   });
 
   it('leaves open options bags alone', () => {
