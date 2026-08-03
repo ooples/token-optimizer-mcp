@@ -39,8 +39,7 @@ export function nearestKnownField(
 
   const contained = fields
     .filter(
-      (f) =>
-        lower.includes(f.toLowerCase()) || f.toLowerCase().includes(lower)
+      (f) => lower.includes(f.toLowerCase()) || f.toLowerCase().includes(lower)
     )
     .sort((a, b) => b.length - a.length)[0];
   if (contained) return contained;
@@ -87,7 +86,10 @@ export function createToolArgumentChecker(
     tools.map((t) => [t.name, t.inputSchema?.required ?? []])
   );
   const known = new Map<string, Set<string>>(
-    tools.map((t) => [t.name, new Set(Object.keys(t.inputSchema?.properties ?? {}))])
+    tools.map((t) => [
+      t.name,
+      new Set(Object.keys(t.inputSchema?.properties ?? {})),
+    ])
   );
 
   return {
