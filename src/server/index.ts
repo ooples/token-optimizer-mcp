@@ -4,6 +4,10 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { installShutdownHandlers } from './lifecycle.js';
 import { discloseResult, expandRef, EXPAND_TOOL } from './disclosure.js';
+import {
+  createToolArgumentChecker,
+  type ToolDefinitionLike,
+} from './tool-arguments.js';
 import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
 import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
 import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
@@ -895,42 +899,12 @@ const TOOL_DEFINITIONS = [
 ];
 
 /**
- * The fields each tool's own published schema says are mandatory.
- *
- * Derived from TOOL_DEFINITIONS, so it cannot drift from what callers read.
+ * Both argument checks, built from the definitions this server publishes -- so
+ * neither can drift from what callers read out of `tools/list`.
  */
-const REQUIRED_FIELDS = new Map<string, string[]>(
-  TOOL_DEFINITIONS.map((t) => [
-    (t as { name: string }).name,
-    (t as { inputSchema?: { required?: string[] } }).inputSchema?.required ??
-      [],
-  ])
+const { assertRequiredFields, assertKnownFields } = createToolArgumentChecker(
+  TOOL_DEFINITIONS as ToolDefinitionLike[]
 );
-
-/**
- * Rejects a call that omits a field the tool advertises as required.
- *
- * Named the missing fields, so the answer is actionable -- which is the
- * whole difference from the internal TypeError this replaces.
- */
-function assertRequiredFields(name: string, args: unknown): void {
-  const required = REQUIRED_FIELDS.get(name);
-  if (!required?.length) return;
-
-  const provided = (args ?? {}) as Record<string, unknown>;
-  const missing = required.filter(
-    (f) => provided[f] === undefined || provided[f] === null
-  );
-  if (!missing.length) return;
-
-  // Name what is MISSING, and list the full set only when that adds something
-  // -- repeating an identical list twice reads like a template, not an answer.
-  const full =
-    missing.length === required.length
-      ? ''
-      : ` (required: ${required.join(', ')})`;
-  throw new Error(`${name} requires ${missing.join(', ')}${full}.`);
-}
 
 // Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -956,6 +930,10 @@ async function handleToolCall(request: {
   // 43 tools share the permissive GenericToolOptionsSchema, so without this
   // their `required` arrays were documentation only.
   assertRequiredFields(name, args);
+
+  // ...and a field it does NOT publish must be refused rather than dropped,
+  // which is what the passthrough schemas were doing to every typo.
+  assertKnownFields(name, args);
 
   try {
     args = validateToolArgs(name, args || {});

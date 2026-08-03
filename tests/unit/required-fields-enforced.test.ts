@@ -77,15 +77,28 @@ describe('published required fields are enforced', () => {
     expect(defs.length).toBeGreaterThan(40);
   });
 
-  it('the server derives its guard from the same list it advertises', () => {
-    // If the guard were built from a hand-maintained copy, it could go stale
+  it('the server derives its guards from the same list it advertises', () => {
+    // If a guard were built from a hand-maintained copy, it could go stale
     // silently -- which is exactly how the required arrays became decorative.
     const server = readFileSync(join(ROOT, 'src/server/index.ts'), 'utf8');
     expect(server).toContain('const TOOL_DEFINITIONS = [');
-    expect(server).toContain('TOOL_DEFINITIONS.map');
+    // Both guards are constructed from that array and nothing else.
+    expect(server).toContain('createToolArgumentChecker(');
+    expect(server).toContain('TOOL_DEFINITIONS as ToolDefinitionLike[]');
     expect(server).toContain('assertRequiredFields(name, args)');
+    expect(server).toContain('assertKnownFields(name, args)');
     // And the handler serves that same array rather than a second literal.
     expect(server).toContain('tools: TOOL_DEFINITIONS');
+
+    // The checker itself must read the definitions it was handed, rather than
+    // keeping its own list of names alongside them.
+    const checker = readFileSync(
+      join(ROOT, 'src/server/tool-arguments.ts'),
+      'utf8'
+    );
+    expect(checker).toContain('tools.map');
+    expect(checker).toContain('inputSchema?.required');
+    expect(checker).toContain('inputSchema?.properties');
   });
 
   it('every advertised tool still has a validation schema', () => {
