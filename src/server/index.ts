@@ -10,7 +10,10 @@ import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
 import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
 import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
 import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
-import { wikiWrite, WIKI_WRITE_TOOL_DEFINITION } from '../tools/intelligence/wiki-write.js';
+import {
+  wikiWrite,
+  WIKI_WRITE_TOOL_DEFINITION,
+} from '../tools/intelligence/wiki-write.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -2591,7 +2594,9 @@ async function handleToolCall(request: {
         // other tool so it carries a schema and a dispatch case, which the
         // reachability suite requires of everything advertised.
         const result = await wikiWrite(args as any);
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
       }
       case 'smart_grep': {
         const { pattern, ...options } = args as any;

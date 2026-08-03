@@ -25,7 +25,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 /** Resolves hooks-core relative to the built output, which lives in dist/tools/intelligence. */
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name))
+    .href;
 }
 
 export interface WikiWriteOptions {
@@ -63,11 +64,19 @@ const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map'];
 export async function wikiWrite(
   options: WikiWriteOptions
 ): Promise<WikiWriteResult> {
-  const empty = { written: 0, keys: [] as string[], unresolvedAnchors: [] as string[] };
+  const empty = {
+    written: 0,
+    keys: [] as string[],
+    unresolvedAnchors: [] as string[],
+  };
 
   const claim = String(options?.claim ?? '').trim();
   if (claim.length < 8) {
-    return { success: false, ...empty, error: 'claim must be a sentence, not a fragment' };
+    return {
+      success: false,
+      ...empty,
+      error: 'claim must be a sentence, not a fragment',
+    };
   }
 
   const anchors = Array.isArray(options?.anchors)
@@ -78,15 +87,18 @@ export async function wikiWrite(
       success: false,
       ...empty,
       error:
-        'anchors are required: a finding with nothing to anchor to can never be '
-        + 'invalidated, so it would be served as current forever',
+        'anchors are required: a finding with nothing to anchor to can never be ' +
+        'invalidated, so it would be served as current forever',
     };
   }
 
-  const type = FINDING_TYPES.includes(String(options?.type)) ? String(options.type) : 'finding';
+  const type = FINDING_TYPES.includes(String(options?.type))
+    ? String(options.type)
+    : 'finding';
   const confidence =
-    Number.isFinite(options?.confidence) && (options!.confidence as number) > 0
-      && (options!.confidence as number) <= 1
+    Number.isFinite(options?.confidence) &&
+    (options!.confidence as number) > 0 &&
+    (options!.confidence as number) <= 1
       ? (options!.confidence as number)
       : 0.9;
 
@@ -101,7 +113,8 @@ export async function wikiWrite(
     // session happens to be running. A session that touches a second repository
     // would otherwise file its conclusions in the wrong graph, or in none.
     const project =
-      options.projectRoot ?? wiki.projectRootFor(anchors[0].split('#')[0], process.cwd());
+      options.projectRoot ??
+      wiki.projectRootFor(anchors[0].split('#')[0], process.cwd());
     const dir = wiki.wikiDir(project);
 
     const keys: string[] = harvestWrite.writeHarvested(
@@ -153,14 +166,14 @@ export async function wikiWrite(
 export const WIKI_WRITE_TOOL_DEFINITION = {
   name: 'wiki_write',
   description:
-    'Record a durable finding in this project\'s knowledge graph so a later session '
-    + 'retrieves it instead of re-deriving it. Use it the moment you conclude something '
-    + 'that cost real work and is not obvious from the code: a dead end and why, a '
-    + 'decision and its rejected alternatives, a command that finally worked, or how a '
-    + 'subsystem fits together. Anchor it to the files it is about — the anchor is what '
-    + 'lets the claim be invalidated when that code changes, and what makes it surface '
-    + 'automatically when the file is next touched. Costs nothing and sends nothing off '
-    + 'the machine.',
+    "Record a durable finding in this project's knowledge graph so a later session " +
+    'retrieves it instead of re-deriving it. Use it the moment you conclude something ' +
+    'that cost real work and is not obvious from the code: a dead end and why, a ' +
+    'decision and its rejected alternatives, a command that finally worked, or how a ' +
+    'subsystem fits together. Anchor it to the files it is about — the anchor is what ' +
+    'lets the claim be invalidated when that code changes, and what makes it surface ' +
+    'automatically when the file is next touched. Costs nothing and sends nothing off ' +
+    'the machine.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -179,18 +192,23 @@ export const WIKI_WRITE_TOOL_DEFINITION = {
         type: 'string',
         enum: FINDING_TYPES,
         description:
-          'failure = a dead end and why (highest value: nothing else records it). '
-          + 'decision = a choice and what was rejected. command = an invocation that worked. '
-          + 'map = how a subsystem fits together.',
+          'failure = a dead end and why (highest value: nothing else records it). ' +
+          'decision = a choice and what was rejected. command = an invocation that worked. ' +
+          'map = how a subsystem fits together.',
       },
       confidence: {
         type: 'number',
-        description: '0..1, default 0.9. Lower it when the claim is plausible but unverified.',
+        description:
+          '0..1, default 0.9. Lower it when the claim is plausible but unverified.',
       },
-      sessionId: { type: 'string', description: 'Optional session id, for provenance.' },
+      sessionId: {
+        type: 'string',
+        description: 'Optional session id, for provenance.',
+      },
       projectRoot: {
         type: 'string',
-        description: 'Optional. Defaults to the repository containing the first anchor.',
+        description:
+          'Optional. Defaults to the repository containing the first anchor.',
       },
     },
     required: ['claim', 'anchors'],
