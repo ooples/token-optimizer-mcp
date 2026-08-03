@@ -28,7 +28,22 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mode, MODE_OFF } from './lib/policy.mjs';
-import { harvestEnabled, apiKey } from './lib/harvest.mjs';
+import { harvestEnabled, harvestMode } from './lib/harvest.mjs';
+
+/** What to tell the user, per reason the harvest is not running. */
+const OFF_REASON = {
+  'off:mode': null, // The whole optimizer is off; saying more would be noise.
+  'off:not-opted-in':
+    'token-optimizer: automatic finding-extraction is OFF. It costs a model call and '
+    + 'sends a digest (paths, commands, prompts, conclusions -- never file contents) off '
+    + 'this machine, so it is opt-in: set TOKEN_OPTIMIZER_HARVEST=1 with an API key, or '
+    + 'point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model to run it free and private. '
+    + 'Meanwhile the structural graph and anything written with wiki_write keep working.',
+  'off:no-key':
+    'token-optimizer: finding-extraction is opted in but has no credential. Set '
+    + 'TOKEN_OPTIMIZER_API_KEY, or point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model '
+    + 'to run it without one.',
+};
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -73,17 +88,12 @@ async function main() {
   if (!transcript || !existsSync(transcript)) return;
 
   if (!harvestEnabled()) {
-    // Say it once, name the variable, and state what still works -- a user who
-    // reads this should know exactly what they are and are not getting.
-    if (!alreadyNotified(payload.session_id)) {
-      process.stdout.write(
-        JSON.stringify({
-          systemMessage:
-            'token-optimizer: semantic harvest is OFF (no TOKEN_OPTIMIZER_API_KEY / ANTHROPIC_API_KEY), ' +
-            'so no findings are being extracted from this session. The structural graph -- files, symbols, ' +
-            'tasks and staleness -- keeps working and costs nothing.',
-        })
-      );
+    // Say it once, name the reason and the variable that changes it, and state
+    // what still works. A user who reads this should know exactly what they are
+    // and are not getting, and what to do about it.
+    const message = OFF_REASON[harvestMode()];
+    if (message && !alreadyNotified(payload.session_id)) {
+      process.stdout.write(JSON.stringify({ systemMessage: message }));
     }
     return;
   }

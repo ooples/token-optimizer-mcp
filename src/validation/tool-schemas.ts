@@ -392,6 +392,13 @@ export const SmartGlobSchema = z
   })
   .passthrough();
 
+// wiki_write: a deliberate agent write into the knowledge graph.
+export const WikiWriteSchema = z
+  .object({
+    claim: z.string(),
+    anchors: z.array(z.string()),
+  })
+  .passthrough();
 // 54. smart_grep
 export const SmartGrepSchema = z
   .object({
@@ -923,6 +930,7 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   smart_edit: SmartEditSchema,
   smart_glob: SmartGlobSchema,
   smart_grep: SmartGrepSchema,
+  wiki_write: WikiWriteSchema,
   alert_manager: AlertManagerSchema,
   metric_collector: MetricCollectorSchema,
   monitoring_integration: MonitoringIntegrationSchema,

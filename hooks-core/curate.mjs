@@ -30,8 +30,26 @@ const loadGraph = load;
 export const ORIGIN_HARVESTED = 'harvested';
 export const ORIGIN_HUMAN = 'human';
 
+/**
+ * Written deliberately by the agent that did the work, via wiki_write.
+ *
+ * Distinct from ORIGIN_HARVESTED on purpose. Harvested means a cheap model read
+ * a transcript afterwards and inferred a claim from it; this means the session
+ * that actually did the reasoning recorded its own conclusion while it still
+ * held the context. Those deserve different trust, and collapsing them would
+ * destroy exactly the calibration that the origin field exists to provide.
+ */
+export const ORIGIN_AGENT = 'agent';
+
 /** Ranking multiplier for human-asserted findings. */
 export const HUMAN_WEIGHT = 1.5;
+
+/**
+ * Ranking multiplier for agent-written findings. Above a post-hoc extraction
+ * because the writer held the context; below a person because it is still a
+ * model asserting something about its own work.
+ */
+export const AGENT_WEIGHT = 1.2;
 
 function findingByKey(graph, key) {
   return graph.nodes.get(nodeId('finding', key)) || null;

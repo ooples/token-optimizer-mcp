@@ -40,8 +40,51 @@ export function apiKey() {
   return process.env.TOKEN_OPTIMIZER_API_KEY || process.env.ANTHROPIC_API_KEY || null;
 }
 
+/**
+ * The configured endpoint when it is on this machine, otherwise null.
+ *
+ * A local endpoint changes what the harvest COSTS and what it DISCLOSES, which
+ * is what the enablement rule below turns on: nothing leaves the machine and
+ * nothing is billed, so it needs no key and no opt-in.
+ */
+export function localEndpoint() {
+  const configured = process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT;
+  if (!configured) return null;
+  try {
+    const { hostname } = new URL(configured);
+    const local = hostname === 'localhost' || hostname === '127.0.0.1'
+      || hostname === '::1' || hostname === '0.0.0.0' || hostname.endsWith('.local');
+    return local ? configured : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why the harvest is or is not running -- a string, because "off" needs a
+ * reason a user can act on and a boolean cannot carry one.
+ *
+ * @returns {'local' | 'remote' | 'off:mode' | 'off:not-opted-in' | 'off:no-key'}
+ */
+export function harvestMode() {
+  if (process.env.TOKEN_OPTIMIZER_MODE === 'off') return 'off:mode';
+
+  // Free and private: on by default, because there is nothing to consent to.
+  if (localEndpoint()) return 'local';
+
+  // Anything else spends money and sends a digest off the machine, so it takes
+  // a DELIBERATE opt-in. Keying off the presence of ANTHROPIC_API_KEY alone --
+  // which is set in most developer environments already -- would have started
+  // billing a third-party call the moment this shipped, without anyone choosing
+  // it. An ambient credential is not consent.
+  const optedIn = /^(1|true|yes|on)$/i.test(process.env.TOKEN_OPTIMIZER_HARVEST || '');
+  if (!optedIn) return 'off:not-opted-in';
+  return apiKey() ? 'remote' : 'off:no-key';
+}
+
 export function harvestEnabled() {
-  return Boolean(apiKey()) && process.env.TOKEN_OPTIMIZER_MODE !== 'off';
+  const mode = harvestMode();
+  return mode === 'local' || mode === 'remote';
 }
 
 /**
@@ -174,8 +217,15 @@ export function validate(raw, { knownFiles = null } = {}) {
  * learn.
  */
 export async function extract(digest, { timeoutMs = 30_000 } = {}) {
+  if (!digest || !harvestEnabled()) return [];
+
+  // A local endpoint usually has no auth at all, so requiring a key there would
+  // make the free, private path unreachable -- the one the design now prefers.
+  // Remote is unchanged: harvestEnabled() has already established that a key
+  // exists and that the user opted in.
   const key = apiKey();
-  if (!key || !digest) return [];
+  const local = Boolean(localEndpoint());
+  if (!local && !key) return [];
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -186,7 +236,7 @@ export async function extract(digest, { timeoutMs = 30_000 } = {}) {
       signal: controller.signal,
       headers: {
         'content-type': 'application/json',
-        'x-api-key': key,
+        ...(key ? { 'x-api-key': key } : {}),
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({

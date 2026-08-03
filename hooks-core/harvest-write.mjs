@@ -25,7 +25,7 @@ import { putNode, putEdge, load, nodeId } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
-import { ORIGIN_HARVESTED } from './curate.mjs';
+import { ORIGIN_HARVESTED, ORIGIN_AGENT } from './curate.mjs';
 
 /**
  * Resolves an `path` or `path#symbol` anchor to an existing node id.
@@ -52,8 +52,18 @@ function resolveAnchor(dir, anchor) {
  * `findings` is the output of `harvest.validate()`, so type/claim/confidence
  * are already checked; what remains is anchor resolution, which needs the graph.
  */
-export function writeHarvested(dir, findings, { sessionId = null } = {}) {
+export function writeHarvested(
+  dir,
+  findings,
+  { sessionId = null, origin = ORIGIN_HARVESTED } = {}
+) {
   if (!Array.isArray(findings) || !findings.length) return [];
+
+  // Only the two origins this path can honestly claim. A caller asking for
+  // anything else -- notably ORIGIN_HUMAN -- would be labelling machine output
+  // as a person's assertion, which is the confusion the field exists to prevent.
+  const provenance = origin === ORIGIN_AGENT ? ORIGIN_AGENT : ORIGIN_HARVESTED;
+  const prefix = provenance === ORIGIN_AGENT ? 'agent' : 'harvested';
 
   const written = [];
   for (const finding of findings) {
@@ -66,14 +76,14 @@ export function writeHarvested(dir, findings, { sessionId = null } = {}) {
     // anything, so it is dropped rather than kept as unfalsifiable.
     if (!resolved.length) continue;
 
-    const key = `harvested-${Date.now().toString(36)}-${written.length}`;
+    const key = `${prefix}-${Date.now().toString(36)}-${written.length}`;
     const id = putNode(dir, {
       kind: 'finding',
       key,
       claim: finding.claim,
       confidence: finding.confidence,
       type: finding.type,
-      origin: ORIGIN_HARVESTED,
+      origin: provenance,
       sessionId,
     });
     for (const target of resolved) putEdge(dir, id, 'derived_from', target);
