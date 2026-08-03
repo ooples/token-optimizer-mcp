@@ -53,7 +53,11 @@ export function localEndpoint() {
   try {
     const { hostname } = new URL(configured);
     const local = hostname === 'localhost' || hostname === '127.0.0.1'
-      || hostname === '::1' || hostname === '0.0.0.0' || hostname.endsWith('.local');
+      // URL.hostname gives IPv6 literals BRACKETED, so a bare '::1' never matched
+      // and http://[::1]:11434 was treated as remote -- the loopback spelling a user
+      // is most likely to copy from a server that printed it that way.
+      || hostname === '[::1]' || hostname === '::1' || hostname === '0.0.0.0'
+      || hostname.endsWith('.local');
     return local ? configured : null;
   } catch {
     return null;

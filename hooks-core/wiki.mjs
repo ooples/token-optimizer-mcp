@@ -344,12 +344,24 @@ export function findingsFor(graph, anchorId, { limit = 20 } = {}) {
     .slice(0, limit);
 }
 
+/**
+ * Provenance multipliers, applied here because this is the only ranking.
+ *
+ * curate.mjs has declared HUMAN_WEIGHT since it was written and nothing ever
+ * consumed it, so a person's correction ranked exactly level with a machine
+ * guess of equal confidence -- the one thing the origin field exists to prevent.
+ * Kept as a local table rather than imported to avoid a cycle: curate.mjs
+ * already imports from this module.
+ */
+const ORIGIN_WEIGHT = { human: 1.5, agent: 1.2, harvested: 1 };
+
 function score(node, now, DAY) {
   const confidence = typeof node.confidence === 'number' ? node.confidence : 0.5;
   // Half-life of 30 days: a finding stays useful for a long time but a fresh
   // one outranks a stale one of equal confidence.
   const ageDays = (now - (node.at || now)) / DAY;
-  return confidence * Math.pow(0.5, ageDays / 30);
+  const weight = ORIGIN_WEIGHT[node.origin] ?? 1;
+  return confidence * weight * Math.pow(0.5, ageDays / 30);
 }
 
 /**

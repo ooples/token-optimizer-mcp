@@ -246,6 +246,7 @@ export function exportMarkdown(graph, { title = 'Project knowledge' } = {}) {
       const tags = [
         finding.type && finding.type !== 'finding' ? finding.type : null,
         finding.origin === ORIGIN_HUMAN ? 'human' : null,
+        finding.origin === ORIGIN_AGENT ? 'agent' : null,
         finding.stale ? 'STALE' : null,
         finding.pinned ? 'pinned' : null,
       ].filter(Boolean);

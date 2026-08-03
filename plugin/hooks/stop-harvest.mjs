@@ -26,6 +26,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { mode, MODE_OFF } from './lib/policy.mjs';
 import { harvestEnabled, harvestMode } from './lib/harvest.mjs';
@@ -47,15 +48,34 @@ const OFF_REASON = {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * A session id reduced to something that cannot leave the marker directory.
+ *
+ * The id arrives in the hook payload, so it is external input, and it was being
+ * interpolated straight into a path: a value containing separators or `..` would
+ * have placed (and later read) the marker anywhere on disk. Everything outside a
+ * conservative allowlist becomes an underscore, which keeps ordinary uuids
+ * readable while making traversal unrepresentable rather than merely unlikely.
+ */
+function markerName(sessionId) {
+  const safe = String(sessionId || 'unknown').replace(/[^A-Za-z0-9._-]/g, '_');
+  // A name of only dots would still resolve to a directory entry.
+  const cleaned = /^[.]+$/.test(safe) ? 'unknown' : safe;
+  return `harvest-notice-${cleaned.slice(0, 64)}`;
+}
+
 /** Where the once-per-session notice is remembered, so Stop does not nag. */
 function noticePath(sessionId) {
-  const dir = join(process.env.TEMP || process.env.TMPDIR || '.', 'token-optimizer');
+  // os.tmpdir() rather than the TEMP/TMPDIR chain: the chain fell back to '.',
+  // which scatters marker files through whatever repository the session happens
+  // to be in.
+  const dir = join(tmpdir(), 'token-optimizer');
   try {
     mkdirSync(dir, { recursive: true });
   } catch {
     /* best effort */
   }
-  return join(dir, `harvest-notice-${String(sessionId || 'unknown').slice(0, 64)}`);
+  return join(dir, markerName(sessionId));
 }
 
 function alreadyNotified(sessionId) {
@@ -68,6 +88,36 @@ function alreadyNotified(sessionId) {
     return true;
   }
   return false;
+}
+
+/** Minimum gap between harvests of one session. */
+const HARVEST_INTERVAL_MS =
+  Number(process.env.TOKEN_OPTIMIZER_HARVEST_INTERVAL_MS) > 0
+    ? Number(process.env.TOKEN_OPTIMIZER_HARVEST_INTERVAL_MS)
+    : 10 * 60 * 1000;
+
+/**
+ * True when this session has not been harvested recently, and records that it
+ * is about to be.
+ *
+ * Deliberately marks only when a harvest actually starts: touching it on every
+ * Stop would let a run of skipped turns keep pushing the next harvest away.
+ */
+function dueForHarvest(sessionId) {
+  const marker = join(dirname(noticePath(sessionId)), `harvest-last-${markerName(sessionId)}`);
+  try {
+    const last = Number(readFileSync(marker, 'utf8'));
+    if (Number.isFinite(last) && Date.now() - last < HARVEST_INTERVAL_MS) return false;
+  } catch {
+    // No marker yet, or unreadable -- treat as due.
+  }
+  try {
+    writeFileSync(marker, String(Date.now()));
+  } catch {
+    // If the marker cannot be written the debounce degrades to off rather than
+    // blocking the harvest entirely.
+  }
+  return true;
 }
 
 async function main() {
@@ -93,13 +143,31 @@ async function main() {
     // and are not getting, and what to do about it.
     const message = OFF_REASON[harvestMode()];
     if (message && !alreadyNotified(payload.session_id)) {
-      process.stdout.write(JSON.stringify({ systemMessage: message }));
+      // AWAIT THE WRITE. The finally below used to call process.exit(0), which
+      // discards anything still buffered -- so on a pipe that had filled, the
+      // one notice explaining why no findings exist was the thing most likely
+      // to be dropped. Resolve on the callback, or on drain when the write is
+      // buffered, before returning.
+      await new Promise((resolve) => {
+        const flushed = process.stdout.write(
+          JSON.stringify({ systemMessage: message }),
+          () => resolve()
+        );
+        if (!flushed) process.stdout.once('drain', resolve);
+      });
     }
     return;
   }
 
   const worker = join(HERE, 'harvest-worker.mjs');
   if (!existsSync(worker)) return;
+
+  // DEBOUNCE. Stop fires at the end of every assistant turn, so a talkative
+  // session would spawn a model call per turn -- each re-reading an overlapping
+  // transcript and re-extracting most of the same findings. The marker is
+  // touched only when a harvest is actually started, so a skipped turn does not
+  // push the next one further away.
+  if (!dueForHarvest(payload.session_id)) return;
 
   // Detached and fully released: the harvest must outlive this hook without
   // holding Stop open for a model round-trip.
@@ -111,7 +179,12 @@ async function main() {
   child.unref();
 }
 
-// Stop must complete whatever happens here.
+// Stop must complete whatever happens here -- but exitCode rather than exit(),
+// so a buffered stdout notice is flushed on natural termination instead of being
+// truncated. The detached worker is already unref'd, so nothing holds the loop
+// open once main resolves.
 main()
   .catch(() => {})
-  .finally(() => process.exit(0));
+  .finally(() => {
+    process.exitCode = 0;
+  });

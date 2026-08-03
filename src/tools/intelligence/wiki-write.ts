@@ -107,22 +107,29 @@ export async function wikiWrite(
     const keys: string[] = harvestWrite.writeHarvested(
       dir,
       [{ type, claim, confidence, anchors }],
-      { sessionId: options.sessionId ?? null, origin: curate.ORIGIN_AGENT }
+      {
+        sessionId: options.sessionId ?? null,
+        origin: curate.ORIGIN_AGENT,
+        // Confines anchors to this project: indexFile READS what it anchors and
+        // stores a snapshot, so an unconstrained path would copy any readable
+        // file on the machine into the graph.
+        projectRoot: project,
+      }
     );
 
-    // writeHarvested refuses a finding whose anchors all failed to resolve, so
-    // an empty result means exactly that — report which, rather than a bare
-    // "nothing happened".
+    // Reported UNCONDITIONALLY, not only when nothing was written. A finding
+    // with three anchors of which one is a typo is stored against the other two
+    // and counts as a success, so gating this on failure hid exactly the case
+    // worth telling the caller about: the claim is narrower than they asked for,
+    // and the misspelled file will never invalidate it.
     const graph = wiki.load(dir);
-    const unresolvedAnchors = keys.length
-      ? []
-      : anchors.filter((a) => {
-          const [file, symbol] = a.split('#');
-          const id = symbol
-            ? wiki.nodeId('symbol', `${file}#${symbol}`)
-            : wiki.nodeId('file', wiki.canonicalKey('file', file));
-          return !graph.nodes.has(id);
-        });
+    const unresolvedAnchors = anchors.filter((a) => {
+      const [file, symbol] = a.split('#');
+      const id = symbol
+        ? wiki.nodeId('symbol', `${file}#${symbol}`)
+        : wiki.nodeId('file', wiki.canonicalKey('file', file));
+      return !graph.nodes.has(id);
+    });
 
     return {
       success: keys.length > 0,

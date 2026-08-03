@@ -25,17 +25,37 @@ import { putNode, putEdge, load, nodeId } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
+import { randomBytes } from 'node:crypto';
 import { ORIGIN_HARVESTED, ORIGIN_AGENT } from './curate.mjs';
 
 /**
  * Resolves an `path` or `path#symbol` anchor to an existing node id.
  * Returns null when the target cannot be created or found.
  */
-function resolveAnchor(dir, anchor) {
+/** True when a canonical path sits inside the canonical project root. */
+function withinProject(path, projectRoot) {
+  const root = canonicalPath(projectRoot);
+  if (path === root) return true;
+  // Compare with a trailing separator so /repo-secrets is not read as inside
+  // /repo. Both sides are already canonical, so this is a plain prefix test.
+  const prefix = root.endsWith("/") ? root : root + "/";
+  return path.startsWith(prefix);
+}
+
+function resolveAnchor(dir, anchor, projectRoot) {
   const [rawPath, symbol] = String(anchor).split('#');
   if (!rawPath) return null;
 
   const path = canonicalPath(rawPath);
+
+  // ANCHORS STAY INSIDE THE PROJECT. indexFile READS the file and stores a
+  // snapshot of it in the graph, so an anchor is a read primitive: without this,
+  // a claim naming ../../.ssh/id_rsa or C:/Users/x/.aws/credentials would copy
+  // that file into .token-optimizer and serve it back on the next touch. The
+  // findings come from a model reading a transcript, so the paths are not
+  // trusted input.
+  if (projectRoot && !withinProject(path, projectRoot)) return null;
+
   // Indexing creates the file node and its symbols with hashes and spans, which
   // is what makes the claim checkable later.
   indexFile(dir, path);
@@ -55,7 +75,7 @@ function resolveAnchor(dir, anchor) {
 export function writeHarvested(
   dir,
   findings,
-  { sessionId = null, origin = ORIGIN_HARVESTED } = {}
+  { sessionId = null, origin = ORIGIN_HARVESTED, projectRoot = null } = {}
 ) {
   if (!Array.isArray(findings) || !findings.length) return [];
 
@@ -69,14 +89,19 @@ export function writeHarvested(
   for (const finding of findings) {
     const resolved = [];
     for (const anchor of finding.anchors || []) {
-      const target = resolveAnchor(dir, anchor);
+      const target = resolveAnchor(dir, anchor, projectRoot);
       if (target && !resolved.includes(target)) resolved.push(target);
     }
     // A claim about files that do not exist cannot be verified against
     // anything, so it is dropped rather than kept as unfalsifiable.
     if (!resolved.length) continue;
 
-    const key = `${prefix}-${Date.now().toString(36)}-${written.length}`;
+    // Date.now() plus an index is not unique across CONCURRENT detached
+    // workers: two Stop hooks finishing in the same millisecond produce the
+    // same key, and putNode keeps the last write for an id -- so one session's
+    // finding silently replaces another's. A random suffix makes that
+    // collision vanishingly unlikely while keeping the timestamp readable.
+    const key = `${prefix}-${Date.now().toString(36)}-${written.length}-${randomBytes(4).toString("hex")}`;
     const id = putNode(dir, {
       kind: 'finding',
       key,
