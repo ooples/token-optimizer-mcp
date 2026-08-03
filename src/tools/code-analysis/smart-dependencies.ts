@@ -119,6 +119,13 @@ export interface SmartDependenciesOptions {
   includeMetadata?: boolean; // Include file metadata
 }
 
+/** JSON-safe shape of the dependency graph. */
+export interface DependencyGraphPayload {
+  nodes: string[];
+  edges: Array<{ from: string; to: string; type: string }>;
+  externalDependencies: string[];
+}
+
 export interface SmartDependenciesResult {
   success: boolean;
   mode: string;
@@ -135,7 +142,21 @@ export interface SmartDependenciesResult {
     cacheHit: boolean;
     incrementalUpdate: boolean;
   };
-  graph?: Map<string, DependencyNode>; // Full graph (graph mode)
+  /**
+   * The dependency graph, as data JSON can carry.
+   *
+   * THIS WAS A `Map`, and `JSON.stringify(new Map([...]))` is `{}` -- so every
+   * response delivered `"graph": {}` no matter what was found. Measured on a
+   * four-file fixture: metadata correctly reported analyzedFiles 4,
+   * externalDependencies 2, internalDependencies 3, while the graph itself
+   * arrived empty. The analysis was right and only the payload was lost, which
+   * is why nothing ever looked broken from inside.
+   *
+   * The compact form was already being built to count tokens against, then
+   * thrown away -- so the reported token count described data the caller never
+   * received.
+   */
+  graph?: DependencyGraphPayload; // Full graph (graph mode)
   circular?: CircularDependency[]; // Circular dependencies (circular mode)
   unused?: UnusedDependency[]; // Unused imports/exports (unused mode)
   impact?: DependencyImpact; // Impact analysis (impact mode)
@@ -199,7 +220,10 @@ export class SmartDependenciesTool {
         return graphResult;
       }
 
-      const graph = graphResult.graph!;
+      // The MAP, for the analysis modes below. `graphResult.graph` is the
+      // JSON payload the caller receives; the two were one field, which is how
+      // a Map came to be JSON.stringify'd into `{}`.
+      const graph = graphResult.rawGraph!;
 
       // Run analysis based on mode
       let result: SmartDependenciesResult;
@@ -280,7 +304,14 @@ export class SmartDependenciesTool {
     opts: Required<SmartDependenciesOptions>,
     _startTime: number
   ): Promise<
-    SmartDependenciesResult & { graph?: Map<string, DependencyNode> }
+    // ONLY `rawGraph`. This used to return the Map as `graph`, which
+    // JSON.stringify turns into `{}` -- the defect this change fixes. The first
+    // fix built the JSON payload here as well, but analyze() reads only
+    // `rawGraph`, and every mode handler builds its own result from it, so that
+    // payload was computed and thrown away on all four paths -- including the
+    // cached fast path, turning an O(1) reference return into an O(n) traversal
+    // for a value nobody read.
+    SmartDependenciesResult & { rawGraph: Map<string, DependencyNode> }
   > {
     const cacheKey = generateCacheKey('dependency_graph', { cwd: opts.cwd });
 
@@ -299,7 +330,7 @@ export class SmartDependenciesTool {
             return {
               success: true,
               mode: 'graph',
-              graph: cachedGraph,
+              rawGraph: cachedGraph,
               metadata: {
                 totalFiles: cachedGraph.size,
                 analyzedFiles: 0,
@@ -340,7 +371,7 @@ export class SmartDependenciesTool {
             return {
               success: true,
               mode: 'graph',
-              graph: updatedGraph,
+              rawGraph: updatedGraph,
               metadata: {
                 totalFiles: updatedGraph.size,
                 analyzedFiles: changedFiles.length,
@@ -361,7 +392,7 @@ export class SmartDependenciesTool {
           return {
             success: true,
             mode: 'graph',
-            graph: cachedGraph,
+            rawGraph: cachedGraph,
             metadata: {
               totalFiles: cachedGraph.size,
               analyzedFiles: 0,
@@ -396,7 +427,7 @@ export class SmartDependenciesTool {
     return {
       success: true,
       mode: 'graph',
-      graph,
+      rawGraph: graph,
       metadata: {
         totalFiles: graph.size,
         analyzedFiles: graph.size,
@@ -1063,10 +1094,11 @@ export class SmartDependenciesTool {
     }
 
     // Calculate tokens
-    const graphData =
-      opts.format === 'compact'
-        ? this.compactGraphRepresentation(filteredGraph)
-        : Array.from(filteredGraph.entries());
+    // Both branches must be JSON-carryable. `detailed` used
+    // Array.from(map.entries()), which survives JSON but was never the value
+    // actually returned -- the raw Map was.
+    const graphData: DependencyGraphPayload =
+      this.compactGraphRepresentation(filteredGraph);
 
     const resultTokens = this.tokenCounter.count(
       JSON.stringify(graphData)
@@ -1080,7 +1112,9 @@ export class SmartDependenciesTool {
     return {
       success: true,
       mode: 'graph',
-      graph: filteredGraph,
+      // The SAME data the token count above describes. This returned the raw
+      // Map, so the count measured one thing and the caller received another.
+      graph: graphData,
       metadata: {
         totalFiles: filteredGraph.size,
         analyzedFiles: filteredGraph.size,
@@ -1100,7 +1134,9 @@ export class SmartDependenciesTool {
   /**
    * Create compact graph representation (edges only)
    */
-  private compactGraphRepresentation(graph: Map<string, DependencyNode>): any {
+  private compactGraphRepresentation(
+    graph: Map<string, DependencyNode>
+  ): DependencyGraphPayload {
     const edges: Array<{ from: string; to: string; type: string }> = [];
     const externalDeps = new Set<string>();
 
