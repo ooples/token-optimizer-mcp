@@ -155,7 +155,9 @@ export function createToolArgumentChecker(
         .filter((candidate) => candidate.near !== null);
       if (!typos.length) return;
 
-      const described = typos.map((t) => `${t.field} (did you mean ${t.near}?)`);
+      const described = typos.map(
+        (t) => `${t.field} (did you mean ${t.near}?)`
+      );
       throw new Error(
         `${name} does not accept ${described.join(', ')}. ` +
           `Accepted: ${[...fields].sort().join(', ')}.`
