@@ -514,7 +514,7 @@ export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
  * informative response available -- more useful than the file, not a lossier
  * version of it.
  */
-export function substitutionFor(dir, graph, rawPath, source) {
+export function substitutionFor(dir, graph, rawPath, source, { sessionId } = {}) {
   const filePath = canonicalPath(rawPath);
   const budget = substitutionBudget(dir, filePath);
   const built = annotatedSkeleton(graph, rawPath, source, { budget });
@@ -523,14 +523,39 @@ export function substitutionFor(dir, graph, rawPath, source) {
   // costs the model a round trip; send it back to the ordinary redirect.
   if (built.tokens * 4 > source.length * 0.5) return null;
 
+  // THE HOLDOUT BELONGS ON THIS PATH, not only on findings injection.
+  //
+  // Substitution is the lever that actually moves tokens -- it replaces a whole
+  // file with a skeleton -- and it had no control arm at all, while the 10%
+  // holdout sat on findings injection, which is two orders of magnitude
+  // smaller. Withholding here serves the file the model asked for and records
+  // what that cost, which is the only way the saving stops being an assumption.
+  const holdout = inHoldout(filePath);
+
   record(dir, {
     kind: 'substitute',
     anchor: filePath,
-    tokens: built.tokens,
+    // Recorded so provenance is checkable. Without it, 366 of 370 substitutions
+    // on this machine turned out to be the enforcement suite's own fixture and
+    // nothing distinguished them from real work.
+    sessionId,
+    holdout,
+    tokens: holdout ? 0 : built.tokens,
     findings: built.findings,
     symbols: built.symbols,
-    bytesAvoided: source.length,
+    // GROSS, kept for continuity with existing records.
+    bytesAvoided: holdout ? 0 : source.length,
+    // NET, which is the honest figure: the skeleton was still sent. Reporting
+    // the whole file as avoided while spending `tokens` on a replacement
+    // overstates the saving by exactly the size of the replacement.
+    tokensNetAvoided: holdout ? 0 : Math.max(0, Math.ceil(source.length / 4) - built.tokens),
+    // What the control arm actually paid, so the two arms are comparable.
+    tokensFullFile: Math.ceil(source.length / 4),
   });
+
+  // Withheld means the model gets what it asked for: the whole file. That is
+  // the control arm, and it must really be paid or the comparison is fiction.
+  if (holdout) return null;
 
   return built.text;
 }

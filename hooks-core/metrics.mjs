@@ -61,7 +61,7 @@ const metricsPath = (dir) => join(dir, 'metrics.jsonl');
 const balancePath = (dir) => join(dir, 'balance.jsonl');
 
 /** Kinds the net balance is computed from, and which therefore must survive. */
-const BALANCE_KINDS = new Set(['inject', 'harvest']);
+const BALANCE_KINDS = new Set(['inject', 'harvest', 'substitute']);
 
 /**
  * Is this touch in the holdout arm?
@@ -281,6 +281,124 @@ export function readBalance(dir) {
     out.push(e);
   }
   return out;
+}
+
+/**
+ * Is this anchor a test fixture rather than real work?
+ *
+ * Not fussiness. Measured on this machine: 366 of 370 substitutions pointed at
+ * the enforcement suite's own big.ts fixture under a temp dir, and counting them made
+ * the product look like it had avoided 40 MB of reads. It had avoided 154 KB.
+ * A balance sheet that counts its own test suite as revenue is worse than none.
+ */
+export function isFixtureAnchor(anchor) {
+  return /[\/](Temp|tmp)[\/]|[\/]tests?[\/]|fixture|edge-src|bench|sandbox|scratch/i.test(
+    String(anchor || '')
+  );
+}
+
+/**
+ * The balance sheet, with every line labelled by HOW it is known.
+ *
+ * The shipped report counted every cost and one benefit that has never been
+ * computable, so it was negative by construction. These are the two things
+ * actually known, kept apart because they are known differently and must never
+ * be summed into a single hero number:
+ *
+ *   MEASURED-COUNTERFACTUAL  substitution. The file size is known exactly and
+ *                            the replacement's size is known exactly, so the
+ *                            saving is arithmetic -- resting on the one
+ *                            assumption that the model would have read what it
+ *                            explicitly asked for.
+ *   ESTIMATED-CAUSAL         findings injection, from the holdout. Genuinely
+ *                            causal when it has samples, and worth far less
+ *                            token-wise.
+ *
+ * Fixture anchors are excluded from both.
+ */
+export function balanceSheet(dir) {
+  const balance = readBalance(dir).filter((e) => !isFixtureAnchor(e.anchor));
+  const events = readMetrics(dir);
+
+  const subs = balance.filter((e) => e.kind === 'substitute');
+  const served = subs.filter((e) => !e.holdout);
+  const withheldSubs = subs.filter((e) => e.holdout);
+
+  // NET, not gross: the skeleton was still sent.
+  const netAvoided = served.reduce(
+    (sum, e) =>
+      sum +
+      (e.tokensNetAvoided ??
+        Math.max(0, Math.ceil((e.bytesAvoided || 0) / 4) - (e.tokens || 0))),
+    0
+  );
+  const substitutionCost = served.reduce((sum, e) => sum + (e.tokens || 0), 0);
+
+  const injectCost = balance
+    .filter((e) => e.kind === 'inject' && !e.holdout)
+    .reduce((sum, e) => sum + (e.tokens || 0), 0);
+  const harvestCost = balance
+    .filter((e) => e.kind === 'harvest')
+    .reduce((sum, e) => sum + (e.tokens || 0), 0);
+  const standingCost = events
+    .filter((e) => e.kind === 'standing')
+    .reduce((sum, e) => sum + (e.tokens || 0), 0);
+
+  // RE-READS: the waste the graph exists to prevent, counted directly.
+  //
+  // This replaces the downstream join, which asked whether an injection
+  // prevented a later read of the same anchor and matched 0 of 37 times --
+  // because injection fires ON the touch, so the read it would prevent is the
+  // one that triggered it. Counting how often a session reads the same file
+  // twice needs no join and is the thing being claimed.
+  const perSessionAnchor = new Map();
+  for (const e of events) {
+    if (e.kind !== 'read' || !e.anchor || isFixtureAnchor(e.anchor)) continue;
+    const key = `${e.sessionId || ''}|${canonicalKeyish(e.anchor)}`;
+    if (!perSessionAnchor.has(key)) perSessionAnchor.set(key, []);
+    perSessionAnchor.get(key).push(e.tokens || 0);
+  }
+  let rereads = 0;
+  let rereadTokens = 0;
+  for (const reads of perSessionAnchor.values()) {
+    if (reads.length < 2) continue;
+    rereads += reads.length - 1;
+    for (let i = 1; i < reads.length; i++) rereadTokens += reads[i];
+  }
+
+  return {
+    measuredCounterfactual: {
+      what: 'substitution: a skeleton sent instead of the file the model asked for',
+      substitutions: served.length,
+      withheld: withheldSubs.length,
+      tokensAvoidedNet: netAvoided,
+      tokensSpent: substitutionCost,
+      assumption: 'that the model would have read the file it explicitly requested',
+    },
+    estimatedCausal: {
+      what: 'findings injection, from the stratified holdout',
+      ...(() => {
+        const r = report(dir);
+        return {
+          treated: r.injections,
+          holdouts: r.holdouts,
+          tokensAvoided: r.estimatedTokensAvoided,
+          sufficientData: r.sufficientData,
+          verdict: r.verdict,
+        };
+      })(),
+    },
+    costs: { injection: injectCost, harvest: harvestCost, standing: standingCost, substitution: substitutionCost },
+    waste: { rereads, rereadTokens },
+    // Deliberately NOT a single number. The two benefit lines are known
+    // differently; adding them would launder an assumption into a measurement.
+    note: 'benefit lines are reported separately by evidence strength and are never summed',
+  };
+}
+
+/** Cheap path normalisation for grouping reads; not the identity canonicaliser. */
+function canonicalKeyish(p) {
+  return String(p || '').replace(/\\/g, '/').toLowerCase();
 }
 
 /**

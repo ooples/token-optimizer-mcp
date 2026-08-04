@@ -36,7 +36,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
-import { readMetrics } from './metrics.mjs';
+import { readMetrics, balanceSheet } from './metrics.mjs';
 import { cacheHealth, readCacheUsage } from './cache.mjs';
 import { activeRules } from './remedy.mjs';
 import { monthly, money, priceNote } from './pricing.mjs';
@@ -164,6 +164,15 @@ const sha256 = (path) => {
  * exists where a refusal actually replaced a read, so its presence is evidence
  * that the veto is live in that project rather than that a config file says so.
  */
+/** Never let a malformed log take down a fleet scan. */
+function safeBalance(dir) {
+  try {
+    return balanceSheet(dir);
+  } catch {
+    return null;
+  }
+}
+
 export function scanProject(project) {
   const dir = project.cwd ? wikiDir(project.cwd) : null;
   const events = dir && existsSync(dir) ? readMetrics(dir) : [];
@@ -186,6 +195,14 @@ export function scanProject(project) {
     perRead: reads.length ? Math.round(tokens / reads.length) : null,
     enforcing: substitutions > 0,
     substitutions,
+    // THE BALANCE, PER PROJECT, LABELLED BY HOW EACH LINE IS KNOWN.
+    //
+    // The fleet view is where 'is this paying for itself' is actually asked,
+    // and it had only raw counts to answer with. The two benefit lines stay
+    // separate here as everywhere else: one is arithmetic on known file sizes,
+    // the other is a causal estimate from the holdout, and summing them would
+    // launder an assumption into a measurement.
+    balance: dir && existsSync(dir) ? safeBalance(dir) : null,
     anchors: [...new Set(reads.map((r) => r.anchor).filter(Boolean))],
     rules: dir ? activeRules(dir) : [],
     cache: project.transcript ? cacheHealth(readCacheUsage(project.transcript)) : null,

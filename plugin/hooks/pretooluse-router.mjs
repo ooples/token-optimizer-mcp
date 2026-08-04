@@ -218,8 +218,16 @@ try {
         // Index on this read, so the NEXT touch of the file is annotated even if
         // no semantic harvest has run against it yet.
         indexFile(dir, payload.tool_input.file_path, source);
-        const substitution = substitutionFor(dir, load(dir), payload.tool_input.raw_file_path
-          ?? payload.tool_input.file_path, source);
+        const substitution = substitutionFor(
+          dir,
+          load(dir),
+          payload.tool_input.raw_file_path ?? payload.tool_input.file_path,
+          source,
+          // Carried through so a substitution can be told apart from a test
+          // fixture later. Without it the balance sheet counted the suite's own
+          // 366 fixture writes as product value.
+          { sessionId: payload.session_id }
+        );
         if (substitution) reason = substitution;
       }
     } catch {
