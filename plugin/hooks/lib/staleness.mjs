@@ -379,9 +379,14 @@ export function serve(graph, findings) {
       // those cases the sentence stated a cause that had not been established.
       // `reason` already carries whatever was actually determined, so the
       // fallback now describes only the evidence gap.
+      // NO DISMISSAL VOCABULARY AT ALL, not even in a sentence arguing against
+      // dismissal. "weigh it rather than discard it" still puts the word in
+      // front of the model, and this text exists precisely because the previous
+      // phrasing was measured suppressing correct findings. State the evidence
+      // gap and stop.
       diff = `(marked stale: ${reason}. The supporting diff can no longer be `
-        + 'reconstructed; the claim itself may well still hold, so weigh it rather '
-        + 'than discard it)';
+        + 'reconstructed; the claim itself may well still hold, so weigh it on '
+        + 'its own merits.)';
     }
 
     served.push({ ...finding, stale, ...(stale ? { diff, staleReason: reason } : {}) });

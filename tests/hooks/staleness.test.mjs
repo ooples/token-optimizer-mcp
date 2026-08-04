@@ -201,8 +201,18 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     expect(out.diff).toBeTruthy();
     expect(out.diff.length).toBeGreaterThan(20);
     expect(out.diff).toMatch(/reconstruct/i);
-    // And it must NOT tell the model to discard a claim that may still hold.
-    expect(out.diff).not.toMatch(/\bunverified\b/i);
+    // And it must carry NO instruction to abandon the claim, however phrased.
+    // The measured harm was the instruction, not one particular word, so this
+    // rejects the whole vocabulary rather than the sentence that was found
+    // doing damage -- otherwise the next rewording reintroduces it freely.
+    expect(out.diff).not.toMatch(
+      /\b(unverified|unreliable|untrusted|discard|dismiss|disregard|ignore)\b/i
+    );
+    expect(out.diff).not.toMatch(/\bdo not (trust|rely|use)\b/i);
+    // Nor may it assert a cause it has not established: `reason` carries
+    // whatever was actually determined, and this branch is also reached by
+    // eager marking and by an anchor that was never snapshotted.
+    expect(out.diff).not.toMatch(/the anchor changed/i);
   });
 });
 
