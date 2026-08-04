@@ -16,7 +16,8 @@
  * diverged.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,18 +41,9 @@ const banner = (name) =>
   `// GENERATED FILE -- do not edit.\n` +
   `// Source of truth: hooks-core/${name}. Regenerate with \`npm run sync:hooks\`.\n`;
 
-/**
- * Compare CONTENT, not the line endings git happened to check the file out with.
- *
- * `.gitattributes` sets `* text=auto`, so these files are stored with LF and
- * written to the working tree with CRLF on Windows. The banner above is built
- * with '\n' regardless, so a byte comparison declared all 180 vendored files
- * drifted on any Windows checkout -- `npm test` failed immediately after a
- * fresh clone, while Linux CI stayed green because its checkout leaves LF
- * alone. Nothing was actually out of sync; only the two banner lines differed,
- * and only in how their newline was spelled.
- */
-const normalize = (text) => text.replace(/\r\n/g, '\n');
+// The EOL-safe comparison this file used to carry locally now lives in
+// scripts/lib/text.mjs, because it was needed by the other two generators and
+// having it here only meant they went without it. See that module for why.
 
 let drifted = 0;
 
@@ -61,16 +53,16 @@ for (const target of TARGETS) {
     const destination = join(target, name);
 
     if (check) {
-      const current = existsSync(destination) ? readFileSync(destination, 'utf8') : null;
-      if (current === null || normalize(current) !== normalize(contents)) {
+      if (!contentMatches(readIfExists(destination), contents)) {
         console.error(`DRIFT: ${destination.slice(ROOT.length + 1)}`);
         drifted++;
       }
       continue;
     }
 
-    mkdirSync(target, { recursive: true });
-    writeFileSync(destination, contents);
+    // writeIfChanged skips files that differ only in line endings, so a sync on
+    // Windows no longer rewrites every vendored file it did not need to.
+    writeIfChanged(destination, contents);
   }
 }
 
