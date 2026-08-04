@@ -93,6 +93,41 @@ describe('smart_edit editsApplied', () => {
     expect(after).not.toContain('echo');
   });
 
+  it('does not count a delete that removed nothing', async () => {
+    // startLine === totalLines + 1 is ACCEPTED by validation (it is the legal
+    // append position for an insert), but for a delete it splices at the end of
+    // the array and removes nothing. splice throws nothing there, so the
+    // operation would otherwise be counted as applied -- reintroducing, for one
+    // operation type, exactly the "it says it worked and nothing happened"
+    // failure this change exists to remove.
+    const result = await runSmartEdit(
+      file,
+      [{ type: 'delete', startLine: 6 }],
+      { returnDiff: false, createBackup: false }
+    );
+
+    expect(result.operation).toBe('unchanged');
+    expect(result.metadata.editsApplied).toBe(0);
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
+    expect(readFileSync(file, 'utf8')).toBe(ORIGINAL);
+  });
+
+  it('rejects a delete whose range runs past the end of the file', async () => {
+    // A different outcome from the one above, and it should stay different:
+    // endLine beyond the last line is caught by validation before any edit is
+    // attempted, so this is a hard failure rather than a silent no-op.
+    const result = await runSmartEdit(
+      file,
+      [{ type: 'delete', startLine: 6, endLine: 6 }],
+      { returnDiff: false, createBackup: false }
+    );
+
+    expect(result.operation).toBe('failed');
+    expect(result.success).toBe(false);
+    expect(readFileSync(file, 'utf8')).toBe(ORIGINAL);
+  });
+
   it('an empty operations array is still a success', async () => {
     // Nothing was asked for, so nothing running is the correct outcome -- the
     // new failure rule must not turn this into an error.

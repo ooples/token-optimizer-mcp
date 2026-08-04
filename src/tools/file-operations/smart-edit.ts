@@ -192,6 +192,13 @@ export class SmartEditTool {
         // misleading negative saving.
         const unchangedSaved = Math.max(0, originalTokens - 50);
 
+        // Decided ONCE and reused by both the metrics record and the returned
+        // result. Computing it twice let the two disagree: the metrics call
+        // still recorded success: true for a run the caller was told had
+        // failed, so the very failure this change surfaces would have been
+        // invisible in the tool's own analytics.
+        const unchangedIsSuccess = ops.length === 0 || applied > 0;
+
         this.metrics.record({
           operation: 'smart_edit',
           duration,
@@ -199,7 +206,7 @@ export class SmartEditTool {
           outputTokens: 0,
           cachedTokens: 0,
           savedTokens: unchangedSaved,
-          success: true,
+          success: unchangedIsSuccess,
           cacheHit: false,
         });
 
@@ -211,7 +218,7 @@ export class SmartEditTool {
           // editsApplied: 0 made a silently-dropped edit indistinguishable from
           // an idempotent one -- observed live, where a two-operation call
           // returned success with the file untouched and no error anywhere.
-          success: ops.length === 0 || applied > 0,
+          success: unchangedIsSuccess,
           path: filePath,
           operation: 'unchanged',
           error:
@@ -531,10 +538,18 @@ export class SmartEditTool {
           }
           break;
 
-        case 'delete':
-          result.splice(startIdx, endIdx - startIdx + 1);
-          applied += 1;
+        case 'delete': {
+          // COUNT ONLY WHAT WAS ACTUALLY REMOVED. splice past the end of the
+          // array removes nothing and throws nothing, so an out-of-range delete
+          // would otherwise be counted as applied -- reintroducing, for this one
+          // operation, exactly the "it says it worked and nothing happened"
+          // failure this change exists to remove.
+          const removed = result.splice(startIdx, endIdx - startIdx + 1);
+          if (removed.length > 0) {
+            applied += 1;
+          }
           break;
+        }
       }
     }
 
