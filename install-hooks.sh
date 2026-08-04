@@ -344,11 +344,22 @@ test_installation() {
 
     local issues=()
 
-    # Check hooks files exist
+    # Verify the files this installer ACTUALLY SHIPS.
+    #
+    # This required a dispatcher.sh plus handlers/ and helpers/ shell libraries
+    # -- the design install_hooks_files replaced with three ES modules. None of
+    # them is produced by an install, so verification could never pass, and a
+    # failed verification skipped the install manifest. Same bug, same cause, as
+    # install-hooks.ps1.
+    #
+    # Note the subdirectory: install_hooks_files copies into
+    # $HOOKS_DIR/token-optimizer, which the old list also omitted.
     local required_files=(
-        "$HOOKS_DIR/dispatcher.sh"
-        "$HOOKS_DIR/handlers/token-optimizer-orchestrator.sh"
-        "$HOOKS_DIR/helpers/invoke-mcp.sh"
+        "$HOOKS_DIR/token-optimizer/session-start.mjs"
+        "$HOOKS_DIR/token-optimizer/pretooluse-router.mjs"
+        "$HOOKS_DIR/token-optimizer/precompact-optimize.mjs"
+        "$HOOKS_DIR/token-optimizer/hooks.json"
+        "$HOOKS_DIR/token-optimizer/lib/policy.mjs"
     )
 
     for file in "${required_files[@]}"; do
@@ -417,8 +428,14 @@ test_installation() {
         checked_configs+=("Windsurf IDE")
     fi
 
+    # ADVISORY, NOT FATAL. This looks for the server in Claude Desktop, Cursor,
+    # Cline, Copilot and Windsurf. A Claude Code user has it in none of them --
+    # that client gets the MCP server from the plugin's own .mcp.json -- so
+    # counting absence as an installation failure fails the install for the
+    # primary supported client.
     if [[ "$mcp_configured" == "false" ]]; then
-        issues+=("token-optimizer MCP server not configured in any AI tool")
+        write_status "MCP server not found in Claude Desktop / Cursor / Cline / Copilot / Windsurf" "WARN"
+        write_status "That is expected on Claude Code, which gets the server from the plugin instead" "INFO"
     else
         write_status "✓ MCP server configured in: ${checked_configs[*]}" "SUCCESS"
     fi
@@ -475,12 +492,19 @@ echo ""
 if [[ "$DRY_RUN" == "true" ]]; then
     write_status "DRY RUN COMPLETE - No changes were made" "SUCCESS"
 else
+    # RECORD THE MANIFEST REGARDLESS OF THE VERDICT.
+    #
+    # Files were written to this machine before verification ran, so the record
+    # of what was written must not be conditional on verification passing --
+    # that is precisely the case where an exact uninstall matters most, and it
+    # is why the doctor reported a missing manifest on a working install.
+    if command -v node >/dev/null 2>&1; then
+        node "$(dirname "${BASH_SOURCE[0]}")/scripts/record-install.mjs" \
+            "$HOOKS_DIR" "$CLAUDE_SETTINGS" 2>/dev/null \
+            || write_status "Could not record the install manifest (uninstall will be manual)" "WARN"
+    fi
+
     if test_installation; then
-        # Record exactly what we put on this machine, so uninstall can be exact
-        # rather than best-effort and "what did this install" has an answer.
-        if command -v node >/dev/null 2>&1; then
-            node "$(dirname "${BASH_SOURCE[0]}")/scripts/record-install.mjs"                 "$HOOKS_DIR" "$CLAUDE_SETTINGS" 2>/dev/null                 || write_status "Could not record the install manifest (uninstall will be manual)" "WARN"
-        fi
         echo ""
         echo "╔═══════════════════════════════════════════════════════════╗"
         echo "║   Installation Complete!                                  ║"
