@@ -174,7 +174,10 @@ export class SmartEditTool {
       this.validateOperations(ops, originalLines.length);
 
       // Apply edits
-      const editedLines = this.applyEdits(originalLines, ops);
+      const { lines: editedLines, applied } = this.applyEdits(
+        originalLines,
+        ops
+      );
       // Caller-supplied content may be multi-line and will use whatever ending
       // the caller happened to type, so each line is re-normalised before the
       // whole file is joined with the ending it actually uses.
@@ -189,6 +192,13 @@ export class SmartEditTool {
         // misleading negative saving.
         const unchangedSaved = Math.max(0, originalTokens - 50);
 
+        // Decided ONCE and reused by both the metrics record and the returned
+        // result. Computing it twice let the two disagree: the metrics call
+        // still recorded success: true for a run the caller was told had
+        // failed, so the very failure this change surfaces would have been
+        // invisible in the tool's own analytics.
+        const unchangedIsSuccess = ops.length === 0 || applied > 0;
+
         this.metrics.record({
           operation: 'smart_edit',
           duration,
@@ -196,16 +206,27 @@ export class SmartEditTool {
           outputTokens: 0,
           cachedTokens: 0,
           savedTokens: unchangedSaved,
-          success: true,
+          success: unchangedIsSuccess,
           cacheHit: false,
         });
 
         return {
-          success: true,
+          // NOT unconditionally true. "The content is identical" has two very
+          // different causes: every operation ran and happened to reproduce what
+          // was already there (a genuine no-op, success), or NOTHING ran at all
+          // (a failure the caller must see). Reporting both as success with
+          // editsApplied: 0 made a silently-dropped edit indistinguishable from
+          // an idempotent one -- observed live, where a two-operation call
+          // returned success with the file untouched and no error anywhere.
+          success: unchangedIsSuccess,
           path: filePath,
           operation: 'unchanged',
+          error:
+            ops.length > 0 && applied === 0
+              ? `none of the ${ops.length} requested operation(s) were applied and the file is unchanged`
+              : undefined,
           metadata: {
-            editsApplied: 0,
+            editsApplied: applied,
             linesChanged: 0,
             originalLines: originalLines.length,
             finalLines: editedLines.length,
@@ -257,7 +278,7 @@ export class SmartEditTool {
           path: filePath,
           operation: 'preview',
           metadata: {
-            editsApplied: ops.length,
+            editsApplied: applied,
             linesChanged: diff.added.length + diff.removed.length,
             originalLines: originalLines.length,
             finalLines: editedLines.length,
@@ -313,7 +334,7 @@ export class SmartEditTool {
         path: filePath,
         operation: 'applied',
         metadata: {
-          editsApplied: ops.length,
+          editsApplied: applied,
           linesChanged: diff.added.length + diff.removed.length,
           originalLines: originalLines.length,
           finalLines: editedLines.length,
@@ -429,13 +450,22 @@ export class SmartEditTool {
    * happens to equal what was already there is a genuine no-op and still
    * returns success/unchanged.
    */
-  private applyEdits(lines: string[], operations: EditOperation[]): string[] {
+  private applyEdits(
+    lines: string[],
+    operations: EditOperation[]
+  ): { lines: string[]; applied: number } {
     // Sort operations by line number (descending) to avoid index shifting
     const sortedOps = [...operations].sort((a, b) => b.startLine - a.startLine);
 
     // Only ever mutated through splice, never reassigned.
     const result = [...lines];
     const unmatched: string[] = [];
+
+    // How many operations actually EXECUTED, which is not the same as how many
+    // were requested. An operation can decline to run -- a pattern that matches
+    // nothing, a replace with neither pattern nor content -- and the caller has
+    // no way to tell that from a successful edit unless the count is real.
+    let applied = 0;
 
     for (const op of sortedOps) {
       const startIdx = op.startLine - 1; // Convert to 0-based
@@ -491,10 +521,12 @@ export class SmartEditTool {
               lastIdx - startIdx + 1,
               ...replaced.split('\n')
             );
+            applied += 1;
           } else if (op.content !== undefined) {
             // Line replacement
             const newLines = op.content.split('\n');
             result.splice(startIdx, endIdx - startIdx + 1, ...newLines);
+            applied += 1;
           }
           break;
 
@@ -502,12 +534,22 @@ export class SmartEditTool {
           if (op.content !== undefined) {
             const newLines = op.content.split('\n');
             result.splice(startIdx, 0, ...newLines);
+            applied += 1;
           }
           break;
 
-        case 'delete':
-          result.splice(startIdx, endIdx - startIdx + 1);
+        case 'delete': {
+          // COUNT ONLY WHAT WAS ACTUALLY REMOVED. splice past the end of the
+          // array removes nothing and throws nothing, so an out-of-range delete
+          // would otherwise be counted as applied -- reintroducing, for this one
+          // operation, exactly the "it says it worked and nothing happened"
+          // failure this change exists to remove.
+          const removed = result.splice(startIdx, endIdx - startIdx + 1);
+          if (removed.length > 0) {
+            applied += 1;
+          }
           break;
+        }
       }
     }
 
@@ -520,7 +562,7 @@ export class SmartEditTool {
       );
     }
 
-    return result;
+    return { lines: result, applied };
   }
 
   /**
