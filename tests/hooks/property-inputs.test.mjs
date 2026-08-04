@@ -75,6 +75,31 @@ describe('canonicalPath', () => {
     );
   });
 
+  it('reaches its fixed point on a Git Bash path carrying a dot segment', () => {
+    // THE COUNTEREXAMPLE THE GENERATED INPUTS FOUND, pinned so it cannot come
+    // back. MSYS translation used to run BEFORE `.` and `..` were collapsed, so
+    // `/./c/Users/me/x` was not MSYS-shaped on the way in: the first pass only
+    // dropped the dot and returned `/c/Users/me/x`, which IS MSYS-shaped, so a
+    // second pass returned `C:/Users/me/x`.
+    //
+    // The same file therefore held two identities depending on how many times
+    // its path had been round-tripped -- two graph nodes, findings anchored
+    // under one invisible from the other. That is exactly the fragmentation
+    // canonicalPath exists to end, and it survived every hand-written example
+    // because nobody thinks to write this path down.
+    expect(canonicalPath('/./c/Users/me/x')).toBe('C:/Users/me/x');
+    expect(canonicalPath(canonicalPath('/./c/Users/me/x'))).toBe('C:/Users/me/x');
+
+    // The shape the property actually generated, which is the same defect.
+    expect(canonicalPath(canonicalPath('/./A/!'))).toBe(canonicalPath('/./A/!'));
+
+    // Ordinary spellings are unchanged by the reordering.
+    expect(canonicalPath('/c/Users/me/x')).toBe('C:/Users/me/x');
+    expect(canonicalPath('C:/Users/me/x')).toBe('C:/Users/me/x');
+    expect(canonicalPath('/c/./x')).toBe('C:/x');
+    expect(canonicalPath('//server/share/f')).toBe('//server/share/f');
+  });
+
   it('is idempotent -- canonicalising twice equals canonicalising once', () => {
     // The property that matters for identity: if it were not idempotent, the
     // same file could occupy two nodes depending on how many times a path had

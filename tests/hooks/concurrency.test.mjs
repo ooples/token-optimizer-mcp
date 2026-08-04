@@ -37,7 +37,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { spawnSync, spawn } from 'child_process';
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, utimesSync, statSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { load } from '../../hooks-core/wiki.mjs';
@@ -164,17 +164,40 @@ describe('parallel processes appending to one graph', () => {
 });
 
 describe('a lock left behind by a killed process', () => {
-  it('does not wedge the graph forever', () => {
-    // A crashed writer must not stop every future write for the life of the
-    // session. The lock is broken once it is provably stale.
-    writeFileSync(join(dir, '.graph.lock'), '');
+  it('is broken and reclaimed, not merely stepped around', () => {
+    // WHAT THIS CAN AND CANNOT PROVE, stated plainly.
+    //
+    // `withLock` calls `write()` whether or not the lock was taken -- that is
+    // deliberate, because a stale lock from a killed process must never stop
+    // the graph being written. The consequence is that "the write still lands"
+    // is true with the stale-lock branch REMOVED, so asserting only that proves
+    // nothing. Verified by deleting the branch: the first version of this test
+    // stayed green.
+    //
+    // The observable difference is reclamation. When the stale lock is broken
+    // the writer holds it and releases it on the way out, so the file is gone
+    // afterwards; when it is not broken the writer never held it and the stale
+    // file survives, leaving every subsequent write unsynchronised for the life
+    // of the session. That is the property worth guarding, and it is what is
+    // asserted below.
+    // BACKDATED WITHOUT A try/catch, and asserted.
+    //
+    // This used to call `require('fs')` inside a catch-all. Jest runs .mjs as
+    // native ESM, where `require` is not defined, so it threw a ReferenceError
+    // straight into the catch on every run -- the lock was never backdated and
+    // the test proved only that a writer succeeds against a FRESH lock, which
+    // is a different code path from the one it names. Reported by CodeRabbit on
+    // this PR.
+    //
+    // `utimesSync` is imported at the top and called directly, and the mtime is
+    // asserted afterwards, so a backdate that silently fails can no longer be
+    // mistaken for recovery.
+    const lockPath = join(dir, '.graph.lock');
+    writeFileSync(lockPath, '');
+    // Comfortably past the 5s threshold in wiki.mjs.
     const old = new Date(Date.now() - 60_000);
-    try {
-      const { utimesSync } = require('fs');
-      utimesSync(join(dir, '.graph.lock'), old, old);
-    } catch {
-      /* handled below by the assertion itself */
-    }
+    utimesSync(lockPath, old, old);
+    expect(Date.now() - statSync(lockPath).mtimeMs).toBeGreaterThan(30_000);
 
     const script = join(dir, 'after-stale.mjs');
     writeFileSync(
@@ -191,5 +214,10 @@ describe('a lock left behind by a killed process', () => {
     const graph = load(dir);
     const keys = [...graph.nodes.values()].map((n) => n.key);
     expect(keys.some((k) => String(k).includes('after-stale.ts'))).toBe(true);
+
+    // THE ASSERTION THAT DISTINGUISHES THE TWO. The stale lock was reclaimed
+    // and released, so it is gone. Leave it in place and every later write in
+    // the session runs unsynchronised.
+    expect(existsSync(lockPath)).toBe(false);
   }, 90_000);
 });
