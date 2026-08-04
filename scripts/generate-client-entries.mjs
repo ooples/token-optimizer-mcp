@@ -10,9 +10,9 @@
  * drifted apart.
  */
 
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -55,16 +55,17 @@ run('${client}', '${event}').catch(() => process.exit(0));
 `;
 
   if (check) {
-    const current = existsSync(destination) ? readFileSync(destination, 'utf8') : null;
-    if (current !== contents) {
+    // EOL-insensitive: these are stored LF and checked out CRLF on Windows, so
+    // a byte comparison reported all ten entries drifted on every Windows clone
+    // while Linux CI stayed green. See scripts/lib/text.mjs.
+    if (!contentMatches(readIfExists(destination), contents)) {
       console.error(`DRIFT: ${destination.slice(ROOT.length + 1)}`);
       drifted++;
     }
     continue;
   }
 
-  mkdirSync(target, { recursive: true });
-  writeFileSync(destination, contents);
+  writeIfChanged(destination, contents);
 }
 
 if (check && drifted > 0) {

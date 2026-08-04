@@ -22,9 +22,10 @@
  * every client at once instead of being hand-copied thirteen times.
  */
 
-import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -168,17 +169,22 @@ function mcpConfig(shape) {
 const check = process.argv.includes('--check');
 let drifted = 0;
 
-/** Writes, or in check mode reports a mismatch without touching the file. */
+/**
+ * Writes, or in check mode reports a mismatch without touching the file.
+ *
+ * The comparison is EOL-insensitive. These files are stored LF and checked out
+ * CRLF on Windows, so a byte comparison reports drift on every Windows clone
+ * while Linux CI stays green. See scripts/lib/text.mjs.
+ */
 function emit(path, contents) {
   if (check) {
-    const current = existsSync(path) ? readFileSync(path, 'utf8') : null;
-    if (current !== contents) {
+    if (!contentMatches(readIfExists(path), contents)) {
       console.error(`DRIFT: ${path.slice(ROOT.length + 1)}`);
       drifted++;
     }
     return;
   }
-  writeFileSync(path, contents);
+  writeIfChanged(path, contents);
 }
 
 for (const client of CLIENTS) {
