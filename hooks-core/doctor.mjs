@@ -23,6 +23,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { harvestMode } from './harvest.mjs';
 import { readManifest, verifyManifest, residue } from './manifest.mjs';
 
 const ok = (name, detail) => ({ name, pass: true, detail });
@@ -121,6 +122,57 @@ function hooksDirFor({ hooksDir, install, root }) {
  * nothing anywhere says so. Restarting does not help, because the restart
  * faithfully reloads the pinned version.
  */
+/**
+ * Is the half that LEARNS actually running?
+ *
+ * Everything else here checks that reads are being optimised. None of it
+ * notices when finding-extraction is off, and the two failure modes look
+ * identical from outside: a graph that fills with structural nodes either way.
+ *
+ * Measured on a real 5.4.0 install: 484 symbol, 286 file and 122 task nodes and
+ * ZERO findings, because harvestMode() was 'off:not-opted-in'. Fifteen checks
+ * passed and none mentioned harvest. stop-harvest.mjs names this exact gap --
+ * "nothing in doctor, audit or waste mentions harvest, so a user sees a graph
+ * filling with structural nodes and no findings and has no way to learn why" --
+ * and then fixed only its own half, the once-per-session Stop notice. A
+ * systemMessage at Stop is easy to miss; the doctor is where someone goes to ask.
+ *
+ * This does NOT judge the default. Opting in costs a model call and sends a
+ * digest off the machine, so requiring consent is right. The defect is that the
+ * state was invisible, which let a user believe findings were accumulating when
+ * they could not.
+ */
+export function probeHarvest() {
+  const mode = harvestMode();
+
+  // The documented escape hatch. A harvest failure stacked on top of "the whole
+  // optimizer is off" is noise, which is why stop-harvest maps it to no notice.
+  if (mode === 'off:mode') return [];
+
+  if (mode === 'local') {
+    return [ok('finding extraction is on', 'local endpoint -- free and private')];
+  }
+  if (mode === 'remote') {
+    return [ok('finding extraction is on', 'opted in, with a credential')];
+  }
+
+  if (mode === 'off:no-key') {
+    return [bad('finding extraction is on',
+      'opted in, but there is no credential to call a model with',
+      'set TOKEN_OPTIMIZER_API_KEY, or point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a ' +
+      'local model to run it without one')];
+  }
+
+  // off:not-opted-in
+  return [bad('finding extraction is on',
+    'off -- the graph will keep collecting files and symbols, but never a finding, ' +
+    'a lesson or a correction',
+    'point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model to run it free and ' +
+    'private, or set TOKEN_OPTIMIZER_HARVEST=1 with a credential to use a remote ' +
+    'one (that spends money and sends a digest of paths, commands and conclusions ' +
+    '-- never file contents -- off this machine)')];
+}
+
 export function probeVersion({ install }) {
   const { method, installedVersion, availableVersion } = install || {};
 
@@ -396,6 +448,7 @@ export function diagnose({
   const checks = [
     ...checklist({ root, settingsPath, install }),
     ...probeVersion({ install }),
+    ...probeHarvest(),
     ...probeEnforcement({ root, workspace, install }),
     ...probeSessionStart({ root, workspace, install }),
     ...probeGraph({ dir: graphDir }),
