@@ -177,13 +177,23 @@ export function fileSize(path) {
  * means state on disk, keyed by the session id the hook payload carries.
  * ------------------------------------------------------------------ */
 
-const STATE_ROOT = join(tmpdir(), 'token-optimizer-hooks');
+/**
+ * Where per-session hook state lives.
+ *
+ * Read per call rather than captured at import, so a test can point it at a
+ * temp directory. Contention on this file is the normal case -- parallel tool
+ * calls each spawn their own hook process -- and it was untestable while the
+ * path was a module constant, which is part of why an unlocked
+ * read-modify-write survived here unnoticed.
+ */
+const stateRoot = () =>
+  process.env.TOKEN_OPTIMIZER_STATE_DIR || join(tmpdir(), 'token-optimizer-hooks');
 
 function statePath(sessionId) {
   // Session ids come from the harness and are uuid-shaped, but they land in a
   // file path, so anything that could traverse is stripped rather than trusted.
   const safe = String(sessionId || 'default').replace(/[^A-Za-z0-9_-]/g, '');
-  return join(STATE_ROOT, `${safe || 'default'}.json`);
+  return join(stateRoot(), `${safe || 'default'}.json`);
 }
 
 /** A usable state object, whatever was on disk. */
@@ -240,18 +250,26 @@ export function loadState(sessionId) {
 export function saveState(sessionId, state) {
   let lock = null;
   try {
-    mkdirSync(STATE_ROOT, { recursive: true, mode: 0o700 });
+    mkdirSync(stateRoot(), { recursive: true, mode: 0o700 });
 
     // A LOCK, because merging alone still loses updates: two processes can both
     // read, both merge, and the second write still discards the first's
     // additions. `wx` fails if the file exists, which makes creation an atomic
     // test-and-set on every platform we target.
     //
-    // Bounded and best-effort: if the lock cannot be taken quickly the write
-    // proceeds anyway. A stale lock from a killed process must never wedge
-    // enforcement, and the worst case without the lock is the merge behaviour
-    // that was already acceptable.
+    // NO UNLOCKED READ-MODIFY-WRITE. This used to fall through and write anyway
+    // when the lock could not be taken, which reintroduces exactly the lost
+    // update the lock exists to prevent: a process that misses the lock reads
+    // the pre-merge state and can erase an `injected` id another process just
+    // recorded, letting the same finding be injected twice in one session.
+    //
+    // Skipping the write is the safe direction. The cost is that THIS process's
+    // additions are not persisted, and every consequence of that is already
+    // bounded by design -- a repeated denial is allowed through by rule, and a
+    // repeated injection costs its tokens once more. A stale lock is still
+    // broken and taken below, so a killed process cannot wedge enforcement.
     lock = takeLock(sessionId);
+    if (!lock) return false;
 
     const current = loadState(sessionId);
     const merged = {
@@ -284,7 +302,25 @@ export function saveState(sessionId, state) {
 }
 
 /** Best-effort exclusive lock. Returns the lock path, or null if not acquired. */
-function takeLock(sessionId, { attempts = 20, staleMs = 5000 } = {}) {
+/**
+ * Sleeps synchronously.
+ *
+ * These hooks are single-shot processes that must reach a decision before they
+ * return, so there is no event loop to yield to and nothing to await. Atomics
+ * on a throwaway SharedArrayBuffer is the standard way to block a worker for a
+ * bounded time without burning the CPU.
+ */
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    // SharedArrayBuffer unavailable under some policies. The caller still makes
+    // progress; it simply retries sooner.
+  }
+}
+
+/** Best-effort exclusive lock. Returns the lock path, or null if not acquired. */
+function takeLock(sessionId, { attempts = 20, staleMs = 5000, waitMs = 15 } = {}) {
   const path = `${statePath(sessionId)}.lock`;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -295,10 +331,21 @@ function takeLock(sessionId, { attempts = 20, staleMs = 5000 } = {}) {
       // A lock left behind by a killed process would otherwise block every
       // future write for the life of the session.
       try {
-        if (Date.now() - statSync(path).mtimeMs > staleMs) unlinkSync(path);
+        if (Date.now() - statSync(path).mtimeMs > staleMs) {
+          unlinkSync(path);
+          continue; // Retry immediately; the holder is gone.
+        }
       } catch {
-        // Raced with the holder releasing it; just retry.
+        // Raced with the holder releasing it; retry immediately.
+        continue;
       }
+
+      // A LIVE holder. Waiting is the whole point: the previous loop retried
+      // 20 times with no delay, so it exhausted in microseconds and the caller
+      // fell through to an unlocked write. Backing off actually lets the holder
+      // finish -- a state write is a few milliseconds -- which is the
+      // difference between contending and merely pretending to.
+      if (i < attempts - 1) sleepSync(waitMs);
     }
   }
   return null;

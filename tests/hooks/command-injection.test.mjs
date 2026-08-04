@@ -185,13 +185,18 @@ describe('forCommand', () => {
 describe('a model-supplied trigger cannot hang the hook', () => {
   it('refuses a catastrophically backtracking pattern instead of running it', async () => {
     const { safeTrigger } = await import('../../hooks-core/inject.mjs');
+    // String.raw throughout. A plain single-quoted string resolves an unknown
+    // escape to the bare character, so '(\d+)*$' was really passing `(d+)*$`
+    // and '\bnpx\s+jest\b' was passing a BACKSPACE followed by `npxs+jest`.
+    // The assertions still went green -- against patterns nobody wrote.
+    //
     // The classic ReDoS shape: a quantifier applied to a group that already
     // contains one. Neither try/catch nor a timeout helps -- it does not throw,
     // it simply does not return -- so it must never be executed at all.
-    expect(safeTrigger('(a+)+b')).toBeNull();
-    expect(safeTrigger('(a*)*b')).toBeNull();
-    expect(safeTrigger('(?:ab+)+c')).toBeNull();
-    expect(safeTrigger('(\d+)*$')).toBeNull();
+    expect(safeTrigger(String.raw`(a+)+b`)).toBeNull();
+    expect(safeTrigger(String.raw`(a*)*b`)).toBeNull();
+    expect(safeTrigger(String.raw`(?:ab+)+c`)).toBeNull();
+    expect(safeTrigger(String.raw`(\d+)*$`)).toBeNull();
   });
 
   it('refuses an absurdly long pattern', async () => {
@@ -201,9 +206,21 @@ describe('a model-supplied trigger cannot hang the hook', () => {
 
   it('still compiles the ordinary triggers this feature exists for', async () => {
     const { safeTrigger } = await import('../../hooks-core/inject.mjs');
-    for (const t of ['\bnpx\s+jest\b', 'git\s+push', '\.csproj', 'gh\s+(pr|run)\b', 'dotnet\s+(build|test)']) {
+    const REAL_TRIGGERS = [
+      String.raw`\bnpx\s+jest\b`,
+      String.raw`git\s+push`,
+      String.raw`\.csproj`,
+      String.raw`gh\s+(pr|run)\b`,
+      String.raw`dotnet\s+(build|test)`,
+    ];
+    for (const t of REAL_TRIGGERS) {
       expect(safeTrigger(t)).toBeInstanceOf(RegExp);
     }
+    // And they must actually MATCH what they were written for -- the previous
+    // form compiled a mangled pattern and proved nothing about the real one.
+    expect(safeTrigger(String.raw`\bnpx\s+jest\b`).test('npx jest tests/')).toBe(true);
+    expect(safeTrigger(String.raw`\bnpx\s+jest\b`).test('npm test')).toBe(false);
+    expect(safeTrigger(String.raw`dotnet\s+(build|test)`).test('dotnet build x')).toBe(true);
   });
 
   it('a rejected trigger degrades to a literal match rather than vanishing', () => {
