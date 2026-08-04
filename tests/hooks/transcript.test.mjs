@@ -14,6 +14,7 @@ import { mkdtempSync, rmSync, writeFileSync, readdirSync, existsSync, mkdirSync 
 import { join, dirname, resolve } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { load, nodeId } from '../../hooks-core/wiki.mjs';
 
 let dir;
@@ -185,8 +186,19 @@ describe('the never-transmit guarantee is enforced, not merely stated', () => {
     const ordinary = join(project, 'ordinary.ts');
     writeFileSync(ordinary, 'export const ordinary = 1;\n');
 
-    const router = resolve(dirname(new URL(import.meta.url).pathname.slice(1)),
-      '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
+    // `fileURLToPath`, NOT `pathname.slice(1)`. Stripping the leading slash is
+    // right for a Windows file URL (`/C:/...`) and wrong everywhere else, where
+    // it turns `/home/runner/...` into a relative path -- so the router was
+    // never spawned on CI and the CONTROL assertion failed, which is the only
+    // reason this was caught rather than passing vacuously.
+    const router = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      '..',
+      'plugin',
+      'hooks',
+      'pretooluse-router.mjs'
+    );
 
     for (const target of [archived, ordinary]) {
       spawnSync(process.execPath, [router], {
