@@ -9,12 +9,18 @@
  */
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { putNode, putNodeWithEdges, wikiDir, contentHash } from 'file:///C:/Users/cheat/source/repos/token-optimizer-mcp/hooks-core/wiki.mjs';
-import { indexFile } from 'file:///C:/Users/cheat/source/repos/token-optimizer-mcp/hooks-core/staleness.mjs';
+import { fileURLToPath } from 'node:url';
+import { putNode, putNodeWithEdges, wikiDir, contentHash } from '../../hooks-core/wiki.mjs';
+import { indexFile } from '../../hooks-core/staleness.mjs';
 
-const HOOK = 'C:/Users/cheat/source/repos/token-optimizer-mcp/plugin/hooks/pretooluse-router.mjs';
+// RESOLVED FROM THIS FILE, not from an absolute path. The harness was written
+// with the author's checkout baked in, which meant it ran nowhere else -- and a
+// proof harness that only works on one machine cannot be re-run to check a
+// later change, which is most of its value.
+const HERE = dirname(fileURLToPath(import.meta.url));
+const HOOK = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
 
 // Five dead-ends this session actually hit. Each cost real time, and none is
 // discoverable by quickly reading the code -- which is the condition that makes
@@ -48,8 +54,19 @@ export const CASES = [
     trigger: '\\b(dotnet|npm|cargo)\\b.*\\|\\s*(tail|head)\\b',
     probeCommand: 'dotnet build App.csproj | tail -20',
     task: 'You want to run `dotnet build App.csproj`, show only the last 20 lines of output, AND reliably know whether the build itself failed. State the EXACT shell command(s). Keep it to one or two lines.',
-    walksIn: (s) => /\|\s*(tail|head)/.test(s) && !/(PIPESTATUS|\$\?|>\s*\S+\.log|tee)/i.test(s),
-    avoids: (s) => /(PIPESTATUS|>\s*\S+\.log[\s\S]*\$\?|tee)/i.test(s) || (/\$\?/.test(s) && !/\|\s*(tail|head)[\s\S]*\$\?/.test(s)),
+    // `tee` alone is NOT a fix: it still leaves the pipeline's status as the
+    // last command's. What actually propagates failure is `set -o pipefail`,
+    // PIPESTATUS, or capturing the status before any pipe (redirect to a file,
+    // read the code, then show the tail).
+    avoids: (s) =>
+      /set\s+-o\s+pipefail|pipefail/i.test(s) ||
+      /PIPESTATUS/i.test(s) ||
+      /LASTEXITCODE/i.test(s) ||
+      />\s*\S+\.(log|txt)[\s\S]*(\$\?|LASTEXITCODE)/i.test(s),
+    walksIn: (s) =>
+      /\|\s*(tail|head|tee)/i.test(s) &&
+      !/set\s+-o\s+pipefail|pipefail|PIPESTATUS|LASTEXITCODE/i.test(s) &&
+      !/>\s*\S+\.(log|txt)[\s\S]*(\$\?|LASTEXITCODE)/i.test(s),
   },
   {
     id: 'fetch-refspec',
@@ -119,11 +136,23 @@ export function buildArms() {
       env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: caseDir },
     });
 
+    // FAIL FAST. A hook that crashed and a hook that had nothing to say both
+    // produce no context, and silently conflating them would let a broken build
+    // score as "the graph did not help" -- turning a bug into a measurement.
+    if (r.error) throw r.error;
+    if (r.status !== 0) {
+      throw new Error(`hook exited ${r.status} for ${c.id}: ${String(r.stderr).slice(0, 400)}`);
+    }
     let injected = null;
-    try {
-      injected = JSON.parse(r.stdout || '{}')?.hookSpecificOutput?.additionalContext ?? null;
-    } catch {
-      injected = null;
+    const stdout = String(r.stdout || '').trim();
+    if (stdout) {
+      let parsed;
+      try {
+        parsed = JSON.parse(stdout);
+      } catch {
+        throw new Error(`hook wrote non-JSON for ${c.id}: ${stdout.slice(0, 200)}`);
+      }
+      injected = parsed?.hookSpecificOutput?.additionalContext ?? null;
     }
 
     out.push({ id: c.id, task: c.task, injected });
@@ -131,7 +160,7 @@ export function buildArms() {
   return out;
 }
 
-if (process.argv[1] && process.argv[1].endsWith('ab-seed.mjs')) {
+if (process.argv[1] && process.argv[1].endsWith('ab-injection-harness.mjs')) {
   const arms = buildArms();
   console.log(JSON.stringify(arms, null, 2));
 }

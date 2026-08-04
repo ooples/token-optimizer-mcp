@@ -369,12 +369,19 @@ export function serve(graph, findings) {
       // discounted was correct every time; all that had changed was the anchor
       // file, which says nothing about whether the claim still holds.
       //
-      // So: report what is actually known -- the anchor moved and the evidence
-      // cannot be rebuilt -- and let the claim stand or fall on its own. That is
-      // honest about staleness without arguing against the content.
-      diff = '(the anchor changed since this was recorded and the diff can no longer be '
-        + 'reconstructed; the claim itself may well still hold, so weigh it rather than '
-        + 'discard it)';
+      // So: report what is actually known and let the claim stand or fall on its
+      // own. That is honest about staleness without arguing against the content.
+      //
+      // REASON-NEUTRAL. The earlier text asserted "the anchor changed", which is
+      // only one of the ways a finding reaches this branch -- it is also reached
+      // when the eager path marked the finding at write time, or when the anchor
+      // was never snapshotted at all because it exceeded the snapshot limit. In
+      // those cases the sentence stated a cause that had not been established.
+      // `reason` already carries whatever was actually determined, so the
+      // fallback now describes only the evidence gap.
+      diff = `(marked stale: ${reason}. The supporting diff can no longer be `
+        + 'reconstructed; the claim itself may well still hold, so weigh it rather '
+        + 'than discard it)';
     }
 
     served.push({ ...finding, stale, ...(stale ? { diff, staleReason: reason } : {}) });

@@ -30,6 +30,42 @@ import { substitutionBudget } from './metrics.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
+
+/** Most findings considered for one command before the budget decides. */
+const MAX_COMMAND_CANDIDATES = 20;
+
+/**
+ * Compiles a finding's trigger, or returns null if it is not safe to run.
+ *
+ * TRIGGERS ARE MODEL-SUPPLIED. The harvest writes them, and a model asked for a
+ * regex can produce `(a+)+b` as readily as `\bnpx\b` -- a pattern whose
+ * backtracking is exponential in the input length. That would execute on the
+ * PreToolUse path against a command the user is waiting on, so a single bad
+ * trigger would hang every subsequent tool call in the session. Neither a
+ * try/catch nor a timeout helps: catastrophic backtracking does not throw, it
+ * simply does not return.
+ *
+ * So the pattern is rejected before it is ever run. The test is deliberately
+ * conservative -- nested quantifiers are the shape that causes this, and no
+ * legitimate trigger for a command needs one.
+ */
+export function safeTrigger(source) {
+  const raw = String(source || '');
+  if (!raw || raw.length > 200) return null;
+
+  // A quantifier applied to a group that itself contains a quantifier: (a+)+,
+  // (a*)*, (\d+)*, (?:ab+)+ and so on. This is the classic ReDoS shape.
+  if (/\([^)]*[+*}][^)]*\)\s*[+*{]/.test(raw)) return null;
+
+  // Stacked quantifiers outside a group, e.g. `a+*` or `.*+`.
+  if (/[+*}]\s*[+*]/.test(raw)) return null;
+
+  try {
+    return new RegExp(raw, 'i');
+  } catch {
+    return null;
+  }
+}
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
 /**
@@ -66,11 +102,21 @@ function render(finding) {
  * measurement holdout -- in which case the caller must behave exactly as if the
  * graph were empty, or the experiment measures nothing.
  */
-export function forTouch(dir, graph, rawPath, { budget = touchBudget(), sessionId } = {}) {
+export function forTouch(
+  dir,
+  graph,
+  rawPath,
+  { budget = touchBudget(), sessionId, alreadyInjected = new Set() } = {}
+) {
   // Canonical, so a touch finds findings anchored under any other spelling.
   const filePath = canonicalPath(rawPath);
   const anchorId = nodeId('file', filePath);
-  const candidates = findingsFor(graph, anchorId, { limit: 30 });
+  // The same once-per-session gate the command path uses. A file touched
+  // repeatedly -- which is the normal shape of working on it -- would otherwise
+  // re-serve the same findings on every single touch, which is both a token
+  // cost per call and the fastest way to train a model to skim past them.
+  const candidates = findingsFor(graph, anchorId, { limit: 30 })
+    .filter((f) => !alreadyInjected.has(f.key));
   if (!candidates.length) return null;
 
   const holdout = inHoldout(filePath);
@@ -88,6 +134,8 @@ export function forTouch(dir, graph, rawPath, { budget = touchBudget(), sessionI
   });
 
   if (holdout || !kept.length) return null;
+
+  for (const f of kept) alreadyInjected.add(f.key);
 
   return `Known about ${filePath} (from previous sessions):\n${kept.map(render).join('\n')}`;
 }
@@ -111,13 +159,18 @@ function appliesToCommand(finding, command) {
   if (!text) return false;
 
   if (finding.trigger) {
-    try {
-      return new RegExp(finding.trigger, 'i').test(text);
-    } catch {
-      // A malformed trigger must not throw on the hook path; fall back to a
-      // literal search so a bad regex degrades to a substring match.
-      return text.toLowerCase().includes(String(finding.trigger).toLowerCase());
+    const pattern = safeTrigger(finding.trigger);
+    if (pattern) {
+      try {
+        return pattern.test(text);
+      } catch {
+        return false;
+      }
     }
+    // Rejected as unsafe or malformed: fall back to a literal search, which
+    // cannot backtrack. A bad trigger degrades to a substring match rather
+    // than taking the hook down or hanging it.
+    return text.toLowerCase().includes(String(finding.trigger).toLowerCase());
   }
 
   // Untriggered findings only qualify if they are about doing something.
@@ -203,7 +256,14 @@ export function forCommand(
   // Highest confidence first, so a tight budget keeps the most trustworthy.
   candidates.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5));
 
-  const served = serve(graph, candidates);
+  // CAPPED BEFORE serve(). serve() re-reads and diffs the anchor of every
+  // finding it is handed, so an unbounded candidate list turns one command into
+  // one file read per matching finding -- on the hook path, with the user
+  // waiting. The budget would discard the surplus a moment later anyway, so the
+  // only thing an uncapped list buys is the I/O.
+  const considered = candidates.slice(0, MAX_COMMAND_CANDIDATES);
+
+  const served = serve(graph, considered);
   const { kept, spent } = fit(served, budget);
   if (!kept.length) return null;
 

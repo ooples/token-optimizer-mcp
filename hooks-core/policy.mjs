@@ -188,7 +188,7 @@ function statePath(sessionId) {
 
 /** A usable state object, whatever was on disk. */
 function emptyState() {
-  return { seen: {}, denied: {} };
+  return { seen: {}, denied: {}, injected: [] };
 }
 
 /**
@@ -208,6 +208,13 @@ export function loadState(sessionId) {
     return {
       seen: parsed.seen && typeof parsed.seen === 'object' ? parsed.seen : {},
       denied: parsed.denied && typeof parsed.denied === 'object' ? parsed.denied : {},
+      // WITHOUT THIS THE ONCE-PER-SESSION GATE DOES NOT EXIST. Every tool call
+      // is a separate hook PROCESS, so a set held only in memory dies with the
+      // process that built it: the router recorded which findings it had
+      // injected, saveState dropped the field, and the next call re-injected
+      // the same advice. The gate looked correct in unit tests, which share one
+      // process, and did nothing at all in production.
+      injected: Array.isArray(parsed.injected) ? parsed.injected : [],
     };
   } catch {
     return emptyState();
@@ -250,6 +257,11 @@ export function saveState(sessionId, state) {
     const merged = {
       seen: { ...current.seen, ...state.seen },
       denied: { ...current.denied, ...state.denied },
+      // UNION, not overwrite. Two hook processes running in parallel each hold
+      // their own view of what has been injected; taking the last writer's copy
+      // would resurrect a finding the other had already delivered, which is the
+      // repetition the once-per-session gate exists to stop.
+      injected: [...new Set([...(current.injected || []), ...(state.injected || [])])],
     };
 
     // Write-then-rename so a reader never observes a half-written file.

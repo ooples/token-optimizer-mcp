@@ -144,7 +144,10 @@ try {
 
       for (const { path } of touched) {
         const dir = dirFor(path);
-        const note = forTouch(dir, load(dir), path, { sessionId: payload.session_id });
+        const note = forTouch(dir, load(dir), path, {
+          sessionId: payload.session_id,
+          alreadyInjected,
+        });
         if (note) parts.push(note);
       }
 

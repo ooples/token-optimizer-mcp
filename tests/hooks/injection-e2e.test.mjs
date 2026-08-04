@@ -22,6 +22,11 @@ const HOOK = join(process.cwd(), 'plugin', 'hooks', 'pretooluse-router.mjs');
 
 let project;
 let dir;
+// UNIQUE PER RUN. The once-per-session gate is persisted to disk now, so a
+// fixed session id would make the suite observe its OWN previous run and
+// correctly decline to re-inject -- a hermeticity problem in the test, not a
+// product bug. It surfaced the moment the persistence defect was fixed.
+let session;
 
 beforeEach(() => {
   project = mkdtempSync(join(tmpdir(), 'inject-e2e-'));
@@ -29,6 +34,7 @@ beforeEach(() => {
   // the hook consults THIS graph rather than walking up to a real one.
   mkdirSync(join(project, '.git'), { recursive: true });
   dir = wikiDir(project);
+  session = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 });
 
 afterEach(() => {
@@ -56,12 +62,24 @@ function runHook(payload, env = {}) {
     timeout: 30_000,
     env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: dir, ...env },
   });
-  let json = null;
-  try {
-    json = result.stdout ? JSON.parse(result.stdout) : null;
-  } catch {
-    /* a bare allow writes nothing */
+  // FAIL FAST rather than treating a crash as "no context". A hook that died
+  // and a hook that had nothing to say both produce no additionalContext, and
+  // conflating them would let a broken build pass every silence assertion here.
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`hook exited ${result.status}: ${String(result.stderr).slice(0, 400)}`);
   }
+
+  const stdout = String(result.stdout || '').trim();
+  let json = null;
+  if (stdout) {
+    try {
+      json = JSON.parse(stdout);
+    } catch {
+      throw new Error(`hook wrote non-JSON: ${stdout.slice(0, 200)}`);
+    }
+  }
+  // Only an EMPTY stdout from a successful process is a bare allow.
   return { status: result.status, stdout: result.stdout, json };
 }
 
@@ -77,7 +95,7 @@ describe('injection reaches the model through the real hook', () => {
     });
 
     const { json } = runHook({
-      session_id: 'e2e-1',
+      session_id: session,
       cwd: project,
       tool_name: 'Bash',
       tool_input: { command: 'npx jest tests/unit' },
@@ -101,7 +119,7 @@ describe('injection reaches the model through the real hook', () => {
     });
 
     const { json } = runHook({
-      session_id: 'e2e-2',
+      session_id: session,
       cwd: project,
       tool_name: 'Bash',
       tool_input: { command: 'git status' },
@@ -124,7 +142,7 @@ describe('injection reaches the model through the real hook', () => {
     // leaked even a hint, every measured difference would be understated.
     const { json } = runHook(
       {
-        session_id: 'e2e-3',
+        session_id: session,
         cwd: project,
         tool_name: 'Bash',
         tool_input: { command: 'npx jest tests/unit' },
@@ -140,7 +158,7 @@ describe('injection reaches the model through the real hook', () => {
     writeFileSync(join(dir, 'graph.jsonl'), '{not json at all\n');
 
     const { status, json } = runHook({
-      session_id: 'e2e-4',
+      session_id: session,
       cwd: project,
       tool_name: 'Bash',
       tool_input: { command: 'npx jest' },
