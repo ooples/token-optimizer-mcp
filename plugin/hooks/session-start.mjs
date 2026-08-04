@@ -21,7 +21,9 @@
 import { mode, MODE_OFF, readPayload, loadState } from './lib/policy.mjs';
 import { policyText } from './lib/adapter.mjs';
 import { restorationPlan } from './lib/restore.mjs';
+import { standingRules } from './lib/inject.mjs';
 import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
+import { join } from 'node:path';
 
 if (mode() === MODE_OFF) process.exit(0);
 
@@ -73,8 +75,35 @@ async function restoration() {
   return plan?.text ?? null;
 }
 
+// THE TEXT ITSELF LIVES IN THE SHARED CORE. It used to be duplicated here,
+// which is exactly the drift the adapter was built to end: an addition to the
+// shared policy -- the project briefing, for instance -- reached the other five
+// clients and silently skipped Claude Code, the one client most users are on.
+// Claude Code keeps its own entry point because its PreToolUse router does more
+// than the shared one; the standing notice is not a place it needs to differ.
 const parts = [policyText(true)];
 
+// THE ALWAYS-ON HALF OF DELIVERY. Trigger-fired injection answers "this
+// situation is happening now", which cannot cover a rule about how the work is
+// conducted -- by the time a command matched a trigger, a turn governed by that
+// rule would already be going wrong. Those have to be present before the first
+// tool call or they do nothing.
+//
+// Deliberately narrow and tightly budgeted: only pinned facts and human-verified
+// corrections qualify. An always-on block that grows with the project is how it
+// becomes wallpaper, and a model stops reading what it always sees.
+try {
+  const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+  const rules = standingRules(dir, load(dir));
+  if (rules) parts.push(rules);
+} catch {
+  // The policy notice must still arrive if the graph is unreadable.
+}
+
+// THE SITUATIONAL HALF, LAST. Standing rules govern every turn; restoration
+// speaks only to a session resuming from a compaction, so it reads as the more
+// specific note after the general one.
 try {
   const restored = await restoration();
   if (restored) parts.push(restored);
@@ -82,12 +111,6 @@ try {
   // The policy notice must still arrive if anything above fails.
 }
 
-// THE TEXT ITSELF LIVES IN THE SHARED CORE. It used to be duplicated here,
-// which is exactly the drift the adapter was built to end: an addition to the
-// shared policy -- the project briefing, for instance -- reached the other five
-// clients and silently skipped Claude Code, the one client most users are on.
-// Claude Code keeps its own entry point because its PreToolUse router does more
-// than the shared one; the standing notice is not a place it needs to differ.
 process.stdout.write(
   JSON.stringify({
     hookSpecificOutput: {

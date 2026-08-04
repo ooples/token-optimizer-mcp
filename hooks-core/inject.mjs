@@ -29,6 +29,20 @@ import { substitutionBudget } from './metrics.mjs';
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
 
+/**
+ * Tokens allowed for the always-on standing rules.
+ *
+ * FIXED AND SMALL, unlike the session index whose budget is earned from measured
+ * hit rate. An earned budget is right for a catalogue that grows with the graph;
+ * it is wrong here, because this text is paid for on EVERY session whether or
+ * not it is relevant, and a set that grows with the project is exactly how an
+ * always-on block becomes wallpaper. 400 tokens is roughly a dozen rules -- if a
+ * project needs more standing rules than that, the honest answer is that some of
+ * them are situational and belong behind a trigger.
+ */
+const standingBudget = () =>
+  Number(process.env.TOKEN_OPTIMIZER_STANDING_BUDGET) || 400;
+
 /** Most findings considered for one command before the budget decides. */
 const MAX_COMMAND_CANDIDATES = 20;
 
@@ -337,6 +351,77 @@ Established in previous sessions. Call wiki_query with a key for detail, or just
 work -- findings anchored to a file are surfaced automatically when you touch it.
 
 ${lines.join('\n')}`;
+}
+
+/**
+ * The always-on set: rules that must hold before the first tool call.
+ *
+ * WHY THESE CANNOT BE TRIGGER-FIRED. A trigger answers "this situation is
+ * happening now". Some rules are not about a situation -- "report the number you
+ * measured, not the one you expected" governs how every turn is conducted, and
+ * by the time any command matched a trigger the turn would already be going
+ * wrong. Those have to be present before anything happens or they are useless.
+ *
+ * WHY THIS IS NOT THE SESSION INDEX. `sessionIndex` lists keys and truncated
+ * titles and tells the model to call wiki_query for detail; that is right for a
+ * catalogue of things it MIGHT want. A standing rule that needs a lookup before
+ * it can be obeyed is not a standing rule -- so these are rendered in full, and
+ * are budgeted separately and much more tightly because of it.
+ *
+ * WHAT QUALIFIES, deliberately narrow:
+ *   - anything a human PINNED, which curate.mjs already defines as a fact that
+ *     stays true and should not decay, or
+ *   - a `feedback` lesson whose quote was verified against the transcript, so a
+ *     person demonstrably said it.
+ *
+ * Everything else waits for its trigger. The failure mode this guards against
+ * is the one that already happened here: an always-on block that grows until it
+ * is wallpaper, and the model stops reading the thing it always sees.
+ */
+export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
+  const rules = [...graph.nodes.values()].filter(
+    (n) =>
+      n.kind === 'finding' &&
+      !n.retired &&
+      typeof n.claim === 'string' &&
+      (n.pinned === true || (n.type === 'feedback' && n.origin === 'human'))
+  );
+  if (!rules.length) return null;
+
+  // A person's own correction outranks anything inferred, then confidence.
+  rules.sort((a, b) => {
+    const weight = (n) => (n.origin === 'human' ? 2 : n.pinned ? 1.5 : 1);
+    return weight(b) * (b.confidence ?? 0.5) - weight(a) * (a.confidence ?? 0.5);
+  });
+
+  const lines = [];
+  let spent = 0;
+  let dropped = 0;
+  for (const rule of rules) {
+    const line = `- ${rule.claim}`;
+    const cost = estimate(line);
+    if (spent + cost > budget) {
+      dropped += 1;
+      continue;
+    }
+    lines.push(line);
+    spent += cost;
+  }
+  if (!lines.length) return null;
+
+  record(dir, { kind: 'standing', count: lines.length, dropped, tokens: spent });
+
+  // SAY WHAT WAS DROPPED. A silent cap reads as "these are all the rules",
+  // which is worse than saying there are more: a model that knows the list is
+  // truncated can ask, one that does not will assume it is complete.
+  const truncated = dropped
+    ? `\n(${dropped} further standing rule${dropped === 1 ? '' : 's'} did not fit this budget; ` +
+      `raise TOKEN_OPTIMIZER_STANDING_BUDGET or retire some.)`
+    : '';
+
+  return `# Standing rules for this project\n\nEstablished in previous sessions and expected to hold. These are not suggestions.\n\n${lines.join(
+    '\n'
+  )}${truncated}`;
 }
 
 /**
