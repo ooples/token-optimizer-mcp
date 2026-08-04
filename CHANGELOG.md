@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.6](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.5...v5.3.6) (2026-08-04)
+
+
+### Bug Fixes
+
+* **cache:** original and compressed sizes were recorded backwards ([#227](https://github.com/ooples/token-optimizer-mcp/issues/227)) ([74f16c6](https://github.com/ooples/token-optimizer-mcp/commit/74f16c6b98862c7a34c4770d45181ddbaf9196e2))
+* **curate:** a correction claimed to be a person's assertion ([#232](https://github.com/ooples/token-optimizer-mcp/issues/232)) ([5d822f3](https://github.com/ooples/token-optimizer-mcp/commit/5d822f38706d42ad7aadfa8f942b7bc936ce31f5))
+* **security:** scanner reported no findings over live-format api keys ([#223](https://github.com/ooples/token-optimizer-mcp/issues/223)) ([beb2ebd](https://github.com/ooples/token-optimizer-mcp/commit/beb2ebdd9065ff68f7b31492875025c39a48b97d))
+* **server:** mistyped tool arguments were dropped instead of refused ([#228](https://github.com/ooples/token-optimizer-mcp/issues/228)) ([800d4e0](https://github.com/ooples/token-optimizer-mcp/commit/800d4e00fbdcf36a4c75aa7e0422bc9315819798))
+* smart_ast_grep was entirely non-functional on windows, and said nothing ([#226](https://github.com/ooples/token-optimizer-mcp/issues/226)) ([56873b9](https://github.com/ooples/token-optimizer-mcp/commit/56873b93d7d04c11d8167b66f55d07dc3aa7f387))
+* smart_env returned every .env value; smart_dependencies never delivered its graph ([#225](https://github.com/ooples/token-optimizer-mcp/issues/225)) ([a963995](https://github.com/ooples/token-optimizer-mcp/commit/a963995b91d2865b4f9c982d29877f8f7d5d2ce8))
+* **smart-edit:** a silently dropped edit reported success ([#231](https://github.com/ooples/token-optimizer-mcp/issues/231)) ([31c5394](https://github.com/ooples/token-optimizer-mcp/commit/31c53946d59cce5e4e8f959a487d921cd62e5001))
+* **tokens:** counting silently fell back to length/4, overstating savings by up to 130% ([#222](https://github.com/ooples/token-optimizer-mcp/issues/222)) ([97a9027](https://github.com/ooples/token-optimizer-mcp/commit/97a90276f41670a857103b859d63566d820c0317))
+* **wiki:** the semantic harvest was implemented but never invoked ([#229](https://github.com/ooples/token-optimizer-mcp/issues/229)) ([895f14b](https://github.com/ooples/token-optimizer-mcp/commit/895f14b590e8f3b7cdbc3416f5dbf4406ac0f180))
+
 ## [5.3.5](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.4...v5.3.5) (2026-08-02)
 
 
