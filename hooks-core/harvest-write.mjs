@@ -26,7 +26,7 @@ import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
 import { randomBytes } from 'node:crypto';
-import { ORIGIN_HARVESTED, ORIGIN_AGENT } from './curate.mjs';
+import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
 
 /**
  * Resolves an `path` or `path#symbol` anchor to an existing node id.
@@ -79,11 +79,33 @@ export function writeHarvested(
 ) {
   if (!Array.isArray(findings) || !findings.length) return [];
 
-  // Only the two origins this path can honestly claim. A caller asking for
-  // anything else -- notably ORIGIN_HUMAN -- would be labelling machine output
-  // as a person's assertion, which is the confusion the field exists to prevent.
-  const provenance = origin === ORIGIN_AGENT ? ORIGIN_AGENT : ORIGIN_HARVESTED;
-  const prefix = provenance === ORIGIN_AGENT ? 'agent' : 'harvested';
+  // The batch default. A caller asking for anything else -- notably
+  // ORIGIN_HUMAN -- would be labelling machine output as a person's assertion,
+  // which is the confusion the field exists to prevent.
+  const batch = origin === ORIGIN_AGENT ? ORIGIN_AGENT : ORIGIN_HARVESTED;
+
+  /**
+   * ORIGIN_HUMAN IS EARNED PER FINDING, BY EVIDENCE.
+   *
+   * A batch-wide origin was the whole story here, and it silently discarded
+   * the per-lesson provenance `validateLessons` had just computed: a
+   * correction whose quote was verified word-for-word in the user's own turn
+   * was stored as ORIGIN_HARVESTED like any model paraphrase. The standing-
+   * rules layer selects on human origin, so it matched nothing this pipeline
+   * wrote, and the verbatim check had no observable effect at all.
+   *
+   * The original rule still holds -- a caller cannot simply DECLARE machine
+   * output human. It is the verified quote that promotes it, and the quote is
+   * stored alongside so the claim carries its own evidence.
+   */
+  const provenanceFor = (finding) =>
+    finding.origin === ORIGIN_HUMAN &&
+    typeof finding.quote === 'string' &&
+    finding.quote.trim()
+      ? ORIGIN_HUMAN
+      : batch;
+  const prefixFor = (p) =>
+    p === ORIGIN_AGENT ? 'agent' : p === ORIGIN_HUMAN ? 'human' : 'harvested';
 
   const written = [];
   for (const finding of findings) {
@@ -101,7 +123,8 @@ export function writeHarvested(
     // same key, and putNode keeps the last write for an id -- so one session's
     // finding silently replaces another's. A random suffix makes that
     // collision vanishingly unlikely while keeping the timestamp readable.
-    const key = `${prefix}-${Date.now().toString(36)}-${written.length}-${randomBytes(4).toString("hex")}`;
+    const provenance = provenanceFor(finding);
+    const key = `${prefixFor(provenance)}-${Date.now().toString(36)}-${written.length}-${randomBytes(4).toString("hex")}`;
     // ONE APPEND for the finding and every anchor it resolved. This runs in a
     // detached worker, so "the process survives to finish the loop" is not a
     // safe assumption: a node written without its edges is an active finding
@@ -125,6 +148,11 @@ export function writeHarvested(
           ? finding.trigger
           : undefined,
         origin: provenance,
+        // THE EVIDENCE TRAVELS WITH THE CLAIM. Without it a human-origin
+        // finding asserts its own provenance and nothing can check it.
+        quote: typeof finding.quote === 'string' && finding.quote.trim()
+          ? finding.quote
+          : undefined,
         sessionId,
       },
       resolved.map((target) => ({ edge: 'derived_from', to: target }))

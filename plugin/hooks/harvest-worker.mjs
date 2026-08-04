@@ -23,8 +23,11 @@ import {
   estimateTokens,
 } from './lib/harvest.mjs';
 import { writeHarvested } from './lib/harvest-write.mjs';
-import { wikiDir } from './lib/wiki.mjs';
 import { record } from './lib/metrics.mjs';
+import { wikiDir } from './lib/wiki.mjs';
+import { readArchive } from './lib/transcript.mjs';
+import { buildFeedbackDigest, validateLessons, LESSON_PROMPT } from './lib/lessons.mjs';
+import { ORIGIN_HARVESTED } from './lib/curate.mjs';
 
 /**
  * The files the digest says were touched.
@@ -79,6 +82,46 @@ async function main() {
     findings: written.length,
     at: Date.now(),
   });
+
+  // THE FEEDBACK LOOP. A separate extraction with a separate prompt, because
+  // the two are looking for different things: the harvest above wants what was
+  // LEARNED about the code, this wants where the user said the agent was WRONG.
+  // Asked for both at once a model returns a summary and the corrections get
+  // lost in it -- and corrections are the only turns carrying information the
+  // code itself could never supply.
+  try {
+    const turns = readArchive(dir, sessionId || 'unknown');
+    const feedback = buildFeedbackDigest(turns);
+    if (feedback) {
+      const rawLessons = await extract(feedback, { prompt: LESSON_PROMPT });
+      const { lessons, rejected } = validateLessons(rawLessons, turns);
+
+      // Anchors are optional on a lesson -- "always run npm test" is about no
+      // file -- so each is anchored to the project root when it names nothing,
+      // which keeps the store's rule that an unanchored finding is refused.
+      const anchored = lessons.map((l) => ({
+        ...l,
+        anchors: l.anchors.length ? l.anchors : [cwd || process.cwd()],
+      }));
+
+      const writtenLessons = writeHarvested(dir, anchored, {
+        sessionId: sessionId || null,
+        origin: ORIGIN_HARVESTED,
+      });
+
+      record(dir, {
+        kind: 'lessons',
+        sessionId: sessionId || null,
+        tokens: estimateTokens(feedback),
+        lessons: writtenLessons.length,
+        rejected: rejected.length,
+        at: Date.now(),
+      });
+    }
+  } catch {
+    // A failed feedback pass must be indistinguishable from a session with
+    // nothing to correct.
+  }
 }
 
 main()
