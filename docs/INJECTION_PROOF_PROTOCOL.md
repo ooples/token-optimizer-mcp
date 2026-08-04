@@ -77,3 +77,87 @@ records.
   can reach them by ordinary reading and the comparison measures nothing.
 - Raw counts are reported alongside the verdict, so the numbers can be checked
   against the bar independently.
+
+---
+
+# Revision 2, after two runs that measured less than they appeared to
+
+Both runs below were carried out. Neither supports the claim as originally
+written, and this revision records why and what changed as a result. The bar was
+raised, not lowered — which is the only direction a bar may move after seeing the
+numbers.
+
+## What the two runs actually produced
+
+**Single-turn, 5 hand-written cases.** Control walked into 2, treatment avoided
+both, 0 regressions. Reported at the time as PASS at 100%. Re-graded under the
+rules below it is a **FAIL**: the rate rested on 2 admitted cases.
+
+**Multi-turn, 3 real sandboxes with tools.** Every trap was verified to fire
+mechanically before the run — the naive guess really does produce MSB1009,
+`./build.sh | tail` really does report exit 0 on a failing build, `git fetch
+origin master` really does report "0 behind" when origin has 3 commits to local's
+1. **Zero of three fired against the subject.** Given tools, the control verified
+instead of guessing: it ran `ls`, redirected to a file and echoed `$?`, and used
+an explicit refspec that bypassed the clobbered config. Token delta −587 over
+114,771, mean −196 with sd 747 — noise, and measuring nothing in any case,
+because there was no rework to avoid.
+
+The lesson is not "the graph does not work". It is that **a dead-end only has
+value where verification is expensive**, and both corpora were full of dead-ends
+one `ls` could settle.
+
+## Two claims, gated separately
+
+They are never blended into one number.
+
+| claim | status | evidence |
+|---|---|---|
+| **Correctness** — avoids known dead-ends the control walks into | supported, under-powered | 2 of 2 admitted cases rescued, 0 regressions; fails the minimum-N bar |
+| **Token savings** | **unproven** | no run has produced a measurable saving; the multi-turn delta was within noise |
+
+The token claim stays open and explicitly unproven. It is not to appear in the
+README, the tool descriptions, or a release note until a run supports it.
+
+## The gate (implemented in `tests/fixtures/ab-gate.mjs`)
+
+Graded by code, because both earlier runs were graded by reading answers and
+deciding whether they looked right — the same contamination this document warns
+about everywhere else, applied to the scoring step.
+
+1. **Admission by control failure.** A case where the control gets the right
+   answer measured nothing and is EXCLUDED, and reported as excluded. It is never
+   counted as a treatment success.
+2. **Minimum 5 admitted cases.** A bar clearable by two lucky cases will
+   eventually be cleared by noise.
+3. **≥ 80% of admitted cases rescued.**
+4. **0 regressions**, looked for across every case including excluded ones — a
+   misleading finding does its damage exactly where the subject needed no help.
+5. **Tokens are reported, never gated**, over admitted cases where both arms were
+   correct. Tokens spent reaching a wrong answer are not comparable to tokens
+   spent reaching a right one.
+
+## Four classes of dead-end, measured separately
+
+Averaging these together is what produced a meaningless rate.
+
+| class | what makes it bite |
+|---|---|
+| `expensive` | the failure only surfaces after costly work — a timeout, a full build, a CI round trip |
+| `plausible` | no error at all; the wrong path looks exactly like success |
+| `non-inferable` | the fact lives in history or in a person's head, not in the tree |
+| `restricted` | fires only when the subject cannot reach the cheap check |
+
+`restricted` is **reported separately and never in the headline**. Handicapping
+the control is a demonstration, not a fair comparison.
+
+## Two corpora, kept separate
+
+- `tests/fixtures/ab-injection-harness.mjs` — hand-written. Regression coverage
+  for the delivery path. Authored by someone who knew the answers, so it is not
+  evidence about behaviour change.
+- `tests/fixtures/harvested-dead-ends.mjs` — harvested from failures this project
+  actually hit, each recorded with the symptom observed at the time. This is the
+  corpus the headline number comes from.
+
+Reported separately, always. An easy case in one must not flatter the other.
