@@ -51,11 +51,13 @@ export const HARVESTED = [
       'about how you know the result is trustworthy.',
     // Walks in: trusts the pass/fail outcome without confirming the sabotage landed.
     walksIn: (s) =>
-      !/(verify|confirm|assert|check).{0,40}(applied|landed|took effect|actually chang)/i.test(s) &&
-      !/grep|diff|print the (file|line)|read it back/i.test(s),
+      !/(verify|confirm|assert|check).{0,40}(applied|landed|took effect|actually chang)/i.test(
+        s
+      ) && !/grep|diff|print the (file|line)|read it back/i.test(s),
     avoids: (s) =>
-      /(verify|confirm|assert|check).{0,40}(applied|landed|took effect|actually chang)/i.test(s) ||
-      /grep|diff|print the (file|line)|read it back/i.test(s),
+      /(verify|confirm|assert|check).{0,40}(applied|landed|took effect|actually chang)/i.test(
+        s
+      ) || /grep|diff|print the (file|line)|read it back/i.test(s),
   },
 
   {
@@ -72,11 +74,22 @@ export const HARVESTED = [
       'You are writing a test that spawns a CLI as a child process. The CLI makes an HTTP request, ' +
       'and you want to answer it from a stub server you start inside the test itself. Outline how you ' +
       'would spawn the child. State which child_process function you use and why.',
-    walksIn: (s) => /spawnSync/i.test(s) && !/(async|await|non-?blocking|event loop|deadlock)/i.test(s),
+    walksIn: (s) =>
+      /spawnSync/i.test(s) &&
+      !/(async|await|non-?blocking|event loop|deadlock)/i.test(s),
+    // `(?!.*spawnSync)` only constrains the position where the match STARTS,
+    // so an answer naming spawnSync first and `spawn(` later satisfied it. The
+    // exclusion has to be a separate test over the whole answer.
+    // NAMING THE FIX, NOT THE FAILURE. Merely mentioning "deadlock" scored as
+    // avoided -- which meant the recorded SYMPTOM, a description of the bug,
+    // counted as a correct answer. Credit requires choosing the non-blocking
+    // call, or explicitly rejecting spawnSync for this use.
     avoids: (s) =>
-      /(?!.*spawnSync)(spawn\b|execFile\b)/i.test(s) ||
-      /(event loop|deadlock|block).{0,60}(spawnSync|synchronous)/i.test(s) ||
-      /spawnSync.{0,60}(block|deadlock|cannot)/i.test(s),
+      (!/spawnSync/i.test(s) &&
+        /(\bspawn\s*\(|\bexecFile\b|\bexeca\b)/i.test(s)) ||
+      /(do not|don't|never|avoid|not).{0,30}spawnSync/i.test(s) ||
+      (/spawnSync.{0,80}(would |will )?(block|deadlock)/i.test(s) &&
+        /(\bspawn\s*\(|\basync\b|\bawait\b)/i.test(s)),
   },
 
   {
@@ -93,8 +106,21 @@ export const HARVESTED = [
       'You are writing a harness that measures whether injected context helps. It runs a hook that ' +
       'serves context once per session. What must the harness do about session identity, and how ' +
       'would you know it is still working on the tenth run?',
-    walksIn: (s) => !/(unique|fresh|random|new).{0,30}session|per[- ]run/i.test(s),
-    avoids: (s) => /(unique|fresh|random|new).{0,30}session|per[- ]run/i.test(s),
+    // The lesson can be stated either as the fix (a new session id per run) or
+    // as the failure mode it prevents (reusing one works exactly once). Both
+    // count; only an answer that does neither walks in.
+    avoids: (s) =>
+      /(unique|fresh|random|new|different).{0,30}session/i.test(s) ||
+      /per[- ]run/i.test(s) ||
+      /(reus|fixed|same).{0,40}session.{0,60}(once|first run|only work)/i.test(
+        s
+      ),
+    walksIn: (s) =>
+      !/(unique|fresh|random|new|different).{0,30}session/i.test(s) &&
+      !/per[- ]run/i.test(s) &&
+      !/(reus|fixed|same).{0,40}session.{0,60}(once|first run|only work)/i.test(
+        s
+      ),
   },
 
   {
@@ -111,9 +137,15 @@ export const HARVESTED = [
       'You want a test that catches a missing import in a set of CLI scripts. Each script is designed ' +
       'to fail open: on unusable input it exits 0 without doing anything. Describe the check you would ' +
       'write, and say what it would miss.',
+    // `AST` needs a word boundary and case sensitivity: with /i and no
+    // boundary it matched inside "last", "fast", "past" and "cast", which
+    // INVERTED the score on perfectly ordinary answers.
     walksIn: (s) =>
-      /(run|execute|spawn|invoke)/i.test(s) && !/(lint|no-undef|static|parse|AST|eslint)/i.test(s),
-    avoids: (s) => /(lint|no-undef|static analys|eslint|AST)/i.test(s),
+      /(run|execute|spawn|invoke)/i.test(s) &&
+      !/(lint|no-undef|static|parse|eslint)/i.test(s) &&
+      !/\bAST\b/.test(s),
+    avoids: (s) =>
+      /(lint|no-undef|static analys|eslint)/i.test(s) || /\bAST\b/.test(s),
   },
 
   {
@@ -130,10 +162,14 @@ export const HARVESTED = [
       'A pipeline validates items and computes a per-item trust level, then hands the whole batch to a ' +
       'writer that takes a single trust level as an option. A downstream consumer selects only the ' +
       'highest trust level. What is the bug, and how would you have detected it?',
-    walksIn: (s) => !/(per[- ]item|per[- ]finding|each item).{0,50}(origin|provenance|trust)/i.test(s),
+    walksIn: (s) =>
+      !/(per[- ]item|per[- ]finding|each item).{0,50}(origin|provenance|trust)/i.test(
+        s
+      ),
     avoids: (s) =>
-      /(per[- ]item|per[- ]finding|each item|individual).{0,60}(origin|provenance|trust|level)/i.test(s) ||
-      /batch.{0,40}(discard|overwrit|lose|collaps)/i.test(s),
+      /(per[- ]item|per[- ]finding|each item|individual).{0,60}(origin|provenance|trust|level)/i.test(
+        s
+      ) || /batch.{0,40}(discard|overwrit|lose|collaps)/i.test(s),
   },
 
   {
@@ -149,8 +185,13 @@ export const HARVESTED = [
     task:
       'A detached background worker makes an HTTP request, writes a file, and must never linger. ' +
       'Write the last three lines of that script -- how it terminates. Explain the choice.',
-    walksIn: (s) => /process\.exit\(/i.test(s) && !/(unref|exitCode|drain|closing|watchdog)/i.test(s),
-    avoids: (s) => /(unref|exitCode|drain|still closing|watchdog)/i.test(s),
+    // The symptom itself says "still closing", so crediting that phrase made a
+    // description of the crash score as a correct answer. Credit requires
+    // naming what the script should DO instead.
+    walksIn: (s) =>
+      /process\.exit\(/i.test(s) && !/(unref|exitCode|drain|watchdog)/i.test(s),
+    avoids: (s) =>
+      /(\bunref\b|exitCode|let the loop drain|\bwatchdog\b)/i.test(s),
   },
 
   {
@@ -168,7 +209,10 @@ export const HARVESTED = [
       'its original commits. Describe how you get your branch onto current master without replaying ' +
       'work that is already there.',
     walksIn: (s) => /git cherry|patch[- ]id/i.test(s) && !/squash/i.test(s),
-    avoids: (s) => /(--onto|squash.{0,40}(different|new) (patch|commit)|drop.{0,30}already)/i.test(s),
+    avoids: (s) =>
+      /(--onto|squash.{0,40}(different|new) (patch|commit)|drop.{0,30}already)/i.test(
+        s
+      ),
   },
 
   {
@@ -184,13 +228,21 @@ export const HARVESTED = [
     task:
       'You have uncommitted changes on branch A. You want a NEW branch off origin/master that does not ' +
       'contain them. State the exact git commands, in order.',
-    walksIn: (s) => /checkout -[bB]/.test(s) && !/(stash|commit|worktree|-- \.|restore)/i.test(s),
-    avoids: (s) => /(stash|commit first|git worktree|git restore|checkout -- )/i.test(s),
+    walksIn: (s) =>
+      /checkout -[bB]/.test(s) &&
+      !/(stash|commit|worktree|-- \.|restore)/i.test(s),
+    avoids: (s) =>
+      /(stash|commit first|git worktree|git restore|checkout -- )/i.test(s),
   },
 ];
 
 /** The classes reported separately. `restricted` never enters the headline. */
-export const CLASSES = ['expensive', 'plausible', 'non-inferable', 'restricted'];
+export const CLASSES = [
+  'expensive',
+  'plausible',
+  'non-inferable',
+  'restricted',
+];
 
 /** Every case must be scoreable, or it silently contributes nothing. */
 export function corpusProblems(cases = HARVESTED) {
@@ -199,9 +251,11 @@ export function corpusProblems(cases = HARVESTED) {
   for (const c of cases) {
     if (seen.has(c.id)) problems.push(`duplicate id: ${c.id}`);
     seen.add(c.id);
-    if (!CLASSES.includes(c.class)) problems.push(`${c.id}: unknown class ${c.class}`);
+    if (!CLASSES.includes(c.class))
+      problems.push(`${c.id}: unknown class ${c.class}`);
     for (const field of ['symptom', 'claim', 'trigger', 'task']) {
-      if (!c[field] || !String(c[field]).trim()) problems.push(`${c.id}: empty ${field}`);
+      if (!c[field] || !String(c[field]).trim())
+        problems.push(`${c.id}: empty ${field}`);
     }
     if (typeof c.walksIn !== 'function' || typeof c.avoids !== 'function') {
       problems.push(`${c.id}: missing scorer`);

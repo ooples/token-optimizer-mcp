@@ -12,7 +12,11 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import { grade } from '../fixtures/ab-gate.mjs';
-import { HARVESTED, corpusProblems, CLASSES } from '../fixtures/harvested-dead-ends.mjs';
+import {
+  HARVESTED,
+  corpusProblems,
+  CLASSES,
+} from '../fixtures/harvested-dead-ends.mjs';
 
 /** A tiny synthetic corpus, so gate behaviour is not entangled with real predicates. */
 const CASES = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({
@@ -47,7 +51,11 @@ describe('admission by control failure', () => {
 
   it('reports the excluded cases rather than dropping them silently', () => {
     const g = grade(
-      [r('a', 'RIGHT', 'RIGHT'), r('b', 'WRONG', 'RIGHT'), r('c', 'RIGHT', 'RIGHT')],
+      [
+        r('a', 'RIGHT', 'RIGHT'),
+        r('b', 'WRONG', 'RIGHT'),
+        r('c', 'RIGHT', 'RIGHT'),
+      ],
       CASES,
       { minAdmitted: 0 }
     );
@@ -60,7 +68,10 @@ describe('the minimum-N requirement', () => {
   it('fails a run that clears the bar on too few cases', () => {
     // Exactly the shape of the single-turn PASS: 2 for 2, which is 100% and
     // means very little.
-    const g = grade([r('a', 'WRONG', 'RIGHT'), r('b', 'WRONG', 'RIGHT')], CASES);
+    const g = grade(
+      [r('a', 'WRONG', 'RIGHT'), r('b', 'WRONG', 'RIGHT')],
+      CASES
+    );
     expect(g.avoidedRate).toBe(1);
     expect(g.verdict).toBe('FAIL');
     expect(g.reasons.join(' ')).toMatch(/only 2 case\(s\) admitted/);
@@ -117,7 +128,9 @@ describe('the token metric', () => {
   });
 
   it('never gates on tokens, however bad the delta', () => {
-    const rows = ['a', 'b', 'c', 'd', 'e'].map((id) => r(id, 'WRONG', 'RIGHT', 100, 10_000));
+    const rows = ['a', 'b', 'c', 'd', 'e'].map((id) =>
+      r(id, 'WRONG', 'RIGHT', 100, 10_000)
+    );
     const g = grade(rows, CASES);
     expect(g.tokens.delta).toBeGreaterThan(0);
     expect(g.verdict).toBe('PASS');
@@ -142,12 +155,30 @@ describe('the harvested corpus', () => {
     expect(HARVESTED.filter((c) => c.class === 'restricted')).toHaveLength(0);
   });
 
-  it('scores its own recorded symptom as walking in, not avoiding', () => {
-    // Each case says what was actually observed when it bit. If the predicates
-    // do not call that a walk-in, they are not scoring the real dead-end.
+  it('has a symptom recorded for every case', () => {
+    // Renamed, because the previous title claimed this ran the symptom through
+    // the predicates and the body only checked its type and length. A test that
+    // describes a stronger check than it performs is worse than no test: it
+    // reads as coverage. Reported by CodeRabbit on this PR.
     for (const c of HARVESTED) {
       expect(typeof c.symptom).toBe('string');
       expect(c.symptom.length).toBeGreaterThan(40);
     }
+  });
+
+  it('actually scores each recorded symptom, and does not call it avoided', () => {
+    // THE CHECK THE OLD TITLE PROMISED. The symptom is what was observed when
+    // the dead-end bit -- a description of the failure, not of the fix. A
+    // predicate that reads it as `avoids` is scoring the wrong thing, and would
+    // mark a subject correct for describing the bug it just walked into.
+    const wrong = HARVESTED.filter((c) => c.avoids(c.symptom));
+    expect(wrong.map((c) => c.id)).toEqual([]);
+  });
+
+  it('scores an answer that states the lesson as avoided', () => {
+    // The other direction, so the predicates are not simply always-false: the
+    // claim IS the lesson, so an answer containing it must score as avoided.
+    const missed = HARVESTED.filter((c) => !c.avoids(c.claim));
+    expect(missed.map((c) => c.id)).toEqual([]);
   });
 });

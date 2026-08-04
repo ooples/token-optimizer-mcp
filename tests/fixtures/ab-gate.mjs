@@ -32,7 +32,10 @@ const DEFAULTS = { minAdmitted: 5, avoidedBar: 0.8, maxRegressions: 0 };
  * @param {Array} cases    the corpus, for the walksIn/avoids predicates
  */
 export function grade(results, cases, options = {}) {
-  const { minAdmitted, avoidedBar, maxRegressions } = { ...DEFAULTS, ...options };
+  const { minAdmitted, avoidedBar, maxRegressions } = {
+    ...DEFAULTS,
+    ...options,
+  };
   const byId = new Map(cases.map((c) => [c.id, c]));
 
   const scored = [];
@@ -47,37 +50,61 @@ export function grade(results, cases, options = {}) {
       id: r.id,
       // A case with no class still reports; it just cannot hide in an average.
       class: c.class || 'unclassified',
-      control: { ...score(r.control?.answer), tokens: r.control?.tokens ?? null },
-      treatment: { ...score(r.treatment?.answer), tokens: r.treatment?.tokens ?? null },
+      control: {
+        ...score(r.control?.answer),
+        tokens: r.control?.tokens ?? null,
+      },
+      treatment: {
+        ...score(r.treatment?.answer),
+        tokens: r.treatment?.tokens ?? null,
+      },
     });
   }
 
   // ADMISSION. The control must actually have failed, or the case is inert.
   const admitted = scored.filter((s) => s.control.walksIn && !s.control.avoids);
-  const excluded = scored.filter((s) => !(s.control.walksIn && !s.control.avoids));
+  const excluded = scored.filter(
+    (s) => !(s.control.walksIn && !s.control.avoids)
+  );
 
-  const rescued = admitted.filter((s) => s.treatment.avoids && !s.treatment.walksIn);
+  const rescued = admitted.filter(
+    (s) => s.treatment.avoids && !s.treatment.walksIn
+  );
   // A regression is the control being RIGHT and the treatment being pushed
   // wrong. It is looked for across every case, admitted or not: a misleading
   // finding does its damage exactly where the subject did not need help.
-  const regressions = scored.filter((s) => s.control.avoids && s.treatment.walksIn);
+  const regressions = scored.filter(
+    (s) => s.control.avoids && s.treatment.walksIn
+  );
 
   const avoidedRate = admitted.length ? rescued.length / admitted.length : null;
 
-  // Tokens over ADMITTED cases only, and only where both arms landed correctly:
-  // tokens spent reaching a wrong answer are not comparable to tokens spent
-  // reaching a right one.
-  const comparable = admitted.filter(
-    (s) => s.treatment.avoids && s.control.tokens != null && s.treatment.tokens != null
+  // TOKENS OVER RESCUED CASES, NOT "BOTH ARMS CORRECT".
+  //
+  // The original rule said both arms had to be correct -- which admission makes
+  // impossible, since a case is only admitted when the control FAILED it. The
+  // filter could never have selected anything, so the token line would have
+  // read 0 vs 0 forever while looking like a real measurement.
+  //
+  // What is actually comparable is a RESCUED case: the control reached a wrong
+  // answer and the treatment reached a right one. Those token counts measure
+  // different outcomes, so the delta is reported as the cost of being right
+  // rather than as a like-for-like saving, and it is labelled that way.
+  const comparable = rescued.filter(
+    (s) => s.control.tokens != null && s.treatment.tokens != null
   );
   const controlTokens = comparable.reduce((a, s) => a + s.control.tokens, 0);
-  const treatmentTokens = comparable.reduce((a, s) => a + s.treatment.tokens, 0);
+  const treatmentTokens = comparable.reduce(
+    (a, s) => a + s.treatment.tokens,
+    0
+  );
 
   const byClass = {};
   for (const s of admitted) {
     byClass[s.class] = byClass[s.class] || { admitted: 0, rescued: 0 };
     byClass[s.class].admitted += 1;
-    if (s.treatment.avoids && !s.treatment.walksIn) byClass[s.class].rescued += 1;
+    if (s.treatment.avoids && !s.treatment.walksIn)
+      byClass[s.class].rescued += 1;
   }
 
   const reasons = [];
@@ -87,12 +114,17 @@ export function grade(results, cases, options = {}) {
         `(a case counts only when the control actually fails it)`
     );
   }
-  if (avoidedRate === null) reasons.push('no admitted cases, so the avoided rate is undefined');
+  if (avoidedRate === null)
+    reasons.push('no admitted cases, so the avoided rate is undefined');
   else if (avoidedRate < avoidedBar) {
-    reasons.push(`avoided rate ${(avoidedRate * 100).toFixed(0)}% is below the ${avoidedBar * 100}% bar`);
+    reasons.push(
+      `avoided rate ${(avoidedRate * 100).toFixed(0)}% is below the ${avoidedBar * 100}% bar`
+    );
   }
   if (regressions.length > maxRegressions) {
-    reasons.push(`${regressions.length} regression(s); the bar is ${maxRegressions}`);
+    reasons.push(
+      `${regressions.length} regression(s); the bar is ${maxRegressions}`
+    );
   }
 
   return {
@@ -116,19 +148,28 @@ export function grade(results, cases, options = {}) {
 /** A human-readable report. Raw counts first, verdict last. */
 export function report(g) {
   const lines = [];
-  lines.push(`admitted : ${g.admitted.length}  [${g.admitted.join(', ') || '-'}]`);
-  lines.push(`excluded : ${g.excluded.length}  [${g.excluded.join(', ') || '-'}]   (control got these right; they measure nothing)`);
-  lines.push(`rescued  : ${g.rescued.length}  [${g.rescued.join(', ') || '-'}]`);
+  lines.push(
+    `admitted : ${g.admitted.length}  [${g.admitted.join(', ') || '-'}]`
+  );
+  lines.push(
+    `excluded : ${g.excluded.length}  [${g.excluded.join(', ') || '-'}]   (control got these right; they measure nothing)`
+  );
+  lines.push(
+    `rescued  : ${g.rescued.length}  [${g.rescued.join(', ') || '-'}]`
+  );
   lines.push(
     `avoided  : ${g.avoidedRate === null ? 'undefined' : (g.avoidedRate * 100).toFixed(0) + '%'}`
   );
-  lines.push(`regress. : ${g.regressions.length}  [${g.regressions.join(', ') || 'none'}]`);
+  lines.push(
+    `regress. : ${g.regressions.length}  [${g.regressions.join(', ') || 'none'}]`
+  );
   for (const [cls, v] of Object.entries(g.byClass)) {
     lines.push(`  class ${cls.padEnd(14)} ${v.rescued}/${v.admitted} rescued`);
   }
   lines.push(
     `tokens   : control ${g.tokens.control}, treatment ${g.tokens.treatment}, ` +
-      `delta ${g.tokens.delta >= 0 ? '+' : ''}${g.tokens.delta} over ${g.tokens.comparableCases.length} comparable case(s)`
+      `delta ${g.tokens.delta >= 0 ? '+' : ''}${g.tokens.delta} over ${g.tokens.comparableCases.length} rescued case(s) ` +
+      `-- the cost of being right, NOT a like-for-like saving`
   );
   lines.push(`VERDICT  : ${g.verdict}`);
   for (const r of g.reasons) lines.push(`  - ${r}`);
