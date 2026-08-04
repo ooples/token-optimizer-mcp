@@ -13,6 +13,8 @@ import {
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { tmpdir } from 'os';
+import { spawnSync } from 'child_process';
+import { load, nodeId } from '../../hooks-core/wiki.mjs';
 
 let dir;
 let transcript;
@@ -150,4 +152,76 @@ describe('prune', () => {
     expect(prune(root, 1_000_000)).toBe(0);
     expect(readdirSync(root)).toHaveLength(1);
   });
+});
+
+describe('the never-transmit guarantee is enforced, not merely stated', () => {
+  it('does not harvest a transcript the agent happens to open', () => {
+    // `isArchived` is the test for "this path is a stored conversation". It was
+    // written, unit-tested, and called from NOWHERE -- so the guarantee it
+    // describes was enforced by nothing.
+    //
+    // The exposure is ordinary, not exotic: archived transcripts are plain
+    // files on disk. An agent that greps the project or opens one to look at it
+    // sends it through the PreToolUse router, which hashes, snapshots and
+    // indexes every file it lets through. The user's own words would land in
+    // the graph, and injection would later serve them back into context.
+    //
+    // So this drives the REAL router at a real archive path and asserts the
+    // graph never learned it. Unit-testing `isArchived` cannot show this: the
+    // function was always correct, it was simply never asked.
+    const project = mkdtempSync(join(tmpdir(), 'archive-leak-'));
+    mkdirSync(join(project, '.git'), { recursive: true });
+    const graph = mkdtempSync(join(tmpdir(), 'archive-graph-'));
+
+    const archived = join(project, '.token-optimizer', 'wiki', 'transcripts', 's-old.jsonl');
+    mkdirSync(dirname(archived), { recursive: true });
+    writeFileSync(
+      archived,
+      JSON.stringify({ prompt: 'my AWS key is AKIAEXAMPLE', response: 'noted' }) + '\n'
+    );
+
+    // A normal file in the same session, to prove the router was working at all
+    // and the archive was skipped specifically.
+    const ordinary = join(project, 'ordinary.ts');
+    writeFileSync(ordinary, 'export const ordinary = 1;\n');
+
+    const router = resolve(dirname(new URL(import.meta.url).pathname.slice(1)),
+      '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
+
+    for (const target of [archived, ordinary]) {
+      spawnSync(process.execPath, [router], {
+        input: JSON.stringify({
+          session_id: 's-archive-leak',
+          cwd: project,
+          tool_name: 'Read',
+          tool_input: { file_path: target },
+        }),
+        encoding: 'utf8',
+        timeout: 30_000,
+        env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: graph },
+      });
+    }
+
+    const g = load(graph);
+    const keys = [...g.nodes.values()].filter((n) => n.kind === 'file').map((n) => n.key);
+
+    // The control: the router did run and did harvest.
+    expect(keys.some((k) => k.endsWith('ordinary.ts'))).toBe(true);
+
+    // The guarantee: nothing about the archive, under any spelling.
+    expect(g.nodes.has(nodeId('file', archived))).toBe(false);
+    expect(keys.some((k) => k.includes('transcripts'))).toBe(false);
+
+    // And its contents were never stored anywhere in the graph.
+    const dump = JSON.stringify([...g.nodes.values()]);
+    expect(dump).not.toContain('AKIAEXAMPLE');
+
+    for (const d of [project, graph]) {
+      try {
+        rmSync(d, { recursive: true, force: true });
+      } catch {
+        /* windows */
+      }
+    }
+  }, 60_000);
 });

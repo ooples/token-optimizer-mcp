@@ -18,6 +18,7 @@ import { recordRead } from './lib/metrics.mjs';
 import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor, forTouch, forCommand } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
+import { isArchived } from './lib/transcript.mjs';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -95,6 +96,19 @@ try {
     // makes no claims.
     for (const { path, size } of touched) {
       try {
+        // NEVER THE TRANSCRIPT ARCHIVE.
+        //
+        // Archived transcripts hold the user's own words verbatim. They are
+        // stored locally, gitignored, and deliberately never harvested -- but
+        // they are ordinary files on disk, so an agent that greps or opens one
+        // would land here and have it hashed, snapshotted and indexed into the
+        // graph, from which injection would later serve it back into context.
+        //
+        // `isArchived` is the test for exactly this, and it was enforcing
+        // nothing: written, tested, and called from nowhere. A privacy
+        // guarantee that no code path consults is not a guarantee.
+        if (isArchived(path)) continue;
+
         // CAPPED BEFORE THE READ. indexFile bounds the stored SNAPSHOT, not the
         // read that produces it, so a single huge operand -- a multi-hundred-
         // megabyte build log is the ordinary case -- would be slurped
