@@ -21,6 +21,23 @@ name: Sync Release Pins
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  # MANUAL TRIGGER, for a release PR that is already open and has nothing pending.
+  #
+  # pull_request only fires on opened/synchronize/reopened, so a release PR that
+  # existed BEFORE this workflow landed never gets one. That happened on the
+  # first release after the workflow was added: #239 sat with package.json at
+  # 5.4.0 and every pin at 5.3.6, with no event to repair it. Merging it would
+  # have tripped the guard in release.yml and failed the publish -- caught, but
+  # only after the tag was cut.
+  #
+  # A dispatch with the branch name unsticks it without waiting for
+  # release-please to amend the PR.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Release PR branch to sync (defaults to the current ref)'
+        required: false
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,17 +52,45 @@ jobs:
     # Scoped to release-please PRs on purpose. Auto-committing to a
     # contributor's branch would be a surprising thing for a lint-adjacent job
     # to do; the release PR is machine-authored, so amending it is not.
-    if: startsWith(github.head_ref, 'release-please')
+    #
+    # head_ref is empty on workflow_dispatch, so that case is admitted here and
+    # the branch is re-checked below -- the scoping is enforced either way.
+    if: >-
+      startsWith(github.head_ref, 'release-please')
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
 
     steps:
+      - name: Resolve the branch to sync
+        id: target
+        env:
+          # Via env rather than inline, so a branch name cannot be interpreted
+          # as shell.
+          INPUT_REF: ${{ inputs.ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          BRANCH="${INPUT_REF:-${HEAD_REF:-$REF_NAME}}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "Resolved target branch: $BRANCH"
+
+          # The same scoping the pull_request path gets from its `if`. Without
+          # this, a dispatch could auto-commit to any branch in the repo.
+          case "$BRANCH" in
+            release-please*) ;;
+            *)
+              echo "::error::Refusing to sync '$BRANCH': only release-please branches are amended automatically."
+              exit 1
+              ;;
+          esac
+
       - name: Checkout the release PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ steps.target.outputs.branch }}
           # Default GITHUB_TOKEN is enough to push to a same-repo PR branch.
           token: ${{ secrets.GITHUB_TOKEN }}
 
