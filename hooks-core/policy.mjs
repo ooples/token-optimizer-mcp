@@ -177,18 +177,28 @@ export function fileSize(path) {
  * means state on disk, keyed by the session id the hook payload carries.
  * ------------------------------------------------------------------ */
 
-const STATE_ROOT = join(tmpdir(), 'token-optimizer-hooks');
+/**
+ * Where per-session hook state lives.
+ *
+ * Read per call rather than captured at import, so a test can point it at a
+ * temp directory. Contention on this file is the normal case -- parallel tool
+ * calls each spawn their own hook process -- and it was untestable while the
+ * path was a module constant, which is part of why an unlocked
+ * read-modify-write survived here unnoticed.
+ */
+const stateRoot = () =>
+  process.env.TOKEN_OPTIMIZER_STATE_DIR || join(tmpdir(), 'token-optimizer-hooks');
 
 function statePath(sessionId) {
   // Session ids come from the harness and are uuid-shaped, but they land in a
   // file path, so anything that could traverse is stripped rather than trusted.
   const safe = String(sessionId || 'default').replace(/[^A-Za-z0-9_-]/g, '');
-  return join(STATE_ROOT, `${safe || 'default'}.json`);
+  return join(stateRoot(), `${safe || 'default'}.json`);
 }
 
 /** A usable state object, whatever was on disk. */
 function emptyState() {
-  return { seen: {}, denied: {} };
+  return { seen: {}, denied: {}, injected: [] };
 }
 
 /**
@@ -208,6 +218,13 @@ export function loadState(sessionId) {
     return {
       seen: parsed.seen && typeof parsed.seen === 'object' ? parsed.seen : {},
       denied: parsed.denied && typeof parsed.denied === 'object' ? parsed.denied : {},
+      // WITHOUT THIS THE ONCE-PER-SESSION GATE DOES NOT EXIST. Every tool call
+      // is a separate hook PROCESS, so a set held only in memory dies with the
+      // process that built it: the router recorded which findings it had
+      // injected, saveState dropped the field, and the next call re-injected
+      // the same advice. The gate looked correct in unit tests, which share one
+      // process, and did nothing at all in production.
+      injected: Array.isArray(parsed.injected) ? parsed.injected : [],
     };
   } catch {
     return emptyState();
@@ -233,23 +250,36 @@ export function loadState(sessionId) {
 export function saveState(sessionId, state) {
   let lock = null;
   try {
-    mkdirSync(STATE_ROOT, { recursive: true, mode: 0o700 });
+    mkdirSync(stateRoot(), { recursive: true, mode: 0o700 });
 
     // A LOCK, because merging alone still loses updates: two processes can both
     // read, both merge, and the second write still discards the first's
     // additions. `wx` fails if the file exists, which makes creation an atomic
     // test-and-set on every platform we target.
     //
-    // Bounded and best-effort: if the lock cannot be taken quickly the write
-    // proceeds anyway. A stale lock from a killed process must never wedge
-    // enforcement, and the worst case without the lock is the merge behaviour
-    // that was already acceptable.
+    // NO UNLOCKED READ-MODIFY-WRITE. This used to fall through and write anyway
+    // when the lock could not be taken, which reintroduces exactly the lost
+    // update the lock exists to prevent: a process that misses the lock reads
+    // the pre-merge state and can erase an `injected` id another process just
+    // recorded, letting the same finding be injected twice in one session.
+    //
+    // Skipping the write is the safe direction. The cost is that THIS process's
+    // additions are not persisted, and every consequence of that is already
+    // bounded by design -- a repeated denial is allowed through by rule, and a
+    // repeated injection costs its tokens once more. A stale lock is still
+    // broken and taken below, so a killed process cannot wedge enforcement.
     lock = takeLock(sessionId);
+    if (!lock) return false;
 
     const current = loadState(sessionId);
     const merged = {
       seen: { ...current.seen, ...state.seen },
       denied: { ...current.denied, ...state.denied },
+      // UNION, not overwrite. Two hook processes running in parallel each hold
+      // their own view of what has been injected; taking the last writer's copy
+      // would resurrect a finding the other had already delivered, which is the
+      // repetition the once-per-session gate exists to stop.
+      injected: [...new Set([...(current.injected || []), ...(state.injected || [])])],
     };
 
     // Write-then-rename so a reader never observes a half-written file.
@@ -272,7 +302,25 @@ export function saveState(sessionId, state) {
 }
 
 /** Best-effort exclusive lock. Returns the lock path, or null if not acquired. */
-function takeLock(sessionId, { attempts = 20, staleMs = 5000 } = {}) {
+/**
+ * Sleeps synchronously.
+ *
+ * These hooks are single-shot processes that must reach a decision before they
+ * return, so there is no event loop to yield to and nothing to await. Atomics
+ * on a throwaway SharedArrayBuffer is the standard way to block a worker for a
+ * bounded time without burning the CPU.
+ */
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    // SharedArrayBuffer unavailable under some policies. The caller still makes
+    // progress; it simply retries sooner.
+  }
+}
+
+/** Best-effort exclusive lock. Returns the lock path, or null if not acquired. */
+function takeLock(sessionId, { attempts = 20, staleMs = 5000, waitMs = 15 } = {}) {
   const path = `${statePath(sessionId)}.lock`;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -283,10 +331,21 @@ function takeLock(sessionId, { attempts = 20, staleMs = 5000 } = {}) {
       // A lock left behind by a killed process would otherwise block every
       // future write for the life of the session.
       try {
-        if (Date.now() - statSync(path).mtimeMs > staleMs) unlinkSync(path);
+        if (Date.now() - statSync(path).mtimeMs > staleMs) {
+          unlinkSync(path);
+          continue; // Retry immediately; the holder is gone.
+        }
       } catch {
-        // Raced with the holder releasing it; just retry.
+        // Raced with the holder releasing it; retry immediately.
+        continue;
       }
+
+      // A LIVE holder. Waiting is the whole point: the previous loop retried
+      // 20 times with no delay, so it exhausted in microseconds and the caller
+      // fell through to an unlocked write. Backing off actually lets the holder
+      // finish -- a state write is a few milliseconds -- which is the
+      // difference between contending and merely pretending to.
+      if (i < attempts - 1) sleepSync(waitMs);
     }
   }
   return null;
@@ -312,6 +371,36 @@ export function alreadyDenied(state, key) {
 
 /** Emits nothing and exits 0 -- the normal permission flow proceeds. */
 export function allow() {
+  process.exit(0);
+}
+
+/**
+ * Allows the call AND hands the model something it did not ask for.
+ *
+ * This is the delivery half of the knowledge graph, and it had no
+ * implementation. `forTouch` -- the just-in-time injection the design calls
+ * "where the win lands" -- was imported by nothing outside its own test, so a
+ * finding could only ever reach a model through a REFUSAL. Measured across a
+ * full working session on three real projects: 4,053 capture events, 2,063
+ * reads, and findings served exactly twice. The graph was writing knowledge it
+ * had no way to deliver.
+ *
+ * `additionalContext` rather than a `permissionDecisionReason`, because the call
+ * is not being judged -- it is proceeding, and this rides along with it. Nothing
+ * is emitted when there is nothing to say, so the common path stays a bare
+ * exit(0).
+ */
+export function allowWithContext(context) {
+  if (context) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          additionalContext: withEscape(context),
+        },
+      })
+    );
+  }
   process.exit(0);
 }
 

@@ -19,6 +19,9 @@ import { dirname } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROUTER = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
 
+/** An empty graph, so no stored finding can influence an enforcement decision. */
+const ISOLATED_GRAPH = mkdtempSync(join(tmpdir(), 'enforcement-graph-'));
+
 let workspace;
 let big;
 let small;
@@ -36,12 +39,21 @@ beforeAll(() => {
 
 afterAll(() => rmSync(workspace, { recursive: true, force: true }));
 
-/** Runs the router with a payload and returns the parsed decision. */
+/**
+ * Runs the router with a payload and returns the parsed decision.
+ *
+ * ISOLATED GRAPH. Without this the router consults whatever findings happen to
+ * be in the developer's own project graph, so these assertions depended on
+ * machine state: seeding a real finding whose trigger matched `| head` turned
+ * this suite red without a line of production code changing. A suite about
+ * ENFORCEMENT must not be able to fail because of what someone learned last
+ * week.
+ */
 function run(payload, env = {}) {
   const result = spawnSync(process.execPath, [ROUTER], {
     input: JSON.stringify({ session_id: payload.session_id || 's-default', ...payload }),
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH, ...env },
   });
   if (!result.stdout.trim()) return { decision: 'allow' };
   const parsed = JSON.parse(result.stdout);
@@ -51,6 +63,7 @@ function run(payload, env = {}) {
     reason: out.permissionDecisionReason || out.additionalContext || '',
   };
 }
+
 
 const read = (path, extra = {}) => ({ tool_name: 'Read', tool_input: { file_path: path }, ...extra });
 

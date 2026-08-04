@@ -28,6 +28,42 @@ import { substitutionBudget } from './metrics.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
+
+/** Most findings considered for one command before the budget decides. */
+const MAX_COMMAND_CANDIDATES = 20;
+
+/**
+ * Compiles a finding's trigger, or returns null if it is not safe to run.
+ *
+ * TRIGGERS ARE MODEL-SUPPLIED. The harvest writes them, and a model asked for a
+ * regex can produce `(a+)+b` as readily as `\bnpx\b` -- a pattern whose
+ * backtracking is exponential in the input length. That would execute on the
+ * PreToolUse path against a command the user is waiting on, so a single bad
+ * trigger would hang every subsequent tool call in the session. Neither a
+ * try/catch nor a timeout helps: catastrophic backtracking does not throw, it
+ * simply does not return.
+ *
+ * So the pattern is rejected before it is ever run. The test is deliberately
+ * conservative -- nested quantifiers are the shape that causes this, and no
+ * legitimate trigger for a command needs one.
+ */
+export function safeTrigger(source) {
+  const raw = String(source || '');
+  if (!raw || raw.length > 200) return null;
+
+  // A quantifier applied to a group that itself contains a quantifier: (a+)+,
+  // (a*)*, (\d+)*, (?:ab+)+ and so on. This is the classic ReDoS shape.
+  if (/\([^)]*[+*}][^)]*\)\s*[+*{]/.test(raw)) return null;
+
+  // Stacked quantifiers outside a group, e.g. `a+*` or `.*+`.
+  if (/[+*}]\s*[+*]/.test(raw)) return null;
+
+  try {
+    return new RegExp(raw, 'i');
+  } catch {
+    return null;
+  }
+}
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
 /**
@@ -64,11 +100,21 @@ function render(finding) {
  * measurement holdout -- in which case the caller must behave exactly as if the
  * graph were empty, or the experiment measures nothing.
  */
-export function forTouch(dir, graph, rawPath, { budget = touchBudget(), sessionId } = {}) {
+export function forTouch(
+  dir,
+  graph,
+  rawPath,
+  { budget = touchBudget(), sessionId, alreadyInjected = new Set() } = {}
+) {
   // Canonical, so a touch finds findings anchored under any other spelling.
   const filePath = canonicalPath(rawPath);
   const anchorId = nodeId('file', filePath);
-  const candidates = findingsFor(graph, anchorId, { limit: 30 });
+  // The same once-per-session gate the command path uses. A file touched
+  // repeatedly -- which is the normal shape of working on it -- would otherwise
+  // re-serve the same findings on every single touch, which is both a token
+  // cost per call and the fastest way to train a model to skim past them.
+  const candidates = findingsFor(graph, anchorId, { limit: 30 })
+    .filter((f) => !alreadyInjected.has(f.key));
   if (!candidates.length) return null;
 
   const holdout = inHoldout(filePath);
@@ -87,7 +133,168 @@ export function forTouch(dir, graph, rawPath, { budget = touchBudget(), sessionI
 
   if (holdout || !kept.length) return null;
 
+  for (const f of kept) alreadyInjected.add(f.key);
+
   return `Known about ${filePath} (from previous sessions):\n${kept.map(render).join('\n')}`;
+}
+
+/**
+ * Does this finding apply to the command about to run?
+ *
+ * A finding carries an optional `trigger`: a string or regex source matched
+ * against the command text. Explicit beats inferred -- the alternative was
+ * scraping command-looking tokens out of the claim, which both misses (a claim
+ * that describes the command in prose) and misfires (a claim that merely
+ * mentions a command it is not about).
+ *
+ * With no trigger, a `command` or `failure` finding still qualifies on a weaker
+ * test: the command mentions a distinctive token from the claim. That keeps the
+ * findings already in existing graphs useful without a migration, while new
+ * ones can be precise.
+ */
+function appliesToCommand(finding, command) {
+  const text = String(command || '');
+  if (!text) return false;
+
+  if (finding.trigger) {
+    const pattern = safeTrigger(finding.trigger);
+    if (pattern) {
+      try {
+        return pattern.test(text);
+      } catch {
+        return false;
+      }
+    }
+    // Rejected as unsafe or malformed: fall back to a literal search, which
+    // cannot backtrack. A bad trigger degrades to a substring match rather
+    // than taking the hook down or hanging it.
+    return text.toLowerCase().includes(String(finding.trigger).toLowerCase());
+  }
+
+  // Untriggered findings only qualify if they are about doing something.
+  if (finding.type !== 'command' && finding.type !== 'failure') return false;
+
+  // Distinctive tokens, matched as WHOLE WORDS.
+  //
+  // The floor is three characters because the tokens that carry the meaning are
+  // short: jest, npm, git, ssh, tsc. A five-character floor -- the first
+  // attempt -- excluded "jest" from the very finding this feature exists to
+  // deliver, which the tests caught. Whole-word matching is what makes the low
+  // floor safe: without it "npm" would fire on any path containing "npm", and
+  // every claim mentioning a common word would match every command.
+  const claim = String(finding.claim || '');
+  const tokens = [
+    ...new Set(
+      (claim.match(/[a-z][a-z0-9._-]{2,}/gi) || [])
+        .map((t) => t.toLowerCase().replace(/[._-]+$/, ''))
+        .filter((t) => t.length >= 3 && !STOPWORDS.has(t))
+    ),
+  ];
+
+  return tokens.some((t) => {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try {
+      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Words common enough that matching on them would fire on every command.
+ * Deliberately small: this is a noise floor, not a language model.
+ */
+const STOPWORDS = new Set([
+  // Long enough to pass the length floor, common enough to match anything.
+  'about', 'after', 'again', 'against', 'because', 'before', 'being', 'between',
+  'could', 'every', 'first', 'instead', 'other', 'rather', 'should', 'since',
+  'their', 'there', 'these', 'thing', 'those', 'through', 'where', 'which',
+  'while', 'would', 'without', 'project', 'always', 'never',
+  // Short words that only became candidates once the floor dropped to three,
+  // which it had to so that the tool names that matter -- jest, npm, git, ssh
+  // -- are matchable at all.
+  'and', 'are', 'but', 'for', 'from', 'has', 'have', 'into', 'its', 'not',
+  'one', 'only', 'our', 'out', 'same', 'some', 'such', 'than', 'that', 'the',
+  'them', 'then', 'they', 'this', 'too', 'use', 'used', 'very', 'was', 'were',
+  'what', 'when', 'will', 'with', 'you', 'your', 'run', 'runs', 'way', 'why',
+]);
+
+/**
+ * What the model sees when it is about to RUN something.
+ *
+ * The gap this closes: injection was keyed entirely on touching a FILE, but the
+ * findings worth the most are about ACTIONS. The case that proved it -- a
+ * finding of type `command`, "run the suite with npm test, not npx jest",
+ * anchored to a source file. An agent about to run `npx jest` is not touching
+ * that file, so the finding could not fire at the only moment it mattered, and
+ * the agent made exactly the mistake the graph had already recorded.
+ *
+ * `alreadyInjected` is the once-per-session gate. Repeating the same advice on
+ * every command is how a real signal becomes wallpaper, and an ignored
+ * injection still costs its tokens on every call.
+ */
+export function forCommand(
+  dir,
+  graph,
+  command,
+  { budget = touchBudget(), sessionId, alreadyInjected = new Set() } = {}
+) {
+  if (!command) return null;
+
+  const candidates = [];
+  for (const node of graph.nodes.values()) {
+    if (node.kind !== 'finding' || node.retired) continue;
+    if (alreadyInjected.has(node.key)) continue;
+    if (!appliesToCommand(node, command)) continue;
+    candidates.push(node);
+  }
+  if (!candidates.length) return null;
+
+  // Highest confidence first, so a tight budget keeps the most trustworthy.
+  // AN EXPLICIT TRIGGER BEATS AN INCIDENTAL WORD, before confidence is even
+  // consulted. A finding whose author wrote a pattern that matched this command
+  // is about this command; one that matched because its prose happened to
+  // contain "build" is not, however confident it was about something else.
+  //
+  // Observed live: `dotnet build App.csproj | tail -20` surfaced a finding about
+  // stale MCP server processes instead of the one about pipes hiding exit
+  // codes, and `gh run list` surfaced a git-refspec finding instead of the one
+  // about mergeStateStatus. Both had the same confidence as the right answer,
+  // so confidence alone could not separate them -- and a tight budget then kept
+  // the wrong one.
+  const explicit = (n) => (n.trigger && safeTrigger(n.trigger)?.test(command) ? 1 : 0);
+  candidates.sort(
+    (a, b) => explicit(b) - explicit(a) || (b.confidence ?? 0.5) - (a.confidence ?? 0.5)
+  );
+
+  // CAPPED BEFORE serve(). serve() re-reads and diffs the anchor of every
+  // finding it is handed, so an unbounded candidate list turns one command into
+  // one file read per matching finding -- on the hook path, with the user
+  // waiting. The budget would discard the surplus a moment later anyway, so the
+  // only thing an uncapped list buys is the I/O.
+  const considered = candidates.slice(0, MAX_COMMAND_CANDIDATES);
+
+  const served = serve(graph, considered);
+  const { kept, spent } = fit(served, budget);
+  if (!kept.length) return null;
+
+  record(dir, {
+    kind: 'inject',
+    trigger: 'command',
+    anchor: String(command).slice(0, 120),
+    holdout: false,
+    tokens: spent,
+    count: kept.length,
+    stale: kept.some((f) => f.stale),
+    sessionId,
+  });
+
+  for (const f of kept) alreadyInjected.add(f.key);
+
+  return `Before running this — known from previous sessions:\n${kept
+    .map(render)
+    .join('\n')}`;
 }
 
 /**

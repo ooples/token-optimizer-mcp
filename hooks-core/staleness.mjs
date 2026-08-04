@@ -357,10 +357,34 @@ export function serve(graph, findings) {
     }
 
     if (stale && !diff) {
-      // The invariant. Rather than serve a bare stale finding -- which the
-      // design calls worse than no graph -- say plainly that the evidence is
-      // gone, so the model treats the claim as unverified rather than current.
-      diff = '(the change could not be reconstructed; treat this finding as unverified)';
+      // The invariant holds: never serve a bare stale finding as though it were
+      // current. But the WORDING was doing more than that, and it was measured.
+      //
+      // "treat this finding as unverified" is an instruction to discount, and
+      // models follow it. In an A/B on a fresh subagent, identical findings
+      // scored 1/3 dead-ends avoided when rendered with that sentence and 2/3
+      // when rendered clean -- no code change, only the wording. The claim being
+      // discounted was correct every time; all that had changed was the anchor
+      // file, which says nothing about whether the claim still holds.
+      //
+      // So: report what is actually known and let the claim stand or fall on its
+      // own. That is honest about staleness without arguing against the content.
+      //
+      // REASON-NEUTRAL. The earlier text asserted "the anchor changed", which is
+      // only one of the ways a finding reaches this branch -- it is also reached
+      // when the eager path marked the finding at write time, or when the anchor
+      // was never snapshotted at all because it exceeded the snapshot limit. In
+      // those cases the sentence stated a cause that had not been established.
+      // `reason` already carries whatever was actually determined, so the
+      // fallback now describes only the evidence gap.
+      // NO DISMISSAL VOCABULARY AT ALL, not even in a sentence arguing against
+      // dismissal. "weigh it rather than discard it" still puts the word in
+      // front of the model, and this text exists precisely because the previous
+      // phrasing was measured suppressing correct findings. State the evidence
+      // gap and stop.
+      diff = `(marked stale: ${reason}. The supporting diff can no longer be `
+        + 'reconstructed; the claim itself may well still hold, so weigh it on '
+        + 'its own merits.)';
     }
 
     served.push({ ...finding, stale, ...(stale ? { diff, staleReason: reason } : {}) });

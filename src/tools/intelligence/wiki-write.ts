@@ -41,6 +41,13 @@ export interface WikiWriteOptions {
   anchors: string[];
   /** finding | decision | failure | command | map. */
   type?: string;
+  /**
+   * Optional regex matched against a command about to run. Anchors answer
+   * "which file"; a trigger answers "when". Without one, a claim about running
+   * something can only surface if someone opens the file it is anchored to,
+   * which is not when the advice is needed.
+   */
+  trigger?: string;
   /** 0..1. Defaults to 0.9 — deliberate, but still a model's assertion. */
   confidence?: number;
   /** Recorded for provenance so a claim can be traced to the session. */
@@ -119,7 +126,7 @@ export async function wikiWrite(
 
     const keys: string[] = harvestWrite.writeHarvested(
       dir,
-      [{ type, claim, confidence, anchors }],
+      [{ type, claim, confidence, anchors, trigger: options.trigger }],
       {
         sessionId: options.sessionId ?? null,
         origin: curate.ORIGIN_AGENT,
@@ -204,6 +211,14 @@ export const WIKI_WRITE_TOOL_DEFINITION = {
       sessionId: {
         type: 'string',
         description: 'Optional session id, for provenance.',
+      },
+      trigger: {
+        type: 'string',
+        description:
+          'Optional regex matched against a command about to run, e.g. "\\bnpx jest\\b". ' +
+          'Anchors say which FILE a claim is about; a trigger says WHEN it is relevant. ' +
+          'Set it on anything about running something, or the claim can only surface ' +
+          'when someone happens to open the file it is anchored to.',
       },
       projectRoot: {
         type: 'string',
