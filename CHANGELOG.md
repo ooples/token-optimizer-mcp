@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.6...v5.4.0) (2026-08-04)
+
+
+### Features
+
+* **hooks:** wire co-occurrence to restoration, so the graph can predict ([#240](https://github.com/ooples/token-optimizer-mcp/issues/240)) ([41e422f](https://github.com/ooples/token-optimizer-mcp/commit/41e422fbdc76a2cae6c9aae6f264453670ee89f2))
+* **inject:** deliver findings to the model, and measure whether it helps ([#235](https://github.com/ooples/token-optimizer-mcp/issues/235)) ([e1f6d2f](https://github.com/ooples/token-optimizer-mcp/commit/e1f6d2f05ea4f4ac559f71841809a1712bc1a54e))
+* **lessons:** capture user corrections and deliver them back as instructions ([#236](https://github.com/ooples/token-optimizer-mcp/issues/236)) ([f2fa046](https://github.com/ooples/token-optimizer-mcp/commit/f2fa046a97dc13907d6bdcc0dddb8159336e1c93))
+
+
+### Bug Fixes
+
+* **ci:** let the release-pin sync be triggered manually ([#244](https://github.com/ooples/token-optimizer-mcp/issues/244)) ([16fc1c5](https://github.com/ooples/token-optimizer-mcp/commit/16fc1c5061bfccb9f4d7d32f85552cd39cdb8344))
+* install verification, plugin-aware doctor, and release pin drift ([#241](https://github.com/ooples/token-optimizer-mcp/issues/241)) ([0295a23](https://github.com/ooples/token-optimizer-mcp/commit/0295a23d0b46919c80b53524eaa0f0de335692dc))
+* **paths:** canonicalise to a fixed point by construction, not by patching ([#243](https://github.com/ooples/token-optimizer-mcp/issues/243)) ([1ce8308](https://github.com/ooples/token-optimizer-mcp/commit/1ce8308fd31625ce18d7b6b223b0bac1b651307a))
+
 ## [5.3.6](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.5...v5.3.6) (2026-08-04)
 
 
