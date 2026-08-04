@@ -77,7 +77,12 @@ export function pin(dir, key, pinned = true) {
  * changed, and what it changed from -- which is the same reason `contradicts`
  * is an edge rather than an overwrite.
  */
-export function correct(dir, key, claim, { confidence = 0.95 } = {}) {
+export function correct(
+  dir,
+  key,
+  claim,
+  { confidence = 0.95, origin = ORIGIN_HUMAN } = {}
+) {
   const graph = load(dir);
   const existing = findingByKey(graph, key);
   if (!existing) return false;
@@ -95,7 +100,22 @@ export function correct(dir, key, claim, { confidence = 0.95 } = {}) {
     claim,
     confidence,
     type: existing.type || 'finding',
-    origin: ORIGIN_HUMAN,
+    // THE CALLER'S ORIGIN, not an assumption. This stamped ORIGIN_HUMAN
+    // unconditionally, so a correction written by an agent -- or carried over
+    // from a harvested claim -- was recorded as a person's assertion. That is
+    // the exact confusion the origin field exists to prevent, and the one
+    // harvest-write.mjs refuses to create when it writes a finding: "a
+    // hand-written assertion and a machine guess look identical three months
+    // later, which quietly destroys the reader's ability to calibrate trust".
+    // It also outranks its own source, since human findings carry the highest
+    // ranking weight.
+    //
+    // Defaults to ORIGIN_HUMAN because curate is the hand-curation path, so
+    // every existing caller keeps its current behaviour. Deliberately NOT
+    // validated against a fixed list: the set of origins differs across
+    // branches, and an unrecognised value already degrades to the neutral
+    // ranking weight rather than doing damage.
+    origin: typeof origin === 'string' && origin ? origin : ORIGIN_HUMAN,
   });
 
   const replacementId = nodeId('finding', replacementKey);
