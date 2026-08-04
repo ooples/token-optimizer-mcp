@@ -68,7 +68,16 @@ describe('the dashboard is self-contained', () => {
     // Pinned exactly: a caret range would let the dependency change under us,
     // which is the supply-chain half of what was wrong with the CDN.
     expect(pkg.dependencies['chart.js']).toBe('4.4.0');
-    expect(pkg.scripts['copy:assets']).toContain('vendor/chart.umd.min.js');
+
+    // The vendoring step moved out of an inline `node -e` in copy:assets and
+    // into scripts/copy-assets.mjs, so that a missing chart.js could fail with a
+    // remedy instead of a bare ENOENT. Assert it where it now lives -- deleting
+    // the vendoring from that module must still fail this test.
+    expect(pkg.scripts['copy:assets']).toContain('scripts/copy-assets.mjs');
+    const copyAssets = readFileSync(join(process.cwd(), 'scripts', 'copy-assets.mjs'), 'utf8');
+    expect(copyAssets).toContain('chart.umd.min.js'); // the vendored target
+    expect(copyAssets).toContain('chart.umd.js'); // sourced from the local package
+    expect(copyAssets).not.toMatch(/https?:\/\/[^\s'"]*chart/i); // never a CDN
 
     // And the loader points at the local copy.
     const charts = readFileSync(join(PUBLIC, 'js', 'charts.js'), 'utf8');

@@ -33,7 +33,7 @@
     "uninstall-hooks": "node scripts/uninstall.mjs",
     "doctor": "node scripts/doctor.mjs",
     "build": "tsc && npm run copy:assets",
-    "copy:assets": "node -e \"const{cpSync,mkdirSync}=require('fs');cpSync('src/dashboard/public','dist/dashboard/public',{recursive:true});mkdirSync('dist/dashboard/public/vendor',{recursive:true});cpSync('node_modules/chart.js/dist/chart.umd.js','dist/dashboard/public/vendor/chart.umd.min.js')\"",
+    "copy:assets": "node scripts/copy-assets.mjs",
     "start": "node dist/server/index.js",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
