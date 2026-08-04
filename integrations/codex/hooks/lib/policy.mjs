@@ -318,6 +318,36 @@ export function allow() {
 }
 
 /**
+ * Allows the call AND hands the model something it did not ask for.
+ *
+ * This is the delivery half of the knowledge graph, and it had no
+ * implementation. `forTouch` -- the just-in-time injection the design calls
+ * "where the win lands" -- was imported by nothing outside its own test, so a
+ * finding could only ever reach a model through a REFUSAL. Measured across a
+ * full working session on three real projects: 4,053 capture events, 2,063
+ * reads, and findings served exactly twice. The graph was writing knowledge it
+ * had no way to deliver.
+ *
+ * `additionalContext` rather than a `permissionDecisionReason`, because the call
+ * is not being judged -- it is proceeding, and this rides along with it. Nothing
+ * is emitted when there is nothing to say, so the common path stays a bare
+ * exit(0).
+ */
+export function allowWithContext(context) {
+  if (context) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          additionalContext: withEscape(context),
+        },
+      })
+    );
+  }
+  process.exit(0);
+}
+
+/**
  * Blocks the call and tells the model exactly what to call instead.
  *
  * The reason string is the whole user interface of this product for an agent.

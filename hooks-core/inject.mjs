@@ -91,6 +91,139 @@ export function forTouch(dir, graph, rawPath, { budget = touchBudget(), sessionI
 }
 
 /**
+ * Does this finding apply to the command about to run?
+ *
+ * A finding carries an optional `trigger`: a string or regex source matched
+ * against the command text. Explicit beats inferred -- the alternative was
+ * scraping command-looking tokens out of the claim, which both misses (a claim
+ * that describes the command in prose) and misfires (a claim that merely
+ * mentions a command it is not about).
+ *
+ * With no trigger, a `command` or `failure` finding still qualifies on a weaker
+ * test: the command mentions a distinctive token from the claim. That keeps the
+ * findings already in existing graphs useful without a migration, while new
+ * ones can be precise.
+ */
+function appliesToCommand(finding, command) {
+  const text = String(command || '');
+  if (!text) return false;
+
+  if (finding.trigger) {
+    try {
+      return new RegExp(finding.trigger, 'i').test(text);
+    } catch {
+      // A malformed trigger must not throw on the hook path; fall back to a
+      // literal search so a bad regex degrades to a substring match.
+      return text.toLowerCase().includes(String(finding.trigger).toLowerCase());
+    }
+  }
+
+  // Untriggered findings only qualify if they are about doing something.
+  if (finding.type !== 'command' && finding.type !== 'failure') return false;
+
+  // Distinctive tokens, matched as WHOLE WORDS.
+  //
+  // The floor is three characters because the tokens that carry the meaning are
+  // short: jest, npm, git, ssh, tsc. A five-character floor -- the first
+  // attempt -- excluded "jest" from the very finding this feature exists to
+  // deliver, which the tests caught. Whole-word matching is what makes the low
+  // floor safe: without it "npm" would fire on any path containing "npm", and
+  // every claim mentioning a common word would match every command.
+  const claim = String(finding.claim || '');
+  const tokens = [
+    ...new Set(
+      (claim.match(/[a-z][a-z0-9._-]{2,}/gi) || [])
+        .map((t) => t.toLowerCase().replace(/[._-]+$/, ''))
+        .filter((t) => t.length >= 3 && !STOPWORDS.has(t))
+    ),
+  ];
+
+  return tokens.some((t) => {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try {
+      return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Words common enough that matching on them would fire on every command.
+ * Deliberately small: this is a noise floor, not a language model.
+ */
+const STOPWORDS = new Set([
+  // Long enough to pass the length floor, common enough to match anything.
+  'about', 'after', 'again', 'against', 'because', 'before', 'being', 'between',
+  'could', 'every', 'first', 'instead', 'other', 'rather', 'should', 'since',
+  'their', 'there', 'these', 'thing', 'those', 'through', 'where', 'which',
+  'while', 'would', 'without', 'project', 'always', 'never',
+  // Short words that only became candidates once the floor dropped to three,
+  // which it had to so that the tool names that matter -- jest, npm, git, ssh
+  // -- are matchable at all.
+  'and', 'are', 'but', 'for', 'from', 'has', 'have', 'into', 'its', 'not',
+  'one', 'only', 'our', 'out', 'same', 'some', 'such', 'than', 'that', 'the',
+  'them', 'then', 'they', 'this', 'too', 'use', 'used', 'very', 'was', 'were',
+  'what', 'when', 'will', 'with', 'you', 'your', 'run', 'runs', 'way', 'why',
+]);
+
+/**
+ * What the model sees when it is about to RUN something.
+ *
+ * The gap this closes: injection was keyed entirely on touching a FILE, but the
+ * findings worth the most are about ACTIONS. The case that proved it -- a
+ * finding of type `command`, "run the suite with npm test, not npx jest",
+ * anchored to a source file. An agent about to run `npx jest` is not touching
+ * that file, so the finding could not fire at the only moment it mattered, and
+ * the agent made exactly the mistake the graph had already recorded.
+ *
+ * `alreadyInjected` is the once-per-session gate. Repeating the same advice on
+ * every command is how a real signal becomes wallpaper, and an ignored
+ * injection still costs its tokens on every call.
+ */
+export function forCommand(
+  dir,
+  graph,
+  command,
+  { budget = touchBudget(), sessionId, alreadyInjected = new Set() } = {}
+) {
+  if (!command) return null;
+
+  const candidates = [];
+  for (const node of graph.nodes.values()) {
+    if (node.kind !== 'finding' || node.retired) continue;
+    if (alreadyInjected.has(node.key)) continue;
+    if (!appliesToCommand(node, command)) continue;
+    candidates.push(node);
+  }
+  if (!candidates.length) return null;
+
+  // Highest confidence first, so a tight budget keeps the most trustworthy.
+  candidates.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5));
+
+  const served = serve(graph, candidates);
+  const { kept, spent } = fit(served, budget);
+  if (!kept.length) return null;
+
+  record(dir, {
+    kind: 'inject',
+    trigger: 'command',
+    anchor: String(command).slice(0, 120),
+    holdout: false,
+    tokens: spent,
+    count: kept.length,
+    stale: kept.some((f) => f.stale),
+    sessionId,
+  });
+
+  for (const f of kept) alreadyInjected.add(f.key);
+
+  return `Before running this — known from previous sessions:\n${kept
+    .map(render)
+    .join('\n')}`;
+}
+
+/**
  * The bounded SessionStart index: titles and ids only, never bodies.
  *
  * Its budget is EARNED from measured hit rate rather than fixed, so a mature

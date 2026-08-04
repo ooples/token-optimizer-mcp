@@ -11,12 +11,12 @@
  * free to -- and routinely did -- ignore.
  */
 
-import { readPayload, loadState, saveState, alreadyDenied, allow, enforce, mode, MODE_OFF }
+import { readPayload, loadState, saveState, alreadyDenied, allow, allowWithContext, enforce, mode, MODE_OFF }
   from './lib/policy.mjs';
 import { decide, remember, normalizePayload, readCostBytes, touchedFiles, isContentDump } from './lib/decide.mjs';
 import { recordRead } from './lib/metrics.mjs';
 import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
-import { refusalPayload, substitutionFor } from './lib/inject.mjs';
+import { refusalPayload, substitutionFor, forTouch, forCommand } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -121,7 +121,54 @@ try {
       } catch { /* never let bookkeeping break an allowed call */ }
     }
 
-    allow();
+    // DELIVER WHAT THE GRAPH ALREADY KNOWS. Everything above this line WRITES
+    // to the graph; until now nothing read from it on an allowed call, so
+    // `forTouch` -- the injection the design calls "where the win lands" -- was
+    // imported by nothing but its own test. Measured over a full session on
+    // three real projects: 4,053 captures, 2,063 reads, findings served twice.
+    //
+    // Both triggers fire here because findings answer two different questions.
+    // An anchor says which FILE a claim is about; a trigger says WHEN it is
+    // relevant. A claim about running something ("use npm test, not npx jest")
+    // is anchored to a file nobody opens at the moment they run the command,
+    // so file-touch injection alone could never deliver it -- and did not.
+    let context = null;
+    try {
+      // Once per session, per finding. Repeating advice on every call is how a
+      // real signal becomes wallpaper, and an ignored injection still costs its
+      // tokens every time.
+      state.injected = state.injected || [];
+      const alreadyInjected = new Set(state.injected);
+      const before = alreadyInjected.size;
+      const parts = [];
+
+      for (const { path } of touched) {
+        const dir = dirFor(path);
+        const note = forTouch(dir, load(dir), path, { sessionId: payload.session_id });
+        if (note) parts.push(note);
+      }
+
+      const command = payload.tool_input?.command;
+      if (command) {
+        const dir = wikiDir(projectRootFor(payload.cwd, payload.cwd));
+        const note = forCommand(dir, load(dir), command, {
+          sessionId: payload.session_id,
+          alreadyInjected,
+        });
+        if (note) parts.push(note);
+      }
+
+      if (alreadyInjected.size !== before) {
+        state.injected = [...alreadyInjected];
+        saveState(payload.session_id, state);
+      }
+      if (parts.length) context = parts.join('\n\n');
+    } catch {
+      // Delivery is an optimization. A defect here must never cost the user
+      // their tool call, so a failure falls through to a plain allow.
+    }
+
+    allowWithContext(context);
   }
 
   const repeat = alreadyDenied(state, verdict.key);

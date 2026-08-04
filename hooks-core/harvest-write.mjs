@@ -116,6 +116,14 @@ export function writeHarvested(
         claim: finding.claim,
         confidence: finding.confidence,
         type: finding.type,
+        // WHEN this finding is relevant, not just what it is about. Anchors
+        // answer "which file", which is the wrong question for a claim about
+        // running something: the agent that needs "use npm test, not npx jest"
+        // is executing a command, not reading the file the claim is anchored
+        // to. Optional, so nothing that omits it changes behaviour.
+        trigger: typeof finding.trigger === 'string' && finding.trigger
+          ? finding.trigger
+          : undefined,
         origin: provenance,
         sessionId,
       },
