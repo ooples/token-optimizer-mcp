@@ -140,7 +140,14 @@ describe('through the real SessionStart hook', () => {
     // called by nothing for its entire life.
     const project = mkdtempSync(join(tmpdir(), 'standing-e2e-'));
     mkdirSync(join(project, '.git'), { recursive: true });
-    const graphDir = wikiDir(project);
+    // EXPLICIT, NOT `wikiDir(project)`. `wikiDir` honours an inherited
+    // TOKEN_OPTIMIZER_WIKI_DIR, so on a machine where that is set -- which is
+    // any machine actually using the tool -- this fixture appended three test
+    // findings to the developer's real persistent graph and then handed that
+    // graph to the child hook. Cleanup only removes the temporary project, so
+    // the findings stayed behind and leaked into later sessions.
+    const graphDir = join(project, '.token-optimizer', 'wiki');
+    mkdirSync(graphDir, { recursive: true });
 
     putNode(graphDir, {
       kind: 'finding', key: 'h1', type: 'feedback', origin: 'human', confidence: 0.95,

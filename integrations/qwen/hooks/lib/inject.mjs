@@ -396,8 +396,30 @@ export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
     return weight(b) * (b.confidence ?? 0.5) - weight(a) * (a.confidence ?? 0.5);
   });
 
+  // THE BUDGET COVERS THE WHOLE MESSAGE, not just the claim lines.
+  //
+  // `spent` used to count selected claims only, while the returned text also
+  // carries a heading, two lines of fixed instruction and an optional
+  // truncation notice. A selection that exactly filled the budget therefore
+  // injected more than the budget allowed and recorded fewer tokens than it
+  // spent -- in a block whose entire justification is that it is tightly
+  // bounded and measured against the control arm.
+  const HEADING =
+    '# Standing rules for this project' +
+    '\n\nEstablished in previous sessions and expected to hold. ' +
+    'These are not suggestions.\n\n';
+  const noticeFor = (n) =>
+    n
+      ? `\n(${n} further standing rule${n === 1 ? '' : 's'} did not fit this budget; ` +
+        'raise TOKEN_OPTIMIZER_STANDING_BUDGET or retire some.)'
+      : '';
+
+  // The wrapper is charged up front, and the worst-case notice is reserved, so
+  // admitting the last line can never push the total over by adding one.
+  const overhead = estimate(HEADING) + estimate(noticeFor(rules.length));
+
   const lines = [];
-  let spent = 0;
+  let spent = overhead;
   let dropped = 0;
   for (const rule of rules) {
     const line = `- ${rule.claim}`;
@@ -409,21 +431,24 @@ export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
     lines.push(line);
     spent += cost;
   }
-  if (!lines.length) return null;
 
-  record(dir, { kind: 'standing', count: lines.length, dropped, tokens: spent });
+  // RECORDED EVEN WHEN NOTHING FITS. Returning early without a metric hid the
+  // one case most worth knowing about: rules exist and every one is too large
+  // for the budget, so the block silently does nothing all session and the
+  // measurement shows no sign of it.
+  const truncated = noticeFor(dropped);
+  record(dir, {
+    kind: 'standing',
+    count: lines.length,
+    dropped,
+    tokens: lines.length ? spent : 0,
+  });
+  if (!lines.length) return null;
 
   // SAY WHAT WAS DROPPED. A silent cap reads as "these are all the rules",
   // which is worse than saying there are more: a model that knows the list is
   // truncated can ask, one that does not will assume it is complete.
-  const truncated = dropped
-    ? `\n(${dropped} further standing rule${dropped === 1 ? '' : 's'} did not fit this budget; ` +
-      `raise TOKEN_OPTIMIZER_STANDING_BUDGET or retire some.)`
-    : '';
-
-  return `# Standing rules for this project\n\nEstablished in previous sessions and expected to hold. These are not suggestions.\n\n${lines.join(
-    '\n'
-  )}${truncated}`;
+  return `${HEADING}${lines.join('\n')}${truncated}`;
 }
 
 /**

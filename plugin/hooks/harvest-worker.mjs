@@ -24,6 +24,7 @@ import {
 } from './lib/harvest.mjs';
 import { writeHarvested } from './lib/harvest-write.mjs';
 import { record } from './lib/metrics.mjs';
+import { wikiDir } from './lib/wiki.mjs';
 import { readArchive } from './lib/transcript.mjs';
 import { buildFeedbackDigest, validateLessons, LESSON_PROMPT } from './lib/lessons.mjs';
 import { ORIGIN_HARVESTED } from './lib/curate.mjs';
@@ -76,6 +77,10 @@ async function main() {
 
   record(dir, {
     kind: 'harvest',
+    sessionId: sessionId || null,
+    tokens: estimateTokens(digest),
+    findings: written.length,
+    at: Date.now(),
   });
 
   // THE FEEDBACK LOOP. A separate extraction with a separate prompt, because
@@ -117,10 +122,6 @@ async function main() {
     // A failed feedback pass must be indistinguishable from a session with
     // nothing to correct.
   }
-    tokens: estimateTokens(digest),
-    findings: written.length,
-    at: Date.now(),
-  });
 }
 
 main()
