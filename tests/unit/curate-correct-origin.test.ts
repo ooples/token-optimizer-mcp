@@ -92,6 +92,26 @@ describe('curate.correct origin', () => {
     expect(replacement.origin).toBe(ORIGIN_HUMAN);
   });
 
+  it('falls back to human for an empty-string origin', async () => {
+    // A separate branch of the guard from the type check above: '' is a string,
+    // so it passes `typeof origin === 'string'` and is caught only by the
+    // truthiness test. Storing it would leave a finding whose origin is neither
+    // absent nor meaningful, which ranks at the neutral weight while looking
+    // deliberate to a reader.
+    const { create, correct, ORIGIN_HUMAN } = await import(CURATE);
+
+    const key = create(dir, {
+      claim: 'subject() returns one',
+      anchors: [anchor],
+    });
+    const replacementKey = correct(dir, key, 'subject() returns two', {
+      origin: '',
+    });
+
+    const replacement = await findingFor(dir, replacementKey);
+    expect(replacement.origin).toBe(ORIGIN_HUMAN);
+  });
+
   it('keeps the correction anchored and supersedes the original', async () => {
     // The origin change must not disturb the rest of the contract.
     const { create, correct } = await import(CURATE);
