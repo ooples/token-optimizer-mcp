@@ -227,3 +227,39 @@ describe('a model-supplied trigger cannot hang the hook', () => {
     expect(seen.size).toBeLessThanOrEqual(20);
   });
 });
+
+describe('relevance ordering', () => {
+  it('prefers a finding whose own trigger matched over one that matched a word', () => {
+    // Observed live: `dotnet build App.csproj | tail -20` surfaced a finding
+    // about stale MCP processes instead of the one about pipes hiding exit
+    // codes. Both were confident; only one was about this command.
+    seed({
+      key: 'incidental',
+      claim: 'The MCP server serves the build it LOADED, not what is on disk.',
+      type: 'failure',
+      trigger: undefined,
+      confidence: 0.95,
+    });
+    seed({
+      key: 'targeted',
+      claim: 'Capture the exit code before piping; a pipe reports the last command status.',
+      type: 'failure',
+      trigger: '\|\s*(tail|head)\b',
+      confidence: 0.95,
+    });
+
+    const out = forCommand(dir, load(dir), 'dotnet build App.csproj | tail -20', {
+      sessionId: 's1',
+    });
+
+    // Assert the ORDER rather than exclusion: a tight budget would also depend
+    // on how staleness renders, which is a different concern. What matters is
+    // that the targeted finding is ranked first, so a tight budget keeps it.
+    expect(out).toBeTruthy();
+    expect(out.indexOf('Capture the exit code')).toBeGreaterThanOrEqual(0);
+    expect(out.indexOf('serves the build it LOADED')).toBeGreaterThanOrEqual(0);
+    expect(out.indexOf('Capture the exit code')).toBeLessThan(
+      out.indexOf('serves the build it LOADED')
+    );
+  });
+});

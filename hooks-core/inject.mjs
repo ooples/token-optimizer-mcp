@@ -252,7 +252,21 @@ export function forCommand(
   if (!candidates.length) return null;
 
   // Highest confidence first, so a tight budget keeps the most trustworthy.
-  candidates.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5));
+  // AN EXPLICIT TRIGGER BEATS AN INCIDENTAL WORD, before confidence is even
+  // consulted. A finding whose author wrote a pattern that matched this command
+  // is about this command; one that matched because its prose happened to
+  // contain "build" is not, however confident it was about something else.
+  //
+  // Observed live: `dotnet build App.csproj | tail -20` surfaced a finding about
+  // stale MCP server processes instead of the one about pipes hiding exit
+  // codes, and `gh run list` surfaced a git-refspec finding instead of the one
+  // about mergeStateStatus. Both had the same confidence as the right answer,
+  // so confidence alone could not separate them -- and a tight budget then kept
+  // the wrong one.
+  const explicit = (n) => (n.trigger && safeTrigger(n.trigger)?.test(command) ? 1 : 0);
+  candidates.sort(
+    (a, b) => explicit(b) - explicit(a) || (b.confidence ?? 0.5) - (a.confidence ?? 0.5)
+  );
 
   // CAPPED BEFORE serve(). serve() re-reads and diffs the anchor of every
   // finding it is handed, so an unbounded candidate list turns one command into
