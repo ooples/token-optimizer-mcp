@@ -342,16 +342,27 @@ function Test-Installation {
 
     $issues = @()
 
-    # Check hooks files exist (including every helper the orchestrator
-    # dot-sources — a missing helper breaks every hook invocation).
+    # Verify the files this installer ACTUALLY SHIPS.
+    #
+    # This list used to require a dispatcher.ps1 plus handlers/ and helpers/
+    # shell libraries -- the design Install-HooksFiles replaced with three ES
+    # modules, as the comment above it says. None of those files has been
+    # produced by an install for some time, so verification could not pass, and
+    # a failed verification skipped record-install.mjs. That is why the doctor
+    # reports "no record of what was installed": the installer was prevented
+    # from writing the manifest by a check on files it no longer creates.
+    #
+    # Note the subdirectory: Install-HooksFiles copies into
+    # $HOOKS_DIR\token-optimizer, not $HOOKS_DIR. The old list omitted it, so
+    # every path was wrong twice over.
     $requiredFiles = @(
-        "$HOOKS_DIR\dispatcher.ps1",
-        "$HOOKS_DIR\handlers\token-optimizer-orchestrator.ps1",
-        "$HOOKS_DIR\helpers\invoke-mcp.ps1",
-        "$HOOKS_DIR\helpers\logging.ps1",
-        "$HOOKS_DIR\helpers\config.ps1",
-        "$HOOKS_DIR\helpers\gzip.ps1",
-        "$HOOKS_DIR\helpers\context-delta.ps1"
+        "$HOOKS_DIR\token-optimizer\session-start.mjs",
+        "$HOOKS_DIR\token-optimizer\pretooluse-router.mjs",
+        "$HOOKS_DIR\token-optimizer\precompact-optimize.mjs",
+        "$HOOKS_DIR\token-optimizer\hooks.json",
+        # The shared library every hook imports. Present but empty would break
+        # all three entrypoints, so it is checked explicitly.
+        "$HOOKS_DIR\token-optimizer\lib\policy.mjs"
     )
 
     foreach ($file in $requiredFiles) {
@@ -424,8 +435,14 @@ function Test-Installation {
         }
     }
 
+    # ADVISORY, NOT FATAL. This check looks for the server in
+    # claude_desktop_config.json, Cursor, Cline, Copilot and Windsurf. A Claude
+    # Code CLI user has it in none of them -- that path gets the MCP server from
+    # the plugin's own .mcp.json -- so treating absence as an installation
+    # failure fails the install for the primary supported client.
     if (-not $mcpConfigured) {
-        $issues += "token-optimizer MCP server not configured in any AI tool"
+        Write-Status "MCP server not found in Claude Desktop / Cursor / Cline / Copilot / Windsurf" "WARN"
+        Write-Status "That is expected on Claude Code, which gets the server from the plugin instead" "INFO"
     } else {
         Write-Status " MCP server configured in: $($checkedConfigs -join ', ')" "SUCCESS"
     }
@@ -483,14 +500,22 @@ try {
     } else {
         $verified = Test-Installation
 
+        # RECORD THE MANIFEST REGARDLESS OF THE VERDICT.
+        #
+        # This used to sit inside `if ($verified)`, which inverted the
+        # relationship it needed: the manifest records what was written to this
+        # machine, and files were written before verification ran. Skipping it on
+        # failure leaves those files with no record of where they came from --
+        # exactly the case where an exact uninstall matters most. It is also why
+        # the doctor reported a missing manifest on a machine whose hooks were
+        # installed and working.
+        try {
+            & node (Join-Path $PSScriptRoot 'scripts/record-install.mjs') $HOOKS_DIR $CLAUDE_SETTINGS
+        } catch {
+            Write-Status "Could not record the install manifest (uninstall will be manual)" "WARN"
+        }
+
         if ($verified) {
-            # Record exactly what we put on this machine, so uninstall can be
-            # exact rather than best-effort.
-            try {
-                & node (Join-Path $PSScriptRoot 'scripts/record-install.mjs') $HOOKS_DIR $CLAUDE_SETTINGS
-            } catch {
-                Write-Status "Could not record the install manifest (uninstall will be manual)" "WARN"
-            }
             Write-Host ""
             Write-Host "=============================================================" -ForegroundColor Green
             Write-Host "   Installation Complete!                                    " -ForegroundColor Green

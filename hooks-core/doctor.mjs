@@ -21,11 +21,122 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { readManifest, verifyManifest, residue } from './manifest.mjs';
 
 const ok = (name, detail) => ({ name, pass: true, detail });
 const bad = (name, detail, remedy) => ({ name, pass: false, detail, remedy });
+
+const PLUGIN_ID = 'token-optimizer@token-optimizer';
+
+/** Reads JSON, or null. Never throws: this module must diagnose, not crash. */
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** Numeric semver compare; unparseable versions sort as equal to avoid crying wolf. */
+function compareVersions(a, b) {
+  const parse = (v) => String(v || '').split('.').map((n) => Number.parseInt(n, 10));
+  const left = parse(a);
+  const right = parse(b);
+  if (left.some(Number.isNaN) || right.some(Number.isNaN)) return 0;
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * WHICH INSTALL IS THIS, AND WHERE ARE THE HOOKS IT ACTUALLY RUNS?
+ *
+ * Everything below used to assume the script-install path: hooks copied into
+ * ~/.claude-global/hooks, entries written into settings.json, a manifest
+ * recording both. The plugin path satisfies none of that. Its hooks are declared
+ * in the plugin's own hooks.json and live in the plugin cache, so a doctor
+ * looking in settings.json reports "not wired" about a plugin that is wired, and
+ * reports "no manifest" about a file that path never writes.
+ *
+ * It also resolved the hook binary from the npm package root, which is a
+ * DIFFERENT BUILD from the plugin's. Measured on a real machine: the package
+ * shipped 5.3.5 and the plugin cache held 5.3.6, with all 37 hook files
+ * differing. The enforcement probe passed -- for a build that was not running.
+ *
+ * Returns the versions separately rather than a boolean, because "installed is
+ * behind available" is the single most useful thing this tool can say: 5.0.2
+ * shipped one advisory hook, so a stale install is present, listed in /mcp, and
+ * saving nothing.
+ */
+export function detectInstall({ pluginsDir, root } = {}) {
+  const dir = pluginsDir || join(homedir(), '.claude', 'plugins');
+  const packageHooks = join(root || '.', 'plugin', 'hooks');
+
+  const record = readJson(join(dir, 'installed_plugins.json'))?.plugins?.[PLUGIN_ID]?.[0];
+  const marketplace = readJson(
+    join(dir, 'marketplaces', 'token-optimizer', 'plugin', '.claude-plugin', 'plugin.json')
+  );
+
+  const installedVersion = record?.version ?? null;
+  const availableVersion = marketplace?.version ?? null;
+  const pluginHooks = record?.installPath ? join(record.installPath, 'hooks') : null;
+
+  // A record whose installPath has gone missing is a broken plugin install, not
+  // a script install -- saying "script" there would send the user to the wrong
+  // remedy entirely.
+  if (record) {
+    return {
+      method: 'plugin',
+      hooksDir: pluginHooks && existsSync(pluginHooks) ? pluginHooks : packageHooks,
+      installPath: record.installPath ?? null,
+      installedVersion,
+      availableVersion,
+    };
+  }
+
+  return {
+    method: verifyManifest(readManifest()) ? 'script' : 'unknown',
+    hooksDir: packageHooks,
+    installPath: null,
+    installedVersion,
+    availableVersion,
+  };
+}
+
+/** Resolves the directory holding the hook entrypoints for a probe. */
+function hooksDirFor({ hooksDir, install, root }) {
+  return hooksDir || install?.hooksDir || join(root || '.', 'plugin', 'hooks');
+}
+
+/**
+ * Is the installed plugin the version that is available?
+ *
+ * The gap this closes: updating the marketplace does NOT update the installed
+ * plugin. `installed_plugins.json` pins installPath and version, so a machine
+ * can sit on 5.0.2 indefinitely while 5.3.6 is checked out beside it, and
+ * nothing anywhere says so. Restarting does not help, because the restart
+ * faithfully reloads the pinned version.
+ */
+export function probeVersion({ install }) {
+  const { method, installedVersion, availableVersion } = install || {};
+
+  if (method !== 'plugin' || !installedVersion || !availableVersion) {
+    return [];
+  }
+
+  if (compareVersions(installedVersion, availableVersion) < 0) {
+    return [bad('plugin is up to date',
+      `installed ${installedVersion}, but ${availableVersion} is available`,
+      'run /plugin and update token-optimizer -- updating the marketplace alone ' +
+      'does not move the installed version, and older builds shipped far weaker hooks')];
+  }
+
+  return [ok('plugin is up to date', `installed ${installedVersion}`)];
+}
 
 /** Runs a hook binary with a payload and returns its stdout, or null. */
 function probe(binary, payload, { timeoutMs = 8000, cwd } = {}) {
@@ -47,11 +158,21 @@ function probe(binary, payload, { timeoutMs = 8000, cwd } = {}) {
 /* ------------------------------------------------------------- THE CHECKLIST */
 
 /** Cheap structural checks. Fast, and each names its own fix. */
-export function checklist({ root, settingsPath }) {
+export function checklist({ root, settingsPath, install }) {
   const checks = [];
+  const resolved = install || detectInstall({ root });
+  const hooksDir = hooksDirFor({ install: resolved, root });
 
-  const router = join(root, 'plugin', 'hooks', 'pretooluse-router.mjs');
-  const sessionStart = join(root, 'plugin', 'hooks', 'session-start.mjs');
+  // SAY WHICH PATH THIS IS. Skipping the script-install checks silently would
+  // leave a user unable to tell whether they passed or were never run, which is
+  // the same opacity that made a 7/9 score untrustworthy in the first place.
+  checks.push(ok('install method', resolved.method === 'plugin'
+    ? `plugin${resolved.installedVersion ? ` ${resolved.installedVersion}` : ''}` +
+      ` -- hooks from ${hooksDir}`
+    : `${resolved.method} -- hooks from ${hooksDir}`));
+
+  const router = join(hooksDir, 'pretooluse-router.mjs');
+  const sessionStart = join(hooksDir, 'session-start.mjs');
 
   checks.push(existsSync(router)
     ? ok('hook binary present', router)
@@ -63,33 +184,43 @@ export function checklist({ root, settingsPath }) {
     : bad('session-start binary present', `not found at ${sessionStart}`,
       'reinstall the package to restore the session-start hook'));
 
-  if (settingsPath && existsSync(settingsPath)) {
-    try {
-      const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
-      const wired = JSON.stringify(settings?.hooks || {}).includes('token-optimizer');
-      checks.push(wired
-        ? ok('hooks wired into settings', settingsPath)
-        : bad('hooks wired into settings', 'no token-optimizer entries found',
-          'run install-hooks.sh to add the PreToolUse and SessionStart entries'));
-    } catch {
-      checks.push(bad('settings file parses', `${settingsPath} is not valid JSON`,
-        'fix the JSON by hand -- we will not rewrite a file we cannot parse'));
+  // SETTINGS AND MANIFEST ARE SCRIPT-INSTALL CONCERNS ONLY.
+  //
+  // A plugin declares its hooks in the plugin's own hooks.json and writes
+  // nothing to settings.json, so demanding entries there reported "not wired"
+  // about a plugin that was demonstrably wired -- its SessionStart hook was
+  // injecting the policy at that very moment. Likewise the manifest: only
+  // install-hooks.* writes one. Two guaranteed failures on a healthy install
+  // taught the user to ignore the score.
+  if (resolved.method !== 'plugin') {
+    if (settingsPath && existsSync(settingsPath)) {
+      try {
+        const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        const wired = JSON.stringify(settings?.hooks || {}).includes('token-optimizer');
+        checks.push(wired
+          ? ok('hooks wired into settings', settingsPath)
+          : bad('hooks wired into settings', 'no token-optimizer entries found',
+            'run install-hooks.sh to add the PreToolUse and SessionStart entries'));
+      } catch {
+        checks.push(bad('settings file parses', `${settingsPath} is not valid JSON`,
+          'fix the JSON by hand -- we will not rewrite a file we cannot parse'));
+      }
+    } else {
+      checks.push(bad('settings file present', `${settingsPath || 'settings path unknown'} not found`,
+        'run install-hooks.sh, or point TOKEN_OPTIMIZER_SETTINGS at your settings file'));
     }
-  } else {
-    checks.push(bad('settings file present', `${settingsPath || 'settings path unknown'} not found`,
-      'run install-hooks.sh, or point TOKEN_OPTIMIZER_SETTINGS at your settings file'));
-  }
 
-  // What we recorded putting on the machine, and whether it is still that.
-  const verified = verifyManifest(readManifest());
-  if (verified) {
-    checks.push(verified.modified === 0
-      ? ok('installed files intact', `${verified.intact} file(s) match the install manifest`)
-      : ok('installed files intact', `${verified.modified} file(s) edited since install -- ` +
-        'uninstall will leave those alone rather than destroy your changes'));
-  } else {
-    checks.push(bad('install manifest present', 'no record of what was installed',
-      'harmless if you installed manually; reinstall to get a removable, verifiable record'));
+    // What we recorded putting on the machine, and whether it is still that.
+    const verified = verifyManifest(readManifest());
+    if (verified) {
+      checks.push(verified.modified === 0
+        ? ok('installed files intact', `${verified.intact} file(s) match the install manifest`)
+        : ok('installed files intact', `${verified.modified} file(s) edited since install -- ` +
+          'uninstall will leave those alone rather than destroy your changes'));
+    } else {
+      checks.push(bad('install manifest present', 'no record of what was installed',
+        'harmless if you installed manually; reinstall to get a removable, verifiable record'));
+    }
   }
 
   return checks;
@@ -104,9 +235,12 @@ export function checklist({ root, settingsPath }) {
  * a hook that refuses everything is as broken as one that refuses nothing, and
  * only the second is what shipped last time.
  */
-export function probeEnforcement({ root, workspace }) {
+export function probeEnforcement({ root, workspace, hooksDir, install }) {
   const checks = [];
-  const binary = join(root, 'plugin', 'hooks', 'pretooluse-router.mjs');
+  // Probe the build that RUNS, not the one bundled beside this module. On a real
+  // machine those were 5.3.5 and 5.3.6 with all 37 hook files differing, and
+  // this probe passed for the copy nobody was executing.
+  const binary = join(hooksDirFor({ hooksDir, install, root }), 'pretooluse-router.mjs');
   if (!existsSync(binary)) {
     return [bad('enforcement refuses a large read', 'hook binary missing', 'reinstall the package')];
   }
@@ -153,8 +287,8 @@ export function probeEnforcement({ root, workspace }) {
 }
 
 /** The session-start notice has to actually come out. */
-export function probeSessionStart({ root, workspace }) {
-  const binary = join(root, 'plugin', 'hooks', 'session-start.mjs');
+export function probeSessionStart({ root, workspace, hooksDir, install }) {
+  const binary = join(hooksDirFor({ hooksDir, install, root }), 'session-start.mjs');
   if (!existsSync(binary)) {
     return [bad('session-start emits the policy', 'binary missing', 'reinstall the package')];
   }
@@ -251,11 +385,19 @@ export function probeServer({ root, timeoutMs = 20_000 }) {
  * Structural checks first because they are fast and explain most failures;
  * probes after, because they are what actually prove it works.
  */
-export function diagnose({ root, workspace, graphDir, settingsPath, skipServer = false } = {}) {
+export function diagnose({
+  root, workspace, graphDir, settingsPath, pluginsDir, skipServer = false,
+} = {}) {
+  // Resolved ONCE and threaded through, so every check reasons about the same
+  // install. Detecting per-probe is how the checklist and the enforcement probe
+  // ended up describing two different builds in the same report.
+  const install = detectInstall({ pluginsDir, root });
+
   const checks = [
-    ...checklist({ root, settingsPath }),
-    ...probeEnforcement({ root, workspace }),
-    ...probeSessionStart({ root, workspace }),
+    ...checklist({ root, settingsPath, install }),
+    ...probeVersion({ install }),
+    ...probeEnforcement({ root, workspace, install }),
+    ...probeSessionStart({ root, workspace, install }),
     ...probeGraph({ dir: graphDir }),
     ...(skipServer ? [] : probeServer({ root })),
   ];
