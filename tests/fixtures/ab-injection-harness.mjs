@@ -8,6 +8,7 @@
  * delivery path rather than a mock of it.
  */
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -97,6 +98,20 @@ export function buildArms() {
   const anchor = join(project, 'subject.mjs');
   writeFileSync(anchor, 'export function subject() {}\n');
 
+  // A SESSION ID THAT IS NEW ON EVERY RUN.
+  //
+  // The id used to be `ab-${c.id}`, fixed. Injection is deliberately
+  // once-per-session and that gate persists to disk under the shared state
+  // root, so the FIRST run of this harness served the findings and recorded
+  // them, and every run after it received nothing at all.
+  //
+  // That is the worst possible failure for a measurement instrument: the
+  // treatment arm silently degrades into a second control arm, both answer the
+  // same way, and the experiment reports that the graph does not help. It
+  // reproduces exactly -- run buildArms() twice and the second call returns
+  // null for all five cases.
+  const run = randomBytes(6).toString('hex');
+
   const out = [];
   for (const c of CASES) {
     // Fresh graph per case so one case's finding cannot answer another's task.
@@ -127,7 +142,7 @@ export function buildArms() {
 
     const r = spawnSync(process.execPath, [HOOK], {
       input: JSON.stringify({
-        session_id: `ab-${c.id}`,
+        session_id: `ab-${c.id}-${run}`,
         cwd: caseProject,
         tool_name: 'Bash',
         tool_input: { command: c.probeCommand },
