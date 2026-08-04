@@ -198,7 +198,44 @@ function withLock(dir, write) {
   }
 }
 
-function append(dir, record) {
+/**
+ * Makes the store ignore itself, once.
+ *
+ * The design says this directory is gitignored by default, precisely because
+ * findings are unreviewed agent output and committing them puts unreviewed
+ * analysis into git history. Nothing enforced it: measured on two real
+ * checkouts, `.token-optimizer/` showed up as untracked in `git status`, so a
+ * single `git add -A` would have committed tens of megabytes of it.
+ *
+ * A `.gitignore` containing `*` INSIDE the store is used rather than editing
+ * the project's own .gitignore. Writing to a file the user owns and reviews is
+ * not this tool's business.
+ *
+ * STRICTLY INSIDE, and that is not a detail. Writing the marker to the PARENT
+ * covers `.token-optimizer/` in the default layout, but TOKEN_OPTIMIZER_WIKI_DIR
+ * can point anywhere -- and when it points at a directory the user owns, the
+ * parent is their project root and `*` ignores their entire repository. That is
+ * not hypothetical: it took the skeleton suite's git fixture down, where
+ * `git add auth.ts` began refusing a file the test had just written. Ignoring
+ * only what we create cannot reach outside the store.
+ */
+function ignoreSelf(dir) {
+  const marker = join(dir, '.gitignore');
+  try {
+    if (existsSync(marker)) return;
+    appendFileSync(
+      marker,
+      '# Written by token-optimizer. Findings are unreviewed agent output;\n' +
+        '# keeping them out of git history is the default. Delete this file to\n' +
+        '# opt in to committing them.\n*\n'
+    );
+  } catch {
+    // Best effort. Failing to write the marker must not fail the graph write.
+  }
+}
+
+function appendAll(dir, records) {
+  if (!records.length) return true;
   try {
     // 0o700 AND an explicit chmod. `recursive: true` applies the mode only to
     // directories it actually creates, and the process umask masks it further,
@@ -213,13 +250,23 @@ function append(dir, record) {
       // Not POSIX, or not ours to chmod. The mkdir mode above still applies
       // where it can, and failing here must not stop the write.
     }
-    withLock(dir, () => appendFileSync(logPath(dir), JSON.stringify(record) + '\n'));
+    ignoreSelf(dir);
+    // ONE appendFileSync for the whole group, inside ONE lock: a caller that
+    // needs several records to be observed together cannot get that by looping,
+    // because every iteration is a separate crash point.
+    const payload = records.map((record) => JSON.stringify(record) + '\n').join('');
+    withLock(dir, () => appendFileSync(logPath(dir), payload));
     return true;
   } catch {
     // The graph is an optimization. Failing to write one must never fail the
     // user's tool call, so this is swallowed and reported only via metrics.
     return false;
   }
+}
+
+/** Records one line. The overwhelmingly common case, and unchanged. */
+function append(dir, record) {
+  return appendAll(dir, [record]);
 }
 
 /**
@@ -242,6 +289,46 @@ export function putNode(dir, { kind, key, ...rest }) {
 export function putEdge(dir, from, edge, to) {
   if (!EDGE_KINDS.includes(edge)) throw new Error(`unknown edge kind: ${edge}`);
   append(dir, { t: 'e', v: GRAPH_VERSION, from, edge, to, at: Date.now() });
+}
+
+/**
+ * Writes a node together with its outgoing edges as a SINGLE append.
+ *
+ * A finding is only meaningful with its `derived_from` anchors: the anchors are
+ * what let it be invalidated when the code moves, and `writeHarvested` refuses
+ * to store one that resolved none. Writing the node and then looping `putEdge`
+ * left a window -- one append per edge, in a DETACHED worker that a session end
+ * or a sleeping machine can kill at any instant -- where the node landed and its
+ * edges did not. The result is exactly the record this store promises never to
+ * create: an active finding anchored to nothing, unfalsifiable, served as
+ * current forever.
+ *
+ * THE NODE IS WRITTEN LAST, and that ordering is the actual guarantee. One
+ * `appendFileSync` can still tear if the process dies mid-write, so ordering is
+ * what makes the surviving prefix safe: a tear leaves edges whose `from` names
+ * no node, and every consumer already dereferences that through a
+ * `nodes.get(...)` guard (`findingsFor`, `audit`, `sweep`), so a dangling edge
+ * is inert. The reverse order has no such property. A torn final line is
+ * discarded by `load()`, which skips unparseable records by design.
+ */
+export function putNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
+  if (!NODE_KINDS.includes(kind)) throw new Error(`unknown node kind: ${kind}`);
+
+  const id = nodeId(kind, key);
+  // One timestamp for the whole group: the node and its anchors were decided
+  // together, so a reader comparing `at` should see them as one event.
+  const at = Date.now();
+
+  const records = [];
+  for (const { edge, to } of edges) {
+    if (!EDGE_KINDS.includes(edge)) throw new Error(`unknown edge kind: ${edge}`);
+    records.push({ t: 'e', v: GRAPH_VERSION, from: id, edge, to, at });
+  }
+  // `rest` first, for the same reason as putNode: it can never override the
+  // bookkeeping fields.
+  records.push({ ...rest, t: 'n', v: GRAPH_VERSION, id, kind, key: canonicalKey(kind, key), at });
+
+  return appendAll(dir, records) ? id : null;
 }
 
 /**
@@ -309,12 +396,24 @@ export function findingsFor(graph, anchorId, { limit = 20 } = {}) {
     .slice(0, limit);
 }
 
+/**
+ * Provenance multipliers, applied here because this is the only ranking.
+ *
+ * curate.mjs has declared HUMAN_WEIGHT since it was written and nothing ever
+ * consumed it, so a person's correction ranked exactly level with a machine
+ * guess of equal confidence -- the one thing the origin field exists to prevent.
+ * Kept as a local table rather than imported to avoid a cycle: curate.mjs
+ * already imports from this module.
+ */
+const ORIGIN_WEIGHT = { human: 1.5, agent: 1.2, harvested: 1 };
+
 function score(node, now, DAY) {
   const confidence = typeof node.confidence === 'number' ? node.confidence : 0.5;
   // Half-life of 30 days: a finding stays useful for a long time but a fresh
   // one outranks a stale one of equal confidence.
   const ageDays = (now - (node.at || now)) / DAY;
-  return confidence * Math.pow(0.5, ageDays / 30);
+  const weight = ORIGIN_WEIGHT[node.origin] ?? 1;
+  return confidence * weight * Math.pow(0.5, ageDays / 30);
 }
 
 /**

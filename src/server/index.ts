@@ -15,6 +15,10 @@ import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
 import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
 import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
 import {
+  wikiWrite,
+  WIKI_WRITE_TOOL_DEFINITION,
+} from '../tools/intelligence/wiki-write.js';
+import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -616,6 +620,7 @@ const TOOL_DEFINITIONS = [
   AUDIT_TOOL,
   DOCTOR_TOOL,
   FLEET_TOOL,
+  WIKI_WRITE_TOOL_DEFINITION,
   EXPAND_TOOL,
   WASTE_TOOL,
   CACHE_TOOL,
@@ -2573,6 +2578,15 @@ async function handleToolCall(request: {
         };
       }
 
+      case 'wiki_write': {
+        // Deliberate agent write into the knowledge graph. Routed like any
+        // other tool so it carries a schema and a dispatch case, which the
+        // reachability suite requires of everything advertised.
+        const result = await wikiWrite(args as any);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
       case 'smart_grep': {
         const { pattern, ...options } = args as any;
         const result = await memoizedSmartGrep(pattern, options);

@@ -96,6 +96,69 @@ export function languageOf(path) {
 }
 
 /**
+ * Module specifiers this file imports, RELATIVE ones only.
+ *
+ * The design lists `imports` and `calls` as first-class edges -- they are what
+ * makes retrieval "this symbol and its callers" rather than similarity search,
+ * which is the stated advantage over RAG. Neither was ever written: a real
+ * project's graph contained only `derived_from` and `contains`, so traversal
+ * could not cross a file boundary and a finding one hop away was unreachable.
+ *
+ * ONLY RELATIVE SPECIFIERS. A bare specifier (`react`, `numpy`, `System.Text`)
+ * names a package, not a file in this project, so there is no node to point at
+ * and a resolved-looking edge would be a lie. Package imports are dropped
+ * rather than guessed, which keeps this module's doctrine intact: a missed edge
+ * is a coarser graph, never a wrong one.
+ *
+ * @returns {string[]} raw specifiers, unresolved -- the caller knows the tree
+ */
+export function extractImports(path, text) {
+  const family = languageOf(path);
+  if (!family) return [];
+
+  const patterns = IMPORT_PATTERNS[family];
+  if (!patterns) return [];
+
+  const found = new Set();
+  for (const line of String(text).split(/\r?\n/)) {
+    // Import statements sit at the top of a file in every language here, but
+    // scanning the whole text is cheap and avoids guessing where "the top" ends.
+    for (const pattern of patterns) {
+      const match = pattern.exec(line);
+      if (!match) continue;
+      const specifier = match[1];
+      // Relative only. `.` and `..` prefixes are the portable test across all
+      // of these languages; everything else is a package or a namespace.
+      if (specifier && /^\.\.?[\\/]/.test(specifier)) found.add(specifier);
+    }
+  }
+  return [...found];
+}
+
+/**
+ * Per-language import forms. Deliberately narrow: each pattern captures a
+ * specifier in group 1 and nothing else, so a near-miss yields no edge instead
+ * of a wrong one.
+ */
+const IMPORT_PATTERNS = {
+  js: [
+    /^\s*import\s[^'"]*from\s*['"]([^'"]+)['"]/,
+    /^\s*import\s*['"]([^'"]+)['"]/,
+    /^\s*export\s[^'"]*from\s*['"]([^'"]+)['"]/,
+    /require\(\s*['"]([^'"]+)['"]\s*\)/,
+    /import\(\s*['"]([^'"]+)['"]\s*\)/,
+  ],
+  py: [
+    /^\s*from\s+(\.[\w.]*)\s+import\s/,
+    /^\s*import\s+(\.[\w.]+)/,
+  ],
+  go: [/^\s*(?:[\w.]+\s+)?"(\.[^"]+)"/],
+  rust: [/^\s*(?:pub\s+)?use\s+(self::[\w:]+|super::[\w:]+)/],
+  // C# and Java address code by namespace rather than by path, so there is no
+  // relative specifier to resolve and no honest file-to-file edge to draw.
+};
+
+/**
  * Extracts symbols with line spans.
  *
  * A symbol's span runs from its declaration to the line before the next

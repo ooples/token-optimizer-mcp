@@ -27,10 +27,11 @@
  * calls worse than no graph.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { putNode, putEdge, contentHash } from './wiki.mjs';
-import { extractSymbols, spanText, symbolKey } from './symbols.mjs';
+import { dirname, join } from 'node:path';
+import { putNode, putEdge, contentHash, nodeId } from './wiki.mjs';
+import { extractSymbols, spanText, symbolKey, extractImports } from './symbols.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 
 /** Reads a path in whichever spelling resolves, or throws if none do. */
@@ -61,6 +62,27 @@ function snapshotLimit() {
   // would snapshot a 2 GB bundle into the graph, and a negative value would
   // disable snapshots entirely while looking configured.
   return Number.isFinite(raw) && raw > 0 ? raw : 262_144;
+}
+
+/**
+ * Largest symbol span stored in full.
+ *
+ * Spans used to be stored unconditionally, on the reasoning that "a function is
+ * small". That holds for hand-written code and fails badly on generated and
+ * machine-assembled sources, where a single class body is megabytes. Measured
+ * on a real project: 132 symbol nodes holding 34.3 MB between them -- 95.8% of
+ * the entire graph -- with one span of 1.8 MB. The graph had become a second,
+ * worse copy of the repository.
+ *
+ * Same trade as the file cap above: past the limit the hash still drives
+ * staleness detection, so invalidation keeps working; only the reconstructed
+ * diff degrades, and `serve` already says so plainly when it cannot show
+ * evidence. A span this large is not worth its own weight in the graph -- the
+ * diff of a 1.8 MB function is not something anyone reads either.
+ */
+function symbolSnapshotLimit() {
+  const raw = Number(process.env.TOKEN_OPTIMIZER_SYMBOL_SNAPSHOT_LIMIT);
+  return Number.isFinite(raw) && raw > 0 ? raw : 32_768;
 }
 
 /**
@@ -98,7 +120,8 @@ export function indexFile(dir, rawPath, text) {
   const snapshot = source.length <= snapshotLimit() ? source : undefined;
   const fileNode = putNode(dir, { kind: 'file', key: path, hash: hash(source), snapshot });
 
-  for (const symbol of extractSymbols(path, source)) {
+  const symbols = extractSymbols(path, source);
+  for (const symbol of symbols) {
     const body = spanText(source, symbol);
     const symbolNode = putNode(dir, {
       kind: 'symbol',
@@ -108,11 +131,108 @@ export function indexFile(dir, rawPath, text) {
       line: symbol.line,
       endLine: symbol.endLine,
       hash: hash(body),
-      snapshot: body,
+      // Bounded for the same reason the file snapshot above is, and measured:
+      // unbounded spans were 95.8% of a real project's graph.
+      snapshot: body.length <= symbolSnapshotLimit() ? body : undefined,
     });
     putEdge(dir, fileNode, 'contains', symbolNode);
   }
+
+  linkImports(dir, path, source, fileNode);
+  linkCalls(dir, path, source, symbols);
   return fileNode;
+}
+
+/**
+ * `imports` edges, file to file.
+ *
+ * Without these the graph is a set of disconnected stars -- a file and the
+ * symbols it contains -- and traversal cannot cross a file boundary, so a
+ * finding one hop from the current work is unreachable. That is the difference
+ * between the design's "traversal, causally correct" and no retrieval at all.
+ *
+ * The target node is created if the file exists on disk. An import that cannot
+ * be resolved to a real path yields no edge: a dangling edge would make
+ * `audit()` count a file as connected while nothing can ever be traversed to.
+ */
+function linkImports(dir, path, source, fileNode) {
+  const base = dirname(path);
+
+  for (const specifier of extractImports(path, source)) {
+    const target = resolveImport(base, specifier);
+    if (!target) continue;
+    // Only the node, not a full index: indexing the target here would recurse
+    // through the whole import graph on every tool call.
+    putEdge(dir, fileNode, 'imports', putNode(dir, { kind: 'file', key: target }));
+  }
+}
+
+/** Extensions and index forms tried when a specifier omits them. */
+const IMPORT_SUFFIXES = [
+  '', '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs',
+  '.py', '.go', '.rs',
+  '/index.ts', '/index.js', '/index.mjs', '/__init__.py',
+];
+
+/**
+ * First existing file a relative specifier names, or null.
+ *
+ * Deliberately a filesystem probe rather than a resolver: the point is to draw
+ * an edge only where a real file node can exist, and existsSync answers exactly
+ * that question without taking on a module-resolution dependency.
+ */
+function resolveImport(base, specifier) {
+  // TypeScript sources routinely import `./x.js` and mean `./x.ts`; trying the
+  // stripped stem covers it without special-casing the whole ESM/TS story.
+  const stems = [specifier, specifier.replace(/\.(js|mjs|cjs)$/, '')];
+
+  for (const stem of stems) {
+    for (const suffix of IMPORT_SUFFIXES) {
+      const candidate = canonicalPath(join(base, stem + suffix));
+      try {
+        if (statSync(candidate).isFile()) return candidate;
+      } catch {
+        // Does not exist, or is not reachable. Try the next shape.
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * `calls` edges between symbols in the SAME file.
+ *
+ * Cross-file call resolution needs a real type resolver; a regex guess would
+ * attach `handle` in one file to `handle` in an unrelated one and produce a
+ * confidently wrong edge. This module's whole doctrine is that degradation is
+ * acceptable and incorrectness is not, so the scope is limited to calls whose
+ * target is declared in the file being indexed, where the match is unambiguous.
+ */
+function linkCalls(dir, path, source, symbols) {
+  if (symbols.length < 2) return;
+
+  const byName = new Map(symbols.map((s) => [s.name, s]));
+
+  for (const caller of symbols) {
+    // spanText, not a hand-rolled slice: it is the same span the snapshot and
+    // the hash use, and it handles a one-line declaration, where a naive
+    // slice(line, endLine) is empty and silently finds no calls at all.
+    const body = spanText(source, caller);
+    const seen = new Set();
+
+    for (const match of body.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
+      const name = match[1];
+      // Not itself, not a keyword, and only names this file declares.
+      if (name === caller.name || seen.has(name) || !byName.has(name)) continue;
+      seen.add(name);
+      putEdge(
+        dir,
+        nodeId('symbol', symbolKey(path, caller.name)),
+        'calls',
+        nodeId('symbol', symbolKey(path, name))
+      );
+    }
+  }
 }
 
 /**
