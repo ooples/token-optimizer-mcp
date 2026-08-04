@@ -91,16 +91,6 @@ const ALLOWED = new Map([
   // WIRED ELSEWHERE -- leaves this list when that PR merges.
   ['forTouch', 'WIRED by the injection PR: just-in-time delivery, imported by nothing before it.'],
 
-  // A COMPLETE FEATURE, DISCONNECTED AT BOTH ENDS. linkCoOccurrence is the only
-  // producer of `related` edges; predictNext in restore.mjs is their only
-  // consumer, and it is reached only through restorationPlan, which is itself
-  // unreachable. So co-occurrence -> restoration is built end to end and wired
-  // at neither. Turning it on is a product decision, not a cleanup: it would
-  // switch on unmeasured behaviour, which is the thing this project has spent
-  // its recent effort correcting.
-  ['linkCoOccurrence', 'UNWIRED FEATURE: sole producer of `related` edges, whose sole consumer (restorationPlan) is also unreachable.'],
-  ['restorationPlan', 'UNWIRED FEATURE: sole consumer of `related` edges, whose sole producer (linkCoOccurrence) is also unreachable.'],
-
   // A COMPLETE LOOP WITH NO ENTRY POINT. calibration.mjs has no importer at
   // all: logForecast and observeOutcome collect the data, reliability scores it
   // and calibrate applies the score. Nothing starts it, so the module cannot

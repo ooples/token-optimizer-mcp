@@ -22,16 +22,21 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { mode, MODE_OFF, loadState } from './lib/policy.mjs';
+import { linkCoOccurrence } from './lib/inject.mjs';
+import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 
 /** Longest compaction may be delayed. Past this the work is abandoned. */
-const TIMEOUT_MS = Number(process.env.TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS) || 8000;
+const TIMEOUT_MS =
+  Number(process.env.TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS) || 8000;
 
 function findWrapper() {
   // Plugin installs place the plugin under .../plugin; the wrapper, when
   // present, sits at the package root above it. Global installs resolve it
   // through the package directory directly.
   const roots = [
-    process.env.CLAUDE_PLUGIN_ROOT ? join(process.env.CLAUDE_PLUGIN_ROOT, '..') : null,
+    process.env.CLAUDE_PLUGIN_ROOT
+      ? join(process.env.CLAUDE_PLUGIN_ROOT, '..')
+      : null,
     process.env.TOKEN_OPTIMIZER_HOME || null,
   ].filter(Boolean);
 
@@ -56,32 +61,87 @@ async function main() {
     return;
   }
 
+  // STATE AND CO-OCCURRENCE BEFORE THE WRAPPER CHECK, deliberately.
+  //
+  // The wrapper is only needed to spawn optimize_session, and plugin-only
+  // installs do not ship one -- the hook returns early for them by design. But
+  // recording which files were worked on together needs nothing but the graph,
+  // so gating it on the wrapper would mean every plugin-only user silently got
+  // no `related` edges and therefore no restoration, forever. That is the same
+  // shape as the defect this whole change is fixing: a feature present, correct,
+  // and unreachable for a reason nobody would think to look for.
+  const state = loadState(payload.session_id);
+  const seen = Object.keys(state.seen || {});
+  const seenCount = seen.length;
+  if (seenCount === 0) return;
+
+  // CO-OCCURRENCE, RECORDED AT THE ONE MOMENT IT IS COMPLETE.
+  //
+  // `linkCoOccurrence` is the only producer of `related` edges, and it was
+  // called by nothing -- so the edge kind was declared, the consumer was
+  // written, and the graph never contained a single one. This is the natural
+  // site: `state.seen` is exactly "the files this session worked on together",
+  // which is the signal, and it is whole only once the session is long enough
+  // to be compacted.
+  //
+  // GROUPED BY PROJECT, because the graph is per project. A session that
+  // touches two checkouts must write each repository's edges into its own
+  // graph, or it invents relationships between files that have never met.
+  try {
+    const byProject = new Map();
+    for (const path of seen) {
+      const root = projectRootFor(path, payload.cwd);
+      if (!root) continue;
+      if (!byProject.has(root)) byProject.set(root, []);
+      byProject.get(root).push(path);
+    }
+    for (const [root, paths] of byProject) {
+      // Two files are the minimum that can co-occur; one writes no edge and
+      // only costs a graph load.
+      if (paths.length < 2) continue;
+      linkCoOccurrence(wikiDir(root), payload.session_id, paths);
+    }
+  } catch {
+    // Bookkeeping must never delay or fail a compaction.
+  }
+
+  // NOW the wrapper, which only the optimize_session spawn needs. Plugin-only
+  // installs stop here having still recorded their co-occurrence above.
   const wrapper = findWrapper();
   if (!wrapper) return;
-
-  // Only worth spawning if this session actually accumulated file operations.
-  const state = loadState(payload.session_id);
-  const seenCount = Object.keys(state.seen || {}).length;
-  if (seenCount === 0) return;
 
   await new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      [wrapper, 'optimize_session', JSON.stringify({ sessionId: payload.session_id })],
+      [
+        wrapper,
+        'optimize_session',
+        JSON.stringify({ sessionId: payload.session_id }),
+      ],
       { stdio: 'ignore', windowsHide: true }
     );
     const timer = setTimeout(() => {
       child.kill();
       resolve();
     }, TIMEOUT_MS);
-    child.on('exit', () => { clearTimeout(timer); resolve(); });
-    child.on('error', () => { clearTimeout(timer); resolve(); });
+    child.on('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    child.on('error', () => {
+      clearTimeout(timer);
+      resolve();
+    });
   });
 
-  process.stdout.write(JSON.stringify({
-    systemMessage: `token-optimizer: compressed ${seenCount} tracked file operation(s) before compaction.`,
-  }));
+  process.stdout.write(
+    JSON.stringify({
+      systemMessage: `token-optimizer: compressed ${seenCount} tracked file operation(s) before compaction.`,
+    })
+  );
 }
 
 // Compaction must proceed whatever happens here.
-main().catch(() => {}).finally(() => process.exit(0));
+main()
+  .catch(() => {})
+  .finally(() => process.exit(0));
