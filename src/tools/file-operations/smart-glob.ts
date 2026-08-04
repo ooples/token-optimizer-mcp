@@ -35,6 +35,11 @@ export interface FileMetadata {
 
 export interface SmartGlobOptions {
   // Pattern options
+  /**
+   * Directory to search. The natural name for it, and the one the hook's
+   * refusal message leads callers to pass; takes precedence over `cwd`.
+   */
+  path?: string;
   cwd?: string; // Working directory (default: process.cwd())
   absolute?: boolean; // Return absolute paths (default: false)
 
@@ -130,7 +135,12 @@ export class SmartGlobTool {
 
     // Default options
     const opts: Required<SmartGlobOptions> = {
-      cwd: options.cwd ?? process.cwd(),
+      // See smart-grep.ts: `path` was silently discarded, so a scoped search
+      // actually ran from the server's own launch directory. This tool did not
+      // crash on it -- it returned confident results from the wrong tree, which
+      // is the worse of the two failures.
+      cwd: options.path ?? options.cwd ?? process.cwd(),
+      path: options.path ?? '',
       absolute: options.absolute ?? false,
       // `dist` and `build` are conventions, not guarantees. Real projects keep
       // real source in both -- AiDotNet.Tensors has two .csproj files under
@@ -571,6 +581,11 @@ export const SMART_GLOB_TOOL_DEFINITION = {
         type: 'string',
         description:
           'Glob pattern to match files (e.g., "src/**/*.ts", "*.json")',
+      },
+      path: {
+        type: 'string',
+        description:
+          'Directory to search. Preferred over cwd; without it the search falls back to the server process directory rather than your project.',
       },
       cwd: {
         type: 'string',

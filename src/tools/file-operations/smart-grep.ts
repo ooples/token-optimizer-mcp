@@ -21,6 +21,7 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import { fsGeneration } from '../../utils/fs-generation.js';
 import { detectFileType } from '../shared/syntax-utils.js';
+import { appendAll } from '../shared/append-all.js';
 
 /**
  * The most this tool will ever return in one response.
@@ -44,6 +45,11 @@ export interface GrepMatch {
 
 export interface SmartGrepOptions {
   // Search scope
+  /**
+   * Directory to search. The natural name for it, and the one the hook's
+   * refusal message leads callers to pass; takes precedence over `cwd`.
+   */
+  path?: string;
   cwd?: string; // Working directory (default: process.cwd())
   files?: string[]; // Specific files to search (glob patterns)
 
@@ -134,7 +140,18 @@ export class SmartGrepTool {
 
     // Default options
     const opts: Required<SmartGrepOptions> = {
-      cwd: options.cwd ?? process.cwd(),
+      // `path` FIRST, and it is not a cosmetic alias.
+      //
+      // The hook refuses the built-in Grep and names this tool as the
+      // replacement, so callers pass the one argument that describes a search:
+      // where to look. `path` was undeclared, and an undeclared field that is
+      // not a near miss of a declared one is discarded silently -- so `cwd` fell
+      // back to process.cwd(), which for an MCP server is its own launch
+      // directory. Measured: every "scoped" search actually walked 676,875 files
+      // across the whole home directory, for 65 seconds, and answered about the
+      // wrong tree.
+      cwd: options.path ?? options.cwd ?? process.cwd(),
+      path: options.path ?? '',
       files: options.files ?? ['**/*'],
       caseSensitive: options.caseSensitive ?? false,
       wholeWord: options.wholeWord ?? false,
@@ -210,7 +227,7 @@ export class SmartGrepTool {
           ignore: opts.ignore,
           nodir: true,
         });
-        filesToSearch.push(...matches);
+        appendAll(filesToSearch, matches);
       }
 
       // Filter files by extension and size
@@ -293,7 +310,7 @@ export class SmartGrepTool {
           if (fileMatches.length > 0) {
             filesWithMatches.add(relative(opts.cwd, file));
             matchCounts.set(relative(opts.cwd, file), fileMatches.length);
-            allMatches.push(...fileMatches);
+            appendAll(allMatches, fileMatches);
           }
         } catch {
           // Skip files we can't read
@@ -612,6 +629,11 @@ export const SMART_GREP_TOOL_DEFINITION = {
       pattern: {
         type: 'string',
         description: 'Search pattern (string or regex)',
+      },
+      path: {
+        type: 'string',
+        description:
+          'Directory to search. Preferred over cwd; without it the search falls back to the server process directory rather than your project.',
       },
       cwd: {
         type: 'string',
