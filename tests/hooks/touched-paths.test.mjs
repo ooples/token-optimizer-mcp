@@ -10,7 +10,14 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { touchedPaths, touchedFiles, isContentDump, decide, isRecursiveSearch, normalizePayload } from '../../hooks-core/decide.mjs';
+import { touchedFiles, isContentDump, decide, isRecursiveSearch, normalizePayload } from '../../hooks-core/decide.mjs';
+
+// touchedPaths was a compatibility shim -- `touchedFiles(p).map(f => f.path)` --
+// kept, per its own docstring, "so every existing caller and test reads exactly
+// the same". It had no callers outside this file, so the shim was serving only
+// the test that existed to check it. The paths are what this suite is about, so
+// it derives them directly now.
+const touchedPaths = (payload) => touchedFiles(payload).map((f) => f.path);
 import { projectRootFor } from '../../hooks-core/wiki.mjs';
 import { isMachineOwned } from '../../hooks-core/policy.mjs';
 
@@ -384,7 +391,7 @@ describe('a touch carries the size that was measured to find it', () => {
     expect(out[0].size).toBe(statSync(join(repoA, 'src/main.ts')).size);
   });
 
-  test('touchedPaths returns exactly the same paths as before', () => {
+  test.skip('REMOVED: compared touchedPaths with its own definition once the shim went', () => {
     // The sizes are additional information, not a different answer.
     const payload = { tool_name: 'Bash', tool_input: { command: 'wc -l src/main.ts' }, cwd: repoA };
     expect(touchedFiles(payload).map((f) => f.path)).toEqual(touchedPaths(payload));

@@ -49,8 +49,15 @@ const DECLARE_DIRS = ['hooks-core', 'plugin/hooks'];
  * `renderAudit` and `exportMarkdown` as unreachable while four MCP tools were
  * calling them. That first draft would have failed CI on working code -- the
  * fastest possible way to get a guard like this switched off.
+ *
+ * `scripts` is here for the same reason and was missed on the first pass:
+ * wire-hooks and uninstall consume hooks-core/wire.mjs, so wirePlan and unwire
+ * were reported dead while the installer and the uninstaller both called them.
+ * Eleven files under scripts/ reference hooks-core. A check that scans only
+ * where its author expected the callers to be measures the author, not the
+ * code.
  */
-const USAGE_DIRS = ['hooks-core', 'plugin/hooks', 'src'];
+const USAGE_DIRS = ['hooks-core', 'plugin', 'src', 'scripts'];
 const TEST_DIRS = ['tests'];
 
 /**
@@ -63,46 +70,71 @@ const TEST_DIRS = ['tests'];
  */
 const ALLOWED = new Map([
   // ------------------------------------------------------------------
-  // TRIAGE BACKLOG -- the state of the repository when this guard landed.
+  // TRIAGE BACKLOG -- investigated, with the evidence recorded.
   //
-  // Every entry here is a feature that is implemented, mostly tested, and
-  // reachable from nothing. They are listed rather than silently ignored so
-  // the number is visible and can only go down: the guard blocks anything NEW
-  // joining this list, which is what stops the forTouch shape recurring while
-  // the existing cases are worked through.
+  // The first pass listed 21. Widening USAGE_DIRS to scripts/ and to all of
+  // plugin/ cleared four of them: wirePlan and unwire are called by
+  // scripts/wire-hooks.mjs and scripts/uninstall.mjs, and writeManifest and
+  // touchedPaths resolved too -- the latter by being DELETED, since it was a
+  // compatibility shim over touchedFiles with no caller but its own test.
   //
-  // Each carries the verdict, not just a description. "Investigate" is a
-  // verdict too, but a dated one -- an entry that says nothing is how an
-  // allowlist turns into a silencer.
+  // The first correction attempt over-generalised from that discovery and
+  // assumed auditFindings, recordRefresh and manifestSize were also
+  // script-called. They are not: each appears exactly once, as its own
+  // declaration. They are listed below as the orphans they are.
+  //
+  // Each survivor was then traced to find whether its OUTPUT has a consumer,
+  // which is the question that separates "unwired feature" from "dead code".
+  // The guard blocks anything new joining this list.
   // ------------------------------------------------------------------
 
-  // WIRE -- the feature is wanted and the delivery path is the missing half.
-  ['forTouch', 'WIRE: just-in-time injection, the design calls it "where the win lands". Wired by the injection PR; this entry goes when that merges.'],
-  ['linkCoOccurrence', 'WIRE: builds the `related` edges that EDGE_KINDS declares and nothing produces, so traversal has no semantic neighbourhood.'],
-  ['invalidateOnWrite', 'WIRE: the eager staleness path. Without it a finding is only invalidated lazily, on the next touch of its anchor.'],
+  // WIRED ELSEWHERE -- leaves this list when that PR merges.
+  ['forTouch', 'WIRED by the injection PR: just-in-time delivery, imported by nothing before it.'],
 
-  // INVESTIGATE -- plausible features whose intended caller is not obvious.
-  ['selectForConsolidation', 'INVESTIGATE: promotes findings into the graph under a budget. Needs a decision on when consolidation should run at all.'],
-  ['consolidationRatio', 'INVESTIGATE: reports what consolidation bought. Useless until selectForConsolidation has a caller.'],
-  ['contentAnchor', 'INVESTIGATE: content-based anchoring, additive to path anchoring. Unclear whether it was finished.'],
-  ['logForecast', 'INVESTIGATE: half of the forecast calibration loop; observeOutcome is the other half and is equally unreachable.'],
-  ['observeOutcome', 'INVESTIGATE: records what actually happened against a forecast. Calibration cannot work while neither half runs.'],
-  ['forecastPanel', 'INVESTIGATE: renders the forecast. Depends on the same unrun calibration loop.'],
-  ['worthSurfacing', 'INVESTIGATE: decides whether a forecast change is worth showing. Same loop.'],
-  ['recordRefresh', 'INVESTIGATE: keep-warm accounting, and untested as well as unreachable.'],
-  ['recordRefreshOutcome', 'INVESTIGATE: records whether a keep-warm refresh bought anything.'],
-  ['cacheOrdered', 'INVESTIGATE: confines cache invalidation to the tail. Real optimisation, no caller.'],
-  ['touchedPaths', 'INVESTIGATE: superseded in practice by touchedFiles, which carries sizes. Likely a delete.'],
-  ['restorationPlan', 'INVESTIGATE: builds the restoration block after a compaction.'],
-  ['auditFindings', 'INVESTIGATE: untested and unreachable, which is the weakest combination in the list.'],
-  ['manifestSize', 'INVESTIGATE: untested and unreachable.'],
-  ['writeManifest', 'INVESTIGATE: records an installation. Probably belongs to an install path that calls it from a script rather than source.'],
-  ['renderStanding', 'INVESTIGATE: renders the standing-context audit. auditStanding IS reachable, so only the renderer is orphaned -- likely a real gap.'],
-  ['wirePlan', 'INVESTIGATE: installer planning. May be invoked from a bin script outside the scanned tree.'],
-  ['unwire', 'INVESTIGATE: installer teardown, same question as wirePlan.'],
+  // A COMPLETE FEATURE, DISCONNECTED AT BOTH ENDS. linkCoOccurrence is the only
+  // producer of `related` edges; predictNext in restore.mjs is their only
+  // consumer, and it is reached only through restorationPlan, which is itself
+  // unreachable. So co-occurrence -> restoration is built end to end and wired
+  // at neither. Turning it on is a product decision, not a cleanup: it would
+  // switch on unmeasured behaviour, which is the thing this project has spent
+  // its recent effort correcting.
+  ['linkCoOccurrence', 'UNWIRED FEATURE: sole producer of `related` edges, whose sole consumer (restorationPlan) is also unreachable.'],
+  ['restorationPlan', 'UNWIRED FEATURE: sole consumer of `related` edges, whose sole producer (linkCoOccurrence) is also unreachable.'],
+
+  // A COMPLETE LOOP WITH NO ENTRY POINT. calibration.mjs has no importer at
+  // all: logForecast and observeOutcome collect the data, reliability scores it
+  // and calibrate applies the score. Nothing starts it, so the module cannot
+  // score anything -- and its own docstring says an uncalibrated forecast is
+  // "a vibe with a typeface".
+  ['logForecast', 'UNWIRED LOOP: calibration.mjs has zero importers; this records the prediction half.'],
+  ['observeOutcome', 'UNWIRED LOOP: records the outcome half of a calibration loop nothing starts.'],
+
+  // FORECAST DISPLAY, unreachable while the calibration behind it is unreachable.
+  ['forecastPanel', 'UNWIRED: renders a forecast whose calibration loop never runs.'],
+  ['worthSurfacing', 'UNWIRED: decides whether a forecast change is worth showing; same dormant loop.'],
+
+  // CONSOLIDATION. forecast.mjs imports aggregateConsolidation from this module,
+  // so it is partly live -- but the selection, the ratio and the content anchor
+  // are not reached, meaning nothing ever decides WHAT to consolidate.
+  ['selectForConsolidation', 'UNWIRED: chooses what to promote into the graph; no caller decides when consolidation runs.'],
+  ['consolidationRatio', 'UNWIRED: reports what consolidation bought, and cannot report on a selection that never happens.'],
+  ['contentAnchor', 'UNWIRED: content-based anchoring, additive to path anchoring; no caller.'],
+
+  // HALF A FEEDBACK LOOP. shouldKeepWarm and keepWarmDecision are reachable;
+  // the outcome half that would tell them whether a refresh ever paid off is
+  // not, so the decision can never learn.
+  ['recordRefreshOutcome', 'UNWIRED: records whether a keep-warm refresh was worth it; the deciding half runs without it.'],
+
+  // SINGLETONS still to be traced.
+  ['cacheOrdered', 'UNWIRED: confines cache invalidation to the tail. A real optimisation with no caller.'],
+  ['invalidateOnWrite', 'UNWIRED: the eager staleness path; invalidation currently happens only lazily, on the next touch.'],
+  ['renderStanding', 'UNWIRED: renders the standing-context audit. auditStanding IS reachable, so only the report is orphaned.'],
+  ['auditFindings', 'UNWIRED: audits stored findings. Verified orphaned -- appears once, as its own declaration.'],
+  ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
+  ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],
 
   // ------------------------------------------------------------------
-  // GENUINE PUBLIC API -- consumed by other clients or by the MCP server.
+  // GENUINE PUBLIC API.
   // ------------------------------------------------------------------
   ['policyText', 'PUBLIC API: shared client briefing, consumed by every non-Claude adapter.'],
 ]);

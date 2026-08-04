@@ -296,17 +296,6 @@ export function touchedFiles(payload) {
 
   return [...out].map(([path, size]) => ({ path, size }));
 }
-
-/**
- * The touched paths alone, for callers that do not need the sizes.
- *
- * Kept so every existing caller and test reads exactly the same, while the
- * ones on the hook's critical path can take the size measured on the way in.
- */
-export function touchedPaths(payload) {
-  return touchedFiles(payload).map((f) => f.path);
-}
-
 /** Dump commands as a whole word, for testing a segment's head. */
 const DUMP_HEAD = /^(?:cat|bat|head|tail|more|less|type|Get-Content|gc)$/i;
 
