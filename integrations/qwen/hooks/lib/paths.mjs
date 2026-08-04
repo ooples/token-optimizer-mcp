@@ -53,9 +53,6 @@ export function canonicalPath(input, cwd) {
     path = path.slice(1, -1);
   }
 
-  const msys = MSYS.exec(path);
-  if (msys) path = `${msys[1].toUpperCase()}:/${msys[2]}`;
-
   path = path.replace(/\\/g, '/');
 
   // Resolve relatives against the session's cwd so `src/a.ts` and the absolute
@@ -93,6 +90,19 @@ export function canonicalPath(input, cwd) {
     segments.push(segment);
   }
   path = (unc ? '//' : '') + segments.join('/');
+
+  // MSYS TRANSLATION AFTER THE COLLAPSE, NOT BEFORE.
+  //
+  // Running it first made canonicalPath non-idempotent, which a generated-
+  // input property caught: `/./c/Users/me/x` is not MSYS-shaped, so the first
+  // pass only dropped the `.` and returned `/c/Users/me/x` -- which IS
+  // MSYS-shaped, so a second pass returned `C:/Users/me/x`. The same file then
+  // held two identities depending on how many times its path had been round-
+  // tripped, which is precisely the fragmentation this module exists to end.
+  //
+  // Translating after normalisation means one pass reaches the fixed point.
+  const msys = MSYS.exec(path);
+  if (msys) path = `${msys[1].toUpperCase()}:/${msys[2]}`;
 
   // Upper-case a drive letter however it arrived, so `c:/x` and `C:/x` agree.
   path = path.replace(/^([A-Za-z]):/, (_, drive) => `${drive.toUpperCase()}:`);

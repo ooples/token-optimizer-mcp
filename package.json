@@ -133,6 +133,7 @@
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "eslint": "^9.38.0",
     "eslint-config-prettier": "^10.1.8",
+    "fast-check": "^4.9.0",
     "jest": "^30.2.0",
     "npm": "^11.19.0",
     "playwright": "^1.62.1",
