@@ -1,0 +1,77 @@
+name: Sync Release Pins
+
+# Repairs the release PR instead of merely failing it.
+#
+# release-please bumps package.json and, via `extra-files`, the plugin manifest.
+# It cannot bump the npm spec pinned inside the hand-maintained client configs:
+# that version lives inside a string in an args array
+# (`@ooples/token-optimizer-mcp@5.3.2`), which no jsonpath can address. So every
+# release left seven client configs pinned to whatever version last had
+# `sync:hooks` run against it by hand.
+#
+# The `generated-artifacts` gate in quality-gates.yml catches the drift, and the
+# guard in release.yml stops it shipping. Both are refusals. This job is the
+# repair: it runs the sync on the release PR and commits the result, so the PR
+# that bumps the version also carries the matching pins.
+#
+# WHY THIS CANNOT LOOP: pushes made with GITHUB_TOKEN do not trigger further
+# workflow runs. Even if they did, the second run would find nothing to commit
+# and exit, because the sync is idempotent.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-release-pins:
+    name: Sync Pinned Specs On Release PR
+    # Scoped to release-please PRs on purpose. Auto-committing to a
+    # contributor's branch would be a surprising thing for a lint-adjacent job
+    # to do; the release PR is machine-authored, so amending it is not.
+    if: startsWith(github.head_ref, 'release-please')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout the release PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          # Default GITHUB_TOKEN is enough to push to a same-repo PR branch.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync generated artifacts and pinned specs
+        run: npm run sync:hooks
+
+      - name: Commit the sync if it changed anything
+        run: |
+          if git diff --quiet; then
+            echo "Pins and generated artifacts already match the bumped version."
+            exit 0
+          fi
+
+          echo "Changed by the sync:"
+          git diff --name-only
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: sync pinned specs and generated artifacts to the released version"
+          git push

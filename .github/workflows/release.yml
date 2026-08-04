@@ -82,6 +82,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # A release is the ONLY event that can introduce pin drift, because
+      # release-please bumps package.json without touching the specs pinned
+      # inside the hand-maintained client configs. Publishing that tree ships
+      # hooks at the new version calling an MCP server at the old one.
+      #
+      # This fails the publish rather than repairing the tree: the tag is
+      # already cut, so silently publishing something different from the tag
+      # would be worse than stopping. The sync-release-pins job below is what
+      # keeps it from getting this far.
+      - name: Verify pinned specs match the released version
+        run: npm run sync:hooks:check
+
       - name: Build project
         run: npm run build
 

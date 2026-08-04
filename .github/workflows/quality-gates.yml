@@ -16,6 +16,36 @@ permissions:
   contents: read
 
 jobs:
+  # Generated and pinned artifacts must match their sources.
+  #
+  # `sync:hooks:check` already existed and already detected this drift. It was
+  # simply never invoked by any workflow, so it never ran -- and seven client
+  # configs shipped pinned to 5.3.2 while the hooks beside them were 5.3.6.
+  #
+  # This job carries NO release-please skip on purpose. The version bump is
+  # precisely what knocks the pinned specs out of step, so a gate that skips
+  # release commits cannot see the only event that causes the failure.
+  generated-artifacts:
+    name: Generated Artifacts In Sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify hook core, client entries, configs and pins are in sync
+        run: npm run sync:hooks:check
+
   bundle-size:
     name: Bundle Size Analysis
     runs-on: ubuntu-latest

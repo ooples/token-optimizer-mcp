@@ -2,7 +2,7 @@
   "mcpServers": {
     "token-optimizer": {
       "command": "npx",
-      "args": ["-y", "@ooples/token-optimizer-mcp@5.3.2"],
+      "args": ["-y", "@ooples/token-optimizer-mcp@5.3.6"],
       "env": {}
     }
   }
