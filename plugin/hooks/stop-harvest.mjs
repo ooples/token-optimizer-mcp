@@ -24,9 +24,12 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, chmodSync, readFileSync,
+  openSync, writeSync, closeSync, lstatSync, constants,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { mode, MODE_OFF } from './lib/policy.mjs';
 import { harvestEnabled, harvestMode } from './lib/harvest.mjs';
@@ -64,30 +67,119 @@ function markerName(sessionId) {
   return `harvest-notice-${cleaned.slice(0, 64)}`;
 }
 
-/** Where the once-per-session notice is remembered, so Stop does not nag. */
-function noticePath(sessionId) {
-  // os.tmpdir() rather than the TEMP/TMPDIR chain: the chain fell back to '.',
-  // which scatters marker files through whatever repository the session happens
-  // to be in.
-  const dir = join(tmpdir(), 'token-optimizer');
+/**
+ * A private, per-user directory for this hook's markers.
+ *
+ * os.tmpdir() is per-user on Windows but resolves to a SHARED, world-writable
+ * /tmp on POSIX. The marker name is derived from the session id, so it is
+ * predictable enough for another local user to pre-create -- as a symlink, or
+ * as a file they own -- and writeFileSync would then follow it and write
+ * through with this user's privileges.
+ *
+ * The state here is a debounce timestamp and a "said it once" flag, so the fix
+ * is not to guard a shared location but to stop using one. XDG_STATE_HOME is
+ * the standard place for state that should persist across runs but is not
+ * precious, and it is inside the user's own home on every POSIX system.
+ */
+function stateDir() {
+  const home = homedir();
+  const base =
+    process.platform === 'win32'
+      ? process.env.LOCALAPPDATA || tmpdir()
+      : process.env.XDG_STATE_HOME || (home ? join(home, '.local', 'state') : tmpdir());
+
+  const dir = join(base, 'token-optimizer');
   try {
-    mkdirSync(dir, { recursive: true });
+    // 0o700 AND an explicit chmod, for the reason the graph store documents:
+    // `recursive` applies the mode only to directories it actually creates, and
+    // the umask masks it further, so neither alone guarantees the result.
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // Not POSIX, or not ours to chmod.
+    }
   } catch {
     /* best effort */
   }
-  return join(dir, markerName(sessionId));
+  return dir;
+}
+
+/** Where the once-per-session notice is remembered, so Stop does not nag. */
+function noticePath(sessionId) {
+  return join(stateDir(), markerName(sessionId));
+}
+
+/**
+ * True when the path is absent, or is a regular file this user owns.
+ *
+ * lstat rather than stat: stat FOLLOWS the link and would happily report on the
+ * target, which is the thing being defended against.
+ */
+function ownedRegularFile(path) {
+  let info;
+  try {
+    info = lstatSync(path);
+  } catch {
+    return true; // Absent. The O_NOFOLLOW open below settles the race.
+  }
+  if (!info.isFile()) return false;
+  // getuid is undefined on Windows, where stateDir() is already per-user.
+  if (typeof process.getuid === 'function' && info.uid !== process.getuid()) return false;
+  return true;
+}
+
+/**
+ * Writes a marker, refusing to follow a symlink.
+ *
+ * O_NOFOLLOW makes the refusal ATOMIC rather than a check-then-use window: a
+ * link swapped in after ownedRegularFile() returns fails the open instead of
+ * being written through. The flag does not exist on Windows, where it is
+ * undefined and falls back to 0 -- acceptable, because the directory is
+ * per-user there to begin with.
+ */
+function writeMarker(path, contents) {
+  if (!ownedRegularFile(path)) return false;
+  const NOFOLLOW = constants.O_NOFOLLOW || 0;
+  let fd;
+  try {
+    fd = openSync(
+      path,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW,
+      0o600
+    );
+    writeSync(fd, contents);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* already closed */
+      }
+    }
+  }
+}
+
+/** Reads a marker, ignoring anything that is not a regular file we own. */
+function readMarker(path) {
+  if (!ownedRegularFile(path)) return null;
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 function alreadyNotified(sessionId) {
   const path = noticePath(sessionId);
-  try {
-    if (existsSync(path)) return true;
-    writeFileSync(path, String(Date.now()));
-  } catch {
-    // If the marker cannot be written, prefer staying quiet over repeating.
-    return true;
-  }
-  return false;
+  // Anything already at this path -- our marker, or something planted -- means
+  // stay quiet. Repeating the notice is the worse failure, and refusing to
+  // write over a foreign file is the point.
+  if (existsSync(path)) return true;
+  return !writeMarker(path, String(Date.now()));
 }
 
 /** Minimum gap between harvests of one session. */
@@ -104,19 +196,19 @@ const HARVEST_INTERVAL_MS =
  * Stop would let a run of skipped turns keep pushing the next harvest away.
  */
 function dueForHarvest(sessionId) {
-  const marker = join(dirname(noticePath(sessionId)), `harvest-last-${markerName(sessionId)}`);
-  try {
-    const last = Number(readFileSync(marker, 'utf8'));
-    if (Number.isFinite(last) && Date.now() - last < HARVEST_INTERVAL_MS) return false;
-  } catch {
-    // No marker yet, or unreadable -- treat as due.
+  const marker = join(stateDir(), `harvest-last-${markerName(sessionId)}`);
+
+  const last = Number(readMarker(marker));
+  // > 0 matters: readMarker returns null when the marker is missing or is not
+  // ours, and Number(null) is 0, which is finite -- so without this an absent
+  // marker would read as a harvest at the epoch.
+  if (Number.isFinite(last) && last > 0 && Date.now() - last < HARVEST_INTERVAL_MS) {
+    return false;
   }
-  try {
-    writeFileSync(marker, String(Date.now()));
-  } catch {
-    // If the marker cannot be written the debounce degrades to off rather than
-    // blocking the harvest entirely.
-  }
+
+  // If the marker cannot be written the debounce degrades to off rather than
+  // blocking the harvest entirely.
+  writeMarker(marker, String(Date.now()));
   return true;
 }
 

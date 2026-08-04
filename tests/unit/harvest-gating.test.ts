@@ -112,7 +112,56 @@ describe('harvest enablement', () => {
   });
 
   it('extract() is a no-op rather than an unauthenticated request when disabled', async () => {
-    const { extract } = await harvest();
-    await expect(extract('some digest')).resolves.toEqual([]);
+    // ASSERT ON THE TRANSPORT, not just the return value. `resolves.toEqual([])`
+    // passes either way: extract() returns [] when it declines to run AND when
+    // it fires a request that fails or comes back empty. Those are opposite
+    // outcomes -- one spends nothing and discloses nothing, the other bills a
+    // call and ships a digest of the user's prompts off the machine -- and the
+    // whole point of this module is the difference between them. Counting fetch
+    // calls is what actually distinguishes the two.
+    const realFetch = globalThis.fetch;
+    const calls: unknown[] = [];
+    globalThis.fetch = (...args: unknown[]) => {
+      calls.push(args);
+      return Promise.reject(new Error('no request should have been made'));
+    };
+
+    try {
+      const { extract, harvestEnabled } = await harvest();
+      // The precondition, stated so a failure here is not misread as a
+      // transport bug: with the env cleared by beforeEach, harvesting is off.
+      expect(harvestEnabled()).toBe(false);
+
+      await expect(extract('some digest')).resolves.toEqual([]);
+      expect(calls).toHaveLength(0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('does make a request once a local endpoint enables it', async () => {
+    // The negative test above is only meaningful next to a positive one: if
+    // extract() never called fetch under ANY configuration, zero calls would
+    // prove nothing about the gate.
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'http://127.0.0.1:11434/v1/messages';
+
+    const realFetch = globalThis.fetch;
+    const calls: unknown[] = [];
+    globalThis.fetch = (...args: unknown[]) => {
+      calls.push(args);
+      return Promise.reject(new Error('transport stubbed'));
+    };
+
+    try {
+      const { extract, harvestEnabled } = await harvest();
+      expect(harvestEnabled()).toBe(true);
+
+      // A rejected transport still yields [] -- the module swallows transport
+      // failure by design -- which is exactly why the count is the assertion.
+      await expect(extract('some digest')).resolves.toEqual([]);
+      expect(calls).toHaveLength(1);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });

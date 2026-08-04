@@ -234,7 +234,8 @@ function ignoreSelf(dir) {
   }
 }
 
-function append(dir, record) {
+function appendAll(dir, records) {
+  if (!records.length) return true;
   try {
     // 0o700 AND an explicit chmod. `recursive: true` applies the mode only to
     // directories it actually creates, and the process umask masks it further,
@@ -250,13 +251,22 @@ function append(dir, record) {
       // where it can, and failing here must not stop the write.
     }
     ignoreSelf(dir);
-    withLock(dir, () => appendFileSync(logPath(dir), JSON.stringify(record) + '\n'));
+    // ONE appendFileSync for the whole group, inside ONE lock: a caller that
+    // needs several records to be observed together cannot get that by looping,
+    // because every iteration is a separate crash point.
+    const payload = records.map((record) => JSON.stringify(record) + '\n').join('');
+    withLock(dir, () => appendFileSync(logPath(dir), payload));
     return true;
   } catch {
     // The graph is an optimization. Failing to write one must never fail the
     // user's tool call, so this is swallowed and reported only via metrics.
     return false;
   }
+}
+
+/** Records one line. The overwhelmingly common case, and unchanged. */
+function append(dir, record) {
+  return appendAll(dir, [record]);
 }
 
 /**
@@ -279,6 +289,46 @@ export function putNode(dir, { kind, key, ...rest }) {
 export function putEdge(dir, from, edge, to) {
   if (!EDGE_KINDS.includes(edge)) throw new Error(`unknown edge kind: ${edge}`);
   append(dir, { t: 'e', v: GRAPH_VERSION, from, edge, to, at: Date.now() });
+}
+
+/**
+ * Writes a node together with its outgoing edges as a SINGLE append.
+ *
+ * A finding is only meaningful with its `derived_from` anchors: the anchors are
+ * what let it be invalidated when the code moves, and `writeHarvested` refuses
+ * to store one that resolved none. Writing the node and then looping `putEdge`
+ * left a window -- one append per edge, in a DETACHED worker that a session end
+ * or a sleeping machine can kill at any instant -- where the node landed and its
+ * edges did not. The result is exactly the record this store promises never to
+ * create: an active finding anchored to nothing, unfalsifiable, served as
+ * current forever.
+ *
+ * THE NODE IS WRITTEN LAST, and that ordering is the actual guarantee. One
+ * `appendFileSync` can still tear if the process dies mid-write, so ordering is
+ * what makes the surviving prefix safe: a tear leaves edges whose `from` names
+ * no node, and every consumer already dereferences that through a
+ * `nodes.get(...)` guard (`findingsFor`, `audit`, `sweep`), so a dangling edge
+ * is inert. The reverse order has no such property. A torn final line is
+ * discarded by `load()`, which skips unparseable records by design.
+ */
+export function putNodeWithEdges(dir, { kind, key, ...rest }, edges = []) {
+  if (!NODE_KINDS.includes(kind)) throw new Error(`unknown node kind: ${kind}`);
+
+  const id = nodeId(kind, key);
+  // One timestamp for the whole group: the node and its anchors were decided
+  // together, so a reader comparing `at` should see them as one event.
+  const at = Date.now();
+
+  const records = [];
+  for (const { edge, to } of edges) {
+    if (!EDGE_KINDS.includes(edge)) throw new Error(`unknown edge kind: ${edge}`);
+    records.push({ t: 'e', v: GRAPH_VERSION, from: id, edge, to, at });
+  }
+  // `rest` first, for the same reason as putNode: it can never override the
+  // bookkeeping fields.
+  records.push({ ...rest, t: 'n', v: GRAPH_VERSION, id, kind, key: canonicalKey(kind, key), at });
+
+  return appendAll(dir, records) ? id : null;
 }
 
 /**

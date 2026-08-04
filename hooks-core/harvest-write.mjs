@@ -21,7 +21,7 @@
  * to resolve is refused rather than stored as permanently-current.
  */
 
-import { putNode, putEdge, load, nodeId } from './wiki.mjs';
+import { putNodeWithEdges, load, nodeId } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
@@ -102,17 +102,28 @@ export function writeHarvested(
     // finding silently replaces another's. A random suffix makes that
     // collision vanishingly unlikely while keeping the timestamp readable.
     const key = `${prefix}-${Date.now().toString(36)}-${written.length}-${randomBytes(4).toString("hex")}`;
-    const id = putNode(dir, {
-      kind: 'finding',
-      key,
-      claim: finding.claim,
-      confidence: finding.confidence,
-      type: finding.type,
-      origin: provenance,
-      sessionId,
-    });
-    for (const target of resolved) putEdge(dir, id, 'derived_from', target);
-    written.push(key);
+    // ONE APPEND for the finding and every anchor it resolved. This runs in a
+    // detached worker, so "the process survives to finish the loop" is not a
+    // safe assumption: a node written without its edges is an active finding
+    // anchored to nothing, which can never be invalidated and is therefore
+    // served as current forever -- the precise record the anchor discipline
+    // above exists to refuse.
+    const id = putNodeWithEdges(
+      dir,
+      {
+        kind: 'finding',
+        key,
+        claim: finding.claim,
+        confidence: finding.confidence,
+        type: finding.type,
+        origin: provenance,
+        sessionId,
+      },
+      resolved.map((target) => ({ edge: 'derived_from', to: target }))
+    );
+    // A failed write returns null. Reporting the key anyway would tell the
+    // caller a claim was stored that no later session can retrieve.
+    if (id) written.push(key);
   }
 
   return written;
