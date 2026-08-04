@@ -191,8 +191,18 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const graph = load(dir);
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(true);
-    // Never an empty diff: the model must be told the claim is unverified.
-    expect(out.diff).toContain('unverified');
+    // THE INVARIANT IS "never bare", not a particular sentence. The previous
+    // assertion pinned the word "unverified", which is how the wording survived
+    // long enough to be measured doing harm: identical findings scored 1/3
+    // dead-ends avoided when the model was told to treat them as unverified and
+    // 2/3 when it was not. Assert that the staleness is disclosed and that the
+    // evidence gap is named -- not the exact phrasing, which should be free to
+    // improve without a test standing in the way.
+    expect(out.diff).toBeTruthy();
+    expect(out.diff.length).toBeGreaterThan(20);
+    expect(out.diff).toMatch(/reconstruct/i);
+    // And it must NOT tell the model to discard a claim that may still hold.
+    expect(out.diff).not.toMatch(/\bunverified\b/i);
   });
 });
 

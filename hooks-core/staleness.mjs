@@ -357,10 +357,22 @@ export function serve(graph, findings) {
     }
 
     if (stale && !diff) {
-      // The invariant. Rather than serve a bare stale finding -- which the
-      // design calls worse than no graph -- say plainly that the evidence is
-      // gone, so the model treats the claim as unverified rather than current.
-      diff = '(the change could not be reconstructed; treat this finding as unverified)';
+      // The invariant holds: never serve a bare stale finding as though it were
+      // current. But the WORDING was doing more than that, and it was measured.
+      //
+      // "treat this finding as unverified" is an instruction to discount, and
+      // models follow it. In an A/B on a fresh subagent, identical findings
+      // scored 1/3 dead-ends avoided when rendered with that sentence and 2/3
+      // when rendered clean -- no code change, only the wording. The claim being
+      // discounted was correct every time; all that had changed was the anchor
+      // file, which says nothing about whether the claim still holds.
+      //
+      // So: report what is actually known -- the anchor moved and the evidence
+      // cannot be rebuilt -- and let the claim stand or fall on its own. That is
+      // honest about staleness without arguing against the content.
+      diff = '(the anchor changed since this was recorded and the diff can no longer be '
+        + 'reconstructed; the claim itself may well still hold, so weigh it rather than '
+        + 'discard it)';
     }
 
     served.push({ ...finding, stale, ...(stale ? { diff, staleReason: reason } : {}) });
