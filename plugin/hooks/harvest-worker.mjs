@@ -126,4 +126,23 @@ async function main() {
 
 main()
   .catch(() => {})
-  .finally(() => process.exit(0));
+  .finally(() => {
+    // NEVER process.exit() SYNCHRONOUSLY HERE.
+    //
+    // It crashed this worker on Windows every single time the feedback pass
+    // ran -- libuv asserts `!(handle->flags & UV_HANDLE_CLOSING)` when the
+    // process exits while the sockets from the model call are still closing,
+    // giving exit code 0xC0000409. Reproduced 5 runs out of 5, and silently,
+    // because this worker is spawned detached and nothing reads its status.
+    // Deferring by one tick is NOT enough; the handles are still closing then.
+    //
+    // So the normal path just lets the loop drain, which it does promptly.
+    process.exitCode = 0;
+
+    // The watchdog keeps the original guarantee: a detached worker must never
+    // linger holding a keep-alive socket open. It is UNREF'D, so it cannot
+    // itself keep the process alive -- it only fires if something else already
+    // has, which is exactly the case worth killing.
+    const watchdog = setTimeout(() => process.exit(0), 5000);
+    watchdog.unref();
+  });
