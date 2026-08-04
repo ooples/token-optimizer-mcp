@@ -30,6 +30,16 @@ function seed({ key, claim, type = 'command', trigger, confidence = 0.9 }) {
   );
 }
 
+// THE HOLDOUT IS OFF IN THIS SUITE, DELIBERATELY.
+//
+// `forCommand` now takes part in the holdout, so a command whose stratification
+// hash lands in the withheld arm correctly returns null. These tests are about
+// DELIVERY, not measurement, and leaving the holdout on would make them depend
+// on which epoch they run in -- passing today and failing tomorrow for a reason
+// nobody would connect to a date. The measurement itself is tested in
+// tests/hooks/holdout-measurement.test.mjs, where the arm is chosen explicitly.
+process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'cmd-inject-'));
   anchorFile = join(dir, 'harvest.mjs');

@@ -43,6 +43,21 @@ const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 50
 const standingBudget = () =>
   Number(process.env.TOKEN_OPTIMIZER_STANDING_BUDGET) || 400;
 
+/**
+ * The stratification key for a command.
+ *
+ * Normalised so that the same intent lands in the same arm: trailing
+ * whitespace and a differing set of paths should not flip a command between
+ * treated and withheld, because that is what makes the two arms comparable.
+ */
+function commandKey(command) {
+  return String(command || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 120)
+    .toLowerCase();
+}
+
 /** Most findings considered for one command before the budget decides. */
 const MAX_COMMAND_CANDIDATES = 20;
 
@@ -137,6 +152,8 @@ export function forTouch(
 
   record(dir, {
     kind: 'inject',
+    // The surface whose saving CAN be measured: reads of this anchor afterwards.
+    surface: 'file',
     anchor: filePath,
     holdout,
     tokens: holdout ? 0 : spent,
@@ -293,16 +310,36 @@ export function forCommand(
   const { kept, spent } = fit(served, budget);
   if (!kept.length) return null;
 
+  // THE COMMAND PATH TAKES PART IN THE HOLDOUT TOO.
+  //
+  // `holdout: false` was hardcoded here, so 95 of 136 injections measured on a
+  // real machine were structurally excluded from the only mechanism that can
+  // establish causation. Seventy per cent of what the feature does could never
+  // be shown to help or hurt.
+  //
+  // Stratified on the COMMAND rather than a file, by the same (key, epoch)
+  // hash: the same command lands in the same arm all session, so a command run
+  // repeatedly cannot straddle both arms and contaminate each.
+  const key = commandKey(command);
+  const holdout = inHoldout(key);
+
   record(dir, {
     kind: 'inject',
     trigger: 'command',
+    // The surface the report needs to keep these OUT of the file-read balance:
+    // a command has no anchor that read events can be joined to.
+    surface: 'command',
     anchor: String(command).slice(0, 120),
-    holdout: false,
-    tokens: spent,
-    count: kept.length,
+    holdout,
+    tokens: holdout ? 0 : spent,
+    count: holdout ? 0 : kept.length,
     stale: kept.some((f) => f.stale),
     sessionId,
   });
+
+  // Withheld means withheld. Returning the text anyway would record an arm the
+  // subject never actually experienced.
+  if (holdout) return null;
 
   for (const f of kept) alreadyInjected.add(f.key);
 

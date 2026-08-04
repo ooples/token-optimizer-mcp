@@ -42,6 +42,28 @@ const EPOCH_MS = 86_400_000;
 const metricsPath = (dir) => join(dir, 'metrics.jsonl');
 
 /**
+ * The balance log: `inject` and `harvest` only.
+ *
+ * WHY A SECOND FILE. The event window is measured in EVENTS, and injections are
+ * a tiny minority of them -- 136 injections against 6,725 captures across every
+ * graph on one machine. So the last 5,000 events are almost entirely captures
+ * and reads, and the injections that carry the measurement age out first.
+ *
+ * Measured on this repository before the fix: 44 inject records in the file, 9
+ * of them holdout, all at lines 60-76 of 9,058 -- every single one outside the
+ * window. `report()` therefore said "0 holdout" while the file plainly
+ * contained nine, and the net balance was uncomputable on all 122 graphs.
+ *
+ * A separate log fixes it structurally rather than by enlarging a number.
+ * These records are rare, so the file stays small for years, and a tail window
+ * on it drops BOTH arms proportionally instead of starving the rare one.
+ */
+const balancePath = (dir) => join(dir, 'balance.jsonl');
+
+/** Kinds the net balance is computed from, and which therefore must survive. */
+const BALANCE_KINDS = new Set(['inject', 'harvest']);
+
+/**
  * Is this touch in the holdout arm?
  *
  * Deterministic in (anchor, epoch) rather than random per call, so repeated
@@ -78,7 +100,12 @@ export function record(dir, event) {
     } catch {
       // Not POSIX, or not ours to chmod; the write still proceeds.
     }
-    appendFileSync(metricsPath(dir), JSON.stringify({ ...event, at: Date.now() }) + '\n');
+    const line = JSON.stringify({ ...event, at: Date.now() }) + '\n';
+    appendFileSync(metricsPath(dir), line);
+    // Balance-critical records go to their own log as well, so the windows on
+    // the firehose can never starve the measurement. Written SECOND: a torn
+    // write here costs a duplicate the reader dedupes, not a lost event.
+    if (BALANCE_KINDS.has(event.kind)) appendFileSync(balancePath(dir), line);
   } catch {
     // Metrics must never break a tool call.
   }
@@ -148,6 +175,115 @@ function readAll(dir) {
 }
 
 /**
+ * Balance records, read WITHOUT the event window that was starving them.
+ *
+ * Reads the dedicated log in full, and merges in whatever the firehose still
+ * holds so graphs that predate the split are not left unmeasurable. Duplicates
+ * are inevitable once both logs carry the same record, so they are removed on
+ * an identity built from the fields that make an event unique.
+ *
+ * The byte cap still applies to the dedicated log, but it means something very
+ * different here: these records are rare, so the cap is years of history rather
+ * than hours, and it drops BOTH arms proportionally when it finally bites.
+ */
+/**
+ * Every balance record in a file, with NO event window.
+ *
+ * The byte cap still bounds the read, because the firehose can be enormous. The
+ * event cap does not apply: it is what buried these records in the first place,
+ * and they are rare enough that keeping all of them inside the byte window costs
+ * nothing.
+ */
+function scanForBalance(path) {
+  if (!existsSync(path)) return [];
+  let text = '';
+  try {
+    const { size } = statSync(path);
+    if (size <= MAX_BYTES) {
+      text = readFileSync(path, 'utf8');
+    } else {
+      const fd = openSync(path, 'r');
+      try {
+        const buffer = Buffer.allocUnsafe(MAX_BYTES);
+        const read = readSync(fd, buffer, 0, MAX_BYTES, size - MAX_BYTES);
+        text = buffer.subarray(0, read).toString('utf8');
+      } finally {
+        closeSync(fd);
+      }
+      text = text.slice(text.indexOf('\n') + 1);
+    }
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    try {
+      const e = JSON.parse(line);
+      if (BALANCE_KINDS.has(e.kind)) out.push(e);
+    } catch {
+      /* a torn line costs a record, not the report */
+    }
+  }
+  return out;
+}
+
+export function readBalance(dir) {
+  const merged = [];
+  const path = balancePath(dir);
+  if (existsSync(path)) {
+    let text = '';
+    try {
+      const { size } = statSync(path);
+      if (size <= MAX_BYTES) {
+        text = readFileSync(path, 'utf8');
+      } else {
+        const fd = openSync(path, 'r');
+        try {
+          const buffer = Buffer.allocUnsafe(MAX_BYTES);
+          const read = readSync(fd, buffer, 0, MAX_BYTES, size - MAX_BYTES);
+          text = buffer.subarray(0, read).toString('utf8');
+        } finally {
+          closeSync(fd);
+        }
+        text = text.slice(text.indexOf('\n') + 1);
+      }
+    } catch {
+      text = '';
+    }
+    for (const line of text.split('\n')) {
+      if (!line) continue;
+      try {
+        merged.push(JSON.parse(line));
+      } catch {
+        /* a torn line costs a record, not the report */
+      }
+    }
+  }
+
+  // MIGRATION, not a fallback. Every graph written before the split has its
+  // only copy of these records in the firehose; ignoring them would reset the
+  // measurement to zero on 122 existing graphs.
+  //
+  // IT MUST NOT GO THROUGH readAll. The first version of this fix did, and
+  // readAll applies the very event window that was starving the measurement --
+  // so the migration inherited the bug it existed to repair and the real graphs
+  // still reported zero holdouts. Verified against them: unchanged at 0 until
+  // this scan stopped windowing.
+  for (const e of scanForBalance(metricsPath(dir))) merged.push(e);
+
+  const seen = new Set();
+  const out = [];
+  for (const e of merged) {
+    const id = [e.kind, e.at, e.anchor ?? '', e.sessionId ?? '', e.tokens ?? ''].join('|');
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(e);
+  }
+  return out;
+}
+
+/**
  * The report.
  *
  * `tokensAvoided` is an ESTIMATE and is labelled as one everywhere it appears.
@@ -157,8 +293,29 @@ function readAll(dir) {
  */
 export function report(dir) {
   const events = readAll(dir);
+  // Injections and harvests come from the log that cannot be starved.
+  const balance = readBalance(dir);
 
-  const injections = events.filter((e) => e.kind === 'inject');
+  // COMMAND INJECTIONS ARE COUNTED SEPARATELY, not mixed into the balance.
+  //
+  // The saving is measured by joining an injection to the READS of its anchor
+  // afterwards. A command injection's anchor is the command text, which no read
+  // event will ever match, so both arms would contribute zero downstream and
+  // every command record would pull both means toward zero -- diluting a real
+  // file-touch saving in proportion to how many commands ran.
+  //
+  // They still take part in the holdout, and are reported, because a structural
+  // exclusion is how 95 of 136 injections came to be unmeasurable. What is
+  // missing is a downstream join for them, and that is stated rather than
+  // papered over with a number.
+  const allInjections = balance.filter((e) => e.kind === 'inject');
+  // `trigger` is the pre-`surface` spelling. Records written before the split
+  // carry it and no surface at all, so keying only on surface would silently
+  // file 95 historical command injections into the file-read balance -- exactly
+  // the dilution the split exists to prevent.
+  const isCommand = (e) => e.surface === 'command' || e.trigger === 'command';
+  const commandInjections = allInjections.filter(isCommand);
+  const injections = allInjections.filter((e) => !isCommand(e));
   const treated = injections.filter((e) => !e.holdout);
   const withheld = injections.filter((e) => e.holdout);
 
@@ -166,7 +323,7 @@ export function report(dir) {
     rows.length ? rows.reduce((sum, r) => sum + (r[field] || 0), 0) / rows.length : 0;
 
   const injectedTokens = treated.reduce((sum, e) => sum + (e.tokens || 0), 0);
-  const harvestTokens = events
+  const harvestTokens = balance
     .filter((e) => e.kind === 'harvest')
     .reduce((sum, e) => sum + (e.tokens || 0), 0);
 
@@ -236,6 +393,8 @@ export function report(dir) {
 
   return {
     injections: treated.length,
+    commandInjections: commandInjections.length,
+    commandHoldouts: commandInjections.filter((e) => e.holdout).length,
     holdouts: withheld.length,
     staleServed: injections.filter((e) => e.stale).length,
     staleRate: injections.length ? injections.filter((e) => e.stale).length / injections.length : 0,
