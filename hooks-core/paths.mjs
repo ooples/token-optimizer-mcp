@@ -39,15 +39,19 @@ const MSYS = /^\/([A-Za-z])\/(.*)$/;
  * are case-preserving, and lower-casing whole paths would make every graph key
  * unreadable for a property nothing here depends on.
  */
-export function canonicalPath(input, cwd) {
+function normaliseOnce(input, cwd) {
   if (typeof input !== 'string' || !input) return input;
 
   let path = input.trim();
   if (!path) return input;
 
   // Strip surrounding quotes a shell command may carry.
-  if ((path.startsWith('"') && path.endsWith('"')) ||
-      (path.startsWith("'") && path.endsWith("'"))) {
+  // LENGTH >= 2, because `startsWith` and `endsWith` both match the SAME
+  // character on a one-character string: a lone `"` looked like a quoted empty
+  // path and `slice(1, -1)` turned it into one.
+  if (path.length >= 2 &&
+      ((path.startsWith('"') && path.endsWith('"')) ||
+       (path.startsWith("'") && path.endsWith("'")))) {
     path = path.slice(1, -1);
   }
 
@@ -89,6 +93,26 @@ export function canonicalPath(input, cwd) {
   }
   path = (unc ? '//' : '') + segments.join('/');
 
+  // ROOT SURVIVES THE COLLAPSE. `/` splits to ['', ''], the loop keeps only the
+  // leading '' that marks absoluteness, and joining a single empty segment
+  // yields '' -- so the root directory canonicalised to the empty string, and a
+  // second pass could not get back.
+  if (path === '' && segments.length === 1 && segments[0] === '') path = '/';
+
+  // TRIMMED ON THE WAY OUT AS WELL AS ON THE WAY IN.
+  //
+  // The input is trimmed at the top because surrounding whitespace is not part
+  // of a path. Collapsing segments can RE-EXPOSE it: `a /` splits to the single
+  // segment `a ` and joins back to `a `, which the next call would then trim to
+  // `a` -- so the same file got two identities depending on how many times its
+  // path had been canonicalised, which is the fragmentation this module exists
+  // to end.
+  //
+  // Applying the rule the function already commits to at both ends reaches the
+  // fixed point in one pass. Whitespace INSIDE a path is untouched: `x /y` and
+  // `C:/ x` canonicalise to themselves.
+  path = path.trim();
+
   // MSYS TRANSLATION AFTER THE COLLAPSE, NOT BEFORE.
   //
   // Running it first made canonicalPath non-idempotent, which a generated-
@@ -108,6 +132,35 @@ export function canonicalPath(input, cwd) {
   // A trailing separator is not part of a file's identity.
   if (path.length > 3 && path.endsWith('/')) path = path.slice(0, -1);
 
+  return path;
+}
+
+/**
+ * Canonicalises to a FIXED POINT, by construction rather than by patching.
+ *
+ * One pass is not idempotent and cannot easily be made so. Its steps interact:
+ * collapsing `a /` re-exposes whitespace the leading trim had already handled;
+ * collapsing `'.'!'/` produces `'.'!'`, which the NEXT call reads as a quoted
+ * path and unquotes. Generated inputs found three such shapes in a row, each
+ * fixed individually and each replaced by another -- which is the signal that
+ * the invariant belongs in the structure, not in another special case.
+ *
+ * So the pass is applied until it stops changing anything. Every step is
+ * non-expanding (trim, unquote and segment-collapse only shorten; the MSYS
+ * rewrite preserves length), so the sequence must reach a fixed point, and the
+ * iteration cap is a backstop rather than a truncation.
+ *
+ * WHY IT MATTERS: this function decides file IDENTITY. A path whose canonical
+ * form depends on how many times it has been canonicalised gives one file two
+ * graph nodes, with findings anchored under one invisible from the other.
+ */
+export function canonicalPath(input, cwd) {
+  let path = normaliseOnce(input, cwd);
+  for (let i = 0; i < 8; i++) {
+    const next = normaliseOnce(path, cwd);
+    if (next === path) return path;
+    path = next;
+  }
   return path;
 }
 

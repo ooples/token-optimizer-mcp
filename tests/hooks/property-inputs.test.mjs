@@ -75,6 +75,43 @@ describe('canonicalPath', () => {
     );
   });
 
+  it('reaches its fixed point on every shape the generators found', () => {
+    // FOUR COUNTEREXAMPLES, FOUND ONE AFTER ANOTHER. Each was fixed on its own
+    // and the next run produced a new one, which is what moved the invariant
+    // into the structure -- canonicalPath now iterates a single pass to a fixed
+    // point instead of trying to make that pass idempotent by hand. These stay
+    // pinned because they document why the loop exists.
+    const CASES = [
+      // A segment ending in whitespace before a separator re-exposed the
+      // whitespace the leading trim had already handled.
+      "! /",
+      "a /",
+      // A one-character quote: startsWith and endsWith match the SAME character,
+      // so slice(1, -1) turned it into the empty string.
+      "\"",
+      "\"/",
+      // Collapsing produced something that LOOKED quoted, so the next pass
+      // unquoted it.
+      "'.'!'/",
+      // The root directory collapsed to the empty string and could not return.
+      "/",
+      "/ \\",
+      ". / ",
+    ];
+    for (const c of CASES) {
+      const once = canonicalPath(c);
+      expect(canonicalPath(once)).toBe(once);
+    }
+
+    // And the fixed point is the RIGHT value, not merely a stable one: an
+    // idempotent function that maps the root to the empty string would satisfy
+    // the property above and still be wrong.
+    expect(canonicalPath('/')).toBe('/');
+    expect(canonicalPath("\"")).toBe("\"");
+    expect(canonicalPath('x /y')).toBe('x /y');
+    expect(canonicalPath('C:/ x')).toBe('C:/ x');
+  });
+
   it('reaches its fixed point on a Git Bash path carrying a dot segment', () => {
     // THE COUNTEREXAMPLE THE GENERATED INPUTS FOUND, pinned so it cannot come
     // back. MSYS translation used to run BEFORE `.` and `..` were collapsed, so
