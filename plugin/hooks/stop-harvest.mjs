@@ -33,6 +33,8 @@ import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { mode, MODE_OFF } from './lib/policy.mjs';
 import { harvestEnabled, harvestMode } from './lib/harvest.mjs';
+import { archive } from './lib/transcript.mjs';
+import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 
 /** What to tell the user, per reason the harvest is not running. */
 const OFF_REASON = {
@@ -228,6 +230,22 @@ async function main() {
 
   const transcript = payload.transcript_path;
   if (!transcript || !existsSync(transcript)) return;
+
+  // ARCHIVE FIRST, AND UNCONDITIONALLY. This is a local file copy: it costs no
+  // model call, spends no money, and sends nothing anywhere, so it must not sit
+  // behind the opt-in that exists to gate cost and disclosure. Gating it there
+  // would mean the record of what the user actually said is kept only for the
+  // users who opted into a paid feature, which is exactly backwards.
+  //
+  // It also has to happen before the early return below, or a session with
+  // harvesting off would archive nothing at all.
+  try {
+    archive(wikiDir(projectRootFor(join(payload.cwd || process.cwd(), '__session__'), payload.cwd)), transcript, {
+      sessionId: payload.session_id,
+    });
+  } catch {
+    // The archive is a convenience. Failing to write it must not affect Stop.
+  }
 
   if (!harvestEnabled()) {
     // Say it once, name the reason and the variable that changes it, and state

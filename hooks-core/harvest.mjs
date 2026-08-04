@@ -34,7 +34,10 @@ const ENDPOINT = () => process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT
   || 'https://api.anthropic.com/v1/messages';
 
 /** Findings must be one of these. Free-form claims are rejected. */
-export const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map'];
+// 'feedback' is a lesson extracted from a USER CORRECTION rather than from the
+// code -- the only finding type whose source is a person telling the agent it
+// was wrong, which is why it is kept distinguishable from an ordinary finding.
+export const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map', 'feedback'];
 
 export function apiKey() {
   return process.env.TOKEN_OPTIMIZER_API_KEY || process.env.ANTHROPIC_API_KEY || null;
@@ -220,7 +223,7 @@ export function validate(raw, { knownFiles = null } = {}) {
  * indistinguishable, from the caller's side, from a session with nothing to
  * learn.
  */
-export async function extract(digest, { timeoutMs = 30_000 } = {}) {
+export async function extract(digest, { timeoutMs = 30_000, prompt = null } = {}) {
   if (!digest || !harvestEnabled()) return [];
 
   // A local endpoint usually has no auth at all, so requiring a key there would
@@ -246,7 +249,7 @@ export async function extract(digest, { timeoutMs = 30_000 } = {}) {
       body: JSON.stringify({
         model: MODEL(),
         max_tokens: 2048,
-        system: PROMPT,
+        system: prompt || PROMPT,
         messages: [{ role: 'user', content: digest }],
       }),
     });

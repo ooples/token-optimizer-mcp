@@ -66,7 +66,7 @@ export interface WikiWriteResult {
   error?: string;
 }
 
-const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map'];
+const FINDING_TYPES = ['finding', 'decision', 'failure', 'command', 'map', 'feedback'];
 
 export async function wikiWrite(
   options: WikiWriteOptions
