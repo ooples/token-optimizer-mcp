@@ -3,7 +3,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 /**
- * Every manifest that names a version must name the SAME version as package.json.
+ * Every manifest that names a version must name the SAME version as package.json,
+ * and release-please must be told about every one of those fields BY JSONPATH.
  *
  * `plugin-version-tracks-package.test.ts` covers the Claude plugin manifest. Three more
  * carried their own version and nothing checked any of them, so they rotted for many
@@ -20,10 +21,11 @@ import { join } from 'path';
  * mcpName. At 5.1.1 the registry entry described a version three minors behind whatever
  * users install, and a publish attempt would be rejected.
  *
- * The cause was the same one that let the plugin manifest rot: release-please only bumps
- * what it is told about. All four are now in `extra-files`, and this asserts the result,
- * because the failure mode is invisible from inside the repo -- nothing builds
- * differently, no test fails, and the npm release publishes perfectly well.
+ * WIRING IS CHECKED PER JSONPATH, NOT PER FILE. An earlier version of this test
+ * collected `extra-files` into a set of PATHS, so both server.json entries collapsed
+ * into one member and deleting `$.packages[0].version` from the config still passed --
+ * the exact drift it exists to prevent, left uncovered by the test that claimed to
+ * cover it. Verified by deleting that entry: all six assertions passed.
  */
 
 const ROOT = process.cwd();
@@ -31,60 +33,80 @@ const read = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
 
 const packageVersion = read('package.json').version as string;
 
-/** Manifest path -> the version fields inside it that mean "the released version". */
-const MANIFESTS: Array<
-  [string, (m: Record<string, unknown>) => Array<[string, unknown]>]
-> = [
-  ['server.json', (m) => [['$.version', m.version]]],
-  [
-    'server.json',
-    (m) => {
-      const packages = (m.packages ?? []) as Array<{ version?: unknown }>;
-      return packages.map(
-        (p, i) => [`$.packages[${i}].version`, p.version] as [string, unknown]
-      );
+interface Target {
+  path: string;
+  jsonpath: string;
+  value: unknown;
+}
+
+/**
+ * Every version field release-please has to bump, addressed exactly as the config
+ * addresses it.
+ *
+ * server.json's packages are enumerated rather than hard-coded at index 0, so adding a
+ * second package entry produces a target that must be wired instead of a silent gap.
+ */
+function targets(): Target[] {
+  const server = read('server.json');
+  const packages = (server.packages ?? []) as Array<{ version?: unknown }>;
+
+  return [
+    { path: 'server.json', jsonpath: '$.version', value: server.version },
+    ...packages.map((p, i) => ({
+      path: 'server.json',
+      jsonpath: `$.packages[${i}].version`,
+      value: p.version,
+    })),
+    {
+      path: 'mcp.json',
+      jsonpath: '$.version',
+      value: read('mcp.json').version,
     },
-  ],
-  ['mcp.json', (m) => [['$.version', m.version]]],
-  ['gemini-extension.json', (m) => [['$.version', m.version]]],
-];
+    {
+      path: 'gemini-extension.json',
+      jsonpath: '$.version',
+      value: read('gemini-extension.json').version,
+    },
+  ];
+}
 
 describe('manifest versions track package.json', () => {
-  it.each(MANIFESTS)('%s declares the package version', (path, extract) => {
-    const fields = extract(read(path));
+  const required = targets();
 
-    // A manifest that stopped declaring a version at all would otherwise pass by
-    // yielding nothing to compare.
-    expect(fields.length).toBeGreaterThan(0);
-
-    for (const [jsonpath, value] of fields) {
-      expect({ jsonpath, value }).toEqual({ jsonpath, value: packageVersion });
-    }
+  it('finds every version field it is meant to check', () => {
+    // Without this, a manifest that stopped declaring a version would empty the
+    // list and turn every assertion below into a vacuous pass.
+    expect(required.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('every manifest with a version is wired into release-please', () => {
-    // The check above only catches drift AFTER it happens. This catches the cause: a
-    // manifest release-please does not know about will drift on the very next release,
-    // and nobody will notice until a registry publish returns 422.
+  it.each(required.map((t) => [`${t.path} ${t.jsonpath}`, t] as const))(
+    '%s declares the package version',
+    (_label, target) => {
+      expect({ at: _label, value: target.value }).toEqual({
+        at: _label,
+        value: packageVersion,
+      });
+    }
+  );
+
+  it('wires every one of those fields into release-please, by jsonpath', () => {
+    // The value check above only catches drift AFTER it happens. This catches the
+    // cause: a field release-please does not know about will drift on the very next
+    // release, and nobody will notice until a registry publish returns 422.
     const config = read('release-please-config.json');
     const extras = (config.packages['.']['extra-files'] ?? []) as Array<{
       path: string;
+      jsonpath: string;
     }>;
-    const wired = new Set(extras.map((e) => e.path));
+    const wired = new Set(extras.map((e) => `${e.path} ${e.jsonpath}`));
 
-    for (const path of new Set(MANIFESTS.map(([p]) => p))) {
-      expect(wired.has(path)).toBe(true);
-    }
-    expect(wired.has('plugin/.claude-plugin/plugin.json')).toBe(true);
-  });
+    const missing = required
+      .map((t) => `${t.path} ${t.jsonpath}`)
+      .filter((key) => !wired.has(key));
 
-  it('covers the nested packages[0].version, not only the top-level one', () => {
-    // server.json carries the version twice: once for the server entry and once for the
-    // npm package. Bumping only the outer one leaves the registry pointing at a version
-    // that may not exist, which is exactly the 422 PUBLISHING.md warns about.
-    const server = read('server.json');
-
-    expect(server.packages?.[0]?.version).toBe(packageVersion);
-    expect(server.version).toBe(packageVersion);
+    expect(missing).toEqual([]);
+    // The plugin manifest has its own value test but the same wiring requirement,
+    // and it is the one that already rotted through four releases.
+    expect(wired.has('plugin/.claude-plugin/plugin.json $.version')).toBe(true);
   });
 });

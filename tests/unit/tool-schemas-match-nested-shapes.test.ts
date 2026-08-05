@@ -6,6 +6,7 @@ import {
   interfaceFields,
   isUnsendable,
   nestedShape,
+  shapeGaps,
 } from './helpers/schema-source.js';
 
 /**
@@ -84,17 +85,14 @@ function audit(): { mismatches: Mismatch[]; checked: number } {
       const fields = interfaceFields(text, shapeName);
       if (!fields.length) continue; // defined elsewhere; cannot resolve from source
 
-      const declared = nestedShape(text, option);
-      if (!declared) continue; // declares no nested shape at all; the name check covers it
+      // Null means the schema does not declare the option at all, which is the
+      // name-check's finding. A DECLARED option with no nested shape is not
+      // skipped -- that was the hole, and it now reports every field.
+      const gaps = shapeGaps(text, option, fields);
+      if (!gaps) continue;
 
       checked++;
-      const sendable = fields.filter((f) => !isUnsendable(f.type));
-      const missingProperties = sendable
-        .filter((f) => !declared.properties.includes(f.name))
-        .map((f) => f.name);
-      const missingRequired = sendable
-        .filter((f) => !f.optional && !declared.required.includes(f.name))
-        .map((f) => f.name);
+      const { missingProperties, missingRequired } = gaps;
 
       if (missingProperties.length || missingRequired.length) {
         mismatches.push({
@@ -143,6 +141,83 @@ describe('a declared option declares its shape too', () => {
     expect(shape?.isArray).toBe(true);
     expect(shape?.properties).toContain('config');
     expect(shape?.required).toContain('enabled');
+  });
+
+  it('does not mistake a nested array property for an array-typed option', () => {
+    // `condition` is an OBJECT whose fields include two arrays (`groupBy`,
+    // `filters`). Deciding array-ness by searching the whole block for
+    // `type: 'array'` matched those nested properties, so the parser reached
+    // into `groupBy.items` -- `{ type: 'string' }`, which has no `properties` --
+    // and reported the option as declaring no shape at all. Combined with the
+    // stricter rule above, that would have condemned five CORRECT schemas and
+    // invited "fixing" them. Array-ness must come from the option's own `type`.
+    const text = readFileSync(
+      join(SRC, 'dashboard-monitoring', 'alert-manager.ts'),
+      'utf8'
+    );
+    const shape = nestedShape(text, 'condition');
+
+    expect(shape?.isArray).toBe(false);
+    expect(shape?.properties).toEqual(
+      expect.arrayContaining([
+        'metric',
+        'aggregation',
+        'percentile',
+        'groupBy',
+        'filters',
+      ])
+    );
+  });
+
+  it('flags an object option that declares NO nested properties at all', () => {
+    // THE HOLE THIS CLOSES. The audit used to `continue` whenever a property
+    // declared no nested shape, on the reasoning that the sibling name-check
+    // covered it. It does not: the name-check only confirms the NAME exists, so
+    // `request: { type: 'object' }` satisfied both tests while declaring none of
+    // its fields and none of its requirements. A schema that accepts anything is
+    // not a contract, and this file's whole purpose is to notice that.
+    const text = `
+export interface Req {
+  url: string;
+  method?: string;
+}
+export interface ThingOptions {
+  request: Req;
+}
+const X_TOOL_DEFINITION = {
+  inputSchema: {
+    properties: {
+      request: { type: 'object', description: 'shapeless' },
+    },
+  },
+};`;
+
+    expect(shapeGaps(text, 'request', interfaceFields(text, 'Req'))).toEqual({
+      missingProperties: ['url', 'method'],
+      missingRequired: ['url'],
+    });
+  });
+
+  it('stays silent about an option the schema never declares', () => {
+    // That case belongs to the name-check, which reports it with the right
+    // message. Reporting it here too would make one defect fail two tests and
+    // read as two defects.
+    const text = `
+export interface Req {
+  url: string;
+}
+export interface ThingOptions {
+  request: Req;
+}
+const X_TOOL_DEFINITION = {
+  inputSchema: {
+    properties: {
+      somethingElse: { type: 'string' },
+    },
+  },
+};`;
+
+    expect(shapeGaps(text, 'request', interfaceFields(text, 'Req'))).toBeNull();
   });
 
   it('reads a plain object shape and its required list', () => {

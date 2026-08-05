@@ -1273,6 +1273,10 @@ export const ALERT_MANAGER_TOOL_DEFINITION = {
             },
           },
         },
+        // `metric` is the only non-optional field of AlertCondition. Without it
+        // here, a condition naming no metric satisfied the published contract
+        // and failed inside the tool instead.
+        required: ['metric'],
       },
       severity: {
         type: 'string',

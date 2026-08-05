@@ -248,7 +248,15 @@ export function nestedShape(
   if (close === -1) return null;
 
   let block = slice.slice(open, close + 1);
-  const isArray = /type:\s*'array'/.test(block);
+  // The option's OWN type, not any type appearing inside it. A plain regex over
+  // the whole block matched a nested array property -- `condition` is an object
+  // whose fields include `groupBy` and `filters`, both arrays -- so the parser
+  // treated the object as an array, reached into `groupBy.items` (`{ type:
+  // 'string' }`, no `properties`), and reported the option as declaring no shape
+  // whatsoever. Five correct schemas were condemned that way, which is how it was
+  // noticed: a scanner that indicts working code is as useless as one that misses
+  // broken code. Same depth-awareness the `required` lookup already needed.
+  const isArray = valueAtTopLevel(block, 'type') === 'array';
 
   if (isArray) {
     const items = block.indexOf('items:');
@@ -269,6 +277,90 @@ export function nestedShape(
     required: requiredAtTopLevel(block),
     isArray,
   };
+}
+
+/**
+ * Fields of an interface that the schema's declaration of `option` fails to
+ * declare, or null when the schema does not mention `option` at all.
+ *
+ * THE NULL CASE IS A DELIBERATE HAND-OFF, not a gap. An option missing from the
+ * schema entirely is the name-check's finding, reported there with the right
+ * message; repeating it here would make one defect fail two tests and read as
+ * two defects.
+ *
+ * A DECLARED BUT SHAPELESS OPTION IS THIS FUNCTION'S FINDING, and it used to be
+ * nobody's. The audit skipped any property with no nested `properties` block on
+ * the reasoning that the name-check covered it -- but that check only confirms
+ * the NAME exists, so `request: { type: 'object' }` satisfied both while
+ * declaring none of its fields and none of its requirements. Every sendable
+ * field is reported missing, because none of them is declared.
+ */
+export function shapeGaps(
+  text: string,
+  option: string,
+  fields: InterfaceField[]
+): { missingProperties: string[]; missingRequired: string[] } | null {
+  if (!(declaredProperties(text) ?? []).includes(option)) return null;
+
+  const sendable = fields.filter((f) => !isUnsendable(f.type));
+  const declared = nestedShape(text, option);
+
+  const properties = declared ? declared.properties : [];
+  const required = declared ? declared.required : [];
+
+  return {
+    missingProperties: sendable
+      .filter((f) => !properties.includes(f.name))
+      .map((f) => f.name),
+    missingRequired: sendable
+      .filter((f) => !f.optional && !required.includes(f.name))
+      .map((f) => f.name),
+  };
+}
+
+/**
+ * The quoted value of a key belonging to THIS object, not to one nested in it.
+ *
+ * Depth-aware for the same reason `requiredAtTopLevel` is: keys like `type`
+ * recur at every level of a JSON Schema, so the first textual match is almost
+ * never the one being asked about.
+ */
+function valueAtTopLevel(block: string, key: string): string | null {
+  let depth = 0;
+  let inString: string | null = null;
+
+  for (let i = 0; i < block.length; i++) {
+    const c = block[i];
+
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === inString) inString = null;
+      continue;
+    }
+    if (c === '/' && block[i + 1] === '/') {
+      const end = block.indexOf('\n', i);
+      if (end === -1) break;
+      i = end;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      inString = c;
+      continue;
+    }
+    if (c === '{' || c === '[') {
+      depth++;
+      continue;
+    }
+    if (c === '}' || c === ']') {
+      depth--;
+      continue;
+    }
+    if (depth === 1 && block.startsWith(`${key}:`, i)) {
+      const m = /^[A-Za-z_$][\w$]*:\s*'([^']*)'/.exec(block.slice(i));
+      if (m) return m[1];
+    }
+  }
+  return null;
 }
 
 /**

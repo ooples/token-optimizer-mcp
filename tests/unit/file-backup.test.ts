@@ -101,13 +101,27 @@ describe('backup filenames', () => {
     }
   });
 
-  it('does not lose a version when calls are concurrent', async () => {
-    // Five at once. With a millisecond timestamp alone this produced four
-    // files; the fifth silently overwrote one of the others.
+  it('does not lose a version when two writes share a timestamp', () => {
+    // THE CLOCK IS PINNED, and that is the whole point of the test.
+    //
+    // This used to wrap the writes in `Promise.all`, which proves nothing:
+    // `writeBackup` is synchronous, so each callback runs to completion before
+    // the next begins. There was no concurrency, and whether the writes
+    // collided depended on whether all five happened to land inside the same
+    // millisecond -- true on a fast machine, not guaranteed. On a slow or
+    // heavily loaded one they straddle a millisecond boundary, timestamp-only
+    // names come out distinct, and the test passes while testing nothing.
+    //
+    // Freezing `toISOString` forces the exact collision the naming scheme
+    // exists to survive, so the test fails for the real reason or not at all.
     const versions = ['a', 'b', 'c', 'd', 'e'];
-    await Promise.all(
-      versions.map((v) => Promise.resolve().then(() => writeBackup(file, v)))
-    );
+    const realToISOString = Date.prototype.toISOString;
+    Date.prototype.toISOString = () => '2026-01-01T00:00:00.000Z';
+    try {
+      for (const v of versions) writeBackup(file, v);
+    } finally {
+      Date.prototype.toISOString = realToISOString;
+    }
 
     const written = readdirSync(backupDirFor(file));
     expect(written).toHaveLength(versions.length);

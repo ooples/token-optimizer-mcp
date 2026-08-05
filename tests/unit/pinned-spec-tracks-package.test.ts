@@ -78,9 +78,10 @@ describe('the MCP spec in client configs', () => {
       // mcp.json and server.json are excluded because they are MCP REGISTRY manifests:
       // they name the package and its version in separate fields rather than as an
       // `@version` suffix, which is why pin-mcp-version reports seven configs and not
-      // nine. Their `version` fields are separately stale (0.2.0 and 5.1.1 against a
-      // package at 5.4.2) and nothing checks them -- recorded here because it is the
-      // same class of drift, not fixed here.
+      // nine. Their `version` fields were separately stale and unchecked; that is now
+      // `manifest-versions-track-package.test.ts`, which also asserts release-please is
+      // wired to bump them. Nothing about those fields is verified HERE, because an
+      // inline-spec test is the wrong place to assert a registry manifest's contents.
       if (INLINE_SPEC_CONFIGS.includes(relative)) {
         expect(specs.length).toBeGreaterThan(0);
       }
