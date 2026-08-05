@@ -47,13 +47,43 @@ const PINNED_CONFIGS = [
 
 const SPEC = /@ooples\/token-optimizer-mcp@([^"'\s,\]]+)/g;
 
+/**
+ * The configs that launch the server via an inline `package@version` spec.
+ *
+ * Everything in PINNED_CONFIGS is swept for a numeric version; only these are
+ * required to CARRY a spec. mcp.json and server.json are registry manifests that
+ * name the package and version in separate fields, so demanding an inline spec of
+ * them would assert a shape they do not have.
+ */
+const INLINE_SPEC_CONFIGS = PINNED_CONFIGS.filter(
+  (relative) => relative !== 'mcp.json' && relative !== 'server.json'
+);
+
 const present = () => PINNED_CONFIGS.filter((r) => existsSync(join(ROOT, r)));
 
 describe('the MCP spec in client configs', () => {
   it.each(PINNED_CONFIGS)('in %s resolves to latest, not a frozen version', (relative) => {
     if (!existsSync(join(ROOT, relative))) return; // not every target ships in every layout
 
-    for (const spec of [...read(relative).matchAll(SPEC)].map((m) => m[1])) {
+    const specs = [...read(relative).matchAll(SPEC)].map((m) => m[1]);
+
+    // AT LEAST ONE, asserted before the values are -- but only for the configs that
+    // carry an inline `package@version` spec. A file that exists and carries no spec
+    // made this loop body never execute, so the test passed while the config said
+    // nothing about which server to launch, and the coverage test below only ever
+    // required ONE spec across the whole set.
+    //
+    // mcp.json and server.json are excluded because they are MCP REGISTRY manifests:
+    // they name the package and its version in separate fields rather than as an
+    // `@version` suffix, which is why pin-mcp-version reports seven configs and not
+    // nine. Their `version` fields are separately stale (0.2.0 and 5.1.1 against a
+    // package at 5.4.2) and nothing checks them -- recorded here because it is the
+    // same class of drift, not fixed here.
+    if (INLINE_SPEC_CONFIGS.includes(relative)) {
+      expect(specs.length).toBeGreaterThan(0);
+    }
+
+    for (const spec of specs) {
       expect(spec).toBe('latest');
     }
   });
