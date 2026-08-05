@@ -456,6 +456,34 @@ export const SMART_READ_TOOL_DEFINITION = {
         type: 'number',
         description: 'For chunked files, the chunk index to retrieve',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      enableCache: {
+        type: 'boolean',
+        description: 'Reuse a cached read of this file when it has not changed',
+        default: true,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds',
+        default: 300,
+      },
+      preserveStructure: {
+        type: 'boolean',
+        description:
+          'Keep structural lines (signatures, exports) when compressing output',
+        default: true,
+      },
+      includeMetadata: {
+        type: 'boolean',
+        description: 'Include size, hash and encoding alongside the content',
+        default: true,
+      },
+      encoding: {
+        type: 'string',
+        description: 'File encoding used to read the file',
+        default: 'utf-8',
+      },
     },
     required: ['path'],
   },

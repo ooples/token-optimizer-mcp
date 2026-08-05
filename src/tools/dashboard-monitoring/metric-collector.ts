@@ -1377,6 +1377,12 @@ export const METRIC_COLLECTOR_TOOL_DEFINITION = {
         description: 'Enable caching (default: true)',
         default: true,
       },
+      // DECLARED BECAUSE IT IS ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so this worked while being undiscoverable.
+      cacheTTL: {
+        type: 'number',
+        description: 'Cache lifetime in seconds',
+      },
     },
     required: ['operation'],
   },

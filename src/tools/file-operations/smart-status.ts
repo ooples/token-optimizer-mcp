@@ -714,6 +714,40 @@ export const SMART_STATUS_TOOL_DEFINITION = {
         type: 'number',
         description: 'Maximum files to return',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      includeSize: {
+        type: 'boolean',
+        description: 'Include each file size, which costs a stat per file',
+        default: false,
+      },
+      includeUntracked: {
+        type: 'boolean',
+        description: 'Include files git does not track yet',
+        default: true,
+      },
+      includeIgnored: {
+        type: 'boolean',
+        description:
+          'Include ignored files, usually a large and low-signal set',
+        default: false,
+      },
+      offset: {
+        type: 'number',
+        description:
+          'Skip this many files before returning any; use with limit to page',
+        default: 0,
+      },
+      useCache: {
+        type: 'boolean',
+        description: 'Serve a previously cached result for the same query',
+        default: false,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds, when useCache is on',
+        default: 300,
+      },
     },
   },
 };

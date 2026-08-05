@@ -842,6 +842,30 @@ export const SMART_MERGE_TOOL_DEFINITION = {
         type: 'number',
         description: 'Maximum conflicts to return',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      strategyOption: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Strategy options passed through to git, for example ["ignore-space-change"]',
+      },
+      resolveUsing: {
+        type: 'string',
+        enum: ['ours', 'theirs'],
+        description:
+          'Resolve every conflict from one side. Destructive: the other side is discarded without review.',
+      },
+      useCache: {
+        type: 'boolean',
+        description: 'Serve a previously cached result for the same query',
+        default: false,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds, when useCache is on',
+        default: 300,
+      },
     },
   },
 };

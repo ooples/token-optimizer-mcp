@@ -688,6 +688,74 @@ export const SMART_GREP_TOOL_DEFINITION = {
         description: 'Only return match counts per file',
         default: false,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED. The server spreads the caller's whole
+      // argument object into options, so each of these already worked -- it simply
+      // could not be discovered, and a caller guessing a neighbouring name got
+      // silence rather than an error.
+      wholeWord: {
+        type: 'boolean',
+        description: 'Match whole words only',
+        default: false,
+      },
+      excludeExtensions: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Skip files with these extensions',
+        default: ['.min.js', '.map', '.lock'],
+      },
+      skipBinary: {
+        type: 'boolean',
+        description: 'Skip files that look binary',
+        default: true,
+      },
+      ignore: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build; pass [] to search everything.',
+        default: [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/dist/**',
+          '**/build/**',
+        ],
+      },
+      includeColumn: {
+        type: 'boolean',
+        description: 'Include the 0-based column of each match',
+        default: false,
+      },
+      maxMatchesPerFile: {
+        type: 'number',
+        description: 'Stop after this many matches in any one file',
+      },
+      offset: {
+        type: 'number',
+        description:
+          'Skip this many matches before returning any; use with limit to page',
+        default: 0,
+      },
+      useCache: {
+        type: 'boolean',
+        description:
+          'Serve a previously cached result for the same query. Off by default: a cached search is keyed on the query, not on the tree it ran against, so a file created between two identical searches will not appear.',
+        default: false,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds, when useCache is on',
+        default: 300,
+      },
+      maxFileSize: {
+        type: 'number',
+        description: 'Skip files larger than this many bytes',
+        default: 10485760,
+      },
+      encoding: {
+        type: 'string',
+        description: 'File encoding used to read candidates',
+        default: 'utf-8',
+      },
     },
     required: ['pattern'],
   },
