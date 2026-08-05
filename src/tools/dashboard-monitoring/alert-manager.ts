@@ -1397,10 +1397,30 @@ export const ALERT_MANAGER_TOOL_DEFINITION = {
                 additionalProperties: { type: 'string' },
               },
               query: { type: 'string' },
+              tool: {
+                type: 'string',
+                description: 'MCP tool to call, for type mcp-tool',
+              },
             },
           },
+          transform: {
+            type: 'string',
+            description: 'JavaScript expression applied to the fetched value',
+          },
+          cache: {
+            type: 'object',
+            description: 'Whether and how long to cache this source',
+            properties: {
+              enabled: { type: 'boolean' },
+              ttl: { type: 'number', description: 'Seconds' },
+            },
+            required: ['enabled', 'ttl'],
+          },
         },
-        required: ['id', 'type'],
+        // `connection` is required by the interface, so it is required here too. The
+        // first draft omitted it along with tool/transform/cache, which meant an
+        // mcp-tool source could not be configured through the published contract.
+        required: ['id', 'type', 'connection'],
       },
       silenceId: {
         type: 'string',

@@ -1358,10 +1358,28 @@ export const LOG_DASHBOARD_TOOL_DEFINITION = {
                   type: 'string',
                   enum: ['json', 'text', 'syslog', 'custom'],
                 },
+                parser: {
+                  type: 'string',
+                  description:
+                    'Custom parser regular expression, for format custom',
+                },
               },
             },
+            enabled: {
+              type: 'boolean',
+              description:
+                'Whether this source is read; required by the interface',
+            },
+            lastRead: {
+              type: 'number',
+              description:
+                'Epoch milliseconds of the last read, maintained by the tool',
+            },
           },
-          required: ['id', 'type'],
+          // MATCHES LogSource. The first draft required only id and type and omitted
+          // name, enabled and config.parser, so it accepted source objects the tool
+          // itself would reject -- a schema loose enough to produce invalid input.
+          required: ['id', 'name', 'type', 'config', 'enabled'],
         },
       },
       filterId: {
