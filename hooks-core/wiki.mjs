@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The wiki graph store. Phase 1: skeleton, structural only.
  *
  * See docs/WIKI_GRAPH.md for the design. This file is the persistence layer and
@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { canonicalPath } from './paths.mjs';
+import { canonicalPath, isFsSafePath } from './paths.mjs';
 
 /**
  * Schema version stamped on every record.
@@ -71,6 +71,10 @@ export function wikiDir(cwd) {
  * file is not inside one, which is the honest answer for a scratch file.
  */
 export function projectRootFor(filePath, fallback) {
+  // This walks UP the path calling existsSync at every level, so one character
+  // that aborts libuv would do it up to forty times over. Refused before the
+  // first stat rather than defended at each one.
+  if (!isFsSafePath(filePath)) return fallback ? canonicalPath(fallback) : null;
   // VCS markers ONLY, and the whole tree is walked before falling back.
   //
   // `package.json` was in this list and it is the wrong marker: in a monorepo
@@ -141,6 +145,10 @@ export function canonicalKey(kind, key) {
  * an allowed tool call, so one avoidable read per file is one too many.
  */
 export function contentHash(path, text) {
+  // Checked BEFORE the read, because an unsafe path aborts the process instead
+  // of throwing and there would be nothing for the catch below to handle.
+  // `text` supplied means no read happens, so the path is only a key then.
+  if (text === undefined && !isFsSafePath(path)) return null;
   try {
     return createHash('sha256')
       .update(text === undefined ? readFileSync(path) : text)

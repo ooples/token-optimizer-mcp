@@ -1,6 +1,6 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/decide.mjs. Regenerate with `npm run sync:hooks`.
-/**
+﻿/**
  * The routing decision, as a pure function.
  *
  * Deliberately free of process, stdin, and exit codes so it can be unit tested
@@ -15,7 +15,7 @@
 
 import { fileSize, isBinaryPath, isMachineOwned, largeFileBytes, refusalFloorBytes } from './policy.mjs';
 import { statSync } from 'node:fs';
-import { canonicalPath, resolvableCandidates } from './paths.mjs';
+import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
 import { activeRules } from './remedy.mjs';
 import { wikiDir } from './wiki.mjs';
 
@@ -269,6 +269,11 @@ export function touchedFiles(payload) {
   const add = (candidate) => {
     if (!candidate || typeof candidate !== 'string') return;
     for (const spelling of resolvableCandidates(candidate, cwd)) {
+      // Sizing a candidate stats it, and a path carrying U+10FFFF aborts libuv
+      // outright rather than throwing. This is where externally supplied paths
+      // first enter the hook, so refusing here keeps the character away from
+      // every downstream consumer instead of asking each one to defend itself.
+      if (!isFsSafePath(spelling)) continue;
       const size = fileSize(spelling);
       if (size >= 0) {
         // Nothing under .git/, node_modules/ or a build directory belongs in a
