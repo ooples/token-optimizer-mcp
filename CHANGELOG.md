@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.2](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.1...v5.4.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* **release:** repair the pins during the release instead of failing on them ([#253](https://github.com/ooples/token-optimizer-mcp/issues/253)) ([5c005f3](https://github.com/ooples/token-optimizer-mcp/commit/5c005f319c5facb4ce4605104c155a1a8bb0abdc))
+* **release:** sync pinned specs from an event that actually fires ([#254](https://github.com/ooples/token-optimizer-mcp/issues/254)) ([e7ff984](https://github.com/ooples/token-optimizer-mcp/commit/e7ff984ef88adc1be6cccb5ce28e77114063de00))
+
 ## [5.4.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.0...v5.4.1) (2026-08-05)
 
 
