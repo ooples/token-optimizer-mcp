@@ -43,6 +43,21 @@ const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 50
 const standingBudget = () =>
   Number(process.env.TOKEN_OPTIMIZER_STANDING_BUDGET) || 400;
 
+/**
+ * The stratification key for a command.
+ *
+ * Normalised so that the same intent lands in the same arm: trailing
+ * whitespace and a differing set of paths should not flip a command between
+ * treated and withheld, because that is what makes the two arms comparable.
+ */
+function commandKey(command) {
+  return String(command || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 120)
+    .toLowerCase();
+}
+
 /** Most findings considered for one command before the budget decides. */
 const MAX_COMMAND_CANDIDATES = 20;
 
@@ -131,12 +146,18 @@ export function forTouch(
     .filter((f) => !alreadyInjected.has(f.key));
   if (!candidates.length) return null;
 
+  // STRATIFIED BY FILE AND EPOCH, which is the documented design here: the
+  // same file lands in the holdout during some epochs and the treated arm in
+  // others, so the comparison becomes within-file and the dominant source of
+  // variance drops out. A session-pinned arm would destroy that.
   const holdout = inHoldout(filePath);
   const served = serve(graph, candidates);
   const { kept, spent } = fit(served, budget);
 
   record(dir, {
     kind: 'inject',
+    // The surface whose saving CAN be measured: reads of this anchor afterwards.
+    surface: 'file',
     anchor: filePath,
     holdout,
     tokens: holdout ? 0 : spent,
@@ -145,9 +166,16 @@ export function forTouch(
     sessionId,
   });
 
-  if (holdout || !kept.length) return null;
-
+  // MARKED SEEN IN BOTH ARMS, for the same reason as the command path: a file
+  // touched repeatedly -- the normal shape of working on it -- would otherwise
+  // write a fresh holdout row every time while a treated file was suppressed
+  // after its first delivery. The report counts rows, so the control arm would
+  // grow faster purely from repetition.
+  //
+  // This is the identical defect that was fixed in `forCommand` and not here.
   for (const f of kept) alreadyInjected.add(f.key);
+
+  if (holdout || !kept.length) return null;
 
   return `Known about ${filePath} (from previous sessions):\n${kept.map(render).join('\n')}`;
 }
@@ -293,18 +321,45 @@ export function forCommand(
   const { kept, spent } = fit(served, budget);
   if (!kept.length) return null;
 
+  // THE COMMAND PATH TAKES PART IN THE HOLDOUT TOO.
+  //
+  // `holdout: false` was hardcoded here, so 95 of 136 injections measured on a
+  // real machine were structurally excluded from the only mechanism that can
+  // establish causation. Seventy per cent of what the feature does could never
+  // be shown to help or hurt.
+  //
+  // Stratified on the COMMAND rather than a file, by the same (key, epoch)
+  // hash: the same command lands in the same arm all session, so a command run
+  // repeatedly cannot straddle both arms and contaminate each.
+  const key = commandKey(command);
+  const holdout = inHoldout(key);
+
   record(dir, {
     kind: 'inject',
     trigger: 'command',
+    // The surface the report needs to keep these OUT of the file-read balance:
+    // a command has no anchor that read events can be joined to.
+    surface: 'command',
     anchor: String(command).slice(0, 120),
-    holdout: false,
-    tokens: spent,
-    count: kept.length,
+    holdout,
+    tokens: holdout ? 0 : spent,
+    count: holdout ? 0 : kept.length,
     stale: kept.some((f) => f.stale),
     sessionId,
   });
 
+  // MARKED SEEN IN BOTH ARMS.
+  //
+  // The held branch used to return before updating the gate, so a command run
+  // repeatedly wrote a fresh holdout row every time while a treated command was
+  // filtered after its first delivery. The report counts rows, so the holdout
+  // arm was systematically overweighted -- a bias in the very comparison this
+  // exists to make.
   for (const f of kept) alreadyInjected.add(f.key);
+
+  // Withheld means withheld. Returning the text anyway would record an arm the
+  // subject never actually experienced.
+  if (holdout) return null;
 
   return `Before running this — known from previous sessions:\n${kept
     .map(render)
@@ -475,7 +530,7 @@ export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
  * informative response available -- more useful than the file, not a lossier
  * version of it.
  */
-export function substitutionFor(dir, graph, rawPath, source) {
+export function substitutionFor(dir, graph, rawPath, source, { sessionId } = {}) {
   const filePath = canonicalPath(rawPath);
   const budget = substitutionBudget(dir, filePath);
   const built = annotatedSkeleton(graph, rawPath, source, { budget });
@@ -484,14 +539,49 @@ export function substitutionFor(dir, graph, rawPath, source) {
   // costs the model a round trip; send it back to the ordinary redirect.
   if (built.tokens * 4 > source.length * 0.5) return null;
 
+  // THE HOLDOUT BELONGS ON THIS PATH, not only on findings injection.
+  //
+  // Substitution is the lever that actually moves tokens -- it replaces a whole
+  // file with a skeleton -- and it had no control arm at all, while the 10%
+  // holdout sat on findings injection, which is two orders of magnitude
+  // smaller. Withholding here serves the file the model asked for and records
+  // what that cost, which is the only way the saving stops being an assumption.
+  // PINNED FOR THE SESSION, with a fixed epoch.
+  //
+  // Unlike the file-touch arm above, this one must not rotate: a session
+  // running across midnight would substitute for a file in one half and serve
+  // the whole file in the other, so `measuredCounterfactual` would mix treated
+  // and control observations for the same file.
+  //
+  // Keying on the session alone was not enough -- with the epoch still in play
+  // the arm flipped 104 times in 400 simulated midnight crossings. The session
+  // id already provides the rotation the epoch was there for.
+  const holdout = inHoldout(`${sessionId || ''}|${filePath}`, 0);
+
   record(dir, {
     kind: 'substitute',
     anchor: filePath,
-    tokens: built.tokens,
+    // Recorded so provenance is checkable. Without it, 366 of 370 substitutions
+    // on this machine turned out to be the enforcement suite's own fixture and
+    // nothing distinguished them from real work.
+    sessionId,
+    holdout,
+    tokens: holdout ? 0 : built.tokens,
     findings: built.findings,
     symbols: built.symbols,
-    bytesAvoided: source.length,
+    // GROSS, kept for continuity with existing records.
+    bytesAvoided: holdout ? 0 : source.length,
+    // NET, which is the honest figure: the skeleton was still sent. Reporting
+    // the whole file as avoided while spending `tokens` on a replacement
+    // overstates the saving by exactly the size of the replacement.
+    tokensNetAvoided: holdout ? 0 : Math.max(0, Math.ceil(source.length / 4) - built.tokens),
+    // What the control arm actually paid, so the two arms are comparable.
+    tokensFullFile: Math.ceil(source.length / 4),
   });
+
+  // Withheld means the model gets what it asked for: the whole file. That is
+  // the control arm, and it must really be paid or the comparison is fiction.
+  if (holdout) return null;
 
   return built.text;
 }

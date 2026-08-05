@@ -18,6 +18,21 @@ import { load, putNode, GRAPH_VERSION } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { record, recordRead, report } from '../../hooks-core/metrics.mjs';
 
+// THE HOLDOUT IS OFF IN THIS SUITE, DELIBERATELY.
+//
+// These assert what injection DELIVERS and how downstream cost is joined, not whether the holdout works.
+//
+// The arm is a hash of the anchor, and the anchor is a fresh mkdtemp path, so
+// whether it is withheld changes with the path the OS hands out. That passed
+// on Windows and failed on Linux CI -- a test that depends on which machine
+// runs it is not testing what it claims to.
+const PRIOR_HOLDOUT = process.env.TOKEN_OPTIMIZER_HOLDOUT;
+process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+afterAll(() => {
+  if (PRIOR_HOLDOUT === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+  else process.env.TOKEN_OPTIMIZER_HOLDOUT = PRIOR_HOLDOUT;
+});
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 let workspace;

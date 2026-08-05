@@ -153,7 +153,20 @@ export function buildArms() {
         tool_input: { command: c.probeCommand },
       }),
       encoding: 'utf8',
-      env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: caseDir },
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_WIKI_DIR: caseDir,
+        // THE HOLDOUT IS OFF FOR THE HARNESS.
+        //
+        // The harness builds the TREATMENT arm: its whole job is to capture
+        // what the hook emits when it serves. With the holdout live, a case
+        // whose command hashes into the withheld arm produces no context, and
+        // the treatment arm silently becomes a second control -- the exact
+        // failure the repeatability guard was added to catch, arriving by a
+        // different route. It showed up as 4 of 5 arms on Linux CI and 5 of 5
+        // locally, because the arm depends on the temp path.
+        TOKEN_OPTIMIZER_HOLDOUT: '0',
+      },
     });
 
     // FAIL FAST. A hook that crashed and a hook that had nothing to say both

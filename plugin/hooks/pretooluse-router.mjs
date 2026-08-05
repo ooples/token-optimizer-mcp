@@ -14,7 +14,7 @@
 import { readPayload, loadState, saveState, alreadyDenied, allow, allowWithContext, enforce, mode, MODE_OFF }
   from './lib/policy.mjs';
 import { decide, remember, normalizePayload, readCostBytes, touchedFiles, isContentDump } from './lib/decide.mjs';
-import { recordRead } from './lib/metrics.mjs';
+import { recordRead, fingerprint } from './lib/metrics.mjs';
 import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
 import { refusalPayload, substitutionFor, forTouch, forCommand } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
@@ -75,6 +75,11 @@ try {
         anchor: payload.tool_input.file_path,
         sessionId: payload.session_id,
         bytes,
+        // So a later re-read of the same file can be told from a re-read of a
+        // file that CHANGED in between. Re-reading what you just edited is
+        // correct behaviour, not waste, and without this the two are
+        // indistinguishable.
+        fp: fingerprint(payload.tool_input.file_path),
       });
     } else if (isContentDump(payload.tool_input.command)) {
       // ONLY commands that actually print the file pay for its bytes. `Write`,
@@ -83,7 +88,14 @@ try {
       // comparison is built on -- and an overstated saving is the one number
       // this project must never produce.
       for (const { path, size } of touched) {
-        if (size > 0) recordRead(dirFor(path), { anchor: path, sessionId: payload.session_id, bytes: size });
+        if (size > 0) {
+          recordRead(dirFor(path), {
+            anchor: path,
+            sessionId: payload.session_id,
+            bytes: size,
+            fp: fingerprint(path),
+          });
+        }
       }
     }
 
@@ -218,8 +230,16 @@ try {
         // Index on this read, so the NEXT touch of the file is annotated even if
         // no semantic harvest has run against it yet.
         indexFile(dir, payload.tool_input.file_path, source);
-        const substitution = substitutionFor(dir, load(dir), payload.tool_input.raw_file_path
-          ?? payload.tool_input.file_path, source);
+        const substitution = substitutionFor(
+          dir,
+          load(dir),
+          payload.tool_input.raw_file_path ?? payload.tool_input.file_path,
+          source,
+          // Carried through so a substitution can be told apart from a test
+          // fixture later. Without it the balance sheet counted the suite's own
+          // 366 fixture writes as product value.
+          { sessionId: payload.session_id }
+        );
         if (substitution) reason = substitution;
       }
     } catch {

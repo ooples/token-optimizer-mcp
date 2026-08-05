@@ -10,7 +10,7 @@
  *
  * These tests pin the trigger path that closes that gap.
  */
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import { forCommand } from '../../hooks-core/inject.mjs';
 import { load, putNodeWithEdges, putNode, nodeId } from '../../hooks-core/wiki.mjs';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
@@ -29,6 +29,25 @@ function seed({ key, claim, type = 'command', trigger, confidence = 0.9 }) {
     [{ edge: 'derived_from', to: fileId }]
   );
 }
+
+// THE HOLDOUT IS OFF IN THIS SUITE, DELIBERATELY.
+//
+// `forCommand` now takes part in the holdout, so a command whose stratification
+// hash lands in the withheld arm correctly returns null. These tests are about
+// DELIVERY, not measurement, and leaving the holdout on would make them depend
+// on which epoch they run in -- passing today and failing tomorrow for a reason
+// nobody would connect to a date. The measurement itself is tested in
+// tests/hooks/holdout-measurement.test.mjs, where the arm is chosen explicitly.
+const PRIOR_HOLDOUT = process.env.TOKEN_OPTIMIZER_HOLDOUT;
+process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+afterAll(() => {
+  // RESTORED, because this variable is process-wide and jest shares a process
+  // between suites in a worker. Leaving it at 0 silently disabled the holdout
+  // for any suite that ran afterwards -- including the one whose entire subject
+  // is the holdout.
+  if (PRIOR_HOLDOUT === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+  else process.env.TOKEN_OPTIMIZER_HOLDOUT = PRIOR_HOLDOUT;
+});
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'cmd-inject-'));
