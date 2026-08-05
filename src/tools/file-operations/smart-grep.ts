@@ -713,7 +713,12 @@ export const SMART_GREP_TOOL_DEFINITION = {
         items: { type: 'string' },
         description:
           'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build; pass [] to search everything.',
-        default: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'],
+        default: [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/dist/**',
+          '**/build/**',
+        ],
       },
       includeColumn: {
         type: 'boolean',
@@ -726,7 +731,8 @@ export const SMART_GREP_TOOL_DEFINITION = {
       },
       offset: {
         type: 'number',
-        description: 'Skip this many matches before returning any; use with limit to page',
+        description:
+          'Skip this many matches before returning any; use with limit to page',
         default: 0,
       },
       useCache: {

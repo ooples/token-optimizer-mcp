@@ -623,7 +623,8 @@ export const SMART_WRITE_TOOL_DEFINITION = {
       },
       tempDir: {
         type: 'string',
-        description: 'Directory for the temporary file used by the write-then-rename',
+        description:
+          'Directory for the temporary file used by the write-then-rename',
       },
       formatType: {
         type: 'string',
@@ -633,7 +634,8 @@ export const SMART_WRITE_TOOL_DEFINITION = {
       },
       trackChanges: {
         type: 'boolean',
-        description: 'Record this write in the change log used by the diff tools',
+        description:
+          'Record this write in the change log used by the diff tools',
         default: false,
       },
       updateCache: {
@@ -658,7 +660,8 @@ export const SMART_WRITE_TOOL_DEFINITION = {
       },
       mode: {
         type: 'number',
-        description: 'POSIX file mode for a newly created file, for example 420 for 0o644',
+        description:
+          'POSIX file mode for a newly created file, for example 420 for 0o644',
       },
     },
     required: ['path', 'content'],

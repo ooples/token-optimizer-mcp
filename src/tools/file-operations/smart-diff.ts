@@ -615,7 +615,8 @@ export const SMART_DIFF_TOOL_DEFINITION = {
       // argument object into options, so these worked while being undiscoverable.
       unified: {
         type: 'boolean',
-        description: 'Return a unified diff rather than a structured list of changes',
+        description:
+          'Return a unified diff rather than a structured list of changes',
         default: true,
       },
       includeLineNumbers: {
@@ -635,7 +636,8 @@ export const SMART_DIFF_TOOL_DEFINITION = {
       },
       offset: {
         type: 'number',
-        description: 'Skip this many files before returning any; use with limit to page',
+        description:
+          'Skip this many files before returning any; use with limit to page',
         default: 0,
       },
       useCache: {

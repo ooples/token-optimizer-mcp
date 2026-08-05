@@ -663,7 +663,8 @@ export const SMART_BRANCH_TOOL_DEFINITION = {
       // argument object into options, so these worked while being undiscoverable.
       local: {
         type: 'boolean',
-        description: 'Restrict to local branches, excluding remote-tracking ones',
+        description:
+          'Restrict to local branches, excluding remote-tracking ones',
         default: false,
       },
       mergedInto: {
@@ -678,7 +679,8 @@ export const SMART_BRANCH_TOOL_DEFINITION = {
       },
       offset: {
         type: 'number',
-        description: 'Skip this many results before returning any; use with limit to page',
+        description:
+          'Skip this many results before returning any; use with limit to page',
         default: 0,
       },
       useCache: {

@@ -762,12 +762,14 @@ export const SMART_EDIT_TOOL_DEFINITION = {
       // argument object into options, so these worked while being undiscoverable.
       verifyBeforeApply: {
         type: 'boolean',
-        description: 'Re-read and verify the target lines still match before writing',
+        description:
+          'Re-read and verify the target lines still match before writing',
         default: true,
       },
       batchEdits: {
         type: 'boolean',
-        description: 'Apply all operations in one pass rather than one at a time',
+        description:
+          'Apply all operations in one pass rather than one at a time',
         default: true,
       },
       contextLines: {

@@ -42,7 +42,8 @@ function walk(dir: string): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) out.push(full);
+    else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts'))
+      out.push(full);
   }
   return out;
 }
@@ -85,12 +86,25 @@ function topLevelKeys(text: string, open: number): string[] {
       continue;
     }
 
-    if (c === '"' || c === "'" || c === '`') { inString = c; continue; }
-    if (c === '{' || c === '[') { depth++; continue; }
-    if (c === '}' || c === ']') { depth--; if (depth === 0) break; continue; }
+    if (c === '"' || c === "'" || c === '`') {
+      inString = c;
+      continue;
+    }
+    if (c === '{' || c === '[') {
+      depth++;
+      continue;
+    }
+    if (c === '}' || c === ']') {
+      depth--;
+      if (depth === 0) break;
+      continue;
+    }
     if (depth === 1 && /[A-Za-z_$]/.test(c)) {
       const m = /^([A-Za-z_$][\w$]*)\s*:/.exec(text.slice(i));
-      if (m) { keys.push(m[1]); i += m[1].length; }
+      if (m) {
+        keys.push(m[1]);
+        i += m[1].length;
+      }
     }
   }
   return keys;
@@ -120,11 +134,20 @@ function acceptedOptions(text: string): string[] {
 
     for (let i = open; i < text.length; i++) {
       const c = text[i];
-      if (c === '{') { depth++; continue; }
-      if (c === '}') { depth--; if (depth === 0) break; continue; }
+      if (c === '{') {
+        depth++;
+        continue;
+      }
+      if (c === '}') {
+        depth--;
+        if (depth === 0) break;
+        continue;
+      }
       if (depth !== 1 || text[i - 1] !== '\n') continue;
 
-      const line = /^\s*([A-Za-z_$][\w$]*)\??\s*:\s*([^;\n]*)/.exec(text.slice(i));
+      const line = /^\s*([A-Za-z_$][\w$]*)\??\s*:\s*([^;\n]*)/.exec(
+        text.slice(i)
+      );
       if (!line) continue;
 
       const [, name, type] = line;
@@ -191,47 +214,126 @@ function audit(): Gap[] {
  */
 const KNOWN_GAPS: Record<string, string[]> = {
   // registered — reachable over MCP
-  'src/tools/advanced-caching/cache-compression.ts': ['dictionary', 'includeMetrics', 'sampleSize', 'testData'],
-  'src/tools/advanced-caching/cache-optimizer.ts': [
-    'constraints', 'currentConfig', 'currentStrategy', 'includeBottlenecks', 'includeCharts',
-    'includePredictions', 'includeRecommendations', 'iterations', 'learningRate', 'reportFormat',
-    'simulationDuration', 'targetConfig', 'targetStrategy', 'workloadSize',
+  'src/tools/advanced-caching/cache-compression.ts': [
+    'dictionary',
+    'includeMetrics',
+    'sampleSize',
+    'testData',
   ],
-  'src/tools/advanced-caching/cache-replication.ts': ['conflicts', 'enableCompression'],
+  'src/tools/advanced-caching/cache-optimizer.ts': [
+    'constraints',
+    'currentConfig',
+    'currentStrategy',
+    'includeBottlenecks',
+    'includeCharts',
+    'includePredictions',
+    'includeRecommendations',
+    'iterations',
+    'learningRate',
+    'reportFormat',
+    'simulationDuration',
+    'targetConfig',
+    'targetStrategy',
+    'workloadSize',
+  ],
+  'src/tools/advanced-caching/cache-replication.ts': [
+    'conflicts',
+    'enableCompression',
+  ],
   'src/tools/advanced-caching/cache-warmup.ts': [
-    'dataSource', 'endTime', 'resolveDependencies', 'startTime', 'validateBeforeCommit',
+    'dataSource',
+    'endTime',
+    'resolveDependencies',
+    'startTime',
+    'validateBeforeCommit',
   ],
   'src/tools/advanced-caching/predictive-cache.ts': ['metadata'],
-  'src/tools/advanced-caching/smart-cache.ts': ['compressionEnabled', 'metadata'],
-  'src/tools/code-analysis/smart-ast-grep.ts': [
-    'includeContext', 'incrementalIndexing', 'respectGitignore', 'ttl',
+  'src/tools/advanced-caching/smart-cache.ts': [
+    'compressionEnabled',
+    'metadata',
   ],
-  'src/tools/configuration/smart-config-read.ts': ['enableCache', 'includeMetadata'],
-  'src/tools/dashboard-monitoring/alert-manager.ts': ['dataSource', 'silenceId'],
-  'src/tools/dashboard-monitoring/log-dashboard.ts': ['cacheTTL', 'filter', 'filterId', 'logSources'],
-  'src/tools/dashboard-monitoring/monitoring-integration.ts': ['cacheTTL', 'mapping', 'pushData', 'syncOptions'],
+  'src/tools/code-analysis/smart-ast-grep.ts': [
+    'includeContext',
+    'incrementalIndexing',
+    'respectGitignore',
+    'ttl',
+  ],
+  'src/tools/configuration/smart-config-read.ts': [
+    'enableCache',
+    'includeMetadata',
+  ],
+  'src/tools/dashboard-monitoring/alert-manager.ts': [
+    'dataSource',
+    'silenceId',
+  ],
+  'src/tools/dashboard-monitoring/log-dashboard.ts': [
+    'cacheTTL',
+    'filter',
+    'filterId',
+    'logSources',
+  ],
+  'src/tools/dashboard-monitoring/monitoring-integration.ts': [
+    'cacheTTL',
+    'mapping',
+    'pushData',
+    'syncOptions',
+  ],
 
   // not registered in src/server/index.ts, so not reachable over MCP today. Still a
   // contract that lies if the tool is ever wired up.
   'src/tools/advanced-caching/cache-benchmark.ts': ['resultsPath', 'workload'],
   'src/tools/api-database/smart-database.ts': [
-    'analyzeIndexUsage', 'circuitBreakerThreshold', 'circuitBreakerTimeout', 'connectionString',
-    'connectionTimeout', 'database', 'detectN1', 'explain', 'host', 'idleTimeout',
-    'includeMetadata', 'minPoolSize', 'password', 'port', 'user',
+    'analyzeIndexUsage',
+    'circuitBreakerThreshold',
+    'circuitBreakerTimeout',
+    'connectionString',
+    'connectionTimeout',
+    'database',
+    'detectN1',
+    'explain',
+    'host',
+    'idleTimeout',
+    'includeMetadata',
+    'minPoolSize',
+    'password',
+    'port',
+    'user',
   ],
-  'src/tools/code-analysis/smart-dependencies.ts': ['exclude', 'includeMetadata', 'ttl'],
+  'src/tools/code-analysis/smart-dependencies.ts': [
+    'exclude',
+    'includeMetadata',
+    'ttl',
+  ],
   // Declares these NESTED under an `options` object rather than at the top level; the
   // tool is unregistered, so which level is correct is undecided until it is wired.
   'src/tools/configuration/smart-workflow.ts': [
-    'enableCache', 'format', 'includePerformanceRecommendations', 'includeSecurityAnalysis',
-    'ttl', 'validateSyntax',
+    'enableCache',
+    'format',
+    'includePerformanceRecommendations',
+    'includeSecurityAnalysis',
+    'ttl',
+    'validateSyntax',
   ],
   'src/tools/intelligence/knowledge-graph.ts': [
-    'communityAlgorithm', 'confidenceThreshold', 'graphs', 'imageHeight', 'imageWidth',
-    'includeLabels', 'maxHops', 'maxInferences', 'maxNodes', 'mergeStrategy',
-    'minCommunitySize', 'rankingAlgorithm',
+    'communityAlgorithm',
+    'confidenceThreshold',
+    'graphs',
+    'imageHeight',
+    'imageWidth',
+    'includeLabels',
+    'maxHops',
+    'maxInferences',
+    'maxNodes',
+    'mergeStrategy',
+    'minCommunitySize',
+    'rankingAlgorithm',
   ],
-  'src/tools/intelligence/sentiment-analysis.ts': ['batchSize', 'outputPath', 'threshold', 'trainingData'],
+  'src/tools/intelligence/sentiment-analysis.ts': [
+    'batchSize',
+    'outputPath',
+    'threshold',
+    'trainingData',
+  ],
 };
 
 describe('every tool declares the options it accepts', () => {
@@ -240,7 +342,9 @@ describe('every tool declares the options it accepts', () => {
   it('introduces no undeclared option beyond the recorded debt', () => {
     const unexpected = gaps.flatMap((g) => {
       const known = KNOWN_GAPS[g.file] ?? [];
-      return g.undeclared.filter((o) => !known.includes(o)).map((o) => `${g.file}: ${o}`);
+      return g.undeclared
+        .filter((o) => !known.includes(o))
+        .map((o) => `${g.file}: ${o}`);
     });
 
     expect(unexpected).toEqual([]);
@@ -264,7 +368,9 @@ describe('every tool declares the options it accepts', () => {
     // smart_grep, smart_glob, smart_read, smart_edit, smart_write, smart_diff and the
     // four git tools are the surface that produced the measured failures, so they are
     // held to zero rather than ratcheted.
-    const remaining = gaps.filter((g) => g.file.startsWith('src/tools/file-operations/'));
+    const remaining = gaps.filter((g) =>
+      g.file.startsWith('src/tools/file-operations/')
+    );
 
     expect(remaining).toEqual([]);
   });
@@ -275,7 +381,11 @@ describe('every tool declares the options it accepts', () => {
     let audited = 0;
     for (const file of walk(SRC)) {
       const text = readFileSync(file, 'utf8');
-      if (text.includes('_TOOL_DEFINITION') && declaredProperties(text) && acceptedOptions(text).length) {
+      if (
+        text.includes('_TOOL_DEFINITION') &&
+        declaredProperties(text) &&
+        acceptedOptions(text).length
+      ) {
         audited++;
       }
     }

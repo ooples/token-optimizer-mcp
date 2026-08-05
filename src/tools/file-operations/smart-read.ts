@@ -470,7 +470,8 @@ export const SMART_READ_TOOL_DEFINITION = {
       },
       preserveStructure: {
         type: 'boolean',
-        description: 'Keep structural lines (signatures, exports) when compressing output',
+        description:
+          'Keep structural lines (signatures, exports) when compressing output',
         default: true,
       },
       includeMetadata: {

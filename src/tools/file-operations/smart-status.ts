@@ -728,12 +728,14 @@ export const SMART_STATUS_TOOL_DEFINITION = {
       },
       includeIgnored: {
         type: 'boolean',
-        description: 'Include ignored files, usually a large and low-signal set',
+        description:
+          'Include ignored files, usually a large and low-signal set',
         default: false,
       },
       offset: {
         type: 'number',
-        description: 'Skip this many files before returning any; use with limit to page',
+        description:
+          'Skip this many files before returning any; use with limit to page',
         default: 0,
       },
       useCache: {

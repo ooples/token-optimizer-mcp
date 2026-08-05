@@ -622,7 +622,8 @@ export const SMART_GLOB_TOOL_DEFINITION = {
       // "scoped" search run from the wrong directory.
       absolute: {
         type: 'boolean',
-        description: 'Return absolute paths instead of paths relative to the search root',
+        description:
+          'Return absolute paths instead of paths relative to the search root',
         default: false,
       },
       ignore: {
@@ -630,7 +631,12 @@ export const SMART_GLOB_TOOL_DEFINITION = {
         items: { type: 'string' },
         description:
           'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build -- the last two hold real source in some projects, so metadata.ignoredMatches reports what they withheld. Pass [] to search everything.',
-        default: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'],
+        default: [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/dist/**',
+          '**/build/**',
+        ],
       },
       onlyFiles: {
         type: 'boolean',
@@ -667,12 +673,14 @@ export const SMART_GLOB_TOOL_DEFINITION = {
       },
       maxContentSize: {
         type: 'number',
-        description: 'Largest file, in bytes, for which includeContent returns content',
+        description:
+          'Largest file, in bytes, for which includeContent returns content',
         default: 10240,
       },
       offset: {
         type: 'number',
-        description: 'Skip this many results before returning any; use with limit to page',
+        description:
+          'Skip this many results before returning any; use with limit to page',
         default: 0,
       },
       sortOrder: {

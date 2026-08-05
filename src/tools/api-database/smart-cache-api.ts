@@ -1003,7 +1003,8 @@ Token Reduction:
       since: {
         type: 'string',
         format: 'date-time',
-        description: 'Only entries created or updated after this ISO-8601 timestamp',
+        description:
+          'Only entries created or updated after this ISO-8601 timestamp',
       },
       includeDetails: {
         type: 'boolean',
