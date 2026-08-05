@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+﻿import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -61,7 +61,10 @@ describe('the reason given for an unreadable anchor', () => {
   it('says the anchor could not be read from this checkout', () => {
     const { reason } = checkAnchor(missing());
 
-    expect(reason).toMatch(/checkout/i);
+    // Exact, not a /checkout/ match: this string IS the contract the renderer
+    // prints, and a loose pattern would accept any replacement that happened to
+    // contain the word -- including one that went back to asserting a cause.
+    expect(reason).toBe('anchor not readable from this checkout');
   });
 
   it('still reports the anchor as stale, carrying its snapshot as evidence', () => {
