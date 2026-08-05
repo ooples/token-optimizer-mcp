@@ -1374,6 +1374,39 @@ export const ALERT_MANAGER_TOOL_DEFINITION = {
         description:
           'Cache TTL in seconds (optional, uses defaults if not specified)',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      dataSource: {
+        type: 'object',
+        description: 'Where the alert rule reads its metric from',
+        properties: {
+          id: { type: 'string' },
+          type: {
+            type: 'string',
+            enum: ['api', 'database', 'file', 'mcp-tool', 'custom'],
+          },
+          connection: {
+            type: 'object',
+            description:
+              'Connection details; which fields apply depends on type',
+            properties: {
+              url: { type: 'string' },
+              method: { type: 'string' },
+              headers: {
+                type: 'object',
+                additionalProperties: { type: 'string' },
+              },
+              query: { type: 'string' },
+            },
+          },
+        },
+        required: ['id', 'type'],
+      },
+      silenceId: {
+        type: 'string',
+        description:
+          'Identifier of an existing silence, for extending or removing it',
+      },
     },
     required: ['operation'],
   },

@@ -1652,6 +1652,49 @@ export const CACHE_WARMUP_TOOL_DEFINITION = {
         description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      // `dataFetcher` is deliberately absent -- it is a callback, so it cannot arrive
+      // as JSON. `dataSource.customFetcher` is omitted below for the same reason.
+      dataSource: {
+        type: 'object',
+        description:
+          'Where to fetch values from when warming keys that are not cached',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['database', 'api', 'file', 'cache', 'custom'],
+          },
+          connectionString: {
+            type: 'string',
+            description: 'For type database',
+          },
+          endpoint: { type: 'string', description: 'For type api' },
+          filePath: { type: 'string', description: 'For type file' },
+        },
+        required: ['type'],
+      },
+      startTime: {
+        type: 'number',
+        description:
+          'Epoch milliseconds at which a scheduled warmup becomes active',
+      },
+      endTime: {
+        type: 'number',
+        description: 'Epoch milliseconds after which a scheduled warmup stops',
+      },
+      resolveDependencies: {
+        type: 'boolean',
+        description:
+          'Warm each key’s dependencies first, in graph order, rather than the listed keys alone',
+        default: false,
+      },
+      validateBeforeCommit: {
+        type: 'boolean',
+        description:
+          'Check each fetched value before writing it into the cache',
+        default: false,
+      },
     },
     required: ['operation'],
   },

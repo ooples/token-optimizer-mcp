@@ -1249,6 +1249,14 @@ export const PREDICTIVE_CACHE_TOOL_DEFINITION = {
         description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
+      // DECLARED BECAUSE IT IS ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so this worked while being undiscoverable.
+      metadata: {
+        type: 'object',
+        description:
+          'Arbitrary key/value context stored alongside the entry and available to the predictor',
+        additionalProperties: true,
+      },
     },
     required: ['operation'],
   },

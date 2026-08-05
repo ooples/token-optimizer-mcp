@@ -1439,6 +1439,24 @@ export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
         description: 'Output format',
         default: 'compact',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      exclude: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Glob patterns for files to skip while resolving the graph',
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds',
+      },
+      includeMetadata: {
+        type: 'boolean',
+        description:
+          'Include per-package version and resolution detail, not just the edges',
+        default: false,
+      },
     },
   },
 };

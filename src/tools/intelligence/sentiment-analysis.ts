@@ -1582,6 +1582,52 @@ export const SENTIMENT_ANALYSIS_TOOL_DEFINITION = {
         type: 'number',
         description: 'Cache TTL in seconds (overrides default)',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      // `progressCallback` is deliberately absent -- a callback cannot arrive as JSON.
+      batchSize: {
+        type: 'number',
+        description: 'How many texts to score per batch',
+      },
+      trainingData: {
+        type: 'array',
+        description: 'Labelled examples for a train or retrain operation',
+        items: {
+          type: 'object',
+          properties: {
+            text: { type: 'string' },
+            sentiment: {
+              type: 'number',
+              description: 'Label from -1 (negative) to 1 (positive)',
+            },
+            emotions: {
+              type: 'object',
+              additionalProperties: { type: 'number' },
+              description: 'Optional per-emotion intensities',
+            },
+          },
+          required: ['text', 'sentiment'],
+        },
+      },
+      outputPath: {
+        type: 'string',
+        description: 'File to write a trained or exported model to',
+      },
+      threshold: {
+        type: 'object',
+        description: 'Cut-offs below which a result is not reported',
+        properties: {
+          sentiment: {
+            type: 'number',
+            description: 'Minimum absolute sentiment, from -1 to 1',
+          },
+          emotion: {
+            type: 'object',
+            additionalProperties: { type: 'number' },
+            description: 'Per-emotion minimum intensities',
+          },
+        },
+      },
     },
     required: ['operation'],
   },

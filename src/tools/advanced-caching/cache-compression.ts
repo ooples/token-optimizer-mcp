@@ -1461,6 +1461,25 @@ export const CACHE_COMPRESSION_TOOL_DEFINITION = {
         description: 'Cache TTL in seconds',
         default: 3600,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      // `dictionary` is deliberately absent -- it is a Buffer handed straight to zlib,
+      // so it cannot arrive as JSON and is programmatic-only.
+      sampleSize: {
+        type: 'number',
+        description:
+          'Bytes of the input to sample when choosing an algorithm, instead of measuring all of it',
+      },
+      includeMetrics: {
+        type: 'boolean',
+        description:
+          'Include per-algorithm ratio and timing metrics in the result',
+        default: false,
+      },
+      testData: {
+        description:
+          'Data to compress for a benchmark or analysis operation. Any JSON value; a string is used as-is and anything else is serialised first.',
+      },
     },
     required: ['operation'],
   },

@@ -1333,6 +1333,68 @@ export const LOG_DASHBOARD_TOOL_DEFINITION = {
         description: 'Enable caching (default: true)',
         default: true,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      logSources: {
+        type: 'array',
+        description: 'Log sources to read from',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            type: {
+              type: 'string',
+              enum: ['file', 'stream', 'api', 'database'],
+            },
+            config: {
+              type: 'object',
+              description: 'Which fields apply depends on type',
+              properties: {
+                path: { type: 'string' },
+                url: { type: 'string' },
+                query: { type: 'string' },
+                format: {
+                  type: 'string',
+                  enum: ['json', 'text', 'syslog', 'custom'],
+                },
+              },
+            },
+          },
+          required: ['id', 'type'],
+        },
+      },
+      filterId: {
+        type: 'string',
+        description: 'Identifier of a saved filter to apply or remove',
+      },
+      filter: {
+        type: 'object',
+        description: 'Filter to apply to the matched entries',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          pattern: {
+            type: 'string',
+            description: 'Regular expression matched against the message',
+          },
+          level: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Log levels to include',
+          },
+          fields: { type: 'object', additionalProperties: true },
+          exclude: {
+            type: 'boolean',
+            description: 'Exclude matches instead of including them',
+            default: false,
+          },
+        },
+      },
+      cacheTTL: {
+        type: 'number',
+        description: 'Cache lifetime in seconds',
+      },
     },
     required: ['operation'],
   },

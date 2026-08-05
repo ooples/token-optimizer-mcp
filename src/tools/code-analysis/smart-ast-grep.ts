@@ -1008,6 +1008,29 @@ export const SMART_AST_GREP_TOOL_DEFINITION = {
         default: true,
         description: 'Enable AST index and pattern caching',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      ttl: {
+        type: 'number',
+        description: 'Lifetime of the AST index cache in seconds',
+        default: 604800,
+      },
+      includeContext: {
+        type: 'boolean',
+        description: 'Include surrounding source lines with each match',
+        default: false,
+      },
+      respectGitignore: {
+        type: 'boolean',
+        description: 'Skip files git ignores when walking the project',
+        default: true,
+      },
+      incrementalIndexing: {
+        type: 'boolean',
+        description:
+          'Reindex only files changed since the last run instead of the whole project',
+        default: true,
+      },
     },
     required: ['pattern', 'projectPath'],
   },

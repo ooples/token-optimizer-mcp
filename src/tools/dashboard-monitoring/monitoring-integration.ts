@@ -696,6 +696,56 @@ export const MONITORING_INTEGRATION_TOOL_DEFINITION = {
         },
       },
       useCache: { type: 'boolean', default: true },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      syncOptions: {
+        type: 'object',
+        description: 'Narrows what a sync pulls from the external platform',
+        properties: {
+          timeRange: {
+            type: 'object',
+            description: 'Epoch-millisecond bounds',
+            properties: { start: { type: 'number' }, end: { type: 'number' } },
+            required: ['start', 'end'],
+          },
+          metrics: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Metric names to sync; all of them when omitted',
+          },
+          limit: { type: 'number', description: 'Maximum records to pull' },
+        },
+      },
+      pushData: {
+        type: 'object',
+        description: 'Payload to push to the external platform',
+        properties: {
+          metrics: { type: 'array', items: {} },
+          logs: { type: 'array', items: {} },
+          traces: { type: 'array', items: {} },
+        },
+      },
+      mapping: {
+        type: 'array',
+        description: 'Field mappings between the external schema and this one',
+        items: {
+          type: 'object',
+          properties: {
+            externalField: { type: 'string' },
+            internalField: { type: 'string' },
+            transform: {
+              type: 'string',
+              description:
+                'JavaScript expression applied to the value during mapping',
+            },
+          },
+          required: ['externalField', 'internalField'],
+        },
+      },
+      cacheTTL: {
+        type: 'number',
+        description: 'Cache lifetime in seconds',
+      },
     },
     required: ['operation'],
   },

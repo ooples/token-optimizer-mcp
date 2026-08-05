@@ -1900,6 +1900,70 @@ export const KNOWLEDGE_GRAPH_TOOL_DEFINITION = {
         type: 'number',
         description: 'Cache TTL in seconds',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      maxHops: {
+        type: 'number',
+        description: 'How many relationship hops a traversal may follow',
+      },
+      communityAlgorithm: {
+        type: 'string',
+        enum: ['louvain', 'label-propagation', 'modularity'],
+        description: 'Community detection algorithm',
+      },
+      minCommunitySize: {
+        type: 'number',
+        description: 'Discard detected communities smaller than this',
+      },
+      rankingAlgorithm: {
+        type: 'string',
+        enum: ['pagerank', 'betweenness', 'closeness', 'eigenvector'],
+        description: 'Centrality measure used to rank nodes',
+      },
+      confidenceThreshold: {
+        type: 'number',
+        description: 'Discard inferences scoring below this, from 0 to 1',
+      },
+      maxInferences: {
+        type: 'number',
+        description: 'Cap on how many inferred relationships to return',
+      },
+      maxNodes: {
+        type: 'number',
+        description: 'Cap on nodes included when rendering or exporting',
+      },
+      includeLabels: {
+        type: 'boolean',
+        description: 'Draw node labels in a rendered graph',
+        default: true,
+      },
+      imageWidth: {
+        type: 'number',
+        description: 'Rendered image width in pixels',
+      },
+      imageHeight: {
+        type: 'number',
+        description: 'Rendered image height in pixels',
+      },
+      graphs: {
+        type: 'array',
+        description: 'Graphs to combine, for a merge operation',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            nodes: { type: 'array', items: {} },
+            edges: { type: 'array', items: {} },
+          },
+          required: ['id', 'nodes', 'edges'],
+        },
+      },
+      mergeStrategy: {
+        type: 'string',
+        enum: ['union', 'intersection', 'override'],
+        description:
+          'How to reconcile nodes and edges present in more than one graph',
+      },
     },
     required: ['operation'],
   },

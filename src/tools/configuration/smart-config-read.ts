@@ -846,6 +846,20 @@ export const SMART_CONFIG_READ_TOOL_DEFINITION = {
         description: 'Cache time-to-live in seconds (default: 604800 = 7 days)',
         default: 604800,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      enableCache: {
+        type: 'boolean',
+        description:
+          'Reuse a cached parse of this config when it has not changed',
+        default: true,
+      },
+      includeMetadata: {
+        type: 'boolean',
+        description:
+          'Include format, size and parse details alongside the parsed value',
+        default: false,
+      },
     },
     required: ['path'],
   },
