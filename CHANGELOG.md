@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.0...v5.4.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **doctor:** report whether finding extraction is actually running ([#247](https://github.com/ooples/token-optimizer-mcp/issues/247)) ([7367250](https://github.com/ooples/token-optimizer-mcp/commit/7367250ecbea9a293a576b7edbe5214b7424b322))
+* **harness:** make the a/b measurement instrument repeatable ([#246](https://github.com/ooples/token-optimizer-mcp/issues/246)) ([219d62a](https://github.com/ooples/token-optimizer-mcp/commit/219d62ad49f7b81c8993791c70486c5d5385795a))
+* **metrics:** the causal measurement had never produced a single reading ([#251](https://github.com/ooples/token-optimizer-mcp/issues/251)) ([516a032](https://github.com/ooples/token-optimizer-mcp/commit/516a032b418c87bc8ee13a5bd6fdd5c0c1b846cd))
+* **release:** unblock the 5.4.0 publish, and stop the harvest worker crashing on exit ([#245](https://github.com/ooples/token-optimizer-mcp/issues/245)) ([1ecd165](https://github.com/ooples/token-optimizer-mcp/commit/1ecd165227cfa6a242ef3fa71f4eeafc710f37ba))
+* **search:** honour `path` and survive oversized result sets ([#249](https://github.com/ooples/token-optimizer-mcp/issues/249)) ([bf3870f](https://github.com/ooples/token-optimizer-mcp/commit/bf3870fcec33e7bf004c734f91b7790f266c3585))
+
 ## [5.4.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.3.6...v5.4.0) (2026-08-04)
 
 
