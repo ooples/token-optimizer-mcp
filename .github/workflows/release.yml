@@ -83,22 +83,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # A BACKSTOP, not a repair of version drift -- there is no version drift left
-      # to repair. The client configs now carry
-      # `@ooples/token-optimizer-mcp@latest`, a spec that does not change when
-      # package.json does, so a release can no longer knock them out of step.
+      # VERIFY, AND DO NOT REPAIR FIRST. Regenerating before the check made the check
+      # meaningless: `sync:hooks` rewrote the generated files, so `sync:hooks:check`
+      # then compared the repaired tree against itself and passed even when the RELEASED
+      # TAG contained stale generated output. The publish could ship files that did not
+      # match the tag it claims to be built from, which is the one thing the
+      # provenance attestation is supposed to rule out.
       #
-      # That is what allowed the sync-release-pins workflow and the release-PR sync
-      # step to be deleted, and with them the failure mode that cost four releases:
-      # v5.4.0 and v5.4.1 were both tagged with GitHub Releases and neither reached
-      # npm, each refused for pins naming the previous version.
+      # The repair existed because a release used to knock the pinned specs out of step
+      # every time. It no longer can: the specs say `@latest`, which does not change
+      # when package.json does. With nothing left to repair, the regeneration only
+      # masked real generator drift.
       #
-      # These two steps stay because the configs are GENERATED: regenerating before
-      # packing and then verifying still catches drift between a generator and its
-      # committed output. On a healthy tree the regeneration is a no-op.
-      - name: Regenerate client configs before packing
-        run: npm run sync:hooks
-
+      # Generated output must therefore be committed before the tag is cut. The
+      # `generated-artifacts` job in quality-gates.yml runs this same check on every
+      # push, so drift is caught long before a release.
       - name: Verify generated configs match their generators
         run: npm run sync:hooks:check
 
