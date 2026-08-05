@@ -26,6 +26,14 @@ import { forCommand } from '../../hooks-core/inject.mjs';
 import { putNode, putNodeWithEdges, load } from '../../hooks-core/wiki.mjs';
 
 const NL = String.fromCharCode(10);
+
+// A KNOWN POSITIVE FRACTION, set before anything calls inHoldout().
+//
+// Another suite sets this to '0' for its own reasons, and jest shares a process
+// between suites in a worker -- so without pinning it here, the suite whose
+// subject IS the holdout could run with the holdout disabled and still pass by
+// finding no withheld command.
+process.env.TOKEN_OPTIMIZER_HOLDOUT = '0.1';
 let dir;
 
 beforeEach(() => {

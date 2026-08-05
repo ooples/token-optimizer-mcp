@@ -146,7 +146,22 @@ export function forTouch(
     .filter((f) => !alreadyInjected.has(f.key));
   if (!candidates.length) return null;
 
-  const holdout = inHoldout(filePath);
+  // KEYED ON THE SESSION AS WELL AS THE FILE.
+  //
+  // `inHoldout` stratifies on (key, epoch) with a 24-hour epoch, so a session
+  // running across midnight would see the SAME file flip arms mid-session and
+  // contribute observations to both -- which makes the two arms
+  // non-comparable for exactly the files worked on longest. Including the
+  // session pins the arm for as long as the session lasts.
+  // A FIXED EPOCH, so the arm cannot rotate mid-session.
+  //
+  // Adding the session to the key was not enough, and the canary said so: with
+  // the epoch still in play a session running across midnight flipped arms for
+  // the same file 104 times in 400 simulated crossings -- worse than the 58
+  // before, just a different hash. Rotation across days exists so one FILE does
+  // not sit in one arm forever; here the session id already provides that
+  // rotation, so the epoch is redundant and actively harmful.
+  const holdout = inHoldout(`${sessionId || ''}|${filePath}`, 0);
   const served = serve(graph, candidates);
   const { kept, spent } = fit(served, budget);
 
@@ -337,11 +352,18 @@ export function forCommand(
     sessionId,
   });
 
+  // MARKED SEEN IN BOTH ARMS.
+  //
+  // The held branch used to return before updating the gate, so a command run
+  // repeatedly wrote a fresh holdout row every time while a treated command was
+  // filtered after its first delivery. The report counts rows, so the holdout
+  // arm was systematically overweighted -- a bias in the very comparison this
+  // exists to make.
+  for (const f of kept) alreadyInjected.add(f.key);
+
   // Withheld means withheld. Returning the text anyway would record an arm the
   // subject never actually experienced.
   if (holdout) return null;
-
-  for (const f of kept) alreadyInjected.add(f.key);
 
   return `Before running this — known from previous sessions:\n${kept
     .map(render)

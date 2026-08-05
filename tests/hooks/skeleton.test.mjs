@@ -18,6 +18,20 @@ import { annotatedSkeleton, contestedHistory, gitSignals } from '../../hooks-cor
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { substitutionBudget, record, recordRead } from '../../hooks-core/metrics.mjs';
+
+// THE HOLDOUT IS OFF IN THIS SUITE, DELIBERATELY.
+//
+// `substitutionFor` now takes part in the holdout, so a file whose
+// stratification hash lands in the withheld arm correctly returns null -- the
+// model is given the real file instead. These tests are about what a
+// substitution CONTAINS, not about measurement.
+//
+// Without this the suite is a coin flip: the anchor is a fresh mkdtemp path on
+// every run, so whether it lands in the holdout changes run to run. It failed
+// once and then passed on the retry, which is the worst way for a test to
+// behave -- it looks fixed.
+const PRIOR_HOLDOUT = process.env.TOKEN_OPTIMIZER_HOLDOUT;
+process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
 import { substitutionFor } from '../../hooks-core/inject.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 
@@ -200,4 +214,11 @@ describe('the budget is earned per file, from the control arm', () => {
     }
     expect(substitutionBudget(dir, anchor)).toBeLessThan(1200);
   });
+});
+
+// Restored at the end: the variable is process-wide and jest shares a process
+// between suites, so leaving it at 0 disables the holdout for whatever runs next.
+afterAll(() => {
+  if (PRIOR_HOLDOUT === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+  else process.env.TOKEN_OPTIMIZER_HOLDOUT = PRIOR_HOLDOUT;
 });

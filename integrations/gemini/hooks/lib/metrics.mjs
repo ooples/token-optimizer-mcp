@@ -144,7 +144,10 @@ export function record(dir, event) {
     } catch {
       // Not POSIX, or not ours to chmod; the write still proceeds.
     }
-    const line = JSON.stringify({ ...event, at: Date.now() }) + '\n';
+    // The CALLER'S timestamp wins when it supplied one. Overwriting it made
+    // `rereadWaste`'s ordering depend on write order rather than on `at`, so a
+    // test that set explicit times was passing by luck.
+    const line = JSON.stringify({ ...event, at: event.at ?? Date.now() }) + '\n';
     appendFileSync(metricsPath(dir), line);
     // Balance-critical records go to their own log as well, so the windows on
     // the firehose can never starve the measurement. Written SECOND: a torn
@@ -337,15 +340,25 @@ export function readBalance(dir) {
  */
 export function isFixtureAnchor(anchor) {
   const p = String(anchor || '');
-  // A PROJECT'S OWN tests/ DIRECTORY IS REAL WORK.
-  //
-  // The first version excluded any path containing /tests/, which would have
-  // dropped every real test file a developer works on -- in this repository
-  // that is most of what gets read. The thing worth excluding is narrower: a
-  // scratch file the suite itself created under the OS temp directory.
-  const underTemp = /[\\/](AppData[\\/]Local[\\/])?(Temp|tmp)[\\/]/i.test(p);
-  const suiteScratch = /(to-hooks-|ab-[a-z]+-|cooccur-|holdout-|reread-|edge-src|fixture)/i.test(p);
-  return underTemp && suiteScratch ? true : underTemp && /[\\/]$/.test(p) ? true : underTemp;
+
+  // TWO CONDITIONS, BOTH REQUIRED. The previous version was a ternary chain in
+  // which every branch evaluated to `underTemp`, so the scratch test was dead
+  // code: it excluded ALL temp paths -- including a real project checked out
+  // under /tmp -- and on macOS excluded nothing at all, because tmpdir() there
+  // is /var/folders/<x>/<y>/T/ and did not match.
+  const underTemp =
+    new RegExp(
+      '[\\\\/](AppData[\\\\/]Local[\\\\/])?(Temp|tmp)[\\\\/]' +
+        '|[\\\\/]var[\\\\/]folders[\\\\/][^\\\\/]+[\\\\/][^\\\\/]+[\\\\/]T[\\\\/]',
+      'i'
+    ).test(p);
+  if (!underTemp) return false;
+
+  // Only names this suite actually creates. A user's own scratch checkout under
+  // a temp directory is real work and must still be counted.
+  return /(to-hooks-|ab-[a-z]+-|cooccur-|holdout-|reread-|feedback-e2e|standing-e2e|lesson-origin|archive-|gen-eol-|tear-|edge-src|fixture)/i.test(
+    p
+  );
 }
 
 /**
@@ -473,6 +486,10 @@ export function balanceSheet(dir) {
       withheld: withheldSubs.length,
       tokensAvoidedNet: netAvoided,
       tokensSpent: substitutionCost,
+      // THE CONTROL ARM'S ACTUAL COST. `tokensFullFile` was recorded and read
+      // by nothing, so the comparison the holdout exists for was not
+      // computable from the report.
+      controlArmTokens: withheldSubs.reduce((sum, e) => sum + (e.tokensFullFile || 0), 0),
       assumption: 'that the model would have read the file it explicitly requested',
     },
     estimatedCausal: {
@@ -492,6 +509,16 @@ export function balanceSheet(dir) {
     waste,
     // Deliberately NOT a single number. The two benefit lines are known
     // differently; adding them would launder an assumption into a measurement.
+    // TWO WINDOWS, STATED RATHER THAN BLENDED. Balance records are read in
+    // full; everything derived from `events` sees only the tail of
+    // metrics.jsonl. Once that log rolls past its cap these cover different
+    // periods, and a reader has to be able to see that rather than assume one
+    // consistent balance.
+    windows: {
+      balance: 'all balance.jsonl records within the byte cap',
+      events: `tail of metrics.jsonl (<= ${MAX_BYTES} bytes, <= ${MAX_EVENTS} events)`,
+      eventsTruncated: events.length >= MAX_EVENTS,
+    },
     note: 'benefit lines are reported separately by evidence strength and are never summed',
   };
 }
