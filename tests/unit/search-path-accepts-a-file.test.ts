@@ -45,7 +45,10 @@ beforeAll(() => {
     join(dir, 'target.ts'),
     'export function findMe() {\n  return 1;\n}\n'
   );
-  writeFileSync(join(dir, 'nested', 'other.ts'), 'export function findMe() {}\n');
+  writeFileSync(
+    join(dir, 'nested', 'other.ts'),
+    'export function findMe() {}\n'
+  );
 
   cache = new CacheEngine(join(dir, 'cache'), 10);
   tokenCounter = new TokenCounter();
@@ -93,6 +96,25 @@ describe('smart_grep path naming a single file', () => {
     expect(result.metadata?.totalMatches).toBe(2);
   });
 
+  it('finds a file whose name contains glob metacharacters', async () => {
+    // `a[0].ts` is a legal filename AND a glob character class. The scoped file
+    // is selected by feeding its basename to the matcher as a PATTERN, so an
+    // unescaped `[0]` matches the character class -- it would look for `a0.ts`,
+    // which does not exist, and return the same confident zero this whole file
+    // exists to stop. The code comment claimed the basename avoided glob
+    // interpretation; it did not, because a basename IS the pattern here.
+    const tricky = join(dir, 'a[0].ts');
+    writeFileSync(tricky, 'export const findMe = 1;\n');
+    const tool = new SmartGrepTool(...deps());
+
+    const result = await tool.grep('findMe', { path: tricky });
+
+    expect({
+      matches: result.metadata?.totalMatches,
+      searched: result.metadata?.filesSearched,
+    }).toEqual({ matches: 1, searched: 1 });
+  });
+
   it('reports a path that does not exist instead of answering zero', async () => {
     // A typo'd path is the other way to produce a confident zero, and it is the
     // one a caller is most likely to hit.
@@ -115,5 +137,38 @@ describe('smart_glob path naming a single file', () => {
     const result = await tool.glob('**/*.ts', { path: join(dir, 'target.ts') });
 
     expect(result.files?.length).toBe(1);
+  });
+
+  it('does not claim the ignore patterns withheld anything', async () => {
+    // `ignoredMatches` is computed by re-globbing WITHOUT `ignore` and
+    // subtracting. Scoping the first walk to one file while leaving the
+    // comparison walk covering the whole parent made the difference look like
+    // suppressed matches: 2 - 1 = 1, and the response then carried a note
+    // saying 1 file "matched but were excluded by the ignore patterns". Nothing
+    // was excluded -- the caller asked for one file and got it. A number
+    // invented to explain an absence is worse than no number.
+    const tool = new SmartGlobTool(...deps());
+
+    const result = await tool.glob('**/*.ts', { path: join(dir, 'target.ts') });
+
+    expect({
+      ignored: result.metadata?.ignoredMatches ?? 0,
+      note: result.metadata?.ignoreNote,
+    }).toEqual({ ignored: 0, note: undefined });
+  });
+
+  it('still reports what the ignore patterns withheld for a directory', async () => {
+    // The counting must keep working where it is meaningful, or the fix above
+    // would just be a way to silence it.
+    mkdirSync(join(dir, 'node_modules'), { recursive: true });
+    writeFileSync(
+      join(dir, 'node_modules', 'dep.ts'),
+      'export const dep = 1;\n'
+    );
+    const tool = new SmartGlobTool(...deps());
+
+    const result = await tool.glob('**/*.ts', { path: dir });
+
+    expect(result.metadata?.ignoredMatches).toBeGreaterThan(0);
   });
 });

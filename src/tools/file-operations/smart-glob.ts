@@ -252,16 +252,26 @@ export class SmartGlobTool {
       // already the unignored set, so the second walk would traverse the whole
       // tree synchronously to rediscover a list we are holding -- pure cost on
       // the exact call that opted out of filtering.
+      //
+      // BOTH WALKS ARE SCOPED THE SAME WAY. Narrowing only the first one made
+      // the difference between them look like suppressed matches: a file-scoped
+      // glob returned 1 while the comparison walk still covered the parent and
+      // returned 2, so the response reported that 1 file "matched but were
+      // excluded by the ignore patterns" when nothing had been excluded at all.
+      // A number invented to explain an absence is worse than no number.
       const ignoredMatches =
         opts.ignore.length === 0
           ? 0
           : Math.max(
               0,
-              globSync(pattern, {
-                cwd: opts.cwd,
-                absolute: opts.absolute,
-                nodir: opts.onlyFiles,
-              }).length - matches.length
+              limitToScopedFile(
+                globSync(pattern, {
+                  cwd: opts.cwd,
+                  absolute: opts.absolute,
+                  nodir: opts.onlyFiles,
+                }),
+                scope
+              ).length - matches.length
             );
 
       // Filter and collect file info

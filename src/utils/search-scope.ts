@@ -1,4 +1,5 @@
 import { statSync } from 'fs';
+import { escape } from 'glob';
 import { dirname, basename, isAbsolute, join, resolve, sep } from 'path';
 
 /**
@@ -66,10 +67,14 @@ export function resolveSearchScope(
 
   return {
     cwd: dirname(resolved),
-    // The exact basename, NOT a glob built from the name: `a[0].ts` is a legal
-    // filename and also a glob character class, and the matcher would read the
-    // brackets rather than the name.
-    files: [basename(resolved)],
+    // ESCAPED, because this basename is used as a glob PATTERN, not compared as
+    // a string. `a[0].ts` is a legal filename and also a glob character class,
+    // so the raw name would look for `a0.ts` -- absent -- and produce exactly
+    // the confident zero this helper exists to prevent. An earlier version of
+    // this comment claimed a plain basename avoided glob interpretation, which
+    // was wrong in the one direction that matters: it read as reassurance while
+    // the code did the unsafe thing.
+    files: [escape(basename(resolved))],
     file: resolved,
   };
 }
