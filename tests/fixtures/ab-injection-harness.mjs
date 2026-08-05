@@ -29,6 +29,7 @@ const HOOK = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
 export const CASES = [
   {
     id: 'npx-jest',
+    class: 'non-inferable',
     claim:
       'Run the suite with npm test, not npx jest: the project passes --experimental-vm-modules, and bare npx jest silently skips every ESM suite.',
     trigger: '\\bnpx\\s+jest\\b',
@@ -40,6 +41,7 @@ export const CASES = [
   },
   {
     id: 'csproj-name',
+    class: 'non-inferable',
     claim:
       'The test project file is tests/AiDotNet.Tests/AiDotNetTests.csproj -- the DIRECTORY is AiDotNet.Tests but the csproj has no dot. Guessing the symmetric name gives MSB1009 Project file does not exist.',
     trigger: 'dotnet\\s+(build|test)',
@@ -50,6 +52,7 @@ export const CASES = [
   },
   {
     id: 'pipe-exit',
+    class: 'plausible',
     claim:
       'Piping a dotnet build or test through | tail or | head makes the shell report the PIPE exit status, not dotnet. A build that failed with MSB1009 came back as exit 0 and was reported as succeeding.',
     trigger: '\\b(dotnet|npm|cargo)\\b.*\\|\\s*(tail|head)\\b',
@@ -71,6 +74,7 @@ export const CASES = [
   },
   {
     id: 'fetch-refspec',
+    class: 'plausible',
     claim:
       "A checkout's remote.origin.fetch can be clobbered to a single tag refspec, so git fetch origin master silently never updates origin/master and every 'commits behind' check lies. Verify with git config --get-all remote.origin.fetch.",
     trigger: 'git\\s+fetch',
@@ -81,6 +85,7 @@ export const CASES = [
   },
   {
     id: 'dirty-pr',
+    class: 'non-inferable',
     claim:
       'A PR whose mergeStateStatus is DIRTY causes GitHub to schedule NO pull_request-triggered workflows at all, because it cannot build refs/pull/N/merge. Runs are never created rather than cancelled. Check gh pr view N --json mergeStateStatus first.',
     trigger: 'gh\\s+(pr|run)\\b',
