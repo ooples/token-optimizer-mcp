@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+﻿import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, readdirSync, readFileSync, existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir, homedir } from 'os';
@@ -101,7 +101,7 @@ describe('backup filenames', () => {
     }
   });
 
-  it('does not lose a version when two writes share a timestamp', () => {
+  it('does not lose a version when five writes share a timestamp', () => {
     // THE CLOCK IS PINNED, and that is the whole point of the test.
     //
     // This used to wrap the writes in `Promise.all`, which proves nothing:

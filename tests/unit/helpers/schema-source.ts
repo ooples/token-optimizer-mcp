@@ -343,6 +343,16 @@ function valueAtTopLevel(block: string, key: string): string | null {
       i = end;
       continue;
     }
+    // Block comments too. Skipping only `//` left a comment containing
+    // `type: 'array'` or a `required:` list being read as declaration -- the
+    // same class of defect as the apostrophe that once swallowed eleven
+    // properties, and half-applying the lesson does not close it.
+    if (c === '/' && block[i + 1] === '*') {
+      const end = block.indexOf('*/', i + 2);
+      if (end === -1) break;
+      i = end + 1;
+      continue;
+    }
     if (c === '"' || c === "'" || c === '`') {
       inString = c;
       continue;
@@ -388,6 +398,16 @@ function requiredAtTopLevel(block: string): string[] {
       const end = block.indexOf('\n', i);
       if (end === -1) break;
       i = end;
+      continue;
+    }
+    // Block comments too. Skipping only `//` left a comment containing
+    // `type: 'array'` or a `required:` list being read as declaration -- the
+    // same class of defect as the apostrophe that once swallowed eleven
+    // properties, and half-applying the lesson does not close it.
+    if (c === '/' && block[i + 1] === '*') {
+      const end = block.indexOf('*/', i + 2);
+      if (end === -1) break;
+      i = end + 1;
       continue;
     }
     if (c === '"' || c === "'" || c === '`') {

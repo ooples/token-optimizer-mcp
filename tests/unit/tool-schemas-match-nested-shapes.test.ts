@@ -169,6 +169,47 @@ describe('a declared option declares its shape too', () => {
     );
   });
 
+  it('reads through a block comment rather than treating it as source', () => {
+    // `//` comments were skipped and `/* */` were not, so a block comment that
+    // happens to contain `type: 'array'` or a `required:` list was read as
+    // declaration. The scanners already learned this lesson once -- an
+    // apostrophe in a `//` comment opened a string that swallowed eleven
+    // properties -- and half-applying it leaves the same class of defect.
+    const text = `
+export interface Cfg {
+  host: string;
+  ports?: number[];
+}
+export interface ThingOptions {
+  cfg: Cfg;
+}
+const X_TOOL_DEFINITION = {
+  inputSchema: {
+    properties: {
+      cfg: {
+        /* Historically this was type: 'array' with required: ['legacy'].
+           It is an object now. */
+        type: 'object',
+        properties: {
+          host: { type: 'string' },
+          ports: { type: 'array', items: { type: 'number' } },
+        },
+        required: ['host'],
+      },
+    },
+  },
+};`;
+
+    const shape = nestedShape(text, 'cfg');
+
+    expect(shape?.isArray).toBe(false);
+    expect(shape?.required).toEqual(['host']);
+    expect(shapeGaps(text, 'cfg', interfaceFields(text, 'Cfg'))).toEqual({
+      missingProperties: [],
+      missingRequired: [],
+    });
+  });
+
   it('flags an object option that declares NO nested properties at all', () => {
     // THE HOLE THIS CLOSES. The audit used to `continue` whenever a property
     // declared no nested shape, on the reasoning that the sibling name-check
