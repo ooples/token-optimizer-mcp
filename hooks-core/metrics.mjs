@@ -74,7 +74,19 @@ export function inHoldout(anchorKey, now = Date.now()) {
   const fraction = holdoutFraction();
   if (fraction <= 0) return false;
   const epoch = Math.floor(now / EPOCH_MS);
-  const digest = createHash('sha1').update(`${anchorKey}:${epoch}`).digest();
+  // SHA-256, NOT SHA-1.
+  //
+  // This is a bucketing hash, not a security primitive -- nothing is kept
+  // secret and nothing is authenticated, only spread evenly across two arms.
+  // But CodeQL flags sha1 as a weak algorithm, seven high-severity alerts
+  // across the core and its six vendored copies, and arguing that a finding is
+  // benign is a worse habit than paying a cost that rounds to nothing here.
+  // Both are deterministic, which is the only property this depends on.
+  //
+  // The change DOES reassign arms: a given (anchor, epoch) may land on the
+  // other side than before. With nine holdout records in existence that costs
+  // nothing, and stratification is a fresh draw either way.
+  const digest = createHash('sha256').update(`${anchorKey}:${epoch}`).digest();
   return (digest[0] / 256) < fraction;
 }
 
