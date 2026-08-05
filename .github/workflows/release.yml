@@ -53,64 +53,6 @@ jobs:
           # config-file / manifest-file default to the repo-root files:
           #   release-please-config.json + .release-please-manifest.json
 
-      # THE PINS MUST BE BUMPED INSIDE THE RELEASE PR, and this is the only place
-      # that can do it.
-      #
-      # release-please bumps package.json and plugin.json (its extra-files) but not
-      # the pinned client specs, which carry `@ooples/token-optimizer-mcp@<version>`
-      # in strings that release-please's json/generic updaters cannot rewrite. The
-      # previous design delegated that to sync-release-pins.yml on `pull_request` --
-      # but release-please opens its PR with GITHUB_TOKEN, and GitHub deliberately
-      # suppresses workflow runs from that token to prevent recursion. Those runs sat
-      # in `action_required` and never executed.
-      #
-      # The cost was not theoretical: v5.4.0 and v5.4.1 were both tagged, both had
-      # GitHub Releases, and NEITHER reached npm -- the publish guard correctly
-      # refused a version whose pins still said the previous one, twice, and npm
-      # stayed on 5.3.6 while master said 5.4.1.
-      #
-      # This job is triggered by push to master, an ordinary event, so it runs. It
-      # amends the release PR rather than publishing unsynced content, which keeps the
-      # tag authoritative: the tarball is still built from the tagged commit, so the
-      # provenance attestation continues to mean what it says.
-      - name: Check out for the pin sync
-        if: ${{ steps.release.outputs.pr != '' }}
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Set up Node for the pin sync
-        if: ${{ steps.release.outputs.pr != '' }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Sync pinned specs into the release PR
-        if: ${{ steps.release.outputs.pr != '' }}
-        env:
-          PR_JSON: ${{ steps.release.outputs.pr }}
-        run: |
-          set -euo pipefail
-
-          BRANCH="$(printf '%s' "$PR_JSON" | jq -r '.headBranchName')"
-          if [ -z "$BRANCH" ] || [ "$BRANCH" = "null" ]; then
-            echo "::error::release-please reported a PR with no head branch"
-            exit 1
-          fi
-
-          # --ignore-scripts: the sync only needs the generator scripts and their
-          # deps, not a full postinstall.
-          npm ci --ignore-scripts
-
-          # The branch guard, the merged-branch check, the commit and the push all
-          # live in the script, where tests/unit/sync-release-pr-pins.test.ts drives
-          # them against real git repositories. This step used to inline that logic,
-          # which meant it could not be run without cutting a release -- and it
-          # shipped a bare `git fetch` that exited 128 the first time a release PR
-          # was merged before the step reached it.
-          node scripts/sync-release-pr-pins.mjs --branch "$BRANCH" --remote origin
 
   # 2) On an actual release, build and publish to npm.
   publish-npm:
@@ -141,39 +83,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # A release is the ONLY event that can introduce pin drift, because
-      # release-please bumps package.json without touching the specs pinned
-      # inside the hand-maintained client configs. Publishing that tree ships
-      # hooks at the new version calling an MCP server at the old one.
+      # A BACKSTOP, not a repair of version drift -- there is no version drift left
+      # to repair. The client configs now carry
+      # `@ooples/token-optimizer-mcp@latest`, a spec that does not change when
+      # package.json does, so a release can no longer knock them out of step.
       #
-      # IT REPAIRS RATHER THAN REFUSES, because refusing did not work.
+      # That is what allowed the sync-release-pins workflow and the release-PR sync
+      # step to be deleted, and with them the failure mode that cost four releases:
+      # v5.4.0 and v5.4.1 were both tagged with GitHub Releases and neither reached
+      # npm, each refused for pins naming the previous version.
       #
-      # The plan was that sync-release-pins would fix the release PR before it
-      # merged. It never ran: on the release-please branch every run sits in
-      # `action_required`, because GitHub does not automatically run workflows
-      # on PRs a bot opened. So 5.4.0 failed here, was hand-fixed, and 5.4.1
-      # failed here again with the same ten files. A guard that fires every
-      # release and is repaired by hand every release is not a guard.
-      #
-      # Regenerating is safe in a way that editing the tree arbitrarily is not:
-      # these files are GENERATED, so the only thing that can change is the
-      # version they pin, and it is being set to the version actually being
-      # published. The verification still runs afterwards and still fails the
-      # publish if anything else drifted -- the tag is already cut, so shipping
-      # something different from the tag remains the one unacceptable outcome.
-      - name: Repair pinned specs to the released version
+      # These two steps stay because the configs are GENERATED: regenerating before
+      # packing and then verifying still catches drift between a generator and its
+      # committed output. On a healthy tree the regeneration is a no-op.
+      - name: Regenerate client configs before packing
         run: npm run sync:hooks
 
-      # NOT COMMITTED BACK. This job checks out the released TAG and runs with
-      # `contents: read`, so there is no branch here to push to and no
-      # permission to push with. What matters is that the PUBLISHED artifact
-      # carries correct pins, and repairing the working tree before packing
-      # achieves exactly that.
-      #
-      # master keeps its stale pins until the next release regenerates them,
-      # which is cosmetic: the repair above runs every time, so a wrong pin can
-      # never reach npm again.
-      - name: Verify pinned specs match the released version
+      - name: Verify generated configs match their generators
         run: npm run sync:hooks:check
 
       - name: Build project

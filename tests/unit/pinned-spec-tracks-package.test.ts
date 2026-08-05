@@ -3,30 +3,33 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 
 /**
- * The SPEC pinned inside the hand-maintained client configs is a second,
- * independent version that must track package.json -- and it did not.
+ * Every client config names ONE spec: `@ooples/token-optimizer-mcp@latest`.
  *
- * `plugin-version-tracks-package.test.ts` covers the plugin MANIFEST, which
- * release-please bumps via `extra-files`. The pinned npm spec is different: it
- * lives inside a string in an args array, so no jsonpath can reach it, and
- * `scripts/pin-mcp-version.mjs` is what keeps it in step. Nothing ran that
- * script during a release, so plugin/.mcp.json shipped `@5.3.2` while the hooks
- * beside it were 5.3.6.
+ * This file used to assert the opposite -- that each config pinned the exact
+ * package.json version, and that `@latest` never appeared. That invariant cannot
+ * hold. release-please bumps package.json, so the configs are wrong the moment a
+ * release starts, and every mechanism built to re-sync them (a CI check, a
+ * pull_request workflow, a step inside the release job, a script) was itself a
+ * release, which invalidated the pins again. Four releases went into that loop:
+ * v5.4.0 and v5.4.1 were both tagged with GitHub Releases and neither reached npm.
  *
- * Observed live on a user machine: the plugin's four hooks loaded at 5.3.6 and
- * launched an MCP server three patch versions behind. Nothing failed loudly --
- * the tool surface happened to be compatible -- which is exactly why this needs
- * a test rather than vigilance.
+ * Pinning also failed at the job it was introduced for. It was meant to stop the
+ * plugin and the server drifting apart, and a pin that lags does exactly that.
+ * Measured from a real installed plugin cache:
  *
- * The second test is the one that actually prevents recurrence. `npm run
- * sync:hooks:check` already existed and already detected this drift; it simply
- * was not wired into any workflow, so it never ran. A gate that exists and is
- * never invoked is indistinguishable from no gate.
+ *     plugin 5.3.6.pre-refresh  spawns server 5.3.2
+ *     plugin 5.4.0              spawns server 5.3.6   <- a downgrade
+ *
+ * Only one of those ever matched itself, and the previous version of this test
+ * asserted the mechanism that produced them.
+ *
+ * `@latest` is the ecosystem norm: Microsoft's official Playwright MCP ships
+ * `npx @playwright/mcp@latest`, GitHub's official MCP carries no version at all, and
+ * this project shipped `@latest` at 5.0.2 before the pinning sweep.
  */
 
 const ROOT = process.cwd();
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
-const pkgVersion = JSON.parse(read('package.json')).version as string;
 
 // Mirrors TARGETS in scripts/pin-mcp-version.mjs. Kept as a literal rather than
 // imported so a target silently dropped from the script is still asserted here.
@@ -44,42 +47,55 @@ const PINNED_CONFIGS = [
 
 const SPEC = /@ooples\/token-optimizer-mcp@([^"'\s,\]]+)/g;
 
-describe('pinned MCP spec', () => {
-  it.each(PINNED_CONFIGS)('in %s is pinned to the package version', (relative) => {
+const present = () => PINNED_CONFIGS.filter((r) => existsSync(join(ROOT, r)));
+
+describe('the MCP spec in client configs', () => {
+  it.each(PINNED_CONFIGS)('in %s resolves to latest, not a frozen version', (relative) => {
     if (!existsSync(join(ROOT, relative))) return; // not every target ships in every layout
 
-    const pinned = [...read(relative).matchAll(SPEC)].map((m) => m[1]);
-    // A config with no pin at all is fine; one that pins the wrong version is not.
-    for (const version of pinned) {
-      expect(version).toBe(pkgVersion);
+    for (const spec of [...read(relative).matchAll(SPEC)].map((m) => m[1])) {
+      expect(spec).toBe('latest');
     }
   });
 
-  it('is never left floating on @latest in a shipped config', () => {
-    // `@latest` resolves at npx time, so the version a user runs depends on when
-    // their npx cache was populated -- unreproducible and unpinnable.
-    const floating = PINNED_CONFIGS.filter(
-      (r) => existsSync(join(ROOT, r)) && read(r).includes('token-optimizer-mcp@latest')
+  it('never carries a numeric version, which is what went stale every release', () => {
+    const frozen = present().filter((r) =>
+      [...read(r).matchAll(SPEC)].some((m) => /^\d/.test(m[1]))
     );
-    expect(floating).toEqual([]);
+
+    expect(frozen).toEqual([]);
+  });
+
+  it('covers at least one real config, so this file cannot pass vacuously', () => {
+    // Every assertion above short-circuits on a missing file. Without this, deleting
+    // the configs would turn the suite green.
+    const withSpec = present().filter((r) => [...read(r).matchAll(SPEC)].length > 0);
+
+    expect(withSpec.length).toBeGreaterThan(0);
   });
 });
 
-describe('the drift gate', () => {
+describe('the generated-config gate', () => {
   const workflowDir = '.github/workflows';
   const workflows = readdirSync(join(ROOT, workflowDir)).filter((f) => /\.ya?ml$/.test(f));
   const allWorkflowText = workflows.map((f) => read(join(workflowDir, f))).join('\n');
 
   it('runs sync:hooks:check somewhere in CI', () => {
-    // Without this, pin drift can only be caught by a human remembering to run
-    // the script -- which is how three patch versions of drift shipped.
+    // The spec can no longer drift, but these files are still GENERATED, so a
+    // generator and its committed output can still disagree.
     expect(allWorkflowText).toMatch(/sync:hooks:check|verify:all/);
   });
 
-  it('guards the release path, which is where the drift is introduced', () => {
-    // ci.yml deliberately skips release-please commits, so a gate that only runs
-    // on ordinary PRs cannot see a bump made by the release PR itself.
+  it('still checks on the release path', () => {
     const release = read(join(workflowDir, 'release.yml'));
     expect(release).toMatch(/sync:hooks:check|verify:all/);
+  });
+
+  it('no longer relies on a workflow that cannot be triggered', () => {
+    // sync-release-pins.yml existed to repair the release PR, but release-please opens
+    // that PR with GITHUB_TOKEN and GitHub suppresses workflow runs from it, so every
+    // run sat in `action_required` having executed nothing. With `@latest` there is
+    // nothing to repair, so it is gone -- and must not return on that assumption.
+    expect(workflows).not.toContain('sync-release-pins.yml');
   });
 });

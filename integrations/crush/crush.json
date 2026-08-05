@@ -5,7 +5,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@ooples/token-optimizer-mcp@5.4.2"
+        "@ooples/token-optimizer-mcp@latest"
       ],
       "env": {}
     }

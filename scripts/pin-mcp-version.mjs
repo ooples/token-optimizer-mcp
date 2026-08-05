@@ -1,13 +1,29 @@
 #!/usr/bin/env node
 /**
- * Keeps the pinned MCP spec in the HAND-MAINTAINED configs matching package.json.
+ * Keeps every client config on one MCP spec: `@latest`.
  *
- * The generated configs get their pin from the generator, but several configs
- * are hand-written and ship all the same -- Copilot, the Gemini extension,
- * OpenCode, the Codex TOML and the Claude plugin's .mcp.json. They were the
- * ones still floating on `@latest` after the pinning sweep, precisely because
- * nothing regenerates them. This closes that gap so a release cannot leave half
- * the clients pinned to an old version and half floating.
+ * WHY NOT THE EXACT VERSION. It used to write package.json's version into nine
+ * configs, which made "the configs match package.json" an invariant that CANNOT
+ * hold: release-please bumps package.json, so the configs are wrong the instant a
+ * release starts, and every fix to the machinery that repaired them was itself a
+ * release. Four releases were burned before one published.
+ *
+ * It also failed at the job it was added for. Pinning was meant to stop plugin and
+ * server drifting apart; a pin that lags does the opposite. Measured from the
+ * installed plugin cache on a real machine:
+ *
+ *     plugin 5.3.6.pre-refresh  spawns server 5.3.2
+ *     plugin 5.4.0              spawns server 5.3.6   <- a downgrade
+ *
+ * Only 5.3.6 ever matched itself. `@latest` cannot produce that.
+ *
+ * `@latest` is also what the ecosystem does. Microsoft's official Playwright MCP
+ * ships `npx @playwright/mcp@latest`; GitHub's official MCP carries no version at
+ * all (it is a remote endpoint); and this project itself shipped `@latest` at 5.0.2,
+ * before the pinning sweep introduced the drift.
+ *
+ * The invariant is now version-independent, so there is nothing left to keep in
+ * step: no release-PR sync, no repair step, no drift.
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -15,8 +31,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
-const SPEC = `@ooples/token-optimizer-mcp@${version}`;
+const SPEC = '@ooples/token-optimizer-mcp@latest';
 
 const TARGETS = [
   'integrations/copilot/mcp-config.json',
@@ -51,8 +66,10 @@ for (const relative of TARGETS) {
 }
 
 if (check && changed > 0) {
-  console.error(`\n${changed} config(s) are not pinned to ${version}. Run: npm run sync:hooks`);
+  console.error(`\n${changed} config(s) do not use ${SPEC}. Run: npm run sync:hooks`);
   process.exit(1);
 }
 
-console.log(check ? `mcp version pinned to ${version} everywhere` : `pinned ${changed} config(s) to ${version}`);
+console.log(
+  check ? `every config uses ${SPEC}` : `set ${changed} config(s) to ${SPEC}`
+);

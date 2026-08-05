@@ -3,7 +3,7 @@
     "token-optimizer": {
       "type": "local",
       "command": "npx",
-      "args": ["-y", "@ooples/token-optimizer-mcp@5.4.2"],
+      "args": ["-y", "@ooples/token-optimizer-mcp@latest"],
       "tools": ["*"]
     }
   }
