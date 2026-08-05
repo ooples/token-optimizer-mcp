@@ -620,10 +620,23 @@ export function decide(payload, state) {
   return null;
 }
 
-/** Records a successful (allowed) read so a later repeat is recognised. */
+/**
+ * Records a successful (allowed) READ so a later repeat is recognised.
+ *
+ * READ ONLY, which is what this docstring always claimed. The condition also
+ * admitted `Write`, and a write is not a read: the model holds what it wrote, not
+ * the file, and for a small edit to a large file those are very different things.
+ *
+ * What that cost, observed live: a test file authored earlier in the session via
+ * Write was refused on its FIRST EVER Read with "UNCHANGED since you last read it
+ * this session -- use what you already have", and the harness then refused the
+ * following Write with "File has not been read yet", because from its side no read
+ * had happened. Neither side was wrong about its own bookkeeping; the hook had
+ * simply asserted a read that never occurred. Escapable only by retrying the Read.
+ */
 export function remember(payload, state) {
   const path = payload.tool_input?.file_path;
-  if (path && (payload.tool_name === 'Read' || payload.tool_name === 'Write')) {
+  if (path && payload.tool_name === 'Read') {
     state.seen[path] = true;
   }
 }

@@ -21,7 +21,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { mode, MODE_OFF, loadState } from './lib/policy.mjs';
+import { mode, MODE_OFF, loadState, clearSeen } from './lib/policy.mjs';
 import { linkCoOccurrence } from './lib/inject.mjs';
 import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 
@@ -104,6 +104,26 @@ async function main() {
   } catch {
     // Bookkeeping must never delay or fail a compaction.
   }
+
+  // COMPACTION ENDS THE CLAIM THAT THE CALLER STILL HOLDS THESE FILES.
+  //
+  // `state.seen` is what licenses the router to refuse a Read with "UNCHANGED
+  // since you last read it this session -- use what you already have". That is a
+  // statement about the READER's context, and compaction is precisely the event
+  // that empties it: the summary survives, the file contents do not.
+  //
+  // Left uncleared, the hook went on withholding content the model demonstrably no
+  // longer had, for the rest of a long session. Cleared here, "seen" means "read
+  // since the last compaction", which is the closest honest approximation of
+  // "still in context" available to a hook.
+  //
+  // Deliberately AFTER the co-occurrence write above, which needs the full list.
+  //
+  // `clearSeen` rather than `saveState({ seen: {} })`: saveState MERGES seen so that
+  // concurrent hook processes cannot erase each other's additions, which means it
+  // cannot shrink the map at all. The first version of this used saveState and was a
+  // silent no-op until a test caught it.
+  clearSeen(payload.session_id);
 
   // NOW the wrapper, which only the optimize_session spawn needs. Plugin-only
   // installs stop here having still recorded their co-occurrence above.

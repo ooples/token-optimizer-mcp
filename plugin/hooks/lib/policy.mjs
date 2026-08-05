@@ -303,6 +303,54 @@ export function saveState(sessionId, state) {
   }
 }
 
+/**
+ * Forgets which files the session has read, keeping the rest of its state.
+ *
+ * SEPARATE FROM `saveState` BECAUSE saveState CANNOT SHRINK `seen`. It merges --
+ * `{ ...current.seen, ...state.seen }` -- deliberately, so two concurrent hook
+ * processes cannot erase each other's additions. Passing `seen: {}` through it
+ * therefore does nothing at all: the merge restores every key. That was the first
+ * attempt at this, and the test caught it.
+ *
+ * The one caller is the PreCompact hook. `seen` is what licenses the router to
+ * refuse a Read with "unchanged since you last read it -- use what you already
+ * have", which is a claim about the READER's context, and compaction is exactly the
+ * event that empties it. Uncleared, the hook withholds content the model no longer
+ * holds for the rest of the session.
+ *
+ * Same lock and write-then-rename discipline as saveState: a reader must never see a
+ * half-written file, and a missed lock skips the write rather than racing it.
+ */
+export function clearSeen(sessionId) {
+  let lock = null;
+  try {
+    mkdirSync(stateRoot(), { recursive: true, mode: 0o700 });
+    lock = takeLock(sessionId);
+    if (!lock) return false;
+
+    const current = loadState(sessionId);
+    const cleared = { ...current, seen: {} };
+
+    const target = statePath(sessionId);
+    const temporary = `${target}.${process.pid}.tmp`;
+    writeFileSync(temporary, JSON.stringify(cleared), { mode: 0o600 });
+    renameSync(temporary, target);
+    return true;
+  } catch {
+    // Same rule as saveState: state is an optimization and must never fail a
+    // compaction. Not clearing degrades to the old behaviour.
+    return false;
+  } finally {
+    if (lock) {
+      try {
+        unlinkSync(lock);
+      } catch {
+        // Already gone; nothing to release.
+      }
+    }
+  }
+}
+
 /** Best-effort exclusive lock. Returns the lock path, or null if not acquired. */
 /**
  * Sleeps synchronously.
