@@ -1439,6 +1439,28 @@ export const SMART_DEPENDENCIES_TOOL_DEFINITION = {
         description: 'Output format',
         default: 'compact',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      exclude: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Glob patterns for files to skip while resolving the graph',
+      },
+      ttl: {
+        type: 'number',
+        // DAYS, not seconds. `cacheGraph` multiplies by 24*60*60 before storing, so a
+        // caller who read "seconds" here and passed 300 would get a 300-DAY entry. A
+        // unit that is confidently wrong is worse than one that is absent.
+        description: 'Cache lifetime in DAYS (converted to seconds internally)',
+        default: 7,
+      },
+      includeMetadata: {
+        type: 'boolean',
+        description:
+          'Include per-package version and resolution detail, not just the edges',
+        default: false,
+      },
     },
   },
 };

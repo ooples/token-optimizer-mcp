@@ -1644,6 +1644,41 @@ Token Reduction:
         type: 'number',
         description: 'Cache TTL in seconds (default: 604800 - 7 days)',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      workload: {
+        type: 'object',
+        description:
+          'Shape of the synthetic load to run. Every field is optional.',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['read-heavy', 'write-heavy', 'mixed', 'custom', 'realistic'],
+          },
+          ratio: {
+            type: 'object',
+            description: 'Read/write split, used when type is mixed or custom',
+            properties: { read: { type: 'number' }, write: { type: 'number' } },
+          },
+          duration: { type: 'number', description: 'Seconds' },
+          concurrency: { type: 'number' },
+          keyCount: { type: 'number' },
+          valueSize: { type: 'number', description: 'Bytes per value' },
+          keyDistribution: {
+            type: 'string',
+            enum: ['uniform', 'zipf', 'gaussian'],
+          },
+          accessPattern: {
+            type: 'string',
+            enum: ['sequential', 'random', 'temporal'],
+          },
+        },
+      },
+      resultsPath: {
+        type: 'string',
+        description:
+          'File to write the benchmark results to, in addition to returning them',
+      },
     },
     required: ['operation'],
   },

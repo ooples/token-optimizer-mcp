@@ -110,13 +110,34 @@ function topLevelKeys(text: string, open: number): string[] {
   return keys;
 }
 
+/**
+ * Property names a schema declares, counting an `options` sub-object as declared.
+ *
+ * MOST tools are flattened by the server -- `const { pattern, ...options } = args` --
+ * so their options belong at the top level. A few instead take options as a SEPARATE
+ * argument (`run(target, options)`) and nest them under an `options` property, which is
+ * correct for that call shape. Counting only top-level keys reported those as
+ * undeclared, which was the checker being wrong rather than the tool: smart_workflow
+ * declares all six of its options inside `options`, exactly as its signature expects.
+ */
 function declaredProperties(text: string): string[] | null {
   const schema = text.indexOf('inputSchema');
   if (schema === -1) return null;
   const props = text.indexOf('properties:', schema);
   if (props === -1) return null;
   const open = text.indexOf('{', props);
-  return open === -1 ? null : topLevelKeys(text, open);
+  if (open === -1) return null;
+
+  const top = topLevelKeys(text, open);
+  if (!top.includes('options')) return top;
+
+  // Descend into the `options` object and treat its keys as declared too.
+  const optionsKey = text.indexOf('options:', open);
+  const nestedProps =
+    optionsKey === -1 ? -1 : text.indexOf('properties:', optionsKey);
+  if (nestedProps === -1) return top;
+  const nestedOpen = text.indexOf('{', nestedProps);
+  return nestedOpen === -1 ? top : [...top, ...topLevelKeys(text, nestedOpen)];
 }
 
 /**
@@ -151,8 +172,17 @@ function acceptedOptions(text: string): string[] {
       if (!line) continue;
 
       const [, name, type] = line;
+
+      // NOT EXPRESSIBLE AS JSON, so not declarable and not reachable over MCP.
+      //
+      // Functions are obvious. `Buffer` is here for the same reason and was checked
+      // rather than assumed: cache_compression's `dictionary` is handed straight to
+      // zlib as a Buffer, so declaring it as a base64 string would promise a shape the
+      // implementation cannot consume -- a different lie from the one this test exists
+      // to catch, not a fix for it.
       const isFunction = type.includes('=>') || /\bFunction\b/.test(type);
-      if (!isFunction) fields.push(name);
+      const isBinary = /\bBuffer\b/.test(type);
+      if (!isFunction && !isBinary) fields.push(name);
     }
   }
 
@@ -214,126 +244,6 @@ function audit(): Gap[] {
  */
 const KNOWN_GAPS: Record<string, string[]> = {
   // registered — reachable over MCP
-  'src/tools/advanced-caching/cache-compression.ts': [
-    'dictionary',
-    'includeMetrics',
-    'sampleSize',
-    'testData',
-  ],
-  'src/tools/advanced-caching/cache-optimizer.ts': [
-    'constraints',
-    'currentConfig',
-    'currentStrategy',
-    'includeBottlenecks',
-    'includeCharts',
-    'includePredictions',
-    'includeRecommendations',
-    'iterations',
-    'learningRate',
-    'reportFormat',
-    'simulationDuration',
-    'targetConfig',
-    'targetStrategy',
-    'workloadSize',
-  ],
-  'src/tools/advanced-caching/cache-replication.ts': [
-    'conflicts',
-    'enableCompression',
-  ],
-  'src/tools/advanced-caching/cache-warmup.ts': [
-    'dataSource',
-    'endTime',
-    'resolveDependencies',
-    'startTime',
-    'validateBeforeCommit',
-  ],
-  'src/tools/advanced-caching/predictive-cache.ts': ['metadata'],
-  'src/tools/advanced-caching/smart-cache.ts': [
-    'compressionEnabled',
-    'metadata',
-  ],
-  'src/tools/code-analysis/smart-ast-grep.ts': [
-    'includeContext',
-    'incrementalIndexing',
-    'respectGitignore',
-    'ttl',
-  ],
-  'src/tools/configuration/smart-config-read.ts': [
-    'enableCache',
-    'includeMetadata',
-  ],
-  'src/tools/dashboard-monitoring/alert-manager.ts': [
-    'dataSource',
-    'silenceId',
-  ],
-  'src/tools/dashboard-monitoring/log-dashboard.ts': [
-    'cacheTTL',
-    'filter',
-    'filterId',
-    'logSources',
-  ],
-  'src/tools/dashboard-monitoring/monitoring-integration.ts': [
-    'cacheTTL',
-    'mapping',
-    'pushData',
-    'syncOptions',
-  ],
-
-  // not registered in src/server/index.ts, so not reachable over MCP today. Still a
-  // contract that lies if the tool is ever wired up.
-  'src/tools/advanced-caching/cache-benchmark.ts': ['resultsPath', 'workload'],
-  'src/tools/api-database/smart-database.ts': [
-    'analyzeIndexUsage',
-    'circuitBreakerThreshold',
-    'circuitBreakerTimeout',
-    'connectionString',
-    'connectionTimeout',
-    'database',
-    'detectN1',
-    'explain',
-    'host',
-    'idleTimeout',
-    'includeMetadata',
-    'minPoolSize',
-    'password',
-    'port',
-    'user',
-  ],
-  'src/tools/code-analysis/smart-dependencies.ts': [
-    'exclude',
-    'includeMetadata',
-    'ttl',
-  ],
-  // Declares these NESTED under an `options` object rather than at the top level; the
-  // tool is unregistered, so which level is correct is undecided until it is wired.
-  'src/tools/configuration/smart-workflow.ts': [
-    'enableCache',
-    'format',
-    'includePerformanceRecommendations',
-    'includeSecurityAnalysis',
-    'ttl',
-    'validateSyntax',
-  ],
-  'src/tools/intelligence/knowledge-graph.ts': [
-    'communityAlgorithm',
-    'confidenceThreshold',
-    'graphs',
-    'imageHeight',
-    'imageWidth',
-    'includeLabels',
-    'maxHops',
-    'maxInferences',
-    'maxNodes',
-    'mergeStrategy',
-    'minCommunitySize',
-    'rankingAlgorithm',
-  ],
-  'src/tools/intelligence/sentiment-analysis.ts': [
-    'batchSize',
-    'outputPath',
-    'threshold',
-    'trainingData',
-  ],
 };
 
 describe('every tool declares the options it accepts', () => {
@@ -364,15 +274,18 @@ describe('every tool declares the options it accepts', () => {
     expect(stale).toEqual([]);
   });
 
-  it('has closed the file-operations tools, which is where the real bugs were', () => {
-    // smart_grep, smart_glob, smart_read, smart_edit, smart_write, smart_diff and the
-    // four git tools are the surface that produced the measured failures, so they are
-    // held to zero rather than ratcheted.
-    const remaining = gaps.filter((g) =>
-      g.file.startsWith('src/tools/file-operations/')
-    );
+  it('has no undeclared option anywhere', () => {
+    // THE RATCHET IS NOW AT ZERO. It started at 29 tools and 166 options, was carried
+    // for a while as recorded debt, and is empty: every tool declares everything it
+    // accepts. Stated as its own assertion so the goal cannot quietly become "no
+    // WORSE than the list", which is all the two tests above check once KNOWN_GAPS is
+    // empty.
+    const report = gaps
+      .map((g) => `${g.file}: ${g.undeclared.join(', ')}`)
+      .join('\n');
 
-    expect(remaining).toEqual([]);
+    expect(report).toBe('');
+    expect(Object.keys(KNOWN_GAPS)).toEqual([]);
   });
 
   it('audits a meaningful number of tools, so it cannot pass by finding nothing', () => {

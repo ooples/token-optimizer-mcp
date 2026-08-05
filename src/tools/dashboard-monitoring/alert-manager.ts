@@ -1374,6 +1374,59 @@ export const ALERT_MANAGER_TOOL_DEFINITION = {
         description:
           'Cache TTL in seconds (optional, uses defaults if not specified)',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      dataSource: {
+        type: 'object',
+        description: 'Where the alert rule reads its metric from',
+        properties: {
+          id: { type: 'string' },
+          type: {
+            type: 'string',
+            enum: ['api', 'database', 'file', 'mcp-tool', 'custom'],
+          },
+          connection: {
+            type: 'object',
+            description:
+              'Connection details; which fields apply depends on type',
+            properties: {
+              url: { type: 'string' },
+              method: { type: 'string' },
+              headers: {
+                type: 'object',
+                additionalProperties: { type: 'string' },
+              },
+              query: { type: 'string' },
+              tool: {
+                type: 'string',
+                description: 'MCP tool to call, for type mcp-tool',
+              },
+            },
+          },
+          transform: {
+            type: 'string',
+            description: 'JavaScript expression applied to the fetched value',
+          },
+          cache: {
+            type: 'object',
+            description: 'Whether and how long to cache this source',
+            properties: {
+              enabled: { type: 'boolean' },
+              ttl: { type: 'number', description: 'Seconds' },
+            },
+            required: ['enabled', 'ttl'],
+          },
+        },
+        // `connection` is required by the interface, so it is required here too. The
+        // first draft omitted it along with tool/transform/cache, which meant an
+        // mcp-tool source could not be configured through the published contract.
+        required: ['id', 'type', 'connection'],
+      },
+      silenceId: {
+        type: 'string',
+        description:
+          'Identifier of an existing silence, for extending or removing it',
+      },
     },
     required: ['operation'],
   },

@@ -40,7 +40,13 @@ export interface SmartConfigReadOptions {
 
   // Output options
   diffMode?: boolean; // Return only diff if config changed
-  includeMetadata?: boolean;
+  // `includeMetadata` REMOVED. It was never read -- `metadata` is built unconditionally
+  // on every return path -- so the option could not change anything. Declaring it in the
+  // schema would have promised control that does not exist, which is the same class of
+  // untruth as an undeclared option, pointing the other way; and honouring it would mean
+  // making `metadata` optional on the result type, a breaking change for every consumer
+  // in service of an option nobody could have been using. Nothing in the repository
+  // passed it.
   includeSuggestions?: boolean;
   validateOnly?: boolean; // Only validate, don't return full config
 
@@ -845,6 +851,14 @@ export const SMART_CONFIG_READ_TOOL_DEFINITION = {
         type: 'number',
         description: 'Cache time-to-live in seconds (default: 604800 = 7 days)',
         default: 604800,
+      },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      enableCache: {
+        type: 'boolean',
+        description:
+          'Reuse a cached parse of this config when it has not changed',
+        default: true,
       },
     },
     required: ['path'],

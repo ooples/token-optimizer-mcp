@@ -1907,6 +1907,75 @@ export const SMART_DATABASE_TOOL_DEFINITION = {
         description: 'Number of parallel batch operations (default: 4)',
         default: 4,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      //
+      // CONNECTION CREDENTIALS ARE PART OF THAT SURFACE. They were reachable while
+      // undocumented, which is the worst combination: a caller could send a password
+      // and have no way to know the field existed, or misspell it and have it silently
+      // dropped while the tool fell back to another connection.
+      connectionString: {
+        type: 'string',
+        description:
+          'Full connection string. Takes precedence over the individual host/port/database fields.',
+      },
+      host: { type: 'string', description: 'Database host' },
+      port: { type: 'number', description: 'Database port' },
+      database: { type: 'string', description: 'Database name' },
+      user: { type: 'string', description: 'Username' },
+      password: {
+        type: 'string',
+        description:
+          'Password. Prefer a connection string sourced from the environment over passing this in a tool call, which puts the secret in the transcript.',
+      },
+      includeMetadata: {
+        type: 'boolean',
+        description: 'Include column types and row counts alongside the rows',
+        default: false,
+      },
+      explain: {
+        type: 'boolean',
+        description: 'Attach the query plan for a SELECT',
+        default: false,
+      },
+      minPoolSize: {
+        type: 'number',
+        description: 'Connections kept open even when idle',
+        default: 2,
+      },
+      connectionTimeout: {
+        type: 'number',
+        description: 'Milliseconds to wait for a connection before failing',
+        default: 5000,
+      },
+      idleTimeout: {
+        type: 'number',
+        description:
+          'Milliseconds an idle connection is kept before being closed',
+        default: 30000,
+      },
+      analyzeIndexUsage: {
+        type: 'boolean',
+        description:
+          'Report which indexes the query used, and which were available but unused',
+        default: false,
+      },
+      detectN1: {
+        type: 'boolean',
+        description:
+          'Flag repeated similar queries that look like an N+1 pattern',
+        default: false,
+      },
+      circuitBreakerThreshold: {
+        type: 'number',
+        description: 'Consecutive failures before the breaker opens',
+        default: 5,
+      },
+      circuitBreakerTimeout: {
+        type: 'number',
+        description: 'Milliseconds the breaker stays open before retrying',
+        default: 30000,
+      },
     },
   },
 } as const;

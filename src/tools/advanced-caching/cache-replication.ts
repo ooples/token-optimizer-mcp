@@ -1538,6 +1538,30 @@ export const CACHE_REPLICATION_TOOL_DEFINITION = {
         description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      enableCompression: {
+        type: 'boolean',
+        description:
+          'Compress replicated payloads before sending them to peers',
+        default: false,
+      },
+      conflicts: {
+        type: 'array',
+        description:
+          'Conflicts to resolve, for a resolve operation. Each entry names the key and the competing local and remote entries.',
+        items: {
+          type: 'object',
+          properties: {
+            key: { type: 'string' },
+            localEntry: { type: 'object' },
+            remoteEntry: { type: 'object' },
+            resolution: { type: 'object' },
+            timestamp: { type: 'number' },
+          },
+          required: ['key'],
+        },
+      },
     },
     required: ['operation'],
   },

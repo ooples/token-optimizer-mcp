@@ -2230,6 +2230,113 @@ export const CACHE_OPTIMIZER_TOOL_DEFINITION = {
         description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      includePredictions: {
+        type: 'boolean',
+        description:
+          'Include forecast figures alongside the current measurements',
+        default: false,
+      },
+      includeBottlenecks: {
+        type: 'boolean',
+        description:
+          'Include the identified bottlenecks rather than the summary alone',
+        default: false,
+      },
+      workloadSize: {
+        type: 'number',
+        description:
+          'Number of synthetic operations to model when simulating a workload',
+      },
+      iterations: {
+        type: 'number',
+        description: 'How many times to repeat a simulation or tuning pass',
+      },
+      constraints: {
+        type: 'object',
+        description: 'Hard limits the recommendation must respect',
+        properties: {
+          maxMemory: { type: 'number', description: 'Cap in bytes' },
+          maxLatency: { type: 'number', description: 'Cap in milliseconds' },
+          minHitRate: {
+            type: 'number',
+            description: 'Floor as a fraction from 0 to 1',
+          },
+        },
+      },
+      currentStrategy: {
+        type: 'string',
+        enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'SIZE', 'HYBRID'],
+        description:
+          'Eviction strategy in use now, used as the comparison baseline',
+      },
+      currentConfig: {
+        type: 'object',
+        properties: {
+          strategy: {
+            type: 'string',
+            enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'SIZE', 'HYBRID'],
+          },
+          l1MaxSize: { type: 'number' },
+          l2MaxSize: { type: 'number' },
+          l3MaxSize: { type: 'number' },
+          ttl: { type: 'number' },
+          compressionEnabled: { type: 'boolean' },
+          prefetchEnabled: { type: 'boolean' },
+          writeMode: { type: 'string', enum: ['write-through', 'write-back'] },
+        },
+        description: 'Full cache configuration in use now',
+      },
+      targetStrategy: {
+        type: 'string',
+        enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'SIZE', 'HYBRID'],
+        description: 'Eviction strategy to evaluate against the current one',
+      },
+      targetConfig: {
+        type: 'object',
+        properties: {
+          strategy: {
+            type: 'string',
+            enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'SIZE', 'HYBRID'],
+          },
+          l1MaxSize: { type: 'number' },
+          l2MaxSize: { type: 'number' },
+          l3MaxSize: { type: 'number' },
+          ttl: { type: 'number' },
+          compressionEnabled: { type: 'boolean' },
+          prefetchEnabled: { type: 'boolean' },
+          writeMode: { type: 'string', enum: ['write-through', 'write-back'] },
+        },
+        description:
+          'Full cache configuration to evaluate against the current one',
+      },
+      simulationDuration: {
+        type: 'number',
+        description: 'Simulated time span in seconds',
+      },
+      learningRate: {
+        type: 'number',
+        description:
+          'Step size for the adaptive tuner; larger converges faster and overshoots',
+      },
+      reportFormat: {
+        type: 'string',
+        enum: ['json', 'markdown', 'html'],
+        description: 'Format for a report operation',
+        default: 'json',
+      },
+      includeCharts: {
+        type: 'boolean',
+        description: 'Embed charts in a markdown or html report',
+        default: false,
+      },
+      includeRecommendations: {
+        type: 'boolean',
+        description:
+          'Include the recommended changes, not just the measurements',
+        default: true,
+      },
     },
     required: ['operation'],
   },

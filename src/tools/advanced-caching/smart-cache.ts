@@ -1403,6 +1403,18 @@ export const SMART_CACHE_TOOL_DEFINITION = {
         description: 'Cache TTL in seconds (default: 300)',
         default: 300,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      compressionEnabled: {
+        type: 'boolean',
+        description: 'Compress entries before storing them',
+        default: false,
+      },
+      metadata: {
+        type: 'object',
+        description: 'Arbitrary key/value context stored alongside the entry',
+        additionalProperties: true,
+      },
     },
     required: ['operation'],
   },
