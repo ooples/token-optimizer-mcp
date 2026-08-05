@@ -85,9 +85,51 @@ export function inHoldout(anchorKey, now = Date.now()) {
  * moment the cost is knowable. This is the producer that makes the holdout
  * comparison a measurement rather than a subtraction of two zeroes.
  */
-export function recordRead(dir, { anchor, sessionId, bytes }) {
+export function recordRead(dir, { anchor, sessionId, bytes, fp = null }) {
   if (!anchor || !bytes) return;
-  record(dir, { kind: 'read', anchor, sessionId, tokens: Math.ceil(bytes / 4) });
+  record(dir, {
+    kind: 'read',
+    anchor,
+    sessionId,
+    tokens: Math.ceil(bytes / 4),
+    // THE CHANGE DETECTOR, recorded AT READ TIME.
+    //
+    // Without it, 'was this re-read wasteful' is undecidable. Measured before
+    // this field existed: 575 repeat reads of a file within one session, and
+    // only 99 could be classified -- 4,735 capture events carried anchors on
+    // just 122 of them, because most captures are bookkeeping calls that touch
+    // no file at all. The waste figure was 98% unknowable, and the 14.6M I
+    // first reported was really 213,651 confirmed plus a very large shrug.
+    //
+    // It belongs on the READ, not on a capture: the read already knows the
+    // anchor, the session and the cost, so the fingerprint completes the record
+    // rather than needing to be joined to another one.
+    fp,
+  });
+}
+
+/**
+ * A cheap fingerprint of a file's current content: size and mtime.
+ *
+ * NOT a content hash, deliberately. This runs on the PreToolUse path before
+ * every tool call, and hashing a file there would add a full read to the
+ * critical path for a measurement. `statSync` is already being done to resolve
+ * the operand, so this is free.
+ *
+ * WHAT IT CAN MISS: a write that leaves both size and mtime identical. That
+ * requires deliberately restoring the timestamp, so for the question being
+ * asked -- did this file change between two reads in one session -- it is
+ * sound. Stated here because a change-detector that silently misses changes
+ * would understate legitimate re-reads and overstate waste, which is the
+ * direction this project must never err in.
+ */
+export function fingerprint(path) {
+  try {
+    const st = statSync(path);
+    return `${st.size}:${Math.round(st.mtimeMs)}`;
+  } catch {
+    return null;
+  }
 }
 
 export function record(dir, event) {
@@ -292,9 +334,16 @@ export function readBalance(dir) {
  * A balance sheet that counts its own test suite as revenue is worse than none.
  */
 export function isFixtureAnchor(anchor) {
-  return /[\/](Temp|tmp)[\/]|[\/]tests?[\/]|fixture|edge-src|bench|sandbox|scratch/i.test(
-    String(anchor || '')
-  );
+  const p = String(anchor || '');
+  // A PROJECT'S OWN tests/ DIRECTORY IS REAL WORK.
+  //
+  // The first version excluded any path containing /tests/, which would have
+  // dropped every real test file a developer works on -- in this repository
+  // that is most of what gets read. The thing worth excluding is narrower: a
+  // scratch file the suite itself created under the OS temp directory.
+  const underTemp = /[\\/](AppData[\\/]Local[\\/])?(Temp|tmp)[\\/]/i.test(p);
+  const suiteScratch = /(to-hooks-|ab-[a-z]+-|cooccur-|holdout-|reread-|edge-src|fixture)/i.test(p);
+  return underTemp && suiteScratch ? true : underTemp && /[\\/]$/.test(p) ? true : underTemp;
 }
 
 /**
@@ -316,6 +365,74 @@ export function isFixtureAnchor(anchor) {
  *
  * Fixture anchors are excluded from both.
  */
+/**
+ * Re-read waste, split into what is KNOWN and what is not.
+ *
+ * The question is narrow on purpose: how often does one session read the same
+ * file twice with the file UNCHANGED in between? That is waste the graph can
+ * remove, and it needs no holdout, no estimate and no join -- the reads carry
+ * their own fingerprints.
+ *
+ * A repeat read of a file that CHANGED is not waste and is reported as such.
+ * Conflating the two is how the first version of this measurement turned
+ * 213,651 confirmed tokens into a 14.6M headline.
+ *
+ * `undecidable` is reported rather than hidden. Reads written before the
+ * fingerprint existed cannot be classified, and a measurement that quietly
+ * counted them either way would be inventing its own answer.
+ */
+export function rereadWaste(
+  dir,
+  // `includeFixtures` exists so the suite can exercise this against files it
+  // creates under the temp directory -- which the fixture filter otherwise
+  // excludes by design, making the real path untestable.
+  { events = readMetrics(dir), includeFixtures = false } = {}
+) {
+  const groups = new Map();
+  for (const e of events) {
+    if (e.kind !== 'read' || !e.anchor) continue;
+    if (!includeFixtures && isFixtureAnchor(e.anchor)) continue;
+    const key = `${e.sessionId || ''}|${canonicalKeyish(e.anchor)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+
+  const out = {
+    repeats: 0,
+    wasteful: 0,
+    wastefulTokens: 0,
+    legitimate: 0,
+    legitimateTokens: 0,
+    undecidable: 0,
+    undecidableTokens: 0,
+  };
+
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => (a.at || 0) - (b.at || 0));
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1];
+      const cur = list[i];
+      const tokens = cur.tokens || 0;
+      out.repeats += 1;
+      if (!prev.fp || !cur.fp) {
+        out.undecidable += 1;
+        out.undecidableTokens += tokens;
+      } else if (prev.fp === cur.fp) {
+        out.wasteful += 1;
+        out.wastefulTokens += tokens;
+      } else {
+        out.legitimate += 1;
+        out.legitimateTokens += tokens;
+      }
+    }
+  }
+
+  const decided = out.wasteful + out.legitimate;
+  out.coverage = out.repeats ? decided / out.repeats : null;
+  return out;
+}
+
 export function balanceSheet(dir) {
   const balance = readBalance(dir).filter((e) => !isFixtureAnchor(e.anchor));
   const events = readMetrics(dir);
@@ -344,27 +461,8 @@ export function balanceSheet(dir) {
     .filter((e) => e.kind === 'standing')
     .reduce((sum, e) => sum + (e.tokens || 0), 0);
 
-  // RE-READS: the waste the graph exists to prevent, counted directly.
-  //
-  // This replaces the downstream join, which asked whether an injection
-  // prevented a later read of the same anchor and matched 0 of 37 times --
-  // because injection fires ON the touch, so the read it would prevent is the
-  // one that triggered it. Counting how often a session reads the same file
-  // twice needs no join and is the thing being claimed.
-  const perSessionAnchor = new Map();
-  for (const e of events) {
-    if (e.kind !== 'read' || !e.anchor || isFixtureAnchor(e.anchor)) continue;
-    const key = `${e.sessionId || ''}|${canonicalKeyish(e.anchor)}`;
-    if (!perSessionAnchor.has(key)) perSessionAnchor.set(key, []);
-    perSessionAnchor.get(key).push(e.tokens || 0);
-  }
-  let rereads = 0;
-  let rereadTokens = 0;
-  for (const reads of perSessionAnchor.values()) {
-    if (reads.length < 2) continue;
-    rereads += reads.length - 1;
-    for (let i = 1; i < reads.length; i++) rereadTokens += reads[i];
-  }
+  // RE-READS, decided by fingerprint rather than assumed.
+  const waste = rereadWaste(dir, { events });
 
   return {
     measuredCounterfactual: {
@@ -389,7 +487,7 @@ export function balanceSheet(dir) {
       })(),
     },
     costs: { injection: injectCost, harvest: harvestCost, standing: standingCost, substitution: substitutionCost },
-    waste: { rereads, rereadTokens },
+    waste,
     // Deliberately NOT a single number. The two benefit lines are known
     // differently; adding them would launder an assumption into a measurement.
     note: 'benefit lines are reported separately by evidence strength and are never summed',
