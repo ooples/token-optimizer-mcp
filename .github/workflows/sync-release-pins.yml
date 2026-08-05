@@ -18,9 +18,22 @@ name: Sync Release Pins
 # workflow runs. Even if they did, the second run would find nothing to commit
 # and exit, because the sync is idempotent.
 
+# SUPERSEDED FOR THE AUTOMATIC PATH, and the reason is written above this line
+# already: "pushes made with GITHUB_TOKEN do not trigger further workflow runs."
+# That rule was cited here as the anti-loop guarantee, and the same rule is why the
+# automatic trigger could never fire -- release-please OPENS its PR with
+# GITHUB_TOKEN, so no `pull_request` event ever reached this workflow. Every run
+# landed in `action_required` and executed nothing.
+#
+# Measured cost: v5.4.0 and v5.4.1 were both tagged with GitHub Releases and neither
+# reached npm, because the publish guard correctly refused pins that still named the
+# previous version. npm sat on 5.3.6 while master said 5.4.1.
+#
+# The sync now runs inside release.yml's release-please job, which is triggered by
+# push to master -- an event that actually fires. This file keeps only the manual
+# path, which is still the right tool for a release PR that needs unsticking.
+
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
   # MANUAL TRIGGER, for a release PR that is already open and has nothing pending.
   #
   # pull_request only fires on opened/synchronize/reopened, so a release PR that
@@ -53,11 +66,10 @@ jobs:
     # contributor's branch would be a surprising thing for a lint-adjacent job
     # to do; the release PR is machine-authored, so amending it is not.
     #
-    # head_ref is empty on workflow_dispatch, so that case is admitted here and
-    # the branch is re-checked below -- the scoping is enforced either way.
-    if: >-
-      startsWith(github.head_ref, 'release-please')
-      || github.event_name == 'workflow_dispatch'
+    # Only workflow_dispatch remains, so the head_ref half of this condition is gone
+    # with the trigger it belonged to. The branch is still re-checked below, which is
+    # where the scoping is actually enforced.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -80,7 +92,11 @@ jobs:
           # The same scoping the pull_request path gets from its `if`. Without
           # this, a dispatch could auto-commit to any branch in the repo.
           case "$BRANCH" in
-            release-please*) ;;
+            # Two dashes, matching release.yml. A single-star `release-please*`
+            # also admits branches like `release-please-maintenance`, and with the
+            # pull_request trigger gone this case is the only guard left on a path
+            # that force-commits to whatever branch it is handed.
+            release-please--*) ;;
             *)
               echo "::error::Refusing to sync '$BRANCH': only release-please branches are amended automatically."
               exit 1

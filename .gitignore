@@ -108,3 +108,9 @@ CHECKSUMS.sha256
 # working tree. Kept locally for the across-run comparison tests/README.md
 # describes -- one machine's numbers are not a shared artifact.
 tests/benchmarks/results.json
+
+# Local tool and runtime artifacts. Untracked but NOT ignored, which is how a
+# `git add -A` swept 7 Playwright page snapshots and a dashboard session file into
+# a release-pipeline PR. Ignored so the next one cannot.
+.playwright-mcp/
+data/sessions.json

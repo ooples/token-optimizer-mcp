@@ -53,6 +53,84 @@ jobs:
           # config-file / manifest-file default to the repo-root files:
           #   release-please-config.json + .release-please-manifest.json
 
+      # THE PINS MUST BE BUMPED INSIDE THE RELEASE PR, and this is the only place
+      # that can do it.
+      #
+      # release-please bumps package.json and plugin.json (its extra-files) but not
+      # the pinned client specs, which carry `@ooples/token-optimizer-mcp@<version>`
+      # in strings that release-please's json/generic updaters cannot rewrite. The
+      # previous design delegated that to sync-release-pins.yml on `pull_request` --
+      # but release-please opens its PR with GITHUB_TOKEN, and GitHub deliberately
+      # suppresses workflow runs from that token to prevent recursion. Those runs sat
+      # in `action_required` and never executed.
+      #
+      # The cost was not theoretical: v5.4.0 and v5.4.1 were both tagged, both had
+      # GitHub Releases, and NEITHER reached npm -- the publish guard correctly
+      # refused a version whose pins still said the previous one, twice, and npm
+      # stayed on 5.3.6 while master said 5.4.1.
+      #
+      # This job is triggered by push to master, an ordinary event, so it runs. It
+      # amends the release PR rather than publishing unsynced content, which keeps the
+      # tag authoritative: the tarball is still built from the tagged commit, so the
+      # provenance attestation continues to mean what it says.
+      - name: Check out for the pin sync
+        if: ${{ steps.release.outputs.pr != '' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node for the pin sync
+        if: ${{ steps.release.outputs.pr != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Sync pinned specs into the release PR
+        if: ${{ steps.release.outputs.pr != '' }}
+        env:
+          PR_JSON: ${{ steps.release.outputs.pr }}
+        run: |
+          set -euo pipefail
+
+          BRANCH="$(printf '%s' "$PR_JSON" | jq -r '.headBranchName')"
+          if [ -z "$BRANCH" ] || [ "$BRANCH" = "null" ]; then
+            echo "::error::release-please reported a PR with no head branch"
+            exit 1
+          fi
+
+          # Same guard as the workflow this replaces: only ever amend a branch
+          # release-please owns, never an arbitrary contributor's.
+          case "$BRANCH" in
+            release-please--*) ;;
+            *)
+              echo "::error::Refusing to sync '$BRANCH': only release-please branches are amended automatically."
+              exit 1
+              ;;
+          esac
+
+          git fetch origin "$BRANCH"
+          git checkout "$BRANCH"
+
+          # --ignore-scripts: the sync only needs the generator scripts and their
+          # deps, not a full postinstall.
+          npm ci --ignore-scripts
+          npm run sync:hooks
+
+          if git diff --quiet; then
+            echo "pinned specs already match the release version"
+            exit 0
+          fi
+
+          echo "Pinned specs updated by the sync:"
+          git diff --stat
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: sync pinned specs to the release version"
+          git push origin "HEAD:$BRANCH"
+
   # 2) On an actual release, build and publish to npm.
   publish-npm:
     name: Publish to npm
