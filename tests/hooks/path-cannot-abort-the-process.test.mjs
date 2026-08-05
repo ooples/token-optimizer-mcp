@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
+﻿import { describe, it, expect, beforeAll } from '@jest/globals';
 import { pathToFileURL } from 'url';
+import { spawnSync } from 'child_process';
 import { join } from 'path';
 
 /**
@@ -39,11 +40,15 @@ let contentHash;
 let projectRootFor;
 let isFsSafePath;
 let touchedFiles;
+let fileSize;
+let indexFile;
 
 beforeAll(async () => {
   ({ contentHash, projectRootFor } = await import(CORE('wiki.mjs')));
   ({ isFsSafePath } = await import(CORE('paths.mjs')));
   ({ touchedFiles } = await import(CORE('decide.mjs')));
+  ({ fileSize } = await import(CORE('policy.mjs')));
+  ({ indexFile } = await import(CORE('staleness.mjs')));
 });
 
 describe('a path that would abort libuv', () => {
@@ -68,6 +73,65 @@ describe('a path that would abort libuv', () => {
     expect(() =>
       projectRootFor(`/tmp/${ABORTS}/deep/file.ts`, process.cwd())
     ).not.toThrow();
+  });
+
+  it('is refused inside the low-level fs helpers, not only at call sites', () => {
+    // Guarding call sites one at a time is the wrong shape: review found a
+    // `cd` operand that reached statSync ahead of the guard, and the next
+    // caller added would be just as easy to miss. Each of these helpers wraps
+    // its own fs call in a try/catch that a native abort walks straight
+    // through, so the check belongs INSIDE them, where no caller can forget it.
+    expect(fileSize(`/tmp/x${ABORTS}.ts`)).toBe(-1);
+    expect(indexFile(process.cwd(), `/tmp/x${ABORTS}.ts`)).toBeNull();
+  });
+
+  it('survives it in a `cd` operand, which is stat-ed before the candidates', () => {
+    // `touchedFiles` resolves a leading `cd` first, to re-base the command's
+    // relative operands, and decides whether to trust it with `isDirectory` --
+    // a statSync. That happens BEFORE the per-candidate guard, so guarding only
+    // the candidates left the abort reachable through any command beginning
+    // `cd <bad path> && ...`.
+    expect(() =>
+      touchedFiles({
+        tool_name: 'Bash',
+        tool_input: { command: `cd /tmp/${ABORTS} && cat src/app.ts` },
+        cwd: process.cwd(),
+      })
+    ).not.toThrow();
+  });
+
+  it.each([
+    ['Read', { file_path: `/tmp/bad${ABORTS}.ts` }],
+    ['Bash', { command: `cd /tmp/${ABORTS} && cat src/app.ts` }],
+    ['Bash', { command: `grep -rn thing /tmp/${ABORTS}/src` }],
+    ['Edit', { file_path: `/tmp/${ABORTS}/x.ts` }],
+  ])('lets the real hook survive a %s payload carrying it', (tool, input) => {
+    // The unit checks above name individual functions; this drives the actual
+    // hook process the way Claude Code does. There are 84 fs calls across
+    // hooks-core, so proving reachability end-to-end is worth more than
+    // enumerating call sites -- which is exactly how the `cd` operand was
+    // missed the first time.
+    const result = spawnSync(
+      process.execPath,
+      [join(process.cwd(), 'plugin', 'hooks', 'pretooluse-router.mjs')],
+      {
+        input: JSON.stringify({
+          tool_name: tool,
+          tool_input: input,
+          cwd: process.cwd(),
+          session_id: 'abort-probe',
+        }),
+        encoding: 'utf8',
+        timeout: 20_000,
+      }
+    );
+
+    // A libuv abort shows up as a non-zero exit carrying the assert text, never
+    // as a thrown JS error, so both are asserted rather than just "no throw".
+    expect(`${result.stdout ?? ''}${result.stderr ?? ''}`).not.toMatch(
+      /Assertion failed/
+    );
+    expect(result.status).toBe(0);
   });
 
   it('drops it at the hook intake, before anything can stat it', () => {

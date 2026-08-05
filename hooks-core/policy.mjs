@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared policy for the token-optimizer Claude Code hooks.
  *
  * WHY THIS EXISTS: before this module, installing the plugin registered exactly
@@ -35,6 +35,7 @@
 import { statSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { isFsSafePath } from './paths.mjs';
 
 /** Enforcement modes, least to most permissive. */
 export const MODE_ENFORCE = 'enforce';
@@ -159,6 +160,11 @@ export function isMachineOwned(path) {
 
 /** Size in bytes, or -1 when the path is missing or is not a regular file. */
 export function fileSize(path) {
+  // A path carrying U+10FFFF aborts libuv instead of throwing, so the catch
+  // below cannot help. Checked here rather than at each call site: this is
+  // exported and widely used, and review already found one caller that stat-ed
+  // an unguarded path ahead of a call-site check.
+  if (!isFsSafePath(path)) return -1;
   try {
     const st = statSync(path);
     return st.isFile() ? st.size : -1;

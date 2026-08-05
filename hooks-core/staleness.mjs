@@ -1,4 +1,4 @@
-/**
+﻿/**
  * P2: staleness, snapshots, and the invalidating diff.
  *
  * THE LOAD-BEARING RULE, from docs/WIKI_GRAPH.md: a stale finding is SERVED,
@@ -30,10 +30,13 @@ import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { putNode, putEdge, contentHash, nodeId } from './wiki.mjs';
 import { extractSymbols, spanText, symbolKey, extractImports } from './symbols.mjs';
-import { canonicalPath, resolvableCandidates } from './paths.mjs';
+import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
 
 /** Reads a path in whichever spelling resolves, or throws if none do. */
 function readAnySpelling(path) {
+  // Unreadable is already this function's failure mode; an unsafe path takes
+  // the same route instead of killing the process.
+  if (!isFsSafePath(path)) throw new Error('unreadable');
   let last;
   for (const candidate of resolvableCandidates(path)) {
     try {
@@ -92,6 +95,10 @@ function symbolSnapshotLimit() {
  * function is orders of magnitude smaller than the file containing it.
  */
 export function indexFile(dir, rawPath, text) {
+  // This reads rawPath through its own loop rather than readAnySpelling, so it
+  // needs the same guard: an unsafe path aborts libuv instead of throwing, and
+  // the per-candidate try/catch below cannot catch that.
+  if (!isFsSafePath(rawPath)) return null;
   // The graph KEY is canonical, so one file is one node however it was spelled.
   // Reading still tries the spellings that actually resolve on this host.
   const path = canonicalPath(rawPath);
@@ -180,6 +187,9 @@ const IMPORT_SUFFIXES = [
  * that question without taking on a module-resolution dependency.
  */
 function resolveImport(base, specifier) {
+  // Import specifiers come from file contents, so they are external input
+  // reaching statSync below.
+  if (!isFsSafePath(base) || !isFsSafePath(specifier)) return null;
   // TypeScript sources routinely import `./x.js` and mean `./x.ts`; trying the
   // stripped stem covers it without special-casing the whole ESM/TS story.
   const stems = [specifier, specifier.replace(/\.(js|mjs|cjs)$/, '')];

@@ -23,6 +23,9 @@ const KB = (bytes) => Math.round(bytes / 1024);
 
 /** Whether a path names an existing directory. Never throws. */
 function isDirectory(path) {
+  // See fileSize: a native abort is not catchable, so the check precedes the
+  // stat rather than relying on the try below.
+  if (!isFsSafePath(path)) return false;
   try {
     return statSync(path).isDirectory();
   } catch {
@@ -264,6 +267,11 @@ export function touchedFiles(payload) {
   // every relative operand onto a path resolving to nothing, so the call records
   // no touch at all. Falling back to the session cwd is strictly better than
   // losing the observation.
+  // `isDirectory` is a statSync, and it runs ahead of the per-candidate check
+  // below -- so guarding only the candidates left the abort reachable through
+  // any command beginning `cd <bad path> && ...`. The guard lives INSIDE
+  // isDirectory rather than here: a second check at this call site would mask
+  // the removal of the real one, and a mutation proved exactly that.
   const cwd = cdTarget && isDirectory(cdTarget) ? cdTarget : payload?.cwd;
 
   const add = (candidate) => {
