@@ -23,7 +23,7 @@ import {
   statSync, openSync, readSync, closeSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 /**
  * Read per call, not once at module load.
@@ -134,6 +134,17 @@ export function fingerprint(path) {
   }
 }
 
+/**
+ * A unique id per record. Counter plus randomness: the counter separates
+ * records written in the same millisecond by one process, the random suffix
+ * separates concurrent processes, which detached workers routinely are.
+ */
+let idCounter = 0;
+function nextId() {
+  idCounter += 1;
+  return `${idCounter.toString(36)}-${randomBytes(4).toString('hex')}`;
+}
+
 export function record(dir, event) {
   try {
     // Same restriction as the graph directory: metrics name real file paths
@@ -147,7 +158,16 @@ export function record(dir, event) {
     // The CALLER'S timestamp wins when it supplied one. Overwriting it made
     // `rereadWaste`'s ordering depend on write order rather than on `at`, so a
     // test that set explicit times was passing by luck.
-    const line = JSON.stringify({ ...event, at: event.at ?? Date.now() }) + '\n';
+    //
+    // `id` EXISTS SO DEDUPE IS EXACT. A record is written to both logs, so the
+    // reader has to drop one copy -- and it was matching on a composite of the
+    // fields, which cannot tell a duplicate from two genuinely distinct events
+    // that happen to look alike. Twenty-five identical injections written in a
+    // single millisecond collapsed to ONE, so a graph with ample data reported
+    // 'insufficient data (2 treated, 1 holdout)'. Real events were being
+    // discarded by the deduplicator, silently.
+    const line =
+      JSON.stringify({ id: nextId(), ...event, at: event.at ?? Date.now() }) + '\n';
     appendFileSync(metricsPath(dir), line);
     // Balance-critical records go to their own log as well, so the windows on
     // the firehose can never starve the measurement. Written SECOND: a torn
@@ -182,7 +202,22 @@ export function readMetrics(dir) {
   return readAll(dir);
 }
 
+/**
+ * How the last readAll truncated, if it did.
+ *
+ * Returned out of band rather than on the array, because callers pass the
+ * events around freely and a property hung on an array would be lost the first
+ * time anything filtered it -- which is exactly how `eventsTruncated` came to
+ * report only half the truth.
+ */
+let lastReadTruncation = { byBytes: false, byEvents: false };
+
+export function readTruncation() {
+  return { ...lastReadTruncation };
+}
+
 function readAll(dir) {
+  lastReadTruncation = { byBytes: false, byEvents: false };
   const path = metricsPath(dir);
   if (!existsSync(path)) return [];
 
@@ -204,13 +239,16 @@ function readAll(dir) {
       // The first line is almost certainly cut mid-record; drop it rather than
       // letting it fail to parse and look like corruption.
       text = text.slice(text.indexOf('\n') + 1);
+      lastReadTruncation.byBytes = true;
     }
   } catch {
     return [];
   }
 
   const out = [];
-  for (const line of text.split('\n').slice(-MAX_EVENTS)) {
+  const lines = text.split('\n');
+  if (lines.length > MAX_EVENTS) lastReadTruncation.byEvents = true;
+  for (const line of lines.slice(-MAX_EVENTS)) {
     if (!line) continue;
     try {
       out.push(JSON.parse(line));
@@ -322,7 +360,11 @@ export function readBalance(dir) {
   const seen = new Set();
   const out = [];
   for (const e of merged) {
-    const id = [e.kind, e.at, e.anchor ?? '', e.sessionId ?? '', e.tokens ?? ''].join('|');
+    // The record's OWN id when it has one. The composite below is the legacy
+    // path for records written before ids existed; it is lossy by nature, which
+    // is precisely why new records carry an id instead.
+    const id =
+      e.id ?? [e.kind, e.at, e.anchor ?? '', e.sessionId ?? '', e.tokens ?? ''].join('|');
     if (seen.has(id)) continue;
     seen.add(id);
     out.push(e);
@@ -451,6 +493,7 @@ export function rereadWaste(
 export function balanceSheet(dir) {
   const balance = readBalance(dir).filter((e) => !isFixtureAnchor(e.anchor));
   const events = readMetrics(dir);
+  const truncation = readTruncation();
 
   const subs = balance.filter((e) => e.kind === 'substitute');
   const served = subs.filter((e) => !e.holdout);
@@ -517,7 +560,12 @@ export function balanceSheet(dir) {
     windows: {
       balance: 'all balance.jsonl records within the byte cap',
       events: `tail of metrics.jsonl (<= ${MAX_BYTES} bytes, <= ${MAX_EVENTS} events)`,
-      eventsTruncated: events.length >= MAX_EVENTS,
+      // BOTH CAPS, from the reader itself. The previous flag tested the event
+      // count only, so a log truncated by the BYTE cap with fewer than
+      // MAX_EVENTS surviving records reported `false` -- the one case where the
+      // window silently covers a shorter period than the balance side.
+      eventsTruncated: truncation.byBytes || truncation.byEvents,
+      truncatedBy: truncation,
     },
     note: 'benefit lines are reported separately by evidence strength and are never summed',
   };
