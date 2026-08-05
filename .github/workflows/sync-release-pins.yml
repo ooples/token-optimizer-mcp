@@ -1,0 +1,138 @@
+name: Sync Release Pins
+
+# Repairs the release PR instead of merely failing it.
+#
+# release-please bumps package.json and, via `extra-files`, the plugin manifest.
+# It cannot bump the npm spec pinned inside the hand-maintained client configs:
+# that version lives inside a string in an args array
+# (`@ooples/token-optimizer-mcp@5.3.2`), which no jsonpath can address. So every
+# release left seven client configs pinned to whatever version last had
+# `sync:hooks` run against it by hand.
+#
+# The `generated-artifacts` gate in quality-gates.yml catches the drift, and the
+# guard in release.yml stops it shipping. Both are refusals. This job is the
+# repair: it runs the sync on the release PR and commits the result, so the PR
+# that bumps the version also carries the matching pins.
+#
+# WHY THIS CANNOT LOOP: pushes made with GITHUB_TOKEN do not trigger further
+# workflow runs. Even if they did, the second run would find nothing to commit
+# and exit, because the sync is idempotent.
+
+# SUPERSEDED FOR THE AUTOMATIC PATH, and the reason is written above this line
+# already: "pushes made with GITHUB_TOKEN do not trigger further workflow runs."
+# That rule was cited here as the anti-loop guarantee, and the same rule is why the
+# automatic trigger could never fire -- release-please OPENS its PR with
+# GITHUB_TOKEN, so no `pull_request` event ever reached this workflow. Every run
+# landed in `action_required` and executed nothing.
+#
+# Measured cost: v5.4.0 and v5.4.1 were both tagged with GitHub Releases and neither
+# reached npm, because the publish guard correctly refused pins that still named the
+# previous version. npm sat on 5.3.6 while master said 5.4.1.
+#
+# The sync now runs inside release.yml's release-please job, which is triggered by
+# push to master -- an event that actually fires. This file keeps only the manual
+# path, which is still the right tool for a release PR that needs unsticking.
+
+on:
+  # MANUAL TRIGGER, for a release PR that is already open and has nothing pending.
+  #
+  # pull_request only fires on opened/synchronize/reopened, so a release PR that
+  # existed BEFORE this workflow landed never gets one. That happened on the
+  # first release after the workflow was added: #239 sat with package.json at
+  # 5.4.0 and every pin at 5.3.6, with no event to repair it. Merging it would
+  # have tripped the guard in release.yml and failed the publish -- caught, but
+  # only after the tag was cut.
+  #
+  # A dispatch with the branch name unsticks it without waiting for
+  # release-please to amend the PR.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Release PR branch to sync (defaults to the current ref)'
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-release-pins:
+    name: Sync Pinned Specs On Release PR
+    # Scoped to release-please PRs on purpose. Auto-committing to a
+    # contributor's branch would be a surprising thing for a lint-adjacent job
+    # to do; the release PR is machine-authored, so amending it is not.
+    #
+    # Only workflow_dispatch remains, so the head_ref half of this condition is gone
+    # with the trigger it belonged to. The branch is still re-checked below, which is
+    # where the scoping is actually enforced.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Resolve the branch to sync
+        id: target
+        env:
+          # Via env rather than inline, so a branch name cannot be interpreted
+          # as shell.
+          INPUT_REF: ${{ inputs.ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          BRANCH="${INPUT_REF:-${HEAD_REF:-$REF_NAME}}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "Resolved target branch: $BRANCH"
+
+          # The same scoping the pull_request path gets from its `if`. Without
+          # this, a dispatch could auto-commit to any branch in the repo.
+          case "$BRANCH" in
+            # Two dashes, matching release.yml. A single-star `release-please*`
+            # also admits branches like `release-please-maintenance`, and with the
+            # pull_request trigger gone this case is the only guard left on a path
+            # that force-commits to whatever branch it is handed.
+            release-please--*) ;;
+            *)
+              echo "::error::Refusing to sync '$BRANCH': only release-please branches are amended automatically."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout the release PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.branch }}
+          # Default GITHUB_TOKEN is enough to push to a same-repo PR branch.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync generated artifacts and pinned specs
+        run: npm run sync:hooks
+
+      - name: Commit the sync if it changed anything
+        run: |
+          if git diff --quiet; then
+            echo "Pins and generated artifacts already match the bumped version."
+            exit 0
+          fi
+
+          echo "Changed by the sync:"
+          git diff --name-only
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: sync pinned specs and generated artifacts to the released version"
+          git push

@@ -30,38 +30,18 @@ import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * The published package, resolved at launch rather than frozen here.
+ * The published package, PINNED to the version being generated from.
  *
- * THIS REVERSES A DELIBERATE DECISION, so the argument it reverses is kept: a
- * committed `@latest` means every launch resolves whatever is newest, so a broken
- * or compromised release reaches users immediately and two machines are not
- * guaranteed to run the same code. Pinning was meant to make upgrades explicit and
- * reviewable, with `sync:hooks` moving the pin each release "rather than rotting".
- *
- * It rotted. Nothing ran the sync during a release, because the only thing that
- * could -- a workflow on the release PR -- cannot be triggered: release-please opens
- * that PR with GITHUB_TOKEN and GitHub suppresses workflow runs from it. So the pin
- * lagged, and a lagging pin is not a reviewed pin, it is a wrong one. Measured from a
- * real installed plugin cache:
- *
- *     plugin 5.3.6.pre-refresh  spawns server 5.3.2
- *     plugin 5.4.0              spawns server 5.3.6   <- a downgrade
- *
- * That is the failure pinning existed to prevent, caused by pinning. Users ran stale
- * code while the config asserted a version it was not running. Meanwhile the
- * invariant "committed spec == package.json" cannot hold across a release, and the
- * four mechanisms built to enforce it cost four releases: v5.4.0 and v5.4.1 were
- * tagged with GitHub Releases and neither reached npm.
- *
- * `@latest` is what the ecosystem ships -- Microsoft's official Playwright MCP uses
- * `npx @playwright/mcp@latest`, GitHub's official MCP carries no version at all, and
- * this project used `@latest` at 5.0.2, before the sweep that introduced the drift.
- *
- * If reproducibility is wanted back, the way to get it is NOT a value committed here:
- * it is pinning at publish time only, so the tarball carries an exact version while
- * git carries none. Nothing in git can then go stale.
+ * `@latest` in a committed config is a supply-chain footgun: every launch
+ * resolves whatever is newest at that moment, so a compromised or simply broken
+ * release reaches every user immediately and no two machines are guaranteed to
+ * run the same code. Pinning makes upgrades an explicit, reviewable change --
+ * and `npm run sync:hooks` regenerates these from package.json, so the pin
+ * moves with each release rather than rotting.
  */
-const PACKAGE_SPEC = '@ooples/token-optimizer-mcp@latest';
+const PACKAGE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+const PACKAGE_SPEC = `@ooples/token-optimizer-mcp@${PACKAGE_VERSION}`;
 
 const MCP_STDIO = {
   command: 'npx',

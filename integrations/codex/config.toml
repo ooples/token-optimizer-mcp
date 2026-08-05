@@ -5,6 +5,6 @@
 
 [mcp_servers.token-optimizer]
 command = "npx"
-args = ["-y", "@ooples/token-optimizer-mcp@latest"]
+args = ["-y", "@ooples/token-optimizer-mcp@5.4.1"]
 # Optional: point the cache somewhere stable.
 # env = { TOKEN_OPTIMIZER_CACHE_DIR = "~/.token-optimizer-cache" }
