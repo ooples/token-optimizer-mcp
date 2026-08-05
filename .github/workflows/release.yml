@@ -87,10 +87,33 @@ jobs:
       # inside the hand-maintained client configs. Publishing that tree ships
       # hooks at the new version calling an MCP server at the old one.
       #
-      # This fails the publish rather than repairing the tree: the tag is
-      # already cut, so silently publishing something different from the tag
-      # would be worse than stopping. The sync-release-pins job below is what
-      # keeps it from getting this far.
+      # IT REPAIRS RATHER THAN REFUSES, because refusing did not work.
+      #
+      # The plan was that sync-release-pins would fix the release PR before it
+      # merged. It never ran: on the release-please branch every run sits in
+      # `action_required`, because GitHub does not automatically run workflows
+      # on PRs a bot opened. So 5.4.0 failed here, was hand-fixed, and 5.4.1
+      # failed here again with the same ten files. A guard that fires every
+      # release and is repaired by hand every release is not a guard.
+      #
+      # Regenerating is safe in a way that editing the tree arbitrarily is not:
+      # these files are GENERATED, so the only thing that can change is the
+      # version they pin, and it is being set to the version actually being
+      # published. The verification still runs afterwards and still fails the
+      # publish if anything else drifted -- the tag is already cut, so shipping
+      # something different from the tag remains the one unacceptable outcome.
+      - name: Repair pinned specs to the released version
+        run: npm run sync:hooks
+
+      # NOT COMMITTED BACK. This job checks out the released TAG and runs with
+      # `contents: read`, so there is no branch here to push to and no
+      # permission to push with. What matters is that the PUBLISHED artifact
+      # carries correct pins, and repairing the working tree before packing
+      # achieves exactly that.
+      #
+      # master keeps its stale pins until the next release regenerates them,
+      # which is cosmetic: the repair above runs every time, so a wrong pin can
+      # never reach npm again.
       - name: Verify pinned specs match the released version
         run: npm run sync:hooks:check
 
