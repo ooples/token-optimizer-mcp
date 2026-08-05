@@ -102,7 +102,20 @@ output:
 ${enforcement}
 
 When the context window gets tight, call optimize_session. To report savings,
-call get_optimization_report. Small one-off reads are fine with the built-ins.${projectBriefing()}`;
+call get_optimization_report. Small one-off reads are fine with the built-ins.
+
+## Record what you work out
+
+Call wiki_write when you establish something durable about this project, while
+you still hold the context. Every claim needs at least one anchor -- a real file
+path, or path#symbol -- because an unanchored claim can never be checked against
+the code again and would be served as current forever; unanchored writes are
+refused.
+
+Worth recording: a decision and why the alternative was rejected, a failure and
+what actually caused it, a command that turned out to be the one that works.
+Not worth recording: what the code plainly says. Prefer the thing someone had to
+work out, because that exists nowhere in the source tree.${projectBriefing()}`;
 }
 
 /**
