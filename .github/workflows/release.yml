@@ -83,19 +83,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # A BACKSTOP, not a repair of version drift -- there is no version drift left
-      # to repair. The client configs now carry
-      # `@ooples/token-optimizer-mcp@latest`, a spec that does not change when
-      # package.json does, so a release can no longer knock them out of step.
-      #
-      # That is what allowed the sync-release-pins workflow and the release-PR sync
-      # step to be deleted, and with them the failure mode that cost four releases:
-      # v5.4.0 and v5.4.1 were both tagged with GitHub Releases and neither reached
-      # npm, each refused for pins naming the previous version.
-      #
-      # These two steps stay because the configs are GENERATED: regenerating before
-      # packing and then verifying still catches drift between a generator and its
-      # committed output. On a healthy tree the regeneration is a no-op.
       # VERIFY, AND DO NOT REPAIR FIRST. Regenerating before the check made the check
       # meaningless: `sync:hooks` rewrote the generated files, so `sync:hooks:check`
       # then compared the repaired tree against itself and passed even when the RELEASED
