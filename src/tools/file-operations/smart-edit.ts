@@ -758,6 +758,38 @@ export const SMART_EDIT_TOOL_DEFINITION = {
         description: 'Create backup before editing',
         default: true,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      verifyBeforeApply: {
+        type: 'boolean',
+        description: 'Re-read and verify the target lines still match before writing',
+        default: true,
+      },
+      batchEdits: {
+        type: 'boolean',
+        description: 'Apply all operations in one pass rather than one at a time',
+        default: true,
+      },
+      contextLines: {
+        type: 'number',
+        description: 'Lines of context around each change in the returned diff',
+        default: 3,
+      },
+      updateCache: {
+        type: 'boolean',
+        description: 'Refresh this file in the read cache after editing',
+        default: true,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds for the refreshed entry',
+        default: 300,
+      },
+      encoding: {
+        type: 'string',
+        description: 'File encoding used to read and write the file',
+        default: 'utf-8',
+      },
     },
     required: ['path', 'operations'],
   },

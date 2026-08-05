@@ -616,6 +616,82 @@ export const SMART_GLOB_TOOL_DEFINITION = {
         description: 'Field to sort results by',
         default: 'path',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED. The server spreads the caller's whole
+      // argument object into options, so these already worked and were simply
+      // undiscoverable -- the same gap that let `path` be dropped silently and every
+      // "scoped" search run from the wrong directory.
+      absolute: {
+        type: 'boolean',
+        description: 'Return absolute paths instead of paths relative to the search root',
+        default: false,
+      },
+      ignore: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Glob patterns to skip. Defaults exclude node_modules, .git, dist and build -- the last two hold real source in some projects, so metadata.ignoredMatches reports what they withheld. Pass [] to search everything.',
+        default: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**'],
+      },
+      onlyFiles: {
+        type: 'boolean',
+        description: 'Return files only, excluding directories',
+        default: true,
+      },
+      onlyDirectories: {
+        type: 'boolean',
+        description: 'Return directories only',
+        default: false,
+      },
+      excludeExtensions: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Skip files with these extensions',
+      },
+      minSize: {
+        type: 'number',
+        description: 'Skip files smaller than this many bytes',
+      },
+      maxSize: {
+        type: 'number',
+        description: 'Skip files larger than this many bytes',
+      },
+      modifiedAfter: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Only files modified after this ISO-8601 timestamp',
+      },
+      modifiedBefore: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Only files modified before this ISO-8601 timestamp',
+      },
+      maxContentSize: {
+        type: 'number',
+        description: 'Largest file, in bytes, for which includeContent returns content',
+        default: 10240,
+      },
+      offset: {
+        type: 'number',
+        description: 'Skip this many results before returning any; use with limit to page',
+        default: 0,
+      },
+      sortOrder: {
+        type: 'string',
+        enum: ['asc', 'desc'],
+        description: 'Sort direction for sortBy',
+        default: 'asc',
+      },
+      useCache: {
+        type: 'boolean',
+        description:
+          'Serve a previously cached result for the same query. Off by default: the key describes the query, not the tree, so a file created between two identical searches will not appear.',
+        default: false,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds, when useCache is on',
+        default: 300,
+      },
     },
     required: ['pattern'],
   },

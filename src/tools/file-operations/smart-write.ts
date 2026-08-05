@@ -613,6 +613,53 @@ export const SMART_WRITE_TOOL_DEFINITION = {
         description: 'Return diff instead of full content',
         default: true,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      createBackup: {
+        type: 'boolean',
+        description:
+          'Back the file up before overwriting. Backups go to a home-directory root, never beside the file.',
+        default: true,
+      },
+      tempDir: {
+        type: 'string',
+        description: 'Directory for the temporary file used by the write-then-rename',
+      },
+      formatType: {
+        type: 'string',
+        enum: ['prettier', 'eslint', 'none'],
+        description: 'Formatter to run on the written content',
+        default: 'none',
+      },
+      trackChanges: {
+        type: 'boolean',
+        description: 'Record this write in the change log used by the diff tools',
+        default: false,
+      },
+      updateCache: {
+        type: 'boolean',
+        description: 'Refresh this file in the read cache after writing',
+        default: true,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds for the refreshed entry',
+        default: 300,
+      },
+      createDirectories: {
+        type: 'boolean',
+        description: 'Create missing parent directories instead of failing',
+        default: true,
+      },
+      encoding: {
+        type: 'string',
+        description: 'File encoding used to write the file',
+        default: 'utf-8',
+      },
+      mode: {
+        type: 'number',
+        description: 'POSIX file mode for a newly created file, for example 420 for 0o644',
+      },
     },
     required: ['path', 'content'],
   },

@@ -611,6 +611,43 @@ export const SMART_DIFF_TOOL_DEFINITION = {
         type: 'number',
         description: 'Maximum number of files to diff',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      unified: {
+        type: 'boolean',
+        description: 'Return a unified diff rather than a structured list of changes',
+        default: true,
+      },
+      includeLineNumbers: {
+        type: 'boolean',
+        description: 'Annotate each changed line with its line number',
+        default: true,
+      },
+      includeBinary: {
+        type: 'boolean',
+        description: 'Report binary files as changed instead of skipping them',
+        default: false,
+      },
+      showRenames: {
+        type: 'boolean',
+        description: 'Detect renames instead of reporting a delete plus an add',
+        default: true,
+      },
+      offset: {
+        type: 'number',
+        description: 'Skip this many files before returning any; use with limit to page',
+        default: 0,
+      },
+      useCache: {
+        type: 'boolean',
+        description: 'Serve a previously cached diff for the same inputs',
+        default: false,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds, when useCache is on',
+        default: 300,
+      },
     },
   },
 };

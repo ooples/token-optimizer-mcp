@@ -659,6 +659,38 @@ export const SMART_BRANCH_TOOL_DEFINITION = {
         description: 'Field to sort by',
         default: 'name',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      local: {
+        type: 'boolean',
+        description: 'Restrict to local branches, excluding remote-tracking ones',
+        default: false,
+      },
+      mergedInto: {
+        type: 'string',
+        description: 'Only branches already merged into this ref',
+      },
+      sortOrder: {
+        type: 'string',
+        enum: ['asc', 'desc'],
+        description: 'Sort direction for sortBy',
+        default: 'asc',
+      },
+      offset: {
+        type: 'number',
+        description: 'Skip this many results before returning any; use with limit to page',
+        default: 0,
+      },
+      useCache: {
+        type: 'boolean',
+        description: 'Serve a previously cached result for the same query',
+        default: false,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds, when useCache is on',
+        default: 300,
+      },
     },
   },
 };

@@ -998,6 +998,18 @@ Token Reduction:
         items: { type: 'string' },
         description: 'Headers to exclude from cache key',
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      since: {
+        type: 'string',
+        format: 'date-time',
+        description: 'Only entries created or updated after this ISO-8601 timestamp',
+      },
+      includeDetails: {
+        type: 'boolean',
+        description: 'Include per-entry detail rather than totals only',
+        default: false,
+      },
     },
     required: ['action'],
   },

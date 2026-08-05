@@ -686,6 +686,34 @@ export const SMART_LOG_TOOL_DEFINITION = {
         description: 'Skip first N commits',
         default: 0,
       },
+      // DECLARED BECAUSE THEY ARE ACCEPTED: the server spreads the caller's whole
+      // argument object into options, so these worked while being undiscoverable.
+      includeRefs: {
+        type: 'boolean',
+        description: 'Include the branch and tag names pointing at each commit',
+        default: false,
+      },
+      fields: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Return only these commit fields, for example ["hash", "subject", "author"]. Fewer fields means fewer tokens.',
+      },
+      reverse: {
+        type: 'boolean',
+        description: 'Oldest commit first instead of newest',
+        default: false,
+      },
+      useCache: {
+        type: 'boolean',
+        description: 'Serve a previously cached result for the same query',
+        default: false,
+      },
+      ttl: {
+        type: 'number',
+        description: 'Cache lifetime in seconds, when useCache is on',
+        default: 300,
+      },
     },
   },
 };
