@@ -100,36 +100,17 @@ jobs:
             exit 1
           fi
 
-          # Same guard as the workflow this replaces: only ever amend a branch
-          # release-please owns, never an arbitrary contributor's.
-          case "$BRANCH" in
-            release-please--*) ;;
-            *)
-              echo "::error::Refusing to sync '$BRANCH': only release-please branches are amended automatically."
-              exit 1
-              ;;
-          esac
-
-          git fetch origin "$BRANCH"
-          git checkout "$BRANCH"
-
           # --ignore-scripts: the sync only needs the generator scripts and their
           # deps, not a full postinstall.
           npm ci --ignore-scripts
-          npm run sync:hooks
 
-          if git diff --quiet; then
-            echo "pinned specs already match the release version"
-            exit 0
-          fi
-
-          echo "Pinned specs updated by the sync:"
-          git diff --stat
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore: sync pinned specs to the release version"
-          git push origin "HEAD:$BRANCH"
+          # The branch guard, the merged-branch check, the commit and the push all
+          # live in the script, where tests/unit/sync-release-pr-pins.test.ts drives
+          # them against real git repositories. This step used to inline that logic,
+          # which meant it could not be run without cutting a release -- and it
+          # shipped a bare `git fetch` that exited 128 the first time a release PR
+          # was merged before the step reached it.
+          node scripts/sync-release-pr-pins.mjs --branch "$BRANCH" --remote origin
 
   # 2) On an actual release, build and publish to npm.
   publish-npm:
