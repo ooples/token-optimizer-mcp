@@ -81,7 +81,8 @@ describe('harvest enablement', () => {
   it('runs against a LOCAL endpoint with no key and no opt-in', async () => {
     // Nothing is spent and nothing leaves the machine, so there is nothing to
     // consent to.
-    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'http://localhost:11434/v1/messages';
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT =
+      'http://localhost:11434/v1/messages';
     const { harvestMode, harvestEnabled, localEndpoint } = await harvest();
     expect(localEndpoint()).toBeTruthy();
     expect(harvestMode()).toBe('local');
@@ -89,7 +90,8 @@ describe('harvest enablement', () => {
   });
 
   it('treats a REMOTE endpoint as remote even with a key present', async () => {
-    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT =
+      'https://api.anthropic.com/v1/messages';
     process.env.ANTHROPIC_API_KEY = 'sk-ant-xxx';
     const { harvestMode, localEndpoint } = await harvest();
     expect(localEndpoint()).toBeNull();
@@ -98,14 +100,16 @@ describe('harvest enablement', () => {
 
   it('does not mistake a hostname that merely contains "localhost" for local', async () => {
     // localhost.attacker.example resolves wherever its owner wants it to.
-    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'https://localhost.attacker.example/v1/messages';
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT =
+      'https://localhost.attacker.example/v1/messages';
     const { localEndpoint } = await harvest();
     expect(localEndpoint()).toBeNull();
   });
 
   it('stays off entirely when the optimizer is off', async () => {
     process.env.TOKEN_OPTIMIZER_MODE = 'off';
-    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'http://localhost:11434/v1/messages';
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT =
+      'http://localhost:11434/v1/messages';
     const { harvestMode, harvestEnabled } = await harvest();
     expect(harvestMode()).toBe('off:mode');
     expect(harvestEnabled()).toBe(false);
@@ -143,7 +147,8 @@ describe('harvest enablement', () => {
     // The negative test above is only meaningful next to a positive one: if
     // extract() never called fetch under ANY configuration, zero calls would
     // prove nothing about the gate.
-    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'http://127.0.0.1:11434/v1/messages';
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT =
+      'http://127.0.0.1:11434/v1/messages';
 
     const realFetch = globalThis.fetch;
     const calls: unknown[] = [];

@@ -10,7 +10,14 @@
  * - Configurable cache path via environment variable
  */
 
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import { CacheEngine, CacheStats } from '../../src/core/cache-engine.js';
 import fs from 'fs';
 import path from 'path';
@@ -58,7 +65,7 @@ describe('CacheEngine', () => {
 
     // Clean up
     cache.close();
-    await new Promise(resolve => setTimeout(resolve, 100)); // Add a small delay
+    await new Promise((resolve) => setTimeout(resolve, 100)); // Add a small delay
     if (fs.existsSync(testDbPath)) {
       fs.unlinkSync(testDbPath);
     }
@@ -117,7 +124,12 @@ describe('CacheEngine', () => {
       const key = 'unicode-key';
       const value = 'Hello 世界 🚀 café';
 
-      cache.set(key, value, Buffer.from(value).length, Buffer.from(value).length);
+      cache.set(
+        key,
+        value,
+        Buffer.from(value).length,
+        Buffer.from(value).length
+      );
       const retrieved = cache.get(key);
 
       expect(retrieved).toBe(value);
@@ -173,7 +185,12 @@ describe('CacheEngine', () => {
       const originalSize = 1000;
       const compressedSize = 200;
 
-      cache.set('compressed-key', 'compressed-data', originalSize, compressedSize);
+      cache.set(
+        'compressed-key',
+        'compressed-data',
+        originalSize,
+        compressedSize
+      );
 
       const stats = cache.getStats();
       expect(stats.totalOriginalSize).toBe(originalSize);
@@ -302,13 +319,14 @@ describe('CacheEngine', () => {
       cache.set(key, 'value', 5, 5);
 
       // Small delay
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(10).then(() => {
         cache.get(key);
 
         const entries = cache.getAllEntries();
-        const entry = entries.find(e => e.key === key);
+        const entry = entries.find((e) => e.key === key);
 
         expect(entry).toBeDefined();
         expect(entry!.lastAccessedAt).toBeGreaterThanOrEqual(beforeSet);
@@ -322,16 +340,17 @@ describe('CacheEngine', () => {
 
       cache.set(key, 'original', 8, 8);
       const entries1 = cache.getAllEntries();
-      const originalCreatedAt = entries1.find(e => e.key === key)!.createdAt;
+      const originalCreatedAt = entries1.find((e) => e.key === key)!.createdAt;
 
       // Small delay
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(10).then(() => {
         cache.set(key, 'updated', 7, 7);
 
         const entries2 = cache.getAllEntries();
-        const updatedEntry = entries2.find(e => e.key === key);
+        const updatedEntry = entries2.find((e) => e.key === key);
 
         expect(updatedEntry!.createdAt).toBe(originalCreatedAt);
       });
@@ -366,7 +385,7 @@ describe('CacheEngine', () => {
       cache.set('key1', 'value1', 10, 10);
 
       // Wait 100ms to make them both slightly old
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Access key1 just before eviction (updates last_accessed)
       cache.get('key1');
@@ -389,7 +408,7 @@ describe('CacheEngine', () => {
       cache.set('old-key', 'old-value', 10, 5);
 
       // Wait longer than the 1-second safety margin
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
 
       // Add another entry (will be recent)
       cache.set('new-key', 'new-value', 10, 5);
@@ -428,15 +447,11 @@ describe('CacheEngine', () => {
       const operations = [];
 
       for (let i = 0; i < 100; i++) {
-        operations.push(
-          cache.set(`key${i}`, `value${i}`, 10, 10)
-        );
+        operations.push(cache.set(`key${i}`, `value${i}`, 10, 10));
       }
 
       for (let i = 0; i < 100; i++) {
-        operations.push(
-          cache.get(`key${i}`)
-        );
+        operations.push(cache.get(`key${i}`));
       }
 
       // Should not throw
@@ -495,7 +510,10 @@ describe('CacheEngine', () => {
 
   describe('Configurable Cache Path', () => {
     it('should use environment variable for cache directory when no dbPath provided', () => {
-      const customCacheDir = path.join(os.tmpdir(), `custom-cache-${Date.now()}`);
+      const customCacheDir = path.join(
+        os.tmpdir(),
+        `custom-cache-${Date.now()}`
+      );
       process.env.TOKEN_OPTIMIZER_CACHE_DIR = customCacheDir;
 
       const cacheWithEnv = new CacheEngine(undefined, 100);
@@ -555,10 +573,17 @@ describe('CacheEngine', () => {
     });
 
     it('should prioritize explicit dbPath parameter over environment variable', () => {
-      const customCacheDir = path.join(os.tmpdir(), `custom-cache-${Date.now()}`);
+      const customCacheDir = path.join(
+        os.tmpdir(),
+        `custom-cache-${Date.now()}`
+      );
       process.env.TOKEN_OPTIMIZER_CACHE_DIR = customCacheDir;
 
-      const explicitPath = path.join(os.tmpdir(), `explicit-cache-${Date.now()}`, 'cache.db');
+      const explicitPath = path.join(
+        os.tmpdir(),
+        `explicit-cache-${Date.now()}`,
+        'cache.db'
+      );
       const cacheWithExplicit = new CacheEngine(explicitPath, 100);
       const dbPath = cacheWithExplicit.getDatabasePath();
 
@@ -572,7 +597,10 @@ describe('CacheEngine', () => {
     });
 
     it('should create cache directory from environment variable if it does not exist', () => {
-      const customCacheDir = path.join(os.tmpdir(), `nonexistent-${Date.now()}`);
+      const customCacheDir = path.join(
+        os.tmpdir(),
+        `nonexistent-${Date.now()}`
+      );
       process.env.TOKEN_OPTIMIZER_CACHE_DIR = customCacheDir;
 
       expect(fs.existsSync(customCacheDir)).toBe(false);

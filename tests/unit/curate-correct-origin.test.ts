@@ -18,8 +18,9 @@ import { join } from 'path';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 
-const CURATE = pathToFileURL(join(process.cwd(), 'hooks-core', 'curate.mjs'))
-  .href;
+const CURATE = pathToFileURL(
+  join(process.cwd(), 'hooks-core', 'curate.mjs')
+).href;
 const WIKI = pathToFileURL(join(process.cwd(), 'hooks-core', 'wiki.mjs')).href;
 
 let dir: string;

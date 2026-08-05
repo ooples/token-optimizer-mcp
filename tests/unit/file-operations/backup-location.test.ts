@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, writeFileSync, existsSync, rmSync, readdirSync } from 'fs';
+import {
+  mkdtempSync,
+  writeFileSync,
+  existsSync,
+  rmSync,
+  readdirSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SmartWriteTool } from '../../../src/tools/file-operations/smart-write.js';
@@ -55,7 +61,8 @@ describe('backups never land next to the file', () => {
     cache.close();
     counter.free();
 
-    if (originalBackupDir === undefined) delete process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
+    if (originalBackupDir === undefined)
+      delete process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
     else process.env.TOKEN_OPTIMIZER_BACKUP_DIR = originalBackupDir;
 
     for (const dir of [home, backups]) {
@@ -114,7 +121,14 @@ describe('backups never land next to the file', () => {
 
       await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, endLine: 1, content: 'const edited = 3;' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            endLine: 1,
+            content: 'const edited = 3;',
+          },
+        ],
         { createBackup: true }
       );
 
@@ -126,7 +140,14 @@ describe('backups never land next to the file', () => {
 
       await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, endLine: 1, content: 'const edited = 3;' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            endLine: 1,
+            content: 'const edited = 3;',
+          },
+        ],
         { createBackup: true }
       );
 

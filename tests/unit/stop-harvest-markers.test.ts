@@ -15,13 +15,20 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { spawnSync } from 'child_process';
 import { join, dirname, resolve } from 'path';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync } from 'fs';
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+  readdirSync,
+} from 'fs';
 import { tmpdir } from 'os';
 
 const HOOK = join(process.cwd(), 'plugin', 'hooks', 'stop-harvest.mjs');
 
 /** The env var this platform actually reads for per-user state. */
-const STATE_VAR = process.platform === 'win32' ? 'LOCALAPPDATA' : 'XDG_STATE_HOME';
+const STATE_VAR =
+  process.platform === 'win32' ? 'LOCALAPPDATA' : 'XDG_STATE_HOME';
 
 let work: string;
 let state: string;
@@ -50,20 +57,16 @@ function runHook(sessionId: string) {
   delete env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT;
   delete env.TOKEN_OPTIMIZER_MODE;
 
-  return spawnSync(
-    process.execPath,
-    [HOOK],
-    {
-      input: JSON.stringify({
-        transcript_path: transcript,
-        session_id: sessionId,
-        cwd: work,
-      }),
-      env,
-      encoding: 'utf8',
-      timeout: 30_000,
-    }
-  );
+  return spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({
+      transcript_path: transcript,
+      session_id: sessionId,
+      cwd: work,
+    }),
+    env,
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
 }
 
 describe('stop-harvest marker location', () => {

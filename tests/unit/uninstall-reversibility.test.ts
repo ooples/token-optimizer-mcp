@@ -21,7 +21,12 @@ describe('the settings round trip', () => {
     env: { SOME_USER_VAR: 'keep-me' },
     hooks: {
       PreToolUse: [
-        { matcher: 'Bash', hooks: [{ type: 'command', command: 'node /somebody/elses/hook.mjs' }] },
+        {
+          matcher: 'Bash',
+          hooks: [
+            { type: 'command', command: 'node /somebody/elses/hook.mjs' },
+          ],
+        },
       ],
     },
   };
@@ -35,8 +40,9 @@ describe('the settings round trip', () => {
     expect(wired.env.SOME_USER_VAR).toBe('keep-me');
     expect(wiredEntries(wired).length).toBeGreaterThan(0);
 
-    const foreign = wired.hooks.PreToolUse.flatMap((e: { hooks?: Array<{ command?: string }> }) =>
-      (e.hooks || []).map((h) => h.command)
+    const foreign = wired.hooks.PreToolUse.flatMap(
+      (e: { hooks?: Array<{ command?: string }> }) =>
+        (e.hooks || []).map((h) => h.command)
     );
     expect(foreign).toContain('node /somebody/elses/hook.mjs');
   });
@@ -60,7 +66,9 @@ describe('the settings round trip', () => {
   it('leaves no empty event keys behind', () => {
     // A settings file with `"PreCompact": []` in it still says we were here.
     const bare = {};
-    const restored = unwire(wire(bare, HOOKS_DIR)) as { hooks?: Record<string, unknown> };
+    const restored = unwire(wire(bare, HOOKS_DIR)) as {
+      hooks?: Record<string, unknown>;
+    };
     for (const [event, entries] of Object.entries(restored.hooks || {})) {
       expect(Array.isArray(entries) && entries.length === 0).toBe(false);
       expect(event).toBeTruthy();
@@ -71,7 +79,10 @@ describe('the settings round trip', () => {
     const shared = {
       hooks: {
         PreToolUse: [
-          { matcher: 'Read', hooks: [{ type: 'command', command: 'node /their/reader.mjs' }] },
+          {
+            matcher: 'Read',
+            hooks: [{ type: 'command', command: 'node /their/reader.mjs' }],
+          },
         ],
       },
     };

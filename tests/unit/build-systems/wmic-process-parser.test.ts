@@ -58,7 +58,11 @@ describe('wmic CSV parsing', () => {
   it('reads the process NAME, not the command line', () => {
     // The old mapping produced 'C:\WINDOWS\Explorer.EXE' here.
     expect(parsed[0].name).toBe('explorer.exe');
-    expect(parsed.map((p) => p.name)).toEqual(['explorer.exe', 'app.exe', 'builder.exe']);
+    expect(parsed.map((p) => p.name)).toEqual([
+      'explorer.exe',
+      'app.exe',
+      'builder.exe',
+    ]);
   });
 
   it('reads memory from WorkingSetSize, not UserModeTime', () => {
@@ -119,11 +123,15 @@ describe('output that yields no processes', () => {
   // and falls through to the CIM path rather than returning it as an answer.
 
   it('returns an empty array for an error message', () => {
-    expect(parseWmicProcessCsv('ERROR: Description = Invalid query\n', NOW)).toEqual([]);
+    expect(
+      parseWmicProcessCsv('ERROR: Description = Invalid query\n', NOW)
+    ).toEqual([]);
   });
 
   it('returns an empty array for an unrecognised format', () => {
-    expect(parseWmicProcessCsv('Name  ProcessId\nexplorer.exe  15748\n', NOW)).toEqual([]);
+    expect(
+      parseWmicProcessCsv('Name  ProcessId\nexplorer.exe  15748\n', NOW)
+    ).toEqual([]);
   });
 
   it('does not invent a process from a header alone', () => {
@@ -133,7 +141,9 @@ describe('output that yields no processes', () => {
 
 describe('WMI datetime parsing', () => {
   it('reads the fixed-width fields', () => {
-    expect(parseWmiDate('20260720023604.916473+000')).toBe(Date.UTC(2026, 6, 20, 2, 36, 4, 916));
+    expect(parseWmiDate('20260720023604.916473+000')).toBe(
+      Date.UTC(2026, 6, 20, 2, 36, 4, 916)
+    );
   });
 
   it('treats the suffix as MINUTES from UTC, not hours', () => {
@@ -157,6 +167,8 @@ describe('lifetime CPU percentage', () => {
 
   it('is zero for a process that has not yet aged, rather than Infinity', () => {
     expect(lifetimeCpuPercent(1e9, CREATED, CREATED_MS)).toBe(0);
-    expect(Number.isFinite(lifetimeCpuPercent(1e9, CREATED, CREATED_MS))).toBe(true);
+    expect(Number.isFinite(lifetimeCpuPercent(1e9, CREATED, CREATED_MS))).toBe(
+      true
+    );
   });
 });

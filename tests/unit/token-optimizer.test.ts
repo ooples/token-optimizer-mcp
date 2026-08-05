@@ -14,7 +14,10 @@ import {
   IOptimizationModule,
   OptimizationResult as ModuleResult,
 } from '../../src/modules/IOptimizationModule.js';
-import { ITokenCounter, TokenCountResult } from '../../src/interfaces/ITokenCounter.js';
+import {
+  ITokenCounter,
+  TokenCountResult,
+} from '../../src/interfaces/ITokenCounter.js';
 
 // Mock token counter
 class MockTokenCounter implements ITokenCounter {
@@ -91,9 +94,8 @@ describe('TokenOptimizer', () => {
     });
 
     it('should calculate token counts correctly', async () => {
-      const module = new MockOptimizationModule(
-        'remove-spaces',
-        (text) => text.replace(/\s+/g, '')
+      const module = new MockOptimizationModule('remove-spaces', (text) =>
+        text.replace(/\s+/g, '')
       );
       const optimizer = new TokenOptimizer([module], tokenCounter);
       const prompt = 'This is a test';
@@ -105,9 +107,7 @@ describe('TokenOptimizer', () => {
 
       expect(result.originalTokens).toBe(originalCount.tokens);
       expect(result.optimizedTokens).toBe(optimizedCount.tokens);
-      expect(result.savings).toBe(
-        originalCount.tokens - optimizedCount.tokens
-      );
+      expect(result.savings).toBe(originalCount.tokens - optimizedCount.tokens);
     });
   });
 

@@ -90,7 +90,9 @@ describe('safe-exec validators', () => {
     it('accepts allowed values and rejects others', () => {
       const allowed = ['npm', 'yarn', 'pnpm'] as const;
       expect(assertAllowed('npm', allowed, 'packageManager')).toBe('npm');
-      expect(() => assertAllowed('npm; id', allowed, 'packageManager')).toThrow();
+      expect(() =>
+        assertAllowed('npm; id', allowed, 'packageManager')
+      ).toThrow();
       expect(() => assertAllowed('bun', allowed, 'packageManager')).toThrow();
     });
   });
@@ -127,11 +129,7 @@ describe('argv-mode execution neutralizes shell metacharacters', () => {
     const marker = join(dir, 'PWNED');
     // If a shell were interpreting this, the marker file would be created.
     const injection = `x"; require('fs').writeFileSync(${JSON.stringify(marker)}, 'x'); "`;
-    execFileSafeSync('node', [
-      '-e',
-      'process.stdout.write("ok")',
-      injection,
-    ]);
+    execFileSafeSync('node', ['-e', 'process.stdout.write("ok")', injection]);
     expect(existsSync(marker)).toBe(false);
   });
 

@@ -24,15 +24,15 @@ describe('AnalyticsManager', () => {
   afterEach(async () => {
     // Clean up test database
     await manager.clear();
-    
+
     // Close the database connection
     if (manager && (manager as any).storage && (manager as any).storage.close) {
       (manager as any).storage.close();
     }
-    
+
     // Wait a bit for the file handle to be released
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     if (fs.existsSync(testDbPath)) {
       try {
         fs.unlinkSync(testDbPath);

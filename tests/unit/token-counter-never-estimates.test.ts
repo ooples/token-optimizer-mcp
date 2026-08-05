@@ -25,7 +25,12 @@ import { TokenCounter } from '../../src/core/token-counter.js';
  * to gpt-4, so an encoder is always available.
  */
 
-const MODEL_VARS = ['CLAUDE_MODEL', 'ANTHROPIC_MODEL', 'OPENAI_MODEL', 'GOOGLE_AI_MODEL'];
+const MODEL_VARS = [
+  'CLAUDE_MODEL',
+  'ANTHROPIC_MODEL',
+  'OPENAI_MODEL',
+  'GOOGLE_AI_MODEL',
+];
 const saved = new Map<string, string | undefined>();
 
 const withModelEnv = (key: string, value: string): TokenCounter => {
@@ -46,7 +51,9 @@ afterEach(() => {
 });
 
 /** Indented source: the case where the estimate was worst, and overstated. */
-const WHITESPACE_HEAVY = ('    '.repeat(8) + 'const indented = true;\n').repeat(25);
+const WHITESPACE_HEAVY = ('    '.repeat(8) + 'const indented = true;\n').repeat(
+  25
+);
 const estimateFor = (s: string) => Math.ceil(s.length / 4);
 
 describe('token counting never silently estimates', () => {

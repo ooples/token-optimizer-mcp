@@ -12,8 +12,14 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { SummarizationModule } from '../../src/modules/SummarizationModule.js';
 import { MockFoundationModel } from '../../src/modules/MockFoundationModel.js';
-import { ITokenCounter, TokenCountResult } from '../../src/interfaces/ITokenCounter.js';
-import { IMetrics, SummarizationMetrics } from '../../src/interfaces/IMetrics.js';
+import {
+  ITokenCounter,
+  TokenCountResult,
+} from '../../src/interfaces/ITokenCounter.js';
+import {
+  IMetrics,
+  SummarizationMetrics,
+} from '../../src/interfaces/IMetrics.js';
 
 // Mock token counter
 class MockTokenCounter implements ITokenCounter {
@@ -83,7 +89,8 @@ describe('SummarizationModule', () => {
 
   describe('Basic Summarization', () => {
     it('should summarize text and return result with metrics', async () => {
-      const text = 'This is a long piece of text that needs to be summarized. It contains multiple sentences. Each sentence adds more context. The summarization should reduce the token count.';
+      const text =
+        'This is a long piece of text that needs to be summarized. It contains multiple sentences. Each sentence adds more context. The summarization should reduce the token count.';
 
       const result = await module.summarize(text);
 
@@ -110,10 +117,7 @@ describe('SummarizationModule', () => {
     });
 
     it('should work without metrics', async () => {
-      const moduleWithoutMetrics = new SummarizationModule(
-        model,
-        tokenCounter
-      );
+      const moduleWithoutMetrics = new SummarizationModule(model, tokenCounter);
       const text = 'Test text for summarization.';
 
       const result = await moduleWithoutMetrics.summarize(text);
@@ -125,7 +129,8 @@ describe('SummarizationModule', () => {
 
   describe('Summarization Options', () => {
     it('should respect maxOutputTokens option', async () => {
-      const text = 'This is a long text that needs summarization. It has many words.';
+      const text =
+        'This is a long text that needs summarization. It has many words.';
       const maxTokens = 5;
 
       const result = await module.summarize(text, {
@@ -170,7 +175,8 @@ describe('SummarizationModule', () => {
     });
 
     it('should handle preserveCodeBlocks option', async () => {
-      const text = 'Here is some code:\n```js\nconst x = 42;\n```\nThis is important.';
+      const text =
+        'Here is some code:\n```js\nconst x = 42;\n```\nThis is important.';
 
       const result = await module.summarize(text, {
         preserveCodeBlocks: true,
@@ -182,7 +188,8 @@ describe('SummarizationModule', () => {
     });
 
     it('should handle compressionRatio option', async () => {
-      const text = 'This is a long text with multiple sentences. Each sentence adds context.';
+      const text =
+        'This is a long text with multiple sentences. Each sentence adds context.';
 
       const result = await module.summarize(text, {
         compressionRatio: 0.5,

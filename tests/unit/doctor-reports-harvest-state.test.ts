@@ -78,7 +78,10 @@ describe('probeHarvest', () => {
   });
 
   it('passes on a local endpoint, which is free and private', () => {
-    envOnly({ TOKEN_OPTIMIZER_HARVEST_ENDPOINT: 'http://127.0.0.1:11434/v1/chat/completions' });
+    envOnly({
+      TOKEN_OPTIMIZER_HARVEST_ENDPOINT:
+        'http://127.0.0.1:11434/v1/chat/completions',
+    });
     const [check] = probeHarvest();
 
     expect(check.pass).toBe(true);
@@ -86,7 +89,10 @@ describe('probeHarvest', () => {
   });
 
   it('passes when opted in with a credential', () => {
-    envOnly({ TOKEN_OPTIMIZER_HARVEST: 'true', TOKEN_OPTIMIZER_API_KEY: 'sk-test' });
+    envOnly({
+      TOKEN_OPTIMIZER_HARVEST: 'true',
+      TOKEN_OPTIMIZER_API_KEY: 'sk-test',
+    });
     const [check] = probeHarvest();
 
     expect(check.pass).toBe(true);

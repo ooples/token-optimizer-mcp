@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  rmSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -39,11 +46,16 @@ let root: string;
 /** A source tree shaped like the repo's, minus whatever the test omits. */
 function givenTree({ withVendor }: { withVendor: boolean }) {
   mkdirSync(join(root, 'src', 'dashboard', 'public'), { recursive: true });
-  writeFileSync(join(root, 'src', 'dashboard', 'public', 'index.html'), '<html></html>');
+  writeFileSync(
+    join(root, 'src', 'dashboard', 'public', 'index.html'),
+    '<html></html>'
+  );
 
   if (withVendor) {
     const dir = join(root, VENDOR_SOURCE, '..');
-    mkdirSync(join(root, VENDOR_SOURCE).replace(/[\\/][^\\/]+$/, ''), { recursive: true });
+    mkdirSync(join(root, VENDOR_SOURCE).replace(/[\\/][^\\/]+$/, ''), {
+      recursive: true,
+    });
     writeFileSync(join(root, VENDOR_SOURCE), '/* chart.js umd */');
     void dir;
   }
@@ -92,7 +104,9 @@ describe('copyAssets on a complete tree', () => {
 
     copyAssets({ root });
 
-    expect(existsSync(join(root, 'dist', 'dashboard', 'public', 'index.html'))).toBe(true);
+    expect(
+      existsSync(join(root, 'dist', 'dashboard', 'public', 'index.html'))
+    ).toBe(true);
   });
 
   it('vendors the chart bundle under the name the dashboard loads', () => {
@@ -100,7 +114,14 @@ describe('copyAssets on a complete tree', () => {
 
     copyAssets({ root });
 
-    const vendored = join(root, 'dist', 'dashboard', 'public', 'vendor', 'chart.umd.min.js');
+    const vendored = join(
+      root,
+      'dist',
+      'dashboard',
+      'public',
+      'vendor',
+      'chart.umd.min.js'
+    );
     expect(readFileSync(vendored, 'utf8')).toBe('/* chart.js umd */');
   });
 });
@@ -109,7 +130,9 @@ describe('the build wiring', () => {
   it('uses the script rather than an inline one-liner', () => {
     // An inline `node -e` has nowhere to put a preflight check or a remedy, so
     // reverting to one would silently reintroduce the bare ENOENT.
-    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+    );
 
     expect(pkg.scripts['copy:assets']).toContain('scripts/copy-assets.mjs');
     expect(pkg.scripts['copy:assets']).not.toContain('node -e');

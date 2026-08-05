@@ -12,7 +12,10 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { CompressionModule } from '../../src/modules/CompressionModule.js';
 import { CompressionEngine } from '../../src/core/compression-engine.js';
-import { ITokenCounter, TokenCountResult } from '../../src/interfaces/ITokenCounter.js';
+import {
+  ITokenCounter,
+  TokenCountResult,
+} from '../../src/interfaces/ITokenCounter.js';
 
 // Mock token counter
 class MockTokenCounter implements ITokenCounter {
@@ -168,7 +171,11 @@ describe('CompressionModule', () => {
     it('should handle different compression modes', async () => {
       const text = 'Test text for mode testing. '.repeat(50);
 
-      const modes: Array<'text' | 'font' | 'generic'> = ['text', 'font', 'generic'];
+      const modes: Array<'text' | 'font' | 'generic'> = [
+        'text',
+        'font',
+        'generic',
+      ];
 
       for (const mode of modes) {
         const moduleWithMode = new CompressionModule(

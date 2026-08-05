@@ -75,7 +75,11 @@ describe('extractSavings', () => {
     ).toBeNull();
     // real measurement that happened to save nothing
     expect(
-      extractSavings({ originalTokens: 50, optimizedTokens: 50, tokensSaved: 0 })
+      extractSavings({
+        originalTokens: 50,
+        optimizedTokens: 50,
+        tokensSaved: 0,
+      })
     ).toEqual({ originalTokens: 50, optimizedTokens: 50, tokensSaved: 0 });
   });
 });
@@ -96,7 +100,10 @@ describe('recordToolAnalytics', () => {
   let manager: AnalyticsManager;
 
   beforeEach(() => {
-    const dbPath = path.join(os.tmpdir(), `rec-analytics-${Date.now()}-${Math.round(performance.now())}.db`);
+    const dbPath = path.join(
+      os.tmpdir(),
+      `rec-analytics-${Date.now()}-${Math.round(performance.now())}.db`
+    );
     manager = new AnalyticsManager(new SqliteAnalyticsStorage(dbPath));
   });
 
@@ -104,7 +111,11 @@ describe('recordToolAnalytics', () => {
     await recordToolAnalytics(
       manager,
       'smart_read',
-      mcpResult({ originalTokens: 1000, optimizedTokens: 100, tokensSaved: 900 })
+      mcpResult({
+        originalTokens: 1000,
+        optimizedTokens: 100,
+        tokensSaved: 900,
+      })
     );
     const action = await manager.getActionAnalytics();
     expect(action.summary.totalOperations).toBe(1);
@@ -126,7 +137,11 @@ describe('recordToolAnalytics', () => {
     await recordToolAnalytics(manager, 'x', {
       content: [{ type: 'text', text: 'not json' }],
     });
-    await recordToolAnalytics(manager, 'count_tokens', mcpResult({ tokens: 2001 }));
+    await recordToolAnalytics(
+      manager,
+      'count_tokens',
+      mcpResult({ tokens: 2001 })
+    );
     expect(await manager.count()).toBe(0);
   });
 });

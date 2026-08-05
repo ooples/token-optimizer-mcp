@@ -1,14 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import {
-  mkdtempSync, writeFileSync, readFileSync, rmSync, statSync,
-  mkdirSync, copyFileSync, readdirSync, existsSync,
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  mkdirSync,
+  copyFileSync,
+  readdirSync,
+  existsSync,
 } from 'fs';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- scripts ship as plain ESM with no type declarations.
-import { normalizeEol, contentMatches, writeIfChanged } from '../../scripts/lib/text.mjs';
+import {
+  normalizeEol,
+  contentMatches,
+  writeIfChanged,
+} from '../../scripts/lib/text.mjs';
 
 /**
  * The generators compared generated content to on-disk content byte-for-byte,
@@ -63,11 +74,15 @@ describe('normalizeEol', () => {
 
 describe('contentMatches', () => {
   it('treats a CRLF file as matching LF generated output', () => {
-    expect(contentMatches('export const x = 1;\r\n', 'export const x = 1;\n')).toBe(true);
+    expect(
+      contentMatches('export const x = 1;\r\n', 'export const x = 1;\n')
+    ).toBe(true);
   });
 
   it('still detects a real content change', () => {
-    expect(contentMatches('export const x = 1;\r\n', 'export const x = 2;\n')).toBe(false);
+    expect(
+      contentMatches('export const x = 1;\r\n', 'export const x = 2;\n')
+    ).toBe(false);
   });
 
   it('reports a missing file as not matching', () => {
@@ -125,10 +140,13 @@ describe('every generator', () => {
   // generate-client-entries.mjs to a raw byte comparison AND an unconditional
   // write while keeping the import: all fourteen tests stayed green. A guard
   // that cannot fail is decoration.
-  it.each(GENERATORS)('%s routes its comparison through the helpers', (file) => {
-    const source = readFileSync(join(ROOT, file), 'utf8');
-    expect(source).toMatch(/contentMatches\s*\(\s*readIfExists\s*\(/);
-  });
+  it.each(GENERATORS)(
+    '%s routes its comparison through the helpers',
+    (file) => {
+      const source = readFileSync(join(ROOT, file), 'utf8');
+      expect(source).toMatch(/contentMatches\s*\(\s*readIfExists\s*\(/);
+    }
+  );
 
   it.each(GENERATORS)('%s routes its writes through writeIfChanged', (file) => {
     const source = readFileSync(join(ROOT, file), 'utf8');
@@ -140,10 +158,13 @@ describe('every generator', () => {
   // straight past. No generator imports writeFileSync today, and requiring that
   // to stay true means a direct write cannot be reintroduced under any name,
   // because it has nowhere to come from.
-  it.each(GENERATORS)('%s cannot write bytes except through the helper', (file) => {
-    const source = readFileSync(join(ROOT, file), 'utf8');
-    expect(source).not.toMatch(/\bwriteFileSync\b/);
-  });
+  it.each(GENERATORS)(
+    '%s cannot write bytes except through the helper',
+    (file) => {
+      const source = readFileSync(join(ROOT, file), 'utf8');
+      expect(source).not.toMatch(/\bwriteFileSync\b/);
+    }
+  );
 
   it.each(GENERATORS)('%s does not compare raw file contents', (file) => {
     const source = readFileSync(join(ROOT, file), 'utf8');
@@ -167,7 +188,10 @@ describe('a generator run against a CRLF working tree', () => {
   function sandbox() {
     const root = mkdtempSync(join(tmpdir(), 'gen-eol-'));
     mkdirSync(join(root, 'scripts', 'lib'), { recursive: true });
-    copyFileSync(join(process.cwd(), 'scripts', GEN), join(root, 'scripts', GEN));
+    copyFileSync(
+      join(process.cwd(), 'scripts', GEN),
+      join(root, 'scripts', GEN)
+    );
     copyFileSync(
       join(process.cwd(), 'scripts', 'lib', 'text.mjs'),
       join(root, 'scripts', 'lib', 'text.mjs')
@@ -191,7 +215,8 @@ describe('a generator run against a CRLF working tree', () => {
         else if (full.endsWith('.mjs')) out.push(full);
       }
     };
-    if (existsSync(join(root, 'integrations'))) walk(join(root, 'integrations'));
+    if (existsSync(join(root, 'integrations')))
+      walk(join(root, 'integrations'));
     return out;
   }
 

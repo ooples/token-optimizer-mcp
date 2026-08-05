@@ -57,10 +57,12 @@ describe('responses survive JSON', () => {
     });
 
     const analyze = () =>
-      new SmartDependenciesTool(cache, counter, new MetricsCollector()).analyze({
-        cwd: root,
-        useCache: false,
-      });
+      new SmartDependenciesTool(cache, counter, new MetricsCollector()).analyze(
+        {
+          cwd: root,
+          useCache: false,
+        }
+      );
 
     it('survives a JSON round-trip with its content intact', async () => {
       const result = await analyze();
@@ -78,7 +80,11 @@ describe('responses survive JSON', () => {
 
       // index.ts imports a and b. Two edges, from index.
       expect(result.graph.edges.length).toBe(2);
-      expect(result.graph.edges.every((e: { from: string }) => e.from.includes('index'))).toBe(true);
+      expect(
+        result.graph.edges.every((e: { from: string }) =>
+          e.from.includes('index')
+        )
+      ).toBe(true);
     });
 
     it('agrees with its own metadata', async () => {
@@ -86,7 +92,9 @@ describe('responses survive JSON', () => {
 
       // The metadata was right all along; the payload is what went missing.
       expect(result.graph.nodes.length).toBe(result.metadata.totalFiles);
-      expect(result.graph.edges.length).toBe(result.metadata.internalDependencies);
+      expect(result.graph.edges.length).toBe(
+        result.metadata.internalDependencies
+      );
     });
 
     it('reports a token count describing the data it actually sent', async () => {
@@ -95,7 +103,9 @@ describe('responses survive JSON', () => {
       // The count was computed on the compact form, which was then discarded in
       // favour of the Map -- so it described something the caller never got.
       const actual = counter.count(JSON.stringify(result.graph)).tokens;
-      expect(Math.abs(actual - result.metadata.tokenCount)).toBeLessThan(actual * 0.5 + 5);
+      expect(Math.abs(actual - result.metadata.tokenCount)).toBeLessThan(
+        actual * 0.5 + 5
+      );
     });
   });
 
@@ -112,7 +122,9 @@ describe('responses survive JSON', () => {
       envPath = join(root, '.env');
       writeFileSync(
         envPath,
-        Object.entries(SECRETS).map(([k, v]) => `${k}=${v}`).join('\n') + '\n'
+        Object.entries(SECRETS)
+          .map(([k, v]) => `${k}=${v}`)
+          .join('\n') + '\n'
       );
     });
 

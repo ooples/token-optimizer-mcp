@@ -105,12 +105,16 @@ describe('backup filenames', () => {
     // Five at once. With a millisecond timestamp alone this produced four
     // files; the fifth silently overwrote one of the others.
     const versions = ['a', 'b', 'c', 'd', 'e'];
-    await Promise.all(versions.map((v) => Promise.resolve().then(() => writeBackup(file, v))));
+    await Promise.all(
+      versions.map((v) => Promise.resolve().then(() => writeBackup(file, v)))
+    );
 
     const written = readdirSync(backupDirFor(file));
     expect(written).toHaveLength(versions.length);
 
-    const contents = written.map((f) => readFileSync(join(backupDirFor(file), f), 'utf8')).sort();
+    const contents = written
+      .map((f) => readFileSync(join(backupDirFor(file), f), 'utf8'))
+      .sort();
     expect(contents).toEqual(versions);
   });
 
@@ -151,7 +155,9 @@ describe('backup filenames', () => {
     const kept = readdirSync(backupDirFor(file));
     expect(kept).toHaveLength(5);
 
-    const contents = kept.map((f) => readFileSync(join(backupDirFor(file), f), 'utf8'));
+    const contents = kept.map((f) =>
+      readFileSync(join(backupDirFor(file), f), 'utf8')
+    );
     expect(contents).toContain('version 8');
     expect(contents).not.toContain('version 0');
   });

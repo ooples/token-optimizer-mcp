@@ -1530,8 +1530,20 @@ export const SMART_PRETTY_TOOL_DEFINITION = {
         description: 'Custom theme definition (use with theme: "custom")',
         properties: {
           name: { type: 'string' as const },
-          colors: { type: 'object' as const },
+          colors: {
+            type: 'object' as const,
+            additionalProperties: { type: 'string' as const },
+            description:
+              'Token colours, for example background, keyword, string, comment, number',
+          },
+          styles: {
+            type: 'object' as const,
+            additionalProperties: true,
+            description: 'Per-token style flags such as bold or italic',
+          },
         },
+        // ThemeDefinition requires a name and colors; styles is optional.
+        required: ['name', 'colors'],
       },
       showLineNumbers: {
         type: 'boolean' as const,

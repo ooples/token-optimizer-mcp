@@ -54,7 +54,8 @@ describe('smart_edit pattern operations', () => {
     cache.close();
     counter.free();
 
-    if (originalBackupDir === undefined) delete process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
+    if (originalBackupDir === undefined)
+      delete process.env.TOKEN_OPTIMIZER_BACKUP_DIR;
     else process.env.TOKEN_OPTIMIZER_BACKUP_DIR = originalBackupDir;
 
     for (const dir of [home, backups]) {
@@ -70,7 +71,14 @@ describe('smart_edit pattern operations', () => {
     it('fails rather than reporting success', async () => {
       const result = await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, pattern: 'NOT_PRESENT_ANYWHERE', replacement: 'x' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            pattern: 'NOT_PRESENT_ANYWHERE',
+            replacement: 'x',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -82,7 +90,14 @@ describe('smart_edit pattern operations', () => {
     it('names the pattern that missed, so the caller can fix it', async () => {
       const result = await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, pattern: 'NOT_PRESENT_ANYWHERE', replacement: 'x' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            pattern: 'NOT_PRESENT_ANYWHERE',
+            replacement: 'x',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -92,7 +107,14 @@ describe('smart_edit pattern operations', () => {
     it('leaves the file untouched', async () => {
       await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, pattern: 'NOT_PRESENT_ANYWHERE', replacement: 'x' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            pattern: 'NOT_PRESENT_ANYWHERE',
+            replacement: 'x',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -105,8 +127,18 @@ describe('smart_edit pattern operations', () => {
       const result = await tool.edit(
         file,
         [
-          { type: 'replace', startLine: 1, pattern: 'const a = 1;', replacement: 'const a = 11;' },
-          { type: 'replace', startLine: 3, pattern: 'NOT_PRESENT', replacement: 'x' },
+          {
+            type: 'replace',
+            startLine: 1,
+            pattern: 'const a = 1;',
+            replacement: 'const a = 11;',
+          },
+          {
+            type: 'replace',
+            startLine: 3,
+            pattern: 'NOT_PRESENT',
+            replacement: 'x',
+          },
         ],
         { createBackup: false }
       );
@@ -133,7 +165,9 @@ describe('smart_edit pattern operations', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(readFileSync(file, 'utf8')).toBe(['const ab = 12;', 'const c = 3;'].join('\n'));
+      expect(readFileSync(file, 'utf8')).toBe(
+        ['const ab = 12;', 'const c = 3;'].join('\n')
+      );
     });
 
     it('is reported as applied, not as unchanged', async () => {
@@ -165,7 +199,14 @@ describe('smart_edit pattern operations', () => {
     it('is a no-op, not a failure', async () => {
       const result = await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, pattern: 'const a = 1;', replacement: 'const a = 1;' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            pattern: 'const a = 1;',
+            replacement: 'const a = 1;',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -176,7 +217,14 @@ describe('smart_edit pattern operations', () => {
     it('handles a capture-group substitution that rebuilds the original', async () => {
       const result = await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, pattern: '(const) (a)', replacement: '$1 $2' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            pattern: '(const) (a)',
+            replacement: '$1 $2',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -188,7 +236,14 @@ describe('smart_edit pattern operations', () => {
       // The distinction has to cut both ways, or the fix just disables the guard.
       const result = await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, pattern: 'NOT_HERE', replacement: 'NOT_HERE' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            pattern: 'NOT_HERE',
+            replacement: 'NOT_HERE',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -199,9 +254,24 @@ describe('smart_edit pattern operations', () => {
       // A global regex is stateful. Probing with the same object would make the
       // outcome depend on what was tested before it.
       const ops = [
-        { type: 'replace' as const, startLine: 1, pattern: 'const', replacement: 'const' },
-        { type: 'replace' as const, startLine: 2, pattern: 'const', replacement: 'const' },
-        { type: 'replace' as const, startLine: 3, pattern: 'const', replacement: 'const' },
+        {
+          type: 'replace' as const,
+          startLine: 1,
+          pattern: 'const',
+          replacement: 'const',
+        },
+        {
+          type: 'replace' as const,
+          startLine: 2,
+          pattern: 'const',
+          replacement: 'const',
+        },
+        {
+          type: 'replace' as const,
+          startLine: 3,
+          pattern: 'const',
+          replacement: 'const',
+        },
       ];
       const result = await tool.edit(file, ops, { createBackup: false });
 
@@ -213,7 +283,14 @@ describe('smart_edit pattern operations', () => {
     it('still applies a matching single-line pattern', async () => {
       const result = await tool.edit(
         file,
-        [{ type: 'replace', startLine: 2, pattern: 'const b = 2;', replacement: 'const b = 22;' }],
+        [
+          {
+            type: 'replace',
+            startLine: 2,
+            pattern: 'const b = 2;',
+            replacement: 'const b = 22;',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -229,7 +306,14 @@ describe('smart_edit pattern operations', () => {
       // or every idempotent edit becomes a failure.
       const result = await tool.edit(
         file,
-        [{ type: 'replace', startLine: 1, endLine: 1, content: 'const a = 1;' }],
+        [
+          {
+            type: 'replace',
+            startLine: 1,
+            endLine: 1,
+            content: 'const a = 1;',
+          },
+        ],
         { createBackup: false }
       );
 
@@ -242,7 +326,14 @@ describe('smart_edit pattern operations', () => {
       // the original dirtied the repository it was meant to protect.
       await tool.edit(
         file,
-        [{ type: 'replace', startLine: 2, pattern: 'const b = 2;', replacement: 'const b = 22;' }],
+        [
+          {
+            type: 'replace',
+            startLine: 2,
+            pattern: 'const b = 2;',
+            replacement: 'const b = 22;',
+          },
+        ],
         { createBackup: true }
       );
 
