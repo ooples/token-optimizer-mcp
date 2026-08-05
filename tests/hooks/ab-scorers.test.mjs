@@ -5,7 +5,7 @@
  * `set -o pipefail` does.
  */
 import { describe, it, expect } from '@jest/globals';
-import { CASES } from '../fixtures/ab-injection-harness.mjs';
+import { CASES, buildArms } from '../fixtures/ab-injection-harness.mjs';
 
 const pipeExit = CASES.find((c) => c.id === 'pipe-exit');
 
@@ -52,3 +52,25 @@ describe('every case is scoreable', () => {
     }
   });
 });
+
+describe('the harness is repeatable', () => {
+  // AN INSTRUMENT THAT ONLY WORKS ONCE MEASURES NOTHING THE SECOND TIME.
+  //
+  // The session id was `ab-${c.id}`, fixed. Injection is deliberately
+  // once-per-session and that gate persists to disk under the shared state
+  // root, so the FIRST run served every finding and recorded it, and every run
+  // afterwards received nothing at all.
+  //
+  // That is the worst failure mode available to a measurement harness: the
+  // treatment arm silently degrades into a second control arm, both arms answer
+  // identically, and the experiment concludes that the graph does not help.
+  // Caught while actually running the A/B -- the first dump showed injected
+  // context for all five cases, and the next showed null for all five.
+  it('carries injected context on every run, not just the first', () => {
+    for (let pass = 0; pass < 3; pass++) {
+      const arms = buildArms();
+      const withContext = arms.filter((a) => a.injected);
+      expect(withContext).toHaveLength(arms.length);
+    }
+  }, 180_000);
+});
