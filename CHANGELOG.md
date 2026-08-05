@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.3](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.2...v5.4.3) (2026-08-05)
+
+
+### Bug Fixes
+
+* **hooks:** a write is not a read, and compaction ends the claim ([#257](https://github.com/ooples/token-optimizer-mcp/issues/257)) ([84525c2](https://github.com/ooples/token-optimizer-mcp/commit/84525c206ab60ac3351b7ab7850c2d956e75fbbd))
+* **mcp:** declare the options tools accept, and ratchet the rest ([#258](https://github.com/ooples/token-optimizer-mcp/issues/258)) ([30dc75d](https://github.com/ooples/token-optimizer-mcp/commit/30dc75d82c74c6cbb3c99746b0ff1335703ea70f))
+* **mcp:** finish declaring every option every tool accepts ([#261](https://github.com/ooples/token-optimizer-mcp/issues/261)) ([03828e9](https://github.com/ooples/token-optimizer-mcp/commit/03828e9516a23f8052e4fc9a1cf8b4a0abbee3c1))
+* **release:** resolve the mcp spec at launch instead of pinning it in git ([#256](https://github.com/ooples/token-optimizer-mcp/issues/256)) ([9672b39](https://github.com/ooples/token-optimizer-mcp/commit/9672b39e4cfe6b8818b342b85b95d8e6d0511e31))
+* **release:** verify the released tag instead of repairing it first ([#260](https://github.com/ooples/token-optimizer-mcp/issues/260)) ([da596ca](https://github.com/ooples/token-optimizer-mcp/commit/da596ca70cae51f4dcffa0e0e8a5339087a207c3))
+
 ## [5.4.2](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.1...v5.4.2) (2026-08-05)
 
 
