@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The graph log is append-only, and nothing was reclaiming it.
  *
  * MEASURED on this repository's own graph before this existed: 206.6 MB across
@@ -15,7 +15,15 @@
  * the graph after compaction must be indistinguishable from the graph before.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, rmSync, statSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import {
+  mkdtempSync,
+  rmSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
@@ -87,7 +95,9 @@ describe('compaction reclaims superseded records', () => {
     churn(120);
     putNode(dir, { kind: 'file', key: '/src/c.ts', hash: 'z' });
 
-    const lines = readFileSync(join(dir, 'graph.jsonl'), 'utf8').split('\n').filter(Boolean);
+    const lines = readFileSync(join(dir, 'graph.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean);
     const live = load(dir).nodes;
 
     // 241 node writes went in; the file holds a small multiple of the live set
@@ -103,7 +113,12 @@ describe('compaction reclaims superseded records', () => {
 
   it('preserves edges, and does not duplicate them', () => {
     const a = putNode(dir, { kind: 'file', key: '/src/a.ts', hash: 'h' });
-    const f = putNode(dir, { kind: 'finding', key: 'f1', claim: 'a claim', confidence: 0.9 });
+    const f = putNode(dir, {
+      kind: 'finding',
+      key: 'f1',
+      claim: 'a claim',
+      confidence: 0.9,
+    });
     putEdge(dir, f, 'derived_from', a);
     // The same edge asserted repeatedly, as a re-harvest would.
     for (let i = 0; i < 40; i++) putEdge(dir, f, 'derived_from', a);
@@ -111,7 +126,9 @@ describe('compaction reclaims superseded records', () => {
     putNode(dir, { kind: 'file', key: '/trigger.ts', hash: 't' });
 
     const g = load(dir);
-    const derived = g.edges.filter((e) => e.edge === 'derived_from' && e.from === f && e.to === a);
+    const derived = g.edges.filter(
+      (e) => e.edge === 'derived_from' && e.from === f && e.to === a
+    );
     expect(derived.length).toBe(1);
     // And the finding is still anchored, which is the property that matters.
     expect(g.nodes.has(f)).toBe(true);
@@ -122,7 +139,12 @@ describe('compaction reclaims superseded records', () => {
     // rewriting would be pure cost. A size threshold alone would rewrite this
     // on every append forever.
     for (let i = 0; i < 80; i++) {
-      putNode(dir, { kind: 'file', key: `/src/f${i}.ts`, hash: 'h', snapshot: 'x'.repeat(400) });
+      putNode(dir, {
+        kind: 'file',
+        key: `/src/f${i}.ts`,
+        hash: 'h',
+        snapshot: 'x'.repeat(400),
+      });
     }
     const size = graphSize();
     putNode(dir, { kind: 'file', key: '/src/last.ts', hash: 'h' });
@@ -142,7 +164,9 @@ describe('compaction reclaims superseded records', () => {
     const blocker = join(dir, 'graph.jsonl.compact');
     mkdirSync(blocker, { recursive: true });
 
-    expect(() => putNode(dir, { kind: 'file', key: '/src/d.ts', hash: 'd' })).not.toThrow();
+    expect(() =>
+      putNode(dir, { kind: 'file', key: '/src/d.ts', hash: 'd' })
+    ).not.toThrow();
 
     // The original survives: a failed compaction costs space, never data.
     const after = readFileSync(join(dir, 'graph.jsonl'), 'utf8');
@@ -171,7 +195,13 @@ describe('compaction reclaims superseded records', () => {
     writeFileSync(
       join(dir, 'graph.jsonl'),
       readFileSync(join(dir, 'graph.jsonl'), 'utf8') +
-        JSON.stringify({ t: 'n', v: 999, id: 'future:1', kind: 'file', key: '/future.ts' }) +
+        JSON.stringify({
+          t: 'n',
+          v: 999,
+          id: 'future:1',
+          kind: 'file',
+          key: '/future.ts',
+        }) +
         '\n'
     );
     putNode(dir, { kind: 'file', key: '/src/c.ts', hash: 'z' });
@@ -195,15 +225,41 @@ describe('snapshots are bounded, because they are the whole file', () => {
   const SNAP = 'x'.repeat(1000);
 
   it('drops the oldest snapshots and keeps the node itself', () => {
+    // THE CLOCK IS DRIVEN, not passed as a field. `putNode` spreads the caller's
+    // properties FIRST and then writes `at: Date.now()`, deliberately, so that a
+    // caller cannot spoof bookkeeping -- which means an `at` argument here was
+    // silently discarded and all ten records took whatever timestamp the machine
+    // happened to be on.
+    //
+    // On a fast machine all ten land in one millisecond, the sort sees a tie and
+    // keeps insertion order; on a slower one they spread out. So which snapshots
+    // survived was a function of CPU speed. It passed on Node 22 locally and
+    // failed on Node 18 and 20 in CI, keeping f7 and f8 instead of f9 -- a real
+    // flake, not a platform difference.
+    //
     // Ten files, one KB of snapshot each, against a three KB budget.
-    for (let i = 0; i < 10; i++) {
-      putNode(dir, { kind: 'file', key: `/src/f${i}.ts`, hash: 'h' + i, snapshot: SNAP, at: 1000 + i });
+    const realNow = Date.now;
+    let clock = 1_700_000_000_000;
+    Date.now = () => (clock += 1000);
+    try {
+      for (let i = 0; i < 10; i++) {
+        putNode(dir, {
+          kind: 'file',
+          key: `/src/f${i}.ts`,
+          hash: 'h' + i,
+          snapshot: SNAP,
+        });
+      }
+    } finally {
+      Date.now = realNow;
     }
     // Churn to push the file past the compaction floor.
     churn(60);
 
     const g = load(dir, { snapshots: true });
-    const files = [...g.nodes.values()].filter((n) => n.kind === 'file' && /\/src\/f\d/.test(n.key));
+    const files = [...g.nodes.values()].filter(
+      (n) => n.kind === 'file' && /\/src\/f\d/.test(n.key)
+    );
 
     // EVERY node survives. Only the snapshot field is dropped.
     expect(files.length).toBe(10);
@@ -222,7 +278,13 @@ describe('snapshots are bounded, because they are the whole file', () => {
 
   it('never drops a snapshot a content-dependent finding relies on', () => {
     // An OLD file, which the budget would otherwise evict first.
-    const old = putNode(dir, { kind: 'file', key: '/src/anchored.ts', hash: 'h', snapshot: SNAP, at: 1 });
+    const old = putNode(dir, {
+      kind: 'file',
+      key: '/src/anchored.ts',
+      hash: 'h',
+      snapshot: SNAP,
+      at: 1,
+    });
     const f = putNode(dir, {
       kind: 'finding',
       key: 'about-anchored',
@@ -233,7 +295,13 @@ describe('snapshots are bounded, because they are the whole file', () => {
     putEdge(dir, f, 'derived_from', old);
 
     for (let i = 0; i < 10; i++) {
-      putNode(dir, { kind: 'file', key: `/src/n${i}.ts`, hash: 'h', snapshot: SNAP, at: 9000 + i });
+      putNode(dir, {
+        kind: 'file',
+        key: `/src/n${i}.ts`,
+        hash: 'h',
+        snapshot: SNAP,
+        at: 9000 + i,
+      });
     }
     churn(60);
 
@@ -248,13 +316,22 @@ describe('snapshots are bounded, because they are the whole file', () => {
   it('does not strip snapshots that fit inside the budget', () => {
     process.env.TOKEN_OPTIMIZER_GRAPH_SNAPSHOT_BYTES = '10000000';
     for (let i = 0; i < 6; i++) {
-      putNode(dir, { kind: 'file', key: `/src/keep${i}.ts`, hash: 'h', snapshot: SNAP, at: 2000 + i });
+      putNode(dir, {
+        kind: 'file',
+        key: `/src/keep${i}.ts`,
+        hash: 'h',
+        snapshot: SNAP,
+        at: 2000 + i,
+      });
     }
     churn(60);
 
     const g = load(dir, { snapshots: true });
     const kept = [...g.nodes.values()].filter(
-      (n) => n.kind === 'file' && /keep/.test(n.key) && typeof n.snapshot === 'string'
+      (n) =>
+        n.kind === 'file' &&
+        /keep/.test(n.key) &&
+        typeof n.snapshot === 'string'
     );
     expect(kept.length).toBe(6);
   });
