@@ -23,12 +23,97 @@
  * to resolve is refused rather than stored as permanently-current.
  */
 
-import { putNodeWithEdges, load, nodeId } from './wiki.mjs';
+import {
+  putNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode,
+} from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
 import { randomBytes } from 'node:crypto';
 import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
+
+/**
+ * The types that may cross a project boundary.
+ *
+ * This is not a new taxonomy: it is the exact complement of the set staleness.mjs
+ * already calls CONTENT_DEPENDENT. A `finding` or a `map` is a claim ABOUT the
+ * anchor's contents, so it is only true where those contents are; carrying it to
+ * another repository would assert something about files that repository does not
+ * have. The rest -- what a command does, what failed, what was decided, what the
+ * user asked for -- are claims about the WORK, and the work follows the person.
+ *
+ * Deriving one set from the other keeps them from drifting apart: if a type ever
+ * becomes content-dependent, it stops being shareable in the same commit.
+ */
+export const SHAREABLE_TYPES = new Set(['command', 'failure', 'decision', 'feedback']);
+
+/** Claim text, normalised enough that the same lesson learned twice is one row. */
+const claimFingerprint = (claim) =>
+  String(claim || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 300);
+
+/**
+ * Copies a portable lesson into the machine-wide graph.
+ *
+ * ANCHORED TO THE PROJECT IT CAME FROM, not to the file that happened to be open.
+ * The source file's path means nothing in another checkout, and an unanchored
+ * finding is refused everywhere else in this codebase for a good reason -- so the
+ * shared copy is anchored to its origin project's root, which is a real path, is
+ * never content-checked (these types are not content-dependent), and doubles as
+ * the provenance the reader needs to judge whether the lesson transfers.
+ *
+ * Failures here are swallowed: this runs inside the harvest worker, and the
+ * project-local write has already succeeded. A shared tier that cannot be written
+ * must not cost the caller the lesson it just learned.
+ */
+function promoteToShared(finding, { projectRoot, sessionId, provenance, key }) {
+  try {
+    if (!SHAREABLE_TYPES.has(finding.type)) return false;
+    const target = sharedDir();
+    if (!projectRoot) return false;
+
+    const root = canonicalPath(projectRoot);
+    const rootId = nodeId('file', root);
+
+    // Same claim, already carried up from anywhere: keep the first. Two repos
+    // teaching the same lesson is evidence it generalises, not a reason to say
+    // it twice on every command.
+    const graph = load(target);
+    const fp = claimFingerprint(finding.claim);
+    for (const node of graph.nodes.values()) {
+      if (node.kind !== 'finding' || node.retired) continue;
+      if (claimFingerprint(node.claim) === fp) return false;
+    }
+
+    // The anchor node must exist before the edge points at it, or the shared
+    // graph inherits exactly the orphan-finding problem the local one refuses.
+    if (!graph.nodes.has(rootId)) putNode(target, { kind: 'file', key: root });
+
+    return Boolean(
+      putNodeWithEdges(
+        target,
+        {
+          kind: 'finding',
+          key: `shared-${key}`,
+          claim: finding.claim,
+          confidence: finding.confidence,
+          type: finding.type,
+          trigger: typeof finding.trigger === 'string' && finding.trigger ? finding.trigger : undefined,
+          origin: provenance,
+          quote: typeof finding.quote === 'string' && finding.quote.trim() ? finding.quote : undefined,
+          // WHERE IT WAS LEARNED, carried so the reader can discount it. A lesson
+          // from another repository is worth surfacing and is not automatically
+          // true here; naming its origin is what lets that judgement be made.
+          sourceProject: root,
+          sessionId,
+        },
+        [{ edge: 'derived_from', to: rootId }]
+      )
+    );
+  } catch {
+    /* the local write already succeeded; the shared tier is best-effort */
+    return false;
+  }
+}
 
 /**
  * Resolves an `path` or `path#symbol` anchor to an existing node id.
@@ -162,6 +247,14 @@ export function writeHarvested(
     // A failed write returns null. Reporting the key anyway would tell the
     // caller a claim was stored that no later session can retrieve.
     if (id) written.push(key);
+
+    // AFTER the project write, and never instead of it. The project graph is the
+    // record of what happened here; the shared tier is a copy for the lessons
+    // that are not about here. Skipped when the two are the same directory,
+    // which is the suite's usual arrangement.
+    if (id && !isSharedDir(dir)) {
+      promoteToShared(finding, { projectRoot, sessionId, provenance, key });
+    }
   }
 
   return written;

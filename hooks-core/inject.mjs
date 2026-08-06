@@ -19,7 +19,10 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { findingsFor, putNode, putEdge, nodeId } from './wiki.mjs';
+import {
+  findingsFor, putNode, putEdge, nodeId, load, sharedDir, isSharedDir,
+} from './wiki.mjs';
+import { basename } from 'node:path';
 import { serve, diffLines } from './staleness.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
@@ -377,6 +380,95 @@ export function forCommand(
     .map(render)
     .join('\n')}`;
 }
+/**
+ * Tokens allowed for lessons carried in from OTHER projects.
+ *
+ * Deliberately a fraction of the command budget rather than its equal. A lesson
+ * from elsewhere is a weaker signal than one learned here -- it was true of a
+ * different codebase -- so it may add to the answer and must never crowd out this
+ * project's own findings, which are selected first and keep the full budget.
+ */
+const sharedBudget = () =>
+  Number(process.env.TOKEN_OPTIMIZER_SHARED_BUDGET) || 160;
+
+/** At most this many cross-project lessons per command, whatever the budget. */
+const MAX_SHARED = 2;
+
+/**
+ * What OTHER projects on this machine learned that applies to this command.
+ *
+ * The project graph answers "what do we know about this repo". This answers the
+ * question that had no owner -- "have I already learned this somewhere else?" --
+ * which is where the same mistake was repeated per checkout, because every lesson
+ * was filed under the repository that happened to teach it.
+ *
+ * TRIGGER-MATCHED, NOT ANCHOR-MATCHED. A shared lesson has no meaningful anchor in
+ * this project by construction, so the retrieval hook is the command text, using
+ * the same appliesToCommand test the local path uses. Anything that cannot say
+ * when it applies is not carried across.
+ */
+export function forSharedCommand(
+  projectDir,
+  command,
+  { budget = sharedBudget(), alreadyInjected = new Set(), projectRoot = null } = {}
+) {
+  if (!command) return null;
+
+  try {
+    const dir = sharedDir();
+    // Nothing to carry when the shared store IS this project's store.
+    if (!dir || isSharedDir(projectDir)) return null;
+
+    const graph = load(dir);
+    if (!graph.nodes.size) return null;
+
+    const home = projectRoot ? canonicalPath(projectRoot) : null;
+    const candidates = [];
+    for (const node of graph.nodes.values()) {
+      if (node.kind !== 'finding' || node.retired) continue;
+      if (alreadyInjected.has(node.key)) continue;
+      // ITS OWN LESSON IS NOT NEWS. A finding this project contributed is already
+      // served by the local path; repeating it under a "from elsewhere" label
+      // would both double the tokens and misstate where it came from.
+      if (home && node.sourceProject && canonicalPath(node.sourceProject) === home) continue;
+      if (!appliesToCommand(node, command)) continue;
+      candidates.push(node);
+    }
+    if (!candidates.length) return null;
+
+    // Explicit trigger first, then confidence -- the same ordering the local
+    // command path uses, for the same reason: a finding whose author wrote a
+    // pattern that matches this command is about this command.
+    const explicit = (n) => (n.trigger && safeTrigger(n.trigger)?.test(command) ? 1 : 0);
+    candidates.sort(
+      (a, b) => explicit(b) - explicit(a) || (b.confidence ?? 0.5) - (a.confidence ?? 0.5)
+    );
+
+    // No serve() here: these types are not content-dependent, so there is no
+    // anchor to re-read and nothing to diff. serve() would spend a file read per
+    // finding to answer a question that does not apply to them.
+    const { kept } = fit(candidates.slice(0, MAX_SHARED), budget);
+    if (!kept.length) return null;
+
+    for (const f of kept) alreadyInjected.add(f.key);
+
+    // NAMED, NOT HEDGED. Measured on this project: wording that tells a model to
+    // discount a claim suppresses correct claims -- findings rendered with "treat
+    // this as unverified" scored 1/3 against 2/3 for the identical findings
+    // rendered clean. So the origin project is stated as a fact and the reader is
+    // left to judge transfer, rather than told in advance to doubt it.
+    return `From other projects on this machine:\n${kept
+      .map((f) => {
+        const from = f.sourceProject ? basename(f.sourceProject) : 'another project';
+        return `- [${f.type || 'finding'}] ${f.claim} (learned in ${from})`;
+      })
+      .join('\n')}`;
+  } catch {
+    // A cross-project extra must never cost the caller their tool call.
+    return null;
+  }
+}
+
 
 /**
  * The bounded SessionStart index: titles and ids only, never bodies.

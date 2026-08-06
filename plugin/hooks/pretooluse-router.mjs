@@ -44,6 +44,7 @@ import {
   substitutionFor,
   forTouch,
   forCommand,
+  forSharedCommand,
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
@@ -190,12 +191,32 @@ try {
         // command that cds into a worktree or a second repository must consult
         // that project's graph; keying on payload.cwd meant findings recorded
         // there never fired -- no injection, no metrics row, no error.
-        const dir = wikiDir(commandProjectRoot(payload, payload.cwd));
+        const root = commandProjectRoot(payload, payload.cwd);
+        const dir = wikiDir(root);
         const note = forCommand(dir, load(dir), command, {
           sessionId: payload.session_id,
           alreadyInjected,
         });
         if (note) parts.push(note);
+
+        // AND WHAT OTHER PROJECTS ON THIS MACHINE ALREADY LEARNED.
+        //
+        // Every graph above is per project, which is right for a claim about a
+        // file here and wrong for a claim about the tools. Measured across five
+        // repositories in one session: structural capture worked in all of them,
+        // and all 35 live lessons sat in ONE project's graph -- so "run npm test,
+        // not npx jest" was available to be re-learned from scratch in every
+        // other checkout.
+        //
+        // SECOND, always. The local findings are selected first and keep the full
+        // budget; this adds at most two lessons within a smaller one, because a
+        // lesson from another codebase is a weaker signal than one from this one
+        // and must never crowd it out.
+        const shared = forSharedCommand(dir, command, {
+          alreadyInjected,
+          projectRoot: root,
+        });
+        if (shared) parts.push(shared);
       }
 
       if (alreadyInjected.size !== before) {
