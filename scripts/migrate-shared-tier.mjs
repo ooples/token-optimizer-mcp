@@ -18,9 +18,15 @@
  */
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
-const HERE = dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+// fileURLToPath, NOT URL.pathname. A file URL percent-encodes, so a checkout
+// under "C:/Program Files/..." or any non-ASCII path yields
+// "/C:/Program%20Files/..." -- and the drive-letter regex that used to be here
+// stripped the leading slash while leaving the %20, so `core()` built a path that
+// does not exist and the top-level import threw before the CLI printed anything.
+// A migration that dies on a space in the path is a migration that looks broken.
+const HERE = dirname(fileURLToPath(import.meta.url));
 const core = (n) => pathToFileURL(join(HERE, '..', 'hooks-core', n)).href;
 
 const { promoteExisting } = await import(core('harvest-write.mjs'));
