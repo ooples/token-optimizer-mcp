@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Edit Tool - 90% Token Reduction
  *
  * Achieves token reduction through:
@@ -155,6 +155,24 @@ export class SmartEditTool {
       // check fails -- and it compounds with every subsequent edit.
       const eol = detectLineEnding(originalContent);
       const originalLines = originalContent.split(/\r?\n/);
+      // THE REAL LINE COUNT, which is not `originalLines.length`.
+      //
+      // Splitting content that ends with a newline leaves a trailing empty
+      // element -- a 10-line file yields 11 -- and that number was both reported
+      // to the caller and used to validate their operations. So the tool
+      // advertised a line that does not exist and then accepted a `replace`
+      // against it: measured, that returned success with verified: true,
+      // appended the content, and destroyed the file's trailing newline.
+      //
+      // The split array itself is left alone: the edit machinery rebuilds the
+      // content by joining it, and dropping the element would silently strip
+      // the trailing newline from every file it touches.
+      const endsWithNewline =
+        originalContent.length > 0 &&
+        originalContent.charCodeAt(originalContent.length - 1) === 10;
+      const lineCount = endsWithNewline
+        ? Math.max(0, originalLines.length - 1)
+        : originalLines.length;
       const originalTokens = this.tokenCounter.count(originalContent).tokens;
 
       // Small-file guard: for tiny files the unified-diff + metadata payload
@@ -171,7 +189,7 @@ export class SmartEditTool {
       const ops = Array.isArray(operations) ? operations : [operations];
 
       // Validate operations
-      this.validateOperations(ops, originalLines.length);
+      this.validateOperations(ops, lineCount);
 
       // Apply edits
       const { lines: editedLines, applied } = this.applyEdits(
@@ -228,7 +246,7 @@ export class SmartEditTool {
           metadata: {
             editsApplied: applied,
             linesChanged: 0,
-            originalLines: originalLines.length,
+            originalLines: lineCount,
             finalLines: editedLines.length,
             tokensSaved: unchangedSaved,
             tokenCount: 50,
@@ -280,7 +298,7 @@ export class SmartEditTool {
           metadata: {
             editsApplied: applied,
             linesChanged: diff.added.length + diff.removed.length,
-            originalLines: originalLines.length,
+            originalLines: lineCount,
             finalLines: editedLines.length,
             tokensSaved,
             tokenCount: diffTokens,
@@ -336,7 +354,7 @@ export class SmartEditTool {
         metadata: {
           editsApplied: applied,
           linesChanged: diff.added.length + diff.removed.length,
-          originalLines: originalLines.length,
+          originalLines: lineCount,
           finalLines: editedLines.length,
           tokensSaved,
           tokenCount: diffTokens,
