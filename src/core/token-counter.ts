@@ -64,6 +64,49 @@ export class TokenCounter {
   }
 
   /**
+   * Longest slice handed to the tokenizer in one call.
+   *
+   * BPE COST IS SUPERLINEAR IN THE LENGTH OF A SINGLE RUN, and pathologically
+   * so on highly repetitive text, because every merge pass has more to merge.
+   * Measured on 100,000 characters:
+   *
+   *   repeated single character   23,004 ms
+   *   a 26-character cycle         6,856 ms
+   *   minified json                   28 ms
+   *   base64                          28 ms
+   *   minified javascript             18 ms
+   *
+   * Ordinary content is fine; repetitive content is not. This is not a
+   * hypothetical input either -- `count_tokens` is the most-called tool in the
+   * product (2,738 of 4,735 recorded captures), and a padding run, an ASCII
+   * separator or a repetitive blob would stall the server for twenty seconds.
+   * It surfaced as a 38-second test suite, of which one case was 23 seconds.
+   *
+   * SLICING MAKES THE COST LINEAR. A merge cannot span a slice boundary, so
+   * the count can differ slightly from an unsliced encode -- always upward, by
+   * at most one token per boundary. Measured against exact encoding at this
+   * size: prose +0.064%, minified javascript +0.013%, and the repetitive cases
+   * agree exactly. Text shorter than one slice is encoded in a single call and
+   * is bit-identical to before.
+   */
+  private static readonly ENCODE_SLICE = 8192;
+
+  /**
+   * Encodes in bounded slices, so one pathological input cannot stall a call.
+   */
+  private encodeBounded(text: string): number {
+    if (!this.encoder) return 0;
+    const slice = TokenCounter.ENCODE_SLICE;
+    if (text.length <= slice) return this.encoder.encode(text).length;
+
+    let total = 0;
+    for (let i = 0; i < text.length; i += slice) {
+      total += this.encoder.encode(text.slice(i, i + slice)).length;
+    }
+    return total;
+  }
+
+  /**
    * Count tokens in text (synchronous).
    *
    * Synchronous on tiktoken-backed tokenizers, which is all we expose
@@ -73,7 +116,7 @@ export class TokenCounter {
   count(text: string): TokenCountResult {
     if (this.encoder) {
       return {
-        tokens: this.encoder.encode(text).length,
+        tokens: this.encodeBounded(text),
         characters: text.length,
       };
     }

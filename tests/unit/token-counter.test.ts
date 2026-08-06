@@ -462,3 +462,53 @@ describe('TokenCounter', () => {
     });
   });
 });
+
+describe('a pathological line cannot stall the counter', () => {
+  // BPE cost is superlinear in the length of a single run, and pathologically
+  // so on repetitive text. Measured before this bound, on 100,000 characters:
+  // a repeated single character took 23,004 ms and a 26-character cycle 6,856
+  // ms, while minified json, base64 and minified javascript were all under 30.
+  //
+  // `count_tokens` is the most-called tool in the product, so that is a stall
+  // reachable from ordinary use -- a padding run or a repetitive blob. It
+  // surfaced as a 38-second test suite with one 23-second case in it.
+  const counter = new TokenCounter();
+
+  it('counts a long repeated run in well under a second', () => {
+    const started = Date.now();
+    const result = counter.count('x'.repeat(100_000));
+    const elapsed = Date.now() - started;
+
+    expect(result.characters).toBe(100_000);
+    expect(result.tokens).toBeGreaterThan(0);
+    // Generous by design: this asserts the quadratic behaviour is gone, not a
+    // particular machine's speed. It was 23,004 ms.
+    expect(elapsed).toBeLessThan(3_000);
+  });
+
+  it('is unchanged for text shorter than one slice', () => {
+    // Below the slice length nothing is split, so the result must be exactly
+    // what an unsliced encode produces.
+    const text = 'The quick brown fox jumps over the lazy dog. '.repeat(20);
+    expect(text.length).toBeLessThan(8192);
+    const encoder = (counter as unknown as { encoder?: { encode(s: string): unknown[] } }).encoder;
+    if (encoder) {
+      expect(counter.count(text).tokens).toBe(encoder.encode(text).length);
+    }
+  });
+
+  it('stays within a fraction of a percent of an exact encode', () => {
+    // A merge cannot span a slice boundary, so the sliced count runs slightly
+    // high. The bound is what makes that acceptable: if this drifts, the
+    // savings numbers built on it drift too.
+    const encoder = (counter as unknown as { encoder?: { encode(s: string): unknown[] } }).encoder;
+    if (!encoder) return;
+
+    const prose = 'The quick brown fox jumps over the lazy dog. '.repeat(2200);
+    const exact = encoder.encode(prose).length;
+    const bounded = counter.count(prose).tokens;
+
+    expect(bounded).toBeGreaterThanOrEqual(exact);
+    expect((bounded - exact) / exact).toBeLessThan(0.005);
+  });
+});
