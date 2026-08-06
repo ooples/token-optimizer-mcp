@@ -35,6 +35,18 @@ beforeAll(() => {
   mkdirSync(join(dir, 'src'), { recursive: true });
   writeFileSync(join(dir, 'src', 'a.ts'), 'export const TOKEN = 1;\n');
   writeFileSync(join(dir, 'src', 'b.ts'), 'const plain = 2;\n');
+  // A line that makes `(a+)+$` backtrack catastrophically: a run of `a` with a
+  // final character that cannot satisfy `$`. 26 is chosen deliberately -- ~2^26
+  // steps is seconds, enough to fail an unguarded probe against the 2 s budget
+  // below, while a longer run would hang the suite instead of failing it.
+  writeFileSync(join(dir, 'src', 'backtrack.ts'), `${'a'.repeat(26)}!\n`);
+  // A line of bare `a`s, which `(a+)+$` MATCHES -- so the guard is the only
+  // thing that decides whether a hint appears, with no dependence on timing.
+  writeFileSync(join(dir, 'src', 'redos.ts'), `${'a'.repeat(26)}\n`);
+  // Two lines in ONE file, so a pattern spanning the newline matches the file
+  // and no single line. Split across two files it would match neither, and the
+  // test would pass without exercising anything.
+  writeFileSync(join(dir, 'src', 'multiline.ts'), 'alpha one\nbeta two\n');
 
   cache = new CacheEngine(join(dir, 'cache'), 10);
   tool = new SmartGrepTool(cache, new TokenCounter(), new MetricsCollector());
@@ -107,6 +119,51 @@ describe('the regex hint', () => {
     const result = await grep('TOKEN|nothing-here', { regex: true });
 
     expect(result.metadata.totalMatches).toBeGreaterThan(0);
+    expect(result.hint).toBeUndefined();
+  });
+
+  it('fires for an anchored pattern, which only matches a LINE', async () => {
+    // The search applies its pattern per line, so the probe has to as well.
+    // Tested against whole file contents, `^TOKEN$` is false -- `^` and `$`
+    // anchor to the ends of the WHOLE STRING without the `m` flag -- so the
+    // hint went missing for exactly the patterns most likely to be written by
+    // someone reaching for regex syntax.
+    const result = await grep('^export const TOKEN = 1;$');
+
+    expect(result.metadata.totalMatches).toBe(0);
+    expect(result.hint).toBeDefined();
+  });
+
+  it('does not fire for a pattern that only matches ACROSS lines', async () => {
+    // The mirror image, and the reason a whole-file probe is wrong in both
+    // directions: this matches the file but no single line, so `regex: true`
+    // would find nothing either and the hint would be a lie.
+    const result = await grep('alpha one\\nbeta two');
+
+    expect(result.metadata.totalMatches).toBe(0);
+    expect(result.hint).toBeUndefined();
+  });
+
+  it('refuses to run a pattern that could backtrack catastrophically', async () => {
+    // A LITERAL search must not be able to hang the server.
+    //
+    // Compiling and running a caller-supplied pattern is new exposure created
+    // by the probe: before it, `(a+)+$` was matched as plain text and cost
+    // nothing. Measured against the fixture whose line ends in `!`, the
+    // unguarded probe took 10.5 SECONDS on 26 characters. Nested quantifiers
+    // are the classic ReDoS shape, and the hint is a convenience -- losing it
+    // on exotic patterns costs nothing, whereas an unbounded backtrack costs
+    // the whole process.
+    //
+    // Asserted on the OUTCOME, not on elapsed time. A timing assertion here
+    // passed or failed with whatever else was running on the machine, which
+    // makes it a coin toss dressed as a test. `redos.ts` is a line of bare `a`s
+    // that this pattern DOES match, so an unguarded probe reports a hint
+    // quickly and a guarded one reports none -- the guard is the only thing
+    // that can change the result.
+    const result = await grep('(a+)+$');
+
+    expect(result.metadata.totalMatches).toBe(0);
     expect(result.hint).toBeUndefined();
   });
 

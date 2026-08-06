@@ -146,6 +146,25 @@ export interface SmartGrepResult {
   error?: string;
 }
 
+/**
+ * True when a group that already contains a quantifier is itself quantified.
+ *
+ * `(a+)+`, `(x*)*`, `(ab+){2,}` -- the classic catastrophic-backtracking shape,
+ * where the engine has exponentially many ways to split the same input.
+ *
+ * DELIBERATELY CONSERVATIVE AND DELIBERATELY CRUDE. It is a gate on offering an
+ * optional hint, not a security boundary: a false positive costs one hint, and
+ * refusing to guess is the safe direction. A real answer needs a parser, and a
+ * parser here would be a larger thing to get wrong than the problem it solves.
+ *
+ * Escaped parens and escaped quantifiers are stripped first, so `\(a\+\)` --
+ * which is literal text, not a group -- does not read as one.
+ */
+function hasNestedQuantifier(pattern: string): boolean {
+  const bare = pattern.replace(/\\./g, '');
+  return /\([^()]*[*+]\)[*+{]|\([^()]*\{\d+,?\d*\}[^()]*\)[*+{]/.test(bare);
+}
+
 export class SmartGrepTool {
   constructor(
     private cache: CacheEngine,
@@ -327,7 +346,20 @@ export class SmartGrepTool {
           const lines = content.split('\n');
           const fileMatches: GrepMatch[] = [];
 
-          if (regexProbe && !regexWouldMatch && regexProbe.test(content)) {
+          // PER LINE, because that is how the search itself matches.
+          //
+          // Testing whole file contents disagreed with the search in both
+          // directions: `^TOKEN$` is false against a multi-line string -- `^`
+          // and `$` anchor to the ends of the WHOLE string without the `m`
+          // flag -- so the hint went missing for exactly the anchored patterns
+          // someone reaching for regex is most likely to write; and a pattern
+          // spanning a newline matched the file while matching no line, which
+          // would have promised a `regex: true` result that does not exist.
+          if (
+            regexProbe &&
+            !regexWouldMatch &&
+            lines.some((l) => regexProbe.test(l))
+          ) {
             regexWouldMatch = true;
           }
 
@@ -626,6 +658,15 @@ export class SmartGrepTool {
 
     const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     if (escaped === pattern) return null;
+
+    // A LITERAL SEARCH MUST NOT BE ABLE TO HANG THE PROCESS.
+    //
+    // Compiling and running the caller's pattern is exposure this probe
+    // introduces: before it, `(a+)+$` was plain text and cost nothing. Measured
+    // against a 26-character line, the unguarded probe spent 10.5 SECONDS
+    // backtracking. The hint is a convenience, so declining to offer it on a
+    // pathological pattern costs the caller nothing they had before.
+    if (hasNestedQuantifier(pattern)) return null;
 
     try {
       const body = opts.wholeWord ? `\\b${pattern}\\b` : pattern;
