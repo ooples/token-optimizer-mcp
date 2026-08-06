@@ -22,6 +22,7 @@ import { generateCacheKey } from '../shared/hash-utils.js';
 import { fsGeneration } from '../../utils/fs-generation.js';
 import { detectFileType } from '../shared/syntax-utils.js';
 import { appendAll } from '../shared/append-all.js';
+import { resolveSearchScope } from '../../utils/search-scope.js';
 
 /**
  * The most this tool will ever return in one response.
@@ -138,53 +139,67 @@ export class SmartGrepTool {
   ): Promise<SmartGrepResult> {
     const startTime = Date.now();
 
-    // Default options
-    const opts: Required<SmartGrepOptions> = {
-      // `path` FIRST, and it is not a cosmetic alias.
-      //
-      // The hook refuses the built-in Grep and names this tool as the
-      // replacement, so callers pass the one argument that describes a search:
-      // where to look. `path` was undeclared, and an undeclared field that is
-      // not a near miss of a declared one is discarded silently -- so `cwd` fell
-      // back to process.cwd(), which for an MCP server is its own launch
-      // directory. Measured: every "scoped" search actually walked 676,875 files
-      // across the whole home directory, for 65 seconds, and answered about the
-      // wrong tree.
-      cwd: options.path ?? options.cwd ?? process.cwd(),
-      path: options.path ?? '',
-      files: options.files ?? ['**/*'],
-      caseSensitive: options.caseSensitive ?? false,
-      wholeWord: options.wholeWord ?? false,
-      regex: options.regex ?? false,
-      extensions: options.extensions ?? [],
-      excludeExtensions: options.excludeExtensions ?? [
-        '.min.js',
-        '.map',
-        '.lock',
-      ],
-      skipBinary: options.skipBinary ?? true,
-      ignore: options.ignore ?? [
-        '**/node_modules/**',
-        '**/.git/**',
-        '**/dist/**',
-        '**/build/**',
-      ],
-      includeContext: options.includeContext ?? false,
-      contextBefore: options.contextBefore ?? 0,
-      contextAfter: options.contextAfter ?? 0,
-      includeColumn: options.includeColumn ?? false,
-      maxMatchesPerFile: options.maxMatchesPerFile ?? Infinity,
-      limit: options.limit ?? Infinity,
-      offset: options.offset ?? 0,
-      filesWithMatches: options.filesWithMatches ?? false,
-      count: options.count ?? false,
-      useCache: options.useCache ?? false,
-      ttl: options.ttl ?? 300,
-      maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB default
-      encoding: options.encoding ?? 'utf-8',
-    };
-
+    // `path` FIRST, and it is not a cosmetic alias.
+    //
+    // The hook refuses the built-in Grep and names this tool as the
+    // replacement, so callers pass the one argument that describes a search:
+    // where to look. `path` was undeclared, and an undeclared field that is
+    // not a near miss of a declared one is discarded silently -- so `cwd` fell
+    // back to process.cwd(), which for an MCP server is its own launch
+    // directory. Measured: every "scoped" search actually walked 676,875 files
+    // across the whole home directory, for 65 seconds, and answered about the
+    // wrong tree.
+    //
+    // Assigning it straight to `cwd` then broke the OTHER reading of `path`: a
+    // single FILE became the search root, and the default `['**/*']` cannot
+    // match inside a file, so a file-scoped search reported success with zero
+    // matches. `resolveSearchScope` handles both readings, and reports a path
+    // that does not exist rather than answering zero for it.
     try {
+      const scope = resolveSearchScope(
+        options.path,
+        options.cwd,
+        process.cwd()
+      );
+
+      // Default options
+      const opts: Required<SmartGrepOptions> = {
+        cwd: scope.cwd,
+        path: options.path ?? '',
+        // A caller's explicit `files` wins over the one derived from `path`, so
+        // `path` narrows the scope rather than overriding a stated filter.
+        files: options.files ?? scope.files ?? ['**/*'],
+        caseSensitive: options.caseSensitive ?? false,
+        wholeWord: options.wholeWord ?? false,
+        regex: options.regex ?? false,
+        extensions: options.extensions ?? [],
+        excludeExtensions: options.excludeExtensions ?? [
+          '.min.js',
+          '.map',
+          '.lock',
+        ],
+        skipBinary: options.skipBinary ?? true,
+        ignore: options.ignore ?? [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/dist/**',
+          '**/build/**',
+        ],
+        includeContext: options.includeContext ?? false,
+        contextBefore: options.contextBefore ?? 0,
+        contextAfter: options.contextAfter ?? 0,
+        includeColumn: options.includeColumn ?? false,
+        maxMatchesPerFile: options.maxMatchesPerFile ?? Infinity,
+        limit: options.limit ?? Infinity,
+        offset: options.offset ?? 0,
+        filesWithMatches: options.filesWithMatches ?? false,
+        count: options.count ?? false,
+        useCache: options.useCache ?? false,
+        ttl: options.ttl ?? 300,
+        maxFileSize: options.maxFileSize ?? 10 * 1024 * 1024, // 10MB default
+        encoding: options.encoding ?? 'utf-8',
+      };
+
       // Check cache first
       const cacheKey = generateCacheKey('grep', {
         pattern,

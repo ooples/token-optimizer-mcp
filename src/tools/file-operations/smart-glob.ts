@@ -21,6 +21,10 @@ import { MetricsCollector } from '../../core/metrics.js';
 import { generateCacheKey } from '../shared/hash-utils.js';
 import { fsGeneration } from '../../utils/fs-generation.js';
 import { detectFileType } from '../shared/syntax-utils.js';
+import {
+  resolveSearchScope,
+  limitToScopedFile,
+} from '../../utils/search-scope.js';
 
 export interface FileMetadata {
   path: string;
@@ -133,52 +137,64 @@ export class SmartGlobTool {
   ): Promise<SmartGlobResult> {
     const startTime = Date.now();
 
-    // Default options
-    const opts: Required<SmartGlobOptions> = {
-      // See smart-grep.ts: `path` was silently discarded, so a scoped search
-      // actually ran from the server's own launch directory. This tool did not
-      // crash on it -- it returned confident results from the wrong tree, which
-      // is the worse of the two failures.
-      cwd: options.path ?? options.cwd ?? process.cwd(),
-      path: options.path ?? '',
-      absolute: options.absolute ?? false,
-      // `dist` and `build` are conventions, not guarantees. Real projects keep
-      // real source in both -- AiDotNet.Tensors has two .csproj files under
-      // build/, and a search for '**/*.csproj' silently returned 16 of its 18.
-      // The hook DENIES the built-in Glob and sends the caller here, so a
-      // silent omission is not a smaller result set, it is the caller
-      // concluding their file does not exist.
-      //
-      // The defaults are kept, because they are right far more often than not.
-      // What is removed is the SILENCE: `ignoredMatches` below reports how many
-      // real matches these patterns withheld, so the omission is visible and
-      // the caller can pass their own `ignore` to see them.
-      ignore: options.ignore ?? [
-        '**/node_modules/**',
-        '**/.git/**',
-        '**/dist/**',
-        '**/build/**',
-      ],
-      onlyFiles: options.onlyFiles ?? true,
-      onlyDirectories: options.onlyDirectories ?? false,
-      extensions: options.extensions ?? [],
-      excludeExtensions: options.excludeExtensions ?? [],
-      minSize: options.minSize ?? 0,
-      maxSize: options.maxSize ?? Infinity,
-      modifiedAfter: options.modifiedAfter ?? new Date(0),
-      modifiedBefore: options.modifiedBefore ?? new Date(8640000000000000), // Max date
-      includeMetadata: options.includeMetadata ?? false,
-      includeContent: options.includeContent ?? false,
-      maxContentSize: options.maxContentSize ?? 10240, // 10KB
-      limit: options.limit ?? Infinity,
-      offset: options.offset ?? 0,
-      sortBy: options.sortBy ?? 'path',
-      sortOrder: options.sortOrder ?? 'asc',
-      useCache: options.useCache ?? false,
-      ttl: options.ttl ?? 300,
-    };
-
+    // See smart-grep.ts: `path` was silently discarded, so a scoped search
+    // actually ran from the server's own launch directory. This tool did not
+    // crash on it -- it returned confident results from the wrong tree, which
+    // is the worse of the two failures.
+    //
+    // Assigning it to `cwd` then broke `path` naming a single FILE: a glob
+    // rooted at a file matches nothing, so the call returned success with an
+    // empty list. The scope resolves a file to its parent plus the file itself,
+    // and `limitToScopedFile` below keeps the result to that one file, since
+    // this tool's only filter is the caller's pattern.
     try {
+      const scope = resolveSearchScope(
+        options.path,
+        options.cwd,
+        process.cwd()
+      );
+
+      // Default options
+      const opts: Required<SmartGlobOptions> = {
+        cwd: scope.cwd,
+        path: options.path ?? '',
+        absolute: options.absolute ?? false,
+        // `dist` and `build` are conventions, not guarantees. Real projects keep
+        // real source in both -- AiDotNet.Tensors has two .csproj files under
+        // build/, and a search for '**/*.csproj' silently returned 16 of its 18.
+        // The hook DENIES the built-in Glob and sends the caller here, so a
+        // silent omission is not a smaller result set, it is the caller
+        // concluding their file does not exist.
+        //
+        // The defaults are kept, because they are right far more often than not.
+        // What is removed is the SILENCE: `ignoredMatches` below reports how many
+        // real matches these patterns withheld, so the omission is visible and
+        // the caller can pass their own `ignore` to see them.
+        ignore: options.ignore ?? [
+          '**/node_modules/**',
+          '**/.git/**',
+          '**/dist/**',
+          '**/build/**',
+        ],
+        onlyFiles: options.onlyFiles ?? true,
+        onlyDirectories: options.onlyDirectories ?? false,
+        extensions: options.extensions ?? [],
+        excludeExtensions: options.excludeExtensions ?? [],
+        minSize: options.minSize ?? 0,
+        maxSize: options.maxSize ?? Infinity,
+        modifiedAfter: options.modifiedAfter ?? new Date(0),
+        modifiedBefore: options.modifiedBefore ?? new Date(8640000000000000), // Max date
+        includeMetadata: options.includeMetadata ?? false,
+        includeContent: options.includeContent ?? false,
+        maxContentSize: options.maxContentSize ?? 10240, // 10KB
+        limit: options.limit ?? Infinity,
+        offset: options.offset ?? 0,
+        sortBy: options.sortBy ?? 'path',
+        sortOrder: options.sortOrder ?? 'asc',
+        useCache: options.useCache ?? false,
+        ttl: options.ttl ?? 300,
+      };
+
       // Check cache first
       const cacheKey = generateCacheKey('glob', {
         pattern,
@@ -210,12 +226,19 @@ export class SmartGlobTool {
       }
 
       // Perform glob search
-      const matches = globSync(pattern, {
-        cwd: opts.cwd,
-        absolute: opts.absolute,
-        ignore: opts.ignore,
-        nodir: opts.onlyFiles,
-      });
+      //
+      // Narrowed to the scoped file when `path` named one -- the glob ran from
+      // that file's PARENT, so without this it would also return the parent's
+      // other matches and quietly widen the scope the caller asked for.
+      const matches = limitToScopedFile(
+        globSync(pattern, {
+          cwd: opts.cwd,
+          absolute: opts.absolute,
+          ignore: opts.ignore,
+          nodir: opts.onlyFiles,
+        }),
+        scope
+      );
 
       // Whether the exclusions in force are OURS or the caller's -- the note
       // below names them, and naming them wrongly misdirects anyone hunting a
@@ -229,16 +252,26 @@ export class SmartGlobTool {
       // already the unignored set, so the second walk would traverse the whole
       // tree synchronously to rediscover a list we are holding -- pure cost on
       // the exact call that opted out of filtering.
+      //
+      // BOTH WALKS ARE SCOPED THE SAME WAY. Narrowing only the first one made
+      // the difference between them look like suppressed matches: a file-scoped
+      // glob returned 1 while the comparison walk still covered the parent and
+      // returned 2, so the response reported that 1 file "matched but were
+      // excluded by the ignore patterns" when nothing had been excluded at all.
+      // A number invented to explain an absence is worse than no number.
       const ignoredMatches =
         opts.ignore.length === 0
           ? 0
           : Math.max(
               0,
-              globSync(pattern, {
-                cwd: opts.cwd,
-                absolute: opts.absolute,
-                nodir: opts.onlyFiles,
-              }).length - matches.length
+              limitToScopedFile(
+                globSync(pattern, {
+                  cwd: opts.cwd,
+                  absolute: opts.absolute,
+                  nodir: opts.onlyFiles,
+                }),
+                scope
+              ).length - matches.length
             );
 
       // Filter and collect file info
