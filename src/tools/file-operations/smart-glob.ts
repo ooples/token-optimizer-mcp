@@ -121,6 +121,28 @@ export interface SmartGlobResult {
   error?: string;
 }
 
+/**
+ * Never enumerated, in either walk, whatever the caller's ignore list says.
+ *
+ * `.git` ONLY, and the narrowness is the point. `node_modules` belongs in the
+ * caller's ignore list, not here: excluding it from BOTH walks makes their
+ * difference zero, which silently deletes the count that tells a caller what was
+ * withheld -- caught by an existing test that asserts a node_modules exclusion is
+ * still reported. `.git` is different because it was never reachable before
+ * `dot: true`; this restores the status quo rather than changing what is counted.
+ *
+ * With `dot: true` the comparison walk would otherwise descend into
+ * `.git/objects` -- unbounded on a
+ * real repository, and pure cost, since nobody's search was 'withheld' by git's
+ * object store.
+ */
+const ALWAYS_IGNORED = ['**/.git/**'];
+
+/** A caller's ignore list, plus the patterns neither walk may enumerate. */
+function withAlwaysIgnored(ignore: string[]): string[] {
+  return [...new Set([...ignore, ...ALWAYS_IGNORED])];
+}
+
 export class SmartGlobTool {
   constructor(
     private cache: CacheEngine,
@@ -234,8 +256,24 @@ export class SmartGlobTool {
         globSync(pattern, {
           cwd: opts.cwd,
           absolute: opts.absolute,
-          ignore: opts.ignore,
+          // ALWAYS_IGNORED REACHES THIS WALK TOO.
+          //
+          // It used to apply only to the comparison walk, so a caller-supplied
+          // ignore list left `.git` enumerated HERE and excluded THERE. The
+          // primary walk then returned more matches than the comparison, the
+          // difference went negative, and `ignoredMatches` clamped to zero --
+          // telling the caller nothing had been withheld while their own
+          // pattern was withholding a file. The two walks only mean anything
+          // relative to each other, so they have to be scoped identically.
+          ignore: withAlwaysIgnored(opts.ignore),
           nodir: opts.onlyFiles,
+          // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
+          // project content, but glob skips anything dot-prefixed unless told
+          // otherwise. Measured in a real checkout: ten .yml files existed, all
+          // under .github/workflows, and a repo-wide search returned ZERO while
+          // reporting success over 654 files searched. Exclusion is the ignore
+          // list's job -- .git and node_modules are still excluded by it.
+          dot: true,
         }),
         scope
       );
@@ -269,6 +307,15 @@ export class SmartGlobTool {
                   cwd: opts.cwd,
                   absolute: opts.absolute,
                   nodir: opts.onlyFiles,
+                  // Same reason as above; both walks must agree.
+                  dot: true,
+                  // NOT an empty ignore list, now that `dot` is on. This walk
+                  // deliberately drops the caller's ignores to count what they
+                  // withheld -- but with dots visible that would enumerate
+                  // `.git/objects`, which on a real repository is enormous and
+                  // is pure cost: nobody's glob was "withheld" by git's object
+                  // store. Infrastructure stays excluded in both walks.
+                  ignore: ALWAYS_IGNORED,
                 }),
                 scope
               ).length - matches.length
