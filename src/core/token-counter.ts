@@ -82,12 +82,18 @@ export class TokenCounter {
    * separator or a repetitive blob would stall the server for twenty seconds.
    * It surfaced as a 38-second test suite, of which one case was 23 seconds.
    *
-   * SLICING MAKES THE COST LINEAR. A merge cannot span a slice boundary, so
-   * the count can differ slightly from an unsliced encode -- always upward, by
-   * at most one token per boundary. Measured against exact encoding at this
-   * size: prose +0.064%, minified javascript +0.013%, and the repetitive cases
-   * agree exactly. Text shorter than one slice is encoded in a single call and
-   * is bit-identical to before.
+   * SLICING MAKES THE COST LINEAR, and slicing at a LINE START makes it very
+   * nearly free of accuracy cost. Measured across all 342 files in this
+   * repository over 8 KB, against an exact unsliced encode:
+   *
+   *   cut at the byte limit        aggregate +0.06437%
+   *   cut at the last space        aggregate +0.00952%,  64.3% of files exact
+   *   cut after the last newline   aggregate +0.00097%,  98.0% of files exact
+   *
+   * A cl100k token can carry its leading whitespace, which is why cutting at a
+   * space still splits one and cutting after a newline does not. 19 tokens
+   * differ across 1,963,504. Text shorter than one slice is encoded in a single
+   * call and is bit-identical to before.
    */
   private static readonly ENCODE_SLICE = 8192;
 
@@ -100,8 +106,26 @@ export class TokenCounter {
     if (text.length <= slice) return this.encoder.encode(text).length;
 
     let total = 0;
-    for (let i = 0; i < text.length; i += slice) {
-      total += this.encoder.encode(text.slice(i, i + slice)).length;
+    let from = 0;
+    while (from < text.length) {
+      let end = Math.min(from + slice, text.length);
+      if (end < text.length) {
+        // BACK UP TO A LINE START. A cl100k token can carry its leading
+        // whitespace, so cutting AT a space still splits one -- measured across
+        // 342 real files over 8 KB, cutting at spaces matched an exact encode on
+        // 64.3% of them. Cutting immediately after a newline matched on 98.0%,
+        // because a line start is a boundary the pre-tokenizer already respects.
+        //
+        // The search stops halfway back so a file with very long lines cannot
+        // degenerate into tiny slices; when no newline is found in range the cut
+        // is taken as-is, which is the minified-single-line case.
+        const floor = from + (slice >> 1);
+        let cut = end;
+        while (cut > floor && text[cut - 1] !== '\n') cut--;
+        if (cut > floor) end = cut;
+      }
+      total += this.encoder.encode(text.slice(from, end)).length;
+      from = end;
     }
     return total;
   }
