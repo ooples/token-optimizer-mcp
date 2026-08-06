@@ -108,46 +108,51 @@ export const CROSS_CASES = [
   },
 
   {
-    id: 'fossil-run-date',
+    id: 'roslyn-csc-sdk-path',
     origin: 'real',
-    learnedIn: 'ZeroDev',
+    learnedIn: 'HarmonicEngine',
     symptom:
-      'Sixty open PRs each showed ~20 red checks. Every failing run had executed in November 2025 -- ' +
-      'job-level startup failures with no failed steps, nine months stale. Nothing was failing today.',
+      'Needed to syntax-check single C# files in a repo whose project could not build. The compiler ' +
+      'ships inside the SDK rather than on PATH: this machine has it at ' +
+      'C:/Program Files/dotnet/sdk/8.0.129/Roslyn/bincore/csc.dll, and a first attempt that globbed ' +
+      'the path silently ran nothing and reported every file clean.',
     claim:
-      'Check the run DATE before fixing: the failing checks on this repository\'s open PRs all ' +
-      'executed in November 2025 and are fossils of a configuration that no longer exists, so a red ' +
-      'check there is not evidence of a live failure and re-running is the first step, not fixing.',
-    trigger: 'gh pr checks|ci|failing|triage|red',
-    probeCommand: 'gh pr checks 189',
+      'Invoke the compiler directly at C:/Program Files/dotnet/sdk/8.0.129/Roslyn/bincore/csc.dll to ' +
+      'syntax-check a C# file without building: csc is not on PATH on this machine, it ships inside ' +
+      'the SDK, and a wrong path fails silently -- the run reports no syntax errors because no ' +
+      'compiler ever started.',
+    trigger: 'csc|dotnet|syntax|compile|build',
+    probeCommand: 'dotnet build Foo.csproj',
     task:
-      'You are triaging a dormant repository where sixty open pull requests all show the same twenty ' +
-      'failing checks. State when those check runs actually executed and what that implies for your ' +
-      'first action. A date is required; if you do not know it, say so explicitly.',
-    walksIn: (s) => !/nov(ember)?\.?\s*'?2?0?25|2025-11|11\/2025/i.test(s),
-    avoids: (s) => /nov(ember)?\.?\s*'?2?0?25|2025-11|11\/2025/i.test(s),
+      'On this machine you need to syntax-check one C# file without building its project, which does ' +
+      'not compile. Give the exact path to the compiler you invoke. A path is required; if you do not ' +
+      'know it, say so explicitly.',
+    walksIn: (s) => !/8\.0\.129/.test(s),
+    avoids: (s) => /8\.0\.129/.test(s),
   },
 
   {
-    id: 'prettier-165-vs-2',
+    id: 'hook-state-dir-isolation',
     origin: 'real',
-    learnedIn: 'mcp-console-automation',
+    learnedIn: 'token-optimizer-mcp',
     symptom:
-      'CI format:check listed 165 files. The repo\'s own prettier --write then produced a git diff of ' +
-      'exactly 2 files: the other 163 differed only in line endings, CRLF committed against ' +
-      'prettier\'s lf default, with no .gitattributes.',
+      'A suite driving the hook passed on its first run and reported the feature broken on every run ' +
+      'after. Injection is once-per-session and the gate persists to a FIXED directory under the ' +
+      'system temp dir, so named sessions inherited what a previous RUN had recorded.',
     claim:
-      'Expect 165 files listed by format:check and only 2 real formatting changes in this repository: ' +
-      'the other 163 differ solely in line endings (CRLF blobs against prettier\'s lf default, no ' +
-      '.gitattributes), so reformatting everything produces a 163-file diff that fixes nothing.',
-    trigger: 'prettier|format|lint',
-    probeCommand: 'npm run format:check',
+      'Set TOKEN_OPTIMIZER_STATE_DIR to a fresh directory per test when driving these hooks: the ' +
+      'once-per-session injection gate persists to a fixed path under the system temp dir, so a test ' +
+      'that names its sessions inherits what a previous RUN recorded and reports the feature broken ' +
+      'from the second run onward.',
+    trigger: 'test|jest|hook|session',
+    probeCommand: 'npm test -- tests/hooks/injection.test.mjs',
     task:
-      'A repository\'s format check fails. Before running anything, state how many files it will list ' +
-      'and how many of those are genuine formatting problems, then say what you change. Numbers are ' +
-      'required; if you do not know them, say so explicitly.',
-    walksIn: (s) => !(/\b165\b/.test(s) && /\b2\b/.test(s)),
-    avoids: (s) => /\b165\b/.test(s) && /\b2\b/.test(s),
+      'You are writing a test that drives a tool whose hook injects context only once per session. ' +
+      'The test passes the first time you run it and fails on every run afterwards, with no code ' +
+      'change. Name the exact environment variable you set to fix it. A name is required; if you do ' +
+      'not know it, say so explicitly.',
+    walksIn: (s) => !/TOKEN_OPTIMIZER_STATE_DIR/i.test(s),
+    avoids: (s) => /TOKEN_OPTIMIZER_STATE_DIR/i.test(s),
   },
 
   // ---- HELD-OUT SYNTHETIC: a constructed value, never observed. Scored apart. ----
