@@ -47,6 +47,7 @@ import {
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
+import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -134,61 +135,30 @@ try {
       }
     }
 
-    // THE MEMORY HALF. `harvest` records that this file was touched, at this
-    // content hash, by this task -- and nothing had been calling it, anywhere.
-    // The graph therefore accumulated no nodes and no task edges from ordinary
-    // work, which left every downstream feature (injection, the zero-turn
-    // refusal, consolidation, re-derivation detection) fed by a producer that
-    // never ran. Structural only: it records what demonstrably happened and
-    // makes no claims.
-    for (const { path, size } of touched) {
-      try {
-        // NEVER THE TRANSCRIPT ARCHIVE.
-        //
-        // Archived transcripts hold the user's own words verbatim. They are
-        // stored locally, gitignored, and deliberately never harvested -- but
-        // they are ordinary files on disk, so an agent that greps or opens one
-        // would land here and have it hashed, snapshotted and indexed into the
-        // graph, from which injection would later serve it back into context.
-        //
-        // `isArchived` is the test for exactly this, and it was enforcing
-        // nothing: written, tested, and called from nowhere. A privacy
-        // guarantee that no code path consults is not a guarantee.
-        if (isArchived(path)) continue;
-
-        // CAPPED BEFORE THE READ. indexFile bounds the stored SNAPSHOT, not the
-        // read that produces it, so a single huge operand -- a multi-hundred-
-        // megabyte build log is the ordinary case -- would be slurped
-        // synchronously on the hook path with the user waiting. A file we
-        // cannot afford to hash is simply not indexed; the touch is still
-        // observed above.
-        if (size > HARVEST_MAX_BYTES) continue;
-
-        const dir = dirFor(path);
-        // ONE read, not two. harvest() hashed the file and indexFile() then
-        // read it again, so every allowed call paid double the I/O on the
-        // hook's critical path. Reading once here and handing the text to both
-        // keeps the graph identical and halves the cost.
-        const source = readFileSync(path, 'utf8');
-        harvest(dir, {
-          filePath: path,
-          sessionId: payload.session_id,
-          action: payload.tool_name,
-          hash: contentHash(path, source),
-        });
-        // Index on the way past, so the NEXT touch can be answered with
-        // structure instead of the file. Bounded by the snapshot limit.
-        indexFile(dir, path, source);
-      } catch {
-        /* never let bookkeeping break an allowed call */
-      }
-    }
-
-    // DELIVER WHAT THE GRAPH ALREADY KNOWS. Everything above this line WRITES
-    // to the graph; until now nothing read from it on an allowed call, so
+    // DELIVER WHAT THE GRAPH ALREADY KNOWS -- BEFORE ANYTHING BELOW OVERWRITES
+    // IT. Nothing read from the graph on an allowed call at all once, so
     // `forTouch` -- the injection the design calls "where the win lands" -- was
     // imported by nothing but its own test. Measured over a full session on
     // three real projects: 4,053 captures, 2,063 reads, findings served twice.
+    //
+    // READ BEFORE WRITE, and the order is load-bearing rather than tidy. The
+    // harvest loop below calls `indexFile`, which re-points every anchor at the
+    // bytes now on disk. Running it first destroyed the only evidence staleness
+    // has to work from: `forTouch` asked "did this file change since the claim
+    // was recorded?" against a snapshot `indexFile` had already refreshed, so
+    // the answer was always no and findings derived from the OLD content were
+    // served as current.
+    //
+    // The files that reach this path are exactly the ones where that matters. A
+    // write the hook observes is invalidated eagerly by `invalidateOnWrite`, so
+    // what is left is the file changed where the session could not see it -- a
+    // checkout, a rebase, a second agent, an editor outside the tool loop --
+    // which is where a stale claim is both most likely and least likely to be
+    // noticed. Serving it clean spends tokens to assert something false with
+    // the graph's authority behind it, which is worse than serving nothing.
+    //
+    // Nothing is lost by the swap: `indexFile` exists so the NEXT touch can be
+    // answered with structure, and the next touch still gets it.
     //
     // Both triggers fire here because findings answer two different questions.
     // An anchor says which FILE a claim is about; a trigger says WHEN it is
@@ -236,6 +206,69 @@ try {
     } catch {
       // Delivery is an optimization. A defect here must never cost the user
       // their tool call, so a failure falls through to a plain allow.
+    }
+
+    // THE MEMORY HALF. `harvest` records that this file was touched, at this
+    // content hash, by this task -- and nothing had been calling it, anywhere.
+    // The graph therefore accumulated no nodes and no task edges from ordinary
+    // work, which left every downstream feature (injection, the zero-turn
+    // refusal, consolidation, re-derivation detection) fed by a producer that
+    // never ran. Structural only: it records what demonstrably happened and
+    // makes no claims.
+    for (const { path, size } of touched) {
+      try {
+        // NEVER THE TRANSCRIPT ARCHIVE.
+        //
+        // Archived transcripts hold the user's own words verbatim. They are
+        // stored locally, gitignored, and deliberately never harvested -- but
+        // they are ordinary files on disk, so an agent that greps or opens one
+        // would land here and have it hashed, snapshotted and indexed into the
+        // graph, from which injection would later serve it back into context.
+        //
+        // `isArchived` is the test for exactly this, and it was enforcing
+        // nothing: written, tested, and called from nowhere. A privacy
+        // guarantee that no code path consults is not a guarantee.
+        if (isArchived(path)) continue;
+
+        // CAPPED BEFORE THE READ. indexFile bounds the stored SNAPSHOT, not the
+        // read that produces it, so a single huge operand -- a multi-hundred-
+        // megabyte build log is the ordinary case -- would be slurped
+        // synchronously on the hook path with the user waiting. A file we
+        // cannot afford to hash is simply not indexed; the touch is still
+        // observed above.
+        if (size > HARVEST_MAX_BYTES) continue;
+
+        const dir = dirFor(path);
+        // THE GUARD MUST BE HERE, not only in the helpers this read feeds.
+        //
+        // A path holding U+10FFFF ABORTS the process inside libuv rather than
+        // throwing, so the surrounding try/catch -- and the whole-hook catch
+        // that promises "a defect here costs the user nothing" -- does not hold
+        // for it. `touchedFiles` filters such paths at intake, but this line is
+        // a bare `readFileSync` and the two consumers below cannot cover it:
+        // `contentHash(path, source)` skips its own check precisely because the
+        // source was supplied, and `indexFile` checks only after this read has
+        // already happened. Defence at the call site, since this is where the
+        // syscall is.
+        if (!isFsSafePath(path)) continue;
+
+        // ONE read, not two. harvest() hashed the file and indexFile() then
+        // read it again, so every allowed call paid double the I/O on the
+        // hook's critical path. Reading once here and handing the text to both
+        // keeps the graph identical and halves the cost.
+        const source = readFileSync(path, 'utf8');
+        harvest(dir, {
+          filePath: path,
+          sessionId: payload.session_id,
+          action: payload.tool_name,
+          hash: contentHash(path, source),
+        });
+        // Index on the way past, so the NEXT touch can be answered with
+        // structure instead of the file. Bounded by the snapshot limit.
+        indexFile(dir, path, source);
+      } catch {
+        /* never let bookkeeping break an allowed call */
+      }
     }
 
     allowWithContext(context);
