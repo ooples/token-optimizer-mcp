@@ -56,9 +56,14 @@ jobs:
             run the test suite, identify the minimal change needed to make all tests pass, implement only that change,
             and stop. Do not refactor unrelated code or files. Keep changes small and surgical.
           sandbox: workspace-write
+      # The stdio contract suite drives dist/server/index.js, so the build has to
+      # happen here too -- otherwise this gate fails for a missing artefact
+      # rather than for anything Codex did or did not fix.
       - name: Verify tests
         if: ${{ env.OPENAI_API_KEY != '' }}
-        run: npm test --silent
+        run: |
+          npm run build
+          npm test --silent
       - name: Create pull request with fixes
         if: ${{ success() && env.OPENAI_API_KEY != '' }}
         uses: peter-evans/create-pull-request@v6

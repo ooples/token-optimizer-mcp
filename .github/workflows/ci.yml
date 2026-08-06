@@ -113,6 +113,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # BUILD BEFORE TESTING. tests/integration/mcp-stdio-contract.test.ts
+      # spawns dist/server/index.js -- the file package.json lists in `bin` --
+      # and speaks JSON-RPC to it, because that is the only way to catch defects
+      # that live in the serialisation boundary rather than in the tool classes.
+      # (smart_grep returned its per-file counts as a Map, which is fine
+      # in-process and arrives as `{}` over the wire; every in-process test
+      # passed.) Without this step dist/ does not exist and that suite fails
+      # outright.
+      - name: Build, because the stdio contract suite drives dist/
+        run: npm run build
+
       - name: Run tests with coverage
         run: npm run test:ci
         env:
