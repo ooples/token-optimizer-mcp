@@ -64,6 +64,73 @@ export class TokenCounter {
   }
 
   /**
+   * Longest slice handed to the tokenizer in one call.
+   *
+   * BPE COST IS SUPERLINEAR IN THE LENGTH OF A SINGLE RUN, and pathologically
+   * so on highly repetitive text, because every merge pass has more to merge.
+   * Measured on 100,000 characters:
+   *
+   *   repeated single character   23,004 ms
+   *   a 26-character cycle         6,856 ms
+   *   minified json                   28 ms
+   *   base64                          28 ms
+   *   minified javascript             18 ms
+   *
+   * Ordinary content is fine; repetitive content is not. This is not a
+   * hypothetical input either -- `count_tokens` is the most-called tool in the
+   * product (2,738 of 4,735 recorded captures), and a padding run, an ASCII
+   * separator or a repetitive blob would stall the server for twenty seconds.
+   * It surfaced as a 38-second test suite, of which one case was 23 seconds.
+   *
+   * SLICING MAKES THE COST LINEAR, and slicing at a LINE START makes it very
+   * nearly free of accuracy cost. Measured across all 342 files in this
+   * repository over 8 KB, against an exact unsliced encode:
+   *
+   *   cut at the byte limit        aggregate +0.06437%
+   *   cut at the last space        aggregate +0.00952%,  64.3% of files exact
+   *   cut after the last newline   aggregate +0.00097%,  98.0% of files exact
+   *
+   * A cl100k token can carry its leading whitespace, which is why cutting at a
+   * space still splits one and cutting after a newline does not. 19 tokens
+   * differ across 1,963,504. Text shorter than one slice is encoded in a single
+   * call and is bit-identical to before.
+   */
+  private static readonly ENCODE_SLICE = 8192;
+
+  /**
+   * Encodes in bounded slices, so one pathological input cannot stall a call.
+   */
+  private encodeBounded(text: string): number {
+    if (!this.encoder) return 0;
+    const slice = TokenCounter.ENCODE_SLICE;
+    if (text.length <= slice) return this.encoder.encode(text).length;
+
+    let total = 0;
+    let from = 0;
+    while (from < text.length) {
+      let end = Math.min(from + slice, text.length);
+      if (end < text.length) {
+        // BACK UP TO A LINE START. A cl100k token can carry its leading
+        // whitespace, so cutting AT a space still splits one -- measured across
+        // 342 real files over 8 KB, cutting at spaces matched an exact encode on
+        // 64.3% of them. Cutting immediately after a newline matched on 98.0%,
+        // because a line start is a boundary the pre-tokenizer already respects.
+        //
+        // The search stops halfway back so a file with very long lines cannot
+        // degenerate into tiny slices; when no newline is found in range the cut
+        // is taken as-is, which is the minified-single-line case.
+        const floor = from + (slice >> 1);
+        let cut = end;
+        while (cut > floor && text[cut - 1] !== '\n') cut--;
+        if (cut > floor) end = cut;
+      }
+      total += this.encoder.encode(text.slice(from, end)).length;
+      from = end;
+    }
+    return total;
+  }
+
+  /**
    * Count tokens in text (synchronous).
    *
    * Synchronous on tiktoken-backed tokenizers, which is all we expose
@@ -73,7 +140,7 @@ export class TokenCounter {
   count(text: string): TokenCountResult {
     if (this.encoder) {
       return {
-        tokens: this.encoder.encode(text).length,
+        tokens: this.encodeBounded(text),
         characters: text.length,
       };
     }

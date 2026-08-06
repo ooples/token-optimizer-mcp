@@ -341,7 +341,37 @@ export function serve(graph, findings) {
   // graph directly cannot accidentally serve a claim a human explicitly
   // withdrew. A withheld claim reappearing is not a bug anyone would notice
   // quickly.
+/**
+ * Types whose truth is a claim ABOUT the anchor's contents.
+ *
+ * Only these can be invalidated by that file changing. An anchor on any other
+ * type is a RETRIEVAL HOOK -- the file that happened to be open when the lesson
+ * was learned -- and its contents changing says nothing about the claim.
+ *
+ * MEASURED, across every real graph on one machine: 32 findings were served
+ * stale, and 24 of them -- 75% -- were types in neither of these sets. The
+ * clearest example is a `failure` reading "Edit hooks-core/, never the generated
+ * copies", marked stale because hooks-core/wiki.mjs changed. That rule is about
+ * process; wiki.mjs's contents cannot make it wrong. It was being discounted for
+ * a reason that did not exist.
+ *
+ * THE TRADE, STATED. A `command` finding CAN be invalidated by its anchor -- a
+ * claim about `npm test` anchored to package.json genuinely dies if the test
+ * script changes. That case is now missed. It is the better error: today every
+ * version bump marks it stale, so the signal fires overwhelmingly when nothing
+ * relevant happened, and a signal that is usually wrong is one a reader learns
+ * to ignore -- taking the rare true positive with it.
+ */
+const CONTENT_DEPENDENT = new Set(['finding', 'map']);
+
   for (const finding of findings.filter((f) => !f.retired)) {
+    // A claim that does not depend on the anchor's contents cannot be
+    // invalidated by them. It is served as-is rather than discounted.
+    if (!CONTENT_DEPENDENT.has(finding.type || 'finding')) {
+      served.push({ ...finding });
+      continue;
+    }
+
     const anchors = graph.edges
       .filter((e) => e.edge === 'derived_from' && e.from === finding.id)
       .map((e) => graph.nodes.get(e.to))
@@ -400,12 +430,30 @@ export function serve(graph, findings) {
       // front of the model, and this text exists precisely because the previous
       // phrasing was measured suppressing correct findings. State the evidence
       // gap and stop.
-      diff = `(marked stale: ${reason}. The supporting diff can no longer be `
-        + 'reconstructed; the claim itself may well still hold, so weigh it on '
-        + 'its own merits.)';
+      // THE PROSE MOVES OUT OF `diff`, and the fact moves into a flag.
+      //
+      // Softening this sentence was not enough, because the RENDERER wraps it:
+      // the model saw `STALE (reason). What changed:` followed by a paragraph
+      // explaining that nothing follows. The strong framing was designed for
+      // the case where evidence exists and was being applied to the case where
+      // it does not.
+      //
+      // Measured across every real graph on one machine: 32 of 241 served
+      // findings were stale, and 25 of those 32 -- 78% -- had no diff at all.
+      // So the strongest wording available was carried by the findings with the
+      // least evidence behind them, on 10.4% of everything served.
+      //
+      // A caller cannot phrase this well from a prose blob, so it gets the two
+      // things it needs: that the finding is stale, and whether any evidence
+      // survives. The wording is then the renderer's business.
+      diff = '';
     }
 
-    served.push({ ...finding, stale, ...(stale ? { diff, staleReason: reason } : {}) });
+    served.push({
+      ...finding,
+      stale,
+      ...(stale ? { diff, staleReason: reason, staleEvidence: Boolean(diff) } : {}),
+    });
   }
   return served;
 }

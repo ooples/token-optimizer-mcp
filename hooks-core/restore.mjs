@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Restoration after compaction.
  *
  * A checkpoint restores what you HAD. That is a recap: it spends the scarcest
@@ -35,7 +35,11 @@ const estimate = (text) => Math.ceil(String(text || '').length / 4);
  * genuinely different things, and treating them identically is what makes a
  * fixed-order restore feel wrong half the time.
  */
-export function classifySituation({ openQuestion, recentAnchors = [], idleMs = 0 } = {}) {
+export function classifySituation({
+  openQuestion,
+  recentAnchors = [],
+  idleMs = 0,
+} = {}) {
   // Days later, nothing in the fresh context connects to anything. Orientation
   // is the only thing that helps; continuation has nothing to continue from.
   if (idleMs > 6 * 60 * 60 * 1000) return 'cold-resume';
@@ -59,21 +63,25 @@ export function classifySituation({ openQuestion, recentAnchors = [], idleMs = 0
  */
 const SPLITS = {
   'mid-problem': { frontier: 0.6, forward: 0.25, brief: 0.15 },
-  'cold-resume': { frontier: 0.15, forward: 0.25, brief: 0.60 },
-  'in-flow': { frontier: 0.20, forward: 0.60, brief: 0.20 },
-  general: { frontier: 0.35, forward: 0.35, brief: 0.30 },
+  'cold-resume': { frontier: 0.15, forward: 0.25, brief: 0.6 },
+  'in-flow': { frontier: 0.2, forward: 0.6, brief: 0.2 },
+  general: { frontier: 0.35, forward: 0.35, brief: 0.3 },
 };
 
 /** Findings for files the co-occurrence graph says are likely next. */
 function predictNext(graph, recentAnchors, limit = 6) {
-  const recent = new Set(recentAnchors.map((a) => nodeId('file', canonicalPath(a))));
+  const recent = new Set(
+    recentAnchors.map((a) => nodeId('file', canonicalPath(a)))
+  );
   const weight = new Map();
 
   for (const edge of graph.edges) {
     if (edge.edge !== 'related') continue;
     const [from, to] = [edge.from, edge.to];
-    if (recent.has(from) && !recent.has(to)) weight.set(to, (weight.get(to) || 0) + 1);
-    if (recent.has(to) && !recent.has(from)) weight.set(from, (weight.get(from) || 0) + 1);
+    if (recent.has(from) && !recent.has(to))
+      weight.set(to, (weight.get(to) || 0) + 1);
+    if (recent.has(to) && !recent.has(from))
+      weight.set(from, (weight.get(from) || 0) + 1);
   }
 
   return [...weight.entries()]
@@ -117,8 +125,10 @@ export function restorationPlan(dir, graph, context = {}) {
   // be recovered by looking at the code again.
   if (context.openQuestion) {
     const lines = [`Open: ${context.openQuestion}`];
-    for (const ruled of context.ruledOut || []) lines.push(`  ruled out: ${ruled}`);
-    for (const open of context.untested || []) lines.push(`  untested: ${open}`);
+    for (const ruled of context.ruledOut || [])
+      lines.push(`  ruled out: ${ruled}`);
+    for (const open of context.untested || [])
+      lines.push(`  untested: ${open}`);
     section('Where you were', lines, total * split.frontier);
   }
 
@@ -132,7 +142,21 @@ export function restorationPlan(dir, graph, context = {}) {
       if (!node) continue;
       const findings = serve(graph, findingsFor(graph, id, { limit: 2 }));
       for (const finding of findings) {
-        lines.push(`${node.key}: ${finding.stale ? '! STALE ' : ''}${finding.claim}`);
+        // `! STALE` only where a diff actually exists to back it; see the
+        // renderer in inject.mjs for the measurement behind this.
+        //
+        // BOTH HALVES, matching inject.mjs exactly (`!staleEvidence || !diff`).
+        // Checking staleEvidence alone marked a finding `! STALE` here while the
+        // injector softened the same finding elsewhere -- and the strong marker
+        // claims 'this is contradicted, here is the proof' with no proof to
+        // show, which is the bare stale finding the design calls worse than
+        // having no graph.
+        const mark = finding.stale
+          ? finding.staleEvidence && finding.diff
+            ? '! STALE '
+            : '~ '
+          : '';
+        lines.push(`${node.key}: ${mark}${finding.claim}`);
       }
     }
     section('Likely next', lines, total * split.forward);
@@ -141,7 +165,9 @@ export function restorationPlan(dir, graph, context = {}) {
   // BRIEF -- orientation. Last, because it is the most replaceable: normal
   // just-in-time injection will deliver most of it the moment work resumes.
   const established = [...graph.nodes.values()]
-    .filter((n) => n.kind === 'finding' && !n.retired && typeof n.claim === 'string')
+    .filter(
+      (n) => n.kind === 'finding' && !n.retired && typeof n.claim === 'string'
+    )
     .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
     .slice(0, 12)
     .map((n) => `${n.key}: ${n.claim.slice(0, 100)}`);

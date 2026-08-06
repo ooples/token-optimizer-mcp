@@ -13,6 +13,23 @@ import { tmpdir } from 'node:os';
 import { extractSymbols, languageOf, spanText } from '../../hooks-core/symbols.mjs';
 import { indexFile, checkAnchor, diffLines, serve, invalidateOnWrite } from '../../hooks-core/staleness.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import { forTouch } from '../../hooks-core/inject.mjs';
+
+// THE HOLDOUT IS PINNED OFF IN THIS SUITE.
+//
+// `forTouch` takes part in the 10% holdout, so a temp anchor whose hash lands
+// in the withheld arm correctly returns null. This suite is about what a stale
+// finding SAYS, not about measurement.
+//
+// I introduced exactly this flake by running the suite locally with the
+// fraction already at 0, which masked it; CI runs with the default and the test
+// failed there. Verifying under a condition CI does not have is not verifying.
+const PRIOR_HOLDOUT = process.env.TOKEN_OPTIMIZER_HOLDOUT;
+process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+afterAll(() => {
+  if (PRIOR_HOLDOUT === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+  else process.env.TOKEN_OPTIMIZER_HOLDOUT = PRIOR_HOLDOUT;
+});
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 let workspace;
@@ -147,7 +164,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
 
   test('a fresh finding is served unmarked and without a diff', () => {
     const { finding } = seed();
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(false);
     expect(out.diff).toBeUndefined();
@@ -157,7 +174,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const { path, finding } = seed();
     writeFileSync(path, 'export function f() { return 2; }');
 
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
 
     // Served, not dropped -- re-verifying against a diff beats re-deriving.
@@ -175,12 +192,51 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const { path, finding } = seed();
     rmSync(path);
 
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(true);
     expect(out.diff).toContain('- export function f() { return 1; }');
   });
 
+  test('a workflow rule is not invalidated by its anchor file changing', () => {
+    // MEASURED: 24 of 32 stale findings on real graphs were types whose truth
+    // cannot depend on the anchor's contents -- 75%. The clearest case is a
+    // `failure` reading "Edit hooks-core/, never the generated copies", marked
+    // stale because hooks-core/wiki.mjs changed. That rule is about process;
+    // the file's contents cannot make it wrong.
+    const path = write('churny.ts', 'export const a = 1;');
+    putNode(dir, { kind: 'file', key: path, hash: 'a-hash-that-no-longer-matches' });
+
+    const rule = putNode(dir, {
+      kind: 'finding',
+      key: 'process-rule',
+      type: 'failure',
+      claim: 'Edit hooks-core/, never the generated copies.',
+      confidence: 0.9,
+    });
+    putEdge(dir, rule, 'derived_from', nodeId('file', path));
+
+    // And a claim that IS about this file's contents, for contrast.
+    const about = putNode(dir, {
+      kind: 'finding',
+      key: 'about-the-file',
+      type: 'finding',
+      claim: 'churny.ts exports a single constant.',
+      confidence: 0.9,
+    });
+    putEdge(dir, about, 'derived_from', nodeId('file', path));
+
+    const graph = load(dir, { snapshots: true });
+    const [servedRule] = serve(graph, [graph.nodes.get(rule)]);
+    const [servedAbout] = serve(graph, [graph.nodes.get(about)]);
+
+    // The process rule stands: nothing about the file bears on it.
+    expect(servedRule.stale).toBeFalsy();
+
+    // The claim about the file's contents is still discounted, because that IS
+    // what changed. Losing this would trade one silent error for another.
+    expect(servedAbout.stale).toBe(true);
+  });
   test('a finding with genuinely unreconstructable evidence says so explicitly', () => {
     // No snapshot at all -- what a file above the snapshot limit looks like.
     const path = write('huge.ts', 'export const a = 1;');
@@ -188,31 +244,40 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const finding = putNode(dir, { kind: 'finding', key: 'f9', claim: 'about a huge file', confidence: 0.9 });
     putEdge(dir, finding, 'derived_from', nodeId('file', path));
 
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(true);
-    // THE INVARIANT IS "never bare", not a particular sentence. The previous
-    // assertion pinned the word "unverified", which is how the wording survived
-    // long enough to be measured doing harm: identical findings scored 1/3
-    // dead-ends avoided when the model was told to treat them as unverified and
-    // 2/3 when it was not. Assert that the staleness is disclosed and that the
-    // evidence gap is named -- not the exact phrasing, which should be free to
-    // improve without a test standing in the way.
-    expect(out.diff).toBeTruthy();
-    expect(out.diff.length).toBeGreaterThan(20);
-    expect(out.diff).toMatch(/reconstruct/i);
-    // And it must carry NO instruction to abandon the claim, however phrased.
-    // The measured harm was the instruction, not one particular word, so this
-    // rejects the whole vocabulary rather than the sentence that was found
-    // doing damage -- otherwise the next rewording reintroduces it freely.
-    expect(out.diff).not.toMatch(
+
+    // THE GAP IS NAMED IN DATA, not in prose stuffed into `diff`. The previous
+    // assertion pinned the word 'reconstruct' to that field -- the very thing
+    // its own comment said should stay free to improve -- and it forced the
+    // renderer to wrap an apology in `STALE (...). What changed:`, announcing
+    // evidence and then presenting none.
+    expect(out.staleEvidence).toBe(false);
+
+    // THE INVARIANT IS ENFORCED ON THE DELIVERED TEXT, which is what a model
+    // actually reads.
+    const served = forTouch(dir, graph, path, {
+      sessionId: 'stale-render',
+      alreadyInjected: new Set(),
+    });
+    expect(served).toBeTruthy();
+
+    // Still disclosed: never served as though it were current.
+    expect(served).toMatch(/recorded earlier/i);
+
+    // But the strongest framing is not spent on the weakest evidence.
+    expect(served).not.toMatch(/STALE/);
+    expect(served).not.toMatch(/What changed:/);
+
+    // And no instruction to abandon the claim, however phrased. Measured:
+    // identical findings scored 1/3 dead-ends avoided with the discount wording
+    // and 2/3 without it.
+    expect(served).not.toMatch(
       /\b(unverified|unreliable|untrusted|discard|dismiss|disregard|ignore)\b/i
     );
-    expect(out.diff).not.toMatch(/\bdo not (trust|rely|use)\b/i);
-    // Nor may it assert a cause it has not established: `reason` carries
-    // whatever was actually determined, and this branch is also reached by
-    // eager marking and by an anchor that was never snapshotted.
-    expect(out.diff).not.toMatch(/the anchor changed/i);
+    expect(served).not.toMatch(/\bdo not (trust|rely|use)\b/i);
+    expect(served).not.toMatch(/the anchor changed/i);
   });
 });
 

@@ -261,7 +261,13 @@ try {
       const dir = wikiDir(
         projectRootFor(payload.tool_input.file_path, payload.cwd)
       );
-      const graph = load(dir);
+      // SNAPSHOTS ONLY HERE. This is the refusal path -- a re-read of a file
+      // large enough to be denied -- and it is the one place the stored
+      // contents actually pay, by answering with a diff instead of the file.
+      // The injection path above deliberately loads without them: it runs
+      // before EVERY tool call and was paying 232 ms to parse bytes it does
+      // not read.
+      const graph = load(dir, { snapshots: true });
       // Only THIS session's own read history can license "unchanged since you
       // read it" or a diff -- the graph is durable and per project, so its
       // snapshot may predate this session entirely.

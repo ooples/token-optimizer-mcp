@@ -155,7 +155,7 @@ describe('P4 -- the zero-turn refusal carries the answer', () => {
     const path = write('a.ts', 'export const a = 1;');
     putNode(dir, { kind: 'file', key: path, hash: 'h', snapshot: 'export const a = 1;' });
 
-    expect(refusalPayload(load(dir), path, { seenThisSession: true })).toContain('UNCHANGED');
+    expect(refusalPayload(load(dir, { snapshots: true }), path, { seenThisSession: true })).toContain('UNCHANGED');
   });
 
   test('a session that never read the file is told NEITHER of those things', () => {
@@ -172,7 +172,7 @@ describe('P4 -- the zero-turn refusal carries the answer', () => {
     // asking.
     const path = write('a.ts', 'export const a = 1;');
     putNode(dir, { kind: 'file', key: path, hash: 'h', snapshot: 'export const a = 1;' });
-    expect(refusalPayload(load(dir), path)).toBeNull();
+    expect(refusalPayload(load(dir, { snapshots: true }), path)).toBeNull();
 
     // Same for the diff branch: a diff against a baseline you never saw is not
     // an answer, it is a puzzle. Sized so the diff genuinely beats the file,
@@ -180,8 +180,8 @@ describe('P4 -- the zero-turn refusal carries the answer', () => {
     const lines = Array.from({ length: 400 }, (_, i) => `export const v${i} = ${i};`);
     const changed = write('b.ts', [...lines.slice(0, 100), 'export const CHANGED = true;', ...lines.slice(101)].join('\n'));
     putNode(dir, { kind: 'file', key: changed, hash: 'h', snapshot: lines.join('\n') });
-    expect(refusalPayload(load(dir), changed)).toBeNull();
-    expect(refusalPayload(load(dir), changed, { seenThisSession: true })).toContain('changed since');
+    expect(refusalPayload(load(dir, { snapshots: true }), changed)).toBeNull();
+    expect(refusalPayload(load(dir, { snapshots: true }), changed, { seenThisSession: true })).toContain('changed since');
   });
 
   test('a changed file yields the DIFF inside the refusal, not a redirect', () => {
@@ -198,7 +198,7 @@ describe('P4 -- the zero-turn refusal carries the answer', () => {
     const path = write('a.ts', after);
     putNode(dir, { kind: 'file', key: path, hash: 'h', snapshot: before });
 
-    const payload = refusalPayload(load(dir), path, { seenThisSession: true });
+    const payload = refusalPayload(load(dir, { snapshots: true }), path, { seenThisSession: true });
     expect(payload).toContain('+ export const CHANGED = true;');
     expect(payload).toContain('do not');
   });
@@ -211,12 +211,12 @@ describe('P4 -- the zero-turn refusal carries the answer', () => {
     const path = write('big.ts', after);
     putNode(dir, { kind: 'file', key: path, hash: 'h', snapshot: body.join('\n') });
 
-    expect(refusalPayload(load(dir), path, { seenThisSession: true }).length).toBeLessThan(after.length / 10);
+    expect(refusalPayload(load(dir, { snapshots: true }), path, { seenThisSession: true }).length).toBeLessThan(after.length / 10);
   });
 
   test('it falls back when there is no snapshot', () => {
     const path = write('a.ts', 'x');
-    expect(refusalPayload(load(dir), path, { seenThisSession: true })).toBeNull();
+    expect(refusalPayload(load(dir, { snapshots: true }), path, { seenThisSession: true })).toBeNull();
   });
 
   test('it falls back when the diff would not be cheaper than the file', () => {
@@ -226,7 +226,7 @@ describe('P4 -- the zero-turn refusal carries the answer', () => {
       kind: 'file', key: path, hash: 'h',
       snapshot: Array.from({ length: 50 }, (_, i) => `original ${i}`).join('\n'),
     });
-    expect(refusalPayload(load(dir), path, { seenThisSession: true })).toBeNull();
+    expect(refusalPayload(load(dir, { snapshots: true }), path, { seenThisSession: true })).toBeNull();
   });
 });
 
