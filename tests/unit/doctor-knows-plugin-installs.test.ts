@@ -4,7 +4,11 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 // @ts-expect-error -- hooks-core ships as plain ESM with no type declarations.
-import { detectInstall, checklist, probeVersion } from '../../hooks-core/doctor.mjs';
+import {
+  detectInstall,
+  checklist,
+  probeVersion,
+} from '../../hooks-core/doctor.mjs';
 
 /**
  * The doctor was written for the script-install path and is blind to plugin
@@ -35,23 +39,52 @@ const PLUGIN_ID = 'token-optimizer@token-optimizer';
 let fixture: string;
 
 /** A plugins dir shaped like Claude Code's, with the given installed version. */
-function givenPluginInstall(installedVersion: string, availableVersion: string) {
+function givenPluginInstall(
+  installedVersion: string,
+  availableVersion: string
+) {
   const pluginsDir = join(fixture, '.claude', 'plugins');
-  const installPath = join(pluginsDir, 'cache', 'token-optimizer', 'token-optimizer', installedVersion);
+  const installPath = join(
+    pluginsDir,
+    'cache',
+    'token-optimizer',
+    'token-optimizer',
+    installedVersion
+  );
   mkdirSync(join(installPath, 'hooks', 'lib'), { recursive: true });
-  for (const f of ['pretooluse-router.mjs', 'session-start.mjs', 'precompact-optimize.mjs']) {
+  for (const f of [
+    'pretooluse-router.mjs',
+    'session-start.mjs',
+    'precompact-optimize.mjs',
+  ]) {
     writeFileSync(join(installPath, 'hooks', f), '// hook\n');
   }
   writeFileSync(join(installPath, 'hooks', 'hooks.json'), '{}\n');
 
   writeFileSync(
     join(pluginsDir, 'installed_plugins.json'),
-    JSON.stringify({ version: 1, plugins: { [PLUGIN_ID]: [{ scope: 'user', installPath, version: installedVersion }] } })
+    JSON.stringify({
+      version: 1,
+      plugins: {
+        [PLUGIN_ID]: [
+          { scope: 'user', installPath, version: installedVersion },
+        ],
+      },
+    })
   );
 
-  const marketplace = join(pluginsDir, 'marketplaces', 'token-optimizer', 'plugin', '.claude-plugin');
+  const marketplace = join(
+    pluginsDir,
+    'marketplaces',
+    'token-optimizer',
+    'plugin',
+    '.claude-plugin'
+  );
   mkdirSync(marketplace, { recursive: true });
-  writeFileSync(join(marketplace, 'plugin.json'), JSON.stringify({ name: 'token-optimizer', version: availableVersion }));
+  writeFileSync(
+    join(marketplace, 'plugin.json'),
+    JSON.stringify({ name: 'token-optimizer', version: availableVersion })
+  );
 
   return { pluginsDir, installPath };
 }
@@ -100,7 +133,9 @@ describe('detectInstall', () => {
 describe('probeVersion', () => {
   it('fails when the installed plugin is behind what is available', () => {
     const { pluginsDir } = givenPluginInstall('5.0.2', '5.3.6');
-    const [check] = probeVersion({ install: detectInstall({ pluginsDir, root: fixture }) });
+    const [check] = probeVersion({
+      install: detectInstall({ pluginsDir, root: fixture }),
+    });
 
     expect(check.pass).toBe(false);
     expect(check.detail).toContain('5.0.2');
@@ -109,7 +144,9 @@ describe('probeVersion', () => {
 
   it('passes when installed matches available', () => {
     const { pluginsDir } = givenPluginInstall('5.3.6', '5.3.6');
-    const [check] = probeVersion({ install: detectInstall({ pluginsDir, root: fixture }) });
+    const [check] = probeVersion({
+      install: detectInstall({ pluginsDir, root: fixture }),
+    });
 
     expect(check.pass).toBe(true);
   });
@@ -124,7 +161,11 @@ describe('checklist on a plugin install', () => {
     const { pluginsDir } = givenPluginInstall('5.3.6', '5.3.6');
     const install = detectInstall({ pluginsDir, root: fixture });
     // No settings file at all: a plugin install does not need one.
-    const checks = checklist({ root: fixture, settingsPath: join(fixture, 'settings.json'), install });
+    const checks = checklist({
+      root: fixture,
+      settingsPath: join(fixture, 'settings.json'),
+      install,
+    });
 
     expect(failedNames(checks)).not.toContain('hooks wired into settings');
     expect(failedNames(checks)).not.toContain('settings file present');
@@ -133,7 +174,11 @@ describe('checklist on a plugin install', () => {
   it('does not demand an install manifest', () => {
     const { pluginsDir } = givenPluginInstall('5.3.6', '5.3.6');
     const install = detectInstall({ pluginsDir, root: fixture });
-    const checks = checklist({ root: fixture, settingsPath: undefined, install });
+    const checks = checklist({
+      root: fixture,
+      settingsPath: undefined,
+      install,
+    });
 
     expect(failedNames(checks)).not.toContain('install manifest present');
   });
@@ -143,7 +188,11 @@ describe('checklist on a plugin install', () => {
     // they were skipped or passed. The report has to say which path it took.
     const { pluginsDir } = givenPluginInstall('5.3.6', '5.3.6');
     const install = detectInstall({ pluginsDir, root: fixture });
-    const checks = checklist({ root: fixture, settingsPath: undefined, install });
+    const checks = checklist({
+      root: fixture,
+      settingsPath: undefined,
+      install,
+    });
 
     expect(names(checks)).toContain('install method');
   });

@@ -22,7 +22,8 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) sourceFiles(full, out);
-    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) out.push(full);
+    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'))
+      out.push(full);
   }
   return out;
 }
@@ -32,7 +33,8 @@ const FABRICATED_BASELINE =
   /(original\w*Tokens?|baseline\w*Tokens?)\s*=\s*[\w.]+\s*\*\s*\d/;
 
 /** `tokensSaved = something * 1000` -- a saving conjured from a count. */
-const FABRICATED_SAVING = /(tokensSaved|savedTokens)\s*=\s*[\w.()]+\s*\*\s*[\d.]/;
+const FABRICATED_SAVING =
+  /(tokensSaved|savedTokens)\s*=\s*[\w.()]+\s*\*\s*[\d.]/;
 
 describe('savings are measured, never assumed', () => {
   const files = sourceFiles(ROOT);
@@ -48,7 +50,9 @@ describe('savings are measured, never assumed', () => {
       const lines = readFileSync(file, 'utf8').split('\n');
       lines.forEach((line, i) => {
         if (FABRICATED_BASELINE.test(line) || FABRICATED_SAVING.test(line)) {
-          offenders.push(`${relative(ROOT, file).split('\\').join('/')}:${i + 1}  ${line.trim()}`);
+          offenders.push(
+            `${relative(ROOT, file).split('\\').join('/')}:${i + 1}  ${line.trim()}`
+          );
         }
       });
     }

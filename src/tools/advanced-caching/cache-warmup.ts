@@ -1569,6 +1569,37 @@ export const CACHE_WARMUP_TOOL_DEFINITION = {
       dependencies: {
         type: 'object',
         description: 'Dependency graph for dependency-based warmup',
+        // Declared in full. This was `{ type: 'object' }` with no properties,
+        // so dependency-based warmup -- the entire reason this option exists --
+        // could not be configured from the published contract.
+        properties: {
+          nodes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                key: { type: 'string' },
+                priority: { type: 'number' },
+                category: { type: 'string' },
+                estimatedSize: { type: 'number' },
+              },
+              required: ['key', 'priority'],
+            },
+          },
+          edges: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                from: { type: 'string', description: 'Dependent key' },
+                to: { type: 'string', description: 'Dependency key' },
+                type: { type: 'string', enum: ['required', 'optional'] },
+              },
+              required: ['from', 'to', 'type'],
+            },
+          },
+        },
+        required: ['nodes', 'edges'],
       },
       accessHistory: {
         type: 'array',

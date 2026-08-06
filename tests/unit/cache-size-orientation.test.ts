@@ -74,8 +74,12 @@ describe('cache size statistics are the right way round', () => {
   it('derives the ratio from the two sizes it reports', () => {
     cache.set('k', 'stored value', ORIGINAL, COMPRESSED);
 
-    const { compressionRatio, totalCompressedSize, totalOriginalSize } = cache.getStats();
-    expect(compressionRatio).toBeCloseTo(totalCompressedSize / totalOriginalSize, 6);
+    const { compressionRatio, totalCompressedSize, totalOriginalSize } =
+      cache.getStats();
+    expect(compressionRatio).toBeCloseTo(
+      totalCompressedSize / totalOriginalSize,
+      6
+    );
   });
 
   it('keeps the orientation across several entries', () => {

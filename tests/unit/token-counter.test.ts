@@ -11,7 +11,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { TokenCounter, TokenCountResult } from '../../src/core/token-counter.js';
+import {
+  TokenCounter,
+  TokenCountResult,
+} from '../../src/core/token-counter.js';
 
 describe('TokenCounter', () => {
   let tokenCounter: TokenCounter;
@@ -136,7 +139,9 @@ describe('TokenCounter', () => {
       const batch = tokenCounter.countBatch([text1, text2]);
 
       expect(batch.tokens).toBe(individual1.tokens + individual2.tokens);
-      expect(batch.characters).toBe(individual1.characters + individual2.characters);
+      expect(batch.characters).toBe(
+        individual1.characters + individual2.characters
+      );
     });
 
     it('should handle large batch', () => {
@@ -270,7 +275,9 @@ describe('TokenCounter', () => {
 
       expect(tokenCounter.exceedsLimit(longText, result.tokens - 1)).toBe(true);
       expect(tokenCounter.exceedsLimit(longText, result.tokens)).toBe(false);
-      expect(tokenCounter.exceedsLimit(longText, result.tokens + 1)).toBe(false);
+      expect(tokenCounter.exceedsLimit(longText, result.tokens + 1)).toBe(
+        false
+      );
     });
 
     it('should handle empty text with any limit', () => {

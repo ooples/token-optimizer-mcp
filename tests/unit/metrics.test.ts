@@ -39,9 +39,24 @@ describe('MetricsCollector', () => {
     });
 
     it('should record multiple metrics', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: true });
-      metrics.record({ operation: 'op3', duration: 30, success: false, cacheHit: false });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: true,
+      });
+      metrics.record({
+        operation: 'op3',
+        duration: 30,
+        success: false,
+        cacheHit: false,
+      });
 
       const operations = metrics.getOperations();
       expect(operations.length).toBe(3);
@@ -110,14 +125,25 @@ describe('MetricsCollector', () => {
       const oneHourAgo = now - 3600000;
 
       // Manually create operations with specific timestamps
-      metrics.record({ operation: 'old-op', duration: 10, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'old-op',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
 
       // Wait a tiny bit to ensure different timestamp
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(5).then(() => {
         const recentTime = Date.now();
-        metrics.record({ operation: 'new-op', duration: 20, success: true, cacheHit: false });
+        metrics.record({
+          operation: 'new-op',
+          duration: 20,
+          success: true,
+          cacheHit: false,
+        });
 
         const allOps = metrics.getOperations();
         const recentOps = metrics.getOperations(recentTime);
@@ -129,18 +155,48 @@ describe('MetricsCollector', () => {
     });
 
     it('should return all operations when no timestamp filter provided', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: false });
-      metrics.record({ operation: 'op3', duration: 30, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op3',
+        duration: 30,
+        success: true,
+        cacheHit: false,
+      });
 
       const operations = metrics.getOperations();
       expect(operations.length).toBe(3);
     });
 
     it('should filter by operation name', () => {
-      metrics.record({ operation: 'op-A', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op-B', duration: 20, success: true, cacheHit: false });
-      metrics.record({ operation: 'op-A', duration: 30, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'op-A',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op-B',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op-A',
+        duration: 30,
+        success: true,
+        cacheHit: false,
+      });
 
       const opsA = metrics.getOperations(undefined, 'op-A');
       const opsB = metrics.getOperations(undefined, 'op-B');
@@ -150,15 +206,36 @@ describe('MetricsCollector', () => {
     });
 
     it('should filter by both timestamp and operation', () => {
-      metrics.record({ operation: 'op-A', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op-B', duration: 20, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'op-A',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op-B',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
 
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(5).then(() => {
         const recentTime = Date.now();
-        metrics.record({ operation: 'op-A', duration: 30, success: true, cacheHit: false });
-        metrics.record({ operation: 'op-B', duration: 40, success: true, cacheHit: false });
+        metrics.record({
+          operation: 'op-A',
+          duration: 30,
+          success: true,
+          cacheHit: false,
+        });
+        metrics.record({
+          operation: 'op-B',
+          duration: 40,
+          success: true,
+          cacheHit: false,
+        });
 
         const filtered = metrics.getOperations(recentTime, 'op-A');
         expect(filtered.length).toBe(1);
@@ -169,10 +246,30 @@ describe('MetricsCollector', () => {
 
   describe('Cache Statistics', () => {
     it('should calculate cache hit rate', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: true });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: true });
-      metrics.record({ operation: 'op3', duration: 30, success: true, cacheHit: false });
-      metrics.record({ operation: 'op4', duration: 40, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: true,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: true,
+      });
+      metrics.record({
+        operation: 'op3',
+        duration: 30,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op4',
+        duration: 40,
+        success: true,
+        cacheHit: false,
+      });
 
       const stats = metrics.getCacheStats();
 
@@ -183,19 +280,54 @@ describe('MetricsCollector', () => {
     });
 
     it('should calculate average duration', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: false });
-      metrics.record({ operation: 'op3', duration: 30, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op3',
+        duration: 30,
+        success: true,
+        cacheHit: false,
+      });
 
       const stats = metrics.getCacheStats();
       expect(stats.averageDuration).toBeCloseTo(20, 2);
     });
 
     it('should calculate success rate', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: false });
-      metrics.record({ operation: 'op3', duration: 30, success: false, cacheHit: false });
-      metrics.record({ operation: 'op4', duration: 40, success: false, cacheHit: false });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op3',
+        duration: 30,
+        success: false,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op4',
+        duration: 40,
+        success: false,
+        cacheHit: false,
+      });
 
       const stats = metrics.getCacheStats();
       expect(stats.successRate).toBeCloseTo(50, 2);
@@ -213,13 +345,24 @@ describe('MetricsCollector', () => {
     });
 
     it('should filter stats by time', () => {
-      metrics.record({ operation: 'old', duration: 10, success: true, cacheHit: true });
+      metrics.record({
+        operation: 'old',
+        duration: 10,
+        success: true,
+        cacheHit: true,
+      });
 
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(5).then(() => {
         const recentTime = Date.now();
-        metrics.record({ operation: 'new', duration: 20, success: true, cacheHit: false });
+        metrics.record({
+          operation: 'new',
+          duration: 20,
+          success: true,
+          cacheHit: false,
+        });
 
         const allStats = metrics.getCacheStats();
         const recentStats = metrics.getCacheStats(recentTime);
@@ -231,8 +374,18 @@ describe('MetricsCollector', () => {
     });
 
     it('should handle 100% cache hit rate', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: true });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: true });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: true,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: true,
+      });
 
       const stats = metrics.getCacheStats();
       expect(stats.cacheHitRate).toBe(100);
@@ -240,8 +393,18 @@ describe('MetricsCollector', () => {
     });
 
     it('should handle 0% cache hit rate', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
 
       const stats = metrics.getCacheStats();
       expect(stats.cacheHitRate).toBe(0);
@@ -251,9 +414,24 @@ describe('MetricsCollector', () => {
 
   describe('Operation Breakdown', () => {
     it('should break down metrics by operation type', () => {
-      metrics.record({ operation: 'read', duration: 10, success: true, cacheHit: true });
-      metrics.record({ operation: 'read', duration: 15, success: true, cacheHit: false });
-      metrics.record({ operation: 'write', duration: 30, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'read',
+        duration: 10,
+        success: true,
+        cacheHit: true,
+      });
+      metrics.record({
+        operation: 'read',
+        duration: 15,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'write',
+        duration: 30,
+        success: true,
+        cacheHit: false,
+      });
 
       const breakdown = metrics.getOperationBreakdown();
 
@@ -264,10 +442,30 @@ describe('MetricsCollector', () => {
     });
 
     it('should calculate per-operation average duration', () => {
-      metrics.record({ operation: 'fast', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'fast', duration: 20, success: true, cacheHit: false });
-      metrics.record({ operation: 'slow', duration: 100, success: true, cacheHit: false });
-      metrics.record({ operation: 'slow', duration: 200, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'fast',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'fast',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'slow',
+        duration: 100,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'slow',
+        duration: 200,
+        success: true,
+        cacheHit: false,
+      });
 
       const breakdown = metrics.getOperationBreakdown();
 
@@ -276,10 +474,30 @@ describe('MetricsCollector', () => {
     });
 
     it('should calculate per-operation success rate', () => {
-      metrics.record({ operation: 'reliable', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'reliable', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'flaky', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'flaky', duration: 10, success: false, cacheHit: false });
+      metrics.record({
+        operation: 'reliable',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'reliable',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'flaky',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'flaky',
+        duration: 10,
+        success: false,
+        cacheHit: false,
+      });
 
       const breakdown = metrics.getOperationBreakdown();
 
@@ -293,13 +511,24 @@ describe('MetricsCollector', () => {
     });
 
     it('should filter breakdown by time', () => {
-      metrics.record({ operation: 'old', duration: 10, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'old',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
 
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(5).then(() => {
         const recentTime = Date.now();
-        metrics.record({ operation: 'new', duration: 20, success: true, cacheHit: false });
+        metrics.record({
+          operation: 'new',
+          duration: 20,
+          success: true,
+          cacheHit: false,
+        });
 
         const allBreakdown = metrics.getOperationBreakdown();
         const recentBreakdown = metrics.getOperationBreakdown(recentTime);
@@ -342,7 +571,12 @@ describe('MetricsCollector', () => {
     });
 
     it('should handle single operation', () => {
-      metrics.record({ operation: 'single', duration: 42, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'single',
+        duration: 42,
+        success: true,
+        cacheHit: false,
+      });
 
       const percentiles = metrics.getPerformancePercentiles();
 
@@ -353,13 +587,24 @@ describe('MetricsCollector', () => {
     });
 
     it('should filter percentiles by time', () => {
-      metrics.record({ operation: 'slow', duration: 1000, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'slow',
+        duration: 1000,
+        success: true,
+        cacheHit: false,
+      });
 
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(5).then(() => {
         const recentTime = Date.now();
-        metrics.record({ operation: 'fast', duration: 10, success: true, cacheHit: false });
+        metrics.record({
+          operation: 'fast',
+          duration: 10,
+          success: true,
+          cacheHit: false,
+        });
 
         const allPercentiles = metrics.getPerformancePercentiles();
         const recentPercentiles = metrics.getPerformancePercentiles(recentTime);
@@ -390,8 +635,18 @@ describe('MetricsCollector', () => {
 
   describe('Clear and Export', () => {
     it('should clear all metrics', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: false,
+      });
 
       expect(metrics.getOperations().length).toBe(2);
 
@@ -411,8 +666,18 @@ describe('MetricsCollector', () => {
     });
 
     it('should export metrics as JSON', () => {
-      metrics.record({ operation: 'op1', duration: 10, success: true, cacheHit: false });
-      metrics.record({ operation: 'op2', duration: 20, success: true, cacheHit: true });
+      metrics.record({
+        operation: 'op1',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
+      metrics.record({
+        operation: 'op2',
+        duration: 20,
+        success: true,
+        cacheHit: true,
+      });
 
       const exported = metrics.export();
       const parsed = JSON.parse(exported);
@@ -424,13 +689,24 @@ describe('MetricsCollector', () => {
     });
 
     it('should export with time filter', () => {
-      metrics.record({ operation: 'old', duration: 10, success: true, cacheHit: false });
+      metrics.record({
+        operation: 'old',
+        duration: 10,
+        success: true,
+        cacheHit: false,
+      });
 
-      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const delay = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       return delay(5).then(() => {
         const recentTime = Date.now();
-        metrics.record({ operation: 'new', duration: 20, success: true, cacheHit: false });
+        metrics.record({
+          operation: 'new',
+          duration: 20,
+          success: true,
+          cacheHit: false,
+        });
 
         const allExport = JSON.parse(metrics.export());
         const recentExport = JSON.parse(metrics.export(recentTime));
@@ -452,7 +728,12 @@ describe('MetricsCollector', () => {
 
   describe('Edge Cases', () => {
     it('should handle operations with zero duration', () => {
-      metrics.record({ operation: 'instant', duration: 0, success: true, cacheHit: true });
+      metrics.record({
+        operation: 'instant',
+        duration: 0,
+        success: true,
+        cacheHit: true,
+      });
 
       const stats = metrics.getCacheStats();
       expect(stats.averageDuration).toBe(0);
@@ -507,7 +788,12 @@ describe('MetricsCollector', () => {
 
       // Record multiple operations that might have the same timestamp
       for (let i = 0; i < 10; i++) {
-        metrics.record({ operation: `op${i}`, duration: 10, success: true, cacheHit: false });
+        metrics.record({
+          operation: `op${i}`,
+          duration: 10,
+          success: true,
+          cacheHit: false,
+        });
       }
 
       const operations = metrics.getOperations();

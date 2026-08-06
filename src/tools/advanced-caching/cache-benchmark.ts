@@ -1556,8 +1556,17 @@ Token Reduction:
           },
           maxSize: { type: 'number' },
           maxEntries: { type: 'number' },
-          ttl: { type: 'number' },
+          ttl: { type: 'number', description: 'Seconds' },
+          evictionPolicy: { type: 'string', enum: ['strict', 'lazy'] },
+          compressionEnabled: { type: 'boolean' },
+          params: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Strategy-specific parameters',
+          },
         },
+        // CacheConfig requires name and strategy; the rest are optional.
+        required: ['name', 'strategy'],
       },
       configs: {
         type: 'array',
@@ -1570,7 +1579,19 @@ Token Reduction:
               type: 'string',
               enum: ['LRU', 'LFU', 'FIFO', 'TTL', 'size', 'hybrid'],
             },
+            maxSize: { type: 'number', description: 'MB' },
+            maxEntries: { type: 'number' },
+            ttl: { type: 'number', description: 'Seconds' },
+            evictionPolicy: { type: 'string', enum: ['strict', 'lazy'] },
+            compressionEnabled: { type: 'boolean' },
+            params: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'Strategy-specific parameters',
+            },
           },
+          // CacheConfig requires name and strategy; the rest are optional.
+          required: ['name', 'strategy'],
         },
       },
       duration: {

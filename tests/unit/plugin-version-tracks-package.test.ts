@@ -38,7 +38,8 @@ describe('plugin manifest version', () => {
     expect(
       extras.some(
         (e: { path?: string; jsonpath?: string }) =>
-          e.path === 'plugin/.claude-plugin/plugin.json' && e.jsonpath === '$.version'
+          e.path === 'plugin/.claude-plugin/plugin.json' &&
+          e.jsonpath === '$.version'
       )
     ).toBe(true);
   });

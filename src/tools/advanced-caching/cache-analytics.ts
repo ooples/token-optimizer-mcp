@@ -2266,6 +2266,9 @@ export const CACHE_ANALYTICS_TOOL_DEFINITION = {
           severity: { type: 'string', enum: ['info', 'warning', 'critical'] },
           enabled: { type: 'boolean' },
         },
+        // AlertConfiguration has no optional fields, so a partial object is not a valid
+        // alert. Pre-existing: the properties were declared without any `required`.
+        required: ['metric', 'condition', 'threshold', 'severity', 'enabled'],
         description: 'Alert configuration',
       },
       heatmapType: {

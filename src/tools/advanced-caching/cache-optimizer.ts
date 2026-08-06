@@ -2286,6 +2286,18 @@ export const CACHE_OPTIMIZER_TOOL_DEFINITION = {
           prefetchEnabled: { type: 'boolean' },
           writeMode: { type: 'string', enum: ['write-through', 'write-back'] },
         },
+        // Every field of CacheConfiguration is non-optional, so a partial object is not
+        // a valid configuration. Declaring the properties without this said otherwise.
+        required: [
+          'strategy',
+          'l1MaxSize',
+          'l2MaxSize',
+          'l3MaxSize',
+          'ttl',
+          'compressionEnabled',
+          'prefetchEnabled',
+          'writeMode',
+        ],
         description: 'Full cache configuration in use now',
       },
       targetStrategy: {
@@ -2308,6 +2320,18 @@ export const CACHE_OPTIMIZER_TOOL_DEFINITION = {
           prefetchEnabled: { type: 'boolean' },
           writeMode: { type: 'string', enum: ['write-through', 'write-back'] },
         },
+        // Every field of CacheConfiguration is non-optional, so a partial object is not
+        // a valid configuration. Declaring the properties without this said otherwise.
+        required: [
+          'strategy',
+          'l1MaxSize',
+          'l2MaxSize',
+          'l3MaxSize',
+          'ttl',
+          'compressionEnabled',
+          'prefetchEnabled',
+          'writeMode',
+        ],
         description:
           'Full cache configuration to evaluate against the current one',
       },

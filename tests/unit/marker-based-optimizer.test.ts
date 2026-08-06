@@ -12,7 +12,10 @@ import { describe, it, expect, beforeEach } from '@jest/globals';
 import { MarkerBasedOptimizer } from '../../src/services/MarkerBasedOptimizer.js';
 import { SummarizationModule } from '../../src/modules/SummarizationModule.js';
 import { MockFoundationModel } from '../../src/modules/MockFoundationModel.js';
-import { ITokenCounter, TokenCountResult } from '../../src/interfaces/ITokenCounter.js';
+import {
+  ITokenCounter,
+  TokenCountResult,
+} from '../../src/interfaces/ITokenCounter.js';
 
 // Mock token counter
 class MockTokenCounter implements ITokenCounter {
@@ -40,7 +43,8 @@ describe('MarkerBasedOptimizer', () => {
 
   describe('Basic Marker Processing', () => {
     it('should detect and process single marker', async () => {
-      const prompt = 'Before <summarize>This is a long text that needs to be summarized. It has multiple sentences. More content here.</summarize> After';
+      const prompt =
+        'Before <summarize>This is a long text that needs to be summarized. It has multiple sentences. More content here.</summarize> After';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -53,7 +57,8 @@ describe('MarkerBasedOptimizer', () => {
     });
 
     it('should process multiple markers', async () => {
-      const prompt = '<summarize>First section to summarize.</summarize> Middle content. <summarize>Second section to summarize.</summarize>';
+      const prompt =
+        '<summarize>First section to summarize.</summarize> Middle content. <summarize>Second section to summarize.</summarize>';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -64,7 +69,8 @@ describe('MarkerBasedOptimizer', () => {
     });
 
     it('should preserve content outside markers', async () => {
-      const prompt = 'Keep this. <summarize>Summarize this part.</summarize> Keep this too.';
+      const prompt =
+        'Keep this. <summarize>Summarize this part.</summarize> Keep this too.';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -129,7 +135,8 @@ describe('MarkerBasedOptimizer', () => {
     });
 
     it('should handle marker with whitespace', async () => {
-      const prompt = '<summarize>  \n\n  Content with whitespace.  \n\n  </summarize>';
+      const prompt =
+        '<summarize>  \n\n  Content with whitespace.  \n\n  </summarize>';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -138,7 +145,8 @@ describe('MarkerBasedOptimizer', () => {
     });
 
     it('should handle marker with special characters', async () => {
-      const prompt = '<summarize>Content with @#$%^&*() special chars.</summarize>';
+      const prompt =
+        '<summarize>Content with @#$%^&*() special chars.</summarize>';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -147,7 +155,8 @@ describe('MarkerBasedOptimizer', () => {
     });
 
     it('should handle marker with unicode', async () => {
-      const prompt = '<summarize>Unicode: 你好世界 こんにちは 안녕하세요</summarize>';
+      const prompt =
+        '<summarize>Unicode: 你好世界 こんにちは 안녕하세요</summarize>';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -156,7 +165,8 @@ describe('MarkerBasedOptimizer', () => {
     });
 
     it('should handle consecutive markers', async () => {
-      const prompt = '<summarize>First.</summarize><summarize>Second.</summarize>';
+      const prompt =
+        '<summarize>First.</summarize><summarize>Second.</summarize>';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -185,7 +195,8 @@ describe('MarkerBasedOptimizer', () => {
 
     it('should not process nested markers', async () => {
       // The regex doesn't handle nesting, so outer marker will consume inner one
-      const prompt = '<summarize>Outer <summarize>Inner</summarize> still outer</summarize>';
+      const prompt =
+        '<summarize>Outer <summarize>Inner</summarize> still outer</summarize>';
 
       const result = await optimizer.processMarkers(prompt);
 
@@ -227,7 +238,8 @@ This is important.
     });
 
     it('should handle mixed content with newlines', async () => {
-      const prompt = 'Before\n<summarize>\nContent\nwith\nnewlines\n</summarize>\nAfter';
+      const prompt =
+        'Before\n<summarize>\nContent\nwith\nnewlines\n</summarize>\nAfter';
 
       const result = await optimizer.processMarkers(prompt);
 

@@ -1312,6 +1312,56 @@ export const METRIC_COLLECTOR_TOOL_DEFINITION = {
       source: {
         type: 'object',
         description: 'Source configuration for configure-source operation',
+        // Declared in full. This was `{ type: 'object' }` with no properties,
+        // which accepts anything at all -- including a source object missing
+        // every field the tool then requires.
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          type: {
+            type: 'string',
+            enum: [
+              'prometheus',
+              'graphite',
+              'influxdb',
+              'cloudwatch',
+              'datadog',
+              'custom',
+            ],
+          },
+          enabled: { type: 'boolean' },
+          config: {
+            type: 'object',
+            properties: {
+              url: { type: 'string' },
+              apiKey: { type: 'string' },
+              region: { type: 'string', description: 'CloudWatch only' },
+              database: { type: 'string', description: 'InfluxDB only' },
+              username: { type: 'string' },
+              password: { type: 'string' },
+              interval: {
+                type: 'number',
+                description: 'Collection interval in seconds',
+              },
+              metrics: { type: 'array', items: { type: 'string' } },
+              tags: {
+                type: 'object',
+                additionalProperties: { type: 'string' },
+                description: 'Default tags applied to every collected metric',
+              },
+            },
+          },
+          lastCollected: {
+            type: 'number',
+            description: 'Epoch milliseconds of the last successful collection',
+          },
+          status: {
+            type: 'string',
+            enum: ['active', 'error', 'disabled'],
+          },
+          errorMessage: { type: 'string' },
+        },
+        required: ['id', 'name', 'type', 'enabled', 'config', 'status'],
       },
       metrics: {
         type: 'array',

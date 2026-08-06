@@ -1,6 +1,10 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
+import {
+  acceptedOptions,
+  declaredProperties,
+} from './helpers/schema-source.js';
 
 /**
  * A tool's published inputSchema must declare every option it accepts.
@@ -46,147 +50,6 @@ function walk(dir: string): string[] {
       out.push(full);
   }
   return out;
-}
-
-/**
- * Top-level keys of the object literal whose `{` is at `open`.
- *
- * COMMENT-AWARE, and that is not a nicety. Without it an apostrophe inside a `//`
- * comment -- "the caller's argument object" -- opens a string that never closes, and
- * every key after it is swallowed. That happened while writing this file: the audit
- * reported 11 newly declared properties as still missing, and the numbers looked
- * plausible enough to believe. A scanner that silently under-reports is worse than
- * no scanner, because it makes a real gap look fixed.
- */
-function topLevelKeys(text: string, open: number): string[] {
-  const keys: string[] = [];
-  let depth = 0;
-  let inString: string | null = null;
-
-  for (let i = open; i < text.length; i++) {
-    const c = text[i];
-
-    if (inString) {
-      if (c === '\\') i++;
-      else if (c === inString) inString = null;
-      continue;
-    }
-
-    // Comments first: their contents are prose, not syntax.
-    if (c === '/' && text[i + 1] === '/') {
-      const end = text.indexOf('\n', i);
-      if (end === -1) break;
-      i = end;
-      continue;
-    }
-    if (c === '/' && text[i + 1] === '*') {
-      const end = text.indexOf('*/', i + 2);
-      if (end === -1) break;
-      i = end + 1;
-      continue;
-    }
-
-    if (c === '"' || c === "'" || c === '`') {
-      inString = c;
-      continue;
-    }
-    if (c === '{' || c === '[') {
-      depth++;
-      continue;
-    }
-    if (c === '}' || c === ']') {
-      depth--;
-      if (depth === 0) break;
-      continue;
-    }
-    if (depth === 1 && /[A-Za-z_$]/.test(c)) {
-      const m = /^([A-Za-z_$][\w$]*)\s*:/.exec(text.slice(i));
-      if (m) {
-        keys.push(m[1]);
-        i += m[1].length;
-      }
-    }
-  }
-  return keys;
-}
-
-/**
- * Property names a schema declares, counting an `options` sub-object as declared.
- *
- * MOST tools are flattened by the server -- `const { pattern, ...options } = args` --
- * so their options belong at the top level. A few instead take options as a SEPARATE
- * argument (`run(target, options)`) and nest them under an `options` property, which is
- * correct for that call shape. Counting only top-level keys reported those as
- * undeclared, which was the checker being wrong rather than the tool: smart_workflow
- * declares all six of its options inside `options`, exactly as its signature expects.
- */
-function declaredProperties(text: string): string[] | null {
-  const schema = text.indexOf('inputSchema');
-  if (schema === -1) return null;
-  const props = text.indexOf('properties:', schema);
-  if (props === -1) return null;
-  const open = text.indexOf('{', props);
-  if (open === -1) return null;
-
-  const top = topLevelKeys(text, open);
-  if (!top.includes('options')) return top;
-
-  // Descend into the `options` object and treat its keys as declared too.
-  const optionsKey = text.indexOf('options:', open);
-  const nestedProps =
-    optionsKey === -1 ? -1 : text.indexOf('properties:', optionsKey);
-  if (nestedProps === -1) return top;
-  const nestedOpen = text.indexOf('{', nestedProps);
-  return nestedOpen === -1 ? top : [...top, ...topLevelKeys(text, nestedOpen)];
-}
-
-/**
- * Option names an interface accepts, with function-typed fields dropped.
- *
- * A `(x) => y` field cannot be expressed in JSON Schema and cannot arrive over MCP,
- * so it is programmatic-only rather than undeclared.
- */
-function acceptedOptions(text: string): string[] {
-  const fields: string[] = [];
-
-  for (const match of text.matchAll(/export interface\s+\w*Options\s*\{/g)) {
-    const open = text.indexOf('{', match.index);
-    let depth = 0;
-
-    for (let i = open; i < text.length; i++) {
-      const c = text[i];
-      if (c === '{') {
-        depth++;
-        continue;
-      }
-      if (c === '}') {
-        depth--;
-        if (depth === 0) break;
-        continue;
-      }
-      if (depth !== 1 || text[i - 1] !== '\n') continue;
-
-      const line = /^\s*([A-Za-z_$][\w$]*)\??\s*:\s*([^;\n]*)/.exec(
-        text.slice(i)
-      );
-      if (!line) continue;
-
-      const [, name, type] = line;
-
-      // NOT EXPRESSIBLE AS JSON, so not declarable and not reachable over MCP.
-      //
-      // Functions are obvious. `Buffer` is here for the same reason and was checked
-      // rather than assumed: cache_compression's `dictionary` is handed straight to
-      // zlib as a Buffer, so declaring it as a base64 string would promise a shape the
-      // implementation cannot consume -- a different lie from the one this test exists
-      // to catch, not a fix for it.
-      const isFunction = type.includes('=>') || /\bFunction\b/.test(type);
-      const isBinary = /\bBuffer\b/.test(type);
-      if (!isFunction && !isBinary) fields.push(name);
-    }
-  }
-
-  return [...new Set(fields)];
 }
 
 function toolName(text: string): string {

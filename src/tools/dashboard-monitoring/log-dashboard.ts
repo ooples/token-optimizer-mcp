@@ -1407,7 +1407,14 @@ export const LOG_DASHBOARD_TOOL_DEFINITION = {
             description: 'Exclude matches instead of including them',
             default: false,
           },
+          createdAt: {
+            type: 'number',
+            description: 'Epoch milliseconds the filter was created',
+          },
         },
+        // LogFilter requires all three; the schema demanded none of them, so a
+        // filter object missing its identity passed validation.
+        required: ['id', 'name', 'createdAt'],
       },
       cacheTTL: {
         type: 'number',

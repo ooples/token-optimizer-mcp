@@ -1,5 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
-import { parseWindowsDiskOutput, parseUnixDiskOutput } from '../../src/utils/disk-output.js';
+import {
+  parseWindowsDiskOutput,
+  parseUnixDiskOutput,
+} from '../../src/utils/disk-output.js';
 
 /**
  * smart_system_metrics takes a LIST of disk paths and answers one per path.
@@ -59,7 +62,10 @@ describe('windows disk output', () => {
   it('returns null for a drive with no media rather than NaN', () => {
     // An empty card reader or optical drive reports blank Size and FreeSpace.
     // parseInt('') is NaN, which used to flow straight into usagePercent.
-    const output = ['Caption  FreeSpace  Size', 'D:                        '].join('\n');
+    const output = [
+      'Caption  FreeSpace  Size',
+      'D:                        ',
+    ].join('\n');
     expect(parseWindowsDiskOutput(output, 'D:\\')).toBeNull();
   });
 
@@ -105,7 +111,12 @@ describe('unix disk output', () => {
   });
 
   it('returns null when there is no data row', () => {
-    expect(parseUnixDiskOutput('Filesystem 1K-blocks Used Available Use% Mounted on', '/')).toBeNull();
+    expect(
+      parseUnixDiskOutput(
+        'Filesystem 1K-blocks Used Available Use% Mounted on',
+        '/'
+      )
+    ).toBeNull();
     expect(parseUnixDiskOutput('', '/')).toBeNull();
   });
 });

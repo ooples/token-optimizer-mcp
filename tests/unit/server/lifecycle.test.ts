@@ -7,7 +7,14 @@
  * which is the race the idempotency guard exists to prevent.
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals';
 import { EventEmitter } from 'events';
 import { installShutdownHandlers } from '../../../src/server/lifecycle.js';
 

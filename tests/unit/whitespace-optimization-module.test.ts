@@ -11,7 +11,10 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { WhitespaceOptimizationModule } from '../../src/modules/WhitespaceOptimizationModule.js';
-import { ITokenCounter, TokenCountResult } from '../../src/interfaces/ITokenCounter.js';
+import {
+  ITokenCounter,
+  TokenCountResult,
+} from '../../src/interfaces/ITokenCounter.js';
 
 // Mock token counter
 class MockTokenCounter implements ITokenCounter {

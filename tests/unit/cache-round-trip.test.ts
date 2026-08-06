@@ -2,7 +2,10 @@ import { describe, it, expect, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync, readdirSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { compress, decompress } from '../../src/tools/shared/compression-utils.js';
+import {
+  compress,
+  decompress,
+} from '../../src/tools/shared/compression-utils.js';
 
 /**
  * A cache entry must be readable by the code that wrote it.
@@ -24,12 +27,21 @@ describe('compressed cache entries survive a round trip', () => {
   afterEach(() => {
     while (dirs.length) {
       const d = dirs.pop();
-      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+      if (d) {
+        try {
+          rmSync(d, { recursive: true, force: true });
+        } catch {
+          /* windows */
+        }
+      }
     }
   });
 
   it('utf8 destroys gzip bytes, which is why the encoding must be explicit', () => {
-    const payload = JSON.stringify({ code: 'const x = 1;', language: 'typescript' });
+    const payload = JSON.stringify({
+      code: 'const x = 1;',
+      language: 'typescript',
+    });
     const { compressed } = compress(payload, 'gzip');
 
     // What the old write path did.
@@ -50,9 +62,14 @@ describe('compressed cache entries survive a round trip', () => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
-        else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+        else if (
+          entry.name.endsWith('.ts') &&
+          !entry.name.endsWith('.test.ts')
+        ) {
           const src = readFileSync(full, 'utf8');
-          for (const m of src.matchAll(/\w*[Cc]ompress\w*\.compressed\.toString\(\)/g)) {
+          for (const m of src.matchAll(
+            /\w*[Cc]ompress\w*\.compressed\.toString\(\)/g
+          )) {
             offenders.push(`${entry.name}: ${m[0]}`);
           }
         }
@@ -76,17 +93,31 @@ describe('compressed cache entries survive a round trip', () => {
     const cache = new CacheEngine(join(dir, 'c.db'));
     try {
       const ToolClass = (mod.SmartPretty ?? mod.SmartPrettyTool) as new (
-        c: unknown, t: unknown, m: unknown
+        c: unknown,
+        t: unknown,
+        m: unknown
       ) => { run(args: unknown): Promise<unknown> };
 
-      const tool = new ToolClass(cache, new TokenCounter(), new MetricsCollector());
-      const args = { operation: 'format-code', code: 'const   x=1', language: 'typescript' };
+      const tool = new ToolClass(
+        cache,
+        new TokenCounter(),
+        new MetricsCollector()
+      );
+      const args = {
+        operation: 'format-code',
+        code: 'const   x=1',
+        language: 'typescript',
+      };
 
       await expect(tool.run(args)).resolves.toBeDefined();
       // The second call is the one that reads what the first wrote.
       await expect(tool.run(args)).resolves.toBeDefined();
     } finally {
-      try { cache.close(); } catch { /* already closed */ }
+      try {
+        cache.close();
+      } catch {
+        /* already closed */
+      }
     }
   });
 });

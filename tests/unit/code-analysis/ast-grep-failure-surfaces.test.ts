@@ -31,7 +31,10 @@ describe('ast-grep distinguishes "no matches" from "could not run"', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'ast-grep-surfaces-'));
     mkdirSync(join(root, 'src'), { recursive: true });
-    writeFileSync(join(root, 'src', 'a.ts'), 'export function alpha() {\n  return 1;\n}\n');
+    writeFileSync(
+      join(root, 'src', 'a.ts'),
+      'export function alpha() {\n  return 1;\n}\n'
+    );
 
     cache = new CacheEngine(join(root, 'cache.db'), 100);
     counter = new TokenCounter();
@@ -49,7 +52,12 @@ describe('ast-grep distinguishes "no matches" from "could not run"', () => {
   });
 
   const grep = (pattern: string) =>
-    tool.grep(pattern, { pattern, projectPath: root, language: 'ts', enableCache: false });
+    tool.grep(pattern, {
+      pattern,
+      projectPath: root,
+      language: 'ts',
+      enableCache: false,
+    });
 
   it('finds a function that is there', async () => {
     const result = await grep('function $NAME');
@@ -73,12 +81,20 @@ describe('ast-grep distinguishes "no matches" from "could not run"', () => {
     writeFileSync(notNode, 'this is not an executable');
 
     const real = process.execPath;
-    Object.defineProperty(process, 'execPath', { value: notNode, configurable: true });
+    Object.defineProperty(process, 'execPath', {
+      value: notNode,
+      configurable: true,
+    });
 
     try {
-      await expect(grep('function $NAME')).rejects.toThrow(/ast-grep could not be run/);
+      await expect(grep('function $NAME')).rejects.toThrow(
+        /ast-grep could not be run/
+      );
     } finally {
-      Object.defineProperty(process, 'execPath', { value: real, configurable: true });
+      Object.defineProperty(process, 'execPath', {
+        value: real,
+        configurable: true,
+      });
     }
   }, 120_000);
 
@@ -87,12 +103,18 @@ describe('ast-grep distinguishes "no matches" from "could not run"', () => {
     writeFileSync(notNode, 'this is not an executable');
 
     const real = process.execPath;
-    Object.defineProperty(process, 'execPath', { value: notNode, configurable: true });
+    Object.defineProperty(process, 'execPath', {
+      value: notNode,
+      configurable: true,
+    });
 
     try {
       await expect(grep('function $NAME')).rejects.toThrow(/@ast-grep\/cli/);
     } finally {
-      Object.defineProperty(process, 'execPath', { value: real, configurable: true });
+      Object.defineProperty(process, 'execPath', {
+        value: real,
+        configurable: true,
+      });
     }
   }, 120_000);
 });

@@ -1180,7 +1180,14 @@ export const PREDICTIVE_CACHE_TOOL_DEFINITION = {
             key: { type: 'string' },
             timestamp: { type: 'number' },
             hitCount: { type: 'number' },
+            metadata: {
+              type: 'object',
+              additionalProperties: true,
+              description: 'Arbitrary context recorded with the access',
+            },
           },
+          // AccessPattern requires all but metadata.
+          required: ['key', 'timestamp', 'hitCount'],
         },
         description: 'Training data (for train operation)',
       },

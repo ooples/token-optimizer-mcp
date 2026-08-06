@@ -34,6 +34,8 @@ describe('validateToolArgs zod-v4 compatibility', () => {
   });
 
   it('throws a clear error for an unknown tool', () => {
-    expect(() => validateToolArgs('does_not_exist', {})).toThrow(/Unknown tool/);
+    expect(() => validateToolArgs('does_not_exist', {})).toThrow(
+      /Unknown tool/
+    );
   });
 });

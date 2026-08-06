@@ -24,7 +24,9 @@ import { builtinModules } from 'module';
  *      and smart_cache_api were all broken this way.
  */
 const ROOT = join(process.cwd(), 'src');
-const PKG = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+const PKG = JSON.parse(
+  readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+);
 const DECLARED = new Set(Object.keys(PKG.dependencies || {}));
 const BUILTIN = new Set(builtinModules);
 
@@ -74,11 +76,20 @@ function importBlock(source: string): string[] {
   const out: string[] = [];
   for (const line of source.split('\n')) {
     const t = line.trim();
-    if (t === '' || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) {
+    if (
+      t === '' ||
+      t.startsWith('//') ||
+      t.startsWith('*') ||
+      t.startsWith('/*')
+    ) {
       out.push(line);
       continue;
     }
-    if (/^import[\s{*]/.test(t) || /^\}\s*from\s/.test(t) || /^['"][^'"]+['"];?$/.test(t)) {
+    if (
+      /^import[\s{*]/.test(t) ||
+      /^\}\s*from\s/.test(t) ||
+      /^['"][^'"]+['"];?$/.test(t)
+    ) {
       out.push(line);
       continue;
     }
@@ -105,12 +116,17 @@ describe('the shipped build only imports what it ships', () => {
       importBlock(readFileSync(file, 'utf8')).forEach((line, i) => {
         // Top-level static imports only; a `type` import is erased at compile
         // time and needs nothing at runtime.
-        const m = line.match(/^import\s+(?!type\s)[^'"]*from\s+['"]([^'"]+)['"]/);
+        const m = line.match(
+          /^import\s+(?!type\s)[^'"]*from\s+['"]([^'"]+)['"]/
+        );
         if (!m) return;
         const spec = m[1];
         if (spec.startsWith('.') || spec.startsWith('node:')) return;
-        const name = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
-        if (BUILTIN.has(name) || DECLARED.has(name) || OPTIONAL.has(name)) return;
+        const name = spec.startsWith('@')
+          ? spec.split('/').slice(0, 2).join('/')
+          : spec.split('/')[0];
+        if (BUILTIN.has(name) || DECLARED.has(name) || OPTIONAL.has(name))
+          return;
         undeclared.push(`${rel(file)}:${i + 1}  imports "${name}"`);
       });
     }
@@ -122,14 +138,18 @@ describe('the shipped build only imports what it ships', () => {
     const bad: string[] = [];
 
     for (const file of files) {
-      readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-        if (isComment(line)) return;
-        for (const m of line.matchAll(/import\(\s*['"](\.[^'"]*)['"]\s*\)/g)) {
-          if (!/\.(js|json|mjs|cjs)$/.test(m[1])) {
-            bad.push(`${rel(file)}:${i + 1}  import('${m[1]}')`);
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (isComment(line)) return;
+          for (const m of line.matchAll(
+            /import\(\s*['"](\.[^'"]*)['"]\s*\)/g
+          )) {
+            if (!/\.(js|json|mjs|cjs)$/.test(m[1])) {
+              bad.push(`${rel(file)}:${i + 1}  import('${m[1]}')`);
+            }
           }
-        }
-      });
+        });
     }
 
     expect(bad).toEqual([]);
@@ -143,15 +163,20 @@ describe('the shipped build only imports what it ships', () => {
     const shims: string[] = [];
 
     for (const file of files) {
-      readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-        if (isComment(line)) return;
-        if (/['"`][^'"`]*\.(cmd|bat)['"`]/.test(line) && /spawn|exec/.test(line)) {
-          shims.push(`${rel(file)}:${i + 1}  ${line.trim().slice(0, 80)}`);
-        }
-        if (/\$\{[^}]*\}\.cmd/.test(line)) {
-          shims.push(`${rel(file)}:${i + 1}  ${line.trim().slice(0, 80)}`);
-        }
-      });
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (isComment(line)) return;
+          if (
+            /['"`][^'"`]*\.(cmd|bat)['"`]/.test(line) &&
+            /spawn|exec/.test(line)
+          ) {
+            shims.push(`${rel(file)}:${i + 1}  ${line.trim().slice(0, 80)}`);
+          }
+          if (/\$\{[^}]*\}\.cmd/.test(line)) {
+            shims.push(`${rel(file)}:${i + 1}  ${line.trim().slice(0, 80)}`);
+          }
+        });
     }
 
     expect(shims).toEqual([]);

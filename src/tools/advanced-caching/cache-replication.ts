@@ -1557,9 +1557,15 @@ export const CACHE_REPLICATION_TOOL_DEFINITION = {
             localEntry: { type: 'object' },
             remoteEntry: { type: 'object' },
             resolution: { type: 'object' },
+            resolvedBy: {
+              type: 'string',
+              description: 'Which resolution rule settled this conflict',
+            },
             timestamp: { type: 'number' },
           },
-          required: ['key'],
+          // Conflict requires all of these; only `resolution` and `resolvedBy` are
+          // optional, because they are what a resolve operation fills in.
+          required: ['key', 'localEntry', 'remoteEntry', 'timestamp'],
         },
       },
     },

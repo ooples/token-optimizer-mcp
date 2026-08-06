@@ -101,7 +101,9 @@ describe('net user', () => {
   });
 
   it('excludes the trailing status line', () => {
-    expect(parseNetUserList(NET_USER).some((u) => /command completed/i.test(u))).toBe(false);
+    expect(
+      parseNetUserList(NET_USER).some((u) => /command completed/i.test(u))
+    ).toBe(false);
   });
 });
 

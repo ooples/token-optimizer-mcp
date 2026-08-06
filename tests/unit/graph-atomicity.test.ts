@@ -36,10 +36,7 @@ afterEach(() => {
 });
 
 const logPath = () => join(dir, 'graph.jsonl');
-const lines = () =>
-  readFileSync(logPath(), 'utf8')
-    .split('\n')
-    .filter(Boolean);
+const lines = () => readFileSync(logPath(), 'utf8').split('\n').filter(Boolean);
 
 describe('putNodeWithEdges', () => {
   it('writes the node and every edge in ONE append', async () => {
@@ -72,8 +69,12 @@ describe('putNodeWithEdges', () => {
     ]);
 
     const written = lines().map((l) => JSON.parse(l));
-    const nodeIndex = written.findIndex((r) => r.t === 'n' && r.kind === 'finding');
-    const edgeIndex = written.findIndex((r) => r.t === 'e' && r.edge === 'derived_from');
+    const nodeIndex = written.findIndex(
+      (r) => r.t === 'n' && r.kind === 'finding'
+    );
+    const edgeIndex = written.findIndex(
+      (r) => r.t === 'e' && r.edge === 'derived_from'
+    );
 
     expect(edgeIndex).toBeGreaterThanOrEqual(0);
     expect(nodeIndex).toBeGreaterThan(edgeIndex);
@@ -103,13 +104,18 @@ describe('putNodeWithEdges', () => {
 
       const graph = load(dir);
       const anchored = new Set(
-        graph.edges.filter((e: any) => e.edge === 'derived_from').map((e: any) => e.from)
+        graph.edges
+          .filter((e: any) => e.edge === 'derived_from')
+          .map((e: any) => e.from)
       );
       const orphans = [...graph.nodes.values()].filter(
         (n: any) => n.kind === 'finding' && !anchored.has(n.id)
       );
 
-      expect({ cut, orphans: orphans.map((o: any) => o.key) }).toEqual({ cut, orphans: [] });
+      expect({ cut, orphans: orphans.map((o: any) => o.key) }).toEqual({
+        cut,
+        orphans: [],
+      });
     }
   });
 
@@ -144,16 +150,27 @@ describe('writeHarvested', () => {
 
     const keys = writeHarvested(
       dir,
-      [{ type: 'finding', claim: 'subject() returns one', confidence: 0.9, anchors: [file] }],
+      [
+        {
+          type: 'finding',
+          claim: 'subject() returns one',
+          confidence: 0.9,
+          anchors: [file],
+        },
+      ],
       { projectRoot: dir }
     );
 
     expect(keys).toHaveLength(1);
 
     const graph = load(dir);
-    const findings = [...graph.nodes.values()].filter((n: any) => n.kind === 'finding');
+    const findings = [...graph.nodes.values()].filter(
+      (n: any) => n.kind === 'finding'
+    );
     const anchored = new Set(
-      graph.edges.filter((e: any) => e.edge === 'derived_from').map((e: any) => e.from)
+      graph.edges
+        .filter((e: any) => e.edge === 'derived_from')
+        .map((e: any) => e.from)
     );
 
     expect(findings).toHaveLength(1);

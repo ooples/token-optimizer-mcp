@@ -1530,8 +1530,40 @@ export const SMART_PRETTY_TOOL_DEFINITION = {
         description: 'Custom theme definition (use with theme: "custom")',
         properties: {
           name: { type: 'string' as const },
-          colors: { type: 'object' as const },
+          colors: {
+            type: 'object' as const,
+            additionalProperties: { type: 'string' as const },
+            description:
+              'Token colours, for example background, keyword, string, comment, number',
+          },
+          styles: {
+            type: 'object' as const,
+            // The three keys are named, and each is a LIST OF TOKEN NAMES rather
+            // than a flag. `additionalProperties: true` with no properties made
+            // `{ styles: { bold: false } }` valid input for a field the tool
+            // iterates as an array, so the schema accepted a shape that fails
+            // inside the tool.
+            properties: {
+              bold: {
+                type: 'array' as const,
+                items: { type: 'string' as const },
+              },
+              italic: {
+                type: 'array' as const,
+                items: { type: 'string' as const },
+              },
+              underline: {
+                type: 'array' as const,
+                items: { type: 'string' as const },
+              },
+            },
+            additionalProperties: false,
+            description:
+              'Token names to render bold, italic or underlined, e.g. { bold: ["keyword"] }',
+          },
         },
+        // ThemeDefinition requires a name and colors; styles is optional.
+        required: ['name', 'colors'],
       },
       showLineNumbers: {
         type: 'boolean' as const,

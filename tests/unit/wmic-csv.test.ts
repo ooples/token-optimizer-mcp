@@ -46,7 +46,9 @@ describe('wmic CSV rows are keyed by the header, not by request order', () => {
 
     const [row] = parseWmicCsvRows(csv);
 
-    expect(row.CommandLine).toBe(String.raw`"C:\app.exe" --enable=a,b,c,d --also=e,f`);
+    expect(row.CommandLine).toBe(
+      String.raw`"C:\app.exe" --enable=a,b,c,d --also=e,f`
+    );
     // Everything after the command line is still read correctly.
     expect(row.Name).toBe('app.exe');
     expect(row.ProcessId).toBe('777');
@@ -86,9 +88,12 @@ describe('wmic CSV rows are keyed by the header, not by request order', () => {
   });
 
   it('skips the blank lines wmic prints before the header', () => {
-    const csv = ['', '  ', PROCESS_HEADER, 'HOST,c,20260720000000.000000+000,1,2,n.exe,9,3,4,5'].join(
-      '\n'
-    );
+    const csv = [
+      '',
+      '  ',
+      PROCESS_HEADER,
+      'HOST,c,20260720000000.000000+000,1,2,n.exe,9,3,4,5',
+    ].join('\n');
     const rows = parseWmicCsvRows(csv);
     expect(rows).toHaveLength(1);
     expect(rows[0].ProcessId).toBe('9');

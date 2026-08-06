@@ -53,9 +53,15 @@ const CONTROL_NAMES: Record<number, string> = {
   27: 'escape',
 };
 
-const FORBIDDEN: Array<[number, string]> = Array.from({ length: 32 }, (_, code) => code)
+const FORBIDDEN: Array<[number, string]> = Array.from(
+  { length: 32 },
+  (_, code) => code
+)
   .filter((code) => !ALLOWED_CONTROLS.has(code))
-  .map((code) => [code, CONTROL_NAMES[code] ?? `control 0x${code.toString(16)}`]);
+  .map((code) => [
+    code,
+    CONTROL_NAMES[code] ?? `control 0x${code.toString(16)}`,
+  ]);
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];

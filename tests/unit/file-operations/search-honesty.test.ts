@@ -31,16 +31,30 @@ describe('search tools bound their output', () => {
 
   afterEach(() => {
     while (caches.length) {
-      try { caches.pop()?.close(); } catch { /* already closed */ }
+      try {
+        caches.pop()?.close();
+      } catch {
+        /* already closed */
+      }
     }
     while (dirs.length) {
       const d = dirs.pop();
-      if (d) { try { rmSync(d, { recursive: true, force: true }); } catch { /* windows */ } }
+      if (d) {
+        try {
+          rmSync(d, { recursive: true, force: true });
+        } catch {
+          /* windows */
+        }
+      }
     }
   });
 
   /** A tree big enough that an unbounded search is genuinely dangerous. */
-  function bigRepo(): { dir: string; counter: TokenCounter; cache: CacheEngine } {
+  function bigRepo(): {
+    dir: string;
+    counter: TokenCounter;
+    cache: CacheEngine;
+  } {
     const dir = mkdtempSync(join(tmpdir(), 'token-optimizer-search-'));
     dirs.push(dir);
     const cache = new CacheEngine(join(dir, 'c.db'));
@@ -49,7 +63,9 @@ describe('search tools bound their output', () => {
     for (let f = 0; f < 40; f++) {
       const lines = [];
       for (let i = 0; i < 120; i++) {
-        lines.push(`export function target${f}_${i}() { return ${i}; } // padding padding padding`);
+        lines.push(
+          `export function target${f}_${i}() { return ${i}; } // padding padding padding`
+        );
       }
       writeFileSync(join(dir, 'src', `mod${f}.ts`), lines.join('\n'));
     }
@@ -95,7 +111,9 @@ describe('search tools bound their output', () => {
     }
     // And the baseline must be at least as large as the result it replaced.
     expect(md.originalTokenCount).toBeGreaterThanOrEqual(md.tokenCount);
-    expect(md.tokensSaved).toBe(Math.max(0, md.originalTokenCount - md.tokenCount));
+    expect(md.tokensSaved).toBe(
+      Math.max(0, md.originalTokenCount - md.tokenCount)
+    );
   });
 
   it('a glob claims only what pagination actually withheld', async () => {
@@ -109,11 +127,19 @@ describe('search tools bound their output', () => {
     expect(all.metadata.originalTokenCount).toBe(all.metadata.tokenCount);
 
     // With a limit, the saving is the paths held back -- countable, so counted.
-    const paged = await glob.glob('src/**/*.ts', { cwd: dir, limit: 5, useCache: false });
+    const paged = await glob.glob('src/**/*.ts', {
+      cwd: dir,
+      limit: 5,
+      useCache: false,
+    });
     expect(paged.metadata.tokensSaved).toBeGreaterThan(0);
-    expect(paged.metadata.originalTokenCount).toBeGreaterThan(paged.metadata.tokenCount);
+    expect(paged.metadata.originalTokenCount).toBeGreaterThan(
+      paged.metadata.tokenCount
+    );
     for (const factor of [10, 50]) {
-      expect(paged.metadata.originalTokenCount).not.toBe(paged.metadata.tokenCount * factor);
+      expect(paged.metadata.originalTokenCount).not.toBe(
+        paged.metadata.tokenCount * factor
+      );
     }
   });
 });

@@ -30,7 +30,7 @@ describe('InMemoryVectorStore', () => {
     expect(results[0].similarity).toBeCloseTo(1.0, 5);
 
     // Second result should be key3 (similar)
-    const key3Result = results.find(r => r.id === 'key3');
+    const key3Result = results.find((r) => r.id === 'key3');
     expect(key3Result).toBeDefined();
     expect(key3Result!.similarity).toBeGreaterThan(0.7);
   });
@@ -71,7 +71,9 @@ describe('InMemoryVectorStore', () => {
 
     // Results should be sorted by similarity (descending)
     for (let i = 0; i < results.length - 1; i++) {
-      expect(results[i].similarity).toBeGreaterThanOrEqual(results[i + 1].similarity);
+      expect(results[i].similarity).toBeGreaterThanOrEqual(
+        results[i + 1].similarity
+      );
     }
   });
 
@@ -89,7 +91,7 @@ describe('InMemoryVectorStore', () => {
 
     // Deleted vector should not appear in search
     const results = await store.search([1, 0, 0, 0], 5, 0.0);
-    expect(results.find(r => r.id === 'key1')).toBeUndefined();
+    expect(results.find((r) => r.id === 'key1')).toBeUndefined();
   });
 
   it('should clear all vectors', async () => {
@@ -141,9 +143,9 @@ describe('InMemoryVectorStore', () => {
 
     const results = await store.search([1, 0, 0], 3, -1.0); // Include all
 
-    const same = results.find(r => r.id === 'same');
-    const opposite = results.find(r => r.id === 'opposite');
-    const orthogonal = results.find(r => r.id === 'orthogonal');
+    const same = results.find((r) => r.id === 'same');
+    const opposite = results.find((r) => r.id === 'opposite');
+    const orthogonal = results.find((r) => r.id === 'orthogonal');
 
     expect(same!.similarity).toBeCloseTo(1.0, 5);
     expect(opposite!.similarity).toBeCloseTo(-1.0, 5);
@@ -158,6 +160,6 @@ describe('InMemoryVectorStore', () => {
     const results = await store.search([0, 0, 0, 0], 5, -1.0);
 
     // Should not crash, but zero vector has 0 similarity with everything
-    expect(results.every(r => r.similarity === 0)).toBe(true);
+    expect(results.every((r) => r.similarity === 0)).toBe(true);
   });
 });

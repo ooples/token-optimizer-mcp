@@ -58,7 +58,7 @@ describe('FoundationModelEmbeddingGenerator', () => {
 
     expect(embedding).toHaveLength(128);
     // All values should be finite numbers
-    expect(embedding.every(v => Number.isFinite(v))).toBe(true);
+    expect(embedding.every((v) => Number.isFinite(v))).toBe(true);
   });
 
   it('should handle long texts', async () => {
@@ -67,7 +67,7 @@ describe('FoundationModelEmbeddingGenerator', () => {
     const embedding = await generator.generateEmbedding(longText);
 
     expect(embedding).toHaveLength(128);
-    expect(embedding.every(v => Number.isFinite(v))).toBe(true);
+    expect(embedding.every((v) => Number.isFinite(v))).toBe(true);
   });
 
   it('should produce consistent embeddings for the same text', async () => {

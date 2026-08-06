@@ -66,10 +66,16 @@ describe('assertKnownFields', () => {
     // the caller still has to pick `files`, but the message names a real field
     // and lists the full set rather than sending them to the schema.
     expect(() =>
-      checker.assertKnownFields('smart_grep', { pattern: 'x', filePattern: 'y' })
+      checker.assertKnownFields('smart_grep', {
+        pattern: 'x',
+        filePattern: 'y',
+      })
     ).toThrow(/did you mean pattern\?/);
     expect(() =>
-      checker.assertKnownFields('smart_grep', { pattern: 'x', filePattern: 'y' })
+      checker.assertKnownFields('smart_grep', {
+        pattern: 'x',
+        filePattern: 'y',
+      })
     ).toThrow(/Accepted: caseSensitive, contextAfter/);
   });
 
@@ -130,7 +136,9 @@ describe('assertKnownFields', () => {
   });
 
   it('tolerates absent and empty arguments', () => {
-    expect(() => checker.assertKnownFields('smart_grep', undefined)).not.toThrow();
+    expect(() =>
+      checker.assertKnownFields('smart_grep', undefined)
+    ).not.toThrow();
     expect(() => checker.assertKnownFields('smart_grep', {})).not.toThrow();
   });
 
@@ -146,7 +154,9 @@ describe('nearestKnownField', () => {
 
   it('prefers a contained name over edit distance', () => {
     expect(nearestKnownField('filePattern', known)).toBe('pattern');
-    expect(nearestKnownField('contextBeforeLines', known)).toBe('contextBefore');
+    expect(nearestKnownField('contextBeforeLines', known)).toBe(
+      'contextBefore'
+    );
   });
 
   it('catches a single-character slip', () => {

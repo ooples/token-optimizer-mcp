@@ -11,7 +11,10 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { DeduplicationModule } from '../../src/modules/DeduplicationModule.js';
-import { ITokenCounter, TokenCountResult } from '../../src/interfaces/ITokenCounter.js';
+import {
+  ITokenCounter,
+  TokenCountResult,
+} from '../../src/interfaces/ITokenCounter.js';
 
 // Mock token counter
 class MockTokenCounter implements ITokenCounter {
@@ -77,7 +80,8 @@ describe('DeduplicationModule', () => {
         minSentenceLength: 20,
       });
 
-      const text = 'Short. Short. This is a longer sentence. This is a longer sentence.';
+      const text =
+        'Short. Short. This is a longer sentence. This is a longer sentence.';
       const result = await moduleMinLength.apply(text);
 
       // Short duplicates should be kept, long ones removed
@@ -235,7 +239,8 @@ Same paragraph.
     });
 
     it('should handle text without duplicates', async () => {
-      const text = 'Every sentence is unique. No repetition here. All different.';
+      const text =
+        'Every sentence is unique. No repetition here. All different.';
       const result = await module.apply(text);
 
       expect(result.text).toBe(text);

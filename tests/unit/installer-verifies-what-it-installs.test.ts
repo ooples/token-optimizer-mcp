@@ -56,11 +56,19 @@ function requiredByInstaller(source: string): string[] {
   // `@(` in PowerShell, `(` in bash.
   const block = source.match(/required_?[Ff]iles\s*=\s*@?\(([\s\S]*?)\)/);
   if (!block) return [];
-  const matches = block[1].matchAll(/["']\$(?:\{)?HOOKS_DIR(?:\})?[\\/]([^"']+)["']/g);
-  return [...matches].map((m) => m[1].replace(/\\/g, '/').split('/').pop() as string);
+  const matches = block[1].matchAll(
+    /["']\$(?:\{)?HOOKS_DIR(?:\})?[\\/]([^"']+)["']/g
+  );
+  return [...matches].map(
+    (m) => m[1].replace(/\\/g, '/').split('/').pop() as string
+  );
 }
 
-const ENTRYPOINTS = ['session-start.mjs', 'pretooluse-router.mjs', 'precompact-optimize.mjs'];
+const ENTRYPOINTS = [
+  'session-start.mjs',
+  'pretooluse-router.mjs',
+  'precompact-optimize.mjs',
+];
 
 describe.each([
   ['install-hooks.ps1', 'install-hooks.ps1'],
@@ -102,7 +110,8 @@ describe('the install manifest', () => {
     expect(recordIndex).toBeGreaterThan(-1);
 
     // The recording must not be gated on the verification verdict.
-    const gatedOnVerified = /if\s*\(\s*\$verified\s*\)[\s\S]{0,400}record-install\.mjs/.test(ps1);
+    const gatedOnVerified =
+      /if\s*\(\s*\$verified\s*\)[\s\S]{0,400}record-install\.mjs/.test(ps1);
     expect(gatedOnVerified).toBe(false);
   });
 });

@@ -54,8 +54,12 @@ describe('the dashboard is self-contained', () => {
       const source = readFileSync(file, 'utf8');
       const calls = [
         ...source.matchAll(/fetch\(\s*[`'"](https?:)?\/\//gi),
-        ...source.matchAll(/new\s+(?:WebSocket|EventSource)\(\s*[`'"][a-z]+:\/\//gi),
-        ...source.matchAll(/XMLHttpRequest[\s\S]{0,80}?open\([^)]*[`'"]https?:\/\//gi),
+        ...source.matchAll(
+          /new\s+(?:WebSocket|EventSource)\(\s*[`'"][a-z]+:\/\//gi
+        ),
+        ...source.matchAll(
+          /XMLHttpRequest[\s\S]{0,80}?open\([^)]*[`'"]https?:\/\//gi
+        ),
       ].map((m) => m[0]);
 
       expect(calls).toEqual([]);
@@ -63,7 +67,9 @@ describe('the dashboard is self-contained', () => {
   );
 
   it('vendors chart.js locally instead of pulling it from a CDN', () => {
-    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+    );
 
     // Pinned exactly: a caret range would let the dependency change under us,
     // which is the supply-chain half of what was wrong with the CDN.
@@ -74,7 +80,10 @@ describe('the dashboard is self-contained', () => {
     // remedy instead of a bare ENOENT. Assert it where it now lives -- deleting
     // the vendoring from that module must still fail this test.
     expect(pkg.scripts['copy:assets']).toContain('scripts/copy-assets.mjs');
-    const copyAssets = readFileSync(join(process.cwd(), 'scripts', 'copy-assets.mjs'), 'utf8');
+    const copyAssets = readFileSync(
+      join(process.cwd(), 'scripts', 'copy-assets.mjs'),
+      'utf8'
+    );
     expect(copyAssets).toContain('chart.umd.min.js'); // the vendored target
     expect(copyAssets).toContain('chart.umd.js'); // sourced from the local package
     expect(copyAssets).not.toMatch(/https?:\/\/[^\s'"]*chart/i); // never a CDN
@@ -85,7 +94,14 @@ describe('the dashboard is self-contained', () => {
   });
 
   it('ships the vendored file when the assets have been built', () => {
-    const built = join(process.cwd(), 'dist', 'dashboard', 'public', 'vendor', 'chart.umd.min.js');
+    const built = join(
+      process.cwd(),
+      'dist',
+      'dashboard',
+      'public',
+      'vendor',
+      'chart.umd.min.js'
+    );
     if (!existsSync(join(process.cwd(), 'dist', 'dashboard', 'public'))) return;
     expect(existsSync(built)).toBe(true);
   });

@@ -16,7 +16,9 @@ describe('tool-schema injection rejection', () => {
 
   it('smart_install: rejects option-flag package specs', () => {
     expect(() =>
-      validateToolArgs('smart_install', { packages: ['--registry=http://evil'] })
+      validateToolArgs('smart_install', {
+        packages: ['--registry=http://evil'],
+      })
     ).toThrow(/Validation failed/);
   });
 
@@ -37,9 +39,9 @@ describe('tool-schema injection rejection', () => {
   });
 
   it('smart_log: rejects a command-substitution filePath', () => {
-    expect(() =>
-      validateToolArgs('smart_log', { filePath: 'a\nb' })
-    ).toThrow(/Validation failed/);
+    expect(() => validateToolArgs('smart_log', { filePath: 'a\nb' })).toThrow(
+      /Validation failed/
+    );
   });
 
   it('smart_diff: accepts legitimate refs and files', () => {

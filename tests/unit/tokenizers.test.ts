@@ -1,5 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
-import { HeuristicTokenizer, ContentType } from '../../src/core/tokenizers/heuristic-tokenizer.js';
+import {
+  HeuristicTokenizer,
+  ContentType,
+} from '../../src/core/tokenizers/heuristic-tokenizer.js';
 import { TokenizerFactory } from '../../src/core/tokenizers/tokenizer-factory.js';
 import { TiktokenTokenizer } from '../../src/core/tokenizers/tiktoken-tokenizer.js';
 

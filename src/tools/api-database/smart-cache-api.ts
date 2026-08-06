@@ -941,6 +941,8 @@ Token Reduction:
           body: { type: 'object' },
           params: { type: 'object' },
         },
+        // APIRequest requires a url; everything else is optional.
+        required: ['url'],
       },
       response: {
         description: 'API response data (for set)',

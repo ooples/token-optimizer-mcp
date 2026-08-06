@@ -32,8 +32,18 @@ function sourceFiles(dir: string): string[] {
 }
 
 /** Every `cache.set(...)` call with four arguments, as written. */
-function fourArgSetCalls(): Array<{ file: string; line: number; third: string; fourth: string }> {
-  const calls: Array<{ file: string; line: number; third: string; fourth: string }> = [];
+function fourArgSetCalls(): Array<{
+  file: string;
+  line: number;
+  third: string;
+  fourth: string;
+}> {
+  const calls: Array<{
+    file: string;
+    line: number;
+    third: string;
+    fourth: string;
+  }> = [];
 
   for (const file of sourceFiles(SRC)) {
     const src = readFileSync(file, 'utf8');
@@ -85,7 +95,10 @@ describe('cache.set arguments are in the declared order', () => {
     // allowed -- that is how an uncompressed entry is honestly recorded -- so
     // this only fires when the fourth names ORIGINAL and the third does not.
     const wrong = calls.filter(
-      (c) => ORIGINAL.test(c.fourth) && !COMPRESSED.test(c.fourth) && c.third !== c.fourth
+      (c) =>
+        ORIGINAL.test(c.fourth) &&
+        !COMPRESSED.test(c.fourth) &&
+        c.third !== c.fourth
     );
 
     expect(
