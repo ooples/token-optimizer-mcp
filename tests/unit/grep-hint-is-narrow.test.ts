@@ -161,6 +161,12 @@ describe('the regex hint', () => {
     // that this pattern DOES match, so an unguarded probe reports a hint
     // quickly and a guarded one reports none -- the guard is the only thing
     // that can change the result.
+    //
+    // CodeQL flags this string as `js/redos` (alert 95, dismissed as "used in
+    // tests"). The finding is accurate, and that is the point: it is test
+    // INPUT, not a regex this project compiles from a literal, and the
+    // assertion below is that the probe REFUSES to run it. Rewriting the string
+    // to slip past the scanner would remove the proof that the guard works.
     const result = await grep('(a+)+$');
 
     expect(result.metadata.totalMatches).toBe(0);
