@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Claude Code PreCompact adapter -- optimize at the moment it matters most.
  *
@@ -123,7 +123,7 @@ async function main() {
   // concurrent hook processes cannot erase each other's additions, which means it
   // cannot shrink the map at all. The first version of this used saveState and was a
   // silent no-op until a test caught it.
-  clearSeen(payload.session_id);
+  clearSeen(payload.session_id, payload.transcript_path || null);
 
   // NOW the wrapper, which only the optimize_session spawn needs. Plugin-only
   // installs stop here having still recorded their co-occurrence above.

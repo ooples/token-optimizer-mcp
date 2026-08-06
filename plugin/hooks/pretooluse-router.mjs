@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Claude Code PreToolUse adapter.
  *
@@ -11,12 +11,39 @@
  * free to -- and routinely did -- ignore.
  */
 
-import { readPayload, loadState, saveState, alreadyDenied, allow, allowWithContext, enforce, mode, MODE_OFF }
-  from './lib/policy.mjs';
-import { decide, remember, normalizePayload, readCostBytes, touchedFiles, isContentDump } from './lib/decide.mjs';
+import {
+  readPayload,
+  loadState,
+  saveState,
+  alreadyDenied,
+  allow,
+  allowWithContext,
+  enforce,
+  mode,
+  MODE_OFF,
+} from './lib/policy.mjs';
+import {
+  decide,
+  remember,
+  normalizePayload,
+  readCostBytes,
+  touchedFiles,
+  isContentDump,
+} from './lib/decide.mjs';
 import { recordRead, fingerprint } from './lib/metrics.mjs';
-import { wikiDir, load, harvest, projectRootFor, contentHash } from './lib/wiki.mjs';
-import { refusalPayload, substitutionFor, forTouch, forCommand } from './lib/inject.mjs';
+import {
+  wikiDir,
+  load,
+  harvest,
+  projectRootFor,
+  contentHash,
+} from './lib/wiki.mjs';
+import {
+  refusalPayload,
+  substitutionFor,
+  forTouch,
+  forCommand,
+} from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
 import { readFileSync } from 'node:fs';
@@ -26,7 +53,8 @@ import { readFileSync } from 'node:fs';
  * observed, but nothing is hashed or snapshotted -- a build log must never
  * become hook latency the user waits on.
  */
-const HARVEST_MAX_BYTES = Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
+const HARVEST_MAX_BYTES =
+  Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
 
 // Wrapped whole. Any defect in this hook must cost the user nothing: an
 // exception here allows the call exactly as if the plugin were not installed.
@@ -41,14 +69,20 @@ try {
   const payload = normalizePayload(raw);
   if (!payload.tool_name) allow();
 
-  const state = loadState(payload.session_id);
+  // The AGENT, not just the session. Subagents inherit the parent's session id,
+  // so keying state on the session alone made one agent's reads silence another's
+  // -- observed: an agent refused a file it had never opened because a sibling had
+  // read it. `transcript_path` is per agent; absent, this falls back to session
+  // scope, which is right for the main session's own calls.
+  const agentScope = payload.transcript_path || null;
+  const state = loadState(payload.session_id, agentScope);
   const verdict = decide(payload, state);
 
   if (!verdict) {
     // Allowed calls are what BUILD the re-read index -- this is the only place
     // a first read gets recorded, so the second one can be recognised.
     remember(payload, state);
-    saveState(payload.session_id, state);
+    saveState(payload.session_id, state, agentScope);
 
     // And what the read COST, which is the signal the holdout comparison
     // consumes. Without a producer here the measurement subtracts two zeroes.
@@ -144,7 +178,9 @@ try {
         // Index on the way past, so the NEXT touch can be answered with
         // structure instead of the file. Bounded by the snapshot limit.
         indexFile(dir, path, source);
-      } catch { /* never let bookkeeping break an allowed call */ }
+      } catch {
+        /* never let bookkeeping break an allowed call */
+      }
     }
 
     // DELIVER WHAT THE GRAPH ALREADY KNOWS. Everything above this line WRITES
@@ -189,7 +225,7 @@ try {
 
       if (alreadyInjected.size !== before) {
         state.injected = [...alreadyInjected];
-        saveState(payload.session_id, state);
+        saveState(payload.session_id, state, agentScope);
       }
       if (parts.length) context = parts.join('\n\n');
     } catch {
@@ -206,7 +242,7 @@ try {
   // IN, not what this call adds.
   const seenThisSession = Boolean(state.seen?.[payload.tool_input?.file_path]);
   remember(payload, state);
-  saveState(payload.session_id, state);
+  saveState(payload.session_id, state, agentScope);
 
   // CARRY THE ANSWER IN THE REFUSAL where we can. A refusal that only redirects
   // costs the model a whole turn to get what we already have; one that carries
@@ -217,12 +253,16 @@ try {
     try {
       // Same per-project rule as the allowed path: a refusal must consult the
       // graph belonging to the FILE, or it answers from the wrong project.
-      const dir = wikiDir(projectRootFor(payload.tool_input.file_path, payload.cwd));
+      const dir = wikiDir(
+        projectRootFor(payload.tool_input.file_path, payload.cwd)
+      );
       const graph = load(dir);
       // Only THIS session's own read history can license "unchanged since you
       // read it" or a diff -- the graph is durable and per project, so its
       // snapshot may predate this session entirely.
-      const carried = refusalPayload(graph, payload.tool_input.file_path, { seenThisSession });
+      const carried = refusalPayload(graph, payload.tool_input.file_path, {
+        seenThisSession,
+      });
       if (carried) {
         reason = carried;
       } else {

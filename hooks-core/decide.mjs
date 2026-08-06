@@ -432,6 +432,14 @@ export function normalizePayload(raw) {
 
   return {
     session_id: raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default',
+    // WHICH AGENT, not just which session. Subagents inherit the parent's session
+    // id, so state keyed on the session alone is shared by every agent under it
+    // -- which made one agent's reads silence another's. The transcript path is
+    // per agent, and it has to survive normalisation to be usable: this function
+    // returns a NEW object rather than spreading `raw`, so a field that is not
+    // named here is silently dropped. That is exactly how it was lost the first
+    // time this fix was attempted.
+    transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
     cwd,
     tool_name: normalizeTool(raw.tool_name ?? raw.toolName ?? raw.tool),
     tool_input: {
