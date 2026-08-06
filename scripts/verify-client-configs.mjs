@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Validates every generated client integration.
  *
@@ -69,7 +69,14 @@ const RETIRED = [
 ];
 
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
-const PACKAGE = `@ooples/token-optimizer-mcp@${PACKAGE_VERSION}`;
+// `@latest`, not the package version. #256 removed the numeric pin because it
+// is a DERIVED value release-please never bumps: it went stale for four
+// consecutive releases and shipped a plugin that launched a server three
+// versions behind. This file kept asserting the abandoned invariant, so
+// `verify:clients` exited 1 with 104/129 checks passing -- unnoticed because no
+// workflow runs it. Supply-chain pinning happens at PUBLISH time (npm provenance
+// + OIDC), never as a value committed to git.
+const PACKAGE = '@ooples/token-optimizer-mcp@latest';
 
 /**
  * Parses JSON or JSONC.
@@ -123,7 +130,7 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
     check(`${key}: ${expected.file} is valid JSON`, true);
     // A pinned spec, not @latest: a committed config that floats to whatever is
     // newest is a supply-chain hazard and makes two machines irreproducible.
-    check(`${key}: pins the package version`, !raw.includes('@latest'));
+    check(`${key}: resolves the package at launch`, raw.includes('@latest'));
 
     const servers = parsed[expected.topKey];
     check(`${key}: top-level key is "${expected.topKey}"`, Boolean(servers),
@@ -194,8 +201,8 @@ for (const relative of [
     continue;
   }
   const raw = readFileSync(path, 'utf8');
-  check(`${relative}: pins the package version`, !raw.includes('@latest'));
-  check(`${relative}: names the current version`, raw.includes(PACKAGE));
+  check(`${relative}: resolves the package at launch`, raw.includes('@latest'));
+  check(`${relative}: names the package`, raw.includes(PACKAGE));
 }
 
 for (const [key, file, why] of RETIRED) {

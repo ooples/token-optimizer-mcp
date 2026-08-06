@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Exercises the harvest HTTP path against a local server impersonating the
  * Anthropic Messages API.
@@ -142,12 +142,32 @@ try {
   const withKnown = validate(await extract(DIGEST), { knownFiles: new Set(['/other.ts']) });
   check('anchors are held against the real file list', withKnown.length === 0);
 
-  /* ---- No key means no request at all --------------------------------- */
+  /* ---- What a missing key does, per endpoint -------------------------- */
+
+  // BOTH HALVES, because the answer depends on WHERE the request would go.
+  // This check used to assert 'no key means no request' unconditionally, which
+  // predates the local-endpoint path: a request to localhost costs nothing and
+  // discloses nothing, so it deliberately needs neither a key nor an opt-in.
+  // The endpoint here IS local (127.0.0.1 stub), so the old assertion failed --
+  // and, being unwired from CI, failed unnoticed.
 
   delete process.env.TOKEN_OPTIMIZER_API_KEY;
   lastRequest = null;
-  const unkeyed = await extract(DIGEST);
-  check('without a key it makes NO request', lastRequest === null && unkeyed.length === 0);
+  const unkeyedLocal = await extract(DIGEST);
+  check('a LOCAL endpoint needs no key', lastRequest !== null && unkeyedLocal.length > 0);
+
+  // Remote is the case the original assertion was really protecting: spending
+  // money and sending a digest off the machine must never happen unkeyed.
+  const localEndpoint = process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT;
+  process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+  lastRequest = null;
+  const unkeyedRemote = await extract(DIGEST);
+  check(
+    'a REMOTE endpoint without a key makes NO request',
+    lastRequest === null && unkeyedRemote.length === 0
+  );
+
+  process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = localEndpoint;
   process.env.TOKEN_OPTIMIZER_API_KEY = 'sk-ant-test-not-a-real-key';
 
   /* ---- The privacy claim, on a realistic transcript -------------------- */
