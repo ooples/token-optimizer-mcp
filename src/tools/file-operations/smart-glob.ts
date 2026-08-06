@@ -236,6 +236,13 @@ export class SmartGlobTool {
           absolute: opts.absolute,
           ignore: opts.ignore,
           nodir: opts.onlyFiles,
+          // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
+          // project content, but glob skips anything dot-prefixed unless told
+          // otherwise. Measured in a real checkout: ten .yml files existed, all
+          // under .github/workflows, and a repo-wide search returned ZERO while
+          // reporting success over 654 files searched. Exclusion is the ignore
+          // list's job -- .git and node_modules are still excluded by it.
+          dot: true,
         }),
         scope
       );
@@ -269,6 +276,8 @@ export class SmartGlobTool {
                   cwd: opts.cwd,
                   absolute: opts.absolute,
                   nodir: opts.onlyFiles,
+                  // Same reason as above; both walks must agree.
+                  dot: true,
                 }),
                 scope
               ).length - matches.length

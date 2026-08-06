@@ -241,6 +241,16 @@ export class SmartGrepTool {
           absolute: true,
           ignore: opts.ignore,
           nodir: true,
+          // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
+          // project content, but glob skips anything dot-prefixed unless told
+          // otherwise -- so every CI workflow in the repository was invisible.
+          // Measured: searching a tree returned 0 matches over 654 files while
+          // reporting success, and naming `.github` explicitly in `path` returned
+          // 7 matches in 4 files. This is the third shape of the same defect in
+          // this tool, and the worst: the other two reported `filesSearched: 0`,
+          // whereas this one looks like a thorough search that found nothing.
+          // What is excluded stays the ignore list's job.
+          dot: true,
         });
         appendAll(filesToSearch, matches);
       }
