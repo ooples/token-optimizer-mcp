@@ -29,6 +29,7 @@ import {
   readCostBytes,
   touchedFiles,
   isContentDump,
+  commandProjectRoot,
 } from './lib/decide.mjs';
 import { recordRead, fingerprint } from './lib/metrics.mjs';
 import {
@@ -215,7 +216,11 @@ try {
 
       const command = payload.tool_input?.command;
       if (command) {
-        const dir = wikiDir(projectRootFor(payload.cwd, payload.cwd));
+        // The project the COMMAND runs in, not the one the session sits in. A
+        // command that cds into a worktree or a second repository must consult
+        // that project's graph; keying on payload.cwd meant findings recorded
+        // there never fired -- no injection, no metrics row, no error.
+        const dir = wikiDir(commandProjectRoot(payload, payload.cwd));
         const note = forCommand(dir, load(dir), command, {
           sessionId: payload.session_id,
           alreadyInjected,
