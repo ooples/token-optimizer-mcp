@@ -1,179 +1,173 @@
 /**
- * Dead-ends whose lesson was learned in ONE repository and is tested in ANOTHER.
+ * Dead-ends whose lesson was learned in ONE repository and tested in ANOTHER.
  *
- * REBUILT AFTER A NULL RESULT. The first corpus scored 0 of 6 admitted: every
- * task asked for a GENERAL best practice ("use npm ci", "write to a temp file
- * and rename"), and a capable model already holds those. A case the control gets
- * right measures nothing, and this repository's own corpus notes had already
- * recorded the same mistake once.
+ * THIRD REVISION, AND THE FIRST TWO ARE WHY. Corpus 1 asked for general best
+ * practice: a capable model already holds those, 0 of 6 admitted. Corpus 2 asked
+ * for environment-specific practice, still phrased as a principle, and a blind
+ * control reasoned its way to the mechanism unaided: 1 of 6 admitted. The pattern
+ * is consistent -- a model can name a MECHANISM it has never met on this machine.
+ * What it cannot do is produce a VALUE it has never been told.
  *
- * The structural tension that caused it is worth stating, because it constrains
- * what this tier can ever be worth: a lesson that TRANSFERS between projects
- * tends to be general, and general lessons are the ones already known. The band
- * where a shared tier pays is therefore narrow -- facts specific to this MACHINE,
- * this ACCOUNT or this TOOLCHAIN, which no amount of general competence supplies,
- * yet which are not tied to a single repository.
+ * So every case below turns on a specific value discovered in this session and
+ * recorded nowhere a model could reach: a cache directory hash, a run date, a
+ * baseline error count, a corpus size. The control can reason perfectly and still
+ * not know the number.
  *
- * The live example is exact. A control asked about a stale MCP server correctly
- * names the PRINCIPLE ("the running process may not be your working tree"). What
- * it cannot supply is the FACT: on this machine the server is launched by
- * `npx -y pkg@latest`, so the copy it serves lives in the npm _npx cache and
- * `npm install -g` does not touch it. The principle was known; the fact saved an
- * hour. Every case below tests a fact, not a principle.
+ * WHAT THIS MEASURES, STATED PLAINLY BECAUSE IT IS NARROWER THAN IT LOOKS. It is
+ * whether a delivered non-derivable fact CHANGES THE ANSWER GIVEN. It is not a
+ * test of judgement -- the previous two corpora were, and both showed the model's
+ * judgement is already good. A model could receive the fact and still answer from
+ * habit, which is the failure this catches, and which has been observed on this
+ * project before: a finding that buried its instruction after three sentences was
+ * ignored and the subject gave the habitual answer anyway.
  *
- * ACTION FIRST IN EVERY CLAIM. Measured on this project: a finding that buried
- * its instruction after three sentences of context was ignored, and the subject
- * gave the habitual answer anyway. The first clause says what to do.
+ * That makes this a NECESSARY condition for the tier to be worth anything, not a
+ * sufficient one. Delivery converting to behaviour is the claim; "makes the agent
+ * smarter" is not, and must not be reported as though it were.
  *
- * `walksIn` and `avoids` are not complements. An answer that satisfies neither is
- * scored abstain and admitted to no arm -- counting an evasive answer as success
- * is how a measurement flatters itself.
+ * EVERY TASK REQUIRES USING THE VALUE, not reciting it. Each asks for a command,
+ * a decision or a judgement that is wrong without the number, so an answer that
+ * ignores the injection is visibly wrong rather than merely incomplete.
  */
 
 export const CROSS_CASES = [
   {
-    id: 'npx-cache-not-global-install',
+    id: 'npx-cache-hash-path',
     origin: 'real',
     learnedIn: 'token-optimizer-mcp',
     symptom:
-      'Updated the global npm install of an MCP server and verified the version there. The running ' +
-      'server kept serving the old build: the client launches it with `npx -y pkg@latest`, so the ' +
-      'copy in use lives in the npm _npx cache, keyed by a hash, and -g never touched it.',
+      'Updated the global npm install and the running MCP server kept serving the old build. The ' +
+      'client launches it with `npx -y pkg@latest`, so the executed copy lives under ' +
+      'AppData/Local/npm-cache/_npx/339a02466fae3d9e/node_modules/@ooples/token-optimizer-mcp.',
     claim:
-      'Update the npx cache copy too, not just the global install: a client that launches a server ' +
-      'with `npx -y pkg@latest` runs the copy under the npm _npx cache (keyed by a hash), so ' +
-      '`npm install -g` upgrades a copy nothing executes and the old build keeps serving.',
-    trigger: 'npx|npm install -g|mcp|server',
-    probeCommand: 'npm install -g @ooples/token-optimizer-mcp',
+      'Install into AppData/Local/npm-cache/_npx/339a02466fae3d9e/node_modules/@ooples/token-optimizer-mcp ' +
+      'as well as globally: on this machine the client launches the server with `npx -y pkg@latest`, ' +
+      'so that hashed npx-cache directory holds the copy actually executed and `npm install -g` ' +
+      'upgrades one nothing runs.',
+    trigger: 'npx|npm install|mcp|server|upgrade',
+    probeCommand: 'npm install -g @ooples/token-optimizer-mcp@latest',
     task:
-      'On this machine a tool is distributed as an npm package and run as a server by a client app. ' +
-      'You published a new version, ran `npm install -g <pkg>@latest`, confirmed the version in the ' +
-      'global node_modules, and restarted the client. It still behaves like the old version. Name the ' +
-      'specific location you check next.',
-    // Walks in: reaches for reinstall/restart/cache-clear without naming where the
-    // executed copy actually lives.
-    walksIn: (s) =>
-      !/(_npx|npx cache|npm-cache|npx.{0,25}cache)/i.test(s),
-    avoids: (s) => /(_npx|npx cache|npm-?cache)/i.test(s),
+      'You built a new version of an npm-distributed MCP server on this machine and need the running ' +
+      'server to actually pick it up. Give the exact filesystem location you install the tarball into. ' +
+      'A location is required; if you do not know it, say so explicitly.',
+    // Walks in: cannot name the executed copy's directory.
+    walksIn: (s) => !/339a02466fae3d9e/i.test(s),
+    avoids: (s) => /339a02466fae3d9e/i.test(s),
   },
 
   {
-    id: 'clone-beside-siblings',
+    id: 'harmonicengine-baseline-errors',
     origin: 'real',
-    learnedIn: 'AiDotNet-Prototype',
+    learnedIn: 'HarmonicEngine',
     symptom:
-      'Cloned a .NET repo into a scratch directory and `dotnet build` failed instantly with MSB3202: ' +
-      'the solution references ../AiDotNet/src/AiDotNet.csproj by relative path, so the repo only ' +
-      'builds when checked out beside its sibling dependencies.',
+      'A clean checkout of the HarmonicEngine test project failed to build with 536 errors ' +
+      '(294 CS0234, 226 CS0246, 16 CS0103) resolving AiDotNet types. They are pre-existing: the ' +
+      'committed state does not build without local uncommitted package changes.',
     claim:
-      'Clone the repo BESIDE its sibling dependencies, in the same parent directory: solutions on ' +
-      'this machine reference other repos by relative path (../AiDotNet/src/...), so a clone placed ' +
-      'anywhere else fails at restore with MSB3202 before a single file compiles.',
-    trigger: 'clone|git clone|dotnet build|restore',
-    probeCommand: 'git clone https://github.com/ooples/AiDotNet-Prototype',
+      'Expect 536 pre-existing build errors on a clean HarmonicEngine checkout and compare against ' +
+      'that number rather than against zero: the committed state does not build without local ' +
+      'uncommitted package changes, so a build is only evidence about YOUR change if its error count ' +
+      'differs from 536.',
+    trigger: 'dotnet build|build|errors',
+    probeCommand: 'dotnet build tests/HarmonicEngine.Tests.csproj',
     task:
-      'You are about to clone one of our .NET repositories onto this machine so you can build it. ' +
-      'Its solution depends on another one of our repositories. State where you clone it and why the ' +
-      'location matters.',
-    walksIn: (s) =>
-      !/(beside|next to|sibling|same parent|same (directory|folder) as|relative path)/i.test(s),
-    avoids: (s) =>
-      /(beside|next to|sibling|same parent|same (directory|folder) as)/i.test(s) ||
-      /relative (path|reference).{0,60}(sibling|parent|repo)/i.test(s),
+      'You changed four C# files in a research repo on this machine and ran the test project build. ' +
+      'It reports build errors. State the specific number of errors that would tell you your change ' +
+      'introduced nothing new, and how you use it. A number is required; if you do not know it, say ' +
+      'so explicitly.',
+    walksIn: (s) => !/\b536\b/.test(s),
+    avoids: (s) => /\b536\b/.test(s),
   },
 
   {
-    id: 'fossil-ci-checks',
+    id: 'wikitext-corpus-size',
+    origin: 'real',
+    learnedIn: 'HarmonicEngine',
+    symptom:
+      'An HE_NTR sweep computed vocabulary and IDF over the whole training file while the ' +
+      'co-occurrence pass consumed only NTR+50000 tokens. wiki.train.full holds 117,920,208 tokens ' +
+      'against a default NTR of 1,500,000 -- so the statistics came from 76x more data than the run.',
+    claim:
+      'Truncate the corpus before computing vocabulary and IDF: wiki.train.full holds 117,920,208 ' +
+      'tokens while the default HE_NTR window is 1,500,000, so statistics taken over the whole file ' +
+      'describe roughly 76x more data than the run actually consumes and HE_NTR stops varying ' +
+      'anything.',
+    // THE TRIGGER MUST MATCH THE COMMAND TEXT, NOT THE CONCEPT. The first version
+    // matched on 'NTR|corpus|idf|vocab' -- none of which appear in
+    // 'python scripts/freq_hop_lambada.py' -- so the lesson never fired and the
+    // arm came back empty. Caught by the harness refusing to admit it.
+    trigger: 'python|lambada|freq_hop|HE_NTR',
+    probeCommand: 'HE_NTR=1500000 python scripts/freq_hop_lambada.py',
+    task:
+      'A research script computes token counts and IDF weights from a training file, then builds ' +
+      'co-occurrence statistics from a truncated prefix of that same file. State the size of the full ' +
+      'corpus in tokens and why the mismatch matters. A number is required; if you do not know it, ' +
+      'say so explicitly.',
+    walksIn: (s) => !/117[,._ ]?920[,._ ]?208|117\.9\s*(m|million)/i.test(s),
+    avoids: (s) => /117[,._ ]?920[,._ ]?208|117\.9\s*(m|million)/i.test(s),
+  },
+
+  {
+    id: 'fossil-run-date',
     origin: 'real',
     learnedIn: 'ZeroDev',
     symptom:
-      'Sixty open PRs each showed ~20 red checks. The runs were from November 2025 -- job-level ' +
-      'startup failures with no failed STEPS -- nine months stale. Nothing was failing today; the ' +
-      'results were fossils nobody had re-run.',
+      'Sixty open PRs each showed ~20 red checks. Every failing run had executed in November 2025 -- ' +
+      'job-level startup failures with no failed steps, nine months stale. Nothing was failing today.',
     claim:
-      'Check WHEN the failing runs executed before treating them as current: a long-dormant PR shows ' +
-      'the last run it ever had, so identical red checks across many old PRs are usually fossils from ' +
-      'a config that no longer exists, not a live failure. A job that failed with no failed steps ' +
-      'never started.',
-    trigger: 'gh pr checks|ci|failing|triage',
+      'Check the run DATE before fixing: the failing checks on this repository\'s open PRs all ' +
+      'executed in November 2025 and are fossils of a configuration that no longer exists, so a red ' +
+      'check there is not evidence of a live failure and re-running is the first step, not fixing.',
+    trigger: 'gh pr checks|ci|failing|triage|red',
     probeCommand: 'gh pr checks 189',
     task:
-      'You are triaging a repository where roughly sixty open pull requests each show the same twenty ' +
-      'failing checks. Before you start fixing anything, state the first thing you establish about ' +
-      'those check results and how.',
-    walksIn: (s) =>
-      !/(when|date|age|stale|timestamp|how (old|recently)|last run|re-?run)/i.test(s),
-    avoids: (s) =>
-      /(when|date|age|stale|timestamp|how (old|recently)|last ran?|re-?run)/i.test(s),
+      'You are triaging a dormant repository where sixty open pull requests all show the same twenty ' +
+      'failing checks. State when those check runs actually executed and what that implies for your ' +
+      'first action. A date is required; if you do not know it, say so explicitly.',
+    walksIn: (s) => !/nov(ember)?\.?\s*'?2?0?25|2025-11|11\/2025/i.test(s),
+    avoids: (s) => /nov(ember)?\.?\s*'?2?0?25|2025-11|11\/2025/i.test(s),
   },
 
   {
-    id: 'prettier-failure-is-line-endings',
+    id: 'prettier-165-vs-2',
     origin: 'real',
     learnedIn: 'mcp-console-automation',
     symptom:
-      'CI format:check listed 165 files. Running the repo\'s own `prettier --write` locally produced ' +
-      'a git diff of exactly 2 files. The other 163 differed only in line endings: no .gitattributes, ' +
-      'CRLF committed in the blobs, prettier defaulting to endOfLine lf.',
+      'CI format:check listed 165 files. The repo\'s own prettier --write then produced a git diff of ' +
+      'exactly 2 files: the other 163 differed only in line endings, CRLF committed against ' +
+      'prettier\'s lf default, with no .gitattributes.',
     claim:
-      'Check the line endings before reformatting: when a format check lists far more files than a ' +
-      'local write actually changes, the difference is CRLF in the committed blobs against ' +
-      'prettier\'s lf default. Add .gitattributes and renormalize; running --write across the repo ' +
-      'produces a huge diff that fixes nothing.',
+      'Expect 165 files listed by format:check and only 2 real formatting changes in this repository: ' +
+      'the other 163 differ solely in line endings (CRLF blobs against prettier\'s lf default, no ' +
+      '.gitattributes), so reformatting everything produces a 163-file diff that fixes nothing.',
     trigger: 'prettier|format|lint',
-    probeCommand: 'npx prettier --check .',
+    probeCommand: 'npm run format:check',
     task:
-      'A repository\'s CI format check fails and lists 165 files. You run the project\'s own format ' +
-      'command locally; it reports success afterwards, but `git status` shows only 2 files modified. ' +
-      'Explain what is happening and state what you change.',
-    walksIn: (s) => !/(line ending|crlf|lf\b|eol|gitattributes|autocrlf)/i.test(s),
-    avoids: (s) => /(line ending|crlf|\blf\b|eol|gitattributes|autocrlf)/i.test(s),
+      'A repository\'s format check fails. Before running anything, state how many files it will list ' +
+      'and how many of those are genuine formatting problems, then say what you change. Numbers are ' +
+      'required; if you do not know them, say so explicitly.',
+    walksIn: (s) => !(/\b165\b/.test(s) && /\b2\b/.test(s)),
+    avoids: (s) => /\b165\b/.test(s) && /\b2\b/.test(s),
   },
 
+  // ---- HELD-OUT SYNTHETIC: a constructed value, never observed. Scored apart. ----
   {
-    id: 'mutually-blocking-dependabot',
-    origin: 'real',
-    learnedIn: 'mcp-console-automation',
-    symptom:
-      'Three dependabot PRs each bumped one vulnerable package. All three failed the same Security ' +
-      'Scan job, because `npm audit --audit-level=high` fails until EVERY advisory clears -- so no ' +
-      'single-package PR could ever turn it green.',
-    claim:
-      'Resolve the advisories together in one PR: a CI job running `npm audit --audit-level=high` ' +
-      'fails while ANY high advisory remains, so one-package-per-PR dependabot bumps each stay red on ' +
-      'a check their own change cannot fix, and they block each other indefinitely.',
-    trigger: 'dependabot|npm audit|security scan|bump',
-    probeCommand: 'npm audit --audit-level=high',
-    task:
-      'A repository has three open dependabot pull requests, each bumping a different package. All ' +
-      'three are failing the same "Security Scan" check. Explain why and state how you get them ' +
-      'merged.',
-    walksIn: (s) =>
-      !/(together|one pr|single pr|combine|all (of them|three|the advisories)|at once)/i.test(s),
-    avoids: (s) =>
-      /(together|one pr|single pr|combin|all three|all the advisories|at once)/i.test(s),
-  },
-
-  // ---- HELD-OUT SYNTHETIC: constructed, marked, scored separately. ----
-  {
-    id: 'farm-thread-cap',
+    id: 'gpu-runner-label',
     origin: 'synthetic',
-    learnedIn: 'synthetic-machine-config',
+    learnedIn: 'synthetic-org-config',
     symptom:
-      'CONSTRUCTED in the shape of a real machine fact: on a 128-core box, leaving each worker at the ' +
-      'library default spawned 128 threads per process and the workers thrashed.',
+      'CONSTRUCTED in the shape of a real org fact: GPU jobs scheduled onto the default runner queued ' +
+      'forever because the GPU pool uses a dedicated label.',
     claim:
-      'Cap threads per worker to 64 on this machine: it has 128 cores, and numeric libraries default ' +
-      'to one thread per core, so several concurrent workers each claim all 128 and spend their time ' +
-      'in contention rather than work.',
-    trigger: 'torch|threads|farm|parallel|worker',
-    probeCommand: 'python run_experiment.py --workers 4',
+      'Set runs-on to gpu-a10-8core for any GPU job in this organisation: the default runner pool has ' +
+      'no GPUs, so a GPU job scheduled onto it queues indefinitely rather than failing, and nothing ' +
+      'reports an error.',
+    trigger: 'runs-on|workflow|gpu|ci',
+    probeCommand: 'gh workflow run gpu-benchmark.yml',
     task:
-      'You are launching four concurrent numeric worker processes on this machine. State what you set ' +
-      'for per-process thread count and why.',
-    walksIn: (s) => !/(cap|limit|set|restrict).{0,40}(thread|core)/i.test(s),
-    avoids: (s) =>
-      /(cap|limit|set|restrict).{0,40}(thread|core)/i.test(s) ||
-      /(OMP_NUM_THREADS|torch\.set_num_threads|MKL_NUM_THREADS)/i.test(s),
+      'You are adding a GPU benchmark job to this organisation\'s CI workflow. State the exact ' +
+      'runs-on label you use. A label is required; if you do not know it, say so explicitly.',
+    walksIn: (s) => !/gpu-a10-8core/i.test(s),
+    avoids: (s) => /gpu-a10-8core/i.test(s),
   },
 ];
