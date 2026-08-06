@@ -121,6 +121,16 @@ export interface SmartGlobResult {
   error?: string;
 }
 
+/**
+ * Never enumerated, in either walk, whatever the caller's ignore list says.
+ *
+ * These are infrastructure rather than project content, and with `dot: true` the
+ * comparison walk would otherwise descend into `.git/objects` -- unbounded on a
+ * real repository, and pure cost, since nobody's search was 'withheld' by git's
+ * object store.
+ */
+const ALWAYS_IGNORED = ['**/.git/**', '**/node_modules/**'];
+
 export class SmartGlobTool {
   constructor(
     private cache: CacheEngine,
@@ -278,6 +288,13 @@ export class SmartGlobTool {
                   nodir: opts.onlyFiles,
                   // Same reason as above; both walks must agree.
                   dot: true,
+                  // NOT an empty ignore list, now that `dot` is on. This walk
+                  // deliberately drops the caller's ignores to count what they
+                  // withheld -- but with dots visible that would enumerate
+                  // `.git/objects`, which on a real repository is enormous and
+                  // is pure cost: nobody's glob was "withheld" by git's object
+                  // store. Infrastructure stays excluded in both walks.
+                  ignore: ALWAYS_IGNORED,
                 }),
                 scope
               ).length - matches.length

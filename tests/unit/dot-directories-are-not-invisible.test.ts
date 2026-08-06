@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+﻿import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -114,6 +114,11 @@ describe('smart_glob and dot-directories', () => {
 
     expect(paths.some((p) => p.includes('.git/'))).toBe(false);
     expect(paths.some((p) => p.includes('node_modules/'))).toBe(false);
+
+    // The COUNT too, not just the result list. Without this the comparison walk
+    // could stop matching .git entirely and these assertions would still pass,
+    // leaving the number that explains the omission silently wrong.
+    expect(result.metadata?.ignoredMatches ?? 0).toBe(0);
   });
 });
 
