@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { extractSymbols, languageOf, spanText } from '../../hooks-core/symbols.mjs';
 import { indexFile, checkAnchor, diffLines, serve, invalidateOnWrite } from '../../hooks-core/staleness.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import { forTouch } from '../../hooks-core/inject.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 let workspace;
@@ -191,28 +192,37 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const graph = load(dir);
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(true);
-    // THE INVARIANT IS "never bare", not a particular sentence. The previous
-    // assertion pinned the word "unverified", which is how the wording survived
-    // long enough to be measured doing harm: identical findings scored 1/3
-    // dead-ends avoided when the model was told to treat them as unverified and
-    // 2/3 when it was not. Assert that the staleness is disclosed and that the
-    // evidence gap is named -- not the exact phrasing, which should be free to
-    // improve without a test standing in the way.
-    expect(out.diff).toBeTruthy();
-    expect(out.diff.length).toBeGreaterThan(20);
-    expect(out.diff).toMatch(/reconstruct/i);
-    // And it must carry NO instruction to abandon the claim, however phrased.
-    // The measured harm was the instruction, not one particular word, so this
-    // rejects the whole vocabulary rather than the sentence that was found
-    // doing damage -- otherwise the next rewording reintroduces it freely.
-    expect(out.diff).not.toMatch(
+
+    // THE GAP IS NAMED IN DATA, not in prose stuffed into `diff`. The previous
+    // assertion pinned the word 'reconstruct' to that field -- the very thing
+    // its own comment said should stay free to improve -- and it forced the
+    // renderer to wrap an apology in `STALE (...). What changed:`, announcing
+    // evidence and then presenting none.
+    expect(out.staleEvidence).toBe(false);
+
+    // THE INVARIANT IS ENFORCED ON THE DELIVERED TEXT, which is what a model
+    // actually reads.
+    const served = forTouch(dir, graph, path, {
+      sessionId: 'stale-render',
+      alreadyInjected: new Set(),
+    });
+    expect(served).toBeTruthy();
+
+    // Still disclosed: never served as though it were current.
+    expect(served).toMatch(/recorded earlier/i);
+
+    // But the strongest framing is not spent on the weakest evidence.
+    expect(served).not.toMatch(/STALE/);
+    expect(served).not.toMatch(/What changed:/);
+
+    // And no instruction to abandon the claim, however phrased. Measured:
+    // identical findings scored 1/3 dead-ends avoided with the discount wording
+    // and 2/3 without it.
+    expect(served).not.toMatch(
       /\b(unverified|unreliable|untrusted|discard|dismiss|disregard|ignore)\b/i
     );
-    expect(out.diff).not.toMatch(/\bdo not (trust|rely|use)\b/i);
-    // Nor may it assert a cause it has not established: `reason` carries
-    // whatever was actually determined, and this branch is also reached by
-    // eager marking and by an anchor that was never snapshotted.
-    expect(out.diff).not.toMatch(/the anchor changed/i);
+    expect(served).not.toMatch(/\bdo not (trust|rely|use)\b/i);
+    expect(served).not.toMatch(/the anchor changed/i);
   });
 });
 

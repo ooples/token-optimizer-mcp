@@ -400,12 +400,30 @@ export function serve(graph, findings) {
       // front of the model, and this text exists precisely because the previous
       // phrasing was measured suppressing correct findings. State the evidence
       // gap and stop.
-      diff = `(marked stale: ${reason}. The supporting diff can no longer be `
-        + 'reconstructed; the claim itself may well still hold, so weigh it on '
-        + 'its own merits.)';
+      // THE PROSE MOVES OUT OF `diff`, and the fact moves into a flag.
+      //
+      // Softening this sentence was not enough, because the RENDERER wraps it:
+      // the model saw `STALE (reason). What changed:` followed by a paragraph
+      // explaining that nothing follows. The strong framing was designed for
+      // the case where evidence exists and was being applied to the case where
+      // it does not.
+      //
+      // Measured across every real graph on one machine: 32 of 241 served
+      // findings were stale, and 25 of those 32 -- 78% -- had no diff at all.
+      // So the strongest wording available was carried by the findings with the
+      // least evidence behind them, on 10.4% of everything served.
+      //
+      // A caller cannot phrase this well from a prose blob, so it gets the two
+      // things it needs: that the finding is stale, and whether any evidence
+      // survives. The wording is then the renderer's business.
+      diff = '';
     }
 
-    served.push({ ...finding, stale, ...(stale ? { diff, staleReason: reason } : {}) });
+    served.push({
+      ...finding,
+      stale,
+      ...(stale ? { diff, staleReason: reason, staleEvidence: Boolean(diff) } : {}),
+    });
   }
   return served;
 }

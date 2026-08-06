@@ -119,8 +119,20 @@ function fit(findings, budget) {
 function render(finding) {
   const head = `- [${finding.type || 'finding'}] ${finding.claim}`;
   if (!finding.stale) return head;
-  // A stale finding NEVER renders without its evidence. Serving one bare would
-  // be worse than having no graph at all.
+
+  // A stale finding NEVER renders as though it were current. But the strength
+  // of the framing follows the strength of the evidence, because the framing
+  // was measured: in an A/B on a fresh subagent, identical findings scored 1/3
+  // dead-ends avoided when rendered with the discount wording and 2/3 when
+  // rendered clean. The claims being discounted were correct every time.
+  //
+  // With a diff, the reader can judge for themselves and the strong form is
+  // earned. Without one -- 78% of stale findings on real graphs -- announcing
+  // STALE and promising `What changed:` in front of nothing spends the
+  // strongest signal available on the weakest evidence available.
+  if (!finding.staleEvidence || !finding.diff) {
+    return `${head}\n  (recorded earlier; ${finding.staleReason}, and no diff could be rebuilt)`;
+  }
   return `${head}\n  STALE (${finding.staleReason}). What changed:\n${finding.diff}`;
 }
 

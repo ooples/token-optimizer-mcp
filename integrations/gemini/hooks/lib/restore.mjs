@@ -134,7 +134,10 @@ export function restorationPlan(dir, graph, context = {}) {
       if (!node) continue;
       const findings = serve(graph, findingsFor(graph, id, { limit: 2 }));
       for (const finding of findings) {
-        lines.push(`${node.key}: ${finding.stale ? '! STALE ' : ''}${finding.claim}`);
+        // `! STALE` only where a diff actually exists to back it; see the
+        // renderer in inject.mjs for the measurement behind this.
+        const mark = finding.stale ? (finding.staleEvidence ? '! STALE ' : '~ ') : '';
+        lines.push(`${node.key}: ${mark}${finding.claim}`);
       }
     }
     section('Likely next', lines, total * split.forward);
