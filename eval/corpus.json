@@ -123,7 +123,7 @@
     {
       "id": "gh-token-suppression",
       "source": "PR #253/#256",
-      "class": "external-knowledge",
+      "class": "derivable",
       "tree": "bf5f0ec",
       "symptom": "A GitHub Actions workflow is meant to repair the release PR after release-please opens it. Every run instead sits in the `action_required` state having executed nothing. The workflow file is syntactically valid and its trigger matches the event. Explain why it never executes.",
       "cause": "release-please opens the PR using the default GITHUB_TOKEN, and GitHub deliberately does not trigger workflow runs from events raised by GITHUB_TOKEN -- this prevents recursive CI. Such runs are parked in action_required. A different credential (PAT or app token), or a different triggering event, is required.",
@@ -136,7 +136,8 @@
       "finding": "GitHub does not run workflows triggered by events that GITHUB_TOKEN raised; those runs sit in `action_required` having executed nothing. Anything meant to react to a release-please PR must use a different credential or a different event.",
       "anchors": [
         ".github/workflows"
-      ]
+      ],
+      "reclassified": "Registered external-knowledge on a search that was WRONG: smart_grep silently skipped .github/ (fixed in #268). GITHUB_TOKEN appears in four workflow files in that tree, so the fact is derivable. Moves the graph\u2019s second-best result out of the class meant to show its value."
     },
     {
       "id": "registry-422",
