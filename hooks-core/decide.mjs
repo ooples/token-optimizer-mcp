@@ -11,11 +11,18 @@
  * target for loop breaking, so a second attempt at the same thing gets through.
  */
 
-import { fileSize, isBinaryPath, isMachineOwned, largeFileBytes, refusalFloorBytes } from './policy.mjs';
+import {
+  fileSize,
+  isBinaryPath,
+  isMachineOwned,
+  largeFileBytes,
+  refusalFloorBytes,
+} from './policy.mjs';
 import { statSync } from 'node:fs';
+import { join } from 'node:path';
 import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
 import { activeRules } from './remedy.mjs';
-import { wikiDir } from './wiki.mjs';
+import { wikiDir, projectRootFor } from './wiki.mjs';
 
 const KB = (bytes) => Math.round(bytes / 1024);
 
@@ -59,10 +66,12 @@ export function isContentDump(command) {
 const DUMP_COMMANDS = /\b(?:cat|bat|head|tail|more|less|type|Get-Content|gc)\b/;
 
 /** Recursive searches, whose output is unbounded by construction. */
-const RECURSIVE_SEARCH = /\b(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)\b/;
+const RECURSIVE_SEARCH =
+  /\b(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)\b/;
 
 /** The search tools themselves, as a whole command word rather than a substring. */
-const SEARCH_TOOL = /^(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)$/i;
+const SEARCH_TOOL =
+  /^(?:grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls)$/i;
 
 /** Tools that walk directories with no flag asked for. */
 const RECURSES_BY_DEFAULT = /^(?:rg|ag|ack)$/i;
@@ -163,7 +172,11 @@ export function isRecursiveSearch(command) {
     const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
 
     let i = 0;
-    while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) i++;
+    while (
+      i < tokens.length &&
+      (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))
+    )
+      i++;
     if (i >= tokens.length) continue;
 
     // `/usr/bin/grep` is grep; `git grep` is grep with a word in front.
@@ -177,7 +190,12 @@ export function isRecursiveSearch(command) {
     if (RECURSES_BY_DEFAULT.test(head)) return true;
 
     const flags = tokens.slice(i + 1);
-    if (flags.some((t) => t === '--recursive' || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(t))) return true;
+    if (
+      flags.some(
+        (t) => t === '--recursive' || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(t)
+      )
+    )
+      return true;
   }
 
   return false;
@@ -206,7 +224,8 @@ function fileOperands(command) {
       if (/^-[a-zA-Z]$/.test(token) && /^\d+$/.test(tokens[i + 1] || '')) i++;
       continue;
     }
-    if (token.includes('*') || token.includes('$') || token.startsWith('<')) continue;
+    if (token.includes('*') || token.includes('$') || token.startsWith('<'))
+      continue;
     operands.push(token);
   }
   return operands;
@@ -241,6 +260,41 @@ function candidatePaths(operand, cwd) {
  * heredoc marker is not a file, and inventing a node for it would put fiction
  * in the graph.
  */
+/**
+ * The project a COMMAND belongs to.
+ *
+ * `forCommand` was looked up with `projectRootFor(payload.cwd, payload.cwd)`, so
+ * the graph consulted was always the SESSION's. Run a command inside another
+ * checkout -- a worktree, a second repository, anything reached with `cd` -- and
+ * every finding recorded against that project was silently skipped: no
+ * injection, no metrics row, no error.
+ *
+ * `projectRootFor` documents this same defect being fixed for the FILE path:
+ * keying the graph on where the client happens to be running is wrong the moment
+ * a session touches a second repository. The command path kept the behaviour
+ * that comment calls wrong.
+ *
+ * Only a `cd` naming a directory that EXISTS is trusted, exactly as touchedFiles
+ * treats it: `cd $UNSET && npm test` must not re-root the lookup onto nothing.
+ */
+export function commandProjectRoot(payload, fallback) {
+  const raw = payload?.tool_input?.command;
+  const base = payload?.cwd ?? fallback;
+  if (typeof raw === 'string') {
+    const command = stripHeredocs(raw);
+    const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
+    if (cd) {
+      const target = canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), base);
+      // A pseudo-file inside the directory, because projectRootFor takes a FILE
+      // and starts from its dirname -- handing it a directory begins the walk one
+      // level too high and silently falls back. Same idiom as stop-harvest.mjs.
+      if (isDirectory(target))
+        return projectRootFor(join(target, '__command__'), base);
+    }
+  }
+  return projectRootFor(join(base, '__command__'), base);
+}
+
 export function touchedFiles(payload) {
   const input = payload?.tool_input || {};
   // path -> size. Resolving a candidate ALREADY stats it -- `fileSize() >= 0`
@@ -257,9 +311,12 @@ export function touchedFiles(payload) {
   // Heredoc bodies stripped first, for the same reason the cost path strips
   // them: a file named inside a commit message or a test fixture was mentioned,
   // not touched, and a node built from it is fiction.
-  const command = typeof input.command === 'string' ? stripHeredocs(input.command) : '';
+  const command =
+    typeof input.command === 'string' ? stripHeredocs(input.command) : '';
   const cd = /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']+'|\S+)/.exec(command);
-  const cdTarget = cd ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd) : null;
+  const cdTarget = cd
+    ? canonicalPath(cd[1].replace(/^['"]|['"]$/g, ''), payload?.cwd)
+    : null;
   // Only trust a `cd` that names a directory which EXISTS. `cd $REPO && cat
   // src/app.ts` -- an unexpanded variable, or a plain typo -- otherwise re-bases
   // every relative operand onto a path resolving to nothing, so the call records
@@ -285,7 +342,8 @@ export function touchedFiles(payload) {
         // Nothing under .git/, node_modules/ or a build directory belongs in a
         // knowledge graph: it is not authored, it churns constantly, and it
         // would thrash staleness for every file that anchors to it.
-        if (!isMachineOwned(spelling)) out.set(canonicalPath(spelling, cwd), size);
+        if (!isMachineOwned(spelling))
+          out.set(canonicalPath(spelling, cwd), size);
         return;
       }
     }
@@ -335,7 +393,11 @@ function largeDumpedOperand(command, cwd) {
     const tokens = segment.match(/(?:"[^"]*"|'[^']*'|[^\s]+)/g) || [];
 
     let i = 0;
-    while (i < tokens.length && (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))) i++;
+    while (
+      i < tokens.length &&
+      (/^\w+=/.test(tokens[i]) || COMMAND_PREFIX.test(tokens[i]))
+    )
+      i++;
     if (i >= tokens.length) continue;
     if (!DUMP_HEAD.test(tokens[i].replace(/^.*[/\\]/, ''))) continue;
 
@@ -379,32 +441,63 @@ function largeOperand(command, cwd) {
  * OpenCode's `read`. The waste is identical in all of them, so the names are
  * normalized here and the policy above stays written once.
  */
-const TOOL_ALIASES = new Map(Object.entries({
-  read: 'Read', read_file: 'Read', view_file: 'Read', readfile: 'Read',
-  view: 'Read', str_replace_editor_view: 'Read', open_file: 'Read',
+const TOOL_ALIASES = new Map(
+  Object.entries({
+    read: 'Read',
+    read_file: 'Read',
+    view_file: 'Read',
+    readfile: 'Read',
+    view: 'Read',
+    str_replace_editor_view: 'Read',
+    open_file: 'Read',
 
-  grep: 'Grep', search_file_content: 'Grep', grep_search: 'Grep',
-  ripgrep_search: 'Grep', codebase_search: 'Grep', search: 'Grep',
+    grep: 'Grep',
+    search_file_content: 'Grep',
+    grep_search: 'Grep',
+    ripgrep_search: 'Grep',
+    codebase_search: 'Grep',
+    search: 'Grep',
 
-  glob: 'Glob', find_files: 'Glob', file_search: 'Glob', list_dir: 'Glob',
-  glob_file_search: 'Glob',
+    glob: 'Glob',
+    find_files: 'Glob',
+    file_search: 'Glob',
+    list_dir: 'Glob',
+    glob_file_search: 'Glob',
 
-  edit: 'Edit', edit_file: 'Edit', replace: 'Edit', apply_patch: 'Edit',
-  str_replace: 'Edit', multiedit: 'Edit', search_replace: 'Edit',
+    edit: 'Edit',
+    edit_file: 'Edit',
+    replace: 'Edit',
+    apply_patch: 'Edit',
+    str_replace: 'Edit',
+    multiedit: 'Edit',
+    search_replace: 'Edit',
 
-  write: 'Write', write_file: 'Write', create_file: 'Write',
+    write: 'Write',
+    write_file: 'Write',
+    create_file: 'Write',
 
-  bash: 'Bash', shell: 'Bash', run_command: 'Bash', execute_command: 'Bash',
-  // Gemini's shell tool. Its own hooks.json matcher already listed
-  // run_shell_command, so the hook fired and then normalizeTool returned null,
-  // silently allowing every shell call through on that client.
-  run_shell_command: 'Bash', run_terminal_cmd: 'Bash', terminal: 'Bash',
-}));
+    bash: 'Bash',
+    shell: 'Bash',
+    run_command: 'Bash',
+    execute_command: 'Bash',
+    // Gemini's shell tool. Its own hooks.json matcher already listed
+    // run_shell_command, so the hook fired and then normalizeTool returned null,
+    // silently allowing every shell call through on that client.
+    run_shell_command: 'Bash',
+    run_terminal_cmd: 'Bash',
+    terminal: 'Bash',
+  })
+);
 
 /** Maps a client's tool name onto the canonical one, or null if unhandled. */
 export function normalizeTool(name) {
   if (!name) return null;
-  if (['Read', 'Grep', 'Glob', 'Edit', 'MultiEdit', 'Write', 'Bash'].includes(name)) return name;
+  if (
+    ['Read', 'Grep', 'Glob', 'Edit', 'MultiEdit', 'Write', 'Bash'].includes(
+      name
+    )
+  )
+    return name;
   return TOOL_ALIASES.get(String(name).toLowerCase()) || null;
 }
 
@@ -423,9 +516,20 @@ export function normalizePayload(raw) {
   // and allowed every call. A total no-op with nothing in stderr and no failing
   // check anywhere -- the worst way for an integration to be broken.
   const input =
-    raw.tool_input || raw.toolInput || raw.tool_args || raw.toolArgs ||
-    raw.arguments || raw.args || raw.parameters || {};
-  const filePath = input.file_path ?? input.path ?? input.absolute_path ?? input.filePath ?? input.target_file;
+    raw.tool_input ||
+    raw.toolInput ||
+    raw.tool_args ||
+    raw.toolArgs ||
+    raw.arguments ||
+    raw.args ||
+    raw.parameters ||
+    {};
+  const filePath =
+    input.file_path ??
+    input.path ??
+    input.absolute_path ??
+    input.filePath ??
+    input.target_file;
   const command = input.command ?? input.cmd ?? input.script;
 
   const cwd = raw.cwd ?? raw.workspace_root ?? process.cwd();
@@ -449,7 +553,9 @@ export function normalizePayload(raw) {
       // breaking, the size check, and the wiki anchor -- keys off this value,
       // so normalising at the single point they all share is what makes one
       // file one identity regardless of which tool spelled it.
-      ...(filePath !== undefined ? { file_path: canonicalPath(filePath, cwd) } : {}),
+      ...(filePath !== undefined
+        ? { file_path: canonicalPath(filePath, cwd) }
+        : {}),
       // The ORIGINAL spelling, kept for messages. Identity is internal and
       // canonical; what the refusal says back to the model should be the path
       // the model actually used, or the instruction reads as being about a
