@@ -63,6 +63,14 @@ jobs:
       # overlaid the toolbar and list, so those controls could not be clicked at
       # all. They need a browser, which is why they were never wired; that is a
       # reason to add the install step, not a reason to leave a gate unrun.
+      # BUILD FIRST. verify-wiki-ui spawns dist/server/web-server.js -- its own
+      # comment says "The server serves from dist/, not src/" -- so without a
+      # build the server never comes up and the gate fails for a reason that has
+      # nothing to do with the dashboard. It passed locally only because dist/
+      # was already there.
+      - name: Build, because the UI gates serve from dist/
+        run: npm run build
+
       - name: Install Chromium for the UI gates
         run: npx playwright install --with-deps chromium
 
