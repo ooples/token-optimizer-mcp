@@ -34,9 +34,19 @@
  *      would trade real tokens for hook overhead and user irritation.
  */
 
-import { statSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import {
+  statSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  openSync,
+  closeSync,
+  unlinkSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { isFsSafePath } from './paths.mjs';
 
 /** Enforcement modes, least to most permissive. */
@@ -68,7 +78,8 @@ function intEnv(name, fallback) {
  * single file. Below it the hook's own overhead is a meaningful fraction of the
  * savings, so the call is left alone.
  */
-export const largeFileBytes = () => intEnv('TOKEN_OPTIMIZER_LARGE_READ_BYTES', 25_600);
+export const largeFileBytes = () =>
+  intEnv('TOKEN_OPTIMIZER_LARGE_READ_BYTES', 25_600);
 
 /**
  * Size below which NO refusal can pay for itself.
@@ -86,14 +97,39 @@ export const largeFileBytes = () => intEnv('TOKEN_OPTIMIZER_LARGE_READ_BYTES', 2
  * 1 KB is about 256 tokens, comfortably above the largest refusal this hook
  * emits, so a refusal above the floor always pays.
  */
-export const refusalFloorBytes = () => intEnv('TOKEN_OPTIMIZER_REFUSAL_FLOOR_BYTES', 1_024);
+export const refusalFloorBytes = () =>
+  intEnv('TOKEN_OPTIMIZER_REFUSAL_FLOOR_BYTES', 1_024);
 
 /** Extensions whose bytes are not tokens, so byte thresholds do not apply. */
 const BINARY_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.svg',
-  '.pdf', '.zip', '.gz', '.tar', '.7z', '.rar',
-  '.exe', '.dll', '.so', '.dylib', '.bin', '.wasm',
-  '.mp3', '.mp4', '.wav', '.mov', '.woff', '.woff2', '.ttf', '.eot',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.ico',
+  '.svg',
+  '.pdf',
+  '.zip',
+  '.gz',
+  '.tar',
+  '.7z',
+  '.rar',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.bin',
+  '.wasm',
+  '.mp3',
+  '.mp4',
+  '.wav',
+  '.mov',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.eot',
 ]);
 
 export function isBinaryPath(path) {
@@ -115,7 +151,8 @@ export function isBinaryPath(path) {
  * knowledge, all of it churns constantly (so it would thrash staleness), and
  * none of it is something a person reads.
  */
-const MACHINE_OWNED = /(?:^|[/\\])(?:\.git|\.hg|\.svn|node_modules|\.venv|__pycache__|\.next|\.turbo|dist|obj|bin)(?:[/\\]|$)/i;
+const MACHINE_OWNED =
+  /(?:^|[/\\])(?:\.git|\.hg|\.svn|node_modules|\.venv|__pycache__|\.next|\.turbo|dist|obj|bin)(?:[/\\]|$)/i;
 
 /**
  * Collapses `.` and `..` textually, without touching the filesystem.
@@ -157,7 +194,13 @@ export function isMachineOwned(path) {
   // stores `.git` as a FILE, so `/repo/.git` has no trailing separator and
   // was classified as authored content -- putting git metadata through Read
   // refusal and into the knowledge graph.
-  return MACHINE_OWNED.test(normalizeSegments(String(path || '').split('\\').join('/')));
+  return MACHINE_OWNED.test(
+    normalizeSegments(
+      String(path || '')
+        .split('\\')
+        .join('/')
+    )
+  );
 }
 
 /** Size in bytes, or -1 when the path is missing or is not a regular file. */
@@ -195,13 +238,36 @@ export function fileSize(path) {
  * read-modify-write survived here unnoticed.
  */
 const stateRoot = () =>
-  process.env.TOKEN_OPTIMIZER_STATE_DIR || join(tmpdir(), 'token-optimizer-hooks');
+  process.env.TOKEN_OPTIMIZER_STATE_DIR ||
+  join(tmpdir(), 'token-optimizer-hooks');
 
-function statePath(sessionId) {
+/**
+ * Per SESSION and per AGENT, not per session alone.
+ *
+ * Every subagent inherits its parent's session id, so keying on the session
+ * alone gave all of them ONE `seen` set. An agent was then refused a file it had
+ * never opened -- observed verbatim: "release.yml is UNCHANGED since you last
+ * read it this session" -- because a different agent had read it. That agent
+ * fell back to Bash to get the contents, which defeats the optimizer and costs
+ * more than the read it replaced.
+ *
+ * `agent` is the caller's transcript path, which is distinct per subagent. It is
+ * HASHED rather than sanitised into the filename: it is an absolute path, so
+ * stripping separators would collide across directories, and the digest keeps
+ * the name bounded.
+ *
+ * Absent, the scope falls back to the session -- the main session's own calls
+ * must keep sharing one state, or the once-per-session gates would reset on
+ * every tool call.
+ */
+function statePath(sessionId, agent) {
   // Session ids come from the harness and are uuid-shaped, but they land in a
   // file path, so anything that could traverse is stripped rather than trusted.
   const safe = String(sessionId || 'default').replace(/[^A-Za-z0-9_-]/g, '');
-  return join(stateRoot(), `${safe || 'default'}.json`);
+  const scope = agent
+    ? `-${createHash('sha256').update(String(agent)).digest('hex').slice(0, 12)}`
+    : '';
+  return join(stateRoot(), `${safe || 'default'}${scope}.json`);
 }
 
 /** A usable state object, whatever was on disk. */
@@ -219,13 +285,16 @@ function emptyState() {
  * have been "enforcement silently stops working for this session", which is
  * exactly the kind of quiet failure that never gets reported.
  */
-export function loadState(sessionId) {
+export function loadState(sessionId, agent) {
   try {
-    const parsed = JSON.parse(readFileSync(statePath(sessionId), 'utf8'));
+    const parsed = JSON.parse(
+      readFileSync(statePath(sessionId, agent), 'utf8')
+    );
     if (!parsed || typeof parsed !== 'object') return emptyState();
     return {
       seen: parsed.seen && typeof parsed.seen === 'object' ? parsed.seen : {},
-      denied: parsed.denied && typeof parsed.denied === 'object' ? parsed.denied : {},
+      denied:
+        parsed.denied && typeof parsed.denied === 'object' ? parsed.denied : {},
       // WITHOUT THIS THE ONCE-PER-SESSION GATE DOES NOT EXIST. Every tool call
       // is a separate hook PROCESS, so a set held only in memory dies with the
       // process that built it: the router recorded which findings it had
@@ -255,7 +324,7 @@ export function loadState(sessionId) {
  * but it turns "last writer wins" into "union of writers", which is the
  * behaviour the two maps actually want, since both are append-only sets.
  */
-export function saveState(sessionId, state) {
+export function saveState(sessionId, state, agent) {
   let lock = null;
   try {
     mkdirSync(stateRoot(), { recursive: true, mode: 0o700 });
@@ -276,10 +345,10 @@ export function saveState(sessionId, state) {
     // bounded by design -- a repeated denial is allowed through by rule, and a
     // repeated injection costs its tokens once more. A stale lock is still
     // broken and taken below, so a killed process cannot wedge enforcement.
-    lock = takeLock(sessionId);
+    lock = takeLock(sessionId, agent);
     if (!lock) return false;
 
-    const current = loadState(sessionId);
+    const current = loadState(sessionId, agent);
     const merged = {
       seen: { ...current.seen, ...state.seen },
       denied: { ...current.denied, ...state.denied },
@@ -287,11 +356,13 @@ export function saveState(sessionId, state) {
       // their own view of what has been injected; taking the last writer's copy
       // would resurrect a finding the other had already delivered, which is the
       // repetition the once-per-session gate exists to stop.
-      injected: [...new Set([...(current.injected || []), ...(state.injected || [])])],
+      injected: [
+        ...new Set([...(current.injected || []), ...(state.injected || [])]),
+      ],
     };
 
     // Write-then-rename so a reader never observes a half-written file.
-    const target = statePath(sessionId);
+    const target = statePath(sessionId, agent);
     const temporary = `${target}.${process.pid}.tmp`;
     writeFileSync(temporary, JSON.stringify(merged), { mode: 0o600 });
     renameSync(temporary, target);
@@ -327,17 +398,17 @@ export function saveState(sessionId, state) {
  * Same lock and write-then-rename discipline as saveState: a reader must never see a
  * half-written file, and a missed lock skips the write rather than racing it.
  */
-export function clearSeen(sessionId) {
+export function clearSeen(sessionId, agent) {
   let lock = null;
   try {
     mkdirSync(stateRoot(), { recursive: true, mode: 0o700 });
-    lock = takeLock(sessionId);
+    lock = takeLock(sessionId, agent);
     if (!lock) return false;
 
-    const current = loadState(sessionId);
+    const current = loadState(sessionId, agent);
     const cleared = { ...current, seen: {} };
 
-    const target = statePath(sessionId);
+    const target = statePath(sessionId, agent);
     const temporary = `${target}.${process.pid}.tmp`;
     writeFileSync(temporary, JSON.stringify(cleared), { mode: 0o600 });
     renameSync(temporary, target);
@@ -376,8 +447,16 @@ function sleepSync(ms) {
 }
 
 /** Best-effort exclusive lock. Returns the lock path, or null if not acquired. */
-function takeLock(sessionId, { attempts = 20, staleMs = 5000, waitMs = 15 } = {}) {
-  const path = `${statePath(sessionId)}.lock`;
+function takeLock(
+  sessionId,
+  agent,
+  { attempts = 20, staleMs = 5000, waitMs = 15 } = {}
+) {
+  // Locks the file it actually guards. Scoping the state per agent while leaving
+  // the lock on the session path would serialise every agent on one lock AND
+  // protect the wrong file -- two agents could then interleave a
+  // read-modify-write on their own states while holding a lock on neither.
+  const path = `${statePath(sessionId, agent)}.lock`;
   for (let i = 0; i < attempts; i++) {
     try {
       const fd = openSync(path, 'wx', 0o600);
@@ -468,13 +547,15 @@ export function allowWithContext(context) {
  * says "use the optimized tool" gets met with a retry of the same call.
  */
 export function deny(reason) {
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'deny',
-      permissionDecisionReason: withEscape(reason),
-    },
-  }));
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: withEscape(reason),
+      },
+    })
+  );
   process.exit(0);
 }
 
@@ -499,12 +580,14 @@ export function withEscape(reason) {
 
 /** Lets the call through, attaching a note the model sees. */
 export function advise(context) {
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      additionalContext: context,
-    },
-  }));
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        additionalContext: context,
+      },
+    })
+  );
   process.exit(0);
 }
 
@@ -532,7 +615,10 @@ export function enforce(reason, deniedBefore) {
  * than an absent one, so the wait has a ceiling and expiring it is treated
  * exactly like unusable input.
  */
-export async function readPayload({ timeoutMs = 5000, maxBytes = 8_000_000 } = {}) {
+export async function readPayload({
+  timeoutMs = 5000,
+  maxBytes = 8_000_000,
+} = {}) {
   const chunks = [];
   let size = 0;
 
@@ -541,7 +627,10 @@ export async function readPayload({ timeoutMs = 5000, maxBytes = 8_000_000 } = {
       size += chunk.length;
       // A payload this large is not a tool call; refusing to buffer it
       // unboundedly keeps a hook from becoming a memory problem.
-      if (size > maxBytes) { finish(null); return; }
+      if (size > maxBytes) {
+        finish(null);
+        return;
+      }
       chunks.push(chunk);
     };
     const onEnd = () => finish(chunks.join(''));
