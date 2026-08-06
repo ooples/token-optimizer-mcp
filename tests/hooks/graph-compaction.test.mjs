@@ -46,7 +46,17 @@ function churn(times, { snapshot = 'x'.repeat(400) } = {}) {
   }
 }
 
-const graphSize = () => statSync(join(dir, 'graph.jsonl')).size;
+// BOTH LOGS. Snapshots live in their own file now, and they are the bulk, so
+// measuring only graph.jsonl would report a shrink that merely moved bytes.
+const graphSize = () => {
+  let n = statSync(join(dir, 'graph.jsonl')).size;
+  try {
+    n += statSync(join(dir, 'snapshots.jsonl')).size;
+  } catch {
+    /* no sidecar yet */
+  }
+  return n;
+};
 
 describe('compaction reclaims superseded records', () => {
   it('grows sublinearly in what is written, which is the whole point', () => {
@@ -192,7 +202,7 @@ describe('snapshots are bounded, because they are the whole file', () => {
     // Churn to push the file past the compaction floor.
     churn(60);
 
-    const g = load(dir);
+    const g = load(dir, { snapshots: true });
     const files = [...g.nodes.values()].filter((n) => n.kind === 'file' && /\/src\/f\d/.test(n.key));
 
     // EVERY node survives. Only the snapshot field is dropped.
@@ -227,7 +237,7 @@ describe('snapshots are bounded, because they are the whole file', () => {
     }
     churn(60);
 
-    const g = load(dir);
+    const g = load(dir, { snapshots: true });
     const anchored = g.nodes.get(old);
     // Its evidence is what makes the staleness diff possible; losing it would
     // silently turn a checkable claim into an unbacked one.
@@ -242,7 +252,7 @@ describe('snapshots are bounded, because they are the whole file', () => {
     }
     churn(60);
 
-    const g = load(dir);
+    const g = load(dir, { snapshots: true });
     const kept = [...g.nodes.values()].filter(
       (n) => n.kind === 'file' && /keep/.test(n.key) && typeof n.snapshot === 'string'
     );

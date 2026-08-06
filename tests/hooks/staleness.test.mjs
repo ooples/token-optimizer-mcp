@@ -164,7 +164,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
 
   test('a fresh finding is served unmarked and without a diff', () => {
     const { finding } = seed();
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(false);
     expect(out.diff).toBeUndefined();
@@ -174,7 +174,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const { path, finding } = seed();
     writeFileSync(path, 'export function f() { return 2; }');
 
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
 
     // Served, not dropped -- re-verifying against a diff beats re-deriving.
@@ -192,7 +192,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const { path, finding } = seed();
     rmSync(path);
 
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(true);
     expect(out.diff).toContain('- export function f() { return 1; }');
@@ -226,7 +226,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     });
     putEdge(dir, about, 'derived_from', nodeId('file', path));
 
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [servedRule] = serve(graph, [graph.nodes.get(rule)]);
     const [servedAbout] = serve(graph, [graph.nodes.get(about)]);
 
@@ -244,7 +244,7 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     const finding = putNode(dir, { kind: 'finding', key: 'f9', claim: 'about a huge file', confidence: 0.9 });
     putEdge(dir, finding, 'derived_from', nodeId('file', path));
 
-    const graph = load(dir);
+    const graph = load(dir, { snapshots: true });
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.stale).toBe(true);
 
