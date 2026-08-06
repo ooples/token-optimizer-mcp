@@ -259,7 +259,13 @@ export function checkAnchor(anchor) {
   try {
     source = readAnySpelling(path);
   } catch {
-    return { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: '', reason: 'file no longer readable' };
+    // REASON-NEUTRAL, for the reason spelled out beside the fallback text below:
+    // report what was determined, not a cause that was not. "no longer readable"
+    // asserts a change of state, and the commonest way to reach this branch
+    // involves none -- a branch, worktree, uninitialised submodule or fresh clone
+    // where the file simply is not present. Observed here: a finding anchored to
+    // a file added on another branch reported it gone.
+    return { fresh: false, before: anchor.snapshot || '', hasBefore: Boolean(anchor.snapshot), after: '', reason: 'anchor not readable from this checkout' };
   }
 
   if (anchor.kind === 'file') {
