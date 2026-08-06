@@ -118,7 +118,13 @@ describe('smart_glob and dot-directories', () => {
     // The COUNT too, not just the result list. Without this the comparison walk
     // could stop matching .git entirely and these assertions would still pass,
     // leaving the number that explains the omission silently wrong.
-    expect(result.metadata?.ignoredMatches ?? 0).toBe(0);
+    // ONE, and the exact number matters. The fixture hides a .yml in `.git` and
+    // another in `node_modules`. `.git` is excluded from BOTH walks, so it
+    // contributes nothing to the difference; `node_modules` is withheld by the
+    // caller's ignore list, so it is correctly reported as one withheld match.
+    // Asserting 0 here would have re-introduced the bug this count exists to
+    // prevent -- a silent omission with no number to explain it.
+    expect(result.metadata?.ignoredMatches ?? 0).toBe(1);
   });
 });
 

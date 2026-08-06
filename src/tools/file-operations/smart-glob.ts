@@ -124,12 +124,19 @@ export interface SmartGlobResult {
 /**
  * Never enumerated, in either walk, whatever the caller's ignore list says.
  *
- * These are infrastructure rather than project content, and with `dot: true` the
- * comparison walk would otherwise descend into `.git/objects` -- unbounded on a
+ * `.git` ONLY, and the narrowness is the point. `node_modules` belongs in the
+ * caller's ignore list, not here: excluding it from BOTH walks makes their
+ * difference zero, which silently deletes the count that tells a caller what was
+ * withheld -- caught by an existing test that asserts a node_modules exclusion is
+ * still reported. `.git` is different because it was never reachable before
+ * `dot: true`; this restores the status quo rather than changing what is counted.
+ *
+ * With `dot: true` the comparison walk would otherwise descend into
+ * `.git/objects` -- unbounded on a
  * real repository, and pure cost, since nobody's search was 'withheld' by git's
  * object store.
  */
-const ALWAYS_IGNORED = ['**/.git/**', '**/node_modules/**'];
+const ALWAYS_IGNORED = ['**/.git/**'];
 
 export class SmartGlobTool {
   constructor(
