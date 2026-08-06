@@ -119,7 +119,14 @@ export interface SmartGrepResult {
   };
   matches?: GrepMatch[]; // Matches (if not filesWithMatches or count mode)
   files?: string[]; // Files with matches (if filesWithMatches mode)
-  counts?: Map<string, number>; // Match counts per file (if count mode)
+  /**
+   * Match counts per file, when `count` is set.
+   *
+   * A Record rather than a Map on purpose: this crosses a JSON boundary, and a
+   * Map serialises to `{}`. The type used to say Map, which was accurate about
+   * the value and wrong about what the caller received.
+   */
+  counts?: Record<string, number>;
   error?: string;
 }
 
@@ -462,7 +469,13 @@ export class SmartGrepTool {
           duration: 0, // Will be set below
           cacheHit: false,
         },
-        ...(opts.count ? { counts: matchCounts } : {}),
+        // PLAIN OBJECT, not the Map. This result is JSON-serialised on its way
+        // to every caller, and a Map stringifies to `{}` -- so count mode
+        // returned an empty counts map beside a correct totalMatches, which is
+        // the one thing the flag exists to provide. The cache path a few lines
+        // up already used Object.fromEntries; only the returned object was
+        // wrong, so the two disagreed about the same query.
+        ...(opts.count ? { counts: Object.fromEntries(matchCounts) } : {}),
         ...(opts.filesWithMatches
           ? { files: Array.from(filesWithMatches) }
           : {}),
