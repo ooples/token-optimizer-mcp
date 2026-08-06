@@ -442,6 +442,30 @@ body.wiki-detail-open {
   overflow: hidden;
 }
 
+/*
+ * RESERVE THE PANEL'S SPACE WHILE IT IS OPEN.
+ *
+ * `.wiki-detail` is `position: fixed; right: 0` at z-index 60, so it is outside
+ * the flow and overlays whatever sits beneath it. Nothing reserved room for it,
+ * so at ordinary viewport widths an open panel covered the right-hand end of the
+ * content -- both list rows and the graph-mode buttons in the toolbar above them --
+ * and none of it could be clicked; the pointer landed on the panel instead.
+ *
+ * Caught by verify:ui, which had never run in CI: a click on a list item timed
+ * out with 'div#wiki-detail intercepts pointer events' after the panel opened --
+ * the button it could not reach was #mode-constellation, in the toolbar.
+ * That is a usability bug, not a test artefact -- a real user with the panel
+ * open cannot reach those rows either.
+ *
+ * Applied to `main` rather than the list pane because the toolbar is a sibling of
+ * the list, not a child -- shifting only the list left the buttons underneath.
+ * Margin rather than padding so backgrounds do not extend under the panel, and
+ * the same `min()` as the panel's width so the two cannot disagree.
+ */
+body.wiki-detail-open main {
+  margin-right: min(460px, 92vw);
+}
+
 .wiki-actions {
   display: flex;
   flex-wrap: wrap;

@@ -46,6 +46,40 @@ jobs:
       - name: Verify hook core, client entries, configs and pins are in sync
         run: npm run sync:hooks:check
 
+      # WIRED BECAUSE IT ROTTED WHILE UNWIRED. verify:clients asserts the SHAPE of
+      # every client integration -- that each declares the hooks and the launch
+      # spec its own documented format requires. No workflow ran it, so it kept
+      # asserting the numeric pin that #256 removed and sat at 104/129 checks,
+      # exit 1, for anyone who happened to run it by hand. A gate nothing runs is
+      # not a gate.
+      - name: Verify client integration shapes
+        run: npm run verify:clients
+
+      - name: Verify the harvest API contract
+        run: npm run verify:harvest
+
+      # BROWSER GATES. These verify the wiki dashboard actually works -- they
+      # caught a real defect the moment they were first run: an open detail panel
+      # overlaid the toolbar and list, so those controls could not be clicked at
+      # all. They need a browser, which is why they were never wired; that is a
+      # reason to add the install step, not a reason to leave a gate unrun.
+      # BUILD FIRST. verify-wiki-ui spawns dist/server/web-server.js -- its own
+      # comment says "The server serves from dist/, not src/" -- so without a
+      # build the server never comes up and the gate fails for a reason that has
+      # nothing to do with the dashboard. It passed locally only because dist/
+      # was already there.
+      - name: Build, because the UI gates serve from dist/
+        run: npm run build
+
+      - name: Install Chromium for the UI gates
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify the wiki dashboard renders and behaves
+        run: npm run verify:ui
+
+      - name: Verify the wiki interactions
+        run: npm run verify:interactions
+
   bundle-size:
     name: Bundle Size Analysis
     runs-on: ubuntu-latest
