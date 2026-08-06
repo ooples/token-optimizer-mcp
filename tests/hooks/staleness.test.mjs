@@ -14,6 +14,22 @@ import { extractSymbols, languageOf, spanText } from '../../hooks-core/symbols.m
 import { indexFile, checkAnchor, diffLines, serve, invalidateOnWrite } from '../../hooks-core/staleness.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { forTouch } from '../../hooks-core/inject.mjs';
+
+// THE HOLDOUT IS PINNED OFF IN THIS SUITE.
+//
+// `forTouch` takes part in the 10% holdout, so a temp anchor whose hash lands
+// in the withheld arm correctly returns null. This suite is about what a stale
+// finding SAYS, not about measurement.
+//
+// I introduced exactly this flake by running the suite locally with the
+// fraction already at 0, which masked it; CI runs with the default and the test
+// failed there. Verifying under a condition CI does not have is not verifying.
+const PRIOR_HOLDOUT = process.env.TOKEN_OPTIMIZER_HOLDOUT;
+process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+afterAll(() => {
+  if (PRIOR_HOLDOUT === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+  else process.env.TOKEN_OPTIMIZER_HOLDOUT = PRIOR_HOLDOUT;
+});
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 let workspace;
@@ -182,6 +198,45 @@ describe('the diff invariant -- a stale finding never arrives bare', () => {
     expect(out.diff).toContain('- export function f() { return 1; }');
   });
 
+  test('a workflow rule is not invalidated by its anchor file changing', () => {
+    // MEASURED: 24 of 32 stale findings on real graphs were types whose truth
+    // cannot depend on the anchor's contents -- 75%. The clearest case is a
+    // `failure` reading "Edit hooks-core/, never the generated copies", marked
+    // stale because hooks-core/wiki.mjs changed. That rule is about process;
+    // the file's contents cannot make it wrong.
+    const path = write('churny.ts', 'export const a = 1;');
+    putNode(dir, { kind: 'file', key: path, hash: 'a-hash-that-no-longer-matches' });
+
+    const rule = putNode(dir, {
+      kind: 'finding',
+      key: 'process-rule',
+      type: 'failure',
+      claim: 'Edit hooks-core/, never the generated copies.',
+      confidence: 0.9,
+    });
+    putEdge(dir, rule, 'derived_from', nodeId('file', path));
+
+    // And a claim that IS about this file's contents, for contrast.
+    const about = putNode(dir, {
+      kind: 'finding',
+      key: 'about-the-file',
+      type: 'finding',
+      claim: 'churny.ts exports a single constant.',
+      confidence: 0.9,
+    });
+    putEdge(dir, about, 'derived_from', nodeId('file', path));
+
+    const graph = load(dir);
+    const [servedRule] = serve(graph, [graph.nodes.get(rule)]);
+    const [servedAbout] = serve(graph, [graph.nodes.get(about)]);
+
+    // The process rule stands: nothing about the file bears on it.
+    expect(servedRule.stale).toBeFalsy();
+
+    // The claim about the file's contents is still discounted, because that IS
+    // what changed. Losing this would trade one silent error for another.
+    expect(servedAbout.stale).toBe(true);
+  });
   test('a finding with genuinely unreconstructable evidence says so explicitly', () => {
     // No snapshot at all -- what a file above the snapshot limit looks like.
     const path = write('huge.ts', 'export const a = 1;');

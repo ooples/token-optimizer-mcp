@@ -341,7 +341,37 @@ export function serve(graph, findings) {
   // graph directly cannot accidentally serve a claim a human explicitly
   // withdrew. A withheld claim reappearing is not a bug anyone would notice
   // quickly.
+/**
+ * Types whose truth is a claim ABOUT the anchor's contents.
+ *
+ * Only these can be invalidated by that file changing. An anchor on any other
+ * type is a RETRIEVAL HOOK -- the file that happened to be open when the lesson
+ * was learned -- and its contents changing says nothing about the claim.
+ *
+ * MEASURED, across every real graph on one machine: 32 findings were served
+ * stale, and 24 of them -- 75% -- were types in neither of these sets. The
+ * clearest example is a `failure` reading "Edit hooks-core/, never the generated
+ * copies", marked stale because hooks-core/wiki.mjs changed. That rule is about
+ * process; wiki.mjs's contents cannot make it wrong. It was being discounted for
+ * a reason that did not exist.
+ *
+ * THE TRADE, STATED. A `command` finding CAN be invalidated by its anchor -- a
+ * claim about `npm test` anchored to package.json genuinely dies if the test
+ * script changes. That case is now missed. It is the better error: today every
+ * version bump marks it stale, so the signal fires overwhelmingly when nothing
+ * relevant happened, and a signal that is usually wrong is one a reader learns
+ * to ignore -- taking the rare true positive with it.
+ */
+const CONTENT_DEPENDENT = new Set(['finding', 'map']);
+
   for (const finding of findings.filter((f) => !f.retired)) {
+    // A claim that does not depend on the anchor's contents cannot be
+    // invalidated by them. It is served as-is rather than discounted.
+    if (!CONTENT_DEPENDENT.has(finding.type || 'finding')) {
+      served.push({ ...finding });
+      continue;
+    }
+
     const anchors = graph.edges
       .filter((e) => e.edge === 'derived_from' && e.from === finding.id)
       .map((e) => graph.nodes.get(e.to))
