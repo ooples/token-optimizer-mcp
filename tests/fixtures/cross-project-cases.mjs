@@ -1,169 +1,179 @@
 /**
- * Dead-ends whose lesson was learned in ONE repository and is being tested in
- * ANOTHER.
+ * Dead-ends whose lesson was learned in ONE repository and is tested in ANOTHER.
  *
- * The existing corpora (ab-injection-harness, harvested-dead-ends) seed a finding
- * and probe it in the same project, which measures retrieval. This corpus
- * measures TRANSFER: every case is seeded into project A's graph, promoted to the
- * shared tier exactly as production promotes it, and then probed from a project B
- * that has its own empty graph and has never seen the claim.
+ * REBUILT AFTER A NULL RESULT. The first corpus scored 0 of 6 admitted: every
+ * task asked for a GENERAL best practice ("use npm ci", "write to a temp file
+ * and rename"), and a capable model already holds those. A case the control gets
+ * right measures nothing, and this repository's own corpus notes had already
+ * recorded the same mistake once.
  *
- * PROVENANCE IS THE POINT. The first four are traps that actually bit during the
- * cross-repo PR work this feature came out of -- each cost real time once, and
- * each is recorded with the symptom that was observed. The last two are HELD-OUT
- * SYNTHETIC: constructed rather than suffered, marked as such, and reported
- * separately, because a corpus that can only grow when someone makes a mistake
- * cannot be extended on demand and a claim built purely on synthetic traps has
- * weak external validity. Neither set is allowed to hide inside a single average.
+ * The structural tension that caused it is worth stating, because it constrains
+ * what this tier can ever be worth: a lesson that TRANSFERS between projects
+ * tends to be general, and general lessons are the ones already known. The band
+ * where a shared tier pays is therefore narrow -- facts specific to this MACHINE,
+ * this ACCOUNT or this TOOLCHAIN, which no amount of general competence supplies,
+ * yet which are not tied to a single repository.
  *
- * `walksIn` and `avoids` are deliberately not complements. An answer that does
- * neither is scored ABSTAIN and admitted to no arm -- counting an evasive answer
- * as a success is how a measurement flatters itself.
+ * The live example is exact. A control asked about a stale MCP server correctly
+ * names the PRINCIPLE ("the running process may not be your working tree"). What
+ * it cannot supply is the FACT: on this machine the server is launched by
+ * `npx -y pkg@latest`, so the copy it serves lives in the npm _npx cache and
+ * `npm install -g` does not touch it. The principle was known; the fact saved an
+ * hour. Every case below tests a fact, not a principle.
+ *
+ * ACTION FIRST IN EVERY CLAIM. Measured on this project: a finding that buried
+ * its instruction after three sentences of context was ignored, and the subject
+ * gave the habitual answer anyway. The first clause says what to do.
+ *
+ * `walksIn` and `avoids` are not complements. An answer that satisfies neither is
+ * scored abstain and admitted to no arm -- counting an evasive answer as success
+ * is how a measurement flatters itself.
  */
 
 export const CROSS_CASES = [
   {
-    id: 'npm-test-not-npx-jest',
+    id: 'npx-cache-not-global-install',
     origin: 'real',
     learnedIn: 'token-optimizer-mcp',
     symptom:
-      'Ran `npx jest` to check a suite. It reported green while silently failing to load 26 ESM ' +
-      'suites and running ~500 fewer tests, because the project passes --experimental-vm-modules ' +
-      'through its npm script.',
+      'Updated the global npm install of an MCP server and verified the version there. The running ' +
+      'server kept serving the old build: the client launches it with `npx -y pkg@latest`, so the ' +
+      'copy in use lives in the npm _npx cache, keyed by a hash, and -g never touched it.',
     claim:
-      'Run the suite with `npm test`, not bare `npx jest`: this project passes ' +
-      '--experimental-vm-modules through the npm script, and without it every ESM suite silently ' +
-      'fails to load while the run still reports green.',
-    trigger: 'jest',
-    probeCommand: 'npx jest tests/unit',
+      'Update the npx cache copy too, not just the global install: a client that launches a server ' +
+      'with `npx -y pkg@latest` runs the copy under the npm _npx cache (keyed by a hash), so ' +
+      '`npm install -g` upgrades a copy nothing executes and the old build keeps serving.',
+    trigger: 'npx|npm install -g|mcp|server',
+    probeCommand: 'npm install -g @ooples/token-optimizer-mcp',
     task:
-      'You need to run the test suite of a Node project you have not worked in before, to check ' +
-      'whether your change broke anything. State the exact command you would run and why you trust ' +
-      'its result.',
+      'On this machine a tool is distributed as an npm package and run as a server by a client app. ' +
+      'You published a new version, ran `npm install -g <pkg>@latest`, confirmed the version in the ' +
+      'global node_modules, and restarted the client. It still behaves like the old version. Name the ' +
+      'specific location you check next.',
+    // Walks in: reaches for reinstall/restart/cache-clear without naming where the
+    // executed copy actually lives.
     walksIn: (s) =>
-      /npx\s+jest/i.test(s) && !/npm\s+(run\s+)?test/i.test(s),
-    avoids: (s) =>
-      /npm\s+(run\s+)?test/i.test(s) ||
-      /(check|read|look at).{0,40}package\.json.{0,40}scripts/i.test(s),
+      !/(_npx|npx cache|npm-cache|npx.{0,25}cache)/i.test(s),
+    avoids: (s) => /(_npx|npx cache|npm-?cache)/i.test(s),
   },
 
   {
-    id: 'exit-code-before-piping',
+    id: 'clone-beside-siblings',
     origin: 'real',
-    learnedIn: 'token-optimizer-mcp',
+    learnedIn: 'AiDotNet-Prototype',
     symptom:
-      'A failing build was reported as succeeding: `cmd | tail` returns the exit status of `tail`, ' +
-      'not of the command, so a non-zero build exited 0 through the pipe.',
+      'Cloned a .NET repo into a scratch directory and `dotnet build` failed instantly with MSB3202: ' +
+      'the solution references ../AiDotNet/src/AiDotNet.csproj by relative path, so the repo only ' +
+      'builds when checked out beside its sibling dependencies.',
     claim:
-      'Capture the exit code before piping. `cmd | tail` reports the PIPE status, not the command: ' +
-      'a failing build came back exit 0 and was reported as succeeding. Redirect to a file and read ' +
-      '$?, or use PIPESTATUS.',
-    trigger: 'build|test|\\|\\s*(tail|head|grep)',
-    probeCommand: 'npm run build | tail -20',
+      'Clone the repo BESIDE its sibling dependencies, in the same parent directory: solutions on ' +
+      'this machine reference other repos by relative path (../AiDotNet/src/...), so a clone placed ' +
+      'anywhere else fails at restore with MSB3202 before a single file compiles.',
+    trigger: 'clone|git clone|dotnet build|restore',
+    probeCommand: 'git clone https://github.com/ooples/AiDotNet-Prototype',
     task:
-      'You are running a long build in a shell and want to see only the last 20 lines of output, ' +
-      'but you must also know reliably whether the build succeeded. Give the exact shell command ' +
-      'and explain how you determine success.',
+      'You are about to clone one of our .NET repositories onto this machine so you can build it. ' +
+      'Its solution depends on another one of our repositories. State where you clone it and why the ' +
+      'location matters.',
     walksIn: (s) =>
-      /\|\s*(tail|head)/i.test(s) &&
-      !/(PIPESTATUS|\$\?|exit code|redirect|tee|> ?[\w./]+\.log)/i.test(s),
+      !/(beside|next to|sibling|same parent|same (directory|folder) as|relative path)/i.test(s),
     avoids: (s) =>
-      /PIPESTATUS/i.test(s) ||
-      /(redirect|write|save).{0,40}(file|log)/i.test(s) ||
-      /\btee\b/i.test(s) ||
-      /set\s+-o\s+pipefail/i.test(s),
+      /(beside|next to|sibling|same parent|same (directory|folder) as)/i.test(s) ||
+      /relative (path|reference).{0,60}(sibling|parent|repo)/i.test(s),
   },
 
   {
-    id: 'installed-build-not-working-tree',
+    id: 'fossil-ci-checks',
     origin: 'real',
-    learnedIn: 'token-optimizer-mcp',
+    learnedIn: 'ZeroDev',
     symptom:
-      'Spent an hour attributing live tool misbehaviour to src/. The running server was launched via ' +
-      'npx from the npm cache and served a build three days old; the working tree was never involved.',
+      'Sixty open PRs each showed ~20 red checks. The runs were from November 2025 -- job-level ' +
+      'startup failures with no failed STEPS -- nine months stale. Nothing was failing today; the ' +
+      'results were fossils nobody had re-run.',
     claim:
-      'A running MCP server serves the build it LOADED, not what is on disk, and it may be launched ' +
-      'from the npx cache rather than your working tree. Before attributing live misbehaviour to ' +
-      'your source, confirm which build the process is actually running.',
-    trigger: 'mcp|server|npx|restart',
-    probeCommand: 'npx @some/mcp-server --version',
+      'Check WHEN the failing runs executed before treating them as current: a long-dormant PR shows ' +
+      'the last run it ever had, so identical red checks across many old PRs are usually fossils from ' +
+      'a config that no longer exists, not a live failure. A job that failed with no failed steps ' +
+      'never started.',
+    trigger: 'gh pr checks|ci|failing|triage',
+    probeCommand: 'gh pr checks 189',
     task:
-      'A locally installed MCP server is behaving in a way that contradicts the source code in your ' +
-      'working tree. Describe the first thing you would check, and why.',
+      'You are triaging a repository where roughly sixty open pull requests each show the same twenty ' +
+      'failing checks. Before you start fixing anything, state the first thing you establish about ' +
+      'those check results and how.',
     walksIn: (s) =>
-      !/(which|what|identify).{0,60}(build|version|process|binary|path)/i.test(s) &&
-      !/(installed|running process|npx cache|node_modules|restart)/i.test(s),
+      !/(when|date|age|stale|timestamp|how (old|recently)|last run|re-?run)/i.test(s),
     avoids: (s) =>
-      /(npx cache|node_modules|installed (build|copy|version)|which build|running process|process command ?line|restart the server)/i.test(
-        s
-      ),
+      /(when|date|age|stale|timestamp|how (old|recently)|last ran?|re-?run)/i.test(s),
   },
 
   {
-    id: 'edit-source-not-generated',
+    id: 'prettier-failure-is-line-endings',
     origin: 'real',
-    learnedIn: 'token-optimizer-mcp',
+    learnedIn: 'mcp-console-automation',
     symptom:
-      'A fix was applied to a generated copy under plugin/hooks/lib/ and silently reverted by the ' +
-      'next `npm run sync:hooks`, so the same bug reappeared with no record of the edit.',
+      'CI format:check listed 165 files. Running the repo\'s own `prettier --write` locally produced ' +
+      'a git diff of exactly 2 files. The other 163 differed only in line endings: no .gitattributes, ' +
+      'CRLF committed in the blobs, prettier defaulting to endOfLine lf.',
     claim:
-      'When a repository has generated copies of a module, edit the SOURCE and regenerate. A change ' +
-      'made to a generated file is silently reverted by the next sync, so the bug returns and the ' +
-      'edit leaves no trace.',
-    trigger: 'sync|generate|lib/|generated',
-    probeCommand: 'npm run sync:hooks',
+      'Check the line endings before reformatting: when a format check lists far more files than a ' +
+      'local write actually changes, the difference is CRLF in the committed blobs against ' +
+      'prettier\'s lf default. Add .gitattributes and renormalize; running --write across the repo ' +
+      'produces a huge diff that fixes nothing.',
+    trigger: 'prettier|format|lint',
+    probeCommand: 'npx prettier --check .',
     task:
-      'You find the same module at src/thing.mjs and at dist/lib/thing.mjs, and the second carries a ' +
-      'header saying it is generated. You need to fix a bug in that module. Which file do you edit ' +
-      'and what do you do next?',
-    walksIn: (s) =>
-      /dist\/lib|generated (file|copy)/i.test(s) &&
-      /\bedit (the )?(dist|generated)/i.test(s),
-    avoids: (s) =>
-      /(edit|change|fix).{0,40}(source|src\/)/i.test(s) ||
-      /(regenerate|re-?run.{0,20}(sync|build|generat))/i.test(s),
+      'A repository\'s CI format check fails and lists 165 files. You run the project\'s own format ' +
+      'command locally; it reports success afterwards, but `git status` shows only 2 files modified. ' +
+      'Explain what is happening and state what you change.',
+    walksIn: (s) => !/(line ending|crlf|lf\b|eol|gitattributes|autocrlf)/i.test(s),
+    avoids: (s) => /(line ending|crlf|\blf\b|eol|gitattributes|autocrlf)/i.test(s),
   },
 
-  // ---- HELD-OUT SYNTHETIC. Constructed, never suffered. Scored separately. ----
-
   {
-    id: 'lockfile-install-in-ci',
+    id: 'mutually-blocking-dependabot',
+    origin: 'real',
+    learnedIn: 'mcp-console-automation',
+    symptom:
+      'Three dependabot PRs each bumped one vulnerable package. All three failed the same Security ' +
+      'Scan job, because `npm audit --audit-level=high` fails until EVERY advisory clears -- so no ' +
+      'single-package PR could ever turn it green.',
+    claim:
+      'Resolve the advisories together in one PR: a CI job running `npm audit --audit-level=high` ' +
+      'fails while ANY high advisory remains, so one-package-per-PR dependabot bumps each stay red on ' +
+      'a check their own change cannot fix, and they block each other indefinitely.',
+    trigger: 'dependabot|npm audit|security scan|bump',
+    probeCommand: 'npm audit --audit-level=high',
+    task:
+      'A repository has three open dependabot pull requests, each bumping a different package. All ' +
+      'three are failing the same "Security Scan" check. Explain why and state how you get them ' +
+      'merged.',
+    walksIn: (s) =>
+      !/(together|one pr|single pr|combine|all (of them|three|the advisories)|at once)/i.test(s),
+    avoids: (s) =>
+      /(together|one pr|single pr|combin|all three|all the advisories|at once)/i.test(s),
+  },
+
+  // ---- HELD-OUT SYNTHETIC: constructed, marked, scored separately. ----
+  {
+    id: 'farm-thread-cap',
     origin: 'synthetic',
-    learnedIn: 'synthetic-repo-a',
+    learnedIn: 'synthetic-machine-config',
     symptom:
-      'CONSTRUCTED: `npm install` in CI silently updates the lockfile, so CI can pass against ' +
-      'dependency versions that were never reviewed.',
+      'CONSTRUCTED in the shape of a real machine fact: on a 128-core box, leaving each worker at the ' +
+      'library default spawned 128 threads per process and the workers thrashed.',
     claim:
-      'In CI use `npm ci`, not `npm install`: install mutates the lockfile, so the job can pass ' +
-      'against dependency versions nobody reviewed and the run stops being reproducible.',
-    trigger: 'npm install|ci',
-    probeCommand: 'npm install --no-audit',
+      'Cap threads per worker to 64 on this machine: it has 128 cores, and numeric libraries default ' +
+      'to one thread per core, so several concurrent workers each claim all 128 and spend their time ' +
+      'in contention rather than work.',
+    trigger: 'torch|threads|farm|parallel|worker',
+    probeCommand: 'python run_experiment.py --workers 4',
     task:
-      'You are writing the dependency-installation step of a CI workflow for a Node project that has ' +
-      'a committed package-lock.json. State the exact command and why.',
-    walksIn: (s) => /npm\s+install/i.test(s) && !/npm\s+ci\b/i.test(s),
-    avoids: (s) => /npm\s+ci\b/i.test(s),
-  },
-
-  {
-    id: 'atomic-write-temp-rename',
-    origin: 'synthetic',
-    learnedIn: 'synthetic-repo-a',
-    symptom:
-      'CONSTRUCTED: a writer truncated the destination on open, so a concurrent reader observed a ' +
-      'half-written file and decoded it without error.',
-    claim:
-      'Publish a file by writing a temp file in the same directory and renaming over the target. ' +
-      'Opening the destination directly truncates it immediately, so a concurrent reader sees a ' +
-      'partial file and a binary reader decodes the partial bytes without reporting corruption.',
-    trigger: 'write|save|persist|checkpoint',
-    probeCommand: 'node scripts/save-weights.mjs',
-    task:
-      'You are writing a function that saves a model checkpoint to a fixed path. Another process may ' +
-      'read that path at any time. Describe how you write the file.',
-    walksIn: (s) =>
-      /(open|create|write).{0,40}(destination|final|target|path)/i.test(s) &&
-      !/(temp|tmp|rename|atomic)/i.test(s),
-    avoids: (s) => /(temp|tmp).{0,60}(rename|move)|atomic/i.test(s),
+      'You are launching four concurrent numeric worker processes on this machine. State what you set ' +
+      'for per-process thread count and why.',
+    walksIn: (s) => !/(cap|limit|set|restrict).{0,40}(thread|core)/i.test(s),
+    avoids: (s) =>
+      /(cap|limit|set|restrict).{0,40}(thread|core)/i.test(s) ||
+      /(OMP_NUM_THREADS|torch\.set_num_threads|MKL_NUM_THREADS)/i.test(s),
   },
 ];
