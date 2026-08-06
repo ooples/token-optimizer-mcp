@@ -271,6 +271,13 @@ const compactFloorBytes = () =>
   Number(process.env.TOKEN_OPTIMIZER_GRAPH_COMPACT_BYTES) || 8_000_000;
 const markerPath = (dir) => join(dir, 'graph.compact.json');
 
+/** Finding types whose evidence is a diff, and so need the snapshot kept. */
+const SNAPSHOT_DEPENDENT = new Set(['finding', 'map']);
+
+/** Read per call, for the reason documented on the compaction floor above. */
+const snapshotBudgetBytes = () =>
+  Number(process.env.TOKEN_OPTIMIZER_GRAPH_SNAPSHOT_BYTES) || 8_000_000;
+
 function compactionBaseline(dir) {
   try {
     const raw = JSON.parse(readFileSync(markerPath(dir), 'utf8'));
@@ -320,6 +327,72 @@ function compactIfWasteful(dir) {
       if (record.t === 'n') nodes.set(record.id, line);
       else if (record.t === 'e') edges.set(`${record.from}|${record.edge}|${record.to}`, line);
       else edges.set('raw:' + edges.size, line);
+    }
+
+    // SNAPSHOTS ARE BOUNDED, and they are the whole file.
+    //
+    // MEASURED after compaction on this repository: 109.5 MB, of which `file`
+    // records are 105.3 MB. The raw snapshot text is 34.8 MB; JSON escaping
+    // triples it. Compaction alone cannot touch this, because every one of
+    // those records is live.
+    //
+    // A snapshot earns its place two ways: it lets a content-dependent finding
+    // show what changed, and it lets a re-read be answered with a diff instead
+    // of the file. The first is rare and identifiable -- 1 of 1,020 file nodes
+    // on this graph had such a finding anchored. The second only pays while the
+    // snapshot is recent: against a weeks-old snapshot the diff approaches the
+    // size of the file and the caller rejects it anyway.
+    //
+    // So: keep every snapshot something depends on, then keep the newest until
+    // the budget runs out, and drop the rest. The NODE always survives -- only
+    // the snapshot field goes, so hashes, staleness and traversal are
+    // unaffected and a dropped snapshot degrades to the ordinary redirect.
+    const needed = new Set();
+    for (const line of edges.values()) {
+      let e;
+      try {
+        e = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (e.t !== 'e' || e.edge !== 'derived_from') continue;
+      const from = nodes.get(e.from);
+      if (!from) continue;
+      let f;
+      try {
+        f = JSON.parse(from);
+      } catch {
+        continue;
+      }
+      if (f.kind === 'finding' && SNAPSHOT_DEPENDENT.has(f.type || 'finding')) needed.add(e.to);
+    }
+
+    const carriers = [];
+    for (const [id, line] of nodes) {
+      let n;
+      try {
+        n = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (typeof n.snapshot !== 'string' || !n.snapshot) continue;
+      carriers.push({ id, at: n.at || 0, size: n.snapshot.length, node: n });
+    }
+    carriers.sort((a, b) => b.at - a.at);
+
+    let spent = 0;
+    const budget = snapshotBudgetBytes();
+    for (const c of carriers) {
+      if (needed.has(c.id)) {
+        spent += c.size;
+        continue;
+      }
+      if (spent + c.size <= budget) {
+        spent += c.size;
+        continue;
+      }
+      const { snapshot, ...rest } = c.node;
+      nodes.set(c.id, JSON.stringify(rest));
     }
 
     // EDGES BEFORE NODES, matching putNodeWithEdges: a torn write can then only

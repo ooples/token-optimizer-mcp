@@ -170,3 +170,82 @@ describe('compaction reclaims superseded records', () => {
     expect(raw).toContain('future:1');
   });
 });
+
+describe('snapshots are bounded, because they are the whole file', () => {
+  beforeEach(() => {
+    // Small budgets, so the test does not have to write megabytes.
+    process.env.TOKEN_OPTIMIZER_GRAPH_COMPACT_BYTES = '20000';
+    process.env.TOKEN_OPTIMIZER_GRAPH_SNAPSHOT_BYTES = '3000';
+  });
+
+  afterEach(() => {
+    delete process.env.TOKEN_OPTIMIZER_GRAPH_SNAPSHOT_BYTES;
+  });
+
+  const SNAP = 'x'.repeat(1000);
+
+  it('drops the oldest snapshots and keeps the node itself', () => {
+    // Ten files, one KB of snapshot each, against a three KB budget.
+    for (let i = 0; i < 10; i++) {
+      putNode(dir, { kind: 'file', key: `/src/f${i}.ts`, hash: 'h' + i, snapshot: SNAP, at: 1000 + i });
+    }
+    // Churn to push the file past the compaction floor.
+    churn(60);
+
+    const g = load(dir);
+    const files = [...g.nodes.values()].filter((n) => n.kind === 'file' && /\/src\/f\d/.test(n.key));
+
+    // EVERY node survives. Only the snapshot field is dropped.
+    expect(files.length).toBe(10);
+    for (const f of files) expect(f.hash).toBeTruthy();
+
+    const withSnap = files.filter((f) => typeof f.snapshot === 'string');
+    expect(withSnap.length).toBeLessThan(10);
+    expect(withSnap.length).toBeGreaterThan(0);
+
+    // The NEWEST are the ones kept -- an old snapshot produces a diff the
+    // caller rejects anyway.
+    const keptKeys = withSnap.map((f) => f.key).sort();
+    expect(keptKeys).toContain('/src/f9.ts');
+    expect(keptKeys).not.toContain('/src/f0.ts');
+  });
+
+  it('never drops a snapshot a content-dependent finding relies on', () => {
+    // An OLD file, which the budget would otherwise evict first.
+    const old = putNode(dir, { kind: 'file', key: '/src/anchored.ts', hash: 'h', snapshot: SNAP, at: 1 });
+    const f = putNode(dir, {
+      kind: 'finding',
+      key: 'about-anchored',
+      type: 'finding',
+      claim: 'anchored.ts exports one thing.',
+      confidence: 0.9,
+    });
+    putEdge(dir, f, 'derived_from', old);
+
+    for (let i = 0; i < 10; i++) {
+      putNode(dir, { kind: 'file', key: `/src/n${i}.ts`, hash: 'h', snapshot: SNAP, at: 9000 + i });
+    }
+    churn(60);
+
+    const g = load(dir);
+    const anchored = g.nodes.get(old);
+    // Its evidence is what makes the staleness diff possible; losing it would
+    // silently turn a checkable claim into an unbacked one.
+    expect(typeof anchored.snapshot).toBe('string');
+    expect(anchored.snapshot.length).toBe(SNAP.length);
+  });
+
+  it('does not strip snapshots that fit inside the budget', () => {
+    process.env.TOKEN_OPTIMIZER_GRAPH_SNAPSHOT_BYTES = '10000000';
+    for (let i = 0; i < 6; i++) {
+      putNode(dir, { kind: 'file', key: `/src/keep${i}.ts`, hash: 'h', snapshot: SNAP, at: 2000 + i });
+    }
+    churn(60);
+
+    const g = load(dir);
+    const kept = [...g.nodes.values()].filter(
+      (n) => n.kind === 'file' && /keep/.test(n.key) && typeof n.snapshot === 'string'
+    );
+    expect(kept.length).toBe(6);
+  });
+});
