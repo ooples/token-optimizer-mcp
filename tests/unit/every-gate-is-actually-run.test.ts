@@ -46,28 +46,47 @@ describe('verification scripts are reachable from CI', () => {
     expect(gates.length).toBeGreaterThan(0);
   });
 
+  /**
+   * Script names a body actually INVOKES, parsed rather than substring-matched.
+   *
+   * `body.includes('verify:ui')` also matches a comment, an `echo`, and the
+   * longer name `verify:ui:extra` -- so a gate could read as covered when CI
+   * never runs it. Only `npm run <name>` occurrences count, and the name must
+   * end at a word boundary.
+   */
+  const invocations = (body: string): string[] =>
+    [...body.matchAll(/npm(?:\s+--\S+)*\s+run\s+([\w:.-]+)/g)].map((m) => m[1]);
+
+  const workflowInvocations = new Set(invocations(workflowText));
+
+  /**
+   * Does CI reach this script, through any depth of wrapper?
+   *
+   * Resolved RECURSIVELY. A single hop was enough today and would quietly stop
+   * being enough the moment someone wrapped a gate twice, which is the kind of
+   * silent gap this whole file exists to prevent. `seen` bounds a cycle.
+   */
+  const runsInCi = (name: string, seen = new Set<string>()): boolean => {
+    if (seen.has(name)) return false;
+    seen.add(name);
+    if (workflowInvocations.has(name)) return true;
+    return Object.entries(scripts).some(
+      ([outer, outerBody]) =>
+        outer !== name &&
+        invocations(outerBody).includes(name) &&
+        runsInCi(outer, seen)
+    );
+  };
+
   it.each(gates)('%s is executed in CI', (gate) => {
-    const body = scripts[gate];
-
-    // An AGGREGATE is covered when everything it runs is covered. `verify:all`
-    // exists for humans -- it chains the others -- so wiring it as well would
-    // just run every gate twice. The invariant is that every verification
-    // EXECUTES in CI, not that every script name appears in a workflow.
-    const parts = gates.filter((g) => g !== gate && body.includes(g));
-
-    const runsInCi = (name: string): boolean => {
-      if (workflowText.includes(`npm run ${name}`)) return true;
-      // Or via any other script a workflow does run.
-      return Object.entries(scripts).some(
-        ([outer, outerBody]) =>
-          outer !== name &&
-          outerBody.includes(name) &&
-          workflowText.includes(`npm run ${outer}`)
-      );
-    };
+    // An AGGREGATE is covered when everything it invokes is covered.
+    // `verify:all` chains the others, so wiring it too would run every gate
+    // twice. The invariant is that every verification EXECUTES, not that every
+    // script name appears somewhere in a workflow file.
+    const parts = invocations(scripts[gate]).filter((g) => gates.includes(g));
 
     const reachable =
-      runsInCi(gate) || (parts.length > 0 && parts.every(runsInCi));
+      runsInCi(gate) || (parts.length > 0 && parts.every((p) => runsInCi(p)));
 
     expect({ gate, reachable }).toEqual({ gate, reachable: true });
   });

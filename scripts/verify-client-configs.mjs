@@ -128,9 +128,11 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
       continue;
     }
     check(`${key}: ${expected.file} is valid JSON`, true);
-    // A pinned spec, not @latest: a committed config that floats to whatever is
-    // newest is a supply-chain hazard and makes two machines irreproducible.
-    check(`${key}: resolves the package at launch`, raw.includes('@latest'));
+    // THE FULL SPEC, not the bare `@latest` suffix. `raw.includes('@latest')`
+    // passes on any dependency pinned that way, so a config that had stopped
+    // naming this package at all would still satisfy it -- the same
+    // loose-substring weakness this file exists to catch elsewhere.
+    check(`${key}: launches ${PACKAGE}`, raw.includes(PACKAGE));
 
     const servers = parsed[expected.topKey];
     check(`${key}: top-level key is "${expected.topKey}"`, Boolean(servers),
@@ -201,7 +203,7 @@ for (const relative of [
     continue;
   }
   const raw = readFileSync(path, 'utf8');
-  check(`${relative}: resolves the package at launch`, raw.includes('@latest'));
+  check(`${relative}: launches ${PACKAGE}`, raw.includes(PACKAGE));
   check(`${relative}: names the package`, raw.includes(PACKAGE));
 }
 
