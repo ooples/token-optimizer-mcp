@@ -134,6 +134,79 @@ try {
       }
     }
 
+    // DELIVER WHAT THE GRAPH ALREADY KNOWS -- BEFORE ANYTHING BELOW OVERWRITES
+    // IT. Nothing read from the graph on an allowed call at all once, so
+    // `forTouch` -- the injection the design calls "where the win lands" -- was
+    // imported by nothing but its own test. Measured over a full session on
+    // three real projects: 4,053 captures, 2,063 reads, findings served twice.
+    //
+    // READ BEFORE WRITE, and the order is load-bearing rather than tidy. The
+    // harvest loop below calls `indexFile`, which re-points every anchor at the
+    // bytes now on disk. Running it first destroyed the only evidence staleness
+    // has to work from: `forTouch` asked "did this file change since the claim
+    // was recorded?" against a snapshot `indexFile` had already refreshed, so
+    // the answer was always no and findings derived from the OLD content were
+    // served as current.
+    //
+    // The files that reach this path are exactly the ones where that matters. A
+    // write the hook observes is invalidated eagerly by `invalidateOnWrite`, so
+    // what is left is the file changed where the session could not see it -- a
+    // checkout, a rebase, a second agent, an editor outside the tool loop --
+    // which is where a stale claim is both most likely and least likely to be
+    // noticed. Serving it clean spends tokens to assert something false with
+    // the graph's authority behind it, which is worse than serving nothing.
+    //
+    // Nothing is lost by the swap: `indexFile` exists so the NEXT touch can be
+    // answered with structure, and the next touch still gets it.
+    //
+    // Both triggers fire here because findings answer two different questions.
+    // An anchor says which FILE a claim is about; a trigger says WHEN it is
+    // relevant. A claim about running something ("use npm test, not npx jest")
+    // is anchored to a file nobody opens at the moment they run the command,
+    // so file-touch injection alone could never deliver it -- and did not.
+    let context = null;
+    try {
+      // Once per session, per finding. Repeating advice on every call is how a
+      // real signal becomes wallpaper, and an ignored injection still costs its
+      // tokens every time.
+      state.injected = state.injected || [];
+      const alreadyInjected = new Set(state.injected);
+      const before = alreadyInjected.size;
+      const parts = [];
+
+      for (const { path } of touched) {
+        const dir = dirFor(path);
+        const note = forTouch(dir, load(dir), path, {
+          sessionId: payload.session_id,
+          alreadyInjected,
+        });
+        if (note) parts.push(note);
+      }
+
+      const command = payload.tool_input?.command;
+      if (command) {
+        // The project the COMMAND runs in, not the one the session sits in. A
+        // command that cds into a worktree or a second repository must consult
+        // that project's graph; keying on payload.cwd meant findings recorded
+        // there never fired -- no injection, no metrics row, no error.
+        const dir = wikiDir(commandProjectRoot(payload, payload.cwd));
+        const note = forCommand(dir, load(dir), command, {
+          sessionId: payload.session_id,
+          alreadyInjected,
+        });
+        if (note) parts.push(note);
+      }
+
+      if (alreadyInjected.size !== before) {
+        state.injected = [...alreadyInjected];
+        saveState(payload.session_id, state, agentScope);
+      }
+      if (parts.length) context = parts.join('\n\n');
+    } catch {
+      // Delivery is an optimization. A defect here must never cost the user
+      // their tool call, so a failure falls through to a plain allow.
+    }
+
     // THE MEMORY HALF. `harvest` records that this file was touched, at this
     // content hash, by this task -- and nothing had been calling it, anywhere.
     // The graph therefore accumulated no nodes and no task edges from ordinary
@@ -182,60 +255,6 @@ try {
       } catch {
         /* never let bookkeeping break an allowed call */
       }
-    }
-
-    // DELIVER WHAT THE GRAPH ALREADY KNOWS. Everything above this line WRITES
-    // to the graph; until now nothing read from it on an allowed call, so
-    // `forTouch` -- the injection the design calls "where the win lands" -- was
-    // imported by nothing but its own test. Measured over a full session on
-    // three real projects: 4,053 captures, 2,063 reads, findings served twice.
-    //
-    // Both triggers fire here because findings answer two different questions.
-    // An anchor says which FILE a claim is about; a trigger says WHEN it is
-    // relevant. A claim about running something ("use npm test, not npx jest")
-    // is anchored to a file nobody opens at the moment they run the command,
-    // so file-touch injection alone could never deliver it -- and did not.
-    let context = null;
-    try {
-      // Once per session, per finding. Repeating advice on every call is how a
-      // real signal becomes wallpaper, and an ignored injection still costs its
-      // tokens every time.
-      state.injected = state.injected || [];
-      const alreadyInjected = new Set(state.injected);
-      const before = alreadyInjected.size;
-      const parts = [];
-
-      for (const { path } of touched) {
-        const dir = dirFor(path);
-        const note = forTouch(dir, load(dir), path, {
-          sessionId: payload.session_id,
-          alreadyInjected,
-        });
-        if (note) parts.push(note);
-      }
-
-      const command = payload.tool_input?.command;
-      if (command) {
-        // The project the COMMAND runs in, not the one the session sits in. A
-        // command that cds into a worktree or a second repository must consult
-        // that project's graph; keying on payload.cwd meant findings recorded
-        // there never fired -- no injection, no metrics row, no error.
-        const dir = wikiDir(commandProjectRoot(payload, payload.cwd));
-        const note = forCommand(dir, load(dir), command, {
-          sessionId: payload.session_id,
-          alreadyInjected,
-        });
-        if (note) parts.push(note);
-      }
-
-      if (alreadyInjected.size !== before) {
-        state.injected = [...alreadyInjected];
-        saveState(payload.session_id, state, agentScope);
-      }
-      if (parts.length) context = parts.join('\n\n');
-    } catch {
-      // Delivery is an optimization. A defect here must never cost the user
-      // their tool call, so a failure falls through to a plain allow.
     }
 
     allowWithContext(context);
