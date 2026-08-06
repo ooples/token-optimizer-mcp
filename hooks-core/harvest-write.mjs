@@ -114,6 +114,56 @@ function promoteToShared(finding, { projectRoot, sessionId, provenance, key }) {
 }
 
 /**
+ * Back-fills lessons that were learned BEFORE the shared tier existed.
+ *
+ * Promotion happens at harvest time, so every lesson already in a project graph
+ * stays there forever without this -- and on the machine that motivated the
+ * feature that was all of them: 35 live lessons, every one filed under the single
+ * repository that happened to teach it.
+ *
+ * IDEMPOTENT, because a migration that cannot be re-run is a migration nobody
+ * dares re-run. Promotion dedupes on the claim text, so a second pass over the
+ * same graph adds nothing, and a graph that gained findings since the last pass
+ * contributes only those.
+ *
+ * Returns what it did rather than printing, so the caller can report and the
+ * tests can assert.
+ */
+export function promoteExisting(projectDir, projectRoot, { sessionId = 'migration' } = {}) {
+  const result = { considered: 0, eligible: 0, promoted: 0, skipped: 0 };
+  if (!projectDir || !projectRoot) return result;
+  if (isSharedDir(projectDir)) return result;
+
+  let graph;
+  try {
+    graph = load(projectDir);
+  } catch {
+    return result;
+  }
+
+  for (const node of graph.nodes.values()) {
+    if (node.kind !== 'finding' || node.retired || !node.claim) continue;
+    result.considered += 1;
+    if (!SHAREABLE_TYPES.has(node.type)) continue;
+    result.eligible += 1;
+
+    // The stored node already carries everything promotion needs, so it is
+    // handed over as-is rather than reconstructed -- a reconstruction would be a
+    // second, divergent definition of what a promoted finding looks like.
+    const ok = promoteToShared(node, {
+      projectRoot,
+      sessionId,
+      provenance: node.origin,
+      key: node.key,
+    });
+    if (ok) result.promoted += 1;
+    else result.skipped += 1;
+  }
+
+  return result;
+}
+
+/**
  * Resolves an `path` or `path#symbol` anchor to an existing node id.
  * Returns null when the target cannot be created or found.
  */

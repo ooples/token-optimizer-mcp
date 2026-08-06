@@ -412,7 +412,7 @@ const MAX_SHARED = 2;
 export function forSharedCommand(
   projectDir,
   command,
-  { budget = sharedBudget(), alreadyInjected = new Set(), projectRoot = null } = {}
+  { budget = sharedBudget(), sessionId = null, alreadyInjected = new Set(), projectRoot = null } = {}
 ) {
   if (!command) return null;
 
@@ -449,10 +449,51 @@ export function forSharedCommand(
     // No serve() here: these types are not content-dependent, so there is no
     // anchor to re-read and nothing to diff. serve() would spend a file read per
     // finding to answer a question that does not apply to them.
-    const { kept } = fit(candidates.slice(0, MAX_SHARED), budget);
+    const { kept, spent } = fit(candidates.slice(0, MAX_SHARED), budget);
     if (!kept.length) return null;
 
+    // THE SAME ARM AS THE LOCAL PATH, KEYED THE SAME WAY.
+    //
+    // Two defects were being introduced here at once, and both attacked the
+    // measurement rather than the feature. Delivering shared lessons to a command
+    // that forCommand had assigned to the HOLDOUT arm means the control arm is
+    // not a control: it received knowledge, just from a different tier, so any
+    // difference between the arms understates what injection does. And spending
+    // tokens that no `inject` event describes makes the balance sheet report a
+    // cost lower than the one actually paid -- an overstated saving, which is the
+    // one number this project must never produce.
+    //
+    // One key, not two. The arm is a property of the COMMAND; letting the tiers
+    // draw separately would put a command in local-treated and shared-holdout at
+    // once and contaminate both readings.
+    const arm = commandKey(command);
+    const holdout = inHoldout(arm);
+
+    record(projectDir, {
+      kind: 'inject',
+      trigger: 'command',
+      // ITS OWN SURFACE. The balance sheet joins `file` injections to later read
+      // events; a shared lesson has no anchor in this project to join to, and
+      // folding it into `command` would hide how much of the spend is
+      // cross-project when that is exactly what needs weighing.
+      surface: 'shared',
+      anchor: String(command).slice(0, 120),
+      holdout,
+      tokens: holdout ? 0 : spent,
+      count: holdout ? 0 : kept.length,
+      stale: false,
+      sessionId,
+    });
+
+    // MARKED SEEN IN BOTH ARMS, for the reason the local paths document: a
+    // command run repeatedly would otherwise write a fresh holdout row every time
+    // while a treated command was suppressed after its first delivery, and the
+    // report counts rows.
     for (const f of kept) alreadyInjected.add(f.key);
+
+    // Withheld means withheld. Returning the text anyway would record an arm the
+    // subject never actually experienced.
+    if (holdout) return null;
 
     // NAMED, NOT HEDGED. Measured on this project: wording that tells a model to
     // discount a claim suppresses correct claims -- findings rendered with "treat

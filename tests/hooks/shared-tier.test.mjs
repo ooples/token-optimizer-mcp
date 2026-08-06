@@ -196,6 +196,70 @@ describe('a lesson learned in one project', () => {
     expect(lines.length).toBeLessThanOrEqual(2);
   });
 
+  test('records an inject event, so its tokens appear in the balance sheet', async () => {
+    // A TIER THAT SPENDS TOKENS SILENTLY OVERSTATES THE SAVING. The balance sheet
+    // is built from `inject` events; text delivered without one is cost the
+    // report cannot see, and an overstated saving is the one number this project
+    // must never produce. Caught in review, not by me.
+    learnIn(projectA, wikiA, NPM_LESSON);
+
+    const context = runCommandIn(projectB, 'npx jest');
+    expect(context).toContain('From other projects');
+
+    // Read off disk rather than through a helper: the balance sheet is built
+    // from these bytes, so the bytes are what the assertion should be about.
+    const { readFileSync, existsSync } = await import('node:fs');
+    const path = join(wikiB, 'metrics.jsonl');
+    expect(existsSync(path)).toBe(true);
+    const shared = readFileSync(path, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => {
+        try {
+          return JSON.parse(l);
+        } catch {
+          return null;
+        }
+      })
+      .filter((e) => e && e.kind === 'inject' && e.surface === 'shared');
+
+    expect(shared.length).toBeGreaterThan(0);
+    expect(shared[0].tokens).toBeGreaterThan(0);
+    expect(shared[0].count).toBeGreaterThan(0);
+  });
+
+  test('respects the holdout arm, so the control arm stays a control', () => {
+    // The shared tier draws on the SAME key as forCommand. If it delivered while
+    // the local path was withheld, the control arm would have received knowledge
+    // -- just from another tier -- and every treated-vs-control difference would
+    // understate what injection does. This is the measurement defending itself.
+    learnIn(projectA, wikiA, NPM_LESSON);
+
+    const result = spawnSync(process.execPath, [ROUTER], {
+      input: JSON.stringify({
+        cwd: projectB,
+        session_id: 'holdout-arm',
+        tool_name: 'Bash',
+        tool_input: { command: 'npx jest' },
+      }),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_SHARED_DIR: shared,
+        TOKEN_OPTIMIZER_STATE_DIR: stateDir,
+        // Everything held out. Nothing may be delivered by either tier.
+        TOKEN_OPTIMIZER_HOLDOUT: '1',
+      },
+      timeout: 30_000,
+    });
+
+    expect(result.status).toBe(0);
+    const context =
+      JSON.parse(result.stdout || '{}').hookSpecificOutput?.additionalContext ?? '';
+
+    expect(context).not.toContain('From other projects');
+  });
+
   test('an absent shared store costs the caller nothing', () => {
     // The tier is an extra. If it cannot be read the tool call must proceed
     // exactly as if the feature were not installed.

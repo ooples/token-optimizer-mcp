@@ -213,6 +213,7 @@ try {
         // lesson from another codebase is a weaker signal than one from this one
         // and must never crowd it out.
         const shared = forSharedCommand(dir, command, {
+          sessionId: payload.session_id,
           alreadyInjected,
           projectRoot: root,
         });
