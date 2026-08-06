@@ -126,6 +126,30 @@ describe('smart_glob and dot-directories', () => {
     // prevent -- a silent omission with no number to explain it.
     expect(result.metadata?.ignoredMatches ?? 0).toBe(1);
   });
+
+  it('still counts what a CUSTOM ignore array withheld', async () => {
+    // BOTH WALKS MUST BE SCOPED THE SAME WAY, and ALWAYS_IGNORED reached only
+    // the comparison walk. With a caller-supplied ignore list the primary walk
+    // therefore descended into `.git` while the comparison walk did not, so the
+    // primary returned MORE matches than the comparison and the difference went
+    // negative -- clamped to zero. The caller was told nothing had been
+    // withheld while their own pattern was withholding a file.
+    const tool = new SmartGlobTool(...deps());
+
+    const result = await tool.glob('**/*.yml', {
+      path: dir,
+      ignore: ['**/node_modules/**'],
+    });
+    const paths = (result.files ?? []).map((f) => String(f).replace(/\\/g, '/'));
+
+    // `.git` stays out regardless of what the caller passed: that is what
+    // ALWAYS_IGNORED means, and it was already true of the comparison walk.
+    expect(paths.some((p) => p.includes('.git/'))).toBe(false);
+    expect(paths.some((p) => p.includes('node_modules/'))).toBe(false);
+
+    // And the caller's own pattern is still reported as having withheld one.
+    expect(result.metadata?.ignoredMatches ?? 0).toBe(1);
+  });
 });
 
 describe('smart_grep and dot-directories', () => {

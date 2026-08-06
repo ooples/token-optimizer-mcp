@@ -138,6 +138,11 @@ export interface SmartGlobResult {
  */
 const ALWAYS_IGNORED = ['**/.git/**'];
 
+/** A caller's ignore list, plus the patterns neither walk may enumerate. */
+function withAlwaysIgnored(ignore: string[]): string[] {
+  return [...new Set([...ignore, ...ALWAYS_IGNORED])];
+}
+
 export class SmartGlobTool {
   constructor(
     private cache: CacheEngine,
@@ -251,7 +256,16 @@ export class SmartGlobTool {
         globSync(pattern, {
           cwd: opts.cwd,
           absolute: opts.absolute,
-          ignore: opts.ignore,
+          // ALWAYS_IGNORED REACHES THIS WALK TOO.
+          //
+          // It used to apply only to the comparison walk, so a caller-supplied
+          // ignore list left `.git` enumerated HERE and excluded THERE. The
+          // primary walk then returned more matches than the comparison, the
+          // difference went negative, and `ignoredMatches` clamped to zero --
+          // telling the caller nothing had been withheld while their own
+          // pattern was withholding a file. The two walks only mean anything
+          // relative to each other, so they have to be scoped identically.
+          ignore: withAlwaysIgnored(opts.ignore),
           nodir: opts.onlyFiles,
           // `.github/`, `.claude/`, `.husky/` and every dotfile are ordinary
           // project content, but glob skips anything dot-prefixed unless told
