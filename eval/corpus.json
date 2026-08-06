@@ -30,7 +30,11 @@
         "blaming caching or the ignore patterns"
       ],
       "finding": "smart_grep/smart_glob `path` naming a single FILE returns success with zero matches: `path` is assigned to the search root and the default glob ('**/*') cannot match with a file as cwd. Resolve a file to its parent directory plus an escaped basename.",
-      "anchors": ["src/tools/file-operations/smart-grep.ts", "src/utils/search-scope.ts"]
+      "anchors": [
+        "src/tools/file-operations/smart-grep.ts",
+        "src/utils/search-scope.ts"
+      ],
+      "class": "derivable"
     },
     {
       "id": "nested-array-type",
@@ -43,7 +47,10 @@
         "assuming the brace matching is off"
       ],
       "finding": "In the schema source scanners, a property's `type` and `required` must be read at the object's OWN depth. A plain search over the whole block matches nested properties -- an object containing an array field was classified as an array, then read through `items`, and reported as declaring nothing.",
-      "anchors": ["tests/unit/helpers/schema-source.ts"]
+      "anchors": [
+        "tests/unit/helpers/schema-source.ts"
+      ],
+      "class": "derivable"
     },
     {
       "id": "libuv-abort",
@@ -56,7 +63,11 @@
         "raising a timeout or reducing the property-test iteration count"
       ],
       "finding": "A path containing U+10FFFF aborts the process on Windows: libuv's assert in `uv_wtf8_to_utf16` is `code_point < 0x10FFFF`, off by one. It is a NATIVE abort, so try/catch cannot catch it, and it reaches existsSync/statSync/readFileSync alike. Guard the path before the fs call.",
-      "anchors": ["hooks-core/paths.mjs", "hooks-core/decide.mjs"]
+      "anchors": [
+        "hooks-core/paths.mjs",
+        "hooks-core/decide.mjs"
+      ],
+      "class": "external-knowledge"
     },
     {
       "id": "manifest-drift",
@@ -69,7 +80,10 @@
         "treating it as cosmetic"
       ],
       "finding": "release-please bumps ONLY what is listed in `extra-files`. Any manifest carrying a version that is not listed will drift silently every release, and for server.json that means the MCP registry rejects the publish with a 422. Wire each version field by jsonpath, including nested ones.",
-      "anchors": ["release-please-config.json"]
+      "anchors": [
+        "release-please-config.json"
+      ],
+      "class": "derivable"
     },
     {
       "id": "pin-vs-latest",
@@ -82,7 +96,65 @@
         "not noticing two gates enforce @latest"
       ],
       "finding": "Client configs in this repo must use `@ooples/token-optimizer-mcp@latest`, not a numeric pin. A pin is a derived value release-please does not bump; it went stale for four releases and shipped a plugin that launched a server three versions behind. Two gates enforce this.",
-      "anchors": ["scripts/pin-mcp-version.mjs", "tests/unit/pinned-spec-tracks-package.test.ts"]
+      "anchors": [
+        "scripts/pin-mcp-version.mjs",
+        "tests/unit/pinned-spec-tracks-package.test.ts"
+      ],
+      "class": "derivable"
+    },
+    {
+      "id": "v8-spread",
+      "source": "PR #249",
+      "class": "external-knowledge",
+      "tree": "919d674",
+      "symptom": "A call to the smart_grep tool with no `path` argument throws `RangeError: Maximum call stack size exceeded`. When it does not throw it reports `filesSearched: 0`. Small scoped searches work fine. Diagnose the root cause.",
+      "cause": "With no path, cwd falls back to process.cwd() -- for an MCP server that is its own launch directory, so the walk enumerated ~676,875 files. That list is then passed through a spread (`...items`), and V8 caps the number of arguments a call can take at roughly 125,000, so the spread itself throws RangeError.",
+      "wrong_turns": [
+        "blaming recursion or a cyclic symlink",
+        "raising the stack size with --stack-size",
+        "assuming a bug in the glob library",
+        "treating it as an out-of-memory problem"
+      ],
+      "finding": "A spread of an unbounded array throws `RangeError: Maximum call stack size exceeded` -- V8 limits a call to roughly 125,000 arguments. Append in chunks instead of spreading. Measured here at 676,875 files after cwd fell back to process.cwd().",
+      "anchors": [
+        "src/tools/file-operations/smart-grep.ts"
+      ]
+    },
+    {
+      "id": "gh-token-suppression",
+      "source": "PR #253/#256",
+      "class": "external-knowledge",
+      "tree": "bf5f0ec",
+      "symptom": "A GitHub Actions workflow is meant to repair the release PR after release-please opens it. Every run instead sits in the `action_required` state having executed nothing. The workflow file is syntactically valid and its trigger matches the event. Explain why it never executes.",
+      "cause": "release-please opens the PR using the default GITHUB_TOKEN, and GitHub deliberately does not trigger workflow runs from events raised by GITHUB_TOKEN -- this prevents recursive CI. Such runs are parked in action_required. A different credential (PAT or app token), or a different triggering event, is required.",
+      "wrong_turns": [
+        "debugging the YAML trigger syntax",
+        "assuming branch protection or a required approval",
+        "adding more paths/branches filters",
+        "concluding the workflow file is not on the default branch"
+      ],
+      "finding": "GitHub does not run workflows triggered by events that GITHUB_TOKEN raised; those runs sit in `action_required` having executed nothing. Anything meant to react to a release-please PR must use a different credential or a different event.",
+      "anchors": [
+        ".github/workflows"
+      ]
+    },
+    {
+      "id": "registry-422",
+      "source": "PR #180 / docs",
+      "class": "external-knowledge",
+      "tree": "2b26227",
+      "symptom": "Publishing this server to the MCP registry fails with HTTP 422. The npm publish itself succeeded and the package is live on npm. The registry manifest is valid JSON and passes local validation. Explain the 422.",
+      "cause": "The MCP registry validates that the version declared in the registry manifest actually exists on npm AND that the published package carries a matching mcpName. A manifest version that has drifted from the published package version is rejected with 422.",
+      "wrong_turns": [
+        "assuming an auth or token problem",
+        "re-validating the JSON schema",
+        "retrying the publish",
+        "assuming the registry is down"
+      ],
+      "finding": "The MCP registry rejects a publish with HTTP 422 when the version in the registry manifest does not exist on npm carrying a matching mcpName. Keep the manifest version in lockstep with the published package version.",
+      "anchors": [
+        "server.json"
+      ]
     }
   ]
 }
