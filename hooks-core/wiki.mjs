@@ -16,7 +16,7 @@
 
 import {
   appendFileSync, readFileSync, existsSync, mkdirSync, chmodSync,
-  openSync, closeSync, unlinkSync, statSync,
+  openSync, closeSync, unlinkSync, statSync, writeFileSync, renameSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -240,6 +240,99 @@ function ignoreSelf(dir) {
   }
 }
 
+/**
+ * The log is append-only, and nothing was ever reclaiming it.
+ *
+ * MEASURED on this repository's own graph: 206.6 MB, 41,810 records, 6,125
+ * unique ids. 85.4% of every record in the file was superseded by a later one,
+ * and 97.5 MB was reclaimable. `load()` parses the whole thing on EVERY hook
+ * invocation -- so every tool call paid 1.2-1.6 seconds, against a 118 ms
+ * median when the graph is small.
+ *
+ * That is the optimizer becoming its own cost, in latency instead of tokens.
+ * It also surfaced as a flaky test: a 20 s spawn budget that a loaded machine
+ * could exceed, which is the sort of failure that gets re-run rather than read.
+ *
+ * AMORTISED TRIGGER, not a size threshold. A fixed cap would compact on every
+ * append once the live set alone exceeded it -- here the live set is 109 MB, so
+ * any cap below that would rewrite the file continuously. Instead the size
+ * after each compaction is recorded, and the next one waits until the file has
+ * doubled again: each compaction therefore does at least as much good as the
+ * work it costs, and the amortised cost per append stays constant.
+ */
+// READ PER CALL, not once at module load -- the same rule the holdout
+// fraction already follows in metrics.mjs. Reading it once meant a process
+// started before a config change honoured the old value forever, and it also
+// made the setting untestable: a suite that sets the variable in `beforeEach`
+// runs after the import, so the module had already captured the default.
+const compactFloorBytes = () =>
+  Number(process.env.TOKEN_OPTIMIZER_GRAPH_COMPACT_BYTES) || 8_000_000;
+const markerPath = (dir) => join(dir, 'graph.compact.json');
+
+function compactionBaseline(dir) {
+  try {
+    const raw = JSON.parse(readFileSync(markerPath(dir), 'utf8'));
+    const n = Number(raw.sizeAfter);
+    return Number.isFinite(n) && n > 0 ? n : compactFloorBytes();
+  } catch {
+    return compactFloorBytes();
+  }
+}
+
+/**
+ * Rewrites the log keeping only the surviving version of each record.
+ *
+ * CALLED INSIDE THE LOCK, so no writer can append between the read and the
+ * rename. Written to a temporary file and renamed, which is atomic on the same
+ * volume: a crash mid-compaction leaves the original log untouched rather than
+ * a half-written graph.
+ */
+function compactIfWasteful(dir) {
+  const path = logPath(dir);
+  let size = 0;
+  try {
+    size = statSync(path).size;
+  } catch {
+    return;
+  }
+  if (size < compactFloorBytes() || size < compactionBaseline(dir) * 2) return;
+
+  try {
+    const nodes = new Map();
+    const edges = new Map();
+    for (const line of readFileSync(path, 'utf8').split('\n')) {
+      if (!line) continue;
+      let record;
+      try {
+        record = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      // A record from another schema is KEPT VERBATIM rather than reinterpreted.
+      // load() skips it, but discarding it here would make compaction a silent
+      // migration that deletes data a future version might understand.
+      if ((record.v ?? 0) !== GRAPH_VERSION) {
+        edges.set('raw:' + edges.size, line);
+        continue;
+      }
+      if (record.t === 'n') nodes.set(record.id, line);
+      else if (record.t === 'e') edges.set(`${record.from}|${record.edge}|${record.to}`, line);
+      else edges.set('raw:' + edges.size, line);
+    }
+
+    // EDGES BEFORE NODES, matching putNodeWithEdges: a torn write can then only
+    // lose a finding, never leave one anchored to nothing.
+    const out = [...edges.values(), ...nodes.values()].join('\n') + '\n';
+    const tmp = path + '.compact';
+    writeFileSync(tmp, out, { mode: 0o600 });
+    renameSync(tmp, path);
+    writeFileSync(markerPath(dir), JSON.stringify({ sizeAfter: out.length, at: Date.now() }), { mode: 0o600 });
+  } catch {
+    // Compaction is an optimization. A failure leaves the log exactly as it
+    // was, which is correct if larger than it needs to be.
+  }
+}
+
 function appendAll(dir, records) {
   if (!records.length) return true;
   try {
@@ -261,7 +354,10 @@ function appendAll(dir, records) {
     // needs several records to be observed together cannot get that by looping,
     // because every iteration is a separate crash point.
     const payload = records.map((record) => JSON.stringify(record) + '\n').join('');
-    withLock(dir, () => appendFileSync(logPath(dir), payload));
+    withLock(dir, () => {
+      appendFileSync(logPath(dir), payload);
+      compactIfWasteful(dir);
+    });
     return true;
   } catch {
     // The graph is an optimization. Failing to write one must never fail the

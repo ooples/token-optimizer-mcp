@@ -1,7 +1,9 @@
-﻿import { describe, it, expect, beforeAll } from '@jest/globals';
+﻿import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { pathToFileURL } from 'url';
 import { spawnSync } from 'child_process';
 import { join } from 'path';
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 
 /**
  * A path must never be able to ABORT the hook process.
@@ -33,6 +35,28 @@ const CORE = (name) =>
 
 /** The exact character libuv mishandles. */
 const ABORTS = String.fromCodePoint(0x10ffff);
+
+// AN ISOLATED, EMPTY GRAPH FOR EVERY SPAWN IN THIS SUITE.
+//
+// These spawns passed `cwd: process.cwd()`, so the hook resolved the project
+// root to this repository and parsed its real graph -- 207 MB at the time this
+// was written, 1.2-1.6 seconds per invocation. Four spawns against a 20 s
+// budget is fine alone and not fine alongside 139 other suites, which is why
+// this failed intermittently on a loaded machine and passed on a rerun.
+//
+// The suite is about whether a hostile PATH can abort the process. Nothing in
+// it needs the developer's accumulated graph, and depending on it made the
+// result a function of how much unrelated history happened to be on disk.
+const ISOLATED_GRAPH = mkdtempSync(join(tmpdir(), 'abort-probe-graph-'));
+const HOOK_ENV = { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH };
+
+afterAll(() => {
+  try {
+    rmSync(ISOLATED_GRAPH, { recursive: true, force: true });
+  } catch {
+    /* windows can hold a handle briefly */
+  }
+});
 /** Its neighbour, which is handled correctly -- the control for the guard. */
 const SAFE_NEIGHBOUR = String.fromCodePoint(0x10fffe);
 
@@ -122,6 +146,7 @@ describe('a path that would abort libuv', () => {
           session_id: 'abort-probe',
         }),
         encoding: 'utf8',
+        env: HOOK_ENV,
         timeout: 20_000,
       }
     );
