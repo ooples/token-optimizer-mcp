@@ -47,6 +47,7 @@ import {
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
+import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -238,6 +239,19 @@ try {
         if (size > HARVEST_MAX_BYTES) continue;
 
         const dir = dirFor(path);
+        // THE GUARD MUST BE HERE, not only in the helpers this read feeds.
+        //
+        // A path holding U+10FFFF ABORTS the process inside libuv rather than
+        // throwing, so the surrounding try/catch -- and the whole-hook catch
+        // that promises "a defect here costs the user nothing" -- does not hold
+        // for it. `touchedFiles` filters such paths at intake, but this line is
+        // a bare `readFileSync` and the two consumers below cannot cover it:
+        // `contentHash(path, source)` skips its own check precisely because the
+        // source was supplied, and `indexFile` checks only after this read has
+        // already happened. Defence at the call site, since this is where the
+        // syscall is.
+        if (!isFsSafePath(path)) continue;
+
         // ONE read, not two. harvest() hashed the file and indexFile() then
         // read it again, so every allowed call paid double the I/O on the
         // hook's critical path. Reading once here and handing the text to both

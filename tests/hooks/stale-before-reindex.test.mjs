@@ -177,6 +177,11 @@ describe('a file changed outside the session', () => {
     // The claim is delivered, and it is delivered MARKED -- never as current.
     expect(context).toContain('RETRIES is 3');
     expect(context).toMatch(/recorded earlier; file changed/);
+    // AND THE CONTRACT IN THE NAME IS ASSERTED, not just implied by the wording.
+    // Checking only for the evidence-free phrasing would still pass if the
+    // router started shipping a diff alongside it -- which is the 232 ms per
+    // call this path exists to avoid. The new content must not appear.
+    expect(context).not.toContain('RETRIES = 12');
   });
 
   test('a file that did NOT change is still served clean', () => {
