@@ -93,23 +93,32 @@ describe('smart_edit editsApplied', () => {
     expect(after).not.toContain('echo');
   });
 
-  it('does not count a delete that removed nothing', async () => {
-    // startLine === totalLines + 1 is ACCEPTED by validation (it is the legal
-    // append position for an insert), but for a delete it splices at the end of
-    // the array and removes nothing. splice throws nothing there, so the
-    // operation would otherwise be counted as applied -- reintroducing, for one
-    // operation type, exactly the "it says it worked and nothing happened"
-    // failure this change exists to remove.
+  it('refuses a delete at the append position instead of quietly removing nothing', async () => {
+    // TIGHTENED, and the previous contract is worth recording because it was the
+    // weaker one. `startLine === totalLines + 1` used to be accepted by
+    // validation -- it is the legal append position for an INSERT -- and a delete
+    // there spliced at the end of the array, removing nothing. The result was
+    // `operation: 'unchanged'` with a generic "nothing was applied" error.
+    //
+    // It is now refused during validation, because that position is not a line:
+    // for a file ending in a newline the array element sitting there is the split
+    // artefact, and deleting it removed the file's trailing newline while
+    // reporting success. A caller that asks to delete a line that does not exist
+    // should be told which line and why, not handed a no-op.
+    //
+    // Everything the caller actually depends on is unchanged: no edit applied,
+    // failure reported, file byte-identical.
     const result = await runSmartEdit(
       file,
       [{ type: 'delete', startLine: 6 }],
       { returnDiff: false, createBackup: false }
     );
 
-    expect(result.operation).toBe('unchanged');
+    expect(result.operation).toBe('failed');
     expect(result.metadata.editsApplied).toBe(0);
     expect(result.success).toBe(false);
-    expect(result.error).toBeTruthy();
+    // Names the offending line, so the caller can correct it.
+    expect(result.error).toMatch(/6/);
     expect(readFileSync(file, 'utf8')).toBe(ORIGINAL);
   });
 

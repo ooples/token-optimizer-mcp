@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart Edit Tool - 90% Token Reduction
  *
  * Achieves token reduction through:
@@ -155,6 +155,25 @@ export class SmartEditTool {
       // check fails -- and it compounds with every subsequent edit.
       const eol = detectLineEnding(originalContent);
       const originalLines = originalContent.split(/\r?\n/);
+      // THE REAL LINE COUNT, which is not `originalLines.length`.
+      //
+      // Splitting content that ends with a newline leaves a trailing empty
+      // element -- a 10-line file yields 11 -- and that number was both reported
+      // to the caller and used to validate their operations. So the tool
+      // advertised a line that does not exist and then accepted a `replace`
+      // against it: measured, that returned success with verified: true,
+      // appended the content, and destroyed the file's trailing newline.
+      //
+      // The split array itself is left alone: the edit machinery rebuilds the
+      // content by joining it, and dropping the element would silently strip
+      // the trailing newline from every file it touches.
+      const countLines = (text: string): number => {
+        const parts = text.split(/\r?\n/);
+        const trailing =
+          text.length > 0 && text.charCodeAt(text.length - 1) === 10;
+        return trailing ? Math.max(0, parts.length - 1) : parts.length;
+      };
+      const lineCount = countLines(originalContent);
       const originalTokens = this.tokenCounter.count(originalContent).tokens;
 
       // Small-file guard: for tiny files the unified-diff + metadata payload
@@ -171,7 +190,7 @@ export class SmartEditTool {
       const ops = Array.isArray(operations) ? operations : [operations];
 
       // Validate operations
-      this.validateOperations(ops, originalLines.length);
+      this.validateOperations(ops, lineCount);
 
       // Apply edits
       const { lines: editedLines, applied } = this.applyEdits(
@@ -184,6 +203,20 @@ export class SmartEditTool {
       const editedContent = editedLines
         .map((line) => line.split(/\r?\n/).join(eol))
         .join(eol);
+
+      // THE SAME RULE ON BOTH SIDES OF THE REPORT.
+      //
+      // `originalLines` counts logical lines, so `finalLines` must too.
+      // `editedLines.length` counts array elements, which still include the
+      // trailing empty one, so an ordinary edit to a ten-line file reported
+      // `originalLines: 10, finalLines: 11` -- a caller reading those two numbers
+      // sees a line appear out of an edit that added none, and the metadata is
+      // the only thing it has to go on, because the file contents are exactly
+      // what smart_edit exists not to return.
+      //
+      // Derived from the CONTENT rather than the array for the same reason the
+      // original count is: the array is a join artefact, the content is the file.
+      const finalLines = countLines(editedContent);
 
       // Check if content actually changed
       if (editedContent === originalContent) {
@@ -228,8 +261,8 @@ export class SmartEditTool {
           metadata: {
             editsApplied: applied,
             linesChanged: 0,
-            originalLines: originalLines.length,
-            finalLines: editedLines.length,
+            originalLines: lineCount,
+            finalLines,
             tokensSaved: unchangedSaved,
             tokenCount: 50,
             originalTokenCount: originalTokens,
@@ -280,8 +313,8 @@ export class SmartEditTool {
           metadata: {
             editsApplied: applied,
             linesChanged: diff.added.length + diff.removed.length,
-            originalLines: originalLines.length,
-            finalLines: editedLines.length,
+            originalLines: lineCount,
+            finalLines,
             tokensSaved,
             tokenCount: diffTokens,
             originalTokenCount: originalTokens,
@@ -336,8 +369,8 @@ export class SmartEditTool {
         metadata: {
           editsApplied: applied,
           linesChanged: diff.added.length + diff.removed.length,
-          originalLines: originalLines.length,
-          finalLines: editedLines.length,
+          originalLines: lineCount,
+          finalLines,
           tokensSaved,
           tokenCount: diffTokens,
           originalTokenCount: originalTokens,
@@ -392,10 +425,52 @@ export class SmartEditTool {
     operations: EditOperation[],
     totalLines: number
   ): void {
+    const KNOWN = new Set(['replace', 'insert', 'delete']);
+
     for (const op of operations) {
-      if (op.startLine < 1 || op.startLine > totalLines + 1) {
+      // A MALFORMED OPERATION IS REFUSED, NOT IGNORED.
+      //
+      // Every check below reads fields off `op`, and `undefined < 1` and
+      // `undefined > 11` are both false -- so an object that is not an operation
+      // at all passed validation untouched, reached `applyEdits`, matched no
+      // branch of its switch, and came back as "unchanged, nothing applied".
+      //
+      // That is not hypothetical. The tests written for this very defect called
+      // `edit(path, { operations: [...] })` when the signature is
+      // `edit(path, operations, options)`, so every one of them handed this
+      // function a single `{ operations: [...] }` object. They passed -- the file
+      // really was untouched and the call really did report failure -- while
+      // exercising none of the behaviour they named. The operations reaching this
+      // tool come from a JSON boundary, so a caller can make the same mistake.
+      if (!op || typeof op !== 'object' || !KNOWN.has(op.type)) {
         throw new Error(
-          `Invalid startLine: ${op.startLine} (file has ${totalLines} lines)`
+          `Invalid operation type: ${JSON.stringify(op?.type)} (expected replace, insert or delete)`
+        );
+      }
+      if (!Number.isInteger(op.startLine)) {
+        throw new Error(
+          `Invalid startLine: ${JSON.stringify(op.startLine)} (expected a 1-based integer line number)`
+        );
+      }
+
+      // ONE PAST THE END IS AN `insert` POSITION, AND ONLY THAT.
+      //
+      // `totalLines + 1` names the point after the last line, which is where an
+      // append goes -- a real and necessary operation. It does not name a line,
+      // so nothing can be replaced or deleted there.
+      //
+      // The array being edited still carries the trailing empty element left by
+      // splitting content that ends with a newline, so `replace` and `delete` at
+      // that index did not fail: they hit the phantom. Measured on a 10-line
+      // file, both returned success with `verified: true` and both stripped the
+      // file's trailing newline -- `replace` by appending its content past the
+      // last line, `delete` by removing the separator itself.
+      const maxStart = op.type === 'insert' ? totalLines + 1 : totalLines;
+      if (op.startLine < 1 || op.startLine > maxStart) {
+        throw new Error(
+          op.type === 'insert'
+            ? `Invalid startLine: ${op.startLine} (file has ${totalLines} lines; insert accepts up to ${maxStart})`
+            : `Invalid startLine: ${op.startLine} (file has ${totalLines} lines; only insert may address line ${totalLines + 1})`
         );
       }
 

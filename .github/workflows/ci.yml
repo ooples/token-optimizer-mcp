@@ -113,6 +113,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # BUILD BEFORE TESTING. tests/integration/mcp-stdio-contract.test.ts
+      # spawns dist/server/index.js -- the file package.json lists in `bin` --
+      # and speaks JSON-RPC to it, because that is the only way to catch defects
+      # that live in the serialisation boundary rather than in the tool classes.
+      # (smart_grep returned its per-file counts as a Map, which is fine
+      # in-process and arrives as `{}` over the wire; every in-process test
+      # passed.) Without this step dist/ does not exist and that suite fails
+      # outright.
+      - name: Build, because the stdio contract suite drives dist/
+        run: npm run build
+
       - name: Run tests with coverage
         run: npm run test:ci
         env:
@@ -277,41 +288,36 @@ jobs:
           name: dist-${{ github.sha }}
           path: dist/
 
-      - name: Start MCP server
-        run: |
-          # Start the server in the background
-          npm start &
-          SERVER_PID=$!
-          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
-
-          # Wait for server to be ready (max 30 seconds)
-          echo "Waiting for server to start..."
-          for i in {1..30}; do
-            if nc -z localhost 3000 2>/dev/null; then
-              echo "Server is ready!"
-              break
-            fi
-            sleep 1
-          done
-        timeout-minutes: 2
-
+      # THIS GATE COULD NOT FAIL, AND IT RAN THE SUITE TWICE.
+      #
+      # The step was:
+      #
+      #   if [ -f "package.json" ] && npm run --silent test:integration 2>/dev/null; then
+      #     npm run test:integration
+      #   else
+      #     echo "Integration tests not yet implemented, skipping"
+      #     exit 0
+      #   fi
+      #
+      # Jest writes its summary to stderr, so the run inside the condition was
+      # invisible -- and it was a real run, so the suite executed twice on every
+      # green build. Worse, a FAILING suite made the condition false and the job
+      # printed "not yet implemented" and exited 0. A broken integration suite
+      # reported a green tick. `test:integration` has existed for as long as
+      # tests/integration has, so that branch was never true for its stated
+      # reason either.
+      #
+      # The "Start MCP server" step that preceded it was also inert: this server
+      # speaks JSON-RPC on stdio and never listens on a socket, so `npm start &`
+      # read EOF and logged "shutting down (stdin end)" within two seconds while
+      # the readiness loop spent its full 30 s waiting for `nc -z localhost 3000`
+      # to answer. Measured in run 31097636811: 11:32:46 to 11:33:16, then the
+      # tests ran anyway. The suite spawns the server itself, which is the only
+      # way to talk to a stdio process, so nothing needed starting.
       - name: Run integration tests
-        run: |
-          if [ -f "package.json" ] && npm run --silent test:integration 2>/dev/null; then
-            npm run test:integration
-          else
-            echo "Integration tests not yet implemented, skipping"
-            exit 0
-          fi
+        run: npm run test:integration
         env:
           NODE_OPTIONS: --experimental-vm-modules
-
-      - name: Stop MCP server
-        if: always()
-        run: |
-          if [ -n "$SERVER_PID" ]; then
-            kill $SERVER_PID || true
-          fi
 
       - name: Upload integration test logs
         if: failure()
