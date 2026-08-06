@@ -1,0 +1,88 @@
+{
+  "$comment": [
+    "Outcome-A/B corpus for the knowledge graph.",
+    "",
+    "EVERY ITEM COMES FROM A REAL MERGED PR IN THIS REPOSITORY. The `symptom` is what",
+    "was actually observed before anyone knew the cause; the `cause` is what it turned",
+    "out to be. Both were written up in the PR body BEFORE this eval existed, which is",
+    "the whole point: neither was authored to make the graph look good.",
+    "",
+    "THE LEAKAGE RULE. A task must be answerable-in-principle from the repository by a",
+    "competent engineer with no graph. If a task can only be answered by someone who",
+    "was told the answer, it measures nothing except that we told them. Each `symptom`",
+    "is therefore the raw observation, phrased as the person hitting it would phrase",
+    "it -- never in the vocabulary of the cause.",
+    "",
+    "`distractors` matter as much as `finding`. In real use the graph injects the top",
+    "few findings by relevance, not the one perfect answer, so an arm that receives",
+    "only the correct finding is testing possession rather than retrieval and would",
+    "overstate the result."
+  ],
+  "items": [
+    {
+      "id": "grep-path-file",
+      "source": "PR #263",
+      "symptom": "In this repo, `smart_grep` is called with `path` pointing at a single existing source file and a pattern that is definitely present in that file. It returns `{ success: true, totalMatches: 0, filesSearched: 0 }`. The same search using `files: [<that same path>]` finds the match. Diagnose the cause.",
+      "cause": "`path` is assigned to the search root (`cwd: options.path ?? ...`) and the file list defaults to `['**/*']`; a glob rooted AT a file matches nothing, so filesSearched is 0.",
+      "wrong_turns": [
+        "concluding the pattern is genuinely absent",
+        "blaming the regex or escaping",
+        "blaming caching or the ignore patterns"
+      ],
+      "finding": "smart_grep/smart_glob `path` naming a single FILE returns success with zero matches: `path` is assigned to the search root and the default glob ('**/*') cannot match with a file as cwd. Resolve a file to its parent directory plus an escaped basename.",
+      "anchors": ["src/tools/file-operations/smart-grep.ts", "src/utils/search-scope.ts"]
+    },
+    {
+      "id": "nested-array-type",
+      "source": "PR #262",
+      "symptom": "A source-scanning test reports that the `condition` option of the alert_manager tool declares no nested schema at all, and lists every field of its interface as missing. Reading the file shows `condition` plainly does declare `properties` with all of those fields. Explain why the scanner is wrong.",
+      "cause": "Array-ness was decided by testing the whole block for `type: 'array'`, which matches a NESTED array property (`groupBy`, `filters`). The scanner then reached into `groupBy.items`, which has no `properties`, and reported the option as shapeless. The type must be read at the object's own depth.",
+      "wrong_turns": [
+        "editing the schema to re-add fields that are already there",
+        "concluding the schema is genuinely incomplete",
+        "assuming the brace matching is off"
+      ],
+      "finding": "In the schema source scanners, a property's `type` and `required` must be read at the object's OWN depth. A plain search over the whole block matches nested properties -- an object containing an array field was classified as an array, then read through `items`, and reported as declaring nothing.",
+      "anchors": ["tests/unit/helpers/schema-source.ts"]
+    },
+    {
+      "id": "libuv-abort",
+      "source": "PR #265",
+      "symptom": "A jest suite fails intermittently, roughly one run in five, on Windows. There is no assertion output and no stack trace -- the worker simply vanishes. The only output is: `Assertion failed: code_point < 0x10FFFF, file deps/uv/src/idna.c, line 397`. The suite uses property-based testing over arbitrary strings. Diagnose it.",
+      "cause": "A native abort in libuv, not a test failure: U+10FFFF is a legal code point and libuv's assert is strictly less-than (off by one), so converting a path containing it to UTF-16 on Windows kills the process. try/catch cannot catch it. Fixed upstream in libuv 1.52.0.",
+      "wrong_turns": [
+        "treating it as a flaky test and retrying or quarantining",
+        "adding a try/catch around the failing call",
+        "raising a timeout or reducing the property-test iteration count"
+      ],
+      "finding": "A path containing U+10FFFF aborts the process on Windows: libuv's assert in `uv_wtf8_to_utf16` is `code_point < 0x10FFFF`, off by one. It is a NATIVE abort, so try/catch cannot catch it, and it reaches existsSync/statSync/readFileSync alike. Guard the path before the fs call.",
+      "anchors": ["hooks-core/paths.mjs", "hooks-core/decide.mjs"]
+    },
+    {
+      "id": "manifest-drift",
+      "source": "PR #262",
+      "symptom": "This repo publishes to npm and to the MCP registry. `package.json` is at 5.4.3, but `server.json` says 5.1.1 and `mcp.json` says 0.2.0. Every CI check is green and has been for many releases. Explain how this happened and what would break.",
+      "cause": "release-please only bumps files listed in `extra-files`, and only plugin.json was listed. Nothing checked the others. The MCP registry validates that the declared version exists on npm, so a publish with a stale server.json version is rejected with a 422.",
+      "wrong_turns": [
+        "manually editing the versions without wiring release-please (they drift again next release)",
+        "assuming a CI check exists and is broken",
+        "treating it as cosmetic"
+      ],
+      "finding": "release-please bumps ONLY what is listed in `extra-files`. Any manifest carrying a version that is not listed will drift silently every release, and for server.json that means the MCP registry rejects the publish with a 422. Wire each version field by jsonpath, including nested ones.",
+      "anchors": ["release-please-config.json"]
+    },
+    {
+      "id": "pin-vs-latest",
+      "source": "PR #256 / #258",
+      "symptom": "Client configs in this repo launch the server with `npx @ooples/token-optimizer-mcp@latest`. A reviewer proposes pinning the exact version instead, on supply-chain grounds. Should that change be made in this repository? Justify it from the repo's own history.",
+      "cause": "No. A numeric pin here is a derived value release-please does not bump, and it went stale for four consecutive releases -- the plugin shipped pinning 5.3.6 against a 5.4.0 package, so users installed a server three versions behind. `@latest` is enforced by pin-mcp-version.mjs and by a test asserting every spec is exactly 'latest'.",
+      "wrong_turns": [
+        "agreeing and pinning the version, reintroducing the drift",
+        "citing supply-chain risk without checking whether the repo already decided this",
+        "not noticing two gates enforce @latest"
+      ],
+      "finding": "Client configs in this repo must use `@ooples/token-optimizer-mcp@latest`, not a numeric pin. A pin is a derived value release-please does not bump; it went stale for four releases and shipped a plugin that launched a server three versions behind. Two gates enforce this.",
+      "anchors": ["scripts/pin-mcp-version.mjs", "tests/unit/pinned-spec-tracks-package.test.ts"]
+    }
+  ]
+}
