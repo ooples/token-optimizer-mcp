@@ -246,6 +246,55 @@ describe('smart_grep over the wire', () => {
     expect(payload.metadata.totalMatches).toBeGreaterThan(0);
   });
 
+  it('says so when a literal search buried a regex', async () => {
+    // A CONFIDENT ZERO. `pattern` is matched literally unless `regex: true`, so
+    // an alternation finds nothing and the result is indistinguishable from a
+    // thorough search over a tree that genuinely does not contain the term:
+    //
+    //     { "success": true, "metadata": { "totalMatches": 0,
+    //                                      "filesSearched": 7 } }
+    //
+    // This is not hypothetical. Searching this repository's workflows for
+    // `npm test|test:ci|npm run build` returned exactly that, and the zero was
+    // taken at face value -- the conclusion drawn was "CI never runs tests",
+    // which is false. The same shape fooled the same reader twice in one
+    // session, so the tool has to say something rather than leave the caller to
+    // notice that `|` meant nothing.
+    //
+    // Zero matches stays a legitimate answer and success stays true. What is
+    // added is the one fact the caller cannot see: the pattern WOULD have
+    // matched had it been read as a regex.
+    const payload = await callTool('smart_grep', {
+      pattern: 'GITHUB_TOKEN|nothing-like-this',
+      path: fixtures,
+    });
+
+    expect(payload.metadata.totalMatches).toBe(0);
+    expect(payload.hint).toMatch(/regex/i);
+  });
+
+  it('stays quiet when a zero is a real zero', async () => {
+    // The other half: a hint on every empty result would be noise, and a caller
+    // that learns to ignore it is no better off than before.
+    const payload = await callTool('smart_grep', {
+      pattern: 'zzz-absent|qqq-also-absent',
+      path: fixtures,
+    });
+
+    expect(payload.metadata.totalMatches).toBe(0);
+    expect(payload.hint).toBeUndefined();
+  });
+
+  it('stays quiet when the literal pattern found something', async () => {
+    const payload = await callTool('smart_grep', {
+      pattern: 'export function',
+      path: fixtures,
+    });
+
+    expect(payload.metadata.totalMatches).toBeGreaterThan(0);
+    expect(payload.hint).toBeUndefined();
+  });
+
   it('searches a single file when path names one', async () => {
     const payload = await callTool('smart_grep', {
       pattern: 'export function',

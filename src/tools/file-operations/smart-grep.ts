@@ -127,7 +127,42 @@ export interface SmartGrepResult {
    * the value and wrong about what the caller received.
    */
   counts?: Record<string, number>;
+  /**
+   * Set only when a literal search found nothing that a regex search would
+   * have found.
+   *
+   * `pattern` is matched literally unless `regex: true`, so an alternation or a
+   * character class silently means nothing and the caller gets
+   * `{ success: true, totalMatches: 0, filesSearched: 7 }` -- indistinguishable
+   * from a thorough search of a tree that does not contain the term. That zero
+   * reads as evidence of absence and gets acted on as such.
+   *
+   * Deliberately narrow. It requires all three of: literal mode, zero matches,
+   * and a pattern that WOULD have matched as a regex. A hint on every empty
+   * result would be noise, and a caller who learns to ignore it is no better
+   * off than one who never saw it.
+   */
+  hint?: string;
   error?: string;
+}
+
+/**
+ * True when a group that already contains a quantifier is itself quantified.
+ *
+ * `(a+)+`, `(x*)*`, `(ab+){2,}` -- the classic catastrophic-backtracking shape,
+ * where the engine has exponentially many ways to split the same input.
+ *
+ * DELIBERATELY CONSERVATIVE AND DELIBERATELY CRUDE. It is a gate on offering an
+ * optional hint, not a security boundary: a false positive costs one hint, and
+ * refusing to guess is the safe direction. A real answer needs a parser, and a
+ * parser here would be a larger thing to get wrong than the problem it solves.
+ *
+ * Escaped parens and escaped quantifiers are stripped first, so `\(a\+\)` --
+ * which is literal text, not a group -- does not read as one.
+ */
+function hasNestedQuantifier(pattern: string): boolean {
+  const bare = pattern.replace(/\\./g, '');
+  return /\([^()]*[*+]\)[*+{]|\([^()]*\{\d+,?\d*\}[^()]*\)[*+{]/.test(bare);
 }
 
 export class SmartGrepTool {
@@ -298,11 +333,35 @@ export class SmartGrepTool {
       const filesWithMatches = new Set<string>();
       const matchCounts = new Map<string, number>();
 
+      // Would this pattern have matched as a regex? One test per FILE, not per
+      // line, and abandoned the moment it answers yes -- the question is
+      // whether any match exists at all, so counting them would cost more and
+      // say no more.
+      const regexProbe = this.buildRegexProbe(pattern, opts);
+      let regexWouldMatch = false;
+
       for (const file of filesToSearch) {
         try {
           const content = readFileSync(file, opts.encoding);
           const lines = content.split('\n');
           const fileMatches: GrepMatch[] = [];
+
+          // PER LINE, because that is how the search itself matches.
+          //
+          // Testing whole file contents disagreed with the search in both
+          // directions: `^TOKEN$` is false against a multi-line string -- `^`
+          // and `$` anchor to the ends of the WHOLE string without the `m`
+          // flag -- so the hint went missing for exactly the anchored patterns
+          // someone reaching for regex is most likely to write; and a pattern
+          // spanning a newline matched the file while matching no line, which
+          // would have promised a `regex: true` result that does not exist.
+          if (
+            regexProbe &&
+            !regexWouldMatch &&
+            lines.some((l) => regexProbe.test(l))
+          ) {
+            regexWouldMatch = true;
+          }
 
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -482,6 +541,17 @@ export class SmartGrepTool {
         ...(!opts.count && !opts.filesWithMatches
           ? { matches: paginatedMatches }
           : {}),
+        // A zero that would not have been a zero. See SmartGrepResult.hint:
+        // this fires only when the search was literal, found nothing, and the
+        // pattern matches as a regex -- so it never contradicts a real result
+        // and never fires on a genuinely absent term.
+        ...(totalMatches === 0 && regexWouldMatch
+          ? {
+              hint:
+                `No literal match for "${pattern}", but it matches as a regular ` +
+                `expression. Patterns are literal unless you pass regex: true.`,
+            }
+          : {}),
       };
 
       // Cache result
@@ -565,6 +635,45 @@ export class SmartGrepTool {
     const flags = opts.caseSensitive ? 'g' : 'gi';
 
     return new RegExp(regexPattern, flags);
+  }
+
+  /**
+   * The regex the caller may have meant, or null when there is nothing to warn
+   * about.
+   *
+   * Null in three cases, each of which would make a hint wrong rather than
+   * merely unhelpful: the search is already a regex search; escaping changed
+   * nothing, so literal and regex mean the same thing; or the pattern is not
+   * valid regex syntax, so `regex: true` would not have helped either.
+   *
+   * NOT global. The caller tests whole file contents with it, and a `g` regex
+   * carries `lastIndex` between calls -- reusing one across files would skip
+   * matches and make the hint depend on file order.
+   */
+  private buildRegexProbe(
+    pattern: string,
+    opts: Required<SmartGrepOptions>
+  ): RegExp | null {
+    if (opts.regex) return null;
+
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (escaped === pattern) return null;
+
+    // A LITERAL SEARCH MUST NOT BE ABLE TO HANG THE PROCESS.
+    //
+    // Compiling and running the caller's pattern is exposure this probe
+    // introduces: before it, `(a+)+$` was plain text and cost nothing. Measured
+    // against a 26-character line, the unguarded probe spent 10.5 SECONDS
+    // backtracking. The hint is a convenience, so declining to offer it on a
+    // pathological pattern costs the caller nothing they had before.
+    if (hasNestedQuantifier(pattern)) return null;
+
+    try {
+      const body = opts.wholeWord ? `\\b${pattern}\\b` : pattern;
+      return new RegExp(body, opts.caseSensitive ? '' : 'i');
+    } catch {
+      return null;
+    }
   }
 
   /**
