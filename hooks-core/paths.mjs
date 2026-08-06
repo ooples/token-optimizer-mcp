@@ -154,6 +154,37 @@ function normaliseOnce(input, cwd) {
  * form depends on how many times it has been canonicalised gives one file two
  * graph nodes, with findings anchored under one invisible from the other.
  */
+/**
+ * True unless handing this path to the filesystem would ABORT the process.
+ *
+ * U+10FFFF is the largest legal Unicode code point, and libuv asserts
+ * `code_point < 0x10FFFF` -- strictly less than -- while converting a UTF-8 path
+ * to UTF-16 on Windows:
+ *
+ *     Assertion failed: code_point < 0x10FFFF, file deps\uv\src\idna.c, line 397
+ *
+ * The assert is off by one, so `existsSync`, `statSync` and `readFileSync` all
+ * kill the process rather than throwing. That is categorically worse than an
+ * exception here: the hook is wrapped whole in a try/catch on the promise that
+ * "any defect in this hook must cost the user nothing", and a native abort walks
+ * straight through it, so the hook's one guarantee about its own failures does
+ * not hold. A path is checked BEFORE it reaches the filesystem because there is
+ * nothing to catch afterwards.
+ *
+ * Deliberately narrow. U+10FFFD and U+10FFFE were measured and are handled
+ * correctly, so only the character that actually aborts is refused -- a broader
+ * filter would silently drop paths that work.
+ */
+export function isFsSafePath(input) {
+  if (typeof input !== 'string') return false;
+  // Iterates code POINTS, so the surrogate pair for U+10FFFF is seen as one
+  // character rather than two unremarkable halves.
+  for (const character of input) {
+    if (character.codePointAt(0) === 0x10ffff) return false;
+  }
+  return true;
+}
+
 export function canonicalPath(input, cwd) {
   let path = normaliseOnce(input, cwd);
   for (let i = 0; i < 8; i++) {

@@ -1,6 +1,6 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/decide.mjs. Regenerate with `npm run sync:hooks`.
-/**
+﻿/**
  * The routing decision, as a pure function.
  *
  * Deliberately free of process, stdin, and exit codes so it can be unit tested
@@ -15,7 +15,7 @@
 
 import { fileSize, isBinaryPath, isMachineOwned, largeFileBytes, refusalFloorBytes } from './policy.mjs';
 import { statSync } from 'node:fs';
-import { canonicalPath, resolvableCandidates } from './paths.mjs';
+import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
 import { activeRules } from './remedy.mjs';
 import { wikiDir } from './wiki.mjs';
 
@@ -23,6 +23,9 @@ const KB = (bytes) => Math.round(bytes / 1024);
 
 /** Whether a path names an existing directory. Never throws. */
 function isDirectory(path) {
+  // See fileSize: a native abort is not catchable, so the check precedes the
+  // stat rather than relying on the try below.
+  if (!isFsSafePath(path)) return false;
   try {
     return statSync(path).isDirectory();
   } catch {
@@ -264,11 +267,21 @@ export function touchedFiles(payload) {
   // every relative operand onto a path resolving to nothing, so the call records
   // no touch at all. Falling back to the session cwd is strictly better than
   // losing the observation.
+  // `isDirectory` is a statSync, and it runs ahead of the per-candidate check
+  // below -- so guarding only the candidates left the abort reachable through
+  // any command beginning `cd <bad path> && ...`. The guard lives INSIDE
+  // isDirectory rather than here: a second check at this call site would mask
+  // the removal of the real one, and a mutation proved exactly that.
   const cwd = cdTarget && isDirectory(cdTarget) ? cdTarget : payload?.cwd;
 
   const add = (candidate) => {
     if (!candidate || typeof candidate !== 'string') return;
     for (const spelling of resolvableCandidates(candidate, cwd)) {
+      // Sizing a candidate stats it, and a path carrying U+10FFFF aborts libuv
+      // outright rather than throwing. This is where externally supplied paths
+      // first enter the hook, so refusing here keeps the character away from
+      // every downstream consumer instead of asking each one to defend itself.
+      if (!isFsSafePath(spelling)) continue;
       const size = fileSize(spelling);
       if (size >= 0) {
         // Nothing under .git/, node_modules/ or a build directory belongs in a
