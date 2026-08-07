@@ -296,7 +296,15 @@ export function attributeInvalidation(cwd, prefixTokens = null, { files = null }
       // A prefix cache invalidates ONCE, at the earliest difference. A later
       // volatile line in the same file costs nothing extra until the first one
       // is fixed, so it is reported for context but not billed again.
-      const subsumedBy = index === 0 ? null : `${relative}:${found[0].line}`;
+      //
+      // Subsumption is measured against the earliest PRICED hit, not simply the
+      // first hit. An unpriced bare date at index 0 does not invalidate anything
+      // we are willing to bill for, so treating it as the subsumer zeroed the
+      // price of a genuine timestamp below it -- turning a real, fixable cost
+      // into a reported zero.
+      const firstPriced = found.find((h) => h.priced);
+      const subsumedBy =
+        hit.priced && firstPriced && firstPriced !== hit ? `${relative}:${firstPriced.line}` : null;
       out.push({
         file: relative,
         line: hit.line,

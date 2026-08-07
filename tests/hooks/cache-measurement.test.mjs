@@ -170,3 +170,43 @@ describe('the transcript tail is read off disk', () => {
     expect(turns).toHaveLength(1);
   });
 });
+
+describe('an unpriced hit does not subsume a priced one', () => {
+  const withFile = (contents) => {
+    const project = mkdtempSync(join(tmpdir(), 'cachemix-'));
+    writeFileSync(join(project, 'CLAUDE.md'), contents);
+    return project;
+  };
+
+  test('a bare date above a real timestamp does not zero the timestamp price', () => {
+    // Caught in review of the fix itself. subsumedBy was derived from found[0] rather than the
+    // earliest PRICED hit, so an unpriced changelog date at the top of the file zeroed the
+    // price of a genuine timestamp below it -- converting a real, fixable cost into a
+    // reported zero, which is the same class of error the unpriced rule exists to avoid.
+    const project = withFile('- 2024-06-11: initial release\nGenerated 2025-10-31T09:00 by the build\n');
+    try {
+      const hits = attributeInvalidation(project, 100_000);
+      const date = hits.find((h) => h.line === 1);
+      const stamp = hits.find((h) => h.line === 2);
+      expect(date.costPerSession).toBeNull();
+      expect(date.subsumedBy).toBeNull();
+      expect(stamp.costPerSession).toBeGreaterThan(0);
+      expect(stamp.subsumedBy).toBeNull();
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  test('a second priced hit is still subsumed by the first priced one', () => {
+    const project = withFile('- 2024-06-11: initial release\nGenerated 2025-10-31T09:00\nGenerated 2025-11-01T09:00\n');
+    try {
+      const hits = attributeInvalidation(project, 100_000);
+      expect(hits.find((h) => h.line === 2).costPerSession).toBeGreaterThan(0);
+      const third = hits.find((h) => h.line === 3);
+      expect(third.costPerSession).toBe(0);
+      expect(third.subsumedBy).toMatch(/CLAUDE\.md:2/);
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+});
