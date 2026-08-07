@@ -45,6 +45,8 @@ import {
   forTouch,
   forCommand,
   forSharedCommand,
+  noteActClasses,
+  forRepeatedAct,
 } from './lib/inject.mjs';
 import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
@@ -175,6 +177,7 @@ try {
       const alreadyInjected = new Set(state.injected);
       const before = alreadyInjected.size;
       const parts = [];
+      let actsChanged = false;
 
       for (const { path } of touched) {
         const dir = dirFor(path);
@@ -218,9 +221,28 @@ try {
           projectRoot: root,
         });
         if (shared) parts.push(shared);
+
+        // AND WHETHER THIS SESSION KEEPS DOING THE SAME KIND OF THING.
+        //
+        // The once-per-session gate is what makes a delivered lesson go quiet
+        // after its first appearance, and that is usually right. It is wrong when
+        // the session develops a pattern: a lesson served at the start of a long
+        // session was suppressed while the same class of mistake was made six more
+        // times. Fires exactly once, when the third act of a class occurs.
+        const crossed = noteActClasses(state, command);
+        if (crossed !== null) actsChanged = true;
+        const repeat = forRepeatedAct(dir, command, crossed, {
+          sessionId: payload.session_id,
+          projectRoot: root,
+        });
+        if (repeat) parts.push(repeat);
       }
 
-      if (alreadyInjected.size !== before) {
+      // PERSIST WHEN THE TALLY MOVED TOO, not only when a finding was served.
+      // Every tool call is its own process, so a counter that is incremented and
+      // not written back is a counter that never passes one -- the reminder was
+      // unreachable for exactly that reason.
+      if (alreadyInjected.size !== before || actsChanged) {
         state.injected = [...alreadyInjected];
         saveState(payload.session_id, state, agentScope);
       }

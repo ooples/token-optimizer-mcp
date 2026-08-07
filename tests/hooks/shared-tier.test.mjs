@@ -317,6 +317,68 @@ describe('a lesson learned in one project', () => {
     }
   });
 
+  test('re-surfaces a lesson when the session keeps doing the same kind of thing', () => {
+    // THE ONCE-PER-SESSION GATE IS WHY THIS IS NEEDED. A lesson delivered at the
+    // start of a session is suppressed for the rest of it -- correct when the
+    // advice landed, wrong when it did not. Measured on this machine: "confirm
+    // the sabotage applied before trusting a canary" was served once and the same
+    // class of mistake was made six more times that day.
+    const file = join(projectA, 'lesson.md');
+    writeFileSync(file, '# x\n');
+    writeHarvested(
+      wikiA,
+      [
+        {
+          type: 'feedback',
+          claim:
+            'Confirm the sabotage actually applied before trusting a canary result: an edit that silently matched nothing reports PASS.',
+          confidence: 0.9,
+          anchors: [file],
+        },
+      ],
+      { sessionId: 'rep-seed', projectRoot: projectA }
+    );
+
+    const sid = 'repeat-session';
+    const seen = [];
+    // Three verification-shaped commands in ONE session.
+    for (const cmd of ['npx jest a.test.mjs', 'npm test -- b', 'npx tsc --noEmit']) {
+      seen.push(runCommandIn(projectB, cmd, { sessionId: sid }));
+    }
+
+    // First delivery is the ordinary cross-project one; the reminder arrives on
+    // the third act, naming the count -- which is the part the model cannot see.
+    expect(seen[2]).toMatch(/You have run 3 verify steps this session/);
+  });
+
+  test('the reminder fires once, not on every subsequent call', () => {
+    // A reminder that returns forever is the wallpaper the once-per-session gate
+    // exists to prevent, rebuilt under another name.
+    const file = join(projectA, 'lesson2.md');
+    writeFileSync(file, '# x\n');
+    writeHarvested(
+      wikiA,
+      [
+        {
+          type: 'feedback',
+          claim: 'Confirm the sabotage actually applied before trusting a canary result.',
+          confidence: 0.9,
+          anchors: [file],
+        },
+      ],
+      { sessionId: 'rep2-seed', projectRoot: projectA }
+    );
+
+    const sid = 'repeat-once';
+    const out = [];
+    for (const cmd of ['npx jest a', 'npm test b', 'npx tsc c', 'npm test d', 'npx jest e']) {
+      out.push(runCommandIn(projectB, cmd, { sessionId: sid }));
+    }
+
+    const reminders = out.filter((o) => /You have run \d+ \w+ steps this session/.test(o));
+    expect(reminders).toHaveLength(1);
+  });
+
   test('an absent shared store costs the caller nothing', () => {
     // The tier is an extra. If it cannot be read the tool call must proceed
     // exactly as if the feature were not installed.

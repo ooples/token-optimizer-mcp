@@ -454,6 +454,103 @@ const classesOf = (text, side) => {
 };
 
 /**
+ * How many times a session must repeat an act class before a lesson it has
+ * already been given is allowed to speak again.
+ *
+ * ONCE PER SESSION IS RIGHT UNTIL IT IS NOT. Repeating advice on every call is
+ * how a real signal becomes wallpaper, which is why the gate exists. But the gate
+ * is also why a lesson can be delivered at 10:00 and be irrelevant by 14:00: in
+ * one session on this machine the lesson "confirm the sabotage applied before
+ * trusting a canary" was served once and then suppressed, and the same class of
+ * mistake was made SIX more times that day -- a prompt mangled by shell quoting
+ * that scored a fabricated result, a compiler path with a trailing character so
+ * no compiler ran and every file reported clean, two heredocs that silently
+ * matched nothing, an edit that clobbered the wrong line, a scorer that counted a
+ * refusal as a success.
+ *
+ * Three is chosen to be quiet: the first two repetitions say nothing, because
+ * doing something twice is ordinary work. The third says the session has a
+ * pattern, which is exactly when a reminder stops being wallpaper and starts
+ * being information.
+ */
+const REPEAT_THRESHOLD = 3;
+
+/**
+ * Records that this session performed an act of a given class, and reports which
+ * classes have now crossed the threshold.
+ *
+ * The counter lives in session state, so it is per session by construction and
+ * disappears when the session does -- a pattern within one working day is the
+ * claim, not a pattern across months.
+ */
+export function noteActClasses(state, command) {
+  const classes = classesOf(command, 'command');
+  if (!classes.size) return new Set();
+
+  state.actCounts = state.actCounts && typeof state.actCounts === 'object' ? state.actCounts : {};
+  const crossed = new Set();
+  for (const c of classes) {
+    state.actCounts[c] = (state.actCounts[c] || 0) + 1;
+    if (state.actCounts[c] === REPEAT_THRESHOLD) crossed.add(c);
+  }
+  return crossed;
+}
+
+/**
+ * A lesson already given this session, re-surfaced because the session keeps
+ * doing the thing it is about.
+ *
+ * EXACTLY ONCE PER CLASS, at the moment the threshold is crossed -- `===` not
+ * `>=` in the counter above. A reminder that returns on every subsequent call is
+ * the wallpaper the once-per-session gate was built to prevent, and re-creating
+ * it here under a different name would be worse than not reminding at all.
+ */
+export function forRepeatedAct(
+  projectDir,
+  command,
+  crossedClasses,
+  { sessionId = null, projectRoot = null } = {}
+) {
+  if (!crossedClasses || !crossedClasses.size) return null;
+
+  try {
+    const dir = sharedDir();
+    if (!dir || isSharedDir(projectDir)) return null;
+    const graph = load(dir);
+    if (!graph.nodes.size) return null;
+
+    const home = projectRoot ? canonicalPath(projectRoot) : null;
+    for (const node of graph.nodes.values()) {
+      if (node.kind !== 'finding' || node.retired || !node.claim) continue;
+      if (home && node.sourceProject && canonicalPath(node.sourceProject) === home) continue;
+      const claimClasses = classesOf(node.claim, 'claim');
+      if (![...crossedClasses].some((c) => claimClasses.has(c))) continue;
+
+      const cls = [...crossedClasses].find((c) => claimClasses.has(c));
+      record(projectDir, {
+        kind: 'inject',
+        trigger: 'repeat',
+        surface: 'shared',
+        anchor: String(command).slice(0, 120),
+        holdout: false,
+        tokens: estimate(node.claim),
+        count: 1,
+        stale: false,
+        sessionId,
+      });
+
+      // The count is the whole message. "You have done this three times" is a
+      // fact about this session that the model cannot see for itself, and it is
+      // what makes a repeated claim land differently from the first delivery.
+      return `You have run ${REPEAT_THRESHOLD} ${cls} steps this session. Worth re-reading:\n- [${node.type || 'finding'}] ${node.claim}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Does this lesson apply to this command, for the CROSS-PROJECT path?
  *
  * Strictly wider than `appliesToCommand`, and only here: the local path keeps its
