@@ -83,6 +83,29 @@ export function sharedDir() {
 }
 
 /**
+ * Where a claim about a file that belongs to NO repository is kept.
+ *
+ * The fallback used to be the caller's cwd, and cwd is a property of how the
+ * process was launched rather than of the file. Reproduced: the same file, in a
+ * tree with no VCS marker anywhere above it, resolved to `<plugin>` when the
+ * client started at the plugin root and to `<plugin>/mcp` when it started one
+ * level down -- 185 nodes in one graph and 284 in the other, neither able to
+ * serve the other, and the briefing only ever reads one. Every directory a
+ * session visits becomes another shard, so the fragmentation is unbounded.
+ *
+ * Deliberately NOT sharedDir(). That tier is for lessons that hold anywhere
+ * (SHAREABLE_TYPES); a claim about one unrooted file is not one, and mixing them
+ * would leak file-specific noise into every project's briefing.
+ */
+export function unrootedRoot() {
+  return (
+    process.env.TOKEN_OPTIMIZER_UNROOTED_DIR ||
+    join(homedir(), '.token-optimizer', 'unrooted')
+  );
+}
+
+
+/**
  * Is this project's graph ALSO the shared one?
  *
  * Both are redirectable by environment variable, and the suite points them at one
@@ -107,8 +130,9 @@ export function isSharedDir(dir) {
  * land in the wrong project's graph, or in none, and the per-project promise
  * quietly breaks. Observed live: work in another checkout recorded nothing.
  *
- * Walks up for a repository marker and falls back to the session cwd when the
- * file is not inside one, which is the honest answer for a scratch file.
+ * Walks up for a repository marker. When there is none the answer must still
+ * depend only on the FILE, so it goes to one stable machine-level graph rather
+ * than to wherever the caller happened to be -- see unrootedRoot.
  */
 export function projectRootFor(filePath, fallback) {
   // This walks UP the path calling existsSync at every level, so one character
@@ -139,7 +163,10 @@ export function projectRootFor(filePath, fallback) {
     if (parent === dir) break;
     dir = parent;
   }
-  return fallback ? canonicalPath(fallback) : null;
+  // No repository anywhere up the tree. `fallback` is deliberately NOT used here:
+  // it is the caller's cwd, which changes as a session moves between directories,
+  // so using it files the same file into a different graph on different runs.
+  return unrootedRoot();
 }
 
 const logPath = (dir) => join(dir, 'graph.jsonl');
