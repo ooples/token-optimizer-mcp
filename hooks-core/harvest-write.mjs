@@ -114,6 +114,102 @@ function promoteToShared(finding, { projectRoot, sessionId, provenance, key }) {
 }
 
 /**
+ * How many refusals retire a cross-project lesson.
+ *
+ * Two, not one. A single refusal can be the model being cautious about a claim
+ * that is in fact fine here, and retiring on one would let a single hedge delete
+ * knowledge. Two independent sessions declining the same lesson is a pattern
+ * about the LESSON rather than about one moment.
+ */
+const REFUSALS_TO_RETIRE = 2;
+
+/**
+ * Language that marks a delivered lesson as declined for NOT TRANSFERRING.
+ *
+ * Deliberately narrow, and narrower than it first was. Bare uncertainty is not a
+ * refusal: an answer that supplies a value and adds "verify the filename matches
+ * before relying on it" has used the lesson and calibrated it, which is the
+ * behaviour a cross-project fact should produce. Only an explicit non-transfer
+ * assertion counts.
+ */
+const REFUSAL_LANGUAGE =
+  /(does\s?n[o']?t transfer|doesn't apply here|would be fabrication|belongs to (that|another|a different) (repo|project)|scoped to a different project|carrying it over)/i;
+
+/**
+ * Which of the lessons delivered this turn were declined?
+ *
+ * THE SIGNAL WAS ALREADY THERE AND NOBODY READ IT. Measured on this machine, a
+ * shared lesson carrying a build-error baseline was delivered into another
+ * project and the model answered: "the 536 figure is HarmonicEngine's baseline
+ * for a different build target, and it doesn't transfer." That is the graph being
+ * told, in plain words, that a lesson is mis-scoped -- and nothing recorded it,
+ * so the same lesson would be delivered again, and again, costing its tokens
+ * every time to be refused every time.
+ *
+ * Matching is by claim rather than by key because the response quotes the claim,
+ * not the id. A lesson is only counted when its own distinctive text appears near
+ * the refusal, so one refusal in a long answer cannot condemn every lesson
+ * delivered alongside it.
+ */
+export function detectRefusals(delivered, responseText) {
+  const text = String(responseText || '');
+  if (!text || !Array.isArray(delivered) || !delivered.length) return [];
+  if (!REFUSAL_LANGUAGE.test(text)) return [];
+
+  const refused = [];
+  for (const lesson of delivered) {
+    const claim = String(lesson.claim || '');
+    if (!claim) continue;
+    // A distinctive fragment of the claim: the longest word run is a poor test,
+    // so the check is on the rarest token the claim contains.
+    const tokens = (claim.match(/[A-Za-z0-9._/-]{6,}/g) || [])
+      .map((t) => t.toLowerCase())
+      .filter((t) => !/^(because|through|without|another|different|project)$/.test(t));
+    if (!tokens.length) continue;
+    const mentioned = tokens.some((t) => text.toLowerCase().includes(t));
+    if (mentioned) refused.push(lesson.key);
+  }
+  return refused;
+}
+
+/**
+ * Records that a cross-project lesson was declined, retiring it once the pattern
+ * is established.
+ *
+ * A retired finding is excluded from every read path in this codebase, so this
+ * stops the lesson costing tokens without destroying it -- the claim and its
+ * refusal count stay in the log, which is what makes the decision auditable
+ * later. Deleting would leave no trace of why a lesson vanished.
+ */
+export function recordRefusal(sharedDirPath, key) {
+  try {
+    const graph = load(sharedDirPath);
+    const target = [...graph.nodes.values()].find(
+      (n) => n.kind === 'finding' && n.key === key
+    );
+    if (!target) return null;
+
+    const refusals = (Number(target.refusals) || 0) + 1;
+    const retired = refusals >= REFUSALS_TO_RETIRE ? true : target.retired;
+
+    putNode(sharedDirPath, {
+      ...target,
+      kind: 'finding',
+      key: target.key,
+      refusals,
+      retired,
+      retiredReason:
+        retired && !target.retired
+          ? `declined as non-transferable in ${refusals} sessions`
+          : target.retiredReason,
+    });
+    return { key, refusals, retired: Boolean(retired) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Back-fills lessons that were learned BEFORE the shared tier existed.
  *
  * Promotion happens at harvest time, so every lesson already in a project graph
