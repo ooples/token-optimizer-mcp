@@ -231,7 +231,10 @@ export function registerWikiRoutes(app: Express): void {
       findings.sort((a: any, b: any) => {
         const weight = (f: any) =>
           (f.confidence ?? 0.5) *
-          (f.origin === 'human' ? mods.curate.HUMAN_WEIGHT : 1) *
+          // originWeight, not a human-only ternary: the `: 1` branch ranked an
+          // agent finding level with a post-hoc harvested guess, so this sort
+          // and findingsFor disagreed about provenance.
+          mods.curate.originWeight(f.origin) *
           (f.pinned ? 2 : 1);
         return weight(b) - weight(a);
       });
