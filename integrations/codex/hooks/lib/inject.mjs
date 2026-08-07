@@ -397,6 +397,82 @@ const sharedBudget = () =>
 const MAX_SHARED = 2;
 
 /**
+ * ACTION CLASSES: what a command is DOING, rather than what it says.
+ *
+ * Two measured problems, one cause. First, `appliesToCommand` refuses any
+ * untriggered finding that is not `command` or `failure`, so every `feedback` and
+ * `decision` lesson is unreachable on the command path -- measured on the real
+ * store, 10 of 19 shared lessons could never fire, and all five `feedback` ones
+ * were among them. Those are the most behaviour-shaping lessons there are:
+ * "report the number you measured, not the one you expected", "a green unit suite
+ * does not mean the feature is reachable".
+ *
+ * Second, a literal trigger only fires on the string its author happened to
+ * write. The lesson "confirm the sabotage applied before trusting a canary" was
+ * in this store all session while I broke that exact rule six times, because the
+ * commands I ran said `node probe.mjs` and `dotnet csc.dll`, not "canary".
+ *
+ * So a finding also matches when its claim and the command are about the same
+ * KIND of act. The classes are deliberately few and behavioural -- each one names
+ * a way work actually goes wrong, not a topic.
+ */
+const ACTION_CLASSES = {
+  // Running something whose output is trusted as proof.
+  verify: {
+    command: /\b(test|jest|pytest|check|--check|lint|verify|assert|canary|probe|csc|tsc|typecheck)\b/i,
+    claim: /\b(verif|assert|canary|sabotage|prove|trust(ed|ing)?|silently|reports? (pass|green|success)|actually (ran|applied|chang))/i,
+  },
+  // Reading a result through a pipe or a filter, where status can be lost.
+  pipe: {
+    command: /\|\s*(tail|head|grep|sort|wc|jq)\b|>\s*\S+\.(log|txt)\b/i,
+    claim: /\b(pipe|PIPESTATUS|exit code|\$\?|stderr|redirect)\b/i,
+  },
+  // Changing files by machine rather than by hand.
+  edit: {
+    command: /\b(sed|smart_edit|prettier|format|codemod|rename)\b/i,
+    claim: /\b(edit|editsApplied|rewrite|generated cop|overwrit|line ending|CRLF)\b/i,
+  },
+  // Producing artefacts from source, where the artefact may not match the source.
+  build: {
+    command: /\b(build|compile|tsc|dotnet build|make|pack|sync:hooks|generate)\b/i,
+    claim: /\b(build|compile|generated|regenerat|artefact|artifact|dist\/|stale)\b/i,
+  },
+  // Putting software somewhere it will be executed from.
+  install: {
+    command: /\b(npm (install|ci|i)\b|npx|pip install|dotnet restore|clone)\b/i,
+    claim: /\b(install|npx|cache|node_modules|global|published|running (process|server|build))\b/i,
+  },
+};
+
+/** Which classes a piece of text belongs to, on the given side. */
+const classesOf = (text, side) => {
+  const out = new Set();
+  for (const [name, spec] of Object.entries(ACTION_CLASSES)) {
+    if (spec[side].test(String(text || ''))) out.add(name);
+  }
+  return out;
+};
+
+/**
+ * Does this lesson apply to this command, for the CROSS-PROJECT path?
+ *
+ * Strictly wider than `appliesToCommand`, and only here: the local path keeps its
+ * stricter rule because a project's own graph is dense and a loose match there
+ * costs tokens on every call. The shared tier is small, capped at two lessons and
+ * budgeted separately, so reachability matters more than selectivity.
+ */
+function appliesCrossProject(finding, command) {
+  if (appliesToCommand(finding, command)) return true;
+
+  // A shared lesson with no usable trigger still has a claim, and a claim about
+  // the same kind of act as the command is the signal a literal string misses.
+  const shared = [...classesOf(finding.claim, 'claim')].filter((c) =>
+    classesOf(command, 'command').has(c)
+  );
+  return shared.length > 0;
+}
+
+/**
  * What OTHER projects on this machine learned that applies to this command.
  *
  * The project graph answers "what do we know about this repo". This answers the
@@ -433,7 +509,7 @@ export function forSharedCommand(
       // served by the local path; repeating it under a "from elsewhere" label
       // would both double the tokens and misstate where it came from.
       if (home && node.sourceProject && canonicalPath(node.sourceProject) === home) continue;
-      if (!appliesToCommand(node, command)) continue;
+      if (!appliesCrossProject(node, command)) continue;
       candidates.push(node);
     }
     if (!candidates.length) return null;

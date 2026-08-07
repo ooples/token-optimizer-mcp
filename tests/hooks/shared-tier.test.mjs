@@ -260,6 +260,63 @@ describe('a lesson learned in one project', () => {
     expect(context).not.toContain('From other projects');
   });
 
+  test('a triggerless feedback lesson still reaches a same-class command', async () => {
+    // MEASURED ON THE REAL STORE: 10 of 19 shared lessons could never fire on any
+    // command, and ALL FIVE of the `feedback` ones were among them -- because
+    // appliesToCommand refuses an untriggered finding that is not `command` or
+    // `failure`. Those are the most behaviour-shaping lessons there are, and the
+    // shared tier is trigger-only, so they were promoted into a store that could
+    // never deliver them.
+    //
+    // The cross-project matcher therefore also accepts a claim about the same
+    // KIND of act as the command. Here: a lesson about trusting a check that
+    // printed nothing, against a command that runs a check.
+    const file = join(projectA, 'guide.md');
+    writeFileSync(file, '# notes\n');
+    writeHarvested(
+      wikiA,
+      [
+        {
+          type: 'feedback',
+          claim:
+            'Confirm the sabotage actually applied before trusting a canary result: an edit that silently matched nothing reports PASS, which reads as "the guard works".',
+          confidence: 0.9,
+          anchors: [file],
+        },
+      ],
+      { sessionId: 'class-seed', projectRoot: projectA }
+    );
+
+    const context = runCommandIn(projectB, 'npx jest tests/guard.test.mjs', {
+      sessionId: 'class-use',
+    });
+
+    expect(context).toContain('sabotage actually applied');
+  });
+
+  test('the wider matcher stays silent on commands with no bearing', () => {
+    // The cost of matching on act-shape is noise, and noise is how a real signal
+    // becomes wallpaper. Reachability is only worth having if this holds.
+    writeHarvested(
+      wikiA,
+      [
+        {
+          type: 'feedback',
+          claim:
+            'Confirm the sabotage actually applied before trusting a canary result.',
+          confidence: 0.9,
+          anchors: [(() => { const f = join(projectA, 'g2.md'); writeFileSync(f, 'x\n'); return f; })()],
+        },
+      ],
+      { sessionId: 'quiet-seed', projectRoot: projectA }
+    );
+
+    for (const cmd of ['echo hello', 'ls -la', 'pwd', 'curl https://example.com']) {
+      const context = runCommandIn(projectB, cmd, { sessionId: `quiet-${cmd.length}` });
+      expect(context).not.toContain('From other projects on this machine');
+    }
+  });
+
   test('an absent shared store costs the caller nothing', () => {
     // The tier is an extra. If it cannot be read the tool call must proceed
     // exactly as if the feature were not installed.
