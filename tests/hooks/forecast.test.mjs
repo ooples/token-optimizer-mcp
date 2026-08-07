@@ -19,7 +19,7 @@ import {
 import {
   logForecast, observeOutcome, reliability, calibrate,
 } from '../../hooks-core/calibration.mjs';
-import { readMetrics } from '../../hooks-core/metrics.mjs';
+import { readMetrics, readBalance } from '../../hooks-core/metrics.mjs';
 
 let dir;
 
@@ -368,5 +368,135 @@ describe('the balance kinds are read from the log that is not windowed', () => {
     seedArms({ treated: 4, withheld: 3 });
     const merged = balanceAwareEvents(dir);
     expect(merged.filter((e) => e.kind === 'inject')).toHaveLength(7);
+  });
+});
+
+// --- the calibration loop is wired, and cannot score one prediction twice -----------
+
+describe('a forecast is closed once', () => {
+  test('two compactions in one session do not score the same prediction twice', () => {
+    // THE DEFECT: the open-forecast filter was `!e.scored`, but nothing ever writes `scored` --
+    // record() is an append-only JSONL writer with no update path, so a forecast could never gain
+    // the field and the predicate was always true. A session where compaction fires twice with no
+    // intervening logForecast popped the SAME forecast twice. reliability counts ROWS, not
+    // predictions, so MIN_SCORED could be satisfied by one prediction re-closed eight times --
+    // exactly the 'threshold from a single sample' this module exists to prevent. The existing
+    // test used a fresh sessionId per iteration, so it never exposed it.
+    logForecast(dir, { sessionId: 'one', predictedTurns: 10, used: 1, capacity: 2 });
+    observeOutcome(dir, { sessionId: 'one', actualTurns: 11 });
+    observeOutcome(dir, { sessionId: 'one', actualTurns: 40 });
+
+    expect(reliability(dir).scored).toBe(1);
+  });
+
+  test('a second prediction in the same session is still scorable', () => {
+    logForecast(dir, { sessionId: 'one', predictedTurns: 10, used: 1, capacity: 2 });
+    observeOutcome(dir, { sessionId: 'one', actualTurns: 11 });
+    logForecast(dir, { sessionId: 'one', predictedTurns: 12, used: 1, capacity: 2 });
+    observeOutcome(dir, { sessionId: 'one', actualTurns: 13 });
+
+    expect(reliability(dir).scored).toBe(2);
+  });
+});
+
+describe('forecast events outlive the event window', () => {
+  test('an outcome still finds its forecast under a firehose', () => {
+    // THE DEFECT: both readers used readMetrics, which returns at most 2 MB and the last 5,000
+    // lines, and forecast events were not protected kinds. On a busy project the forecast had
+    // scrolled past the tail by the time compaction fired, so the outcome was discarded with no
+    // record, no error and no counter -- and reliability could never reach MIN_SCORED, leaving
+    // 'not yet calibrated (n/8)' forever with no way to tell it from having no data at all.
+    logForecast(dir, { sessionId: 'buried', predictedTurns: 10, used: 1, capacity: 2 });
+    for (let i = 0; i < 5_200; i++) {
+      recordRead(dir, { anchor: `/noise${i}.ts`, sessionId: 'buried', bytes: 40 });
+    }
+    observeOutcome(dir, { sessionId: 'buried', actualTurns: 11 });
+
+    expect(reliability(dir).scored).toBe(1);
+    expect(readMetrics(dir).filter((e) => e.kind === 'forecast')).toHaveLength(0);
+  });
+});
+
+describe('a correction never replaces the thing it corrects', () => {
+  test('a bimodal bucket at the reliability floor refuses to publish', () => {
+    // THE DEFECT: bias is a plain arithmetic mean of signed error, applied unguarded to any
+    // bucket clearing hitRate >= 0.5 -- and a mean is not robust to the shape that rule admits.
+    // Errors [0,0,0,0,-30,-30,-30,-30] give four hits, so the bucket passes the floor and is
+    // called calibrated, with bias -15. A raw forecast of 3 turns became
+    // Math.max(0, Math.round(3 - 15)) = 0, published as fact with the note 'within 3 on 50% of 8
+    // past forecasts'. The clamp converted nonsense into a plausible-looking emergency.
+    const errors = [0, 0, 0, 0, -30, -30, -30, -30];
+    errors.forEach((error, i) => {
+      logForecast(dir, { sessionId: `b${i}`, predictedTurns: 3, used: 1, capacity: 2 });
+      observeOutcome(dir, { sessionId: `b${i}`, actualTurns: 3 + error });
+    });
+
+    const bucket = reliability(dir).buckets.near;
+    expect(bucket.scored).toBe(8);
+    expect(bucket.calibrated).toBe(true); // it really does clear the floor
+
+    const out = calibrate(dir, 3);
+    expect(out.publishable).toBe(false);
+    expect(out.predictedTurns).toBe(3); // the raw forecast, not a zero
+    expect(out.reason).toMatch(/as large as the forecast itself/);
+  });
+
+  test('a proportionate correction still publishes', () => {
+    for (let i = 0; i < 10; i++) {
+      logForecast(dir, { sessionId: `p${i}`, predictedTurns: 12, used: 1, capacity: 2 });
+      observeOutcome(dir, { sessionId: `p${i}`, actualTurns: 14 });
+    }
+    const out = calibrate(dir, 12);
+    expect(out.publishable).toBe(true);
+    expect(out.predictedTurns).toBe(14);
+  });
+});
+
+describe('the panel actually runs the calibration loop', () => {
+  const session = { sessionId: 'live', used: 60_000, capacity: 200_000, turns: 30, touches: 30 };
+
+  test('rendering a panel logs the forecast it published', () => {
+    // THE DEFECT: calibration.mjs had zero shipped importers. forecastPanel computed the runway
+    // and pushed '~N turns to compaction' without ever calling logForecast or calibrate, so no
+    // forecast was logged, no outcome could be observed, reliability always saw an empty set, and
+    // calibrate was unreachable. The shipped panel printed exactly the uncalibrated number this
+    // module's docstring calls 'a vibe with a typeface'.
+    forecastPanel(dir, session, []);
+    const logged = readBalance(dir).filter((e) => e.kind === 'forecast');
+    expect(logged).toHaveLength(1);
+    expect(logged[0].predictedTurns).toBeGreaterThan(0);
+  });
+
+  test('the raw forecast is what gets logged, not the corrected one', () => {
+    // Scoring the corrected number would fold each correction into the next and the bias would
+    // chase its own tail.
+    for (let i = 0; i < 10; i++) {
+      logForecast(dir, { sessionId: `w${i}`, predictedTurns: 70, used: 1, capacity: 2 });
+      observeOutcome(dir, { sessionId: `w${i}`, actualTurns: 72 });
+    }
+    const panel = forecastPanel(dir, session, []);
+    const raw = panel.parts.runway.withGraph;
+    const logged = readBalance(dir).filter((e) => e.kind === 'forecast' && e.sessionId === 'live');
+    expect(logged[0].predictedTurns).toBe(raw);
+  });
+
+  test('an uncalibrated horizon prints the number without a track record', () => {
+    const panel = forecastPanel(dir, session, []);
+    expect(panel.parts.calibration.publishable).toBe(false);
+    expect(panel.text).not.toMatch(/corrected:/);
+  });
+
+  test('a calibrated horizon prints the corrected number with its track record', () => {
+    const panel = forecastPanel(dir, session, []);
+    const raw = panel.parts.runway.withGraph;
+    // Score enough forecasts at that horizon for the bucket to earn publication.
+    for (let i = 0; i < 12; i++) {
+      logForecast(dir, { sessionId: `c${i}`, predictedTurns: raw, used: 1, capacity: 2 });
+      observeOutcome(dir, { sessionId: `c${i}`, actualTurns: raw + 2 });
+    }
+    const after = forecastPanel(dir, session, []);
+    expect(after.parts.calibration.publishable).toBe(true);
+    expect(after.text).toMatch(/corrected: within 3 on \d+% of \d+ past forecasts/);
+    expect(after.text).toContain(`~${raw + 2} turns to compaction`);
   });
 });

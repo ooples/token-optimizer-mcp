@@ -68,7 +68,17 @@ const balancePath = (dir) => join(dir, 'balance.jsonl');
  * starve the measurement. Exported because any reader that needs the unwindowed truth needs to
  * know which kinds it applies to, and a second copy of this set elsewhere would drift.
  */
-export const BALANCE_KINDS = new Set(['inject', 'harvest', 'substitute']);
+export const BALANCE_KINDS = new Set([
+  'inject',
+  'harvest',
+  'substitute',
+  // The forecast's own score. Both kinds are rare and accumulate slowly -- MIN_SCORED is 8 --
+  // while the firehose they shared is dominated by per-tool-call records, so they were evicted
+  // faster than they could accumulate: calibrate() returned 'not yet calibrated (n/8)' forever
+  // and an outcome whose forecast had scrolled away was dropped with no record at all.
+  'forecast',
+  'forecast-outcome',
+]);
 
 /**
  * Is this touch in the holdout arm?
