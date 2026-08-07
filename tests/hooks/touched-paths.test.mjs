@@ -18,7 +18,7 @@ import { touchedFiles, isContentDump, decide, isRecursiveSearch, normalizePayloa
 // the test that existed to check it. The paths are what this suite is about, so
 // it derives them directly now.
 const touchedPaths = (payload) => touchedFiles(payload).map((f) => f.path);
-import { projectRootFor } from '../../hooks-core/wiki.mjs';
+import { projectRootFor, unrootedRoot } from '../../hooks-core/wiki.mjs';
 import { isMachineOwned } from '../../hooks-core/policy.mjs';
 
 let home;
@@ -93,10 +93,24 @@ describe('the graph a touch belongs to is the FILE\'s project', () => {
     expect(root).toBe(repoB.split('\\').join('/'));
   });
 
-  test('a file outside any repository falls back to the session project', () => {
+  test('a file outside any repository routes to the stable unrooted graph', () => {
+    // This used to fall back to the caller's cwd. That made the answer depend on
+    // where the process was launched rather than on the file: the same file
+    // resolved to `<plugin>` from one directory and `<plugin>/mcp` from another,
+    // producing two graphs (185 and 284 nodes) for one logical project, with the
+    // briefing only ever reading one of them. Every directory a session visits
+    // became another shard.
     const loose = join(home, 'scratch.ts');
     writeFileSync(loose, 'x');
-    expect(projectRootFor(loose, repoA)).toBe(repoA.split('\\').join('/'));
+    expect(projectRootFor(loose, repoA)).toBe(unrootedRoot());
+  });
+
+  test('an unrooted file resolves the same regardless of the caller cwd', () => {
+    // The actual property being bought: determinism per FILE, not per caller.
+    const loose = join(home, 'scratch2.ts');
+    writeFileSync(loose, 'x');
+    expect(projectRootFor(loose, repoA)).toBe(projectRootFor(loose, repoB));
+    expect(projectRootFor(loose, undefined)).toBe(projectRootFor(loose, repoA));
   });
 
   test('the marker search does not run away up the tree', () => {
@@ -108,9 +122,9 @@ describe('the graph a touch belongs to is the FILE\'s project', () => {
     const buried = join(deep, 'main.ts');
     writeFileSync(buried, 'x');
 
-    // No marker anywhere above it within the bound, so it must fall back rather
-    // than walk to the filesystem root.
-    expect(projectRootFor(buried, repoA)).toBe(repoA.split('\\').join('/'));
+    // No marker anywhere above it within the bound, so it must stop and take the
+    // unrooted graph rather than walk to the filesystem root.
+    expect(projectRootFor(buried, repoA)).toBe(unrootedRoot());
   });
 
   test('a nested package.json does NOT shadow the repository root', () => {

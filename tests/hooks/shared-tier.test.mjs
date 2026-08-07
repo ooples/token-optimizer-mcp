@@ -45,6 +45,13 @@ let projectA, projectB, wikiA, wikiB, shared, stateDir;
 beforeEach(() => {
   projectA = mkdtempSync(join(tmpdir(), 'shared-projA-'));
   projectB = mkdtempSync(join(tmpdir(), 'shared-projB-'));
+  // These fixtures stand in for the repositories the docstring above describes, so
+  // they carry a VCS marker. Without one, projectRootFor resolves them to the
+  // machine-wide unrooted graph instead of to themselves, and the "learned here"
+  // identity these tests turn on collapses -- projectA would no longer recognise
+  // its own lesson and would be told about it as foreign news.
+  mkdirSync(join(projectA, '.git'), { recursive: true });
+  mkdirSync(join(projectB, '.git'), { recursive: true });
   wikiA = join(projectA, '.token-optimizer', 'wiki');
   wikiB = join(projectB, '.token-optimizer', 'wiki');
   mkdirSync(wikiA, { recursive: true });
