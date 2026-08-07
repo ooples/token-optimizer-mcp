@@ -32,7 +32,7 @@ const CLI = 'claude';
  *   prompt        what the subject is asked to do
  *   correct(dir)  true when the repository is in the required end state
  */
-export function runToolTrial(task, { injected = null, settings = null, maxTurns = 12 } = {}) {
+export function runToolTrial(task, { injected = null, settings = null, maxTurns = 30 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), `tool-trial-${task.id}-`));
   try {
     task.setup(dir);
@@ -68,18 +68,24 @@ export function runToolTrial(task, { injected = null, settings = null, maxTurns 
     const elapsedMs = Date.now() - started;
 
     if (r.error) throw r.error;
-    // A NON-ZERO EXIT IS NOT A TRIAL. A truncated run that happens to leave the
-    // repository untouched is indistinguishable from a subject that failed the
-    // task, and scoring it as the latter invents a data point.
-    if (r.status !== 0) {
-      throw new Error(`claude exited ${r.status}: ${(r.stderr || '').slice(0, 300)}`);
-    }
 
-    let payload = {};
+    // RUNNING OUT OF TURNS IS A RESULT, NOT A HARNESS FAULT -- and treating it as
+    // one silently destroyed a run. The CLI exits non-zero when it hits
+    // --max-turns, so throwing on any non-zero status discarded exactly the
+    // SLOWEST trials and kept the fast ones. That biases the very quantity being
+    // measured, and it did: an earlier comparison reported the treated arm taking
+    // 41% more turns when both arms were simply censored at the cap.
+    //
+    // So the distinction is drawn on whether the CLI produced a parseable report.
+    // A report means the subject ran and the disk is the verdict, capped or not.
+    // No report means the harness failed, and that still throws.
+    let payload;
     try {
-      payload = JSON.parse(r.stdout || '{}');
+      payload = JSON.parse(r.stdout || '');
     } catch {
-      throw new Error(`unparseable CLI output: ${(r.stdout || '').slice(0, 200)}`);
+      throw new Error(
+        `claude exited ${r.status} with no parseable report: ${(r.stdout || r.stderr || '').slice(0, 200)}`
+      );
     }
 
     // The CLI reports turns; tool calls are counted from the message stream when
@@ -92,6 +98,10 @@ export function runToolTrial(task, { injected = null, settings = null, maxTurns 
       id: task.id,
       correct: Boolean(task.correct(dir)),
       toolCalls,
+      // A capped run reached the ceiling rather than choosing to stop, so its
+      // turn count is a lower bound and must not be averaged in as if it were
+      // a measurement.
+      hitLimit: payload.is_error === true || payload.stop_reason === 'tool_use',
       elapsedMs,
       costUsd: payload.total_cost_usd ?? null,
       text: String(payload.result || '').slice(0, 2000),
@@ -163,6 +173,68 @@ export const CAN_WRITE_TASK = {
     return /after/.test(readFileSync(join(dir, 'probe.txt'), 'utf8'));
   },
 };
+
+/**
+ * The same trap with the giveaway removed.
+ *
+ * The first version of this task labelled the generated file "GENERATED FILE --
+ * do not edit", so the control read the rule straight off the environment and
+ * both arms scored 3/3 with the treated arm 41% slower. A task whose answer is
+ * printed inside it measures nothing, which is the corpus-design mistake this
+ * work has already made twice in the single-turn setting.
+ *
+ * Here the header is gone. The fact is still DISCOVERABLE -- with tools, almost
+ * anything in a tree is -- but it costs a chain of steps: read package.json, find
+ * the sync script, read it, work out which direction it copies. That is what the
+ * lesson replaces, so the measure is turns rather than correctness, and the
+ * outcome is still checked on disk.
+ *
+ * BOTH FILES MUST END CONSISTENT. Editing only the source leaves the built output
+ * stale; editing only the copy is silently reverted by the next sync. Only
+ * "fix the source, then regenerate" satisfies both, and that is exactly the
+ * behaviour the lesson encodes.
+ */
+export const HIDDEN_GENERATED_TASK = {
+  id: 'hidden-generated-copy',
+  setup(dir) {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    mkdirSync(join(dir, 'build', 'lib'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'greet.mjs'), 'export const greet = () => "helo";\n');
+    // No "generated" header, and a neutral directory name.
+    writeFileSync(join(dir, 'build', 'lib', 'greet.mjs'), 'export const greet = () => "helo";\n');
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify(
+        { name: 'trial', type: 'module', scripts: { sync: 'node scripts/sync.mjs' } },
+        null,
+        2
+      ) + '\n'
+    );
+    mkdirSync(join(dir, 'scripts'), { recursive: true });
+    writeFileSync(
+      join(dir, 'scripts', 'sync.mjs'),
+      'import { readFileSync, writeFileSync } from "node:fs";\n' +
+        '// build/lib is produced from src; never edit it by hand.\n' +
+        'writeFileSync("build/lib/greet.mjs", readFileSync("src/greet.mjs", "utf8"));\n'
+    );
+  },
+  prompt:
+    'The greeting returns "helo" and should return "hello". Fix it so the fix survives ' +
+    'the project\'s build, and leave the repository consistent.',
+  correct(dir) {
+    const src = readFileSync(join(dir, 'src', 'greet.mjs'), 'utf8');
+    const built = readFileSync(join(dir, 'build', 'lib', 'greet.mjs'), 'utf8');
+    // Source carries the fix AND the built copy matches it: the only end state
+    // that survives the next sync.
+    return /"hello"/.test(src) && /"hello"/.test(built);
+  },
+};
+
+export const LESSON_FOR_HIDDEN_GENERATED =
+  'From other projects on this machine:\n' +
+  '- [failure] Edit the SOURCE and then run the project\'s sync script, never the built copy: ' +
+  'this repository generates build/lib from src/, so a change made to the built file is ' +
+  'silently reverted by the next sync and the bug returns. (learned in token-optimizer-mcp)';
 
 export const LESSON_FOR_GENERATED_COPY =
   'From other projects on this machine:\n' +
