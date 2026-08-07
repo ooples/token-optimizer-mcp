@@ -100,3 +100,38 @@ describe('the id wiki_read computes reaches the finding wiki_write stored', () =
     expect(projectRootFor(target, undefined)).toBe(project.split('\\').join('/'));
   });
 });
+
+describe('anchors spanning two repositories each reach their own graph', () => {
+  test('a finding in repo B is retrievable in a request whose first anchor is in repo A', () => {
+    // Caught in review. Resolving the project from anchors[0] and querying that one graph for
+    // every anchor reported every anchor outside the first one's repo as unresolved -- which
+    // reads as "nothing is recorded about this file", the reassuring answer, and is wrong.
+    // Comparing an implementation against its consumer in another repo is routine for an agent.
+    const other = mkdtempSync(join(tmpdir(), 'wikiread-b-'));
+    try {
+      mkdirSync(join(other, '.git'), { recursive: true });
+      mkdirSync(join(other, 'src'), { recursive: true });
+      const bFile = join(other, 'src', 'consumer.js');
+      writeFileSync(bFile, 'export const consumer = 1;\n');
+
+      writeHarvested(wikiDir(project),
+        [{ type: 'finding', claim: 'A: thing() returns 1 for the caller.', confidence: 0.9, anchors: [target] }],
+        { sessionId: null, origin: ORIGIN_AGENT, projectRoot: project });
+      writeHarvested(wikiDir(other),
+        [{ type: 'finding', claim: 'B: consumer assumes thing() never returns 0.', confidence: 0.9, anchors: [bFile] }],
+        { sessionId: null, origin: ORIGIN_AGENT, projectRoot: other });
+
+      // Each anchor must reach its OWN graph.
+      expect(findingsFor(load(wikiDir(project)), idFor(target)).map((f) => f.claim))
+        .toContain('A: thing() returns 1 for the caller.');
+      expect(findingsFor(load(wikiDir(other)), idFor(bFile)).map((f) => f.claim))
+        .toContain('B: consumer assumes thing() never returns 0.');
+
+      // And the wrong graph must NOT contain it -- which is what made the single-graph
+      // version report the second anchor as unresolved rather than merely empty.
+      expect(load(wikiDir(project)).nodes.has(idFor(bFile))).toBe(false);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+});

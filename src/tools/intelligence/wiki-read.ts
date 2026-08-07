@@ -114,11 +114,22 @@ export async function wikiRead(options: WikiReadOptions = {}): Promise<WikiReadR
     // Same rule as wiki_write: the graph is the ANCHOR's project, not wherever the caller is
     // running. A subagent's cwd is not meaningful, which is precisely why it cannot be trusted
     // to select the graph.
-    const project =
+    //
+    // ONE GRAPH PER ANCHOR PROJECT, not one graph for the whole request. Resolving the project
+    // from anchors[0] and querying it for every anchor meant that a request spanning two
+    // repositories -- routine for an agent asked to compare an implementation against its
+    // consumer -- reported every anchor outside the first one's repo as unresolved. That reads
+    // as "nothing is recorded about this file", which is the reassuring answer, and it would be
+    // wrong. Graphs are loaded once each and reused across anchors that share a project.
+    const graphs = new Map<string, any>();
+    const graphFor = (project: string) => {
+      if (!graphs.has(project)) graphs.set(project, wiki.load(wiki.wikiDir(project)));
+      return graphs.get(project);
+    };
+
+    const primary =
       options.projectRoot ??
-      wiki.projectRootFor(anchors[0].split('#')[0], process.cwd());
-    const dir = wiki.wikiDir(project);
-    const graph = wiki.load(dir);
+      (anchors.length ? wiki.projectRootFor(anchors[0].split('#')[0], process.cwd()) : process.cwd());
 
     const seen = new Set<string>();
     const findings: WikiFinding[] = [];
@@ -126,6 +137,11 @@ export async function wikiRead(options: WikiReadOptions = {}): Promise<WikiReadR
 
     for (const a of anchors) {
       const [file, symbol] = a.split('#');
+      // An explicit projectRoot pins every anchor to that graph -- the caller has said which
+      // project they mean. Otherwise each anchor resolves to its own repository.
+      const project = options.projectRoot ?? wiki.projectRootFor(file, process.cwd());
+      const graph = graphFor(project);
+
       const id = symbol
         ? wiki.nodeId('symbol', `${file}#${symbol}`)
         : wiki.nodeId('file', wiki.canonicalKey('file', file));
@@ -143,6 +159,9 @@ export async function wikiRead(options: WikiReadOptions = {}): Promise<WikiReadR
         findings.push(toFinding(node));
       }
     }
+
+    const project = primary;
+    const graph = graphFor(primary);
 
     // Anchorless: the project's own findings, ranked, as a session-start briefing would give.
     if (!anchors.length) {
