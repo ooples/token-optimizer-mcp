@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.5.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.3...v5.5.0) (2026-08-07)
+
+
+### Features
+
+* **graph:** carry process lessons across projects ([#278](https://github.com/ooples/token-optimizer-mcp/issues/278)) ([7c6bedd](https://github.com/ooples/token-optimizer-mcp/commit/7c6bedd2f30e4544e4233439de96bc395d688b5f))
+* **hooks:** ask the running session to record what it worked out ([#264](https://github.com/ooples/token-optimizer-mcp/issues/264)) ([dc39357](https://github.com/ooples/token-optimizer-mcp/commit/dc39357ca8f90bcdbc1781036d44478178831a49))
+
+
+### Bug Fixes
+
+* **ci:** run every verification gate, and repair the four that had rotted ([#272](https://github.com/ooples/token-optimizer-mcp/issues/272)) ([e02bce1](https://github.com/ooples/token-optimizer-mcp/commit/e02bce1bf65ec337206f533a7f62763a24104104))
+* **edit:** report the real line count, not the split artefact ([#274](https://github.com/ooples/token-optimizer-mcp/issues/274)) ([564e5c6](https://github.com/ooples/token-optimizer-mcp/commit/564e5c6a1b8ebb9f6dd8ce41e4fcd22c39370cfd))
+* **hooks:** a path must not be able to abort the hook process ([#265](https://github.com/ooples/token-optimizer-mcp/issues/265)) ([44c673b](https://github.com/ooples/token-optimizer-mcp/commit/44c673b1afee5ea0bff9cf5e31485d900a44f37e))
+* **hooks:** look up command findings in the project the command runs in ([#271](https://github.com/ooples/token-optimizer-mcp/issues/271)) ([b19f1c5](https://github.com/ooples/token-optimizer-mcp/commit/b19f1c5d5b9a0aeab1185a87221e066756ac1324))
+* **hooks:** say what was observed about an unreadable anchor ([#266](https://github.com/ooples/token-optimizer-mcp/issues/266)) ([8c00f5b](https://github.com/ooples/token-optimizer-mcp/commit/8c00f5b4021bcfa9e85adda03a3b4e6dc1279eb6))
+* **hooks:** scope read state per agent, not per session ([#269](https://github.com/ooples/token-optimizer-mcp/issues/269)) ([19d326a](https://github.com/ooples/token-optimizer-mcp/commit/19d326a2e36b00aa0f33c2da61ddc887a436d260))
+* **hooks:** serve findings before re-indexing, so an external change shows stale ([#275](https://github.com/ooples/token-optimizer-mcp/issues/275)) ([34c82f0](https://github.com/ooples/token-optimizer-mcp/commit/34c82f02088f07743fc204880b2bc6af3f9668e6))
+* **inject:** match the framing to the evidence, not to the strongest wording available ([#270](https://github.com/ooples/token-optimizer-mcp/issues/270)) ([c29896f](https://github.com/ooples/token-optimizer-mcp/commit/c29896f18b5484c2047103d59063f40d0a17e03d))
+* **mcp:** close the two verification holes that let bad schemas and stale manifests through ([#262](https://github.com/ooples/token-optimizer-mcp/issues/262)) ([a6fa649](https://github.com/ooples/token-optimizer-mcp/commit/a6fa6498e8f7342be84849332a3b358052aed140))
+* **search:** let path name a single file instead of answering zero ([#263](https://github.com/ooples/token-optimizer-mcp/issues/263)) ([359f556](https://github.com/ooples/token-optimizer-mcp/commit/359f556c74d7dc22ccb011d45c787bee099b8041))
+* **search:** make count mode actually return counts ([#273](https://github.com/ooples/token-optimizer-mcp/issues/273)) ([710747d](https://github.com/ooples/token-optimizer-mcp/commit/710747d78480c4c6275112b8709c98cb8c6061ca))
+* **search:** say when a literal zero was hiding a regex match ([#276](https://github.com/ooples/token-optimizer-mcp/issues/276)) ([c11a20e](https://github.com/ooples/token-optimizer-mcp/commit/c11a20ee2cdc713b1f28918a0e642260a3176860))
+* **search:** stop hiding every dot-directory, including .github ([#268](https://github.com/ooples/token-optimizer-mcp/issues/268)) ([4f59b98](https://github.com/ooples/token-optimizer-mcp/commit/4f59b98d0cf665b87a9fc0e66f444eb0e514d438))
+
 ## [5.4.3](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.2...v5.4.3) (2026-08-05)
 
 
