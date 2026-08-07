@@ -17,6 +17,7 @@ import { tmpdir } from 'os';
 
 import { wikiDir, projectRootFor } from '../../hooks-core/wiki.mjs';
 import { recordRead, fingerprint, readMetrics } from '../../hooks-core/metrics.mjs';
+import { loadState, saveState } from '../../hooks-core/policy.mjs';
 
 let repoA, repoB, fileA, fileB;
 
@@ -95,5 +96,35 @@ describe('the briefing is read from the repository root', () => {
     const sub = join(repoA, 'packages', 'web');
     mkdirSync(sub, { recursive: true });
     expect(wikiDir(sub)).not.toBe(wikiDir(repoA));
+  });
+});
+
+describe('state is scoped to the agent, not just the session', () => {
+  test('two agents in one session do not share denial state', () => {
+    // Subagents inherit the parent's session id. The router already keys state on
+    // transcript_path for this reason -- its comment records the failure observed live: "an
+    // agent refused a file it had never opened because a sibling had read it." The adapter,
+    // which serves codex/gemini/qwen/opencode, was never given the same scope.
+    const session = 'shared-session-id';
+    const a = loadState(session, '/transcripts/agent-a.jsonl');
+    const b = loadState(session, '/transcripts/agent-b.jsonl');
+
+    a.denied = { 'read:big.ts': 1 };
+    saveState(session, a, '/transcripts/agent-a.jsonl');
+
+    const bAfter = loadState(session, '/transcripts/agent-b.jsonl');
+    expect(bAfter.denied?.['read:big.ts']).toBeUndefined();
+    expect(b).toBeTruthy();
+  });
+
+  test('the same agent still sees its own state', () => {
+    // The scope must not be so narrow that a single agent forgets its own denials, or the
+    // repeat-denial escape hatch stops working.
+    const session = 'shared-session-id-2';
+    const scope = '/transcripts/agent-a.jsonl';
+    const first = loadState(session, scope);
+    first.denied = { 'read:big.ts': 1 };
+    saveState(session, first, scope);
+    expect(loadState(session, scope).denied?.['read:big.ts']).toBe(1);
   });
 });

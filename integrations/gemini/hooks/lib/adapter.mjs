@@ -192,12 +192,20 @@ export async function run(clientName, event) {
   const payload = normalizePayload(raw);
   if (!payload.tool_name) process.exit(0);
 
-  const state = loadState(payload.session_id);
+  // THE AGENT, not just the session -- the same scope the Claude Code router
+  // applies. Subagents inherit the parent's session id, so keying state on the
+  // session alone lets one agent's reads silence another's: the router's comment
+  // records it observed live, an agent refusing a file it had never opened
+  // because a sibling had read it. That fix was never carried across to the four
+  // clients this adapter serves. `transcript_path` is per agent; absent, this
+  // falls back to session scope, which is right for a main session's own calls.
+  const agentScope = payload.transcript_path || null;
+  const state = loadState(payload.session_id, agentScope);
   const verdict = decide(payload, state);
 
   if (!verdict) {
     remember(payload, state);
-    saveState(payload.session_id, state);
+    saveState(payload.session_id, state, agentScope);
 
     // Same measurement as the Claude Code router: every client's allowed read
     // feeds the same holdout comparison, or the metric is client-specific and
@@ -227,7 +235,7 @@ export async function run(clientName, event) {
 
   const repeat = alreadyDenied(state, verdict.key);
   remember(payload, state);
-  saveState(payload.session_id, state);
+  saveState(payload.session_id, state, agentScope);
 
   // A post-tool hook has already paid for the call, so a denial would cost a
   // turn and save nothing. It advises about the NEXT one instead.
