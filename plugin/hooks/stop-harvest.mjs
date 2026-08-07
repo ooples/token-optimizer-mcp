@@ -34,7 +34,8 @@ import { fileURLToPath } from 'node:url';
 import { mode, MODE_OFF } from './lib/policy.mjs';
 import { harvestEnabled, harvestMode } from './lib/harvest.mjs';
 import { archive } from './lib/transcript.mjs';
-import { wikiDir, projectRootFor } from './lib/wiki.mjs';
+import { wikiDir, projectRootFor, sharedDir, load } from './lib/wiki.mjs';
+import { detectRefusals, recordRefusal } from './lib/harvest-write.mjs';
 
 /** What to tell the user, per reason the harvest is not running. */
 const OFF_REASON = {
@@ -245,6 +246,27 @@ async function main() {
     });
   } catch {
     // The archive is a convenience. Failing to write it must not affect Stop.
+  }
+
+  // CLOSE THE REFUSAL LOOP, and do it OUTSIDE the harvest opt-in. Reading the
+  // transcript this process already holds costs no model call and sends nothing
+  // anywhere, so gating it behind the paid feature would leave a mis-scoped
+  // lesson costing tokens forever for everyone who did not opt in.
+  //
+  // The model states plainly when a cross-project lesson does not transfer --
+  // "that figure is another repo's baseline and it doesn't transfer" -- and until
+  // now nothing read it, so the same lesson was delivered again next session.
+  try {
+    const shared = sharedDir();
+    const lessons = [...load(shared).nodes.values()].filter(
+      (n) => n.kind === 'finding' && !n.retired && n.claim
+    );
+    if (lessons.length) {
+      const text = readFileSync(transcript, 'utf8');
+      for (const key of detectRefusals(lessons, text)) recordRefusal(shared, key);
+    }
+  } catch {
+    // Feedback is a refinement; a failure here must not affect Stop.
   }
 
   if (!harvestEnabled()) {
