@@ -19,6 +19,7 @@ import {
   openSync, closeSync, unlinkSync, statSync, writeFileSync, renameSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { canonicalPath, isFsSafePath } from './paths.mjs';
 
@@ -56,6 +57,45 @@ export const EDGE_KINDS = [
 /** Resolves the graph directory for a project. Configurable, per the design. */
 export function wikiDir(cwd) {
   return process.env.TOKEN_OPTIMIZER_WIKI_DIR || join(cwd || process.cwd(), '.token-optimizer', 'wiki');
+}
+
+/**
+ * The one graph that is NOT per project.
+ *
+ * Every graph above is keyed on the project a file belongs to, which is right for
+ * a claim about that file and wrong for a claim about the tools. Measured across
+ * five repositories in one session: structural capture worked everywhere (31, 30
+ * and 12 capture events in three fresh checkouts) and all 35 live lessons sat in
+ * ONE project's graph. A lesson learned in one repo -- "run `npm test`, not `npx
+ * jest`", "capture the exit code before piping" -- could never be served in
+ * another, so the same mistake stayed available to be made again in every other
+ * checkout on the machine.
+ *
+ * This tier holds only lessons that do not depend on any repository's contents
+ * (SHAREABLE_TYPES in harvest-write.mjs). It is per MACHINE and per USER,
+ * deliberately: it follows the person who learned the lesson.
+ */
+export function sharedDir() {
+  return (
+    process.env.TOKEN_OPTIMIZER_SHARED_DIR ||
+    join(homedir(), '.token-optimizer', 'wiki')
+  );
+}
+
+/**
+ * Is this project's graph ALSO the shared one?
+ *
+ * Both are redirectable by environment variable, and the suite points them at one
+ * scratch directory more often than not. Promoting into a store that is already
+ * the source would duplicate every finding and then serve it twice, so every
+ * caller checks this first.
+ */
+export function isSharedDir(dir) {
+  try {
+    return canonicalPath(dir) === canonicalPath(sharedDir());
+  } catch {
+    return false;
+  }
 }
 
 

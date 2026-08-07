@@ -272,7 +272,7 @@ function statePath(sessionId, agent) {
 
 /** A usable state object, whatever was on disk. */
 function emptyState() {
-  return { seen: {}, denied: {}, injected: [] };
+  return { seen: {}, denied: {}, injected: [], actCounts: {} };
 }
 
 /**
@@ -302,6 +302,16 @@ export function loadState(sessionId, agent) {
       // the same advice. The gate looked correct in unit tests, which share one
       // process, and did nothing at all in production.
       injected: Array.isArray(parsed.injected) ? parsed.injected : [],
+      // THE SAME REASON, ONE FIELD LATER. Every tool call is a separate process,
+      // so a per-session tally not carried through here resets on every call and
+      // can never reach a threshold. The act counter was written by the router and
+      // dropped on the next load, so "three verification steps this session"
+      // counted to one forever -- invisible rather than broken, which is the
+      // harder failure to notice.
+      actCounts:
+        parsed.actCounts && typeof parsed.actCounts === 'object' && !Array.isArray(parsed.actCounts)
+          ? parsed.actCounts
+          : {},
     };
   } catch {
     return emptyState();
@@ -359,6 +369,20 @@ export function saveState(sessionId, state, agent) {
       injected: [
         ...new Set([...(current.injected || []), ...(state.injected || [])]),
       ],
+      // HIGHEST WINS, for the same concurrency reason and with the same
+      // direction of safety. Two hook processes each read the tally, each
+      // increment, and a last-writer merge would lose one -- so a session that
+      // genuinely performed three acts of a class could sit at two forever and
+      // the reminder would never fire. Taking the max keeps the count
+      // monotonic: it can under-count under heavy parallelism, never over-count,
+      // and an under-count costs a reminder rather than producing a false one.
+      actCounts: (() => {
+        const out = { ...(current.actCounts || {}) };
+        for (const [k, v] of Object.entries(state.actCounts || {})) {
+          out[k] = Math.max(Number(out[k]) || 0, Number(v) || 0);
+        }
+        return out;
+      })(),
     };
 
     // Write-then-rename so a reader never observes a half-written file.

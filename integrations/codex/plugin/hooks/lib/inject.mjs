@@ -21,7 +21,10 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { findingsFor, putNode, putEdge, nodeId } from './wiki.mjs';
+import {
+  findingsFor, putNode, putEdge, nodeId, load, sharedDir, isSharedDir,
+} from './wiki.mjs';
+import { basename } from 'node:path';
 import { serve, diffLines } from './staleness.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
@@ -379,6 +382,309 @@ export function forCommand(
     .map(render)
     .join('\n')}`;
 }
+/**
+ * Tokens allowed for lessons carried in from OTHER projects.
+ *
+ * Deliberately a fraction of the command budget rather than its equal. A lesson
+ * from elsewhere is a weaker signal than one learned here -- it was true of a
+ * different codebase -- so it may add to the answer and must never crowd out this
+ * project's own findings, which are selected first and keep the full budget.
+ */
+const sharedBudget = () =>
+  Number(process.env.TOKEN_OPTIMIZER_SHARED_BUDGET) || 160;
+
+/** At most this many cross-project lessons per command, whatever the budget. */
+const MAX_SHARED = 2;
+
+/**
+ * ACTION CLASSES: what a command is DOING, rather than what it says.
+ *
+ * Two measured problems, one cause. First, `appliesToCommand` refuses any
+ * untriggered finding that is not `command` or `failure`, so every `feedback` and
+ * `decision` lesson is unreachable on the command path -- measured on the real
+ * store, 10 of 19 shared lessons could never fire, and all five `feedback` ones
+ * were among them. Those are the most behaviour-shaping lessons there are:
+ * "report the number you measured, not the one you expected", "a green unit suite
+ * does not mean the feature is reachable".
+ *
+ * Second, a literal trigger only fires on the string its author happened to
+ * write. The lesson "confirm the sabotage applied before trusting a canary" was
+ * in this store all session while I broke that exact rule six times, because the
+ * commands I ran said `node probe.mjs` and `dotnet csc.dll`, not "canary".
+ *
+ * So a finding also matches when its claim and the command are about the same
+ * KIND of act. The classes are deliberately few and behavioural -- each one names
+ * a way work actually goes wrong, not a topic.
+ */
+const ACTION_CLASSES = {
+  // Running something whose output is trusted as proof.
+  verify: {
+    command: /\b(test|jest|pytest|check|--check|lint|verify|assert|canary|probe|csc|tsc|typecheck)\b/i,
+    claim: /\b(verif|assert|canary|sabotage|prove|trust(ed|ing)?|silently|reports? (pass|green|success)|actually (ran|applied|chang))/i,
+  },
+  // Reading a result through a pipe or a filter, where status can be lost.
+  pipe: {
+    command: /\|\s*(tail|head|grep|sort|wc|jq)\b|>\s*\S+\.(log|txt)\b/i,
+    claim: /\b(pipe|PIPESTATUS|exit code|\$\?|stderr|redirect)\b/i,
+  },
+  // Changing files by machine rather than by hand.
+  edit: {
+    command: /\b(sed|smart_edit|prettier|format|codemod|rename)\b/i,
+    claim: /\b(edit|editsApplied|rewrite|generated cop|overwrit|line ending|CRLF)\b/i,
+  },
+  // Producing artefacts from source, where the artefact may not match the source.
+  build: {
+    command: /\b(build|compile|tsc|dotnet build|make|pack|sync:hooks|generate)\b/i,
+    claim: /\b(build|compile|generated|regenerat|artefact|artifact|dist\/|stale)\b/i,
+  },
+  // Putting software somewhere it will be executed from.
+  install: {
+    command: /\b(npm (install|ci|i)\b|npx|pip install|dotnet restore|clone)\b/i,
+    claim: /\b(install|npx|cache|node_modules|global|published|running (process|server|build))\b/i,
+  },
+};
+
+/** Which classes a piece of text belongs to, on the given side. */
+const classesOf = (text, side) => {
+  const out = new Set();
+  for (const [name, spec] of Object.entries(ACTION_CLASSES)) {
+    if (spec[side].test(String(text || ''))) out.add(name);
+  }
+  return out;
+};
+
+/**
+ * How many times a session must repeat an act class before a lesson it has
+ * already been given is allowed to speak again.
+ *
+ * ONCE PER SESSION IS RIGHT UNTIL IT IS NOT. Repeating advice on every call is
+ * how a real signal becomes wallpaper, which is why the gate exists. But the gate
+ * is also why a lesson can be delivered at 10:00 and be irrelevant by 14:00: in
+ * one session on this machine the lesson "confirm the sabotage applied before
+ * trusting a canary" was served once and then suppressed, and the same class of
+ * mistake was made SIX more times that day -- a prompt mangled by shell quoting
+ * that scored a fabricated result, a compiler path with a trailing character so
+ * no compiler ran and every file reported clean, two heredocs that silently
+ * matched nothing, an edit that clobbered the wrong line, a scorer that counted a
+ * refusal as a success.
+ *
+ * Three is chosen to be quiet: the first two repetitions say nothing, because
+ * doing something twice is ordinary work. The third says the session has a
+ * pattern, which is exactly when a reminder stops being wallpaper and starts
+ * being information.
+ */
+const REPEAT_THRESHOLD = 3;
+
+/**
+ * Records that this session performed an act of a given class, and reports which
+ * classes have now crossed the threshold.
+ *
+ * The counter lives in session state, so it is per session by construction and
+ * disappears when the session does -- a pattern within one working day is the
+ * claim, not a pattern across months.
+ */
+export function noteActClasses(state, command) {
+  const classes = classesOf(command, 'command');
+  if (!classes.size) return new Set();
+
+  state.actCounts = state.actCounts && typeof state.actCounts === 'object' ? state.actCounts : {};
+  const crossed = new Set();
+  for (const c of classes) {
+    state.actCounts[c] = (state.actCounts[c] || 0) + 1;
+    if (state.actCounts[c] === REPEAT_THRESHOLD) crossed.add(c);
+  }
+  return crossed;
+}
+
+/**
+ * A lesson already given this session, re-surfaced because the session keeps
+ * doing the thing it is about.
+ *
+ * EXACTLY ONCE PER CLASS, at the moment the threshold is crossed -- `===` not
+ * `>=` in the counter above. A reminder that returns on every subsequent call is
+ * the wallpaper the once-per-session gate was built to prevent, and re-creating
+ * it here under a different name would be worse than not reminding at all.
+ */
+export function forRepeatedAct(
+  projectDir,
+  command,
+  crossedClasses,
+  { sessionId = null, projectRoot = null } = {}
+) {
+  if (!crossedClasses || !crossedClasses.size) return null;
+
+  try {
+    const dir = sharedDir();
+    if (!dir || isSharedDir(projectDir)) return null;
+    const graph = load(dir);
+    if (!graph.nodes.size) return null;
+
+    const home = projectRoot ? canonicalPath(projectRoot) : null;
+    for (const node of graph.nodes.values()) {
+      if (node.kind !== 'finding' || node.retired || !node.claim) continue;
+      if (home && node.sourceProject && canonicalPath(node.sourceProject) === home) continue;
+      const claimClasses = classesOf(node.claim, 'claim');
+      if (![...crossedClasses].some((c) => claimClasses.has(c))) continue;
+
+      const cls = [...crossedClasses].find((c) => claimClasses.has(c));
+      record(projectDir, {
+        kind: 'inject',
+        trigger: 'repeat',
+        surface: 'shared',
+        anchor: String(command).slice(0, 120),
+        holdout: false,
+        tokens: estimate(node.claim),
+        count: 1,
+        stale: false,
+        sessionId,
+      });
+
+      // The count is the whole message. "You have done this three times" is a
+      // fact about this session that the model cannot see for itself, and it is
+      // what makes a repeated claim land differently from the first delivery.
+      return `You have run ${REPEAT_THRESHOLD} ${cls} steps this session. Worth re-reading:\n- [${node.type || 'finding'}] ${node.claim}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Does this lesson apply to this command, for the CROSS-PROJECT path?
+ *
+ * Strictly wider than `appliesToCommand`, and only here: the local path keeps its
+ * stricter rule because a project's own graph is dense and a loose match there
+ * costs tokens on every call. The shared tier is small, capped at two lessons and
+ * budgeted separately, so reachability matters more than selectivity.
+ */
+function appliesCrossProject(finding, command) {
+  if (appliesToCommand(finding, command)) return true;
+
+  // A shared lesson with no usable trigger still has a claim, and a claim about
+  // the same kind of act as the command is the signal a literal string misses.
+  const shared = [...classesOf(finding.claim, 'claim')].filter((c) =>
+    classesOf(command, 'command').has(c)
+  );
+  return shared.length > 0;
+}
+
+/**
+ * What OTHER projects on this machine learned that applies to this command.
+ *
+ * The project graph answers "what do we know about this repo". This answers the
+ * question that had no owner -- "have I already learned this somewhere else?" --
+ * which is where the same mistake was repeated per checkout, because every lesson
+ * was filed under the repository that happened to teach it.
+ *
+ * TRIGGER-MATCHED, NOT ANCHOR-MATCHED. A shared lesson has no meaningful anchor in
+ * this project by construction, so the retrieval hook is the command text, using
+ * the same appliesToCommand test the local path uses. Anything that cannot say
+ * when it applies is not carried across.
+ */
+export function forSharedCommand(
+  projectDir,
+  command,
+  { budget = sharedBudget(), sessionId = null, alreadyInjected = new Set(), projectRoot = null } = {}
+) {
+  if (!command) return null;
+
+  try {
+    const dir = sharedDir();
+    // Nothing to carry when the shared store IS this project's store.
+    if (!dir || isSharedDir(projectDir)) return null;
+
+    const graph = load(dir);
+    if (!graph.nodes.size) return null;
+
+    const home = projectRoot ? canonicalPath(projectRoot) : null;
+    const candidates = [];
+    for (const node of graph.nodes.values()) {
+      if (node.kind !== 'finding' || node.retired) continue;
+      if (alreadyInjected.has(node.key)) continue;
+      // ITS OWN LESSON IS NOT NEWS. A finding this project contributed is already
+      // served by the local path; repeating it under a "from elsewhere" label
+      // would both double the tokens and misstate where it came from.
+      if (home && node.sourceProject && canonicalPath(node.sourceProject) === home) continue;
+      if (!appliesCrossProject(node, command)) continue;
+      candidates.push(node);
+    }
+    if (!candidates.length) return null;
+
+    // Explicit trigger first, then confidence -- the same ordering the local
+    // command path uses, for the same reason: a finding whose author wrote a
+    // pattern that matches this command is about this command.
+    const explicit = (n) => (n.trigger && safeTrigger(n.trigger)?.test(command) ? 1 : 0);
+    candidates.sort(
+      (a, b) => explicit(b) - explicit(a) || (b.confidence ?? 0.5) - (a.confidence ?? 0.5)
+    );
+
+    // No serve() here: these types are not content-dependent, so there is no
+    // anchor to re-read and nothing to diff. serve() would spend a file read per
+    // finding to answer a question that does not apply to them.
+    const { kept, spent } = fit(candidates.slice(0, MAX_SHARED), budget);
+    if (!kept.length) return null;
+
+    // THE SAME ARM AS THE LOCAL PATH, KEYED THE SAME WAY.
+    //
+    // Two defects were being introduced here at once, and both attacked the
+    // measurement rather than the feature. Delivering shared lessons to a command
+    // that forCommand had assigned to the HOLDOUT arm means the control arm is
+    // not a control: it received knowledge, just from a different tier, so any
+    // difference between the arms understates what injection does. And spending
+    // tokens that no `inject` event describes makes the balance sheet report a
+    // cost lower than the one actually paid -- an overstated saving, which is the
+    // one number this project must never produce.
+    //
+    // One key, not two. The arm is a property of the COMMAND; letting the tiers
+    // draw separately would put a command in local-treated and shared-holdout at
+    // once and contaminate both readings.
+    const arm = commandKey(command);
+    const holdout = inHoldout(arm);
+
+    record(projectDir, {
+      kind: 'inject',
+      trigger: 'command',
+      // ITS OWN SURFACE. The balance sheet joins `file` injections to later read
+      // events; a shared lesson has no anchor in this project to join to, and
+      // folding it into `command` would hide how much of the spend is
+      // cross-project when that is exactly what needs weighing.
+      surface: 'shared',
+      anchor: String(command).slice(0, 120),
+      holdout,
+      tokens: holdout ? 0 : spent,
+      count: holdout ? 0 : kept.length,
+      stale: false,
+      sessionId,
+    });
+
+    // MARKED SEEN IN BOTH ARMS, for the reason the local paths document: a
+    // command run repeatedly would otherwise write a fresh holdout row every time
+    // while a treated command was suppressed after its first delivery, and the
+    // report counts rows.
+    for (const f of kept) alreadyInjected.add(f.key);
+
+    // Withheld means withheld. Returning the text anyway would record an arm the
+    // subject never actually experienced.
+    if (holdout) return null;
+
+    // NAMED, NOT HEDGED. Measured on this project: wording that tells a model to
+    // discount a claim suppresses correct claims -- findings rendered with "treat
+    // this as unverified" scored 1/3 against 2/3 for the identical findings
+    // rendered clean. So the origin project is stated as a fact and the reader is
+    // left to judge transfer, rather than told in advance to doubt it.
+    return `From other projects on this machine:\n${kept
+      .map((f) => {
+        const from = f.sourceProject ? basename(f.sourceProject) : 'another project';
+        return `- [${f.type || 'finding'}] ${f.claim} (learned in ${from})`;
+      })
+      .join('\n')}`;
+  } catch {
+    // A cross-project extra must never cost the caller their tool call.
+    return null;
+  }
+}
+
 
 /**
  * The bounded SessionStart index: titles and ids only, never bodies.
