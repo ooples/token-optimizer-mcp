@@ -345,7 +345,18 @@ describe('expand serves what it claims to serve', () => {
     const { resolve } = await import('../../hooks-core/expand.mjs');
     const dir = mkdtempSync(join(tmpdir(), 'exp-ref-'));
     try {
-      for (const bad of ['../../../etc/passwd', '..\..\notes', 'not-hex-at-all', 'ABCDEF0123456789', '', null, 42]) {
+      // String.raw for the Windows case. Written as '..\..\notes' it collapsed to '....notes' --
+      // `\.` is not an escape sequence, so the backslashes vanished and the input duplicated the
+      // 'not-hex-at-all' case. The test still passed, so the gap was silent: the traversal shape
+      // this guard exists to refuse was never actually passed to it.
+      const windowsTraversal = String.raw`..\..\notes`;
+      expect(windowsTraversal).toContain('\\');
+
+      for (const bad of [
+        '../../../etc/passwd', windowsTraversal, 'not-hex-at-all',
+        'ABCDEF0123456789', // uppercase hex: right shape, wrong case, still refused
+        '', null, 42,
+      ]) {
         expect(resolve(dir, bad)).toBeNull();
       }
     } finally {

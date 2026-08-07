@@ -149,7 +149,14 @@ export function capture(dir, text, meta = {}) {
  * that ever produced these bytes counts as staleness.
  */
 function captureOf(dir, ref) {
-  const rows = readMetrics(dir).filter((e) => e.kind === 'capture' && e.ref === ref);
+  const rows = readMetrics(dir)
+    .filter((e) => e.kind === 'capture' && e.ref === ref)
+    // SORTED, rather than trusting the reader's order. "Oldest hash per anchor wins" and "the
+    // latest capture supplies the rest of the record" are both statements about TIME, and
+    // readMetrics returns whatever order the log and its tail slice produce. Relying on write
+    // order makes the conservative direction accidental. Ties keep their relative order, since
+    // sort is stable and two rows in the same millisecond have no better ordering available.
+    .sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
   if (!rows.length) return null;
   const byAnchor = new Map();
   for (const row of rows) {
