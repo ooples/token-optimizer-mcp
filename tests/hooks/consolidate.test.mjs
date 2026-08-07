@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   selectForConsolidation, irrecoverability, reuseProbability,
-  consolidationRatio, aggregateConsolidation, contentAnchor,
+  consolidationRatio, aggregateConsolidation, contentAnchor, costToRederive,
 } from '../../hooks-core/consolidate.mjs';
 import { classifySituation, restorationPlan } from '../../hooks-core/restore.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
@@ -224,5 +224,61 @@ describe('restoration adapts to the situation', () => {
     // A misread situation can shift the mix; it can never overspend, because the
     // ceiling is measured rather than situational.
     expect(plan.tokens).toBeLessThanOrEqual(1200);
+  });
+});
+
+describe('scoring inputs are the ones the module claims to use', () => {
+  test('an anchor reaches the graph, so a well-connected file outranks an isolated one', () => {
+    // The defect: anchors were canonical PATHS while graph edges hold nodeId hashes, so degree
+    // was zero for every candidate and the reuse term was a constant. Worse, an EMPTY anchor
+    // list scores 0.5 while a resolved-but-unmatched one scores 0.25 -- so every anchored
+    // candidate was penalised 2x against every unanchored aside, and budget pressure dropped
+    // the anchored findings first.
+    const dir = mkdtempSync(join(tmpdir(), 'consol-'));
+    try {
+      const hot = putNode(dir, { kind: 'file', key: '/hot.ts' });
+      const cold = putNode(dir, { kind: 'file', key: '/cold.ts' });
+      for (let i = 0; i < 8; i += 1) {
+        const other = putNode(dir, { kind: 'file', key: `/n${i}.ts` });
+        putEdge(dir, hot, 'related', other);
+      }
+      const graph = load(dir);
+
+      const entry = (anchor) => ({ type: 'finding', summary: 'the same claim, differently anchored', anchors: [anchor] });
+      // Budgeted so only one survives: the ranking, not the budget, decides which.
+      const { kept } = selectForConsolidation(graph, [entry('/cold.ts'), entry('/hot.ts')], { budget: 12 });
+      expect(kept).toHaveLength(1);
+      expect(kept[0].anchors[0]).toBe('/hot.ts');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a stack trace does not score as an irrecoverable observation', () => {
+    // `race` matched "stack trace", putting an ordinary reasoned finding in the top tier.
+    const traced = irrecoverability({ summary: 'the stack trace shows the handler returns early because the guard is inverted' });
+    const flaky = irrecoverability({ summary: 'only fails intermittently under load' });
+    expect(traced).toBeLessThan(flaky);
+    expect(traced).toBe(2);
+  });
+
+  test('a profile in the non-performance sense does not score as a measurement', () => {
+    expect(irrecoverability({ summary: 'the user profile page renders the wrong avatar' })).toBeLessThan(3);
+  });
+
+  test('a genuine reproduction still scores at the top', () => {
+    // The word-anchoring must not disarm the detector it belongs to.
+    expect(irrecoverability({ summary: 'reproduced only under a race between the two writers' })).toBe(4);
+  });
+
+  test('costToRederive depends only on the entry, not on a dead previousAt', () => {
+    // `window > 0 ? 0 : 0` returned zero on both branches, so previousAt never affected
+    // anything while the docstring claimed cost was measured from the transcript.
+    const entry = { type: 'finding', summary: 'a claim', evidence: 'some evidence text' };
+    expect(costToRederive(entry, null)).toBe(costToRederive(entry, Date.now() - 50_000));
+  });
+
+  test('an explicitly measured spend still wins over the evidence-size fallback', () => {
+    expect(costToRederive({ summary: 'x', evidence: 'y', tokensSpent: 4242 })).toBe(4242);
   });
 });
