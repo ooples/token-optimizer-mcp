@@ -335,3 +335,56 @@ describe('preview quality is reported, not buried', () => {
     expect(quality.healthy).toBe(false);
   });
 });
+
+describe('expand serves what it claims to serve', () => {
+  test('a ref that is not a digest is refused, not joined into a path', async () => {
+    // The ref arrives straight from a model-supplied tool argument -- index.ts dispatches
+    // `expand` with request.params.arguments unvalidated and the schema declares a bare string.
+    // `join` resolves `..`, so '../../notes' read notes.txt from anywhere on disk and returned it
+    // as the expansion of the pointer the caller was holding.
+    const { resolve } = await import('../../hooks-core/expand.mjs');
+    const dir = mkdtempSync(join(tmpdir(), 'exp-ref-'));
+    try {
+      for (const bad of ['../../../etc/passwd', '..\..\notes', 'not-hex-at-all', 'ABCDEF0123456789', '', null, 42]) {
+        expect(resolve(dir, bad)).toBeNull();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a well-formed but unknown digest is still null, not an adjacent file', async () => {
+    const { resolve } = await import('../../hooks-core/expand.mjs');
+    const dir = mkdtempSync(join(tmpdir(), 'exp-miss-'));
+    try {
+      expect(resolve(dir, '0123456789abcdef')).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('an expansion whose capture record is gone is marked unverified, not served as fresh', async () => {
+    // The artifact store is never pruned while metrics is a bounded tail, so artifacts routinely
+    // outlive their capture records. Staleness is then unanswerable -- and unanswerable rendered
+    // as fresh, which the module header calls worse than serving nothing.
+    const { capture, resolve } = await import('../../hooks-core/expand.mjs');
+    const dir = mkdtempSync(join(tmpdir(), 'exp-unver-'));
+    try {
+      // Capture writes the artifact AND a metrics record; delete the metrics so only the
+      // artifact survives, which is exactly the steady state being reproduced.
+      const ref = capture(dir, 'some captured output', { anchors: [], tool: 'Bash', shape: 'log' });
+      rmSync(join(dir, 'metrics.jsonl'), { force: true });
+      const out = resolve(dir, ref);
+      expect(out).toBeTruthy();
+      expect(out.text).toMatch(/UNVERIFIED/);
+      expect(out.known).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('the artifact TTL is exported so the bound is not silent', async () => {
+    const { ARTIFACT_TTL_MS } = await import('../../hooks-core/expand.mjs');
+    expect(ARTIFACT_TTL_MS).toBeGreaterThan(0);
+  });
+});

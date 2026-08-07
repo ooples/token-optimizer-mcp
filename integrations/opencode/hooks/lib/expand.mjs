@@ -33,11 +33,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'node:fs';
+import {
+  readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync,
+  readdirSync, statSync, unlinkSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { record, readMetrics } from './metrics.mjs';
 import { putNode, putEdge, nodeId } from './wiki.mjs';
-import { checkAnchor } from './staleness.mjs';
 import { canonicalPath } from './paths.mjs';
 
 /** A stale artifact cheaper than this to regenerate is refreshed, not served. */
@@ -46,7 +48,35 @@ export const CHEAP_REGEN_MS = 3000;
 /** Expansions below this rate mean the preview policy is working. */
 export const HEALTHY_HOLD_RATE = 0.85;
 
+/**
+ * How long an artifact is kept. STATED, not silent.
+ *
+ * The store was otherwise write-only: every disclosed tool result landed here forever, while its
+ * capture record ages out of the bounded metrics window -- so most files on disk were already
+ * unreachable and could not even be resolved usefully, only occupy space. Content addressing
+ * dedupes byte-identical bodies but not near-identical ones, so two runs of the same suite
+ * differing only in elapsed-ms are two files.
+ *
+ * A bound nobody can see would be worse than none, so it is exported and documented alongside
+ * the rest of the module's stated properties.
+ */
+export const ARTIFACT_TTL_MS = 30 * 86_400_000;
+
 const digest = (text) => createHash('sha256').update(String(text)).digest('hex').slice(0, 16);
+
+/** Removes artifacts past the TTL. A sweep must never break a capture. */
+function sweepArtifacts(path) {
+  try {
+    const cutoff = Date.now() - ARTIFACT_TTL_MS;
+    for (const name of readdirSync(path)) {
+      if (!name.endsWith('.txt')) continue;
+      const file = join(path, name);
+      try {
+        if (statSync(file).mtimeMs < cutoff) unlinkSync(file);
+      } catch { /* raced with another sweep or a reader */ }
+    }
+  } catch { /* no store yet, or unreadable -- neither is worth failing a capture over */ }
+}
 
 function artifactDir(dir) {
   const path = join(dir, 'artifacts');
@@ -72,7 +102,12 @@ export function capture(dir, text, meta = {}) {
 
   const ref = digest(body);
   const path = join(artifactDir(dir), `${ref}.txt`);
-  if (!existsSync(path)) writeFileSync(path, body, { mode: 0o600 });
+  if (!existsSync(path)) {
+    writeFileSync(path, body, { mode: 0o600 });
+    // Amortised off the digest rather than run on every capture, and deterministic rather than
+    // sampled at random: roughly one write in sixty-four pays for a readdir.
+    if (parseInt(ref.slice(0, 2), 16) < 4) sweepArtifacts(artifactDir(dir));
+  }
 
   const anchors = (meta.anchors || []).map((a) => canonicalPath(a));
   record(dir, {
@@ -101,9 +136,30 @@ export function capture(dir, text, meta = {}) {
   return ref;
 }
 
-/** The capture record for a reference, or null. */
+/**
+ * The capture record for a reference, or null.
+ *
+ * ANCHORS ARE UNIONED ACROSS EVERY CAPTURE OF THIS REF. The ref is the hash of the BODY, which
+ * is exactly what makes the store converge -- and it means one ref legitimately spans captures
+ * made against DIFFERENT anchors: two byte-identical files, one generated file vendored into six
+ * directories (this module is itself vendored six times), the same command output captured
+ * against two operands. Taking only the last record checked staleness against whichever copy
+ * happened to be captured most recently, so editing the copy the caller actually asked about
+ * produced no stale marker at all.
+ *
+ * The OLDEST hash per anchor wins, which is the conservative direction: any change to any file
+ * that ever produced these bytes counts as staleness.
+ */
 function captureOf(dir, ref) {
-  return readMetrics(dir).filter((e) => e.kind === 'capture' && e.ref === ref).pop() || null;
+  const rows = readMetrics(dir).filter((e) => e.kind === 'capture' && e.ref === ref);
+  if (!rows.length) return null;
+  const byAnchor = new Map();
+  for (const row of rows) {
+    for (const entry of row.anchorHashes || []) {
+      if (!byAnchor.has(entry.anchor)) byAnchor.set(entry.anchor, entry);
+    }
+  }
+  return { ...rows[rows.length - 1], anchorHashes: [...byAnchor.values()] };
 }
 
 /**
@@ -165,6 +221,13 @@ export function refreshDecision(state) {
  * rather than having it executed underneath them.
  */
 export function resolve(dir, ref, { section } = {}) {
+  // The ref reaches this function straight from a model-supplied tool argument -- index.ts
+  // dispatches `expand` with request.params.arguments unvalidated, and the tool schema declares
+  // ref as a bare string. It is a content digest and nothing else, so anything that is not one
+  // is refused rather than joined into a path: `join` resolves `..`, so '../../notes' would read
+  // notes.txt from anywhere on disk and return it as the expansion of the pointer the caller was
+  // holding. digest() always produces exactly 16 lowercase hex characters, so this is exact.
+  if (typeof ref !== 'string' || !/^[0-9a-f]{16}$/.test(ref)) return null;
   const path = join(artifactDir(dir), `${ref}.txt`);
   let body;
   try {
@@ -175,9 +238,16 @@ export function resolve(dir, ref, { section } = {}) {
 
   const state = freshness(dir, ref);
   const decision = refreshDecision(state);
-
   const notes = [];
-  if (decision.action === 'serve-stale') {
+  if (decision.action === 'unknown') {
+    // The artifact outlived its capture record: metrics.jsonl is read as a bounded tail and the
+    // artifact store is never pruned, so this is the ordinary steady state rather than an edge
+    // case. Staleness is then unanswerable -- and unanswerable must not render as fresh. Serving
+    // a month-old build log about a file that has since been rewritten, unmarked, is what the
+    // module header calls worse than serving nothing.
+    notes.push('! UNVERIFIED -- no capture record survives for this reference, so whether the '
+      + 'code it describes has changed since cannot be determined. Treat it as historical.');
+  } else if (decision.action === 'serve-stale') {
     notes.push(`! STALE -- ${decision.changed.join(', ')} changed after this was captured. ` +
       'Treat it as historical.');
   } else if (decision.action === 'refresh') {
@@ -188,6 +258,8 @@ export function resolve(dir, ref, { section } = {}) {
     ref,
     text: notes.length ? `${notes.join('\n')}\n${body}` : body,
     stale: Boolean(state.stale),
+    // Distinguishes "checked and unchanged" from "could not be checked".
+    known: state.known !== false,
     decision: decision.action,
     section: section || null,
     // Nothing was spent producing this a second time. That is the number the
@@ -204,7 +276,20 @@ export function resolve(dir, ref, { section } = {}) {
  * xunit output are wrong specifically by dropping the first failing trace".
  */
 export function recordExpansion(dir, { ref, tool, shape, asked, sessionId } = {}) {
-  record(dir, { kind: 'expand', ref: ref || null, tool: tool || null, shape: shape || null, asked: asked || null, sessionId: sessionId || null });
+  // BACKFILLED FROM THE CAPTURE, because the caller of `expand` holds a ref and nothing else.
+  // Written without tool and shape, every expand event filed as null/null -- and previewPolicy's
+  // per-(tool, shape) filter then matched none of them, pinning holdRate at 1, strength at 0 and
+  // boosts permanently {}. The refit was inert in production while the suite passed by supplying
+  // a shape the real caller never has.
+  const cap = ref ? captureOf(dir, ref) : null;
+  record(dir, {
+    kind: 'expand',
+    ref: ref || null,
+    tool: tool || cap?.tool || null,
+    shape: shape || cap?.shape || null,
+    asked: asked || null,
+    sessionId: sessionId || null,
+  });
 }
 
 /**
@@ -291,7 +376,11 @@ export function previewQuality(dir) {
     shapes.get(shape).served += 1;
   }
   for (const exp of expansions) {
-    const shape = exp.shape || 'plain';
+    // NOT `|| 'plain'`. 'plain' is a REAL shape parseShape returns, so folding shapeless events
+    // into it charges expansions to a shape that was never expanded -- and that is then the
+    // shape the panel names as the worst one. An 'unknown' bucket has served 0 and is skipped by
+    // the served < 3 guard below, which is the right treatment for an unattributable event.
+    const shape = exp.shape || 'unknown';
     if (!shapes.has(shape)) shapes.set(shape, { served: 0, expanded: 0 });
     shapes.get(shape).expanded += 1;
   }
