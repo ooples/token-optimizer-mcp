@@ -19,6 +19,10 @@ import {
   WIKI_WRITE_TOOL_DEFINITION,
 } from '../tools/intelligence/wiki-write.js';
 import {
+  wikiRead,
+  WIKI_READ_TOOL_DEFINITION,
+} from '../tools/intelligence/wiki-read.js';
+import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -621,6 +625,7 @@ const TOOL_DEFINITIONS = [
   DOCTOR_TOOL,
   FLEET_TOOL,
   WIKI_WRITE_TOOL_DEFINITION,
+  WIKI_READ_TOOL_DEFINITION,
   EXPAND_TOOL,
   WASTE_TOOL,
   CACHE_TOOL,
@@ -2583,6 +2588,15 @@ async function handleToolCall(request: {
         // other tool so it carries a schema and a dispatch case, which the
         // reachability suite requires of everything advertised.
         const result = await wikiWrite(args as any);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+      case 'wiki_read': {
+        // The read counterpart to wiki_write. Until this existed the graph had a
+        // deliberate write path and no deliberate read path, so a subagent -- which
+        // never receives the SessionStart briefing -- could not reach it at all.
+        const result = await wikiRead(args as any);
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
