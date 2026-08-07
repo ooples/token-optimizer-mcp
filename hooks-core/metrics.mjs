@@ -61,7 +61,12 @@ const metricsPath = (dir) => join(dir, 'metrics.jsonl');
 const balancePath = (dir) => join(dir, 'balance.jsonl');
 
 /** Kinds the net balance is computed from, and which therefore must survive. */
-const BALANCE_KINDS = new Set(['inject', 'harvest', 'substitute']);
+/**
+ * Kinds written to balance.jsonl as well as the firehose, so the event window can never
+ * starve the measurement. Exported because any reader that needs the unwindowed truth needs to
+ * know which kinds it applies to, and a second copy of this set elsewhere would drift.
+ */
+export const BALANCE_KINDS = new Set(['inject', 'harvest', 'substitute']);
 
 /**
  * Is this touch in the holdout arm?
