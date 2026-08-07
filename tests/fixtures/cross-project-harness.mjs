@@ -57,23 +57,32 @@ export async function buildCrossArms(cases) {
 
     // Written through the PRODUCTION path, with the shared dir pointed at the
     // scratch store, so promotion is the real promotion.
+    // RESTORED IN A finally. Without it, a throw from writeHarvested leaves this
+    // scratch directory installed as the process-wide shared store, and every
+    // test that runs afterwards reads and writes another case's lessons. That is
+    // cross-test contamination arriving through an error path, which is the kind
+    // that survives a green suite.
     const prevShared = process.env.TOKEN_OPTIMIZER_SHARED_DIR;
-    process.env.TOKEN_OPTIMIZER_SHARED_DIR = shared;
-    const written = writeHarvested(
-      wikiA,
-      [
-        {
-          type: 'command',
-          claim: c.claim,
-          confidence: 0.95,
-          trigger: c.trigger,
-          anchors: [anchor],
-        },
-      ],
-      { sessionId: `xproj-seed-${run}`, projectRoot: projectA }
-    );
-    if (prevShared === undefined) delete process.env.TOKEN_OPTIMIZER_SHARED_DIR;
-    else process.env.TOKEN_OPTIMIZER_SHARED_DIR = prevShared;
+    let written;
+    try {
+      process.env.TOKEN_OPTIMIZER_SHARED_DIR = shared;
+      written = writeHarvested(
+        wikiA,
+        [
+          {
+            type: 'command',
+            claim: c.claim,
+            confidence: 0.95,
+            trigger: c.trigger,
+            anchors: [anchor],
+          },
+        ],
+        { sessionId: `xproj-seed-${run}`, projectRoot: projectA }
+      );
+    } finally {
+      if (prevShared === undefined) delete process.env.TOKEN_OPTIMIZER_SHARED_DIR;
+      else process.env.TOKEN_OPTIMIZER_SHARED_DIR = prevShared;
+    }
 
     // Probe from project B through the REAL hook.
     const r = spawnSync(process.execPath, [HOOK], {
