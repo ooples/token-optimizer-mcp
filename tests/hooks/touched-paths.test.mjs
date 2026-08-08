@@ -422,3 +422,46 @@ describe('a touch carries the size that was measured to find it', () => {
     expect(bashFiles('wc -l node_modules/pkg/index.js', repoA)).toEqual([]);
   });
 });
+
+describe('a dump whose output goes to a file is not a dump', () => {
+  it('a heredoc append is a WRITE, and was being refused as a read', () => {
+    // THE FALSE POSITIVE, hit while appending a test file to this repository. stripHeredocs
+    // removes the body and leaves `cat >> file <<'EOF'`, which still matched \bcat\b.
+    //
+    // The cost was not the refusal itself. The whole Bash call was denied, so a `git checkout` and
+    // a python edit chained inside it silently never ran -- and the change looked applied when
+    // nothing had happened. A false positive here fails silently in the middle of a compound
+    // command, which is worse than failing loudly.
+    expect(isContentDump("cat >> tests/x.test.mjs <<'EOF'\nbody\nEOF")).toBe(false);
+    expect(isContentDump('cat > new.txt <<EOF\nbody\nEOF')).toBe(false);
+  });
+
+  it('any dump redirected to a file puts nothing in context', () => {
+    expect(isContentDump('head -100 big.log > out.txt')).toBe(false);
+    expect(isContentDump('tail -n 500 server.log >> archive.log')).toBe(false);
+  });
+
+  it('but the same command printing to the terminal still is', () => {
+    // The bypass this rule exists to close: an agent that cannot Read a file will cat it instead.
+    expect(isContentDump('cat big.ts')).toBe(true);
+    expect(isContentDump('type big.txt')).toBe(true);
+    expect(isContentDump('Get-Content big.txt')).toBe(true);
+  });
+
+  it('a pipeline still reaches context even though a redirect appears elsewhere', () => {
+    // Segments are judged individually, so one redirected dump does not excuse an unredirected one.
+    expect(isContentDump('cat big.ts | head -20')).toBe(true);
+    expect(isContentDump('cat a.ts > out.txt && cat b.ts')).toBe(true);
+  });
+
+  it('stderr redirection is not stdout redirection', () => {
+    // `2>` sends errors to a file and leaves the content itself heading for the transcript.
+    expect(isContentDump('cat big.ts 2> err.log')).toBe(true);
+  });
+
+  it('a recursive search is unbounded regardless of redirection', () => {
+    // Kept deliberately: the refusal for these is about the search tool being the wrong instrument,
+    // not only about output size, and the router names smart_grep as the replacement.
+    expect(isContentDump('grep -r foo src')).toBe(true);
+  });
+});

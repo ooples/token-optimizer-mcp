@@ -52,7 +52,41 @@ export function isContentDump(command) {
   // print foo.ts, and charging the session for its bytes would inflate the
   // measured cost -- the one number this project must never overstate.
   const runnable = stripHeredocs(command);
-  return DUMP_COMMANDS.test(runnable) || RECURSIVE_SEARCH.test(runnable);
+  if (RECURSIVE_SEARCH.test(runnable)) return true;
+  if (!DUMP_COMMANDS.test(runnable)) return false;
+
+  // A DUMP WHOSE STDOUT GOES TO A FILE PUTS NOTHING IN CONTEXT, and refusing it is a false
+  // positive that blocks ordinary work. `cat >> file <<'EOF'` is the standard way to APPEND a
+  // heredoc -- cat is WRITING there, not printing -- and stripping the heredoc body leaves
+  // `cat >> file <<'EOF'`, which still matched \bcat\b and was refused.
+  //
+  // Hit while appending a test file to this very repository. The whole Bash call was denied, so
+  // the git checkout and the python edit chained inside it silently never ran, and the change
+  // looked applied when nothing had happened. A false positive here does not merely annoy: it
+  // fails silently in the middle of a compound command.
+  //
+  // The same reasoning covers `head -100 big.log > out.txt` -- those bytes land on disk, not in
+  // the transcript. Segments are checked individually, so `cat big.ts | head`, where the output
+  // DOES reach context, is still caught.
+  return segmentsOf(runnable).some(
+    (segment) => DUMP_COMMANDS.test(segment) && !redirectsStdoutToFile(segment),
+  );
+}
+
+/** Command segments, split on the operators that end one command's stdout. */
+function segmentsOf(command) {
+  return String(command).split(/\|\||&&|[|;&\n]/).map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Does this segment send its stdout to a file?
+ *
+ * `2>` is stderr and does not count, and `>&1`/`>&2` duplicate a descriptor rather than naming a
+ * file. Anything else of the form `>` or `>>` followed by a path captures output that would
+ * otherwise have reached the transcript.
+ */
+function redirectsStdoutToFile(segment) {
+  return /(?:^|[^0-9&2])>>?\s*(?!&)\S+/.test(String(segment));
 }
 
 /**
