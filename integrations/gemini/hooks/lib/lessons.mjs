@@ -91,6 +91,13 @@ export function buildFeedbackDigest(turns, { maxChars = 40_000 } = {}) {
   let total = 0;
   for (let i = rendered.length - 1; i >= 0; i--) {
     const piece = rendered[i];
+    // A SINGLE oversize turn must not end the digest. One pasted stack trace in the last turn
+    // made the budget test below true on the FIRST iteration, so `out` stayed empty, this
+    // returned null, and harvest-worker skipped the entire feedback pass for that session --
+    // no extraction, no lesson validation, no metrics record, no signal anywhere. The loop runs
+    // backwards precisely to keep the end, and a big terminal turn is exactly what a session
+    // that went wrong tends to produce.
+    if (piece.length > maxChars) continue;
     if (total + piece.length > maxChars) break;
     out.unshift(piece);
     total += piece.length;
