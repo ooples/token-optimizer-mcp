@@ -30,6 +30,7 @@
  */
 
 import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from './curate.mjs';
+import { safeTrigger } from './inject.mjs';
 
 /** Lessons longer than this are prose, not instructions. */
 const MAX_CLAIM = 400;
@@ -91,6 +92,13 @@ export function buildFeedbackDigest(turns, { maxChars = 40_000 } = {}) {
   let total = 0;
   for (let i = rendered.length - 1; i >= 0; i--) {
     const piece = rendered[i];
+    // A SINGLE oversize turn must not end the digest. One pasted stack trace in the last turn
+    // made the budget test below true on the FIRST iteration, so `out` stayed empty, this
+    // returned null, and harvest-worker skipped the entire feedback pass for that session --
+    // no extraction, no lesson validation, no metrics record, no signal anywhere. The loop runs
+    // backwards precisely to keep the end, and a big terminal turn is exactly what a session
+    // that went wrong tends to produce.
+    if (piece.length > maxChars) continue;
     if (total + piece.length > maxChars) break;
     out.unshift(piece);
     total += piece.length;
@@ -199,9 +207,17 @@ export function validateLessons(raw, turns) {
       rejected.push({ reason: 'no-trigger', claim: claim.slice(0, 80) });
       continue;
     }
-    try {
-      new RegExp(trigger);
-    } catch {
+    // THE SAME GATE THE INJECTOR USES. `new RegExp` only proves the pattern COMPILES. inject.mjs
+    // additionally refuses sources over 200 characters and nested-quantifier ReDoS shapes -- and
+    // when it refuses, appliesToCommand falls back to a LITERAL substring search of the regex
+    // SOURCE against the command. A regex source is not a substring of any real command --
+    // a word-boundary-anchored pattern for the jest runner does not appear literally inside
+    // `npx jest --watch` --
+    // so a lesson stored with such a trigger is written to the graph, counted as delivered in the
+    // metrics record, and can never surface for the rest of its life. Both rejection shapes are
+    // realistic from the extraction prompt: a long alternation over test runners passes 200
+    // characters easily, and `(\w+\s*)+\.csproj` is the kind of thing a model emits unprompted.
+    if (!safeTrigger(trigger)) {
       rejected.push({ reason: 'bad-trigger-regex', trigger });
       continue;
     }
