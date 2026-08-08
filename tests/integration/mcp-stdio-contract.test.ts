@@ -136,7 +136,7 @@ beforeAll(async () => {
     env: {
       ...process.env,
       // Keep the server's own graph and state out of the developer's real ones.
-      TOKEN_OPTIMIZER_WIKI_DIR: join(fixtures, '.wiki'),
+      TOKEN_OPTIMIZER_WIKI_DIR: join, TOKEN_OPTIMIZER_SHARED_DIR: join(fixtures, '.wiki'),
       TOKEN_OPTIMIZER_STATE_DIR: join(fixtures, '.state'),
     },
   });

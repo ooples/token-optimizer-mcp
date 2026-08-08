@@ -142,7 +142,7 @@ describe('the feedback loop end to end', () => {
 
     const r = await runWorker([transcript, SESSION, project], {
       TOKEN_OPTIMIZER_MODE: 'on',
-      TOKEN_OPTIMIZER_WIKI_DIR: dir,
+      TOKEN_OPTIMIZER_WIKI_DIR: dir, TOKEN_OPTIMIZER_SHARED_DIR: dir,
       TOKEN_OPTIMIZER_HARVEST_ENDPOINT: endpoint,
     });
 

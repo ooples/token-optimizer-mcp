@@ -155,7 +155,7 @@ export function buildArms() {
       encoding: 'utf8',
       env: {
         ...process.env,
-        TOKEN_OPTIMIZER_WIKI_DIR: caseDir,
+        TOKEN_OPTIMIZER_WIKI_DIR: caseDir, TOKEN_OPTIMIZER_SHARED_DIR: caseDir,
         // THE HOLDOUT IS OFF FOR THE HARNESS.
         //
         // The harness builds the TREATMENT arm: its whole job is to capture

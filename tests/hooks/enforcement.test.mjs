@@ -53,7 +53,7 @@ function run(payload, env = {}) {
   const result = spawnSync(process.execPath, [ROUTER], {
     input: JSON.stringify({ session_id: payload.session_id || 's-default', ...payload }),
     encoding: 'utf8',
-    env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH, ...env },
+    env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH, TOKEN_OPTIMIZER_SHARED_DIR: ISOLATED_GRAPH, ...env },
   });
   if (!result.stdout.trim()) return { decision: 'allow' };
   const parsed = JSON.parse(result.stdout);
