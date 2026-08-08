@@ -270,7 +270,7 @@ function statePath(sessionId, agent) {
 
 /** A usable state object, whatever was on disk. */
 function emptyState() {
-  return { seen: {}, denied: {}, injected: [], actCounts: {} };
+  return { seen: {}, denied: {}, injected: [], actCounts: {}, forecast: null };
 }
 
 /**
@@ -310,6 +310,16 @@ export function loadState(sessionId, agent) {
         parsed.actCounts && typeof parsed.actCounts === 'object' && !Array.isArray(parsed.actCounts)
           ? parsed.actCounts
           : {},
+      // THE SAME REASON A THIRD TIME. The forecast throttle records when the panel was last
+      // computed and what runway it last SHOWED, and both are meaningless within a single hook
+      // process -- every tool call is a new one. Dropped here, `checkedAt` would reset on every
+      // call and the panel would rebuild itself, transcript parse and all, on each tool use; and
+      // `shown` would reset, so worthSurfacing would compare against nothing and re-interrupt with
+      // the same runway forever.
+      forecast:
+        parsed.forecast && typeof parsed.forecast === 'object' && !Array.isArray(parsed.forecast)
+          ? parsed.forecast
+          : null,
     };
   } catch {
     return emptyState();
@@ -380,6 +390,18 @@ export function saveState(sessionId, state, agent) {
           out[k] = Math.max(Number(out[k]) || 0, Number(v) || 0);
         }
         return out;
+      })(),
+      // LATEST CHECK WINS, which is the opposite direction from the fields above and correct for
+      // this one. `seen`, `denied`, `injected` and `actCounts` are all append-only, so a union or
+      // a max is the safe merge. The forecast throttle is a POINT IN TIME: taking the older of two
+      // concurrent checks would re-open the window and let the panel be rebuilt immediately, which
+      // is the cost the throttle exists to bound.
+      forecast: (() => {
+        const mine = state.forecast || null;
+        const theirs = current.forecast || null;
+        if (!mine) return theirs;
+        if (!theirs) return mine;
+        return (mine.checkedAt || 0) >= (theirs.checkedAt || 0) ? mine : theirs;
       })(),
     };
 

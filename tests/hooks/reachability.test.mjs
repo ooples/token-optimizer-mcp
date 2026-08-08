@@ -91,17 +91,18 @@ const ALLOWED = new Map([
   // WIRED ELSEWHERE -- leaves this list when that PR merges.
   ['forTouch', 'WIRED by the injection PR: just-in-time delivery, imported by nothing before it.'],
 
-  // A COMPLETE LOOP WITH NO ENTRY POINT. calibration.mjs has no importer at
-  // all: logForecast and observeOutcome collect the data, reliability scores it
-  // and calibrate applies the score. Nothing starts it, so the module cannot
-  // score anything -- and its own docstring says an uncalibrated forecast is
-  // "a vibe with a typeface".
-  ['logForecast', 'UNWIRED LOOP: calibration.mjs has zero importers; this records the prediction half.'],
-  ['observeOutcome', 'UNWIRED LOOP: records the outcome half of a calibration loop nothing starts.'],
+  // THE FORECAST IS WIRED, so nothing from it is listed here any more.
+  // logForecast and calibrate are called by forecastPanel; forecastPanel and
+  // worthSurfacing by surface.mjs; observeOutcome by surface.closeForecast; and
+  // surface itself by the PreToolUse router and the PreCompact hook. Five
+  // entries left this list at once, which is what wiring a whole feature looks
+  // like -- and is why it was worth doing rather than annotating.
 
-  // FORECAST DISPLAY, unreachable while the calibration behind it is unreachable.
-  ['forecastPanel', 'UNWIRED: renders a forecast whose calibration loop never runs.'],
-  ['worthSurfacing', 'UNWIRED: decides whether a forecast change is worth showing; same dormant loop.'],
+  // SURFACED BY TIGHTENING THE SCAN. Previously counted as reachable only
+  // because the bare word match read comment prose as a call site. Verified
+  // orphaned: in shipped code it appears as its own declaration plus two
+  // mentions in comments, and its only importer is a test.
+  ['sessionIndex', 'UNWIRED: lists graph keys and truncated claims for a session. Found by the comment-stripping fix; only a test imports it.'],
 
   // CONSOLIDATION. forecast.mjs imports aggregateConsolidation from this module,
   // so it is partly live -- but the selection, the ratio and the content anchor
@@ -176,19 +177,70 @@ function exportedFunctions() {
 }
 
 /**
+ * Strips comments, so prose cannot be mistaken for a call.
+ *
+ * THIS IS WHAT LET A DEAD PUBLIC ENTRY POINT THROUGH. `calibrate` counted as
+ * reachable because curate.mjs:13 contains the English phrase "the reader's
+ * ability to calibrate trust", and `reliability` counted because the word
+ * appears in its own file's prose. calibration.mjs had ZERO importers -- no
+ * forecast was ever logged, no outcome observed, and the shipped panel printed
+ * precisely the uncalibrated number that module's docstring calls "a vibe with
+ * a typeface" -- while the check that exists to catch exactly this reported it
+ * as wired, on a coincidence of comment wording.
+ *
+ * A guard that reads documentation as code is worse than none: it is a clean
+ * bill of health nobody re-examines. This module's files are heavily commented
+ * by design, which makes the false-positive rate high rather than incidental.
+ *
+ * COMMENTS ONLY, NOT STRING LITERALS -- and that boundary was found the hard
+ * way. Stripping quotes as well made `routingReport` and `modelSwitchCost` look
+ * orphaned when routing-tool.ts calls both: three independent global passes
+ * cannot nest, so an apostrophe inside a DOUBLE-quoted sentence opened a
+ * "single-quoted string" that ran to the next apostrophe further down the file
+ * and swallowed the real call sites in between.
+ *
+ * Getting that right needs a scanner, and this guard's own rule says why not to
+ * build one: a check wrong in the permissive direction is merely useless, while
+ * one wrong in the strict direction fails CI on working code and gets deleted.
+ * The observed defect was comment prose, comments nest predictably, and that is
+ * where the line belongs.
+ */
+function stripComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')     // block comments, including docblocks
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 '); // line comments, sparing the // in a URL
+}
+
+/**
  * Referenced anywhere that ships, other than its own declaration?
  *
- * A bare word match, deliberately. Anything cleverer would need to resolve the
- * dynamic `mods.<module>.<fn>` handles that src/server uses, and a check that
- * is wrong in the permissive direction is merely useless -- one that is wrong in
- * the strict direction fails CI on working code and gets deleted.
+ * A bare word match over CODE, deliberately. Anything cleverer would need to
+ * resolve the dynamic `mods.<module>.<fn>` handles that src/server uses, and a
+ * check that is wrong in the permissive direction is merely useless -- one that
+ * is wrong in the strict direction fails CI on working code and gets deleted.
+ * Comments and strings are removed first: they are prose, and prose is not a
+ * caller.
  */
+const codeOnly = new Map();
+function shippedCode(file, text) {
+  if (!codeOnly.has(file)) codeOnly.set(file, stripComments(text));
+  return codeOnly.get(file);
+}
+
+// AN IN-FILE CALLER STILL COUNTS, and the attempt to change that is worth recording. Excluding
+// the declaring file outright -- on the reasoning that `reliability` passed only because
+// `calibrate` calls it from the same module -- reported 40+ false orphans in one run, among them
+// burnRate, runway and shadowAvoided, which forecastPanel calls from inside forecast.mjs. Those
+// are genuinely reached; reachability propagates THROUGH an in-file caller. The real defect in the
+// reliability case was that its whole module had no importer, which is a module-level question
+// this function cannot answer and should not try to.
 function usedInShippedCode(name, declaringFile) {
   const word = new RegExp(`\\b${name}\\b`, 'g');
   const decl = new RegExp(`export\\s+(?:async\\s+)?function\\s+${name}\\b`, 'g');
   for (const { file, text } of usages) {
-    const uses = (text.match(word) || []).length;
-    const declared = file === declaringFile ? (text.match(decl) || []).length : 0;
+    const code = shippedCode(file, text);
+    const uses = (code.match(word) || []).length;
+    const declared = file === declaringFile ? (code.match(decl) || []).length : 0;
     if (uses - declared > 0) return true;
   }
   return false;

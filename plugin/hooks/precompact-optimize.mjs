@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { mode, MODE_OFF, loadState, clearSeen } from './lib/policy.mjs';
 import { linkCoOccurrence } from './lib/inject.mjs';
 import { wikiDir, projectRootFor } from './lib/wiki.mjs';
+import { closeForecast } from './lib/surface.mjs';
 
 /** Longest compaction may be delayed. Past this the work is abandoned. */
 const TIMEOUT_MS =
@@ -124,6 +125,26 @@ async function main() {
   // cannot shrink the map at all. The first version of this used saveState and was a
   // silent no-op until a test caught it.
   clearSeen(payload.session_id, payload.transcript_path || null);
+
+  // THE GROUND TRUTH, AT THE ONLY MOMENT IT EXISTS.
+  //
+  // Compaction firing is exactly the event every runway forecast was predicting, so this is the
+  // one place the calibration loop can be closed. Without a caller here the loop collected
+  // predictions and never scored one: reliability saw an empty set forever and calibrate returned
+  // "not yet calibrated" for the life of the project, which is indistinguishable from the feature
+  // not existing.
+  //
+  // Silent, and before the wrapper check: nothing is shown to anybody, and a plugin-only install
+  // returns early below, so putting it after would have excluded every such user from the
+  // measurement -- the same shape as the co-occurrence write above.
+  try {
+    closeForecast(wikiDir(projectRootFor(payload.cwd, payload.cwd)), {
+      transcriptPath: payload.transcript_path,
+      sessionId: payload.session_id,
+    });
+  } catch {
+    // Scoring a forecast must never delay compaction.
+  }
 
   // NOW the wrapper, which only the optimize_session spawn needs. Plugin-only
   // installs stop here having still recorded their co-occurrence above.

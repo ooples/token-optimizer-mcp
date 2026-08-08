@@ -32,6 +32,7 @@
 import { readMetrics, readBalance, isFixtureAnchor, BALANCE_KINDS } from './metrics.mjs';
 import { aggregateConsolidation } from './consolidate.mjs';
 import { previewQuality } from './expand.mjs';
+import { logForecast, calibrate } from './calibration.mjs';
 
 /** Turns of headroom below which the runway is worth interrupting for. */
 export const ACTIONABLE_RUNWAY = 8;
@@ -310,7 +311,33 @@ export function forecastPanel(dir, session = {}, findings = []) {
 
   if (air) {
     parts.runway = air;
-    lines.push(runwayLine(air));
+
+    // THE FORECAST KEEPS ITS OWN SCORE -- from here, because this is the only place a forecast is
+    // actually made. calibration.mjs was written for exactly this and had zero shipped importers:
+    // no forecast was ever logged, no outcome ever observed, reliability always saw an empty set,
+    // and calibrate was unreachable. So the shipped panel printed precisely the uncalibrated
+    // number that module's docstring calls "a vibe with a typeface".
+    //
+    // Logged BEFORE it is corrected. The raw prediction is what gets scored against the outcome;
+    // scoring the corrected one would fold the correction back into the next correction and the
+    // bias would chase its own tail.
+    logForecast(dir, {
+      sessionId: session.sessionId,
+      predictedTurns: air.withGraph,
+      used: session.used,
+      capacity: session.capacity,
+      // The turn this was predicted FROM. predictedTurns is an interval, so without its origin
+      // the outcome at compaction has nothing to subtract from.
+      turns: session.turns,
+    });
+
+    const score = calibrate(dir, air.withGraph);
+    parts.calibration = score;
+    // Published only when the horizon has earned it. An unpublishable score does not replace the
+    // number -- it is simply absent, exactly as the uncalibrated case reads today.
+    lines.push(score.publishable
+      ? `${runwayLine({ ...air, withGraph: score.predictedTurns })}\n  (corrected: ${score.note})`
+      : runwayLine(air));
   }
 
   if (rate) {

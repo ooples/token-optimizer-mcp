@@ -32,6 +32,7 @@ import {
   commandProjectRoot,
 } from './lib/decide.mjs';
 import { recordRead, fingerprint } from './lib/metrics.mjs';
+import { maybeSurface } from './lib/surface.mjs';
 import {
   wikiDir,
   load,
@@ -250,6 +251,28 @@ try {
     } catch {
       // Delivery is an optimization. A defect here must never cost the user
       // their tool call, so a failure falls through to a plain allow.
+    }
+
+    // THE FORECAST, AND THE ONLY PLACE IT CAN REACH A USER.
+    //
+    // This is the mid-session hook -- SessionStart is too early for a runway to mean anything and
+    // PreCompact is too late to act on one -- so it is where a deadline can still change what
+    // somebody does next. Everything about the cost is bounded inside maybeSurface: the throttle
+    // is checked from persisted state BEFORE any file is opened, and worthSurfacing withholds the
+    // panel unless the runway is actionable and has moved since the last one shown.
+    try {
+      const surfaced = maybeSurface(dirFor(payload.cwd || process.cwd()), {
+        transcriptPath: payload.transcript_path,
+        sessionId: payload.session_id,
+        state,
+      });
+      if (surfaced.state !== state.forecast) {
+        state.forecast = surfaced.state;
+        saveState(payload.session_id, state, agentScope);
+      }
+      if (surfaced.text) context = context ? `${context}\n\n${surfaced.text}` : surfaced.text;
+    } catch {
+      // Same rule as above: a forecast is a courtesy and must never cost a tool call.
     }
 
     // THE MEMORY HALF. `harvest` records that this file was touched, at this
