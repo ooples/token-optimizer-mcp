@@ -25,6 +25,7 @@ import { mode, MODE_OFF, loadState, clearSeen } from './lib/policy.mjs';
 import { linkCoOccurrence } from './lib/inject.mjs';
 import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 import { closeForecast } from './lib/surface.mjs';
+import { compactionNudge } from './lib/recording.mjs';
 
 /** Longest compaction may be delayed. Past this the work is abandoned. */
 const TIMEOUT_MS =
@@ -125,6 +126,20 @@ async function main() {
   // cannot shrink the map at all. The first version of this used saveState and was a
   // silent no-op until a test caught it.
   clearSeen(payload.session_id, payload.transcript_path || null);
+
+  // THE LAST HONEST MOMENT TO ASK FOR A RECORDING. Compaction is the event this whole subsystem
+  // exists for: an unrecorded conclusion does not survive it, it is destroyed rather than merely
+  // forgotten. Deliberately not gated on the once-per-session flag the router uses.
+  try {
+    const graphDir = wikiDir(projectRootFor(join(payload.cwd || process.cwd(), 'x'), payload.cwd));
+    const state = loadState(payload.session_id, payload.transcript_path || null);
+    const nudge = compactionNudge(graphDir, { edits: state.edits || 0 });
+    if (nudge) {
+      process.stdout.write(JSON.stringify({ systemMessage: nudge }));
+    }
+  } catch {
+    // Never delay compaction for a reminder.
+  }
 
   // THE GROUND TRUTH, AT THE ONLY MOMENT IT EXISTS.
   //

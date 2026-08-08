@@ -33,6 +33,7 @@ import {
 } from './lib/decide.mjs';
 import { recordRead, fingerprint } from './lib/metrics.mjs';
 import { maybeSurface } from './lib/surface.mjs';
+import { recordingNudge, isSubstantive } from './lib/recording.mjs';
 import {
   wikiDir,
   load,
@@ -251,6 +252,38 @@ try {
     } catch {
       // Delivery is an optimization. A defect here must never cost the user
       // their tool call, so a failure falls through to a plain allow.
+    }
+
+    // PRESSURE TO RECORD, once, after real work, on a project that has learned nothing.
+    //
+    // The read side of this product is enforced by REFUSAL -- this same hook denies Read, Grep and
+    // Edit and names the tool to use instead. The write side had only a line of SessionStart prose,
+    // and measured across a long working session on this repository it was followed zero times.
+    // Advisory text loses to whatever the model is already doing.
+    //
+    // A refusal is the wrong instrument: wiki_write substitutes for no other tool, so there is
+    // nothing to deny, and holding an edit hostage to bookkeeping would be worse than the problem.
+    // Timing and specificity are what is available -- fired after the work exists, naming the
+    // files, exactly once.
+    try {
+      if (isSubstantive(payload.tool_name)) {
+        state.edits = (state.edits || 0) + 1;
+        const edited = payload.tool_input?.file_path;
+        if (edited) state.editedFiles = [edited, ...(state.editedFiles || [])].slice(0, 20);
+
+        const nudge = recordingNudge(dirFor(edited || payload.cwd || process.cwd()), {
+          state, edits: state.edits, files: state.editedFiles,
+        });
+        if (nudge) {
+          state.recordingNudged = true;
+          context = context ? `${context}
+
+${nudge}` : nudge;
+        }
+        saveState(payload.session_id, state, agentScope);
+      }
+    } catch {
+      // Bookkeeping must never cost a tool call.
     }
 
     // THE FORECAST, AND THE ONLY PLACE IT CAN REACH A USER.
