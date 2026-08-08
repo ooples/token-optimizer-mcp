@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.5.0...v5.6.0) (2026-08-08)
+
+
+### Features
+
+* **graph:** add wiki_read so agents can retrieve what the graph knows ([#281](https://github.com/ooples/token-optimizer-mcp/issues/281)) ([23f8250](https://github.com/ooples/token-optimizer-mcp/commit/23f8250d5f1df388d5c66fa1c61e603c4ee88fda))
+
+
+### Bug Fixes
+
+* **adapter:** make the non-Claude clients measure what the router measures ([#284](https://github.com/ooples/token-optimizer-mcp/issues/284)) ([d1fbf2a](https://github.com/ooples/token-optimizer-mcp/commit/d1fbf2ab182dc6abbd8af52cf9a460afe1dedd0e))
+* **audit:** stop the report misstating its own numbers ([#286](https://github.com/ooples/token-optimizer-mcp/issues/286)) ([7a6f4be](https://github.com/ooples/token-optimizer-mcp/commit/7a6f4be8d55655800fded2c2f63702e996b0f34c))
+* **cache:** stop reporting invented cache costs ([#282](https://github.com/ooples/token-optimizer-mcp/issues/282)) ([7ad35b0](https://github.com/ooples/token-optimizer-mcp/commit/7ad35b08dc6dc2868b7b939566d425305176190c))
+* **consolidate:** score against the inputs the module says it uses ([#285](https://github.com/ooples/token-optimizer-mcp/issues/285)) ([b10eba0](https://github.com/ooples/token-optimizer-mcp/commit/b10eba0e7ab6b84dabd04ca3af039285937b6ee8))
+* **curate:** stop losing curated claims to a single failed append ([#283](https://github.com/ooples/token-optimizer-mcp/issues/283)) ([6f66b55](https://github.com/ooples/token-optimizer-mcp/commit/6f66b55d2a5c1a8d2aabfac370ddf7e5516bf57f))
+* **disclose:** never withhold content while reporting nothing omitted ([#288](https://github.com/ooples/token-optimizer-mcp/issues/288)) ([dc65b9c](https://github.com/ooples/token-optimizer-mcp/commit/dc65b9cf85bf551068b6203e1d133003d7c622ee))
+* **doctor:** stop reporting a broken install as healthy ([#287](https://github.com/ooples/token-optimizer-mcp/issues/287)) ([04d17b5](https://github.com/ooples/token-optimizer-mcp/commit/04d17b524e793af79fa7f4b9651d0eb41988654a))
+* **expand:** serve only what the pointer actually points at ([#289](https://github.com/ooples/token-optimizer-mcp/issues/289)) ([a4be61e](https://github.com/ooples/token-optimizer-mcp/commit/a4be61e9a0ec7175335093666c50be1e2716271d))
+* **fleet:** scope the scan, weight the comparison, read nothing before consent ([#290](https://github.com/ooples/token-optimizer-mcp/issues/290)) ([4473a07](https://github.com/ooples/token-optimizer-mcp/commit/4473a07b93b36b087fd707355d9f6963d2da1925))
+* **forecast:** let the panel publish a result that is bad for the product ([#291](https://github.com/ooples/token-optimizer-mcp/issues/291)) ([9efbe84](https://github.com/ooples/token-optimizer-mcp/commit/9efbe849f0625a1c8ec418caaffca2e5d99f6a49))
+* **graph:** key unrooted files on a stable graph, not the caller cwd ([#279](https://github.com/ooples/token-optimizer-mcp/issues/279)) ([87f50d7](https://github.com/ooples/token-optimizer-mcp/commit/87f50d738e7358f87d5ae69c069e09ce5329ba31))
+
 ## [5.5.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.4.3...v5.5.0) (2026-08-07)
 
 
