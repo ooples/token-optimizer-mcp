@@ -54,11 +54,39 @@ describe('harvest enablement', () => {
     }
   });
 
-  it('does NOT bill just because an API key happens to be in the environment', async () => {
-    // The regression this whole rule exists for.
-    process.env.ANTHROPIC_API_KEY = 'sk-ant-not-consent';
+  it('runs by default when a credential is present', async () => {
+    // DELIBERATELY REVERSED. This asserted the opposite -- that an ambient key was not consent and
+    // must not start a harvest. The argument was sound, and it was measured against: on a machine
+    // running this for weeks, two project graphs held 340 and 48 read events and ZERO findings,
+    // harvests or injections. Nobody sets a variable they have never heard of, so the whole
+    // knowledge half of the product was inert by default.
+    //
+    // Everything the old rule protected is still protected: no key still means no call
+    // (off:no-key, below), the digest still excludes tool results and file bodies, and
+    // TOKEN_OPTIMIZER_HARVEST=0 turns it off. What changed is which way the default points.
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-present';
     const { harvestMode, harvestEnabled } = await harvest();
-    expect(harvestMode()).toBe('off:not-opted-in');
+    expect(harvestMode()).toBe('remote');
+    expect(harvestEnabled()).toBe(true);
+  });
+
+  it('is turned off by an explicit opt-out, and says so as a choice', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-present';
+    for (const value of ['0', 'false', 'no', 'off', 'OFF']) {
+      process.env.TOKEN_OPTIMIZER_HARVEST = value;
+      const { harvestMode, harvestEnabled } = await harvest();
+      expect(harvestMode()).toBe('off:opted-out');
+      expect(harvestEnabled()).toBe(false);
+    }
+  });
+
+  it('still refuses to call anything without a credential', async () => {
+    // The half of the consent argument that survives unchanged: on by default cannot mean
+    // billing a machine that has no key to bill against.
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.TOKEN_OPTIMIZER_API_KEY;
+    const { harvestMode, harvestEnabled } = await harvest();
+    expect(harvestMode()).toBe('off:no-key');
     expect(harvestEnabled()).toBe(false);
   });
 
@@ -95,7 +123,9 @@ describe('harvest enablement', () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-xxx';
     const { harvestMode, localEndpoint } = await harvest();
     expect(localEndpoint()).toBeNull();
-    expect(harvestMode()).toBe('off:not-opted-in');
+    // A remote endpoint is not a LOCAL one, so it does not take the free-and-private path -- but
+    // with a credential present it now runs remotely rather than refusing.
+    expect(harvestMode()).toBe('remote');
   });
 
   it('does not mistake a hostname that merely contains "localhost" for local', async () => {
