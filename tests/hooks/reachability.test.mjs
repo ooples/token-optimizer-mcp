@@ -217,8 +217,8 @@ function stripComments(text) {
  * resolve the dynamic `mods.<module>.<fn>` handles that src/server uses, and a
  * check that is wrong in the permissive direction is merely useless -- one that
  * is wrong in the strict direction fails CI on working code and gets deleted.
- * Comments and strings are removed first: they are prose, and prose is not a
- * caller.
+ * COMMENTS are removed first, because prose is not a caller. Strings are NOT --
+ * see stripComments above for the measurement that settled that boundary.
  */
 const codeOnly = new Map();
 function shippedCode(file, text) {

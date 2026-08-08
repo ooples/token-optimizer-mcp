@@ -34,7 +34,7 @@
 import { readMetrics, readBalance, isFixtureAnchor, BALANCE_KINDS } from './metrics.mjs';
 import { aggregateConsolidation } from './consolidate.mjs';
 import { previewQuality } from './expand.mjs';
-import { logForecast, calibrate } from './calibration.mjs';
+import { calibrate } from './calibration.mjs';
 
 /** Turns of headroom below which the runway is worth interrupting for. */
 export const ACTIONABLE_RUNWAY = 8;
@@ -320,19 +320,14 @@ export function forecastPanel(dir, session = {}, findings = []) {
     // and calibrate was unreachable. So the shipped panel printed precisely the uncalibrated
     // number that module's docstring calls "a vibe with a typeface".
     //
-    // Logged BEFORE it is corrected. The raw prediction is what gets scored against the outcome;
-    // scoring the corrected one would fold the correction back into the next correction and the
-    // bias would chase its own tail.
-    logForecast(dir, {
-      sessionId: session.sessionId,
-      predictedTurns: air.withGraph,
-      used: session.used,
-      capacity: session.capacity,
-      // The turn this was predicted FROM. predictedTurns is an interval, so without its origin
-      // the outcome at compaction has nothing to subtract from.
-      turns: session.turns,
-    });
-
+    // NOT LOGGED HERE. Building a panel is not making a forecast. maybeSurface builds one per
+    // throttle window and worthSurfacing rejects most of them, so logging on every build appended
+    // an open forecast record nobody ever saw. observeOutcome closes only the LAST open forecast
+    // for a session, so every earlier one stayed open forever -- and they accumulate in
+    // balance.jsonl, whose tail-bytes read is precisely what would then displace the
+    // inject/harvest/substitute rows BALANCE_KINDS exists to protect. That would have undone this
+    // change's own fix. The surfacing path logs instead, at the one moment a prediction is
+    // actually made to somebody.
     const score = calibrate(dir, air.withGraph);
     parts.calibration = score;
     // Published only when the horizon has earned it. An unpublishable score does not replace the

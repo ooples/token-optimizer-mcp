@@ -27,7 +27,7 @@
  */
 
 import { forecastPanel, worthSurfacing } from './forecast.mjs';
-import { observeOutcome } from './calibration.mjs';
+import { observeOutcome, logForecast } from './calibration.mjs';
 import { readCacheUsage } from './cache.mjs';
 import { readBalance } from './metrics.mjs';
 
@@ -136,6 +136,25 @@ export function maybeSurface(dir, {
   if (!worthSurfacing(panel, shown)) {
     return { text: null, state: { ...previous, checkedAt: now } };
   }
+
+  // LOGGED HERE, AND ONLY HERE -- past the throttle and past worthSurfacing, so exactly one record
+  // is written per prediction a person is actually shown. forecastPanel used to log on every build;
+  // since most builds are rejected above, that appended open forecast records nobody saw, and
+  // observeOutcome closes only the newest one per session. The rest stayed open forever and piled
+  // up in balance.jsonl, whose tail-bytes read would then evict the inject/harvest/substitute rows
+  // BALANCE_KINDS protects -- undoing the very repair this work exists to make.
+  //
+  // The RAW runway is logged, not the calibrated one: scoring a corrected number would fold each
+  // correction into the next and the bias would chase its own tail.
+  try {
+    logForecast(dir, {
+      sessionId,
+      predictedTurns: panel.parts.runway.withGraph,
+      used: usage.used,
+      capacity: usage.capacity,
+      turns: usage.turns,
+    });
+  } catch { /* a forecast is a courtesy; failing to score it must not cost a tool call */ }
 
   return {
     text: panel.text,

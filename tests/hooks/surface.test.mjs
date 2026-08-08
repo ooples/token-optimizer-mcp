@@ -18,7 +18,7 @@ import {
   maybeSurface, closeForecast, sessionUsage, SURFACE_INTERVAL_MS, DEFAULT_CAPACITY,
 } from '../../hooks-core/surface.mjs';
 import { logForecast, observeOutcome, reliability } from '../../hooks-core/calibration.mjs';
-import { record, recordRead } from '../../hooks-core/metrics.mjs';
+import { record, recordRead, readBalance } from '../../hooks-core/metrics.mjs';
 
 let workspace;
 let dir;
@@ -219,5 +219,49 @@ describe('the wiring is real, not merely present', () => {
     // means the hook throws on load and fails open, silently doing nothing.
     expect(() => readFileSync(join(process.cwd(), 'plugin', 'hooks', 'lib', 'surface.mjs'), 'utf8'))
       .not.toThrow();
+  });
+});
+
+// --- a forecast is logged when it is SHOWN, and only then ---------------------------
+
+describe('only a surfaced forecast is scored', () => {
+  test('a panel the throttle or worthSurfacing rejects logs nothing', () => {
+    // THE DEFECT: forecastPanel logged on every build. maybeSurface builds one per throttle window
+    // and worthSurfacing rejects most of them, so open forecast records nobody ever saw piled up
+    // in balance.jsonl -- and that log is read by its TAIL BYTES, so those rows would eventually
+    // evict the inject/harvest/substitute rows BALANCE_KINDS exists to protect. The fix this work
+    // is built on would have been undone by its own display path.
+    seedArms();
+    const out = maybeSurface(dir, {
+      transcriptPath: transcript(20, 20_000), sessionId: 'live', state: {}, now: 5_000,
+    });
+    expect(out.text).toBeNull(); // comfortable runway: nothing worth showing
+    expect(readBalance(dir).filter((e) => e.kind === 'forecast')).toHaveLength(0);
+  });
+
+  test('a surfaced panel logs exactly one forecast, carrying its origin turn', () => {
+    seedArms();
+    const out = maybeSurface(dir, {
+      transcriptPath: transcript(20, 190_000), sessionId: 'live', state: {}, now: 5_000,
+    });
+    expect(out.text).not.toBeNull();
+
+    const logged = readBalance(dir).filter((e) => e.kind === 'forecast');
+    expect(logged).toHaveLength(1);
+    expect(logged[0].sessionId).toBe('live');
+    expect(logged[0].predictedTurns).toBe(out.state.shown);
+    // The origin turn is what makes the outcome an interval rather than an absolute.
+    expect(logged[0].turns).toBe(20);
+  });
+
+  test('a throttled second call adds no second forecast', () => {
+    seedArms();
+    const path = transcript(20, 190_000);
+    const first = maybeSurface(dir, { transcriptPath: path, sessionId: 'live', state: {}, now: 5_000 });
+    expect(first.text).not.toBeNull();
+    maybeSurface(dir, {
+      transcriptPath: path, sessionId: 'live', state: { forecast: first.state }, now: 5_100,
+    });
+    expect(readBalance(dir).filter((e) => e.kind === 'forecast')).toHaveLength(1);
   });
 });

@@ -121,8 +121,17 @@ export function observeOutcome(dir, { sessionId, actualTurns, atTurn }) {
   const closed = new Set(
     events.filter((e) => e.kind === 'forecast-outcome' && e.forecastId).map((e) => e.forecastId),
   );
+  // ID-BEARING ROWS ONLY, AND NEWEST BY TIME RATHER THAN BY POSITION.
+  //
+  // Two separate hazards, both from readBalance's shape. It returns balance-log rows followed by
+  // the legacy firehose rows it migrates, unsorted -- so `.pop()` returns the last row in the
+  // array, which is not the newest forecast. And legacy rows predate `id`, so `closed.has(e.id)`
+  // is `closed.has(undefined)`, always false: such a forecast can be closed again and again, and
+  // each outcome stores `forecastId: undefined`, which JSON.stringify drops entirely. That is the
+  // repeat-scoring defect this function was written to fix, reappearing through the back door.
   const open = events
-    .filter((e) => e.kind === 'forecast' && e.sessionId === sessionId && !closed.has(e.id))
+    .filter((e) => e.kind === 'forecast' && e.sessionId === sessionId && e.id && !closed.has(e.id))
+    .sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
     .pop();
   if (!open) return;
 
@@ -132,7 +141,13 @@ export function observeOutcome(dir, { sessionId, actualTurns, atTurn }) {
   // so it is left open instead.
   const actual = elapsed !== null ? elapsed
     : (Number.isFinite(open.turns) ? atTurn - open.turns : null);
-  if (actual === null || !Number.isFinite(actual)) return;
+  // AT LEAST ONE TURN MUST HAVE PASSED. `atTurn` is the transcript's current turn count and
+  // `open.turns` the count at prediction time, so a truncated, rotated or replaced transcript
+  // makes the difference zero or negative. Recording that as ground truth feeds a large negative
+  // `error` into `reliability`, which shifts `bucket.bias`, which is what `calibrate` publishes a
+  // corrected forecast from -- so one bad transcript would skew every later prediction. Leaving
+  // the forecast open loses nothing: the next compaction closes it against a sane count.
+  if (actual === null || !Number.isFinite(actual) || actual < 1) return;
 
   record(dir, {
     kind: 'forecast-outcome',

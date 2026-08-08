@@ -138,7 +138,12 @@ async function main() {
   // returns early below, so putting it after would have excluded every such user from the
   // measurement -- the same shape as the co-occurrence write above.
   try {
-    closeForecast(wikiDir(projectRootFor(payload.cwd, payload.cwd)), {
+    // THE SAME RESOLVER THE PreToolUse ROUTER USES. projectRootFor starts its marker walk from
+    // `dirname(canonicalPath(filePath))`, so handing it a DIRECTORY starts the walk one level
+    // above that directory -- and closeForecast would read a different graph than maybeSurface
+    // wrote to, silently scoring nothing. The router passes a file path and resolves per file;
+    // here the equivalent is to anchor inside the cwd rather than at it.
+    closeForecast(wikiDir(projectRootFor(join(payload.cwd || process.cwd(), 'x'), payload.cwd)), {
       transcriptPath: payload.transcript_path,
       sessionId: payload.session_id,
     });

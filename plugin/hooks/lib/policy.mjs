@@ -318,8 +318,14 @@ export function loadState(sessionId, agent) {
       // call and the panel would rebuild itself, transcript parse and all, on each tool use; and
       // `shown` would reset, so worthSurfacing would compare against nothing and re-interrupt with
       // the same runway forever.
+      // AND ITS TIMESTAMP MUST BE A NUMBER. The shape check alone accepted `checkedAt: "1700"`,
+      // and both the throttle comparison and the merge below order by it -- so a persisted numeric
+      // STRING compares by lexicographic coercion and can beat a later real timestamp, freezing
+      // the throttle open or shut. Same class as every other field validated here: a value that
+      // parsed is not a value that means anything.
       forecast:
         parsed.forecast && typeof parsed.forecast === 'object' && !Array.isArray(parsed.forecast)
+          && Number.isFinite(parsed.forecast.checkedAt)
           ? parsed.forecast
           : null,
     };
@@ -401,9 +407,10 @@ export function saveState(sessionId, state, agent) {
       forecast: (() => {
         const mine = state.forecast || null;
         const theirs = current.forecast || null;
-        if (!mine) return theirs;
-        if (!theirs) return mine;
-        return (mine.checkedAt || 0) >= (theirs.checkedAt || 0) ? mine : theirs;
+        const stamp = (f) => (Number.isFinite(f?.checkedAt) ? f.checkedAt : null);
+        if (stamp(mine) === null) return theirs;
+        if (stamp(theirs) === null) return mine;
+        return stamp(mine) >= stamp(theirs) ? mine : theirs;
       })(),
     };
 

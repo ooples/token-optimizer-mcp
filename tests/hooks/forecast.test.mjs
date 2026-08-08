@@ -201,9 +201,20 @@ describe('each read is charged to exactly one injection', () => {
     // per-touch cost of 100. A 3x inflation growing with the repeat count, and it does NOT cancel
     // between the arms: the holdout is deterministic in (anchor, epoch), so all repeat touches of
     // a file land in the same arm. Whichever arm drew the re-touched anchors was inflated.
+    // EXPLICIT, INTERLEAVED TIMESTAMPS. This depended on Date.now() advancing between each pair
+    // of writes; if all ten landed in one millisecond every injection would see `until = Infinity`,
+    // charge all five reads, and perTouch would be 500 rather than 100 -- the test would pass or
+    // fail on machine speed. The very next test already documents this hazard and works around it.
+    // record() directly for the read, because recordRead() does not forward `at`.
     for (let i = 0; i < 5; i++) {
-      record(dir, { kind: 'inject', anchor: '/repeat.ts', sessionId: 's', holdout: false, tokens: 0 });
-      recordRead(dir, { anchor: '/repeat.ts', sessionId: 's', bytes: 400 });
+      record(dir, {
+        kind: 'inject', anchor: '/repeat.ts', sessionId: 's', holdout: false, tokens: 0,
+        at: 1_000 + i * 100,
+      });
+      record(dir, {
+        kind: 'read', anchor: '/repeat.ts', sessionId: 's', tokens: 100,
+        at: 1_000 + i * 100 + 50,
+      });
     }
     const rate = burnRate(readMetrics(dir));
     expect(rate.perTouch).toBe(100);
@@ -425,15 +436,20 @@ describe('a correction never replaces the thing it corrects', () => {
     // called calibrated, with bias -15. A raw forecast of 3 turns became
     // Math.max(0, Math.round(3 - 15)) = 0, published as fact with the note 'within 3 on 50% of 8
     // past forecasts'. The clamp converted nonsense into a plausible-looking emergency.
-    const errors = [0, 0, 0, 0, -30, -30, -30, -30];
+    // POSITIVE errors, so every actualTurns is a sane turn count. The original fixture used -30
+    // against a forecast of 3, producing actualTurns of -27 -- which observeOutcome now rejects,
+    // correctly: a session cannot have run a negative number of turns. +30 gives the identical
+    // |bias| of 15 and the identical 4-of-8 hit rate, so the property under test is unchanged.
+    const errors = [0, 0, 0, 0, 30, 30, 30, 30];
     errors.forEach((error, i) => {
-      logForecast(dir, { sessionId: `b${i}`, predictedTurns: 3, used: 1, capacity: 2 });
+      logForecast(dir, { sessionId: `b${i}`, predictedTurns: 3, used: 1, capacity: 2, turns: 1 });
       observeOutcome(dir, { sessionId: `b${i}`, actualTurns: 3 + error });
     });
 
     const bucket = reliability(dir).buckets.near;
     expect(bucket.scored).toBe(8);
     expect(bucket.calibrated).toBe(true); // it really does clear the floor
+    expect(Math.abs(bucket.bias)).toBe(15);
 
     const out = calibrate(dir, 3);
     expect(out.publishable).toBe(false);
@@ -455,29 +471,36 @@ describe('a correction never replaces the thing it corrects', () => {
 describe('the panel actually runs the calibration loop', () => {
   const session = { sessionId: 'live', used: 60_000, capacity: 200_000, turns: 30, touches: 30 };
 
-  test('rendering a panel logs the forecast it published', () => {
-    // THE DEFECT: calibration.mjs had zero shipped importers. forecastPanel computed the runway
-    // and pushed '~N turns to compaction' without ever calling logForecast or calibrate, so no
-    // forecast was logged, no outcome could be observed, reliability always saw an empty set, and
-    // calibrate was unreachable. The shipped panel printed exactly the uncalibrated number this
-    // module's docstring calls 'a vibe with a typeface'.
+  test('building a panel does NOT log a forecast', () => {
+    // Inverted deliberately. calibration.mjs had zero shipped importers, and the first fix logged
+    // from forecastPanel -- but a panel is built once per throttle window and most builds are
+    // never shown, so that appended an open forecast record nobody saw. observeOutcome closes only
+    // the newest per session, so the rest stayed open forever and accumulated in balance.jsonl,
+    // whose tail-bytes read would then evict the very inject/harvest/substitute rows BALANCE_KINDS
+    // protects. Logging belongs on the surfacing path; see surface.test.mjs.
     forecastPanel(dir, session, []);
-    const logged = readBalance(dir).filter((e) => e.kind === 'forecast');
-    expect(logged).toHaveLength(1);
-    expect(logged[0].predictedTurns).toBeGreaterThan(0);
+    expect(readBalance(dir).filter((e) => e.kind === 'forecast')).toHaveLength(0);
   });
 
-  test('the raw forecast is what gets logged, not the corrected one', () => {
+  test('the panel still renders a calibration verdict without logging one', () => {
+    // The read half stays here: calibrate() is what turns the raw runway into a published number.
+    const panel = forecastPanel(dir, session, []);
+    expect(panel.parts.calibration).toBeTruthy();
+    expect(typeof panel.parts.calibration.publishable).toBe('boolean');
+  });
+
+  test('a calibrated panel publishes the corrected number while the raw one is what gets scored', () => {
     // Scoring the corrected number would fold each correction into the next and the bias would
-    // chase its own tail.
-    for (let i = 0; i < 10; i++) {
-      logForecast(dir, { sessionId: `w${i}`, predictedTurns: 70, used: 1, capacity: 2 });
+    // chase its own tail. The logging half of this now lives in surface.test.mjs, which is where
+    // the write happens; what stays checkable here is that the two numbers differ as expected.
+    for (let i = 0; i < 12; i++) {
+      logForecast(dir, { sessionId: `w${i}`, predictedTurns: 70, used: 1, capacity: 2, turns: 1 });
       observeOutcome(dir, { sessionId: `w${i}`, actualTurns: 72 });
     }
     const panel = forecastPanel(dir, session, []);
-    const raw = panel.parts.runway.withGraph;
-    const logged = readBalance(dir).filter((e) => e.kind === 'forecast' && e.sessionId === 'live');
-    expect(logged[0].predictedTurns).toBe(raw);
+    expect(panel.parts.calibration.publishable).toBe(true);
+    expect(panel.parts.calibration.raw).toBe(panel.parts.runway.withGraph);
+    expect(panel.parts.calibration.predictedTurns).not.toBe(panel.parts.calibration.raw);
   });
 
   test('an uncalibrated horizon prints the number without a track record', () => {
