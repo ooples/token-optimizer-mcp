@@ -94,7 +94,12 @@ async function main() {
     const feedback = buildFeedbackDigest(turns);
     if (feedback) {
       const rawLessons = await extract(feedback, { prompt: LESSON_PROMPT });
-      const { lessons, rejected } = validateLessons(rawLessons, turns);
+      // The same restriction the finding path above applies, for the same reason: a model that
+      // invents a plausible path must not be able to anchor a lesson to it. `turns` is the
+      // archived transcript for this session, so its rendered digest is the honest file list.
+      const { lessons, rejected } = validateLessons(rawLessons, turns, {
+        knownFiles: filesIn(feedback),
+      });
 
       // Anchors are optional on a lesson -- "always run npm test" is about no
       // file -- so each is anchored to the project root when it names nothing,
