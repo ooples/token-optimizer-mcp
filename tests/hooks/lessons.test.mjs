@@ -16,7 +16,7 @@ import {
 } from '../../hooks-core/lessons.mjs';
 import { ORIGIN_HUMAN, ORIGIN_HARVESTED } from '../../hooks-core/curate.mjs';
 import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
-import { standingRules } from '../../hooks-core/inject.mjs';
+import { standingRules, safeTrigger } from '../../hooks-core/inject.mjs';
 import { wikiDir, load, putNode } from '../../hooks-core/wiki.mjs';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
@@ -176,119 +176,119 @@ describe('malformed extractor output', () => {
     expect(lessons[0].origin).toBe(ORIGIN_HUMAN);
   });
 });
-
-describe('the checks the review found were passable without passing', () => {
-  const TURNS = [{ role: 'user', text: 'no, use npm test not npx jest' }];
-
-  it('rejects a quote whose capitalisation never occurred', () => {
-    // Both sides were lower-cased before comparing, so a quote the user never
-    // typed satisfied a VERBATIM check -- and then earned ORIGIN_HUMAN and 0.95
-    // confidence on the strength of it. The prompt asks for an exact copy.
-    expect(quoteIsVerbatim('use npm test not npx jest', TURNS)).toBe(true);
-    expect(quoteIsVerbatim('USE NPM TEST NOT NPX JEST', TURNS)).toBe(false);
-    expect(quoteIsVerbatim('Use Npm Test Not Npx Jest', TURNS)).toBe(false);
-  });
-
-  it('still forgives whitespace, which the storage layer chose, not the user', () => {
-    expect(quoteIsVerbatim('use  npm   test' + String.fromCharCode(92) + 'n not npx jest'.trim(), TURNS)).toBe(false);
-    expect(quoteIsVerbatim('use  npm  test  not  npx  jest', TURNS)).toBe(true);
-  });
-
-  it('does not throw when there is no archive to check against', () => {
-    expect(() => quoteIsVerbatim('use npm test', null)).not.toThrow();
-    expect(quoteIsVerbatim('use npm test', null)).toBe(false);
-    expect(quoteIsVerbatim('use npm test', undefined)).toBe(false);
-  });
-
-  it('rejects a noun-led description that merely avoids the denylist', () => {
-    // The old rule listed the openings a paraphrase usually starts with and
-    // accepted everything else, so any noun-led sentence walked through and was
-    // stored as a standing rule despite describing rather than instructing.
-    expect(isImperative('npm test is preferred over npx jest.')).toBe(false);
-    expect(isImperative('jest runs faster than the npm wrapper.')).toBe(false);
-    expect(isImperative('builds should be run from the worktree.')).toBe(false);
-
-    // And still accepts the shape a real instruction has.
-    expect(isImperative('Use npm test, not npx jest.')).toBe(true);
-    expect(isImperative('Never force-push a shared branch.')).toBe(true);
-    expect(isImperative('Verify the refspec before trusting a fetch.')).toBe(true);
-  });
-
-  it('fails closed on an opening it does not recognise', () => {
-    // The direction matters more than the coverage: this text becomes an
-    // always-on instruction, so an unrecognised opening is refused rather than
-    // admitted.
-    expect(isImperative('frobnicate the widget.')).toBe(false);
-    expect(isImperative('')).toBe(false);
-  });
+
+describe('the checks the review found were passable without passing', () => {
+  const TURNS = [{ role: 'user', text: 'no, use npm test not npx jest' }];
+
+  it('rejects a quote whose capitalisation never occurred', () => {
+    // Both sides were lower-cased before comparing, so a quote the user never
+    // typed satisfied a VERBATIM check -- and then earned ORIGIN_HUMAN and 0.95
+    // confidence on the strength of it. The prompt asks for an exact copy.
+    expect(quoteIsVerbatim('use npm test not npx jest', TURNS)).toBe(true);
+    expect(quoteIsVerbatim('USE NPM TEST NOT NPX JEST', TURNS)).toBe(false);
+    expect(quoteIsVerbatim('Use Npm Test Not Npx Jest', TURNS)).toBe(false);
+  });
+
+  it('still forgives whitespace, which the storage layer chose, not the user', () => {
+    expect(quoteIsVerbatim('use  npm   test' + String.fromCharCode(92) + 'n not npx jest'.trim(), TURNS)).toBe(false);
+    expect(quoteIsVerbatim('use  npm  test  not  npx  jest', TURNS)).toBe(true);
+  });
+
+  it('does not throw when there is no archive to check against', () => {
+    expect(() => quoteIsVerbatim('use npm test', null)).not.toThrow();
+    expect(quoteIsVerbatim('use npm test', null)).toBe(false);
+    expect(quoteIsVerbatim('use npm test', undefined)).toBe(false);
+  });
+
+  it('rejects a noun-led description that merely avoids the denylist', () => {
+    // The old rule listed the openings a paraphrase usually starts with and
+    // accepted everything else, so any noun-led sentence walked through and was
+    // stored as a standing rule despite describing rather than instructing.
+    expect(isImperative('npm test is preferred over npx jest.')).toBe(false);
+    expect(isImperative('jest runs faster than the npm wrapper.')).toBe(false);
+    expect(isImperative('builds should be run from the worktree.')).toBe(false);
+
+    // And still accepts the shape a real instruction has.
+    expect(isImperative('Use npm test, not npx jest.')).toBe(true);
+    expect(isImperative('Never force-push a shared branch.')).toBe(true);
+    expect(isImperative('Verify the refspec before trusting a fetch.')).toBe(true);
+  });
+
+  it('fails closed on an opening it does not recognise', () => {
+    // The direction matters more than the coverage: this text becomes an
+    // always-on instruction, so an unrecognised opening is refused rather than
+    // admitted.
+    expect(isImperative('frobnicate the widget.')).toBe(false);
+    expect(isImperative('')).toBe(false);
+  });
 });
-
-describe('a verified correction survives the write boundary', () => {
-  // THE FINDING THAT MADE THE WHOLE FEATURE INERT. `validateLessons` computed a
-  // per-lesson origin and kept the verified quote; `writeHarvested` took ONE
-  // origin from its options and persisted no quote at all. So every lesson
-  // landed as ORIGIN_HARVESTED, the standing-rules layer selects on human
-  // origin, and it therefore matched nothing this pipeline had ever written.
-  // The verbatim check ran and had no observable effect.
-  //
-  // This drives the real write path and then the real selector, because both
-  // halves passed their own unit tests for the entire time the pair did nothing.
-  it('is stored as human, keeps its evidence, and reaches the standing rules', () => {
-    const project = mkdtempSync(join(tmpdir(), 'lesson-origin-'));
-    mkdirSync(join(project, '.git'), { recursive: true });
-    const dir = join(project, '.token-optimizer', 'wiki');
-    mkdirSync(dir, { recursive: true });
-
-    const anchor = join(project, 'a.ts');
-    writeFileSync(anchor, 'export const a = 1;');
-    putNode(dir, { kind: 'file', key: anchor, hash: 'h' });
-
-    const written = writeHarvested(
-      dir,
-      [
-        {
-          type: 'feedback',
-          claim: 'Use npm test, not npx jest.',
-          confidence: 0.95,
-          origin: ORIGIN_HUMAN,
-          quote: 'no, use npm test not npx jest',
-          anchors: [anchor],
-        },
-        {
-          type: 'feedback',
-          claim: 'Prefer the worktree build.',
-          confidence: 0.6,
-          origin: ORIGIN_HARVESTED,
-          anchors: [anchor],
-        },
-      ],
-      // The batch default is still HARVESTED, exactly as the worker passes it.
-      { sessionId: 's1', origin: ORIGIN_HARVESTED }
-    );
-    expect(written).toHaveLength(2);
-
-    const graph = load(dir);
-    const findings = [...graph.nodes.values()].filter((n) => n.kind === 'finding');
-    const verified = findings.find((n) => n.claim.startsWith('Use npm test'));
-    const paraphrase = findings.find((n) => n.claim.startsWith('Prefer the worktree'));
-
-    // The verified one is promoted, and carries the evidence that promoted it.
-    expect(verified.origin).toBe(ORIGIN_HUMAN);
-    expect(verified.quote).toBe('no, use npm test not npx jest');
-
-    // The unverified one is NOT promoted. A caller cannot simply declare
-    // machine output human; it is the quote that earns it.
-    expect(paraphrase.origin).toBe(ORIGIN_HARVESTED);
-    expect(paraphrase.quote).toBeUndefined();
-
-    // And the selector that exists to consume it now finds it.
-    const rules = standingRules(dir, load(dir));
-    expect(rules).toContain('Use npm test, not npx jest.');
-    expect(rules).not.toContain('Prefer the worktree build.');
-
-    rmSync(project, { recursive: true, force: true });
-  }, 60_000);
-});
+
+describe('a verified correction survives the write boundary', () => {
+  // THE FINDING THAT MADE THE WHOLE FEATURE INERT. `validateLessons` computed a
+  // per-lesson origin and kept the verified quote; `writeHarvested` took ONE
+  // origin from its options and persisted no quote at all. So every lesson
+  // landed as ORIGIN_HARVESTED, the standing-rules layer selects on human
+  // origin, and it therefore matched nothing this pipeline had ever written.
+  // The verbatim check ran and had no observable effect.
+  //
+  // This drives the real write path and then the real selector, because both
+  // halves passed their own unit tests for the entire time the pair did nothing.
+  it('is stored as human, keeps its evidence, and reaches the standing rules', () => {
+    const project = mkdtempSync(join(tmpdir(), 'lesson-origin-'));
+    mkdirSync(join(project, '.git'), { recursive: true });
+    const dir = join(project, '.token-optimizer', 'wiki');
+    mkdirSync(dir, { recursive: true });
+
+    const anchor = join(project, 'a.ts');
+    writeFileSync(anchor, 'export const a = 1;');
+    putNode(dir, { kind: 'file', key: anchor, hash: 'h' });
+
+    const written = writeHarvested(
+      dir,
+      [
+        {
+          type: 'feedback',
+          claim: 'Use npm test, not npx jest.',
+          confidence: 0.95,
+          origin: ORIGIN_HUMAN,
+          quote: 'no, use npm test not npx jest',
+          anchors: [anchor],
+        },
+        {
+          type: 'feedback',
+          claim: 'Prefer the worktree build.',
+          confidence: 0.6,
+          origin: ORIGIN_HARVESTED,
+          anchors: [anchor],
+        },
+      ],
+      // The batch default is still HARVESTED, exactly as the worker passes it.
+      { sessionId: 's1', origin: ORIGIN_HARVESTED }
+    );
+    expect(written).toHaveLength(2);
+
+    const graph = load(dir);
+    const findings = [...graph.nodes.values()].filter((n) => n.kind === 'finding');
+    const verified = findings.find((n) => n.claim.startsWith('Use npm test'));
+    const paraphrase = findings.find((n) => n.claim.startsWith('Prefer the worktree'));
+
+    // The verified one is promoted, and carries the evidence that promoted it.
+    expect(verified.origin).toBe(ORIGIN_HUMAN);
+    expect(verified.quote).toBe('no, use npm test not npx jest');
+
+    // The unverified one is NOT promoted. A caller cannot simply declare
+    // machine output human; it is the quote that earns it.
+    expect(paraphrase.origin).toBe(ORIGIN_HARVESTED);
+    expect(paraphrase.quote).toBeUndefined();
+
+    // And the selector that exists to consume it now finds it.
+    const rules = standingRules(dir, load(dir));
+    expect(rules).toContain('Use npm test, not npx jest.');
+    expect(rules).not.toContain('Prefer the worktree build.');
+
+    rmSync(project, { recursive: true, force: true });
+  }, 60_000);
+});
 
 describe('a session whose corrections are worth keeping is not skipped for its size', () => {
   it('one oversize turn does not abort the whole digest', () => {
@@ -334,8 +334,16 @@ describe('a lesson is only stored if its trigger can ever fire', () => {
     // shapes -- and when it refuses, appliesToCommand falls back to a LITERAL substring search of
     // the regex SOURCE against the command. A regex source is not a substring of any real command,
     // so such a lesson was written to the graph, counted as delivered, and could never surface.
-    const nested = '(\w+\s*)+\.csproj';
-    const tooLong = `\b(${Array.from({ length: 40 }, (_, i) => `runner${i}`).join('|')})\b`;
+    // String.raw, because these are REGEX SOURCES. Written as ordinary quoted strings, JavaScript
+    // turns `\b` into U+0008 and drops the backslash from `\w`, `\s` and `\.` -- so the first
+    // version of this test exercised `(w+s*)+.csproj` and a backspace-delimited `npxs+jest`,
+    // neither of which is the pattern named. The repo's own no-stray-control-characters guard is
+    // what caught it.
+    const nested = String.raw`(\w+\s*)+\.csproj`;
+    const tooLong = String.raw`\b(`
+      + Array.from({ length: 40 }, (_, i) => `runner${i}`).join('|')
+      + String.raw`)\b`;
+
     for (const bad of [nested, tooLong]) {
       const out = validateLessons(lesson(bad), []);
       expect(out.lessons).toHaveLength(0);
@@ -343,8 +351,21 @@ describe('a lesson is only stored if its trigger can ever fire', () => {
     }
   });
 
+  it('the rejection agrees with what the injector would actually do', () => {
+    // The property, rather than a restatement of the implementation: anything this stores must be
+    // something safeTrigger will run. Asserting against safeTrigger directly means the test still
+    // holds if the rejection reason or the validator's internals change.
+    // safeTrigger returns the compiled RegExp it would run, or null when it refuses -- which is
+    // why the production check is `if (!safeTrigger(trigger))` rather than a boolean comparison.
+    const nested = String.raw`(\w+\s*)+\.csproj`;
+    expect(safeTrigger(nested)).toBeNull();
+    expect(validateLessons(lesson(nested), []).lessons).toHaveLength(0);
+  });
+
   it('an ordinary trigger the injector accepts still passes', () => {
-    const out = validateLessons(lesson('\bnpx\s+jest\b'), []);
+    const good = String.raw`\bnpx\s+jest\b`;
+    expect(safeTrigger(good)).toBeInstanceOf(RegExp);
+    const out = validateLessons(lesson(good), []);
     expect(out.rejected.filter((r) => r.reason === 'bad-trigger-regex')).toHaveLength(0);
   });
 });

@@ -208,7 +208,9 @@ export function validateLessons(raw, turns) {
     // THE SAME GATE THE INJECTOR USES. `new RegExp` only proves the pattern COMPILES. inject.mjs
     // additionally refuses sources over 200 characters and nested-quantifier ReDoS shapes -- and
     // when it refuses, appliesToCommand falls back to a LITERAL substring search of the regex
-    // SOURCE against the command. `npx\s+jest` never appears literally in `npx jest --watch`,
+    // SOURCE against the command. A regex source is not a substring of any real command --
+    // a word-boundary-anchored pattern for the jest runner does not appear literally inside
+    // `npx jest --watch` --
     // so a lesson stored with such a trigger is written to the graph, counted as delivered in the
     // metrics record, and can never surface for the rest of its life. Both rejection shapes are
     // realistic from the extraction prompt: a long alternation over test runners passes 200

@@ -29,7 +29,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 /** Resolves hooks-core relative to the built output, which lives in dist/tools/intelligence. */
 function coreUrl(name: string): string {
-  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name)).href;
+  return pathToFileURL(path.join(here, '..', '..', '..', 'hooks-core', name))
+    .href;
 }
 
 export interface WikiReadOptions {
@@ -88,8 +89,14 @@ function toFinding(node: any): WikiFinding {
   };
 }
 
-export async function wikiRead(options: WikiReadOptions = {}): Promise<WikiReadResult> {
-  const empty = { findings: [] as WikiFinding[], shared: [] as WikiFinding[], unresolvedAnchors: [] as string[] };
+export async function wikiRead(
+  options: WikiReadOptions = {}
+): Promise<WikiReadResult> {
+  const empty = {
+    findings: [] as WikiFinding[],
+    shared: [] as WikiFinding[],
+    unresolvedAnchors: [] as string[],
+  };
 
   const anchors = Array.isArray(options?.anchors)
     ? options.anchors.filter((a) => typeof a === 'string' && a.trim())
@@ -123,13 +130,16 @@ export async function wikiRead(options: WikiReadOptions = {}): Promise<WikiReadR
     // wrong. Graphs are loaded once each and reused across anchors that share a project.
     const graphs = new Map<string, any>();
     const graphFor = (project: string) => {
-      if (!graphs.has(project)) graphs.set(project, wiki.load(wiki.wikiDir(project)));
+      if (!graphs.has(project))
+        graphs.set(project, wiki.load(wiki.wikiDir(project)));
       return graphs.get(project);
     };
 
     const primary =
       options.projectRoot ??
-      (anchors.length ? wiki.projectRootFor(anchors[0].split('#')[0], process.cwd()) : process.cwd());
+      (anchors.length
+        ? wiki.projectRootFor(anchors[0].split('#')[0], process.cwd())
+        : process.cwd());
 
     const seen = new Set<string>();
     const findings: WikiFinding[] = [];
@@ -139,7 +149,8 @@ export async function wikiRead(options: WikiReadOptions = {}): Promise<WikiReadR
       const [file, symbol] = a.split('#');
       // An explicit projectRoot pins every anchor to that graph -- the caller has said which
       // project they mean. Otherwise each anchor resolves to its own repository.
-      const project = options.projectRoot ?? wiki.projectRootFor(file, process.cwd());
+      const project =
+        options.projectRoot ?? wiki.projectRootFor(file, process.cwd());
       const graph = graphFor(project);
 
       const id = symbol
