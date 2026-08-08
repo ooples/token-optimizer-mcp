@@ -9,14 +9,15 @@
  * and the scan says what it read and reads nothing it was not asked to.
  */
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   discoverProjects, projectCwd, scanProject, transferable, enforcementComparison,
-  pareto, renderFleet, DEFAULT_LIMIT,
+  pareto, renderFleet, slugifyCwd, DEFAULT_LIMIT,
 } from '../../hooks-core/fleet.mjs';
 import { applyRemedy } from '../../hooks-core/remedy.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 let machine;
 
@@ -245,5 +246,241 @@ describe('the scan accounts for what it opened', () => {
     expect(text).toMatch(/Where the cost is:/);
     expect(text).toMatch(/\[enforcing\]/);
     expect(text).toMatch(/Enforcing vs directive/);
+  });
+});
+
+// --- scoping, weighting, and reading nothing before consent -------------------------
+
+/**
+ * Writes a transcript directly, so a test can control the exact SPELLING of the cwd it
+ * reports -- which is the thing the client varies and the thing dedupe has to survive.
+ */
+function transcriptFor(slug, cwd, { root = join(machine, 'projects'), name = 'session.jsonl' } = {}) {
+  const dir = join(root, slug);
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, name);
+  writeFileSync(path, `${JSON.stringify({ type: 'user', cwd, message: { role: 'user', content: 'hi' } })}\n`);
+  return path;
+}
+
+/** Can this machine make a dangling symlink? Needed to simulate the readdir/stat race. */
+const canSymlink = (() => {
+  const probe = mkdtempSync(join(tmpdir(), 'fleet-symlink-probe-'));
+  try {
+    symlinkSync(join(probe, 'does-not-exist'), join(probe, 'link'));
+    return true;
+  } catch {
+    return false;
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
+})();
+
+describe('exclusion is matched against the shape the directory actually has', () => {
+  test('a pattern spelled as a path excludes the project it names', () => {
+    // THE DEFECT: exclude was matched against entry.name, which is the cwd with every
+    // non-alphanumeric character replaced by a dash. So every pattern spelled the way a user
+    // would spell it could never match, and the project was scanned anyway -- with no
+    // diagnostic that the exclusion had not taken.
+    const cwd = 'C:\\work\\private';
+    transcriptFor(slugifyCwd(cwd), cwd);
+    transcriptFor(slugifyCwd('C:\\work\\public'), 'C:\\work\\public');
+
+    const out = discoverProjects({ root: join(machine, 'projects'), exclude: [cwd] });
+    expect(out.projects.map((p) => p.slug)).toEqual([slugifyCwd('C:\\work\\public')]);
+    expect(out.skipped.find((s) => s.slug === slugifyCwd(cwd)).why).toMatch(/excluded/);
+  });
+
+  test('a pattern with an underscore or a dot still matches', () => {
+    transcriptFor(slugifyCwd('/src/node_modules/x'), '/src/node_modules/x');
+    transcriptFor(slugifyCwd('/src/my.project'), '/src/my.project');
+    transcriptFor(slugifyCwd('/src/keep'), '/src/keep');
+
+    const out = discoverProjects({
+      root: join(machine, 'projects'), exclude: ['node_modules', 'my.project'],
+    });
+    expect(out.projects.map((p) => p.slug)).toEqual([slugifyCwd('/src/keep')]);
+  });
+
+  test('the literal slug still works, since that is what people copy out of the report', () => {
+    project('keep-me', { reads: reads(2, '/a.ts', 100) });
+    project('drop-me', { reads: reads(2, '/b.ts', 100) });
+    const out = discoverProjects({ root: join(machine, 'projects'), exclude: ['drop-me'] });
+    expect(out.projects.map((p) => p.slug)).toEqual(['keep-me']);
+  });
+
+  test('an empty pattern excludes nothing rather than everything', () => {
+    // '' is a substring of every string, so a stray entry would silently scan zero projects
+    // and report them all as deliberately excluded.
+    project('keep-me', { reads: reads(2, '/a.ts', 100) });
+    const out = discoverProjects({ root: join(machine, 'projects'), exclude: ['', null] });
+    expect(out.projects.map((p) => p.slug)).toEqual(['keep-me']);
+  });
+});
+
+describe('a dry run reads nothing', () => {
+  test('resolveCwd: false opens no transcript at all', () => {
+    // THE DEFECT: the cwd was resolved during discovery, and resolving it reads 64 KB from the
+    // head of the transcript. fleet-tool calls discoverProjects BEFORE it branches on dryRun,
+    // so the consent step had already read the head of every transcript on the machine by the
+    // time it printed 'Nothing was read'.
+    const built = project('proj-a', { reads: reads(2, '/a.ts', 100) });
+    const dry = discoverProjects({ root: join(machine, 'projects'), resolveCwd: false });
+    expect(dry.projects).toHaveLength(1);
+    expect(dry.projects[0].cwd).toBeNull();
+    expect(dry.projects[0].slug).toBe('proj-a');
+
+    // and the same call with resolution on does find it, so the null above is the switch
+    // working rather than the fixture being unreadable.
+    const wet = discoverProjects({ root: join(machine, 'projects') });
+    expect(wet.projects[0].cwd).toBe(canonicalPath(built.cwd));
+  });
+
+  test('projects beyond the limit are never resolved', () => {
+    for (let i = 0; i < 4; i++) project(`p${i}`, { reads: reads(2, '/a.ts', 100) });
+    const out = discoverProjects({ root: join(machine, 'projects'), limit: 2 });
+    expect(out.projects).toHaveLength(2);
+    expect(out.projects.every((p) => p.cwd)).toBe(true);
+    expect(out.skipped.filter((s) => /beyond the limit/.test(s.why))).toHaveLength(2);
+  });
+});
+
+describe('one project is one project however its directory was spelled', () => {
+  test('two spellings of the same cwd are scanned once', () => {
+    // The client mints one directory per cwd SPELLING, and wikiDir maps every spelling onto the
+    // same case-insensitive directory -- so readMetrics returns the SAME event log for each.
+    // Undeduped, the project's pareto share multiplies and it contributes that many identical
+    // points to whichever arm of the enforcement comparison it lands in.
+    transcriptFor('spelling-one', 'C:\\Users\\me\\repo');
+    transcriptFor('spelling-two', 'C:/Users/me/repo');
+
+    const out = discoverProjects({ root: join(machine, 'projects') });
+    expect(out.projects).toHaveLength(1);
+    expect(out.skipped.some((s) => /duplicate of/.test(s.why))).toBe(true);
+  });
+
+  test('genuinely different projects are both kept', () => {
+    transcriptFor('one', 'C:\\Users\\me\\repo-a');
+    transcriptFor('two', 'C:\\Users\\me\\repo-b');
+    expect(discoverProjects({ root: join(machine, 'projects') }).projects).toHaveLength(2);
+  });
+});
+
+(canSymlink ? describe : describe.skip)('a transcript rotated away mid-scan costs only itself', () => {
+  test('the project survives, with its remaining transcripts', () => {
+    // Transcripts under the discovery root are written and rotated by other live sessions while
+    // the scan enumerates them, so a file present at readdirSync can be gone at statSync. The
+    // try wrapped the whole per-directory loop, so one such race abandoned the rest of the
+    // directory: 'no transcript' for a project that has several, or a stale cwd.
+    const built = project('racy', { reads: reads(2, '/a.ts', 100) });
+    const dir = join(machine, 'projects', 'racy');
+    const dangling = join(dir, 'aaa-rotated.jsonl'); // enumerated before session.jsonl
+    symlinkSync(join(dir, 'gone.jsonl'), dangling);
+
+    const out = discoverProjects({ root: join(machine, 'projects') });
+    expect(out.projects.map((p) => p.slug)).toEqual(['racy']);
+    expect(out.projects[0].cwd).toBe(canonicalPath(built.cwd));
+    unlinkSync(dangling);
+  });
+});
+
+describe('a multi-anchor remedy can transfer', () => {
+  const scanFor = (slug, { rules = [], anchors = [] }) => ({ slug, cwd: `/${slug}`, rules, anchors });
+
+  function shared(name, body) {
+    const dir = join(machine, 'shared');
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, name);
+    writeFileSync(path, body);
+    return path;
+  }
+
+  test('a composite rule transfers when every anchor matches', () => {
+    // THE DEFECT: `if (!rule.anchor) continue` skipped every composite rule. remedy.mjs lists
+    // composite among the remedy types this product applies itself, and applyRemedy stores those
+    // with `anchors` plural and `anchor` undefined -- so they were invisible to transfer
+    // analysis, and not reported as skipped either.
+    const a = shared('a.ts', 'AAA');
+    const b = shared('b.ts', 'BBB');
+    const copyDir = join(machine, 'copy');
+    mkdirSync(copyDir, { recursive: true });
+    writeFileSync(join(copyDir, 'a.ts'), 'AAA');
+    writeFileSync(join(copyDir, 'b.ts'), 'BBB');
+
+    const out = transferable([
+      scanFor('source', { rules: [{ id: 'composite:1', type: 'composite', anchors: [a, b], why: 'x' }] }),
+      scanFor('target', { anchors: [join(copyDir, 'a.ts'), join(copyDir, 'b.ts')] }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].targets.map((t) => t.slug)).toEqual(['target']);
+  });
+
+  test('a composite rule does not transfer on a partial match', () => {
+    const a = shared('pa.ts', 'AAA');
+    const b = shared('pb.ts', 'BBB');
+    const copyDir = join(machine, 'partial');
+    mkdirSync(copyDir, { recursive: true });
+    writeFileSync(join(copyDir, 'pa.ts'), 'AAA');
+    writeFileSync(join(copyDir, 'pb.ts'), 'DIFFERENT');
+
+    const out = transferable([
+      scanFor('source', { rules: [{ id: 'composite:2', type: 'composite', anchors: [a, b], why: 'x' }] }),
+      scanFor('target', { anchors: [join(copyDir, 'pa.ts'), join(copyDir, 'pb.ts')] }),
+    ]);
+    expect(out).toHaveLength(0);
+  });
+
+  test('same name and same length but different bytes does not transfer', () => {
+    // The size check added in front of the hash is an optimisation, not a relaxation.
+    const a = shared('same-size.ts', 'AAAA');
+    const copyDir = join(machine, 'samesize');
+    mkdirSync(copyDir, { recursive: true });
+    writeFileSync(join(copyDir, 'same-size.ts'), 'BBBB');
+
+    const out = transferable([
+      scanFor('source', { rules: [{ id: 'skip:3', type: 'skip', anchor: a, why: 'x' }] }),
+      scanFor('target', { anchors: [join(copyDir, 'same-size.ts')] }),
+    ]);
+    expect(out).toHaveLength(0);
+  });
+});
+
+describe('the enforcement comparison is pooled over reads', () => {
+  const arm = (slug, { reads: n, tokens, enforcing }) => ({
+    slug, reads: n, tokens, enforcing, perRead: n ? Math.round(tokens / n) : null,
+    rules: [], anchors: [],
+  });
+
+  test('a two-read outlier does not decide the fleet result', () => {
+    // THE DEFECT: averaging each project's per-read average gave every project equal weight
+    // regardless of evidence, so one project with 2 reads counted as much as one with 5,000 --
+    // and renderFleet printed the exact inverse of the truth under a heading that calls this the
+    // check on the central claim of this product.
+    const scans = [
+      arm('outlier', { reads: 2, tokens: 300_000, enforcing: true }),
+      arm('big-a', { reads: 5_000, tokens: 2_500_000, enforcing: true }),
+      arm('big-b', { reads: 4_000, tokens: 1_600_000, enforcing: true }),
+      arm('directive', { reads: 3_000, tokens: 2_400_000, enforcing: false }),
+    ];
+
+    // What the old unweighted mean reported: enforcing looks ~60x WORSE than directive's 800.
+    const unweighted = Math.round((150_000 + 500 + 400) / 3);
+    expect(unweighted).toBeGreaterThan(50_000);
+
+    const out = enforcementComparison(scans);
+    expect(out.enforcingReads).toBe(9_002);
+    expect(out.directiveReads).toBe(3_000);
+    expect(out.enforcingPerRead).toBe(Math.round(4_400_000 / 9_002));
+    expect(out.enforcingPerRead).toBeLessThan(out.directivePerRead);
+  });
+
+  test('the render names the read counts behind each arm', () => {
+    const scans = [
+      arm('e', { reads: 10, tokens: 1_000, enforcing: true }),
+      arm('d', { reads: 20, tokens: 8_000, enforcing: false }),
+    ];
+    const text = renderFleet({ discovery: { mode: 'enumerate', skipped: [] }, scans });
+    expect(text).toMatch(/enforcing {2}100 tokens\/read over 1 project\(s\), 10 read\(s\)/);
+    expect(text).toMatch(/directive {2}400 tokens\/read over 1 project\(s\), 20 read\(s\)/);
   });
 });

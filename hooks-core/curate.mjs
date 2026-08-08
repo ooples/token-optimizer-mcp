@@ -19,7 +19,8 @@
  * the un-invalidatable node the schema rules exist to prevent.
  */
 
-import { putNode, putEdge, load, nodeId } from './wiki.mjs';
+import { randomBytes } from 'node:crypto';
+import { putNode, putNodeWithEdges, load, nodeId } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
@@ -50,6 +51,22 @@ export const HUMAN_WEIGHT = 1.5;
  * model asserting something about its own work.
  */
 export const AGENT_WEIGHT = 1.2;
+
+/**
+ * The one provenance ranking table.
+ *
+ * Exported as a FUNCTION rather than left to each caller to assemble, because
+ * the alternative already failed twice: HUMAN_WEIGHT sat declared and unread
+ * until wiki.mjs worked around it with a private duplicate table, and
+ * AGENT_WEIGHT is still unread today -- so an agent finding ranks level with a
+ * post-hoc guess in the dashboard search while findingsFor ranks it correctly.
+ * Two rankings that disagree is worse than one that is wrong.
+ */
+export function originWeight(origin) {
+  if (origin === ORIGIN_HUMAN) return HUMAN_WEIGHT;
+  if (origin === ORIGIN_AGENT) return AGENT_WEIGHT;
+  return 1;
+}
 
 function findingByKey(graph, key) {
   return graph.nodes.get(nodeId('finding', key)) || null;
@@ -85,46 +102,69 @@ export function correct(
   const existing = findingByKey(graph, key);
   if (!existing) return false;
 
-  // ORDER MATTERS. `append` fails open -- it swallows write errors and returns
-  // false -- so retiring first and then failing to write the replacement would
-  // delete the claim outright: gone from activeFindings, from the export, and
-  // from every read path, with nothing put in its place. Writing the successor
-  // first makes the worst case two live claims rather than none, and a
-  // duplicate is recoverable where a silent deletion is not.
+  // ORDER MATTERS, AND SO DOES CHECKING. `append` fails open -- it swallows
+  // write errors and returns false -- so retiring first and then failing to
+  // write the replacement would delete the claim outright: gone from
+  // activeFindings, from the export, and from every read path, with nothing put
+  // in its place.
+  //
+  // Writing the successor first was necessary but NOT sufficient. putNode
+  // discards appendAll's boolean and returns an id unconditionally, so this
+  // function could not observe a failed write and retired the original anyway.
+  // One transient EBUSY -- routine on Windows, and withLock gives up after 20
+  // attempts and proceeds regardless -- was enough to destroy a human's
+  // curated claim while the API replied ok.
+  //
+  // putNodeWithEdges returns null on a failed append AND writes the node, the
+  // supersedes link and every inherited anchor as ONE append, so a partial
+  // write cannot leave an unanchored successor either.
+  const originalId = nodeId('finding', key);
   const replacementKey = `${key}-c${Date.now().toString(36)}`;
-  putNode(dir, {
-    kind: 'finding',
-    key: replacementKey,
-    claim,
-    confidence,
-    type: existing.type || 'finding',
-    // THE CALLER'S ORIGIN, not an assumption. This stamped ORIGIN_HUMAN
-    // unconditionally, so a correction written by an agent -- or carried over
-    // from a harvested claim -- was recorded as a person's assertion. That is
-    // the exact confusion the origin field exists to prevent, and the one
-    // harvest-write.mjs refuses to create when it writes a finding: "a
-    // hand-written assertion and a machine guess look identical three months
-    // later, which quietly destroys the reader's ability to calibrate trust".
-    // It also outranks its own source, since human findings carry the highest
-    // ranking weight.
-    //
-    // Defaults to ORIGIN_HUMAN because curate is the hand-curation path, so
-    // every existing caller keeps its current behaviour. Deliberately NOT
-    // validated against a fixed list: the set of origins differs across
-    // branches, and an unrecognised value already degrades to the neutral
-    // ranking weight rather than doing damage.
-    origin: typeof origin === 'string' && origin ? origin : ORIGIN_HUMAN,
-  });
 
-  const replacementId = nodeId('finding', replacementKey);
-  putEdge(dir, replacementId, 'supersedes', nodeId('finding', key));
-
+  const edges = [{ edge: 'supersedes', to: originalId }];
   // The correction inherits the original's anchors, so it can go stale too.
   for (const edge of graph.edges) {
-    if (edge.edge === 'derived_from' && edge.from === nodeId('finding', key)) {
-      putEdge(dir, replacementId, 'derived_from', edge.to);
+    if (edge.edge === 'derived_from' && edge.from === originalId) {
+      edges.push({ edge: 'derived_from', to: edge.to });
     }
   }
+
+  const written = putNodeWithEdges(
+    dir,
+    {
+      kind: 'finding',
+      key: replacementKey,
+      claim,
+      confidence,
+      type: existing.type || 'finding',
+      // PINNED SURVIVES A CORRECTION. The pin is an explicit human act about the
+      // subject matter, not about the wording, and the original that carried it
+      // is retired below -- so not copying it silently un-pins the fact and it
+      // stops being injected as a standing rule (inject.mjs selects on
+      // `n.pinned === true`). Correcting a claim must not demote it.
+      ...(existing.pinned ? { pinned: true } : {}),
+      // THE CALLER'S ORIGIN, not an assumption. This stamped ORIGIN_HUMAN
+      // unconditionally, so a correction written by an agent -- or carried over
+      // from a harvested claim -- was recorded as a person's assertion. That is
+      // the exact confusion the origin field exists to prevent, and the one
+      // harvest-write.mjs refuses to create when it writes a finding: "a
+      // hand-written assertion and a machine guess look identical three months
+      // later, which quietly destroys the reader's ability to calibrate trust".
+      // It also outranks its own source, since human findings carry the highest
+      // ranking weight.
+      //
+      // Defaults to ORIGIN_HUMAN because curate is the hand-curation path, so
+      // every existing caller keeps its current behaviour. Deliberately NOT
+      // validated against a fixed list: the set of origins differs across
+      // branches, and an unrecognised value already degrades to the neutral
+      // ranking weight rather than doing damage.
+      origin: typeof origin === 'string' && origin ? origin : ORIGIN_HUMAN,
+    },
+    edges
+  );
+
+  // NOTHING IS RETIRED UNTIL THE SUCCESSOR IS ON DISK.
+  if (!written) return false;
 
   putNode(dir, { ...existing, kind: 'finding', key, retired: true });
   return replacementKey;
@@ -172,9 +212,27 @@ export function create(dir, { claim, anchors, type = 'finding', confidence = 0.9
   // so it is refused rather than stored as permanently-current.
   if (!resolved.length) return null;
 
-  const key = `human-${Date.now().toString(36)}`;
-  const id = putNode(dir, { kind: 'finding', key, claim, confidence, type, origin: ORIGIN_HUMAN });
-  for (const target of resolved) putEdge(dir, id, 'derived_from', target);
+  // A bare millisecond is NOT unique: two creates landing in the same tick hash
+  // to the same node id, and wiki.mjs's fold keeps only the last -- so one
+  // person's claim silently replaces another's while both HTTP responses report
+  // ok, and the survivor inherits the union of both claims' anchors. Same random
+  // suffix harvest-write.mjs already applies for the same reason.
+  const key = `human-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
+
+  // ONE APPEND for the finding and every anchor it resolved, and the key is only
+  // reported when that append is confirmed. Writing the node and then looping
+  // putEdge let a single failed edge append leave an active, human-origin,
+  // high-confidence finding anchored to NOTHING -- staleness can never mark it
+  // and audit() lists it under `orphaned`, which this file calls the most
+  // dangerous nodes in the graph. That is exactly the record the block above
+  // refuses to create, arriving through the write path instead of the resolve
+  // path. No process death required; one transient EBUSY is enough.
+  const id = putNodeWithEdges(
+    dir,
+    { kind: 'finding', key, claim, confidence, type, origin: ORIGIN_HUMAN },
+    resolved.map((target) => ({ edge: 'derived_from', to: target }))
+  );
+  if (!id) return null;
   return key;
 }
 

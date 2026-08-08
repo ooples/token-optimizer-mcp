@@ -192,11 +192,23 @@ function splitJson(text) {
   }
 
   if (Array.isArray(parsed)) {
-    return [
-      section('shape', [`array of ${parsed.length}`], 9, 'summary'),
-      section('first element', JSON.stringify(parsed[0], null, 2).split('\n'), 6),
-      section('remaining elements', [`${Math.max(0, parsed.length - 1)} more`], 1),
-    ];
+    // THE REMAINING ELEMENTS ARE A REAL SECTION, not a placeholder string. As a
+    // placeholder they were discarded by this splitter itself, so the budget loop never
+    // saw them, no omission was recorded, and -- because the tail is skipped when there
+    // are no omissions -- the preview carried no expand ref either. Measured: a 30 KB
+    // array of 500 objects returned ~150 bytes, `omissions: []`, and no way to recover
+    // the other 499. Every other splitter in this file partitions all of its input.
+    const out = [section('shape', [`array of ${parsed.length}`], 9, 'summary')];
+    if (parsed.length) {
+      // `?? null` because JSON.stringify(undefined) returns undefined, and .split would
+      // then throw -- parseShape('[]') aborted the whole disclosure block.
+      out.push(section('first element', JSON.stringify(parsed[0] ?? null, null, 2).split('\n'), 6));
+    }
+    const rest = parsed.slice(1);
+    if (rest.length) {
+      out.push(section(`remaining ${rest.length} elements`, JSON.stringify(rest, null, 2).split('\n'), 1));
+    }
+    return out;
   }
 
   const sections = [];
@@ -336,6 +348,12 @@ export function disclose(dir, text, context = {}) {
 
   // LAYERS 2 and 3 -- structure, then relevance within it.
   const { shape, sections } = parseShape(raw);
+  // Counted from the SECTIONS, not from `raw`. A JSON envelope is one physical line
+  // however large its payload -- and the file's own comment says a JSON envelope is what
+  // everything this product returns -- so the header read "1 lines" directly above a tail
+  // reporting 3,000 omitted. The two numbers were in different units and the header was
+  // the smaller one, contradicting the safeguard immediately below it.
+  const totalLines = sections.reduce((n, s) => n + s.lines.length, 0);
   const ranked = rankSections(sections, { question, anchors, boosts });
   const budget = substitutionBudget(dir, anchors[0] || tool || 'output');
 
@@ -387,9 +405,15 @@ export function disclose(dir, text, context = {}) {
       }
 
       if (slice.length) {
-        kept.push({ label: s.label, lines: slice, kind: s.kind, partial: true });
+        // The budget check costs a section as one estimate over the joined body; this
+        // loop costs it as a sum of per-line estimates. Those roundings differ, so the
+        // loop can consume EVERY line of a section the budget check rejected. That is a
+        // complete section, and labelling it partial with "0 lines omitted" makes the two
+        // signals a reader is meant to trust fire on content that was not withheld.
+        const dropped = s.lines.length - slice.length;
+        kept.push({ label: s.label, lines: slice, kind: s.kind, partial: dropped > 0 });
         spent += used;
-        omissions.push({ label: s.label, lines: s.lines.length - slice.length, ref, partial: true });
+        if (dropped > 0) omissions.push({ label: s.label, lines: dropped, ref, partial: true });
         continue;
       }
     }
@@ -398,7 +422,7 @@ export function disclose(dir, text, context = {}) {
 
   const head = question
     ? `[selected against: "${question}"]`
-    : `[${shape} output, ${raw.split('\n').length} lines -- most relevant sections kept]`;
+    : `[${shape} output, ${totalLines.toLocaleString()} lines -- most relevant sections kept]`;
 
   const body = kept.map((k) => (k.partial
     ? [`--- ${k.label} (partial) ---`, ...k.lines]

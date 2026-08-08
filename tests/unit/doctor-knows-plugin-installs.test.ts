@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -195,5 +195,28 @@ describe('checklist on a plugin install', () => {
     });
 
     expect(names(checks)).toContain('install method');
+  });
+});
+
+describe('the doctor cannot pass on a broken install', () => {
+  it('a plugin record whose hooks directory is gone does not fall back to the package copy', () => {
+    // THE DEFECT: hooksDir fell back to the npm package's own plugin/hooks, which ships with
+    // every install (it is in package.json `files`). So the binary-present checks passed, the
+    // enforcement probe ran THAT copy and got a real deny back, and the report said
+    // "Enforcement is live" -- while Claude Code loads from installPath, which is gone, and
+    // enforces nothing. The file's own header records this exact defect as fixed once before.
+    const { pluginsDir, installPath } = givenPluginInstall('5.3.6', '5.3.6');
+    rmSync(join(installPath, 'hooks'), { recursive: true, force: true });
+
+    const install = detectInstall({ pluginsDir, root: fixture });
+    expect(install.method).toBe('plugin');
+    // Points at the plugin path that is missing, not at a copy that happens to work.
+    expect(install.hooksDir).toContain('5.3.6');
+    expect(existsSync(install.hooksDir)).toBe(false);
+
+    // And the checklist must therefore FAIL rather than report the binary present.
+    const binaryCheck = checklist({ install, root: fixture })
+      .find((c: { name: string }) => c.name === 'hook binary present');
+    expect(binaryCheck?.pass).toBe(false);
   });
 });

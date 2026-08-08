@@ -238,3 +238,55 @@ describe('the audit is held to its own standard', () => {
     expect(renderAudit(dir, [finding()]).text).toMatch(/prices: opus \$15\/\$75 per Mtok/);
   });
 });
+
+describe('the report does not misstate its own numbers', () => {
+  test('a measured cost of zero is not labelled unmeasurable', () => {
+    // The price branch tested `costPerSession == null` while the text branch tested truthiness,
+    // so a real 0 rendered "cost not yet measurable (~$0.00/month)" -- the exact contradiction
+    // the assertion below already forbids, reachable because waste.mjs defaults every finding
+    // to 0 and hard-sets it on the co-occurrence detector.
+    const dir = mkdtempSync(join(tmpdir(), 'auditzero-'));
+    try {
+      const out = renderAudit(dir,
+        [{ id: 'co-occurrence', title: 'a and b are always opened together', costPerSession: 0 }],
+        { full: true });
+      expect(out.text).not.toMatch(/cost not yet measurable \(~\$0\.00/);
+      expect(out.text).toMatch(/0 tokens\/session/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('an advice-only finding prints the id needed to decline it', () => {
+    // `decline` keys strictly on the recorded id, which is anchor-derived and unguessable. With
+    // the id printed only on the appliable branch, model-routing findings -- which carry no
+    // remedy -- could never be suppressed no matter how often a user declined them.
+    const dir = mkdtempSync(join(tmpdir(), 'auditid-'));
+    try {
+      const out = renderAudit(dir,
+        [{ id: 'model-routing', title: 'a cheaper model would do', costPerSession: 100, remedy: null }],
+        { full: true });
+      expect(out.text).toMatch(/decline: model-routing/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('the self-cost includes the closing sentence it reports', () => {
+    // Measuring the body before pushing the closing line left the longest line of the report
+    // out of its own cost -- biasing, in the tool's favour, the very comparison the figure
+    // exists to make honest.
+    const dir = mkdtempSync(join(tmpdir(), 'auditself-'));
+    try {
+      const out = renderAudit(dir,
+        [{ id: 'x', title: 'a finding with a reasonably long title to bulk the body', costPerSession: 5000 }],
+        { full: true });
+      const stated = Number(/cost about ([\d,]+) tokens/.exec(out.text)[1].replace(/,/g, ''));
+      const actual = Math.ceil(out.text.length / 4);
+      // The stated figure must not undercount the rendered report.
+      expect(stated).toBeGreaterThanOrEqual(actual * 0.9);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

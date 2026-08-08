@@ -29,7 +29,6 @@
  */
 
 import { record, readMetrics } from './metrics.mjs';
-import { detect } from './waste.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
 
@@ -67,7 +66,7 @@ const idOf = (finding) => finding.remedy
  * -- a trend computed from one session on each side is a coin flip with a
  * percentage sign.
  */
-export function habitTrend(dir, detector, { events = readMetrics(dir), minSessions = 2 } = {}) {
+export function habitTrend(dir, detector, { events = readMetrics(dir), minSessions = 2, anchors = null } = {}) {
   // SPLIT BY POSITION, NOT BY TIMESTAMP. The log is append-only, so its order is
   // authoritative -- while `at` has millisecond granularity, and a burst of
   // events inside one millisecond would land on the wrong side of the split or
@@ -75,11 +74,22 @@ export function habitTrend(dir, detector, { events = readMetrics(dir), minSessio
   const raisedAt = events.findIndex((e) => e.kind === 'advice' && e.detector === detector);
   if (raisedAt === -1) return null;
 
+  // SCOPED TO THE FILES THIS DETECTOR NAMED. Counting every read in the window
+  // made the "trend" the project's total read volume printed under one
+  // detector's name -- and because renderAudit raises every finding in one tight
+  // loop, each detector's advice event lands at an adjacent index, so all of them
+  // saw an identical set of reads and printed identical before/after numbers.
+  // Three detectors would each claim that habit specifically improved or worsened
+  // by the same amount. The existing test masked it by putting its reads on the
+  // same anchor as its finding.
+  const scope = anchors && anchors.length ? new Set(anchors) : null;
+
   const perSession = (from, to) => {
     const sessions = new Map();
     for (let i = from; i < Math.min(to, events.length); i++) {
       const event = events[i];
       if (event.kind !== 'read' || !event.tokens) continue;
+      if (scope && !scope.has(event.anchor)) continue;
       const key = event.sessionId || 'unknown';
       sessions.set(key, (sessions.get(key) || 0) + event.tokens);
     }
@@ -164,11 +174,21 @@ export function renderAudit(dir, findings = [], { tier = 'opus', full = false, s
     // know -- the same unknown-becomes-zero error the rest of this project
     // corrects, in the one unit that gets quoted to other people.
     const priced = item.costPerSession == null ? null : monthly(cost, { tier, sessionsPerMonth });
+    // The id appears on EVERY actionable line, not just the appliable ones. It is the only
+    // handle `decline` accepts and it cannot be guessed from the title, so omitting it made the
+    // advertised decline path unreachable for precisely the findings most likely to be
+    // unwanted -- model-routing findings carry no remedy, so they could never be suppressed no
+    // matter how many times a user declined them.
     const action = item.remedy?.kind === 'ours' ? `apply: waste_audit action="apply" id="${item.id}"`
-      : item.remedy?.kind === 'yours' ? 'proposed edit -- needs your yes, nothing changed'
-        : 'advice only -- no automatic fix';
+      : item.remedy?.kind === 'yours' ? `proposed edit -- needs your yes, nothing changed; decline: ${item.id}`
+        : `advice only -- no automatic fix; decline: ${item.id}`;
 
-    const text = `  ${item.title}\n      ${cost ? `${cost.toLocaleString()} tokens/session` : 'cost not yet measurable'}` +
+    // MEASURED ZERO IS NOT UNMEASURED. Testing `cost` for truthiness sent a real 0 down the
+    // "not yet measurable" branch while `priced` above, which tests for null, still rendered
+    // $0.00 beside it -- producing `cost not yet measurable (~$0.00/month)`, the exact string
+    // the test suite declares must never appear. waste.mjs defaults every finding to 0 and
+    // hard-sets it on the co-occurrence detector, so this is reachable, not theoretical.
+    const text = `  ${item.title}\n      ${item.costPerSession != null ? `${cost.toLocaleString()} tokens/session` : 'cost not yet measurable'}` +
       `${priced ? ` (~${money(priced.amount)}/month)` : ''}; ${action}`;
 
     const printCost = estimate(text);
@@ -209,6 +229,12 @@ export function renderAudit(dir, findings = [], { tier = 'opus', full = false, s
         ? 'not yet measurable (fewer than two sessions since)'
         : `measured ${saved.toLocaleString()} tokens/session${priced ? `, ~${money(priced.amount)}/month` : ''}`}`);
     }
+    // Never a silent cap: the withheld block above states its remainder and so must this one.
+    // Truncating to six with no disclosure showed a user six savings and let them conclude that
+    // was everything the tool had bought them, which understates its own measured value.
+    if (done.length > 6) {
+      body.push(`  ... and ${done.length - 6} more applied fix(es), not shown.`);
+    }
   }
 
   if (suppressed.length) {
@@ -218,8 +244,19 @@ export function renderAudit(dir, findings = [], { tier = 'opus', full = false, s
   }
 
   // Whether the advice changed anything.
+  // Scoped per detector to the anchors that detector actually named, or every trend line
+  // reports the project's total read volume and they all print the same numbers.
+  const anchorsBy = new Map();
+  for (const f of findings) {
+    const anchors = f.anchors || [f.anchor || f.file].filter(Boolean);
+    if (!anchors.length) continue;
+    if (!anchorsBy.has(f.id)) anchorsBy.set(f.id, new Set());
+    for (const a of anchors) anchorsBy.get(f.id).add(a);
+  }
   const trends = [...new Set(findings.map((f) => f.id))]
-    .map((detector) => habitTrend(dir, detector))
+    .map((detector) => habitTrend(dir, detector, {
+      anchors: anchorsBy.has(detector) ? [...anchorsBy.get(detector)] : null,
+    }))
     .filter(Boolean);
 
   if (trends.length) {
@@ -235,10 +272,15 @@ export function renderAudit(dir, findings = [], { tier = 'opus', full = false, s
   if (note) body.push('', note);
 
   // Held to its own standard.
-  const selfCost = estimate(body.join('\n'));
-  body.push('', `This report cost about ${selfCost.toLocaleString()} tokens and names ` +
+  // Held to its own standard -- INCLUDING the closing sentence. Measuring the body before
+  // pushing it left the report's longest line out of its own reported cost, understating it by
+  // 10-20% on a short audit. This figure exists to prove the audit is not a net loss, so
+  // understating the cost side biases exactly the comparison it was written to be honest about.
+  const closing = (n) => `This report cost about ${n.toLocaleString()} tokens and names ` +
     `${addressable.toLocaleString()} tokens/session of addressable waste` +
-    `${addressable ? ` (~${money(monthly(addressable, { tier, sessionsPerMonth })?.amount)}/month across ${sessionsPerMonth} sessions)` : ''}.`);
+    `${addressable ? ` (~${money(monthly(addressable, { tier, sessionsPerMonth })?.amount)}/month across ${sessionsPerMonth} sessions)` : ''}.`;
+  const selfCost = estimate([...body, '', closing(0)].join('\n'));
+  body.push('', closing(selfCost));
 
   return {
     text: body.join('\n'),
@@ -249,11 +291,6 @@ export function renderAudit(dir, findings = [], { tier = 'opus', full = false, s
     selfCostTokens: selfCost,
     printedTokens: printed,
   };
-}
-
-/** Convenience: the full pass over the waste detectors, for callers with a graph. */
-export function auditFindings(dir, graph) {
-  return detect(dir, graph);
 }
 
 export { applyRemedy, proposal, dollars };

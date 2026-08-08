@@ -30,7 +30,7 @@
  */
 
 import { statSync } from 'node:fs';
-import { canonicalPath } from './paths.mjs';
+import { nodeId } from './wiki.mjs';
 
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
@@ -47,9 +47,17 @@ export function irrecoverability(entry) {
   const text = `${entry.summary || ''} ${entry.evidence || ''}`.toLowerCase();
 
   // Anything derived from a non-deterministic or long-running observation.
-  if (/flak|intermitten|race|timing|reproduc|only fails|sometimes/.test(text)) return 4;
+  //
+  // WORD-ANCHORED. The bare fragment `race` matched "stack trace", and a stack trace is among
+  // the most common things to appear in a finding's evidence -- so an ordinary reasoned finding
+  // scored 4, the tier reserved for observations that cannot be re-derived, instead of the 2 it
+  // earns. That is a 2x multiplier inflation on a very common input, and under budget pressure
+  // an inflated ordinary finding displaces a genuinely irrecoverable one.
+  if (/flak|intermitten|\brace\b|\btiming|\breproduc|only fails|sometimes/.test(text)) return 4;
   // Conclusions drawn from running something, not from reading it.
-  if (/benchmark|profil|measured|timed|ran the|test run|reproduced/.test(text)) return 3;
+  // `reproduced` is deliberately absent: the `\breproduc` prefix above returns first, so listing
+  // it here was unreachable.
+  if (/benchmark|\bprofil(?:ed|ing|er)\b|measured|timed|ran the|test run/.test(text)) return 3;
   // Reasoning over material that is on disk but had to be understood.
   if (/because|therefore|turns out|root cause|the reason/.test(text)) return 2;
   return 1;
@@ -87,10 +95,21 @@ export function reuseProbability(graph, anchors) {
 export function costToRederive(entry, previousAt) {
   if (typeof entry.tokensSpent === 'number') return entry.tokensSpent;
 
-  const window = (entry.at ?? 0) - (previousAt ?? entry.at ?? 0);
-  // Fall back to the size of the evidence when no spend is attributable, so a
+  // NO TRANSCRIPT ATTRIBUTION IS IMPLEMENTED. This previously computed an
+  // inter-conclusion window and then consumed it as `window > 0 ? 0 : 0` --
+  // zero on both branches -- so the value, and the `previousAt` parameter
+  // threaded through selectForConsolidation to produce it, had no effect on any
+  // output. The docstring above and the module header claimed cost was
+  // "measured from the transcript" and called that "exactly the quantity a
+  // competitor without session instrumentation cannot obtain"; it was not
+  // measured at all.
+  //
+  // `entry.at` is a millisecond timestamp, not a token count, so feeding the
+  // window in would substitute a fabricated ms-to-token conversion for the
+  // no-op. The only measured cost is `entry.tokensSpent`, which the extraction
+  // site must supply; otherwise fall back to the size of the evidence, so a
   // conclusion drawn from a large investigation still outranks an aside.
-  return Math.max(estimate(entry.evidence) * 4, window > 0 ? 0 : 0) || estimate(entry.summary) * 8;
+  return estimate(entry.evidence) * 4 || estimate(entry.summary) * 8;
 }
 
 /** Kinds that survive on the floor regardless of score. */
@@ -108,7 +127,17 @@ export function selectForConsolidation(graph, candidates, { budget = 4000 } = {}
   let previousAt = null;
 
   for (const entry of candidates) {
-    const anchors = (entry.anchors || []).map((a) => canonicalPath(String(a).split('#')[0]));
+    // Graph edges hold NODE IDS -- wiki.mjs writes from/to as nodeId(kind, key), a hash --
+    // so an anchor must be hashed to the same identity before it can match anything.
+    // Comparing raw paths made `degree` zero for every candidate, which made the whole
+    // reuse-probability term a constant. Worse than inert: reuseProbability returns 0.5 for an
+    // EMPTY anchor list and 0.25 for a resolved-but-unmatched one, so every anchored candidate
+    // was penalised 2x against every unanchored aside -- and under budget pressure the anchored
+    // findings, the ones the graph can actually retrieve later, were dropped first.
+    const anchors = (entry.anchors || []).map((a) => {
+      const raw = String(a);
+      return nodeId(raw.includes('#') ? 'symbol' : 'file', raw);
+    });
     const cost = costToRederive(entry, previousAt);
     const score = cost * irrecoverability(entry) * reuseProbability(graph, entry.anchorIds || anchors);
     scored.push({ entry, score, cost, tokens: estimate(entry.summary) });

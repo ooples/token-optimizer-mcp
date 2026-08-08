@@ -399,6 +399,11 @@ export const WikiWriteSchema = z
     anchors: z.array(z.string()),
   })
   .passthrough();
+// wiki_read: the retrieval counterpart to wiki_write. Neither anchors nor
+// projectRoot is required at the schema level; the tool reports which is missing,
+// so the caller gets an explanation rather than a validation rejection.
+export const WikiReadSchema = z.object({}).passthrough();
+
 // 54. smart_grep
 export const SmartGrepSchema = z
   .object({
@@ -931,6 +936,7 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   smart_glob: SmartGlobSchema,
   smart_grep: SmartGrepSchema,
   wiki_write: WikiWriteSchema,
+  wiki_read: WikiReadSchema,
   alert_manager: AlertManagerSchema,
   metric_collector: MetricCollectorSchema,
   monitoring_integration: MonitoringIntegrationSchema,
