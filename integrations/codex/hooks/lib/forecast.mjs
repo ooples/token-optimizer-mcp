@@ -328,6 +328,9 @@ export function forecastPanel(dir, session = {}, findings = []) {
       predictedTurns: air.withGraph,
       used: session.used,
       capacity: session.capacity,
+      // The turn this was predicted FROM. predictedTurns is an interval, so without its origin
+      // the outcome at compaction has nothing to subtract from.
+      turns: session.turns,
     });
 
     const score = calibrate(dir, air.withGraph);

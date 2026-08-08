@@ -66,8 +66,15 @@ function horizonOf(turns) {
   return HORIZONS.find((h) => turns <= h.max).name;
 }
 
-/** Records a prediction so it can be scored when the outcome arrives. */
-export function logForecast(dir, { sessionId, predictedTurns, used, capacity }) {
+/**
+ * Records a prediction so it can be scored when the outcome arrives.
+ *
+ * `turns` is the session's turn count AT PREDICTION TIME, and it is what makes the outcome
+ * computable at all: predictedTurns means "turns from here until compaction", so the ground truth
+ * is the turns that ELAPSED, not the turn number compaction happened on. Without it the caller at
+ * compaction has nothing to subtract from and would have to score an interval against an absolute.
+ */
+export function logForecast(dir, { sessionId, predictedTurns, used, capacity, turns }) {
   if (!Number.isFinite(predictedTurns)) return;
   record(dir, {
     kind: 'forecast',
@@ -76,6 +83,7 @@ export function logForecast(dir, { sessionId, predictedTurns, used, capacity }) 
     horizon: horizonOf(predictedTurns),
     used,
     capacity,
+    turns: Number.isFinite(turns) ? turns : null,
   });
 }
 
@@ -86,8 +94,17 @@ export function logForecast(dir, { sessionId, predictedTurns, used, capacity }) 
  * Called when compaction fires: the number of turns that elapsed since the
  * prediction is the ground truth it was predicting.
  */
-export function observeOutcome(dir, { sessionId, actualTurns }) {
-  if (!Number.isFinite(actualTurns)) return;
+export function observeOutcome(dir, { sessionId, actualTurns, atTurn }) {
+  // EITHER THE ELAPSED COUNT OR THE TURN IT HAPPENED ON.
+  //
+  // The only real caller -- the PreCompact hook -- knows what turn compaction fired on, not how
+  // many turns have passed since a prediction it did not make. Deriving the interval here keeps
+  // that subtraction next to the record that defines it, rather than making every caller
+  // re-discover which forecast is open in order to compute its own ground truth.
+  const elapsed = Number.isFinite(actualTurns)
+    ? actualTurns
+    : null;
+  if (elapsed === null && !Number.isFinite(atTurn)) return;
 
   // CLOSURE IS DERIVED FROM THE OUTCOME ROWS, not from a flag on the forecast.
   //
@@ -111,6 +128,14 @@ export function observeOutcome(dir, { sessionId, actualTurns }) {
     .pop();
   if (!open) return;
 
+  // Derived only once the open forecast is known, since the interval is measured from ITS turn.
+  // A forecast recorded before `turns` existed has none, and there is nothing to subtract from --
+  // scoring it against an absolute turn number would manufacture an error rather than measure one,
+  // so it is left open instead.
+  const actual = elapsed !== null ? elapsed
+    : (Number.isFinite(open.turns) ? atTurn - open.turns : null);
+  if (actual === null || !Number.isFinite(actual)) return;
+
   record(dir, {
     kind: 'forecast-outcome',
     sessionId,
@@ -119,9 +144,9 @@ export function observeOutcome(dir, { sessionId, actualTurns }) {
     forecastId: open.id,
     horizon: open.horizon,
     predictedTurns: open.predictedTurns,
-    actualTurns,
-    error: actualTurns - open.predictedTurns,
-    hit: Math.abs(actualTurns - open.predictedTurns) <= TOLERANCE,
+    actualTurns: actual,
+    error: actual - open.predictedTurns,
+    hit: Math.abs(actual - open.predictedTurns) <= TOLERANCE,
   });
 }
 

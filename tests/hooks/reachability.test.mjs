@@ -91,19 +91,12 @@ const ALLOWED = new Map([
   // WIRED ELSEWHERE -- leaves this list when that PR merges.
   ['forTouch', 'WIRED by the injection PR: just-in-time delivery, imported by nothing before it.'],
 
-  // CALIBRATION, HALF-RESOLVED. logForecast and calibrate are now called by
-  // forecastPanel, so the prediction side of the loop runs and those two have
-  // left this list. observeOutcome has not: nothing observes the ground truth,
-  // which arrives when compaction fires. The natural caller is the PreCompact
-  // hook, which needs a turn count it does not currently compute.
-  ['observeOutcome', 'UNWIRED HALF: records the outcome half. The prediction half now runs; the PreCompact hook does not yet supply actualTurns.'],
-
-  // FORECAST DISPLAY. The calibration behind it now runs, but the panel itself
-  // still has no shipped caller -- so nothing renders it and nothing decides
-  // when to. Wiring the loop did not change that, and saying otherwise would be
-  // the exact failure this file exists to catch.
-  ['forecastPanel', 'UNWIRED: the calibration loop behind it now runs, but no hook or tool renders the panel.'],
-  ['worthSurfacing', 'UNWIRED: decides whether a forecast change is worth showing; nothing shows it yet.'],
+  // THE FORECAST IS WIRED, so nothing from it is listed here any more.
+  // logForecast and calibrate are called by forecastPanel; forecastPanel and
+  // worthSurfacing by surface.mjs; observeOutcome by surface.closeForecast; and
+  // surface itself by the PreToolUse router and the PreCompact hook. Five
+  // entries left this list at once, which is what wiring a whole feature looks
+  // like -- and is why it was worth doing rather than annotating.
 
   // SURFACED BY TIGHTENING THE SCAN. Previously counted as reachable only
   // because the bare word match read comment prose as a call site. Verified
