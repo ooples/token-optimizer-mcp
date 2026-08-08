@@ -174,9 +174,21 @@ export function recordRefresh(dir, { tier, prefixTokens, expectedValue }) {
  */
 export function recordRefreshOutcome(dir, { tier, prefixTokens, hit }) {
   const tierSpec = TIERS.find((t) => t.name === tier) || TIERS[0];
+  // THE SAME LEDGER keepWarmDecision BUYS THE REFRESH WITH. That function is explicit that a
+  // refresh is a PING, which READS the prefix -- costOfPing = prefixTokens * READ_MULTIPLIER --
+  // and its comment warns that pricing the ping as a write "overstates its cost by more than
+  // twelvefold". This scored the very same refresh as a re-WRITE, charging (writeMultiplier - 1)
+  // on both branches.
+  //
+  // The disagreement runs in the direction that kills the feature. Mean realised per refresh under
+  // the old lines was p*(0.9h - 0.25), negative below a 27.8% hit rate, while the decision's own
+  // model makes the ping pay above 8.7%. For any project whose gaps fall in that band, `tripwire`
+  // accumulates a negative balance and permanently disables a policy that is genuinely paying --
+  // and tells the user "keep-warm has lost N tokens ... stopping". The backstop fired on its own
+  // accounting error rather than on a distribution shift.
   const realised = hit
-    ? prefixTokens * (1 - READ_MULTIPLIER) - prefixTokens * (tierSpec.writeMultiplier - 1)
-    : -prefixTokens * (tierSpec.writeMultiplier - 1);
+    ? prefixTokens * (tierSpec.writeMultiplier - READ_MULTIPLIER) - prefixTokens * READ_MULTIPLIER
+    : -prefixTokens * READ_MULTIPLIER;
   record(dir, { kind: 'keepwarm', action: 'outcome', tier, prefixTokens, hit: Boolean(hit), realised: Math.round(realised) });
 }
 
