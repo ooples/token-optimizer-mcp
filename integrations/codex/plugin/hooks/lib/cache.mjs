@@ -30,13 +30,28 @@
  * cache-safety-by-construction half of this file.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 /** Anthropic prompt-cache pricing multipliers, relative to a plain input token. */
 export const WRITE_MULTIPLIER = 1.25;
 export const READ_MULTIPLIER = 0.1;
+
+/**
+ * The client's own placeholder for a row it wrote itself -- an interrupt, an
+ * auth error, "No response requested." at the end of a session. It carries a
+ * full all-zero `usage` object, so it survives every filter below, but it is
+ * not a model and no prefix was ever written under it.
+ *
+ * Measured across the four real transcripts on one machine: all four contain
+ * these rows, and three used exactly one real model yet would report two --
+ * a false "2 models used in this session" costing an invented ~767,000 tokens.
+ */
+const SYNTHETIC_MODEL = '<synthetic>';
+
+/** True for a turn naming a model an inference actually ran under. */
+const realModel = (turn) => Boolean(turn.model) && turn.model !== SYNTHETIC_MODEL;
 
 /* -------------------------------------------------------------- MEASUREMENT */
 
@@ -77,8 +92,27 @@ export function readCacheUsage(path, { maxBytes = 4_000_000 } = {}) {
   let text;
   try {
     const size = statSync(path).size;
-    const fd = readFileSync(path, 'utf8');
-    text = size > maxBytes ? fd.slice(size - maxBytes) : fd;
+    if (size <= maxBytes) {
+      text = readFileSync(path, 'utf8');
+    } else {
+      // Read the tail OFF DISK. readFileSync loaded the whole file first, which
+      // on a real 147 MB transcript measured 361 ms and 334 MB of RSS to keep
+      // 4 MB, and throws ERR_STRING_TOO_LONG past ~512 MB -- which the catch
+      // below silently turns into "no cache measurements available" for a
+      // perfectly readable file. It also sliced a BYTE offset out of a UTF-16
+      // string: on that same file bytes-minus-chars was 140,264, so 3.5% of the
+      // requested window was quietly discarded.
+      const handle = openSync(path, 'r');
+      try {
+        const buffer = Buffer.allocUnsafe(maxBytes);
+        const got = readSync(handle, buffer, 0, maxBytes, size - maxBytes);
+        // A partial UTF-8 sequence at the cut is discarded by the startsWith('{')
+        // and JSON.parse guards below, exactly as the old first-line slice was.
+        text = buffer.toString('utf8', 0, got);
+      } finally {
+        closeSync(handle);
+      }
+    }
   } catch {
     return [];
   }
@@ -122,7 +156,7 @@ export function cacheHealth(turns) {
   for (const turn of turns) {
     read += turn.read;
     written += turn.written;
-    if (!turn.model) continue;
+    if (!realModel(turn)) continue;
     if (!models.has(turn.model)) models.set(turn.model, { read: 0, written: 0, turns: 0 });
     const entry = models.get(turn.model);
     entry.read += turn.read;
@@ -130,7 +164,14 @@ export function cacheHealth(turns) {
     entry.turns += 1;
   }
 
-  const last = turns[turns.length - 1];
+  // The last turn that actually CARRIED a prefix. A session routinely ends on a
+  // zero-usage row -- the client's '<synthetic>' placeholders, an interrupted
+  // turn -- and reading turns[length - 1] literally reported a 0-token prefix
+  // for a session whose prefix was 600,000 tokens. That zeroed every
+  // attribution price, made keepWarm answer "unknown", and returned null from
+  // modelSwitchCost under a guard its caller does not share, which crashed
+  // cache_audit outright with "Cannot read properties of null".
+  const last = turns.reduce((best, turn) => (turn.read + turn.written > 0 ? turn : best), turns[turns.length - 1]);
   const total = read + written;
 
   return {
@@ -159,7 +200,7 @@ export function modelSwitchCost(turns) {
   const health = cacheHealth(turns);
   if (!health?.prefixTokens) return null;
 
-  const switched = new Set(turns.map((t) => t.model).filter(Boolean)).size > 1;
+  const switched = new Set(turns.filter(realModel).map((t) => t.model)).size > 1;
   return {
     prefixTokens: health.prefixTokens,
     rewriteCost: Math.round(health.prefixTokens * WRITE_MULTIPLIER),
@@ -182,7 +223,12 @@ export function modelSwitchCost(turns) {
 const VOLATILE = [
   { id: 'timestamp', re: /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/, why: 'an embedded timestamp' },
   { id: 'date', re: /\b(?:today|current date)\b[^\n]{0,40}\d{4}-\d{2}-\d{2}/i, why: 'an embedded current date' },
-  { id: 'iso-date', re: /\b\d{4}-\d{2}-\d{2}\b/, why: 'an embedded date' },
+  // A bare date is a SUSPICION, not a measurement: "- 2025-10-31: reworked the
+  // loader" is byte-identical every session. Kept, because stableText fails
+  // closed over our own output and dropping a line there costs little -- but
+  // NOT priced, because in the blame report a false positive invents a
+  // per-session cost and tells the user to delete their changelog.
+  { id: 'iso-date', re: /\b\d{4}-\d{2}-\d{2}\b/, why: 'an embedded date', priced: false },
   { id: 'session-id', re: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i, why: 'a session id' },
   { id: 'git-sha', re: /\b[0-9a-f]{40}\b/, why: 'a git sha' },
   { id: 'counter', re: /\b(?:run|build|attempt|iteration)\s*#?\d+\b/i, why: 'a run counter' },
@@ -196,7 +242,7 @@ export function volatileLines(text) {
   for (let i = 0; i < lines.length; i++) {
     for (const rule of VOLATILE) {
       if (!rule.re.test(lines[i])) continue;
-      out.push({ line: i + 1, id: rule.id, why: rule.why, text: lines[i].trim().slice(0, 120) });
+      out.push({ line: i + 1, id: rule.id, why: rule.why, priced: rule.priced !== false, text: lines[i].trim().slice(0, 120) });
       break; // one cause per line is enough to act on
     }
   }
@@ -235,19 +281,44 @@ export function attributeInvalidation(cwd, prefixTokens = null, { files = null }
     }
 
     const size = estimate(text);
+    const lines = text.split('\n');
     const found = volatileLines(text);
-    for (const hit of found) {
-      // Everything after this file's start is re-written. Conservative: the
-      // preamble ahead of it is not counted, so this is a floor rather than a
-      // flattering estimate.
-      const downstream = prefixTokens != null ? Math.max(0, prefixTokens - offset) : null;
+    for (const [index, hit] of found.entries()) {
+      // Everything after THIS LINE is re-written -- not everything after the
+      // file, which priced every hit in a file identically and, because each is
+      // emitted as its own record and audit.mjs sums them, billed the same
+      // tokens once per line. Measured before this fix: a three-line changelog
+      // in CLAUDE.md priced at 2,301,093 tokens/session against a 613,625-token
+      // prefix -- 3.75x the entire prefix. Conservative still: the preamble
+      // ahead of the file is not counted, so this remains a floor.
+      const ahead = offset + estimate(lines.slice(0, hit.line - 1).join('\n'));
+      const downstream = prefixTokens != null ? Math.max(0, prefixTokens - ahead) : null;
+      // A prefix cache invalidates ONCE, at the earliest difference. A later
+      // volatile line in the same file costs nothing extra until the first one
+      // is fixed, so it is reported for context but not billed again.
+      //
+      // Subsumption is measured against the earliest PRICED hit, not simply the
+      // first hit. An unpriced bare date at index 0 does not invalidate anything
+      // we are willing to bill for, so treating it as the subsumer zeroed the
+      // price of a genuine timestamp below it -- turning a real, fixable cost
+      // into a reported zero.
+      const firstPriced = found.find((h) => h.priced);
+      const subsumedBy =
+        hit.priced && firstPriced && firstPriced !== hit ? `${relative}:${firstPriced.line}` : null;
       out.push({
         file: relative,
         line: hit.line,
         why: hit.why,
         excerpt: hit.text,
         downstreamTokens: downstream,
-        costPerSession: downstream == null ? null : Math.round(downstream * WRITE_MULTIPLIER),
+        subsumedBy,
+        // null means NOT MEASURABLE -- no prefix measurement, or a construct we
+        // decline to price. 0 means measured and genuinely free, which is what a
+        // subsumed hit is: real, but already billed by the earlier line. Folding
+        // those two into one value is the same mistake this file warns about.
+        costPerSession: downstream == null || !hit.priced
+          ? null
+          : (subsumedBy ? 0 : Math.round(downstream * WRITE_MULTIPLIER)),
         remedy: {
           kind: 'yours',
           type: 'edit',
