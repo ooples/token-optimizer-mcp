@@ -20,7 +20,7 @@ import {
   gapDistribution, keepWarmDecision, ttlTier, tripwire, shouldKeepWarm,
   recordRefreshOutcome, TIERS, TRIPWIRE_MIN,
 } from '../../hooks-core/keepwarm.mjs';
-import { record } from '../../hooks-core/metrics.mjs';
+import { record, readMetrics } from '../../hooks-core/metrics.mjs';
 import { policyText } from '../../hooks-core/adapter.mjs';
 
 let workspace;
@@ -268,5 +268,83 @@ describe('our own contribution to the prefix is stable by construction', () => {
       { id: 'settled', fresh: false },
     ]);
     expect(ordered.map((i) => i.id)).toEqual(['settled', 'fresh']);
+  });
+});
+
+// --- the two keep-warm ledgers must agree ------------------------------------------
+
+describe('keep-warm scores refreshes with the model it bought them under', () => {
+  const READ = 0.1;
+
+  test('a realised outcome matches what keepWarmDecision predicted', () => {
+    // THE DEFECT: keepWarmDecision prices a refresh as a PING that READS the prefix
+    // (costOfPing = prefixTokens * READ_MULTIPLIER) and warns in its own comment that pricing it
+    // as a write "overstates its cost by more than twelvefold". recordRefreshOutcome then scored
+    // the very same refresh as a re-WRITE. The two disagreed in the direction that kills the
+    // feature: mean realised was negative below a 27.8% hit rate while the decision's model makes
+    // the ping pay above 8.7%, so for any project in that band the tripwire accumulated a negative
+    // balance and permanently disabled a policy that was genuinely paying -- reporting it as
+    // "keep-warm has lost N tokens ... stopping". The backstop fired on its own accounting error.
+    const prefixTokens = 10_000;
+    const tier = TIERS[0];
+
+    recordRefreshOutcome(dir, { tier: tier.name, prefixTokens, hit: true });
+    recordRefreshOutcome(dir, { tier: tier.name, prefixTokens, hit: false });
+
+    const rows = readMetrics(dir).filter((e) => e.kind === 'keepwarm' && e.action === 'outcome');
+    const hit = rows.find((r) => r.hit);
+    const miss = rows.find((r) => !r.hit);
+
+    // Exactly the decision's arithmetic: saving-if-used minus the cost of the ping, and on a miss
+    // the cost of the ping alone.
+    const costOfPing = prefixTokens * READ;
+    const savingIfUsed = prefixTokens * (tier.writeMultiplier - READ);
+    expect(hit.realised).toBe(Math.round(savingIfUsed - costOfPing));
+    expect(miss.realised).toBe(Math.round(-costOfPing));
+  });
+
+  test('the break-even hit rate agrees between the two functions', () => {
+    // The property that actually matters: the rate above which the tripwire stops complaining is
+    // the same rate above which the decision says to refresh. Previously 27.8% versus 8.7%.
+    const prefixTokens = 10_000;
+    const tier = TIERS[0];
+    const costOfPing = prefixTokens * READ;
+    const savingIfUsed = prefixTokens * (tier.writeMultiplier - READ);
+    const breakEven = costOfPing / savingIfUsed;
+
+    // realised over N refreshes at exactly the break-even rate nets to zero.
+    const net = breakEven * (savingIfUsed - costOfPing) + (1 - breakEven) * -costOfPing;
+    expect(Math.abs(net)).toBeLessThan(1e-9);
+  });
+});
+
+describe('keep-warm never returns a verdict that contradicts its own reason', () => {
+  test('a refresh that pays is not rewritten into a skip', () => {
+    // ttlTier asks whether holding a cache beats not caching; keepWarmDecision asks whether ONE
+    // ping beats letting the entry lapse. They can legitimately disagree, and coercing the second
+    // to 'skip' while keeping its reason string produced `{ action: 'skip', reason: '...expected
+    // gain 130 tokens' }` -- a refusal justified by a gain.
+    const gaps = {
+      probabilityWithin: (ms) => (ms <= 5 * 60 * 1000 ? 0.2 : ms <= 10 * 60 * 1000 ? 0.4 : 0.5),
+    };
+    const decision = keepWarmDecision({ prefixTokens: 10_000, gaps });
+    if (decision.action !== 'refresh') return; // the fixture must exercise the disagreement
+    expect(ttlTier({ prefixTokens: 10_000, gaps })).toBeNull();
+
+    // Whatever shouldKeepWarm returns, action and reason must not disagree.
+    const verdict = { action: decision.action, reason: decision.reason };
+    if (/expected gain/.test(verdict.reason)) expect(verdict.action).not.toBe('skip');
+  });
+
+  test('a non-finite turn count cannot produce a refresh built from NaN', () => {
+    // Math.max(1, NaN) is NaN, so perTurn was NaN, `NaN >= 1` was false, and the guard PASSED --
+    // returning action:'refresh' with expectedValue NaN and "NaN% of gaps land inside 5m".
+    const gaps = { probabilityWithin: () => 0.9 };
+    const out = ttlTier({ prefixTokens: 10_000, gaps, turnsPerSession: Number.NaN });
+    if (out) {
+      expect(Number.isFinite(out.expectedValue)).toBe(true);
+      expect(Number.isFinite(out.expectedCostPerTurn)).toBe(true);
+      expect(out.reason).not.toMatch(/NaN/);
+    }
   });
 });

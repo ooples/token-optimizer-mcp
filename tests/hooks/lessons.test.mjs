@@ -289,3 +289,62 @@ describe('a verified correction survives the write boundary', () => {
     rmSync(project, { recursive: true, force: true });
   }, 60_000);
 });
+
+describe('a session whose corrections are worth keeping is not skipped for its size', () => {
+  it('one oversize turn does not abort the whole digest', () => {
+    // THE DEFECT: the loop walks turns backwards to keep the END -- the module's own reasoning is
+    // that corrections cluster where the work went wrong -- and `break`s the moment a turn would
+    // overflow the budget. When the NEWEST turn is on its own larger than maxChars (one pasted
+    // stack trace, one dumped file, one long diff), the break fired on the FIRST iteration, `out`
+    // stayed empty and this returned null. harvest-worker guards on `if (feedback)`, so the entire
+    // feedback pass was skipped: no extraction, no lesson validation, no metrics record, no signal
+    // anywhere. And a big terminal turn is exactly what a session that went wrong tends to produce.
+    const turns = [
+      { role: 'user', text: 'use npm test, not npx jest' },
+      { role: 'assistant', text: 'understood' },
+      { role: 'assistant', text: 'X'.repeat(50_000) },
+    ];
+    const digest = buildFeedbackDigest(turns, { maxChars: 1_000 });
+    expect(digest).not.toBeNull();
+    expect(digest).toContain('use npm test');
+    expect(digest).not.toContain('X'.repeat(200));
+  });
+
+  it('the budget is still respected for turns that fit', () => {
+    const turns = Array.from({ length: 40 }, (_, i) => ({ role: 'user', text: `line ${i} `.repeat(20) }));
+    const digest = buildFeedbackDigest(turns, { maxChars: 1_000 });
+    expect(digest.length).toBeLessThanOrEqual(1_200);
+  });
+
+  it('a genuinely empty set of turns is still null', () => {
+    expect(buildFeedbackDigest([], { maxChars: 1_000 })).toBeNull();
+  });
+});
+
+describe('a lesson is only stored if its trigger can ever fire', () => {
+  const lesson = (trigger) => JSON.stringify([{
+    claim: 'Use npm test rather than npx jest for this repository.',
+    trigger,
+    anchors: ['package.json'],
+  }]);
+
+  it('a trigger the injector would refuse is rejected at store time', () => {
+    // THE DEFECT: this validated with a bare `new RegExp`, which only proves the pattern COMPILES.
+    // inject.mjs additionally refuses sources over 200 characters and nested-quantifier ReDoS
+    // shapes -- and when it refuses, appliesToCommand falls back to a LITERAL substring search of
+    // the regex SOURCE against the command. A regex source is not a substring of any real command,
+    // so such a lesson was written to the graph, counted as delivered, and could never surface.
+    const nested = '(\w+\s*)+\.csproj';
+    const tooLong = `\b(${Array.from({ length: 40 }, (_, i) => `runner${i}`).join('|')})\b`;
+    for (const bad of [nested, tooLong]) {
+      const out = validateLessons(lesson(bad), []);
+      expect(out.lessons).toHaveLength(0);
+      expect(out.rejected.some((r) => r.reason === 'bad-trigger-regex')).toBe(true);
+    }
+  });
+
+  it('an ordinary trigger the injector accepts still passes', () => {
+    const out = validateLessons(lesson('\bnpx\s+jest\b'), []);
+    expect(out.rejected.filter((r) => r.reason === 'bad-trigger-regex')).toHaveLength(0);
+  });
+});

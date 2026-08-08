@@ -137,7 +137,14 @@ export function ttlTier({ prefixTokens, gaps, turnsPerSession = DEFAULT_TURNS })
   const costOf = (tier) => {
     const hit = gaps.probabilityWithin(tier.ms);
     const perTurn = hit * READ_MULTIPLIER + (1 - hit) * tier.writeMultiplier;
-    const turns = Math.max(1, turnsPerSession);
+    // THE SUPPLIED VALUE, not only the computed one. Math.max(1, NaN) is NaN -- Math.max
+    // propagates it rather than clamping -- so perTurn became NaN, the `perTurn >= 1` guard below
+    // read `NaN >= 1` as false and PASSED, and this returned action:'refresh' with an
+    // expectedValue of NaN and a reason string reading "NaN% of gaps land inside 5m". A positive
+    // verdict built entirely out of NaN. The guard was on the wrong side of the computation.
+    const turns = Number.isFinite(turnsPerSession) && turnsPerSession >= 1
+      ? turnsPerSession
+      : DEFAULT_TURNS;
     return {
       tier,
       hit,
@@ -234,7 +241,15 @@ export function shouldKeepWarm(dir, { prefixTokens, events = readMetrics(dir) } 
   const gaps = gapDistribution(dir, { events });
   const best = ttlTier({ prefixTokens, gaps });
   if (!best) {
+    // THE TWO MODELS ANSWER DIFFERENT QUESTIONS, so they may legitimately disagree. ttlTier asks
+    // whether holding a cache beats not caching at all; keepWarmDecision asks whether ONE ping
+    // beats letting the entry lapse -- and a ping can pay where no tier does. Coercing everything
+    // that was not 'unknown' to 'skip' while keeping the decision's reason verbatim produced a
+    // refusal justified by a GAIN: `{ action: 'skip', reason: '...expected gain 130 tokens' }`.
+    // This module's own docstring says a refusal that cannot be checked is indistinguishable from
+    // a bug; one that contradicts itself is worse.
     const decision = keepWarmDecision({ prefixTokens, gaps });
+    if (decision.action === 'refresh') return decision;
     return { action: decision.action === 'unknown' ? 'unknown' : 'skip', reason: decision.reason };
   }
   return best;
