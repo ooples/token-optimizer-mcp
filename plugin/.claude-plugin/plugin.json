@@ -1,7 +1,7 @@
 {
   "name": "token-optimizer",
   "description": "Aggressive context-window optimization by DEFAULT: enforcing hooks route expensive built-in file, search and shell calls to cached/diffed MCP tools, cutting token usage 60-90% without the user configuring anything.",
-  "version": "5.6.0",
+  "version": "5.6.1",
   "author": {
     "name": "ooples"
   },
