@@ -76,6 +76,11 @@ export const BALANCE_KINDS = new Set([
   // and an outcome whose forecast had scrolled away was dropped with no record at all.
   'forecast',
   'forecast-outcome',
+  // The keep-warm tripwire's evidence. It needs TRIPWIRE_MIN outcomes before it may have an
+  // opinion, and there is one outcome per refresh -- so through the windowed reader the tenth
+  // aged out before it was written and the backstop was structurally unable to fire, reporting
+  // "only N/10 refreshes observed" for the life of the project.
+  'keepwarm',
 ]);
 
 /**

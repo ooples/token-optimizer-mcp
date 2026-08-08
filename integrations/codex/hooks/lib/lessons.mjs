@@ -31,6 +31,7 @@
 
 import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from './curate.mjs';
 import { safeTrigger } from './inject.mjs';
+import { isFsSafePath } from './paths.mjs';
 
 /** Lessons longer than this are prose, not instructions. */
 const MAX_CLAIM = 400;
@@ -172,7 +173,7 @@ export function isImperative(claim) {
  * Returns { lessons, rejected } so a caller can report what was dropped rather
  * than silently storing less than it was given.
  */
-export function validateLessons(raw, turns) {
+export function validateLessons(raw, turns, { knownFiles = null } = {}) {
   let parsed = raw;
   if (typeof raw === 'string') {
     try {
@@ -238,8 +239,19 @@ export function validateLessons(raw, turns) {
       // A verified human correction is as close to ground truth as this system
       // gets. An unverified paraphrase is a model's reading of one.
       confidence: verified ? 0.95 : 0.6,
+      // HELD TO THE FILES THE SESSION ACTUALLY TOUCHED, exactly as the finding path already is.
+      // harvest-worker calls validate() with `knownFiles: filesIn(digest)` and says why in its own
+      // comment -- "a model that invents a plausible path cannot anchor a finding to it" -- while
+      // this path accepted any non-empty string. The identical hallucination therefore walked
+      // straight through, and a lesson anchored to a file nobody opened is then injected on every
+      // future touch of it: a permanent instruction attached to code it was never about.
+      //
+      // isFsSafePath as well, because these strings reach the filesystem later through the graph.
+      // A path holding U+10FFFF ABORTS the process inside libuv rather than throwing, so no
+      // try/catch downstream can contain it.
       anchors: Array.isArray(item?.anchors)
-        ? item.anchors.filter((a) => typeof a === 'string' && a.trim())
+        ? item.anchors.filter((a) => typeof a === 'string' && a.trim() && isFsSafePath(a)
+            && (!knownFiles || knownFiles.includes(a)))
         : [],
     });
   }
