@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.6.1...v5.7.0) (2026-08-08)
+
+
+### Features
+
+* **graph:** make the knowledge loop actually run -- harvest by default, and enforce recording ([#296](https://github.com/ooples/token-optimizer-mcp/issues/296)) ([8a7ebce](https://github.com/ooples/token-optimizer-mcp/commit/8a7ebce623a8a420f1f231d715da5dd21032d37d))
+
+
+### Bug Fixes
+
+* **decide:** a dump redirected to a file is not a dump ([#298](https://github.com/ooples/token-optimizer-mcp/issues/298)) ([eb57606](https://github.com/ooples/token-optimizer-mcp/commit/eb57606a895c71ad5cc0946bbd5b23b4516a0490))
+
 ## [5.6.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.6.0...v5.6.1) (2026-08-08)
 
 
