@@ -63,7 +63,21 @@ const metricsPath = (dir) => join(dir, 'metrics.jsonl');
 const balancePath = (dir) => join(dir, 'balance.jsonl');
 
 /** Kinds the net balance is computed from, and which therefore must survive. */
-const BALANCE_KINDS = new Set(['inject', 'harvest', 'substitute']);
+/**
+ * Kinds mirrored into balance.jsonl as well as the firehose, so the event window cannot starve
+ * them. A kind belongs here when a DECISION depends on counting it and it is rare enough to be
+ * evicted by high-volume reads and captures before the count is reached.
+ */
+const BALANCE_KINDS = new Set([
+  'inject',
+  'harvest',
+  'substitute',
+  // The keep-warm tripwire's evidence. It needs TRIPWIRE_MIN outcomes before it may have an
+  // opinion, and there is one outcome per refresh -- so through the windowed reader the tenth
+  // aged out before it was written and the backstop was structurally unable to fire, reporting
+  // "only N/10 refreshes observed" for the life of the project.
+  'keepwarm',
+]);
 
 /**
  * Is this touch in the holdout arm?

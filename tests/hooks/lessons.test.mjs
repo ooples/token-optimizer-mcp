@@ -369,3 +369,38 @@ describe('a lesson is only stored if its trigger can ever fire', () => {
     expect(out.rejected.filter((r) => r.reason === 'bad-trigger-regex')).toHaveLength(0);
   });
 });
+
+describe('a lesson cannot be anchored to a file the session never opened', () => {
+  const lesson = (anchors) => JSON.stringify([{
+    claim: 'Use npm test rather than npx jest for this repository.',
+    trigger: String.raw`\bnpx\s+jest\b`,
+    anchors,
+  }]);
+
+  it('an invented path is dropped when the touched-file list is known', () => {
+    // THE DEFECT: the finding path calls validate() with `knownFiles: filesIn(digest)` and says
+    // why in its own comment -- "a model that invents a plausible path cannot anchor a finding to
+    // it" -- while this path accepted any non-empty string. A lesson anchored to a file nobody
+    // opened is then injected on every future touch of that file: a permanent instruction attached
+    // to code it was never about.
+    const { lessons } = validateLessons(
+      lesson(['/repo/src/real.ts', '/repo/src/invented-by-the-model.ts']),
+      TURNS,
+      { knownFiles: ['/repo/src/real.ts'] }
+    );
+    expect(lessons[0].anchors).toEqual(['/repo/src/real.ts']);
+  });
+
+  it('without a known-file list every anchor is still accepted', () => {
+    // The full-delta path has no such list, so the restriction must not become mandatory.
+    const { lessons } = validateLessons(lesson(['/repo/a.ts', '/repo/b.ts']), TURNS);
+    expect(lessons[0].anchors).toHaveLength(2);
+  });
+
+  it('a path that would abort the process is refused either way', () => {
+    // U+10FFFF trips an assert inside libuv rather than throwing, so no downstream try/catch helps.
+    const unsafe = `/repo/${String.fromCodePoint(0x10ffff)}.ts`;
+    const { lessons } = validateLessons(lesson(['/repo/ok.ts', unsafe]), TURNS);
+    expect(lessons[0].anchors).toEqual(['/repo/ok.ts']);
+  });
+});

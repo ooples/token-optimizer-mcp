@@ -398,3 +398,65 @@ describe('keep-warm never returns a verdict that contradicts its own reason', ()
     }
   });
 });
+
+describe('the backstop can actually reach its own threshold', () => {
+  test('outcomes survive a firehose long enough to have evicted them', () => {
+    // THE DEFECT: tripwire read through readMetrics, whose window is 5000 events and 2 MB. There
+    // is one keepwarm outcome per refresh, in a log dominated by reads and captures, so the ten
+    // TRIPWIRE_MIN demands aged out before the tenth was written. It returned
+    // "only N/10 refreshes observed" for the life of the project, and shouldKeepWarm could never
+    // be vetoed -- a guard that cannot reach its own threshold is not a guard.
+    for (let i = 0; i < TRIPWIRE_MIN + 2; i++) {
+      recordRefreshOutcome(dir, { tier: TIERS[0].name, prefixTokens: 10_000, hit: false });
+    }
+    // Bury them under more events than the window will hold.
+    for (let i = 0; i < 5_200; i++) record(dir, { kind: 'read', anchor: `/n${i}.ts`, tokens: 10 });
+
+    const windowed = readMetrics(dir).filter((e) => e.kind === 'keepwarm');
+    expect(windowed.length).toBeLessThan(TRIPWIRE_MIN); // the window really did evict them
+
+    const trip = tripwire(dir);
+    expect(trip.observed).toBe(TRIPWIRE_MIN + 2);
+    expect(trip.tripped).toBe(true);
+  });
+});
+
+describe('a gap between two sessions is not a gap between turns', () => {
+  test('an overnight boundary does not enter the distribution', () => {
+    // THE DEFECT: every timestamp in the log was sorted and differenced, so the interval between
+    // the last event of one session and the first of the next -- routinely sixteen hours -- was
+    // counted as a turn gap. That dominated p90/p99 and diluted probabilityWithin in the
+    // conservative direction, so ttlTier returned "neither tier pays" on projects where it would
+    // have paid. Silent, because the bias only ever declines to act.
+    const base = Date.now() - 48 * 60 * 60 * 1000;
+    const events = [];
+    for (let s = 0; s < 2; s++) {
+      for (let i = 0; i < 6; i++) {
+        events.push({ kind: 'read', sessionId: `s${s}`, at: base + s * 24 * 3600_000 + i * 60_000 });
+      }
+    }
+    record(dir, { kind: 'seed' });
+    writeFileSync(join(dir, 'metrics.jsonl'), `${events.map((e) => JSON.stringify(e)).join('\n')}\n`);
+
+    const gaps = gapDistribution(dir);
+    expect(gaps).not.toBeNull();
+    // Ten one-minute gaps within the two sessions, and no 24-hour one between them.
+    expect(gaps.count).toBe(10);
+    expect(gaps.p99).toBeLessThan(2 * 60_000);
+  });
+
+  test('a long gap INSIDE a session is kept, because it is real evidence', () => {
+    // Dropping these would bias the answer the other way -- making keep-warm look better than it
+    // is, which is the direction this project cares about most.
+    const base = Date.now() - 10 * 60 * 60 * 1000;
+    const events = Array.from({ length: 8 }, (_, i) => ({
+      kind: 'read', sessionId: 'one', at: base + i * 90 * 60_000,
+    }));
+    record(dir, { kind: 'seed' });
+    writeFileSync(join(dir, 'metrics.jsonl'), `${events.map((e) => JSON.stringify(e)).join('\n')}\n`);
+
+    const gaps = gapDistribution(dir);
+    expect(gaps.median).toBeGreaterThan(60 * 60_000);
+    expect(ttlTier({ prefixTokens: 47_000, gaps })).toBeNull(); // and it correctly declines
+  });
+});
