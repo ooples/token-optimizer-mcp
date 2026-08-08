@@ -76,8 +76,6 @@ export function localEndpoint() {
 export function harvestMode() {
   if (process.env.TOKEN_OPTIMIZER_MODE === 'off') return 'off:mode';
 
-  // Free and private: on by default, because there is nothing to consent to.
-  if (localEndpoint()) return 'local';
 
   // ON BY DEFAULT, OPT-OUT. This was opt-in, and the argument was a real one: a remote harvest
   // spends money and sends a digest off the machine, and an ambient ANTHROPIC_API_KEY is not
@@ -101,8 +99,19 @@ export function harvestMode() {
   //     them, because summarised still means sent.
   //   - probeHarvest in doctor.mjs states the mode and what is sent, so the state is legible
   //     rather than assumed.
+  // AN EXPLICIT CHOICE OUTRANKS EVERY CAPABILITY CHECK, and it has to be tested first.
+  //
+  // The opt-out used to sit after the local-endpoint branch, which meant a user who configured a
+  // local endpoint AND set TOKEN_OPTIMIZER_HARVEST=0 kept harvesting: `localEndpoint()` returned
+  // 'local' before anything looked at the variable. Turning a feature off must not depend on how
+  // it happens to be configured.
   const optedOut = /^(0|false|no|off)$/i.test(process.env.TOKEN_OPTIMIZER_HARVEST || '');
   if (optedOut) return 'off:opted-out';
+
+  // Free and private, so nothing further to weigh: no credential, no billing, no digest leaving
+  // the machine.
+  if (localEndpoint()) return 'local';
+
   return apiKey() ? 'remote' : 'off:no-key';
 }
 

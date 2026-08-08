@@ -80,6 +80,38 @@ describe('harvest enablement', () => {
     }
   });
 
+  it('an explicit opt-out outranks a configured local endpoint', async () => {
+    // THE BUG: the opt-out was tested AFTER the local-endpoint branch, so a user who ran a local
+    // model and then set TOKEN_OPTIMIZER_HARVEST=0 kept harvesting -- localEndpoint() returned
+    // 'local' before anything looked at the variable. Turning a feature off must not depend on how
+    // it happens to be configured.
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'http://localhost:11434/v1/messages';
+    process.env.TOKEN_OPTIMIZER_HARVEST = '0';
+    const { harvestMode, harvestEnabled } = await harvest();
+    expect(harvestMode()).toBe('off:opted-out');
+    expect(harvestEnabled()).toBe(false);
+  });
+
+  it('a local endpoint still runs free and private when nothing opted out', async () => {
+    // The control for the test above: the reordering must not break the local path.
+    process.env.TOKEN_OPTIMIZER_HARVEST_ENDPOINT = 'http://localhost:11434/v1/messages';
+    const { harvestMode, harvestEnabled } = await harvest();
+    expect(harvestMode()).toBe('local');
+    expect(harvestEnabled()).toBe(true);
+  });
+
+  it('an opt-out with no credential reports the CHOICE, not the missing key', async () => {
+    // Deliberate precedence, and it was questioned in review. Both facts are true, but only one is
+    // the operative reason: somebody who turned the feature off is not waiting on a credential for
+    // it, and doctor telling them to set one would be a diagnostic about a feature they disabled.
+    // Explicit intent outranks capability.
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.TOKEN_OPTIMIZER_API_KEY;
+    process.env.TOKEN_OPTIMIZER_HARVEST = 'false';
+    const { harvestMode } = await harvest();
+    expect(harvestMode()).toBe('off:opted-out');
+  });
+
   it('still refuses to call anything without a credential', async () => {
     // The half of the consent argument that survives unchanged: on by default cannot mean
     // billing a machine that has no key to bill against.
