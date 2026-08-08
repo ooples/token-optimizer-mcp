@@ -73,21 +73,47 @@ export function localEndpoint() {
  * Why the harvest is or is not running -- a string, because "off" needs a
  * reason a user can act on and a boolean cannot carry one.
  *
- * @returns {'local' | 'remote' | 'off:mode' | 'off:not-opted-in' | 'off:no-key'}
+ * @returns {'local' | 'remote' | 'off:mode' | 'off:opted-out' | 'off:no-key'}
  */
 export function harvestMode() {
   if (process.env.TOKEN_OPTIMIZER_MODE === 'off') return 'off:mode';
 
-  // Free and private: on by default, because there is nothing to consent to.
+
+  // ON BY DEFAULT, OPT-OUT. This was opt-in, and the argument was a real one: a remote harvest
+  // spends money and sends a digest off the machine, and an ambient ANTHROPIC_API_KEY is not
+  // consent.
+  //
+  // Measured against that argument on a machine running this for weeks: 340 read events recorded
+  // in one project's graph and 48 in another, with ZERO findings, ZERO harvests and ZERO
+  // injections in either. The graph accumulated structure and never learned anything, because
+  // nobody sets an environment variable they have never heard of. Everything downstream --
+  // injection, transfer between projects, consolidation, the whole claim that this stops you
+  // re-deriving what you already worked out -- is inert without the harvest, so an opt-in default
+  // silently withheld the product from every user who did not go looking for it.
+  //
+  // A default nobody discovers is not conservative. It is a dead feature.
+  //
+  // The consent argument is answered rather than discarded:
+  //   - off:no-key still applies, so nothing starts billing on a machine with no credential.
+  //   - TOKEN_OPTIMIZER_HARVEST=0|false|no|off turns it off; TOKEN_OPTIMIZER_MODE=off turns off
+  //     everything.
+  //   - buildDigest already drops tool results, file bodies and diffs rather than summarising
+  //     them, because summarised still means sent.
+  //   - probeHarvest in doctor.mjs states the mode and what is sent, so the state is legible
+  //     rather than assumed.
+  // AN EXPLICIT CHOICE OUTRANKS EVERY CAPABILITY CHECK, and it has to be tested first.
+  //
+  // The opt-out used to sit after the local-endpoint branch, which meant a user who configured a
+  // local endpoint AND set TOKEN_OPTIMIZER_HARVEST=0 kept harvesting: `localEndpoint()` returned
+  // 'local' before anything looked at the variable. Turning a feature off must not depend on how
+  // it happens to be configured.
+  const optedOut = /^(0|false|no|off)$/i.test(process.env.TOKEN_OPTIMIZER_HARVEST || '');
+  if (optedOut) return 'off:opted-out';
+
+  // Free and private, so nothing further to weigh: no credential, no billing, no digest leaving
+  // the machine.
   if (localEndpoint()) return 'local';
 
-  // Anything else spends money and sends a digest off the machine, so it takes
-  // a DELIBERATE opt-in. Keying off the presence of ANTHROPIC_API_KEY alone --
-  // which is set in most developer environments already -- would have started
-  // billing a third-party call the moment this shipped, without anyone choosing
-  // it. An ambient credential is not consent.
-  const optedIn = /^(1|true|yes|on)$/i.test(process.env.TOKEN_OPTIMIZER_HARVEST || '');
-  if (!optedIn) return 'off:not-opted-in';
   return apiKey() ? 'remote' : 'off:no-key';
 }
 

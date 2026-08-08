@@ -210,7 +210,7 @@ describe('the never-transmit guarantee is enforced, not merely stated', () => {
         }),
         encoding: 'utf8',
         timeout: 30_000,
-        env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: graph },
+        env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: graph, TOKEN_OPTIMIZER_SHARED_DIR: graph },
       });
     }
 

@@ -48,7 +48,7 @@ const ABORTS = String.fromCodePoint(0x10ffff);
 // it needs the developer's accumulated graph, and depending on it made the
 // result a function of how much unrelated history happened to be on disk.
 const ISOLATED_GRAPH = mkdtempSync(join(tmpdir(), 'abort-probe-graph-'));
-const HOOK_ENV = { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH };
+const HOOK_ENV = { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH, TOKEN_OPTIMIZER_SHARED_DIR: ISOLATED_GRAPH };
 
 afterAll(() => {
   try {

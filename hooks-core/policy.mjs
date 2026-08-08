@@ -270,7 +270,7 @@ function statePath(sessionId, agent) {
 
 /** A usable state object, whatever was on disk. */
 function emptyState() {
-  return { seen: {}, denied: {}, injected: [], actCounts: {}, forecast: null };
+  return { seen: {}, denied: {}, injected: [], actCounts: {}, forecast: null, edits: 0, editedFiles: [], recordingNudged: false };
 }
 
 /**
@@ -326,6 +326,12 @@ export function loadState(sessionId, agent) {
           && Number.isFinite(parsed.forecast.checkedAt)
           ? parsed.forecast
           : null,
+      // THE SAME REASON AS EVERY FIELD ABOVE. Every tool call is a separate hook process, so a
+      // counter not carried through here resets to zero on each one and can never reach a
+      // threshold -- which is exactly how the act counter came to sit at one forever.
+      edits: Number.isFinite(parsed.edits) ? parsed.edits : 0,
+      editedFiles: Array.isArray(parsed.editedFiles) ? parsed.editedFiles : [],
+      recordingNudged: parsed.recordingNudged === true,
     };
   } catch {
     return emptyState();
@@ -402,6 +408,13 @@ export function saveState(sessionId, state, agent) {
       // a max is the safe merge. The forecast throttle is a POINT IN TIME: taking the older of two
       // concurrent checks would re-open the window and let the panel be rebuilt immediately, which
       // is the cost the throttle exists to bound.
+      // HIGHEST WINS for the edit count, for the same concurrency reason as actCounts: two hook
+      // processes each read, each increment, and last-writer would lose one. Monotonic beats
+      // exact here -- undercounting delays a nudge, overcounting invents one.
+      edits: Math.max(Number(current.edits) || 0, Number(state.edits) || 0),
+      editedFiles: [...new Set([...(state.editedFiles || []), ...(current.editedFiles || [])])].slice(0, 20),
+      // ONCE SET, STAYS SET. A nudge that can un-fire is a nudge that repeats.
+      recordingNudged: Boolean(current.recordingNudged || state.recordingNudged),
       forecast: (() => {
         const mine = state.forecast || null;
         const theirs = current.forecast || null;

@@ -144,10 +144,13 @@ function hooksDirFor({ hooksDir, install, root }) {
  * and then fixed only its own half, the once-per-session Stop notice. A
  * systemMessage at Stop is easy to miss; the doctor is where someone goes to ask.
  *
- * This does NOT judge the default. Opting in costs a model call and sends a
- * digest off the machine, so requiring consent is right. The defect is that the
- * state was invisible, which let a user believe findings were accumulating when
- * they could not.
+ * THE DEFAULT HAS SINCE BEEN JUDGED, and reversed. This used to say that requiring consent was
+ * right and that only the invisibility was the defect. Measured again on a machine running this
+ * for weeks: 340 read events in one project's graph, 48 in another, and ZERO findings, ZERO
+ * harvests, ZERO injections in either. A default that nobody discovers is not a conservative
+ * default, it is a dead feature -- and everything downstream of the harvest is inert without it.
+ * Extraction is now on unless turned off, so this check reports a MISSING CREDENTIAL as the
+ * blocking case and a deliberate opt-out as a choice rather than a fault.
  */
 export function probeHarvest() {
   const mode = harvestMode();
@@ -160,24 +163,25 @@ export function probeHarvest() {
     return [ok('finding extraction is on', 'local endpoint -- free and private')];
   }
   if (mode === 'remote') {
-    return [ok('finding extraction is on', 'opted in, with a credential')];
+    return [ok('finding extraction is on',
+      'on by default, with a credential -- a digest of paths, commands and conclusions, never ' +
+      'file contents, is sent to extract findings. TOKEN_OPTIMIZER_HARVEST=0 turns it off')];
   }
 
+  // THE COMMON BLOCKING CASE now that extraction is on by default: wanted, but unable to run.
   if (mode === 'off:no-key') {
     return [bad('finding extraction is on',
-      'opted in, but there is no credential to call a model with',
+      'on, but there is no credential to call a model with -- so the graph will keep collecting ' +
+      'files and symbols and never a finding, a lesson or a correction',
       'set TOKEN_OPTIMIZER_API_KEY, or point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a ' +
-      'local model to run it without one')];
+      'local model to run it free and without one')];
   }
 
-  // off:not-opted-in
-  return [bad('finding extraction is on',
-    'off -- the graph will keep collecting files and symbols, but never a finding, ' +
-    'a lesson or a correction',
-    'point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model to run it free and ' +
-    'private, or set TOKEN_OPTIMIZER_HARVEST=1 with a credential to use a remote ' +
-    'one (that spends money and sends a digest of paths, commands and conclusions ' +
-    '-- never file contents -- off this machine)')];
+  // off:opted-out -- a deliberate choice, reported as one. Nagging about a setting somebody chose
+  // is how a diagnostic gets ignored, and the point of this check is that it is worth reading.
+  return [ok('finding extraction is on',
+    'off by your choice (TOKEN_OPTIMIZER_HARVEST is set to a false value) -- the graph will ' +
+    'collect files and symbols but no findings, lessons or corrections')];
 }
 
 export function probeVersion({ install }) {

@@ -95,7 +95,7 @@ function route(payload, { sessionId = 'stale-order' } = {}) {
     encoding: 'utf8',
     env: {
       ...process.env,
-      TOKEN_OPTIMIZER_WIKI_DIR: wiki,
+      TOKEN_OPTIMIZER_WIKI_DIR: wiki, TOKEN_OPTIMIZER_SHARED_DIR: wiki,
       TOKEN_OPTIMIZER_STATE_DIR: stateDir,
       TOKEN_OPTIMIZER_HOLDOUT: '0',
     },

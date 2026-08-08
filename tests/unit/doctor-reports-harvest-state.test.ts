@@ -60,13 +60,24 @@ describe('probeHarvest', () => {
   });
 
   it('names the variable that changes it, because a diagnosis without a next step is a complaint', () => {
+    // With extraction on by default, the blocking state is a MISSING CREDENTIAL rather than a
+    // missing opt-in, so the remedy names the key and the free local alternative.
     envOnly({});
     const [check] = probeHarvest();
 
-    expect(check.remedy).toMatch(/TOKEN_OPTIMIZER_HARVEST/);
-    // The free, private path must be offered too -- opting in remotely costs
-    // money and sends a digest off the machine.
+    expect(check.pass).toBe(false);
+    expect(check.remedy).toMatch(/TOKEN_OPTIMIZER_API_KEY/);
     expect(check.remedy).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+  });
+
+  it('reports a deliberate opt-out as a choice, not a fault', () => {
+    // Nagging about a setting somebody chose is how a diagnostic gets ignored, and the point of
+    // this check is that it stays worth reading.
+    envOnly({ TOKEN_OPTIMIZER_HARVEST: '0', TOKEN_OPTIMIZER_API_KEY: 'sk-x' });
+    const [check] = probeHarvest();
+
+    expect(check.pass).toBe(true);
+    expect(check.detail).toMatch(/your choice/i);
   });
 
   it('fails differently when opted in but with no credential', () => {

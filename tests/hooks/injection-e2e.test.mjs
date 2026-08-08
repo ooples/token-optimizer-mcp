@@ -60,7 +60,7 @@ function runHook(payload, env = {}) {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     timeout: 30_000,
-    env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: dir, ...env },
+    env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: dir, TOKEN_OPTIMIZER_SHARED_DIR: dir, ...env },
   });
   // FAIL FAST rather than treating a crash as "no context". A hook that died
   // and a hook that had nothing to say both produce no additionalContext, and
