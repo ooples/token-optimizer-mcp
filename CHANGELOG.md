@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.6.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.6.0...v5.6.1) (2026-08-08)
+
+
+### Bug Fixes
+
+* **keepwarm,lessons:** make the tripwire reachable, the gaps per-session, the anchors real ([#295](https://github.com/ooples/token-optimizer-mcp/issues/295)) ([c22bc55](https://github.com/ooples/token-optimizer-mcp/commit/c22bc55600014c59c61e6a225034f5c6a2f20b93))
+* **keepwarm,lessons:** score refreshes with the model that bought them ([#293](https://github.com/ooples/token-optimizer-mcp/issues/293)) ([ff158bf](https://github.com/ooples/token-optimizer-mcp/commit/ff158bf3d4021c5b13398392e1b28d824bebf8fc))
+
 ## [5.6.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.5.0...v5.6.0) (2026-08-08)
 
 
