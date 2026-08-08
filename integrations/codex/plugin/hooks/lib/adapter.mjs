@@ -28,8 +28,9 @@ import {
   loadState, saveState, alreadyDenied, mode, MODE_OFF, MODE_ADVISE, largeFileBytes, withEscape,
 } from './policy.mjs';
 import { decide, remember, normalizePayload, readCostBytes } from './decide.mjs';
-import { recordRead } from './metrics.mjs';
-import { wikiDir } from './wiki.mjs';
+import { recordRead, fingerprint } from './metrics.mjs';
+import { wikiDir, projectRootFor } from './wiki.mjs';
+import { join } from 'node:path';
 import { briefing } from './remedy.mjs';
 import { stableText, transcriptFor } from './cache.mjs';
 import { cachedRoutingBriefing } from './routing.mjs';
@@ -133,6 +134,13 @@ work out, because that exists nowhere in the source tree.${projectBriefing()}`;
 function projectBriefing() {
   try {
     const cwd = process.cwd();
+    // THE GRAPH LIVES AT THE REPOSITORY ROOT, and wikiDir does no upward walk. Trusting the
+    // bare cwd meant that launching the agent from a subdirectory read an empty directory and
+    // reported "nothing learned" for a project whose graph was fully populated one level up --
+    // indistinguishable, to the reader, from a project that has genuinely learned nothing.
+    // The sentinel filename is what session-start.mjs uses: the walk wants a path INSIDE the
+    // tree, not the tree itself.
+    const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
 
     // Routing facts join the same briefing, and are number-free for the same
     // reason the rest of it is: a count that ticks up as evidence accumulates
@@ -140,10 +148,10 @@ function projectBriefing() {
     // The digits live in the model_routing tool, where changing costs nothing.
     let routing = null;
     try {
-      routing = cachedRoutingBriefing(wikiDir(cwd), transcriptFor(cwd));
+      routing = cachedRoutingBriefing(dir, transcriptFor(cwd));
     } catch { /* no transcript, no routing facts; the rest still applies */ }
 
-    const text = briefing(wikiDir(cwd), { extra: routing ? [routing] : [] });
+    const text = briefing(dir, { extra: routing ? [routing] : [] });
     if (!text) return '';
 
     // CACHE-SAFE BY CONSTRUCTION. This text sits near the front of the prompt
@@ -184,22 +192,42 @@ export async function run(clientName, event) {
   const payload = normalizePayload(raw);
   if (!payload.tool_name) process.exit(0);
 
-  const state = loadState(payload.session_id);
+  // THE AGENT, not just the session -- the same scope the Claude Code router
+  // applies. Subagents inherit the parent's session id, so keying state on the
+  // session alone lets one agent's reads silence another's: the router's comment
+  // records it observed live, an agent refusing a file it had never opened
+  // because a sibling had read it. That fix was never carried across to the four
+  // clients this adapter serves. `transcript_path` is per agent; absent, this
+  // falls back to session scope, which is right for a main session's own calls.
+  const agentScope = payload.transcript_path || null;
+  const state = loadState(payload.session_id, agentScope);
   const verdict = decide(payload, state);
 
   if (!verdict) {
     remember(payload, state);
-    saveState(payload.session_id, state);
+    saveState(payload.session_id, state, agentScope);
 
     // Same measurement as the Claude Code router: every client's allowed read
     // feeds the same holdout comparison, or the metric is client-specific and
     // therefore not comparable.
     const bytes = readCostBytes(payload);
     if (bytes) {
-      recordRead(wikiDir(payload.cwd), {
+      // THE GRAPH IS PER PROJECT, so a read is filed where the FILE lives, not where the
+      // client happens to be running. Keying it on payload.cwd meant a session started in
+      // repo A that reads a file in repo B appended the cost to A's metrics with an anchor
+      // that does not exist in A, while B never saw the cost of its own file. The Claude Code
+      // router already resolves it this way (pretooluse-router.mjs), and the comment above
+      // claims parity with that router -- this is what makes the claim true.
+      recordRead(wikiDir(projectRootFor(payload.tool_input.file_path, payload.cwd)), {
         anchor: payload.tool_input.file_path,
         sessionId: payload.session_id,
         bytes,
+        // WITHOUT THIS EVERY RE-READ IS UNDECIDABLE. rereadWaste classifies a pair whose
+        // fingerprint is missing as unknowable, so an adapter that omits it reports zero
+        // waste for these clients rather than no data -- the reads still inflate `repeats`,
+        // so the figure looks measured. Re-reading a file you just edited is correct
+        // behaviour; re-reading an unchanged one is not, and this is what tells them apart.
+        fp: fingerprint(payload.tool_input.file_path),
       });
     }
     process.exit(0);
@@ -207,7 +235,7 @@ export async function run(clientName, event) {
 
   const repeat = alreadyDenied(state, verdict.key);
   remember(payload, state);
-  saveState(payload.session_id, state);
+  saveState(payload.session_id, state, agentScope);
 
   // A post-tool hook has already paid for the call, so a denial would cost a
   // turn and save nothing. It advises about the NEXT one instead.

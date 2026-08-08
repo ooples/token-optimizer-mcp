@@ -119,7 +119,6 @@ const ALLOWED = new Map([
   ['cacheOrdered', 'UNWIRED: confines cache invalidation to the tail. A real optimisation with no caller.'],
   ['invalidateOnWrite', 'UNWIRED: the eager staleness path; invalidation currently happens only lazily, on the next touch.'],
   ['renderStanding', 'UNWIRED: renders the standing-context audit. auditStanding IS reachable, so only the report is orphaned.'],
-  ['auditFindings', 'UNWIRED: audits stored findings. Verified orphaned -- appears once, as its own declaration.'],
   ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
   ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],
 

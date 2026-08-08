@@ -59,6 +59,10 @@ export async function fleetAudit(input: {
     only: input?.projects || [],
     exclude: input?.exclude || [],
     limit: input?.limit,
+    // A dry run must not open a transcript. Resolving each project's cwd reads 64 KB from the
+    // head of its transcript, so leaving it on meant the consent step had already read the
+    // material it was asking permission for by the time it printed 'Nothing was read'.
+    resolveCwd: !input?.dryRun,
   });
 
   // The consent step: show what would be opened, open nothing.
@@ -80,7 +84,8 @@ export async function fleetAudit(input: {
             ]
           : []),
         '',
-        'Nothing was read. Run again without dryRun to scan.',
+        'Nothing was read -- not one transcript was opened. Slugs are each project directory ' +
+          'with its punctuation replaced by dashes. Run again without dryRun to scan.',
       ].join('\n')
     );
   }

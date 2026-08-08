@@ -41,7 +41,7 @@ import { cacheHealth, readCacheUsage } from './cache.mjs';
 import { activeRules } from './remedy.mjs';
 import { monthly, money, priceNote } from './pricing.mjs';
 import { wikiDir } from './wiki.mjs';
-import { canonicalPath } from './paths.mjs';
+import { canonicalPath, isFsSafePath } from './paths.mjs';
 
 /** How many projects an enumerating scan will read before it stops and says so. */
 export const DEFAULT_LIMIT = 25;
@@ -60,6 +60,7 @@ export function projectsRoot() {
  * is read, since `cwd` appears on the first rows.
  */
 export function projectCwd(transcript, { headBytes = 65_536 } = {}) {
+  if (!isFsSafePath(transcript)) return null;
   let fd;
   try {
     fd = openSync(transcript, 'r');
@@ -96,6 +97,7 @@ export function projectCwd(transcript, { headBytes = 65_536 } = {}) {
  */
 export function discoverProjects({
   mode = 'enumerate', root = projectsRoot(), only = [], exclude = [], limit = DEFAULT_LIMIT,
+  resolveCwd = true,
 } = {}) {
   if (mode === 'explicit') {
     return {
@@ -118,44 +120,145 @@ export function discoverProjects({
   for (const entry of entries) {
     const dir = join(root, entry.name);
     let newest = null;
+    let files = [];
     try {
-      for (const file of readdirSync(dir)) {
-        if (!file.endsWith('.jsonl')) continue;
-        const path = join(dir, file);
+      files = readdirSync(dir);
+    } catch { /* unreadable directory */ }
+
+    for (const file of files) {
+      if (!file.endsWith('.jsonl')) continue;
+      const path = join(dir, file);
+      // Scoped to the one file deliberately. Transcripts under the discovery root are being
+      // written and rotated by OTHER live sessions while this scan enumerates them, so a file
+      // present at readdirSync can be gone at statSync. Wrapping the whole loop meant one such
+      // race abandoned the directory's remaining transcripts -- reporting a project with several
+      // of them as 'no transcript', or silently deriving its cwd from a stale one.
+      try {
         const at = statSync(path).mtimeMs;
         if (!newest || at > newest.at) newest = { path, at };
-      }
-    } catch { /* unreadable directory */ }
+      } catch { /* rotated away mid-scan; the other transcripts still count */ }
+    }
 
     if (!newest) {
       skipped.push({ slug: entry.name, why: 'no transcript' });
       continue;
     }
-    if (exclude.some((pattern) => entry.name.includes(pattern))) {
+    if (isExcluded(entry.name, exclude)) {
       skipped.push({ slug: entry.name, why: 'excluded by pattern' });
       continue;
     }
 
-    projects.push({ slug: entry.name, transcript: newest.path, at: newest.at, cwd: projectCwd(newest.path) });
+    projects.push({ slug: entry.name, transcript: newest.path, at: newest.at });
   }
 
   projects.sort((a, b) => b.at - a.at);
 
+  let kept = projects;
   if (mode !== 'all' && projects.length > limit) {
     for (const extra of projects.slice(limit)) skipped.push({ slug: extra.slug, why: `beyond the limit of ${limit}` });
-    return { mode, projects: projects.slice(0, limit), skipped, root };
+    kept = projects.slice(0, limit);
   }
 
-  return { mode, projects, skipped, root };
+  // RESOLVED HERE, NOT DURING DISCOVERY. projectCwd opens a transcript and reads 64 KB of it, so
+  // resolving during the loop read every transcript on the machine and threw most of them away --
+  // 400 opened to keep 25. It also made the dry run a lie: fleet-tool.ts calls discoverProjects
+  // before it branches on dryRun, so "Nothing was read" was printed after reading the head of
+  // every transcript on the machine. Sorting needs only `at`, so nothing is lost by waiting.
+  //
+  // resolveCwd: false is what makes the dry run a real consent step. Reading 64 KB of a
+  // transcript IS reading the material consent is being asked about -- transcripts hold source
+  // code, paths and whatever has been pasted into a terminal -- so a gate that reads it before
+  // asking is not a gate. The slug is the cwd with its punctuation dashed out, so the listing
+  // still identifies each project.
+  if (!resolveCwd) return { mode, projects: kept.map((p) => ({ ...p, cwd: null })), skipped, root };
+
+  const resolved = [];
+  const seen = new Map();
+  for (const project of kept) {
+    const raw = projectCwd(project.transcript);
+    // Canonicalised as explicit mode already does. The client mints one directory per cwd
+    // SPELLING, so the same repo opened as C:\Users\me\repo, c:\users\me\repo and /c/Users/me/repo
+    // yields three slugs -- and wikiDir maps all three onto the same case-insensitive Windows
+    // directory, so readMetrics returns the SAME event log each time. Left undeduped, the project
+    // is counted once per spelling: its pareto share multiplies, and it contributes that many
+    // identical points to whichever arm of enforcementComparison it lands in.
+    const cwd = raw ? canonicalPath(raw) : null;
+    if (cwd && seen.has(cwd)) {
+      skipped.push({ slug: project.slug, why: `duplicate of ${seen.get(cwd)} (same cwd)` });
+      continue;
+    }
+    if (cwd) seen.set(cwd, project.slug);
+    resolved.push({ ...project, cwd });
+  }
+
+  return { mode, projects: resolved, skipped, root };
 }
 
-const sha256 = (path) => {
+/**
+ * The directory slug the client mints for a cwd: every non-alphanumeric character becomes a dash.
+ */
+export function slugifyCwd(cwd) {
+  return String(cwd).replace(/[^a-zA-Z0-9]/g, '-');
+}
+
+/**
+ * Does an exclude pattern apply to this project directory?
+ *
+ * Matched against the slugified form as well as the literal one. `exclude` is documented as
+ * "substrings to skip" and is the only scoping control the tool offers, but the thing being
+ * matched is the MANGLED slug -- so every pattern spelled the way a user would spell it could
+ * never match: `C:\work\private` (colon, backslashes), `~/work/private` (slashes, tilde),
+ * `node_modules` (underscore) and `my.project` (dot) all failed silently, and the project was
+ * scanned -- transcript head read, metrics and rules read, slug printed in the report -- with no
+ * diagnostic that the exclusion had not taken.
+ */
+function isExcluded(slug, exclude) {
+  return exclude.some((pattern) => {
+    const raw = String(pattern ?? '');
+    if (!raw) return false; // an empty pattern is in every string; excluding everything is never meant
+    return slug.includes(raw) || slug.includes(slugifyCwd(raw));
+  });
+}
+
+/**
+ * Size and content digest for one file, or null if it cannot be read.
+ *
+ * isFsSafePath first, and not as belt-and-braces: this is a copy of wiki.mjs's contentHash with
+ * that check dropped. libuv's UTF-8-to-UTF-16 conversion on Windows asserts
+ * `code_point < 0x10FFFF`, so a path containing U+10FFFF makes statSync/readFileSync **abort the
+ * process** rather than throw -- paths.mjs documents the assert and notes there is nothing to
+ * catch afterwards, so the try/catch below cannot save the scan. The paths reaching here are
+ * external input of exactly the guarded kind: `rule.anchor` out of a project's rules.json and
+ * `target.anchors` out of its event log. The blast radius is the whole MCP server process.
+ */
+function measure(path) {
+  if (!isFsSafePath(path)) return null;
   try {
-    return createHash('sha256').update(readFileSync(path)).digest('hex');
+    const size = statSync(path).size;
+    return { size, hash: createHash('sha256').update(readFileSync(path)).digest('hex') };
   } catch {
     return null;
   }
-};
+}
+
+/**
+ * Per-scan digest cache.
+ *
+ * `transferable` compares inside a triple loop -- every source project, every rule, every other
+ * project, every anchor whose basename matches -- and `target.anchors` is every distinct file the
+ * project read within the 5000-event window, routinely hundreds of paths. Common basenames
+ * (index.ts, package.json, __init__.py) match many of them. At the default cap of 25 projects
+ * with ~20 rules each that was tens of thousands of synchronous whole-file reads and SHA-256
+ * passes on the MCP server's only thread, with `mode: 'all'` removing the project cap entirely.
+ * The same file was re-read once per rule-project pair.
+ */
+function digestCache() {
+  const cache = new Map();
+  return (path) => {
+    if (!cache.has(path)) cache.set(path, measure(path));
+    return cache.get(path);
+  };
+}
 
 /**
  * What one project costs, and whether enforcement is on there.
@@ -174,7 +277,10 @@ function safeBalance(dir) {
 }
 
 export function scanProject(project) {
-  const dir = project.cwd ? wikiDir(project.cwd) : null;
+  // project.cwd comes out of a transcript's JSON -- the same external, unvalidated input that
+  // reaches sha256 -- and existsSync aborts the process rather than throwing on a path holding
+  // U+10FFFF. See measure() above.
+  const dir = project.cwd && isFsSafePath(project.cwd) ? wikiDir(project.cwd) : null;
   const events = dir && existsSync(dir) ? readMetrics(dir) : [];
 
   const reads = events.filter((e) => e.kind === 'read');
@@ -219,24 +325,44 @@ export function scanProject(project) {
  */
 export function transferable(scans) {
   const out = [];
+  const digest = digestCache();
 
   for (const source of scans) {
     for (const rule of source.rules) {
-      if (!rule.anchor) continue;
-      const hash = sha256(rule.anchor);
-      if (!hash) continue;
+      // BOTH SHAPES. `if (!rule.anchor) continue` skipped every composite rule: remedy.mjs lists
+      // 'composite' among the remedy types this product applies itself, and applyRemedy stores
+      // those with `anchors` plural and `anchor` undefined. So composites were invisible to
+      // transfer analysis -- never offered to another project, never in the report's "proven
+      // somewhere, available elsewhere" block, and never counted as skipped either.
+      const wanted = rule.anchors?.length ? rule.anchors : (rule.anchor ? [rule.anchor] : []);
+      if (!wanted.length) continue;
+
+      // A multi-anchor remedy is only meaningful where EVERY file it was proven against is
+      // present with matching contents; a partial match is a different situation, not a weaker
+      // version of this one.
+      const required = wanted.map((a) => ({ anchor: a, base: basename(a), measured: digest(a) }));
+      if (required.some((r) => !r.measured)) continue;
 
       const targets = [];
       for (const target of scans) {
         if (target.slug === source.slug) continue;
         if (target.rules.some((r) => r.id === rule.id)) continue; // already has it
 
-        for (const anchor of target.anchors) {
-          if (basename(anchor) !== basename(rule.anchor)) continue;
-          if (sha256(anchor) !== hash) continue;
-          targets.push({ slug: target.slug, cwd: target.cwd, anchor });
-          break;
+        const matched = [];
+        for (const need of required) {
+          const hit = target.anchors.find((anchor) => {
+            if (basename(anchor) !== need.base) return false;
+            const found = digest(anchor);
+            // Size first: two files of different lengths cannot share contents, and statSync is
+            // orders of magnitude cheaper than hashing a whole file that cannot match anyway.
+            return Boolean(found) && found.size === need.measured.size && found.hash === need.measured.hash;
+          });
+          if (!hit) break;
+          matched.push(hit);
         }
+        if (matched.length !== required.length) continue;
+
+        targets.push({ slug: target.slug, cwd: target.cwd, anchor: matched[0], anchors: matched });
       }
 
       if (targets.length) {
@@ -281,14 +407,36 @@ export function enforcementComparison(scans) {
     };
   }
 
-  const mean = (list) => Math.round(list.reduce((sum, s) => sum + s.perRead, 0) / list.length);
+  // POOLED, NOT AN AVERAGE OF AVERAGES.
+  //
+  // Averaging each project's per-read average gives every project equal weight regardless of how
+  // much evidence stands behind it: a project with 2 reads counted as much as one with 30,000.
+  // An enforcing arm of [2 reads totalling 300k -> 150,000/read; 5,000 reads at 500; 4,000 at 400]
+  // reported 50,300 tokens/read where the pooled figure over the same 9,002 reads is about 530.
+  // Set against a directive arm around 800, renderFleet then printed that enforcing costs ~60x
+  // MORE per read -- the exact inverse of the truth, under a heading calling this the check on
+  // the central claim of this product, with nothing in the caveat to hint that one two-read
+  // project drove the whole result. scanProject already returns both tokens and reads, so the
+  // pooled statistic needs no new measurement.
+  const pool = (list) => {
+    const tokens = list.reduce((sum, s) => sum + (s.tokens || 0), 0);
+    const reads = list.reduce((sum, s) => sum + (s.reads || 0), 0);
+    return { perRead: reads ? Math.round(tokens / reads) : null, reads, tokens };
+  };
+
+  const e = pool(enforcing);
+  const d = pool(directive);
 
   return {
     comparable: true,
-    enforcingPerRead: mean(enforcing),
-    directivePerRead: mean(directive),
+    enforcingPerRead: e.perRead,
+    directivePerRead: d.perRead,
     enforcingProjects: enforcing.length,
     directiveProjects: directive.length,
+    // The read counts are exposed rather than kept internal: they are how a reader tells a
+    // fleet-wide result from one project's noise, which is the whole question here.
+    enforcingReads: e.reads,
+    directiveReads: d.reads,
     caveat: 'Not a randomised comparison: people choose their client and the projects differ. ' +
       'Treat as suggestive, not causal -- the per-project holdout arm is the causal measurement.',
   };
@@ -350,8 +498,11 @@ export function renderFleet({ discovery, scans, tier = 'opus', sessionsPerMonth 
   const comparison = enforcementComparison(scans);
   lines.push('', 'Enforcing vs directive, measured across this fleet:');
   if (comparison.comparable) {
-    lines.push(`  enforcing  ${comparison.enforcingPerRead.toLocaleString()} tokens/read over ${comparison.enforcingProjects} project(s)`);
-    lines.push(`  directive  ${comparison.directivePerRead.toLocaleString()} tokens/read over ${comparison.directiveProjects} project(s)`);
+    const arm = (label, perRead, projects, reads) =>
+      `  ${label}  ${perRead == null ? 'no reads yet' : `${perRead.toLocaleString()} tokens/read`}` +
+      ` over ${projects} project(s), ${reads.toLocaleString()} read(s)`;
+    lines.push(arm('enforcing', comparison.enforcingPerRead, comparison.enforcingProjects, comparison.enforcingReads));
+    lines.push(arm('directive', comparison.directivePerRead, comparison.directiveProjects, comparison.directiveReads));
     lines.push(`  ! ${comparison.caveat}`);
   } else {
     lines.push(`  not comparable yet -- ${comparison.reason}`);

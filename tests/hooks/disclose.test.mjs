@@ -399,3 +399,58 @@ describe('expand serves what it claims to serve', () => {
     expect(ARTIFACT_TTL_MS).toBeGreaterThan(0);
   });
 });
+
+describe('an omission is never silent, and never invented', () => {
+  test('a large array reports the elements it withheld, with an expand ref', () => {
+    // MEASURED before the fix: a 30,281-byte array of 500 objects returned mode 'preview',
+    // `omissions: []`, ~150 bytes of text, and out.text did not contain the ref -- so 30 KB
+    // vanished, the machine-readable contract asserted nothing was omitted, and there was no
+    // pointer to recover it. Every other splitter partitions all of its input; this one did not.
+    const dir = mkdtempSync(join(tmpdir(), 'disc-arr-'));
+    try {
+      const body = JSON.stringify(Array.from({ length: 500 }, (_, i) => ({
+        id: i, name: `item-${i}`, detail: 'x'.repeat(20),
+      })));
+      const out = disclose(dir, body, { ref: 'abc123def4567890' });
+      expect(out).toBeTruthy();
+      expect(out.omissions.length).toBeGreaterThan(0);
+      expect(out.text).toContain('abc123def4567890');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('an empty array does not throw', () => {
+    // JSON.stringify(undefined) returns undefined, so `.split` threw and aborted the whole
+    // disclosure/capture block for any tool returning [].
+    expect(() => parseShape('[]')).not.toThrow();
+  });
+
+  test('the header line count agrees with the omission counts below it', () => {
+    // A JSON envelope is one physical line however large its payload, so the header read
+    // "1 lines" directly above a tail reporting thousands omitted.
+    const dir = mkdtempSync(join(tmpdir(), 'disc-hdr-'));
+    try {
+      const report = Array.from({ length: 3000 }, (_, i) => `  ok ${i} - passing test`).join('\n');
+      const out = disclose(dir, JSON.stringify({ output: report, path: 'x.ts' }), { ref: 'r9' });
+      expect(out).toBeTruthy();
+      const stated = Number(/output, ([\d,]+) lines/.exec(out.text)?.[1]?.replace(/,/g, '') ?? '0');
+      expect(stated).toBeGreaterThan(100);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a section kept in full is not labelled partial with zero lines omitted', () => {
+    // The budget check and the slice loop round differently, so the loop could consume every
+    // line of a section the check rejected -- reporting "omitted: 0 lines" and inviting the
+    // reader to spend an expand call on nothing.
+    const dir = mkdtempSync(join(tmpdir(), 'disc-zero-'));
+    try {
+      const out = disclose(dir, Array.from({ length: 1100 }, () => 'abcd').join('\n'), { ref: 'r1' });
+      if (out) for (const o of out.omissions) expect(o.lines).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
