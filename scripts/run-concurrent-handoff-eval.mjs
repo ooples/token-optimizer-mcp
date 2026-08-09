@@ -93,6 +93,14 @@ export function graphIntegrity(graphDir, expectedFindingIds = []) {
   };
 }
 
+export function capturesByWriter(graph, scenarios, producers) {
+  return scenarios.map((scenario, index) => {
+    const accepted = new Set(producers[index]?.acceptedFindingIds || []);
+    return findNaturalCapture(graph, scenario.targetFinding)
+      .filter((finding) => accepted.has(finding.key));
+  });
+}
+
 function combinedPrompt() {
   return [
     'Continue all three independent beta follow-ups in this fixture.',
@@ -152,9 +160,7 @@ async function main() {
     })));
     const producerAudit = readJsonl(auditPath);
     const graph = loadGraph(graphDir);
-    const captures = scenarios.map((scenario) =>
-      findNaturalCapture(graph, scenario.targetFinding)
-    );
+    const captures = capturesByWriter(graph, scenarios, producers);
     const findingIds = [...new Set(captures.flat().map((finding) => finding.key))];
     const acceptedFindingIds = [...new Set(
       producers.flatMap((producer) => producer.acceptedFindingIds)

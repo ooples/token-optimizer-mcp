@@ -11,6 +11,7 @@ import {
   handoffSchedule,
   targetFindingMatches,
 } from '../../scripts/run-handoff-eval.mjs';
+import { capturesByWriter } from '../../scripts/run-concurrent-handoff-eval.mjs';
 
 const ROOT = resolve(process.cwd());
 const suite = JSON.parse(
@@ -69,6 +70,26 @@ describe('natural semantic capture contract', () => {
       originAgent: true,
       invalidatorCount: 0,
     });
+  });
+
+  test('attributes a shared-graph finding only to the writer that acknowledged it', () => {
+    const target = suite.scenarios[0].targetFinding;
+    const finding = {
+      id: 'finding:shared', kind: 'finding', key: 'agent-writer-1', type: 'command',
+      origin: 'agent', claim: 'Use package-level npm test; the direct verifier is unsupported.',
+      evidence: 'Direct verification failed and npm test passed.',
+      applicability: 'When verifying this fixture.', confidenceLabel: 'verified',
+      invalidators: ['package script changes'], scope: 'project',
+    };
+    const graph = { nodes: new Map([['finding', finding]]), edges: [] };
+    const captures = capturesByWriter(
+      graph,
+      [{ targetFinding: target }, { targetFinding: target }],
+      [{ acceptedFindingIds: [finding.key] }, { acceptedFindingIds: [] }]
+    );
+
+    expect(captures[0]).toEqual([finding]);
+    expect(captures[1]).toEqual([]);
   });
 });
 
