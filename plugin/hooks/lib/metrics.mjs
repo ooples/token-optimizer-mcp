@@ -1090,9 +1090,15 @@ function matchesFilters(event, filters) {
     if (event.kind === 'handoff-run') {
       actual = field === 'taskId'
         ? event.scenarioId
-        : (event.consumer?.[field] ?? event.producer?.[field] ?? event[field]);
+        : field === 'arm'
+          ? event.arm
+          : (event.consumer?.[field] ?? event.producer?.[field] ?? event[field]);
     } else if (event.kind === 'concurrency-run') {
-      actual = field === 'taskId' ? 'concurrent-combined' : (event.consumer?.[field] ?? event[field]);
+      actual = field === 'taskId'
+        ? 'concurrent-combined'
+        : field === 'arm'
+          ? event.arm
+          : (event.consumer?.[field] ?? event[field]);
     }
     if (String(actual || '') !== String(filters[field])) return false;
   }

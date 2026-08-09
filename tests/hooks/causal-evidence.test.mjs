@@ -242,7 +242,8 @@ describe('paired evidence report', () => {
     for (const arm of ['empty', 'natural']) {
       record(dir, {
         kind: 'handoff-run', pairId: 'filter-1', scenarioId: 'filter-task', arm,
-        producer: { client: 'codex' }, consumer: { client: 'claude-code' },
+        producer: { client: 'codex', arm: 'nested-producer-value' },
+        consumer: { client: 'claude-code', arm: 'nested-consumer-value' },
       });
     }
     const filtered = evidenceReport(dir, { filters: { arm: 'natural' } });
