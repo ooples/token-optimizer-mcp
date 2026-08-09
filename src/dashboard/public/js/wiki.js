@@ -245,17 +245,27 @@ async function loadUcr() {
     ['Typed objects', nf.format(status.graph?.objects || 0)],
     ['Certified clients', nf.format(status.certifiedClients)],
     ['Live handoff', status.liveHandoff?.passed ? 'passed' : 'not run'],
-  ].map(([label, value]) => `
+  ]
+    .map(
+      ([label, value]) => `
     <div class="stat-card"><div class="stat-content">
       <div class="stat-label">${escapeHtml(label)}</div>
       <div class="stat-value wiki-figure">${escapeHtml(value)}</div>
-    </div></div>`).join('');
+    </div></div>`
+    )
+    .join('');
   const verdict = status.verdict?.status || 'insufficient';
   const deterministic = status.deterministicEvidence
     ? `${status.deterministicEvidence.checksPassed}/${status.deterministicEvidence.checksTotal} deterministic gates`
     : 'no deterministic ledger';
-  el('ucr-verdict').textContent = `${verdict} · ${deterministic} · ${status.cognitiveOperations.length} lazy cognitive operations · ${status.malformed} malformed events`;
-  el('ucr-verdict').dataset.state = verdict === 'passed' ? 'ok' : verdict === 'harmful' ? 'bad' : 'insufficient';
+  el('ucr-verdict').textContent =
+    `${verdict} · ${deterministic} · ${status.cognitiveOperations.length} lazy cognitive operations · ${status.malformed} malformed events`;
+  el('ucr-verdict').dataset.state =
+    verdict === 'passed'
+      ? 'ok'
+      : verdict === 'harmful'
+        ? 'bad'
+        : 'insufficient';
 }
 
 /* ---- Finding list ---------------------------------------------------- */
@@ -910,5 +920,11 @@ if (typeof ResizeObserver !== 'undefined') {
     el('graph-stats').textContent = 'Graph unavailable';
     return;
   }
-  await Promise.all([loadBalance(), search(), loadAudit(), loadEvidence(), loadUcr()]);
+  await Promise.all([
+    loadBalance(),
+    search(),
+    loadAudit(),
+    loadEvidence(),
+    loadUcr(),
+  ]);
 })();

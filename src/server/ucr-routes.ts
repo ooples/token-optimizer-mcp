@@ -114,12 +114,10 @@ export function registerUcrRoutes(app: Express): void {
           : null,
       });
     } catch (error) {
-      return res
-        .status(500)
-        .json({
-          available: false,
-          reason: error instanceof Error ? error.message : String(error),
-        });
+      return res.status(500).json({
+        available: false,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
   });
 
@@ -128,11 +126,9 @@ export function registerUcrRoutes(app: Express): void {
       const ucr = await runtime();
       return res.json(releaseEvidence(ucr));
     } catch (error) {
-      return res
-        .status(500)
-        .json({
-          error: error instanceof Error ? error.message : String(error),
-        });
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   });
 }

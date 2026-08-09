@@ -404,34 +404,52 @@ export const WikiWriteSchema = z
 // so the caller gets an explanation rather than a validation rejection.
 export const WikiReadSchema = z.object({}).passthrough();
 
-export const ContextPageSchema = z.object({
-  query: z.string(),
-  taskId: z.string().optional(),
-  sessionId: z.string().optional(),
-  trigger: z.enum(['task', 'plan', 'file', 'symbol', 'tool', 'command', 'validation']).optional(),
-  budget: z.number().min(0).max(2048).optional(),
-}).passthrough();
-export const CognitionRecordSchema = z.object({
-  kind: z.enum(['claim', 'failure', 'decision', 'procedure', 'goal', 'hypothesis', 'guard']),
-  semanticObject: z.record(z.string(), z.unknown()),
-  evidenceReceipts: z.array(z.record(z.string(), z.unknown())),
-  taskId: z.string().optional(),
-  sessionId: z.string().optional(),
-}).passthrough();
-export const CheckpointHandoffSchema = z.object({
-  operation: z.enum(['create', 'restore']),
-  checkpoint: z.record(z.string(), z.unknown()),
-  currentState: z.record(z.string(), z.unknown()).optional(),
-  boundary: z.string().optional(),
-  consumer: z.string().optional(),
-}).passthrough();
-export const OutcomeReportSchema = z.object({
-  episodeId: z.string(),
-  outcome: z.record(z.string(), z.unknown()),
-  graderReceipt: z.record(z.string(), z.unknown()),
-  taskId: z.string().optional(),
-  sessionId: z.string().optional(),
-}).passthrough();
+export const ContextPageSchema = z
+  .object({
+    query: z.string(),
+    taskId: z.string().optional(),
+    sessionId: z.string().optional(),
+    trigger: z
+      .enum(['task', 'plan', 'file', 'symbol', 'tool', 'command', 'validation'])
+      .optional(),
+    budget: z.number().min(0).max(2048).optional(),
+  })
+  .passthrough();
+export const CognitionRecordSchema = z
+  .object({
+    kind: z.enum([
+      'claim',
+      'failure',
+      'decision',
+      'procedure',
+      'goal',
+      'hypothesis',
+      'guard',
+    ]),
+    semanticObject: z.record(z.string(), z.unknown()),
+    evidenceReceipts: z.array(z.record(z.string(), z.unknown())),
+    taskId: z.string().optional(),
+    sessionId: z.string().optional(),
+  })
+  .passthrough();
+export const CheckpointHandoffSchema = z
+  .object({
+    operation: z.enum(['create', 'restore']),
+    checkpoint: z.record(z.string(), z.unknown()),
+    currentState: z.record(z.string(), z.unknown()).optional(),
+    boundary: z.string().optional(),
+    consumer: z.string().optional(),
+  })
+  .passthrough();
+export const OutcomeReportSchema = z
+  .object({
+    episodeId: z.string(),
+    outcome: z.record(z.string(), z.unknown()),
+    graderReceipt: z.record(z.string(), z.unknown()),
+    taskId: z.string().optional(),
+    sessionId: z.string().optional(),
+  })
+  .passthrough();
 
 // 54. smart_grep
 export const SmartGrepSchema = z
