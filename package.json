@@ -74,7 +74,7 @@
     "eval:ucr:compounding": "node scripts/run-ucr-compounding-study.mjs",
     "eval:ucr:production": "node scripts/run-ucr-production-study.mjs",
     "eval:ucr:context": "node scripts/run-mcp-context-audit.mjs",
-    "evidence:ucr:assemble": "node scripts/assemble-ucr-evidence.mjs",
+    "evidence:ucr:assemble": "node scripts/assemble-ucr-evidence.mjs && node scripts/verify-ucr-runtime.mjs --write",
     "eval:ucr:multimodel:plan": "node scripts/run-ucr-multimodel-handoff.mjs",
     "eval:ucr:multimodel": "node scripts/run-ucr-multimodel-handoff.mjs --execute --directions all",
     "eval:ucr:effectiveness:plan": "node scripts/run-ucr-handoff-effectiveness.mjs",
