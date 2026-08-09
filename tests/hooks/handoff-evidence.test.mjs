@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import {
   extractToolTrace,
   extractAcceptedFindingIds,
+  diagnoseNaturalFinding,
   findNaturalCapture,
   gradeBehavior,
   handoffSchedule,
@@ -62,6 +63,12 @@ describe('natural semantic capture contract', () => {
     expect(targetFindingMatches(wrongMeaning, target)).toBe(false);
     expect(findNaturalCapture({ nodes: new Map([['good', good]]), edges: [] }, target)).toEqual([good]);
     expect(findNaturalCapture({ nodes: new Map([['bad', wrongOrigin]]), edges: [] }, target)).toEqual([]);
+    expect(diagnoseNaturalFinding({ ...good, invalidators: [] }, target)).toMatchObject({
+      targetPrimaryMatch: true,
+      targetSecondaryMatch: true,
+      originAgent: true,
+      invalidatorCount: 0,
+    });
   });
 });
 
@@ -77,6 +84,9 @@ describe('hidden behavioral graders', () => {
 
     expect(clean).toMatchObject({ correct: true, firstPass: true, mistakeExecuted: false });
     expect(repeated).toMatchObject({ correct: true, firstPass: false, mistakeExecuted: true });
+    expect(gradeBehavior(scenario, 'consumer', workspace, audit, [
+      { command: null, paths: ['scripts/verify-beta.mjs'] },
+    ])).toMatchObject({ mistakeAttempted: false, mistakeExecuted: false });
   });
 
   test('generated-file grading detects a direct edit even when regeneration later repairs it', () => {

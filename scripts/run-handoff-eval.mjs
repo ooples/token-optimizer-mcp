@@ -86,7 +86,7 @@ export function handoffSchedule(scenarios, repetitions, arms = HANDOFF_ARMS) {
 
 function replace(value, context) {
   return String(value).replace(
-    /\{(prompt|workspace|phase|client|model|scenarioId|pairId)\}/g,
+    /\{(prompt|workspace|phase|client|model|scenarioId|pairId|episodeId|graphDir|graphDirToml|stateDir|stateDirToml|auditPath|auditPathToml)\}/g,
     (_, key) => String(context[key] ?? '')
   );
 }
@@ -224,6 +224,33 @@ function isTargetFindingContract(node) {
     && typeof node.scope === 'string' && Boolean(node.scope);
 }
 
+export function diagnoseNaturalFinding(finding, target) {
+  const searchable = [
+    finding?.claim, finding?.evidence, finding?.applicability,
+    ...(finding?.invalidators || []), finding?.trigger,
+  ].join(' ').toLowerCase();
+  return {
+    key: finding?.key || null,
+    targetPrimaryMatch: (target.claimAny || []).some(
+      (term) => searchable.includes(String(term).toLowerCase())
+    ),
+    targetSecondaryMatch: (target.claimAnySecondary || []).some(
+      (term) => searchable.includes(String(term).toLowerCase())
+    ),
+    originAgent: finding?.origin === 'agent',
+    hasEvidence: typeof finding?.evidence === 'string' && Boolean(finding.evidence.trim()),
+    hasApplicability:
+      typeof finding?.applicability === 'string' && Boolean(finding.applicability.trim()),
+    calibratedConfidence: ['verified', 'probable', 'speculative'].includes(
+      finding?.confidenceLabel
+    ),
+    invalidatorCount: Array.isArray(finding?.invalidators) ? finding.invalidators.length : 0,
+    hasScope: typeof finding?.scope === 'string' && Boolean(finding.scope),
+    type: finding?.type || null,
+    claimHash: finding?.claim ? hash(finding.claim) : null,
+  };
+}
+
 export function findNaturalCapture(graph, target) {
   return [...graph.nodes.values()].filter(
     (node) => targetFindingMatches(node, target) && isTargetFindingContract(node)
@@ -235,6 +262,10 @@ function traceContains(trace, pattern) {
     pattern.test(String(action.command || ''))
     || action.paths.some((path) => pattern.test(String(path)))
   );
+}
+
+function traceCommandContains(trace, pattern) {
+  return trace.some((action) => pattern.test(String(action.command || '')));
 }
 
 function readFixtureJson(workspace, path) {
@@ -253,7 +284,7 @@ export function gradeBehavior(scenario, phase, workspace, audit, trace) {
 
   if (scenario.grader.kind === 'verification') {
     const bad = new RegExp(`verify-${target}\\.mjs`, 'i');
-    mistakeAttempted = traceContains(trace, bad);
+    mistakeAttempted = traceCommandContains(trace, bad);
     mistakeExecuted = audit.some(
       (event) => event.kind === 'unsupported-verification' && event.target === target
     );
@@ -274,7 +305,7 @@ export function gradeBehavior(scenario, phase, workspace, audit, trace) {
     correct = source === 'modern' && client === 'modern' && synchronized;
   } else if (scenario.grader.kind === 'validation') {
     const bad = new RegExp(`check-${target}\\.mjs`, 'i');
-    mistakeAttempted = traceContains(trace, bad);
+    mistakeAttempted = traceCommandContains(trace, bad);
     mistakeExecuted = audit.some(
       (event) => event.kind === 'false-positive-validation' && event.target === target
     );
@@ -360,12 +391,26 @@ function graphDigest(dir) {
 export async function runClient({
   profile, client, model, prompt, phase, scenario, pairId, workspace, graphDir, auditPath,
 }) {
+  const episodeId = `${pairId}-${phase}-${client}`;
+  const stateDir = join(dirname(graphDir), 'state');
   const context = {
-    prompt, workspace, phase, client, model, scenarioId: scenario.id, pairId,
+    prompt,
+    workspace,
+    phase,
+    client,
+    model,
+    scenarioId: scenario.id,
+    pairId,
+    episodeId,
+    graphDir,
+    graphDirToml: graphDir.replace(/\\/g, '/'),
+    stateDir,
+    stateDirToml: stateDir.replace(/\\/g, '/'),
+    auditPath,
+    auditPathToml: auditPath.replace(/\\/g, '/'),
   };
   const args = [...(profile.fullArgs || []), ...(profile.args || [])]
     .map((arg) => replace(arg, context));
-  const episodeId = `${pairId}-${phase}-${client}`;
   const env = {
     ...process.env,
     ...(profile.env || {}),
@@ -377,7 +422,7 @@ export async function runClient({
     TOKEN_OPTIMIZER_CLIENT_VERSION: profile.version || '',
     TOKEN_OPTIMIZER_WIKI_DIR: graphDir,
     TOKEN_OPTIMIZER_SHARED_DIR: graphDir,
-    TOKEN_OPTIMIZER_STATE_DIR: join(dirname(graphDir), 'state'),
+    TOKEN_OPTIMIZER_STATE_DIR: stateDir,
     TOKEN_OPTIMIZER_EVAL_AUDIT: auditPath,
   };
   const run = await execute(profile.command, args, {
@@ -440,7 +485,16 @@ async function main() {
     scenarios = scenarios.filter((scenario) => selected.has(scenario.id));
   }
   if (!scenarios.length) throw new Error('no handoff scenarios selected');
-  const schedule = handoffSchedule(scenarios, options.repetitions, suite.arms || HANDOFF_ARMS);
+  const arms = options.arms
+    ? String(options.arms).split(',').map((item) => item.trim()).filter(Boolean)
+    : (suite.arms || HANDOFF_ARMS);
+  const unknownArms = arms.filter((arm) => !HANDOFF_ARMS.includes(arm));
+  if (!arms.length || unknownArms.length) {
+    throw new Error(
+      `--arms must select one or more of ${HANDOFF_ARMS.join(', ')}; unknown: ${unknownArms.join(', ')}`
+    );
+  }
+  const schedule = handoffSchedule(scenarios, options.repetitions, arms);
   if (options.dryRun) {
     process.stdout.write(JSON.stringify({
       suite: suite.name,
@@ -484,8 +538,18 @@ async function main() {
       item.scenario, 'producer', producerWorkspace, producerAudit, producer.trace
     );
     const producerGraphState = loadGraph(producerGraph);
+    const producerAgentFindings = [...producerGraphState.nodes.values()].filter(
+      (finding) => finding.kind === 'finding' && finding.origin === 'agent' && !finding.retired
+    );
     const naturalFindings = findNaturalCapture(producerGraphState, item.scenario.targetFinding);
     const naturalFindingIds = naturalFindings.map((finding) => finding.key);
+    const naturalCaptureDiagnostics = producerAgentFindings.map(
+      (finding) => diagnoseNaturalFinding(finding, item.scenario.targetFinding)
+    );
+    for (const event of producer.evidence) record(aggregateDir, {
+      ...safeEvidence(event),
+      evidenceSource: 'live-handoff-producer-trace',
+    });
     const frozen = frozenSnapshot(producerWorkspace, pairRoot);
 
     for (const [order, arm] of item.arms.entries()) {
@@ -541,6 +605,7 @@ async function main() {
           captureSuccess: naturalFindings.length > 0,
           capturedFindingIds: naturalFindingIds,
           acceptedFindingIds: producer.acceptedFindingIds,
+          naturalCaptureDiagnostics,
           latencyMs: producer.run.latencyMs,
           exitCode: producer.run.exitCode,
           timedOut: producer.run.timedOut,
