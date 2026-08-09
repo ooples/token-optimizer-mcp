@@ -157,6 +157,9 @@ export function semanticHarvestPrompt({
     + ' If this work produced a durable, non-obvious conclusion -- a failed approach and why, '
     + 'a decision and its rejected alternative, or a command that finally worked -- call '
     + 'wiki_write now with a real file anchor. Do not delegate this to another model or an '
-    + 'external harvester. If there is no such conclusion, do not invent one; finish normally.'
+    + 'external harvester. Include: the concrete evidence, when the finding applies, a calibrated '
+    + 'confidenceLabel (verified/probable/speculative), its project/organization/global scope, '
+    + 'and anything that would invalidate it. If there is no such conclusion, do not invent one; '
+    + 'finish normally.'
   );
 }

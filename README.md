@@ -160,6 +160,11 @@ and what contradicts it.
 Contradictions, stale findings, and anything the graph believes that the code no
 longer supports — each with the diff that invalidated it.
 
+**Evidence console**
+Client/model/task cohorts, matched four-arm effects with 95% intervals, live
+injection-to-outcome traces, harm feedback, and the honest capability tier for
+all sixteen supported CLIs. Insufficient evidence stays visibly insufficient.
+
 **One-click Markdown export**
 Your agent's accumulated knowledge as documentation you can review, edit and
 commit. The graph stops being a black box the moment you can read it as prose.
@@ -177,6 +182,10 @@ Server-side by design: the browser asks for a neighbourhood, a search result or
 a page. A mature graph holds thousands of nodes, and shipping it wholesale would
 make every page load a multi-megabyte download for a view that shows twenty
 things.
+
+See [the causal evidence protocol](docs/EVIDENCE_PROTOCOL.md), the
+[cross-client capability contract](docs/CLIENT_SUPPORT.md), and the
+[live evaluation suite](evals/README.md).
 
 ---
 
@@ -1812,4 +1821,4 @@ MIT License - see [LICENSE](./LICENSE) for details
 
 ## Author
 
-Built for optimal Claude Code token efficiency by the ooples team.
+Built for measurable token efficiency across supported coding agents by the ooples team.

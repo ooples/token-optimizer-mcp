@@ -15,6 +15,7 @@ import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
 import { tokenAudit, AUDIT_TOOL } from './audit-tool.js';
 import { installDoctor, DOCTOR_TOOL } from './doctor-tool.js';
 import { fleetAudit, FLEET_TOOL } from './fleet-tool.js';
+import { McpEvidenceRecorder } from './mcp-evidence.js';
 import {
   wikiWrite,
   WIKI_WRITE_TOOL_DEFINITION,
@@ -589,6 +590,10 @@ const server = new Server(
     },
   }
 );
+const mcpEvidence = new McpEvidenceRecorder();
+server.oninitialized = () => {
+  mcpEvidence.clientInitialized(server.getClientVersion());
+};
 
 // Define tools
 /**
@@ -2921,6 +2926,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // Best-effort: feed savings into analytics so the report/breakdown tools have
   // real data. Never blocks meaningfully or breaks the tool call.
   await recordToolAnalytics(analyticsManager, request.params.name, result);
+  mcpEvidence.toolOutcome(
+    request.params.name,
+    Date.now() - started,
+    !(result as { isError?: boolean } | null)?.isError
+  );
 
   // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
   // per-tool is what keeps it a single policy instead of ninety. The elapsed

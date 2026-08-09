@@ -28,6 +28,10 @@ LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
   command that finally worked.
 - Anchor every claim to a real file path or path#symbol. Never invent a claim
   merely to populate the graph, and do not delegate harvesting to another model.
+- Include the concrete evidence, when it applies, confidenceLabel
+  (verified/probable/speculative), scope (project/organization/global), and any
+  condition that would invalidate it. Use project scope unless transfer is
+  genuinely justified.
 - Before finishing substantive work, reflect once and write any still-unrecorded
   conclusion while you hold the reasoning. This is what makes the lesson
   available across sessions and projects instead of losing it to compaction.

@@ -89,6 +89,18 @@ async function seed() {
   for (let i = 0; i < 25; i++) record(GRAPH, { kind: 'inject', holdout: false, tokens: 120, downstream: 300 });
   for (let i = 0; i < 8; i++) record(GRAPH, { kind: 'inject', holdout: true, tokens: 0, downstream: 2400 });
   record(GRAPH, { kind: 'harvest', tokens: 800 });
+  for (let pair = 1; pair <= 5; pair++) {
+    for (const [arm, totalTokens, toolCalls] of [
+      ['baseline', 1000, 10], ['optimizer', 900, 9],
+      ['retrieval', 750, 7], ['full', 600, 6],
+    ]) {
+      record(GRAPH, {
+        kind: 'eval-run', pairId: `ui-${pair}`, taskId: 'ui-recovery', arm,
+        client: 'codex', clientVersion: 'ui-fixture', model: 'fixture-model',
+        modelVersion: '1', correct: true, totalTokens, toolCalls, latencyMs: totalTokens,
+      });
+    }
+  }
 }
 
 async function waitForServer(attempts = 40) {
@@ -288,6 +300,19 @@ async function main() {
         check('audit surfaces the contradiction', /Contradicted/i.test(auditText || ''));
         check('audit surfaces low confidence', /Low confidence/i.test(auditText || ''));
         await page.screenshot({ path: join(SHOTS, 'audit.png'), fullPage: true });
+
+        // Evidence console: causal cohorts, live traces, and honest client tiers.
+        await page.click('.wiki-tab[data-tab="evidence"]');
+        await page.waitForSelector('#evidence-capabilities tbody tr', { timeout: 5000 });
+        const evidenceState = await page.getAttribute('#evidence-status', 'data-state');
+        check('evidence console distinguishes sufficient causal data', evidenceState === 'ok', evidenceState);
+        const cohortText = await page.textContent('#evidence-cohorts');
+        check('evidence renders matched effect intervals', /full/i.test(cohortText || '') && /400/.test(cohortText || ''));
+        const capabilityCount = await page.locator('#evidence-capabilities tbody tr').count();
+        check('evidence lists all supported client capabilities', capabilityCount === 16, String(capabilityCount));
+        const capabilityText = await page.textContent('#evidence-capabilities');
+        check('rules-only clients are labelled MCP-visible only', /mcp-visible-only/i.test(capabilityText || ''));
+        await page.screenshot({ path: join(SHOTS, 'evidence.png'), fullPage: true });
       } else {
         await page.screenshot({ path: join(SHOTS, 'narrow.png'), fullPage: true });
       }

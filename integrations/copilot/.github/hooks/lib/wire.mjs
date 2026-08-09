@@ -28,7 +28,7 @@ export const MARKER = 'token-optimizer';
 /** The events we wire, and which hook file serves each. */
 export const WIRING = [
   { event: 'SessionStart', file: 'session-start.mjs', matcher: null },
-  { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash' },
+  { event: 'PreToolUse', file: 'pretooluse-router.mjs', matcher: 'Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell' },
   { event: 'PreCompact', file: 'precompact-optimize.mjs', matcher: null },
 ];
 

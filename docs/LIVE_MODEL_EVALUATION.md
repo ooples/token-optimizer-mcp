@@ -4,6 +4,19 @@ This report records the August 9, 2026 live validation of automatic graph
 capture and retrieval. It separates model-observed evidence from deterministic
 fixtures so that dashboard claims are not based on seeded data alone.
 
+This remains a historical pilot report. The follow-on
+[causal evidence protocol](EVIDENCE_PROTOCOL.md) adds four isolated arms,
+episode/tool/injection identity, shadow candidates, paired confidence intervals,
+cross-client cohorts, harm feedback, and a representative task suite. Those
+later mechanisms do not retroactively turn the three-pair pilot into a
+statistical conclusion.
+
+The follow-on PR also produced a redacted
+[five-pair Claude Sonnet 5 cohort](../evals/results/2026-08-09-claude-sonnet-5-command-recovery.md).
+That cohort found equal correctness, uncertain incremental retrieval effects,
+and a measurable full-system token overhead on its one task; it is retained as
+evidence rather than summarized as a win.
+
 ## Scope
 
 - Model: `gpt-5.6-sol`, invoked through Codex CLI 0.147.0 in fresh sessions.

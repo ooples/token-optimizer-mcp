@@ -20,6 +20,21 @@ export const CORE_TOOL_NAMES = [
 ] as const;
 
 export type ToolProfile = 'core' | 'full';
+export type ExperimentArm = 'baseline' | 'optimizer' | 'retrieval' | 'full';
+
+export function resolveExperimentArm(
+  value = process.env.TOKEN_OPTIMIZER_EXPERIMENT_ARM
+): ExperimentArm {
+  const arm = String(value || 'full')
+    .trim()
+    .toLowerCase();
+  if (['baseline', 'optimizer', 'retrieval', 'full'].includes(arm))
+    return arm as ExperimentArm;
+  throw new Error(
+    `Invalid TOKEN_OPTIMIZER_EXPERIMENT_ARM=${JSON.stringify(value)}. ` +
+      'Expected baseline, optimizer, retrieval, or full.'
+  );
+}
 
 export function resolveToolProfile(
   value = process.env.TOKEN_OPTIMIZER_TOOL_PROFILE
@@ -46,18 +61,30 @@ export function resolveToolProfile(
  */
 export function selectToolDefinitions<T extends { name: string }>(
   tools: readonly T[],
-  profile = resolveToolProfile()
+  profile = resolveToolProfile(),
+  arm = resolveExperimentArm()
 ): T[] {
-  if (profile === 'full') return [...tools];
-
   const core = new Set<string>(CORE_TOOL_NAMES);
-  const selected = tools.filter((tool) => core.has(tool.name));
+  const selected =
+    profile === 'full'
+      ? [...tools]
+      : tools.filter((tool) => core.has(tool.name));
   const selectedNames = new Set(selected.map((tool) => tool.name));
-  const missing = CORE_TOOL_NAMES.filter((name) => !selectedNames.has(name));
+  const missing =
+    profile === 'core'
+      ? CORE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+      : [];
 
   if (missing.length) {
     throw new Error(`Core MCP tool profile is missing: ${missing.join(', ')}`);
   }
 
+  if (arm === 'baseline') return [];
+  if (arm === 'optimizer')
+    return selected.filter(
+      (tool) => !['wiki_read', 'wiki_write'].includes(tool.name)
+    );
+  if (arm === 'retrieval')
+    return selected.filter((tool) => tool.name !== 'wiki_write');
   return selected;
 }

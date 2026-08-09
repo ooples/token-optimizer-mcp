@@ -1,0 +1,8 @@
+{
+  "name": "token-optimizer-eval-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/test.mjs"
+  }
+}

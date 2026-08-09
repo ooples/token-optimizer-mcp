@@ -32,6 +32,7 @@ interface GraphModules {
   curate: any;
   metrics: any;
   staleness: any;
+  capabilities: any;
 }
 
 let cached: GraphModules | null = null;
@@ -39,13 +40,14 @@ let cached: GraphModules | null = null;
 async function modules(): Promise<GraphModules | null> {
   if (cached) return cached;
   try {
-    const [wiki, curate, metrics, staleness] = await Promise.all([
+    const [wiki, curate, metrics, staleness, capabilities] = await Promise.all([
       import(coreUrl('wiki.mjs')),
       import(coreUrl('curate.mjs')),
       import(coreUrl('metrics.mjs')),
       import(coreUrl('staleness.mjs')),
+      import(coreUrl('capabilities.mjs')),
     ]);
-    cached = { wiki, curate, metrics, staleness };
+    cached = { wiki, curate, metrics, staleness, capabilities };
     return cached;
   } catch {
     return null;
@@ -164,6 +166,11 @@ function summarise(node: any) {
     claim: node.claim,
     type: node.type,
     confidence: node.confidence,
+    confidenceLabel: node.confidenceLabel,
+    evidence: node.evidence,
+    applicability: node.applicability,
+    scope: node.scope || 'project',
+    invalidators: Array.isArray(node.invalidators) ? node.invalidators : [],
     origin: node.origin || 'harvested',
     stale: Boolean(node.stale),
     pinned: Boolean(node.pinned),
@@ -379,6 +386,82 @@ export function registerWikiRoutes(app: Express): void {
       return res.status(500).json({ error: 'balance failed' });
     }
   });
+
+  /**
+   * Causal evidence, with cohort filters and honest capability tiers.  This is
+   * separate from /balance because randomized eval runs and passive file
+   * holdouts are different strengths of evidence and must not be blended.
+   */
+  app.get('/api/wiki/evidence', async (req: Request, res: Response) => {
+    const mods = await modules();
+    if (!mods) return res.status(503).json({ error: 'graph unavailable' });
+
+    const filters: Record<string, string> = {};
+    for (const key of [
+      'client',
+      'clientVersion',
+      'model',
+      'modelVersion',
+      'taskId',
+      'arm',
+    ]) {
+      const value = req.query[key];
+      if (typeof value === 'string' && value.trim())
+        filters[key] = value.trim().slice(0, 200);
+    }
+    const requestedLimit = Number(req.query.limit);
+    const episodeLimit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(500, requestedLimit))
+      : 100;
+
+    try {
+      return res.json({
+        ...mods.metrics.evidenceReport(graphDir(req, mods.wiki), {
+          filters,
+          episodeLimit,
+        }),
+        capabilities: mods.capabilities.capabilitySummary(),
+      });
+    } catch {
+      return res.status(500).json({ error: 'evidence report failed' });
+    }
+  });
+
+  /** Human outcome feedback drives utility ranking and harmful-finding quarantine. */
+  app.post(
+    '/api/wiki/evidence/feedback',
+    async (req: Request, res: Response) => {
+      if (rejectsCrossSite(req, res)) return undefined;
+      const mods = await modules();
+      if (!mods) return res.status(503).json({ error: 'graph unavailable' });
+
+      const { findingId, rating, reason, episodeId, injectionId } =
+        req.body || {};
+      if (typeof findingId !== 'string' || !findingId.trim())
+        return res.status(400).json({ error: 'findingId required' });
+      if (!['helpful', 'neutral', 'harmful'].includes(rating))
+        return res
+          .status(400)
+          .json({ error: 'rating must be helpful, neutral, or harmful' });
+
+      const recorded = mods.metrics.recordFindingFeedback(
+        graphDir(req, mods.wiki),
+        {
+          findingId: findingId.trim().slice(0, 300),
+          rating,
+          reason:
+            typeof reason === 'string' ? reason.trim().slice(0, 1000) : null,
+          episodeId:
+            typeof episodeId === 'string' ? episodeId.slice(0, 300) : null,
+          injectionId:
+            typeof injectionId === 'string' ? injectionId.slice(0, 300) : null,
+        }
+      );
+      return recorded
+        ? res.json({ ok: true, id: recorded.id })
+        : res.status(500).json({ error: 'feedback write failed' });
+    }
+  );
 
   /** Markdown export -- the graph as reviewable, committable documentation. */
   app.get('/api/wiki/export', async (req: Request, res: Response) => {

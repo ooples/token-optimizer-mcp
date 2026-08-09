@@ -511,6 +511,8 @@ const TOOL_ALIASES = new Map(
     create_file: 'Write',
 
     bash: 'Bash',
+    powershell: 'Bash',
+    pwsh: 'Bash',
     shell: 'Bash',
     run_command: 'Bash',
     execute_command: 'Bash',

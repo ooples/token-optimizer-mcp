@@ -96,8 +96,13 @@ function promoteToShared(finding, { projectRoot, sessionId, provenance, key }) {
           key: `shared-${key}`,
           claim: finding.claim,
           confidence: finding.confidence,
+          confidenceLabel: finding.confidenceLabel,
           type: finding.type,
           trigger: typeof finding.trigger === 'string' && finding.trigger ? finding.trigger : undefined,
+          applicability: finding.applicability,
+          evidence: finding.evidence,
+          invalidators: Array.isArray(finding.invalidators) ? finding.invalidators : [],
+          scope: finding.scope || 'global',
           origin: provenance,
           quote: typeof finding.quote === 'string' && finding.quote.trim() ? finding.quote : undefined,
           // WHERE IT WAS LEARNED, carried so the reader can discount it. A lesson
@@ -351,6 +356,26 @@ export function writeHarvested(
     // anything, so it is dropped rather than kept as unfalsifiable.
     if (!resolved.length) continue;
 
+    // Exact semantic duplicates collapse to the existing active record.  The
+    // normalisation intentionally ignores punctuation/formatting noise but not
+    // meaning-bearing words; near-duplicates that need judgement remain visible
+    // to curation rather than being silently merged by a fuzzy heuristic.
+    const fingerprint = claimFingerprint(finding.claim);
+    const currentGraph = load(dir);
+    const duplicate = [...currentGraph.nodes.values()].find((node) =>
+      node.kind === 'finding'
+      && !node.retired
+      && node.type === finding.type
+      && claimFingerprint(node.claim) === fingerprint
+      && resolved.every((target) => currentGraph.edges.some((edge) =>
+        edge.from === node.id && edge.edge === 'derived_from' && edge.to === target
+      ))
+    );
+    if (duplicate) {
+      written.push(duplicate.key);
+      continue;
+    }
+
     // Date.now() plus an index is not unique across CONCURRENT detached
     // workers: two Stop hooks finishing in the same millisecond produce the
     // same key, and putNode keeps the last write for an id -- so one session's
@@ -371,6 +396,7 @@ export function writeHarvested(
         key,
         claim: finding.claim,
         confidence: finding.confidence,
+        confidenceLabel: finding.confidenceLabel,
         type: finding.type,
         // WHEN this finding is relevant, not just what it is about. Anchors
         // answer "which file", which is the wrong question for a claim about
@@ -380,6 +406,16 @@ export function writeHarvested(
         trigger: typeof finding.trigger === 'string' && finding.trigger
           ? finding.trigger
           : undefined,
+        applicability: typeof finding.applicability === 'string'
+          ? finding.applicability
+          : undefined,
+        evidence: typeof finding.evidence === 'string'
+          ? finding.evidence
+          : undefined,
+        invalidators: Array.isArray(finding.invalidators)
+          ? finding.invalidators
+          : [],
+        scope: finding.scope || 'project',
         origin: provenance,
         // THE EVIDENCE TRAVELS WITH THE CLAIM. Without it a human-origin
         // finding asserts its own provenance and nothing can check it.
@@ -398,7 +434,11 @@ export function writeHarvested(
     // record of what happened here; the shared tier is a copy for the lessons
     // that are not about here. Skipped when the two are the same directory,
     // which is the suite's usual arrangement.
-    if (id && !isSharedDir(dir)) {
+    if (
+      id
+      && !isSharedDir(dir)
+      && (finding.scope === undefined || finding.scope === 'organization' || finding.scope === 'global')
+    ) {
       promoteToShared(finding, { projectRoot, sessionId, provenance, key });
     }
   }

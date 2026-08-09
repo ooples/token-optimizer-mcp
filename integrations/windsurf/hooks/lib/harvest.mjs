@@ -201,7 +201,11 @@ const PROMPT = `Extract durable findings from this coding session for a project 
 Return ONLY a JSON array. Each element:
 {"type": "finding|decision|failure|command|map",
  "claim": "one sentence, specific and checkable",
- "confidence": 0.0-1.0,
+ "evidence": "the concrete observation, command result, or rejected approach that proved it",
+ "applicability": "the condition under which a future model should use it",
+ "confidenceLabel": "verified|probable|speculative",
+ "scope": "project|organization|global",
+ "invalidators": ["what change would require this to be checked again"],
  "anchors": ["absolute/file/path" or "absolute/file/path#symbolName"]}
 
 RULES:
@@ -211,7 +215,9 @@ RULES:
 - Prefer "failure" and "decision" entries. What was TRIED AND REJECTED, and WHY,
   is the most valuable thing here because it exists nowhere in the source tree.
 - Do not restate what the code plainly says. Record what someone had to work out.
-- confidence reflects how well established the claim is, not how important.
+- verified requires direct evidence; probable means strong but incomplete evidence;
+  speculative is a hypothesis and must be labelled as such.
+- Use project scope unless the lesson is genuinely independent of this repository.
 - If nothing durable was learned, return [].`;
 
 /**
@@ -232,8 +238,29 @@ export function validate(raw, { knownFiles = null } = {}) {
     if (!FINDING_TYPES.includes(item.type)) continue;
     if (typeof item.claim !== 'string' || item.claim.trim().length < 8) continue;
 
-    const confidence = Number(item.confidence);
-    if (!Number.isFinite(confidence) || confidence <= 0 || confidence > 1) continue;
+    const evidence = typeof item.evidence === 'string' ? item.evidence.trim() : '';
+    const applicability = typeof item.applicability === 'string' ? item.applicability.trim() : '';
+    if (evidence.length < 8 || applicability.length < 8) continue;
+
+    const confidenceLabel = ['verified', 'probable', 'speculative'].includes(item.confidenceLabel)
+      ? item.confidenceLabel
+      : null;
+    if (!confidenceLabel) continue;
+    const defaults = { verified: 0.95, probable: 0.75, speculative: 0.45 };
+    const supplied = Number(item.confidence);
+    if (
+      item.confidence !== undefined
+      && (!Number.isFinite(supplied) || supplied <= 0 || supplied > 1)
+    ) continue;
+    const confidence = item.confidence === undefined
+      ? defaults[confidenceLabel]
+      : supplied;
+    const scope = ['project', 'organization', 'global'].includes(item.scope)
+      ? item.scope
+      : 'project';
+    const invalidators = Array.isArray(item.invalidators)
+      ? item.invalidators.filter((value) => typeof value === 'string' && value.trim()).slice(0, 10)
+      : [];
 
     let anchors = Array.isArray(item.anchors) ? item.anchors.filter((a) => typeof a === 'string' && a) : [];
     // A model asked for file paths will sometimes invent them. When the caller
@@ -241,7 +268,18 @@ export function validate(raw, { knownFiles = null } = {}) {
     if (knownFiles) anchors = anchors.filter((a) => knownFiles.has(a.split('#')[0]));
     if (!anchors.length) continue;
 
-    accepted.push({ type: item.type, claim: item.claim.trim(), confidence, anchors });
+    accepted.push({
+      type: item.type,
+      claim: item.claim.trim(),
+      evidence,
+      applicability,
+      confidence,
+      confidenceLabel,
+      scope,
+      invalidators,
+      anchors,
+      trigger: typeof item.trigger === 'string' ? item.trigger : undefined,
+    });
   }
   return accepted;
 }

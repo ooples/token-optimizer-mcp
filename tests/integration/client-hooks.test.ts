@@ -213,6 +213,14 @@ describe('native CLI hook integrations', () => {
     }
   });
 
+  it('observes Claude Code PowerShell calls on Windows', () => {
+    const manifest = JSON.parse(
+      readFileSync(join(repoRoot, 'plugin/hooks/hooks.json'), 'utf8')
+    );
+    expect(manifest.hooks.PreToolUse[0].matcher).toContain('PowerShell');
+    expect(manifest.hooks.PostToolUse[0].matcher).toContain('PowerShell');
+  });
+
   it('ships a Codex plugin MCP config that Codex can discover', () => {
     const config = JSON.parse(
       readFileSync(join(repoRoot, 'integrations/codex/plugin/.mcp.json'), 'utf8')

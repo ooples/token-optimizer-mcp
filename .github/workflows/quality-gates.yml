@@ -55,6 +55,9 @@ jobs:
       - name: Verify client integration shapes
         run: npm run verify:clients
 
+      - name: Certify all client capability tiers
+        run: npm run verify:certification
+
       - name: Verify the harvest API contract
         run: npm run verify:harvest
 

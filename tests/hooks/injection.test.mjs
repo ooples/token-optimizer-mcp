@@ -66,16 +66,16 @@ describe('P3 harvest -- the schema keeps the graph honest', () => {
     // Models asked for paths will sometimes produce plausible fabrications.
     const known = new Set(['/real.ts']);
     const out = validate([
-      { type: 'finding', claim: 'real one here', confidence: 0.8, anchors: ['/real.ts'] },
-      { type: 'finding', claim: 'invented one here', confidence: 0.8, anchors: ['/imaginary.ts'] },
+      { type: 'finding', claim: 'real one here', evidence: 'a passing focused test', applicability: 'when changing the real module', confidenceLabel: 'probable', confidence: 0.8, scope: 'project', anchors: ['/real.ts'] },
+      { type: 'finding', claim: 'invented one here', evidence: 'an unsupported model guess', applicability: 'when changing an invented module', confidenceLabel: 'speculative', confidence: 0.8, scope: 'project', anchors: ['/imaginary.ts'] },
     ], { knownFiles: known });
     expect(out).toHaveLength(1);
     expect(out[0].claim).toBe('real one here');
   });
 
   test('a valid finding survives intact', () => {
-    const out = validate([{ type: 'failure', claim: 'retry loop deadlocks on close', confidence: 0.7, anchors: ['/a.ts#run'] }]);
-    expect(out).toEqual([{ type: 'failure', claim: 'retry loop deadlocks on close', confidence: 0.7, anchors: ['/a.ts#run'] }]);
+    const out = validate([{ type: 'failure', claim: 'retry loop deadlocks on close', evidence: 'the close-path concurrency test timed out', applicability: 'when changing the retry close path', confidenceLabel: 'probable', confidence: 0.7, scope: 'project', invalidators: ['retry ownership changes'], anchors: ['/a.ts#run'] }]);
+    expect(out).toEqual([{ type: 'failure', claim: 'retry loop deadlocks on close', evidence: 'the close-path concurrency test timed out', applicability: 'when changing the retry close path', confidenceLabel: 'probable', confidence: 0.7, scope: 'project', invalidators: ['retry ownership changes'], anchors: ['/a.ts#run'], trigger: undefined }]);
   });
 
   test('harvest is disabled without a key, rather than failing', () => {

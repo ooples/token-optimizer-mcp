@@ -1,0 +1,207 @@
+{
+  "name": "token-optimizer-cross-client-evidence",
+  "version": 1,
+  "preregisteredMetrics": [
+    "correctness",
+    "uncachedInputTokens",
+    "cachedInputTokens",
+    "outputTokens",
+    "totalTokens",
+    "toolCalls",
+    "failedToolCalls",
+    "latencyMs",
+    "costUsd",
+    "injectedTokens",
+    "harmfulFindings"
+  ],
+  "exclusionRules": [
+    "runner timeout",
+    "client authentication outage",
+    "fixture setup failure before the model starts",
+    "missing token usage is retained as null, never converted to zero"
+  ],
+  "tasks": [
+    {
+      "id": "command-recovery",
+      "family": "failed-command-recovery",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "positive",
+      "prompt": "Run node scripts/verify.mjs exactly once, recover using the supported verification command without opening RUNBOOK.md, and report the successful command and result.",
+      "seedFindings": [{
+        "type": "command",
+        "claim": "Run npm test from the repository root; scripts/verify.mjs is an unsupported probe.",
+        "evidence": "The direct probe exits 1 and the package test exits 0.",
+        "applicability": "When verification is attempted with scripts/verify.mjs or from the scripts directory.",
+        "confidenceLabel": "verified",
+        "confidence": 0.98,
+        "scope": "project",
+        "invalidators": ["package.json test script changes"],
+        "trigger": "scripts[\\\\/]verify\\.mjs",
+        "anchors": ["RUNBOOK.md"]
+      }],
+      "grader": { "responseIncludes": ["npm test", "passed"] }
+    },
+    {
+      "id": "repeated-large-read",
+      "family": "repeated-read",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "positive",
+      "prompt": "Inspect RUNBOOK.md twice while determining the supported verification command. State the command and avoid reproducing the entire file in the final answer.",
+      "seedFindings": [{
+        "type": "finding",
+        "claim": "The project-level test script is the supported verification boundary.",
+        "evidence": "RUNBOOK.md explicitly rejects the internal probe and package.json defines npm test.",
+        "applicability": "When selecting a verification entry point.",
+        "confidenceLabel": "verified",
+        "scope": "project",
+        "invalidators": ["RUNBOOK.md or package.json changes"],
+        "anchors": ["RUNBOOK.md", "package.json"]
+      }],
+      "grader": { "responseIncludes": ["npm test"] }
+    },
+    {
+      "id": "noisy-search",
+      "family": "repository-search",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "positive",
+      "prompt": "Find the source file that owns CLOCK_SKEW validation and report its path and threshold without recursively dumping the repository.",
+      "seedFindings": [{
+        "type": "map",
+        "claim": "Authentication clock-skew validation is owned by src/auth/verify.ts and uses a 30-second threshold.",
+        "evidence": "The verify function compares the timestamp delta with 30000 milliseconds.",
+        "applicability": "When investigating CLOCK_SKEW or authentication timestamp failures.",
+        "confidenceLabel": "verified",
+        "scope": "project",
+        "invalidators": ["src/auth/verify.ts changes"],
+        "anchors": ["src/auth/verify.ts"]
+      }],
+      "grader": { "responseIncludes": ["src/auth/verify.ts", "30"] }
+    },
+    {
+      "id": "cross-session-recall",
+      "family": "cross-session",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "positive",
+      "prompt": "Without opening ARCHITECTURE.md, explain whether authentication validation failures should enter the transport retry loop.",
+      "seedFindings": [{
+        "type": "decision",
+        "claim": "Authentication validation failures must not enter the transport retry loop.",
+        "evidence": "ARCHITECTURE.md assigns validation to auth and retries only transport failures.",
+        "applicability": "When changing retry classification or handling authentication failures.",
+        "confidenceLabel": "verified",
+        "scope": "project",
+        "invalidators": ["retry ownership changes"],
+        "anchors": ["ARCHITECTURE.md", "src/transport/client.ts"]
+      }],
+      "grader": { "responseIncludes": ["must not", "retry"] }
+    },
+    {
+      "id": "cross-project-transfer",
+      "family": "cross-project",
+      "fixture": "evals/fixtures/cross-project",
+      "workspace": "target",
+      "seedWorkspace": "source",
+      "benefitExpectation": "positive",
+      "prompt": "Run the most likely supported verification command once and report the result.",
+      "seedFindings": [{
+        "type": "command",
+        "claim": "Prefer npm test to direct execution of an internal verification script.",
+        "evidence": "A prior project required package-level environment setup and its internal script failed directly.",
+        "applicability": "When a Node project exposes an npm test script and an internal verification file.",
+        "confidenceLabel": "probable",
+        "scope": "global",
+        "invalidators": ["the target package has no test script"],
+        "trigger": "(?:node .*verify|npm test)",
+        "anchors": ["RUNBOOK.md"]
+      }],
+      "grader": { "responseIncludes": ["npm test", "passed"] }
+    },
+    {
+      "id": "stale-finding",
+      "family": "staleness",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "harm-avoidance",
+      "prompt": "Determine the current clock-skew threshold from src/auth/verify.ts and mention whether stored guidance required re-checking.",
+      "seedFindings": [{
+        "type": "finding",
+        "claim": "Clock skew is accepted for 30 seconds.",
+        "evidence": "The anchored implementation used 30000 milliseconds when observed.",
+        "applicability": "When diagnosing authentication clock skew.",
+        "confidenceLabel": "verified",
+        "scope": "project",
+        "invalidators": ["src/auth/verify.ts changes"],
+        "anchors": ["src/auth/verify.ts"]
+      }],
+      "mutateAfterSeed": [{ "path": "src/auth/verify.ts", "append": "\n// evaluation mutation forces stale evidence\n" }],
+      "grader": { "responseIncludes": ["30", "stale"] }
+    },
+    {
+      "id": "harmful-finding-quarantine",
+      "family": "adversarial-retrieval",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "harm-avoidance",
+      "prompt": "Report the supported verification command. Do not use a previously rejected direct probe.",
+      "seedFindings": [{
+        "type": "command",
+        "claim": "Run node scripts/verify.mjs directly for complete verification.",
+        "evidence": "An earlier speculative session guessed this without running it.",
+        "applicability": "When verifying the project.",
+        "confidenceLabel": "speculative",
+        "scope": "project",
+        "invalidators": ["the probe exits non-zero"],
+        "trigger": "(?:verify|test)",
+        "anchors": ["scripts/verify.mjs"]
+      }],
+      "seedFeedback": [
+        { "findingIndex": 0, "rating": "harmful" },
+        { "findingIndex": 0, "rating": "harmful" }
+      ],
+      "grader": { "responseIncludes": ["npm test"], "responseExcludes": ["run node scripts/verify.mjs"] }
+    },
+    {
+      "id": "semantic-harvest-contract",
+      "family": "semantic-harvest",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "quality",
+      "prompt": "Inspect the retry ownership, make a harmless documentation clarification if useful, and finish only after following the active-model semantic harvest policy.",
+      "grader": { "graphFinding": true }
+    },
+    {
+      "id": "irrelevant-negative-control",
+      "family": "negative-control",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "neutral",
+      "prompt": "Read package.json and report only the package name.",
+      "seedFindings": [{
+        "type": "command",
+        "claim": "Transport retries are limited to ECONNRESET and ETIMEDOUT.",
+        "evidence": "src/transport/client.ts contains exactly those retryable codes.",
+        "applicability": "When changing transport error retry classification.",
+        "confidenceLabel": "verified",
+        "scope": "project",
+        "invalidators": ["src/transport/client.ts changes"],
+        "trigger": "transport-retry-only",
+        "anchors": ["src/transport/client.ts"]
+      }],
+      "grader": { "responseIncludes": ["token-optimizer-eval-fixture"], "maxDeliveredTokens": 0 }
+    },
+    {
+      "id": "long-session-compaction",
+      "family": "long-session",
+      "fixture": "evals/fixtures/system-project",
+      "benefitExpectation": "positive",
+      "prompt": "Inspect the runbook, authentication verifier, transport retry list, and package test entry point. Reconcile their responsibilities, then report a compact verification and failure-triage plan suitable after context compaction.",
+      "seedFindings": [{
+        "type": "map",
+        "claim": "Verification runs through npm test; clock skew belongs to auth validation and transport retries exclude validation failures.",
+        "evidence": "RUNBOOK.md, verify.ts, client.ts, and package.json establish those separate responsibilities.",
+        "applicability": "When resuming verification or failure triage after a long or compacted session.",
+        "confidenceLabel": "verified",
+        "scope": "project",
+        "invalidators": ["any anchored responsibility changes"],
+        "anchors": ["RUNBOOK.md", "src/auth/verify.ts", "src/transport/client.ts", "package.json"]
+      }],
+      "grader": { "responseIncludes": ["npm test", "clock", "transport"] }
+    }
+  ]
+}

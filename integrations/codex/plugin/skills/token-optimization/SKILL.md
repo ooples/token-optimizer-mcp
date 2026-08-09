@@ -48,7 +48,9 @@ tool call itself.
 
 - Call **`wiki_write`** when you establish a durable, non-obvious conclusion:
   a failed approach and why, a decision and its rejected alternative, or a
-  command that finally worked. Anchor it to a real file or `path#symbol`.
+  command that finally worked. Anchor it to a real file or `path#symbol`, and
+  include its concrete evidence, applicability, calibrated `confidenceLabel`,
+  scope, and invalidators.
 - Perform this semantic harvest yourself while you still hold the reasoning.
   Do not delegate it to another model, and do not invent a finding merely to
   populate the graph.

@@ -7,24 +7,19 @@ surfaces.
 
 ## Capability matrix
 
-| Client | Expensive-call routing | Structural capture + finding delivery | Active-model semantic harvest |
-|---|---|---|---|
-| Claude Code | native `PreToolUse` veto | native hooks | native `Stop` continuation |
-| Codex | native `PreToolUse` veto | native hooks | native `Stop` continuation |
-| GitHub Copilot CLI | native `preToolUse` veto | native hooks | native `agentStop` continuation |
-| Gemini CLI | native `BeforeTool` veto | native hooks | native `AfterAgent` retry |
-| Qwen Code | native `PreToolUse` veto | native hooks | native `Stop` continuation |
-| Cursor | native `preToolUse` veto | native hooks | native `stop` follow-up |
-| Cline | native `PreToolUse` veto | native pre/post hooks | active-model rule at completion |
-| OpenCode | native plugin before-hook | native plugin bridge | active-model rule at completion |
-| Kilo | native plugin before-hook | native plugin bridge | active-model rule at completion |
-| Windsurf | native exit-2 veto | native structural hooks + rules | active-model rule at completion |
-| Roo Code | always-on rules | MCP + rules | active-model rule at completion |
-| Zed | always-on `AGENTS.md` | MCP + rules | active-model rule at completion |
-| Amp | always-on `AGENTS.md` | MCP + rules | active-model rule at completion |
-| Continue | always-on rules | MCP + rules | active-model rule at completion |
-| Crush | always-on `AGENTS.md` | MCP + rules | active-model rule at completion |
-| Droid (Factory) | always-on `AGENTS.md` | MCP + rules | active-model rule at completion |
+The tier is a protocol guarantee, not a product preference. A rules/MCP-only
+client cannot observe arbitrary built-in shell or file operations, so it is
+never presented as having native automatic capture.
+
+| Client group | Tier | Automatic guarantee |
+|---|---|---|
+| Claude Code, Codex, Copilot CLI, Gemini CLI, Qwen Code, Cursor | lifecycle continuation | native routing/capture/delivery and one active-model completion reflection |
+| Cline, OpenCode, Kilo, Windsurf | native observation | native routing/capture/delivery; semantic write through the active-model rule |
+| Roo Code, Zed, Amp, Continue, Crush, Droid | MCP + rules | MCP-visible activity and explicit graph tools; no claim over hidden built-in calls |
+
+The executable registry in `hooks-core/capabilities.mjs` contains the exact
+per-client surfaces and prevents the adapter, generator, verifier, dashboard,
+and certification report from inventing different matrices.
 
 “Active-model semantic harvest” always means the model doing the work decides
 whether a durable, non-obvious conclusion exists and calls `wiki_write` itself.
@@ -45,6 +40,8 @@ drifted. Client integrations now differ only where the protocol differs.
 ```bash
 npm run sync:hooks          # regenerate vendored copies, entries, and configs
 npm run sync:hooks:check    # CI gate: fails if any copy has drifted
+npm run verify:certification # structured protocol certification for all 16
+node scripts/certify-clients.mjs --json # also detects installed exact versions
 ```
 
 The core is vendored into each native client directory rather than imported, because

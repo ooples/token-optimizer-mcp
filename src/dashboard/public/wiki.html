@@ -22,12 +22,12 @@
       <!-- Says, in words, what this page is for. Someone arriving here has no
            reason to know what a knowledge graph is or why they want one. -->
       <section class="intro">
-        <h1>Everything Claude has learned about this project</h1>
+        <h1>What your coding agents have learned and whether it helps</h1>
         <p>
-          Each file Claude reads gets remembered here &mdash; its structure, and
-          anything worked out about it. Next time, that memory is offered
-          instead of the whole file, which is where most of your savings come
-          from. This page is that memory, and you can correct it.
+          Native lifecycle clients capture the work they can observe; every
+          supported MCP client can deliberately read and write durable findings.
+          This page keeps the knowledge, its provenance, and the causal evidence
+          about whether delivering it improved later work.
         </p>
       </section>
 
@@ -54,6 +54,9 @@
         </button>
         <button class="wiki-tab" role="tab" aria-selected="false" data-tab="audit">
           Needs a look
+        </button>
+        <button class="wiki-tab" role="tab" aria-selected="false" data-tab="evidence">
+          Evidence
         </button>
       </nav>
 
@@ -124,6 +127,41 @@
             <span id="audit-count"></span>
           </p>
           <div id="audit-groups"></div>
+        </section>
+
+        <section id="tab-evidence" class="wiki-panel" role="tabpanel" hidden>
+          <p class="wiki-muted panel-intro">
+            Deterministic wiring checks, passive lifecycle traces, and randomized
+            model evaluations are kept separate. Only matched evaluation pairs
+            produce a causal effect interval.
+          </p>
+          <div class="evidence-filters">
+            <label><span class="ctl-label">Client</span><input id="evidence-client" placeholder="all clients" /></label>
+            <label><span class="ctl-label">Model</span><input id="evidence-model" placeholder="all models" /></label>
+            <label><span class="ctl-label">Task</span><input id="evidence-task" placeholder="all tasks" /></label>
+            <label>
+              <span class="ctl-label">Arm</span>
+              <select id="evidence-arm">
+                <option value="">all arms</option>
+                <option value="baseline">baseline</option>
+                <option value="optimizer">optimizer</option>
+                <option value="retrieval">retrieval</option>
+                <option value="full">full</option>
+              </select>
+            </label>
+          </div>
+          <div class="stats-grid" id="evidence-summary"></div>
+          <p class="verdict-line" id="evidence-status"></p>
+
+          <h2>Causal cohorts</h2>
+          <div class="table-scroll"><table class="evidence-table" id="evidence-cohorts"></table></div>
+
+          <h2>Recent injection traces</h2>
+          <div class="table-scroll"><table class="evidence-table" id="evidence-episodes"></table></div>
+
+          <h2>Client capability contract</h2>
+          <p class="wiki-muted">Rules/MCP-only clients are not labelled as native capture clients.</p>
+          <div class="table-scroll"><table class="evidence-table" id="evidence-capabilities"></table></div>
         </section>
       </main>
     </div>

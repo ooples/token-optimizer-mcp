@@ -31,7 +31,9 @@ import {
   readCostBytes,
   touchedFiles,
 } from './decide.mjs';
-import { recordRead, fingerprint } from './metrics.mjs';
+import {
+  recordRead, fingerprint, recordToolOutcome, recordEpisodeOutcome,
+} from './metrics.mjs';
 import {
   contentHash,
   harvest,
@@ -57,6 +59,8 @@ import { isFsSafePath } from './paths.mjs';
 import {
   isSubstantive, recordingNudge, semanticHarvestPrompt,
 } from './recording.mjs';
+import { nativeClientProfiles } from './capabilities.mjs';
+import { episodeMeta, featuresForArm, usageFrom } from './experiment.mjs';
 
 /**
  * Per-client capability.
@@ -65,41 +69,7 @@ import {
  * it true where the client has no pre-execution veto would make the product
  * claim enforcement it cannot deliver.
  */
-export const CLIENTS = {
-  'claude-code': { canDeny: true, denyStyle: 'permission', stopDecision: 'block' },
-  codex: { canDeny: true, denyStyle: 'permission', stopDecision: 'block' },
-  cline: {
-    canDeny: true,
-    contextStyle: 'cline',
-    denyStyle: 'cline',
-    stopDecision: 'block',
-  },
-  copilot: {
-    canDeny: true,
-    contextStyle: 'top-level',
-    denyStyle: 'top-level-permission',
-    stopDecision: 'block',
-  },
-  cursor: {
-    canDeny: true,
-    contextStyle: 'cursor',
-    denyStyle: 'cursor',
-    stopStyle: 'followup',
-    stopDecision: 'block',
-  },
-  // Gemini's BeforeTool and AfterAgent decisions are top-level. Treating it
-  // like Codex produced well-formed JSON that Gemini ignored.
-  gemini: { canDeny: true, denyStyle: 'top-level', stopDecision: 'deny' },
-  kilo: { canDeny: true, denyStyle: 'permission', stopDecision: 'block' },
-  opencode: { canDeny: true, denyStyle: 'permission', stopDecision: 'block' },
-  qwen: { canDeny: true, denyStyle: 'permission', stopDecision: 'block' },
-  windsurf: {
-    canDeny: true,
-    contextStyle: 'silent',
-    denyStyle: 'exit-2',
-    stopDecision: 'block',
-  },
-};
+export const CLIENTS = nativeClientProfiles();
 
 /** Never synchronously hash an unbounded build artifact on a hook path. */
 const HARVEST_MAX_BYTES =
@@ -135,6 +105,24 @@ export function mutationSucceeded(clientName, raw) {
   // or are called by our in-process bridge only from its successful after hook.
   return new Set(['claude-code', 'qwen', 'opencode', 'kilo', 'windsurf'])
     .has(clientName);
+}
+
+/** Conservative success classification for any completed tool call. */
+export function toolSucceeded(raw) {
+  if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
+    return false;
+  if (raw?.postToolUse?.success === false || raw?.success === false) return false;
+  const status =
+    raw?.tool_response?.status ?? raw?.toolResponse?.status ??
+    raw?.tool_result?.status ?? raw?.toolResult?.status;
+  if (status !== undefined) {
+    if (/^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(String(status))) return false;
+    if (/^(?:ok|success|succeeded|complete|completed)$/i.test(String(status))) return true;
+  }
+  // A post-tool lifecycle event is evidence that the call completed, but not
+  // that its output proved the task.  `success` here is deliberately scoped to
+  // the tool call; task correctness comes only from an eval grader.
+  return true;
 }
 
 function contextOutput(client, eventName, additionalContext) {
@@ -253,8 +241,10 @@ refused.
 
 Worth recording: a decision and why the alternative was rejected, a failure and
 what actually caused it, a command that turned out to be the one that works.
-Not worth recording: what the code plainly says. Prefer the thing someone had to
-work out, because that exists nowhere in the source tree.${projectBriefing()}`;
+Not worth recording: what the code plainly says. Every wiki_write must include
+the concrete evidence, when it applies, a calibrated confidence label, its
+scope, and what would invalidate it. Prefer the thing someone had to work out,
+because that exists nowhere in the source tree.${projectBriefing()}`;
 }
 
 /**
@@ -315,7 +305,7 @@ function projectBriefing() {
  * metrics. It never called forTouch/forCommand, so four advertised clients
  * accumulated a graph that their active model could not receive.
  */
-function observeAndInject(payload, state) {
+function observeAndInject(payload, state, episode, features) {
   const touched = touchedFiles(payload);
   const dirFor = (path) => wikiDir(projectRootFor(path, payload.cwd));
 
@@ -344,45 +334,51 @@ function observeAndInject(payload, state) {
   state.injected = state.injected || [];
   const alreadyInjected = new Set(state.injected);
 
-  for (const { path } of touched) {
-    const dir = dirFor(path);
-    const note = forTouch(dir, load(dir), path, {
-      sessionId: payload.session_id,
-      alreadyInjected,
-    });
-    if (note) parts.push(note);
-  }
+  if (features.retrieval) {
+    for (const { path } of touched) {
+      const dir = dirFor(path);
+      const note = forTouch(dir, load(dir), path, {
+        sessionId: payload.session_id,
+        alreadyInjected,
+        episode,
+      });
+      if (note) parts.push(note);
+    }
 
-  const command = payload.tool_input?.command;
-  if (command) {
-    const root = commandProjectRoot(payload, payload.cwd);
-    const dir = wikiDir(root);
-    const local = forCommand(dir, load(dir), command, {
-      sessionId: payload.session_id,
-      alreadyInjected,
-    });
-    if (local) parts.push(local);
+    const command = payload.tool_input?.command;
+    if (command) {
+      const root = commandProjectRoot(payload, payload.cwd);
+      const dir = wikiDir(root);
+      const local = forCommand(dir, load(dir), command, {
+        sessionId: payload.session_id,
+        alreadyInjected,
+        episode,
+      });
+      if (local) parts.push(local);
 
-    const shared = forSharedCommand(dir, command, {
-      sessionId: payload.session_id,
-      alreadyInjected,
-      projectRoot: root,
-    });
-    if (shared) parts.push(shared);
+      const shared = forSharedCommand(dir, command, {
+        sessionId: payload.session_id,
+        alreadyInjected,
+        projectRoot: root,
+        episode,
+      });
+      if (shared) parts.push(shared);
 
-    const crossed = noteActClasses(state, command);
-    const repeated = forRepeatedAct(dir, command, crossed, {
-      sessionId: payload.session_id,
-      projectRoot: root,
-    });
-    if (repeated) parts.push(repeated);
+      const crossed = noteActClasses(state, command);
+      const repeated = forRepeatedAct(dir, command, crossed, {
+        sessionId: payload.session_id,
+        projectRoot: root,
+        episode,
+      });
+      if (repeated) parts.push(repeated);
+    }
   }
   state.injected = [...alreadyInjected];
 
   // Structural capture is evidence about what was touched, not a semantic
   // conclusion. It is therefore safe to automate for every client and leaves
   // the active model responsible for wiki_write at completion.
-  for (const { path, size } of touched) {
+  if (features.capture) for (const { path, size } of touched) {
     try {
       if (isArchived(path) || size > HARVEST_MAX_BYTES || !isFsSafePath(path))
         continue;
@@ -420,7 +416,10 @@ export async function run(clientName, event) {
 
   if (mode() === MODE_OFF) process.exit(0);
 
+  const features = featuresForArm();
+
   if (event === 'session-start') {
+    if (!features.routing && !features.retrieval && !features.harvest) process.exit(0);
     const output = contextOutput(client, eventName, policyText(client.canDeny));
     if (output) emit(output);
     process.exit(0);
@@ -437,10 +436,22 @@ export async function run(clientName, event) {
     const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
     const agentScope = raw.transcript_path ?? raw.transcriptPath ?? null;
     const state = loadState(sessionId, agentScope);
+    const episode = episodeMeta({ client: clientName, raw });
+    try {
+      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      recordEpisodeOutcome(dir, {
+        ...episode,
+        status: 'completed',
+        ...usageFrom(raw),
+      });
+    } catch {
+      // Evidence is best effort and must never stop a session from finishing.
+    }
     const alreadyHarvested =
       Number(state.edits || 0) > 0 &&
       Number(state.harvestedEdits || 0) >= Number(state.edits || 0);
-    const prompt = semanticHarvestPrompt({
+    const prompt = features.harvest ? semanticHarvestPrompt({
       edits: state.edits,
       files: state.editedFiles,
       model: raw.model,
@@ -449,7 +460,7 @@ export async function run(clientName, event) {
         raw.stopHookActive === true ||
         alreadyHarvested ||
         (clientName === 'cursor' && Number(raw.loop_count || 0) > 0),
-    });
+    }) : null;
     if (prompt) {
       state.harvestedEdits = Number(state.edits || 0);
       saveState(sessionId, state, agentScope);
@@ -466,6 +477,7 @@ export async function run(clientName, event) {
     process.exit(0);
   const payload = normalizePayload(normalizeClientPayload(clientName, event, raw));
   if (!payload.tool_name) process.exit(0);
+  const episode = episodeMeta({ client: clientName, raw, payload });
 
   // THE AGENT, not just the session -- the same scope the Claude Code router
   // applies. Subagents inherit the parent's session id, so keying state on the
@@ -506,17 +518,41 @@ export async function run(clientName, event) {
       const anchor = state.editedFiles[0]
         || join(payload.cwd || process.cwd(), '__recording__');
       const dir = wikiDir(projectRootFor(anchor, payload.cwd));
-      recordingContext = recordingNudge(dir, {
+      recordingContext = features.harvest ? recordingNudge(dir, {
         state,
         edits: state.edits,
         files: state.editedFiles,
-      });
+      }) : null;
       if (recordingContext) state.recordingNudged = true;
     } catch {
       // Recording pressure is an optimization and must never cost a tool call.
     }
   }
-  const verdict = decide(payload, state);
+  if (event === 'post-tool') {
+    try {
+      const command = payload.tool_input?.command;
+      const touched = touchedFiles(payload);
+      const anchor = command
+        ? String(command).slice(0, 120)
+        : touched[0]?.path || payload.tool_input?.file_path || '';
+      const root = command
+        ? commandProjectRoot(payload, payload.cwd)
+        : projectRootFor(anchor || join(payload.cwd || process.cwd(), '__tool__'), payload.cwd);
+      recordToolOutcome(wikiDir(root), {
+        ...episode,
+        surface: command ? 'command' : 'file',
+        anchor,
+        toolName: payload.tool_name,
+        success: toolSucceeded(raw),
+        durationMs: Number(raw.duration_ms ?? raw.durationMs ?? raw.elapsed_ms ?? raw.elapsedMs) || null,
+        ...usageFrom(raw),
+      });
+    } catch {
+      // Causal tracing is fail-open like every other hook optimization.
+    }
+  }
+
+  const verdict = features.routing ? decide(payload, state) : null;
   const repeat = verdict && event === 'pre-tool'
     ? alreadyDenied(state, verdict.key)
     : false;
@@ -571,7 +607,7 @@ export async function run(clientName, event) {
   remember(payload, state);
   let graphContext = null;
   try {
-    graphContext = observeAndInject(payload, state);
+    graphContext = observeAndInject(payload, state, episode, features);
   } catch {
     // Delivery is an optimization. Fail open.
   }

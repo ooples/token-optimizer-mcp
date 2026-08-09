@@ -18,6 +18,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
+import { capabilityFor, CAPABILITY_TIERS } from '../hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -124,6 +125,15 @@ const CLIENTS = [
     docs: 'https://docs.factory.ai/cli/configuration/mcp', verified: 'mcpServers key confirmed; the CLI reads ~/.factory/mcp.json' },
 ];
 
+for (const client of CLIENTS) {
+  const capability = capabilityFor(client.key);
+  if (!capability) throw new Error(`missing capability registry entry for ${client.key}`);
+  const registrySaysNative = capability.tier !== CAPABILITY_TIERS.RULES;
+  if (Boolean(client.nativeHooks) !== registrySaysNative) {
+    throw new Error(`capability drift for ${client.key}: generator and registry disagree`);
+  }
+}
+
 /** The policy, written once. */
 function rules(client) {
   const enforcement = client.nativeHooks
@@ -154,6 +164,10 @@ LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
   command that finally worked.
 - Anchor every claim to a real file path or path#symbol. Never invent a claim
   merely to populate the graph, and do not delegate harvesting to another model.
+- Include the concrete evidence, when it applies, confidenceLabel
+  (verified/probable/speculative), scope (project/organization/global), and any
+  condition that would invalidate it. Use project scope unless transfer is
+  genuinely justified.
 - Before finishing substantive work, reflect once and write any still-unrecorded
   conclusion while you hold the reasoning. This is what makes the lesson
   available across sessions and projects instead of losing it to compaction.

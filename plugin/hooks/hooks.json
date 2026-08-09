@@ -12,7 +12,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash",
+        "matcher": "Read|Grep|Glob|Edit|MultiEdit|Write|Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
@@ -33,7 +33,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|MultiEdit|Write|Bash|mcp__.*__(?:smart_edit|smart_write)",
+        "matcher": "Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)",
         "hooks": [
           {
             "type": "command",
