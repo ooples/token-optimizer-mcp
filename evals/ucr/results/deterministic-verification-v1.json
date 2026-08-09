@@ -1,10 +1,10 @@
 {
-  "schemaVersion": "ucr.deterministic-verification/1",
+  "schemaVersion": "ucr.deterministic-verification/2",
   "evidenceClass": "deterministic-conformance-not-live-effectiveness",
   "source": {
     "fixtureHash": "cbcf660b87d8714ada6c445ddd761947c3db01d2292edad0956e677ad90e7d73",
-    "benchmarkHash": "9a53db5b863fe7796620db51774378f27ff27a43bbd4b91996a9c5c31bc65d6c",
-    "competitorRegistryHash": "84d8de6f730164269d9492ec38e3fe7990e7cfb9ec0ffebd5705e4c81e49135a"
+    "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+    "competitorRegistryHash": "c25fcd84a3e383ddfbbd0148e0a673ed7607d73da6ff75bdd8a64a5b188b68de"
   },
   "implementation": {
     "workstreamsWithRuntimeModules": 18,
@@ -16,13 +16,13 @@
     "registeredClients": 16,
     "schemaCertifiedClients": 16,
     "lifecycleFamilies": 4,
-    "executableSmokeClients": 2,
+    "executableSmokeClients": 3,
     "cognitionSemanticParity": true,
     "fixtureEventsPerClient": 5
   },
   "deterministicProof": {
-    "checksPassed": 26,
-    "checksTotal": 26,
+    "checksPassed": 29,
+    "checksTotal": 29,
     "replayInvariant": true,
     "graphRebuildInvariant": true,
     "guardFalsePositiveRate": 0,
@@ -42,12 +42,59 @@
     "competitorBaselines": 10
   },
   "liveEvidence": {
-    "status": "passed-single-pair-smoke",
-    "modelRuns": 3,
-    "executableClientSmokes": 2,
+    "status": "passed-three-direction-smoke",
+    "modelRuns": 9,
+    "executableClientSmokes": 3,
     "competitiveReproductions": 0,
-    "reportHash": "32cf870ffa29dcc76ef73656f395515c546506780eb10ed7a74bd41ecdab31d3",
-    "reason": "one live pair proves executable transfer and control abstention, not effectiveness or superiority"
+    "reportHash": "ac3e026e90776c8214bd1d9c9e2e3d31f275aa9b9ba6d8aa2e4e0c1b9fc92870",
+    "evidenceTiers": {
+      "transport": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "conformance": {
+        "status": "present",
+        "ledgers": 2,
+        "rows": 706,
+        "hashes": [
+          "73844b1a671481141cc852d2928dbbee74d349ef4fca7b9c753ddabff817e749",
+          "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
+        ]
+      },
+      "executable-smoke": {
+        "status": "present",
+        "ledgers": 5,
+        "rows": 13,
+        "hashes": [
+          "c0becec243d72c42db68de9c6ba644875ef63a921a9e20d04b7114ded9ea2c24",
+          "3687c5556e820640f4935ed9c1f63896cc7b09a1f59ebd712514e3bcd4c506bb",
+          "1c0cf1af21ba062c77628de5780e4cb9b843fe9551edc04ed3e486a611bba675",
+          "3e249024e94cbe94dcc94dd1781817f99070a754b9465ef1a1a46f71cdcf00a5",
+          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+        ]
+      },
+      "effectiveness": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "superiority": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "production": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      }
+    },
+    "reason": "three live directions prove executable transfer and control abstention across three CLIs and two model families, not powered effectiveness or superiority"
   },
   "release": {
     "status": "insufficient",
@@ -79,14 +126,56 @@
       "detail": "5 lifecycle events each"
     },
     {
+      "name": "independent Python implementation replays identical cognition semantics",
+      "passed": true,
+      "detail": {
+        "diagnostics": [],
+        "events": 5,
+        "implementation": "python-stdlib",
+        "semanticDigest": "633df63bec7a8543f995c4282483b022eea5e5520cb00fce6c8f779fb04f63ee"
+      }
+    },
+    {
       "name": "certification is honest about executable smoke coverage",
       "passed": true,
       "detail": "schema certification is not labelled live proof"
     },
     {
-      "name": "redacted live Codex-to-Claude handoff smoke is integrity-valid",
+      "name": "unified signed evidence index is integrity-valid",
       "passed": true,
-      "detail": "5 events / 1 delivery"
+      "detail": "11/11 artifacts"
+    },
+    {
+      "name": "live cross-client smoke covers three passing directions without raw transcripts",
+      "passed": true,
+      "detail": {
+        "artifactsValid": 11,
+        "artifactsTotal": 11,
+        "liveDirectionsPassed": 3,
+        "liveDirectionsAttempted": 3,
+        "registeredClientProcesses": 16,
+        "graphEvents": 1000000,
+        "coordinationWorkers": 100,
+        "productionFaults": 6,
+        "cognitiveSchemaTokens": 1162,
+        "cognitiveReductionVsFull": 0.9620174549733599
+      }
+    },
+    {
+      "name": "scale, coordination, adapter, and fault artifacts meet frozen targets",
+      "passed": true,
+      "detail": {
+        "artifactsValid": 11,
+        "artifactsTotal": 11,
+        "liveDirectionsPassed": 3,
+        "liveDirectionsAttempted": 3,
+        "registeredClientProcesses": 16,
+        "graphEvents": 1000000,
+        "coordinationWorkers": 100,
+        "productionFaults": 6,
+        "cognitiveSchemaTokens": 1162,
+        "cognitiveReductionVsFull": 0.9620174549733599
+      }
     },
     {
       "name": "duplicate and out-of-order replay is projection invariant",
@@ -113,7 +202,10 @@
         "positiveApplicabilityRate": 1,
         "negativeApplicabilityRate": 1,
         "verifiedReceiptCoverage": 1,
-        "duplicateRate": 0
+        "duplicateRate": 0,
+        "hardNegativeCases": 0,
+        "overgeneralizationRate": null,
+        "applicabilityRecall": null
       }
     },
     {
@@ -124,7 +216,10 @@
         "positiveApplicabilityRate": 1,
         "negativeApplicabilityRate": 1,
         "verifiedReceiptCoverage": 1,
-        "duplicateRate": 0
+        "duplicateRate": 0,
+        "hardNegativeCases": 0,
+        "overgeneralizationRate": null,
+        "applicabilityRecall": null
       }
     },
     {
@@ -136,6 +231,7 @@
         "falsePositive": 0,
         "falseNegative": 0,
         "falsePositiveRate": 0,
+        "falseNegativeRate": 0,
         "safeToActivate": true
       }
     },
@@ -262,5 +358,5 @@
       }
     }
   ],
-  "reportHash": "5e94bfd8607390ca606450f946fb4b9c15aaba596e564706b188b1322cb1d4b4"
+  "reportHash": "e2c2937a48d7e9c9432f3736c50613844da7e8efc7a51fbcd5bfd9b7beb2a518"
 }

@@ -62,8 +62,27 @@ describe('four-operation UCR MCP runtime', () => {
         graderId: 'sync-check',
         passed: true,
         artifactHash: 'a'.repeat(64),
+        observations: { correction: 'edit source/beta-policy.txt' },
       },
       'integration-test-secret'
+    );
+    const eventsBeforeVerification = (await import('../../ucr/index.mjs'))
+      .EventStore;
+    const beforeCount = new eventsBeforeVerification(root).read().events.length;
+    await expect(
+      runUcrTool('cognition_record', {
+        operation: 'verify-evidence',
+        evidenceReceipts: [receipt],
+      })
+    ).resolves.toMatchObject({
+      valid: true,
+      persisted: false,
+      receipts: [
+        { observations: { correction: 'edit source/beta-policy.txt' } },
+      ],
+    });
+    expect(new eventsBeforeVerification(root).read().events).toHaveLength(
+      beforeCount
     );
     const recorded = await runUcrTool('cognition_record', {
       kind: 'failure',

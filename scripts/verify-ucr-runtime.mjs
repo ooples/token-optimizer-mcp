@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPairSync } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import {
   BOOTSTRAP_COGNITIVE_OPERATIONS,
   CognitionGraph,
@@ -36,6 +37,7 @@ import {
   signedBundle,
   surfaceOverhead,
   verifyBundle,
+  verifyEvidenceLedger,
 } from '../ucr/index.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -49,14 +51,52 @@ const EVIDENCE_PATH = join(
   'results',
   'deterministic-verification-v1.json'
 );
-const LIVE_HANDOFF_PATH = join(
+const EVIDENCE_INDEX_PATH = join(
   ROOT,
   'evals',
   'ucr',
   'results',
-  'live-cross-model-handoff-v1.json'
+  'evidence-index-v2.json'
 );
 const args = new Set(process.argv.slice(2));
+
+function independentPythonReplay(events) {
+  const candidates =
+    process.platform === 'win32' ? ['python', 'py'] : ['python3', 'python'];
+  for (const command of candidates) {
+    const commandArgs = command === 'py' ? ['-3'] : [];
+    const result = spawnSync(
+      command,
+      [...commandArgs, join(ROOT, 'scripts', 'verify-ucr-protocol.py')],
+      {
+        input: JSON.stringify(events),
+        encoding: 'utf8',
+        windowsHide: true,
+      }
+    );
+    if (result.error?.code === 'ENOENT') continue;
+    if (result.status !== 0)
+      return {
+        available: true,
+        passed: false,
+        diagnostic: String(result.stderr || result.stdout || '').trim(),
+      };
+    try {
+      return {
+        available: true,
+        passed: true,
+        report: JSON.parse(result.stdout),
+      };
+    } catch (error) {
+      return { available: true, passed: false, diagnostic: error.message };
+    }
+  }
+  return {
+    available: false,
+    passed: false,
+    diagnostic: 'python not installed',
+  };
+}
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const checks = [];
@@ -73,14 +113,9 @@ const fixture = readJson(FIXTURE_PATH);
 const benchmarkSource = readJson(BENCHMARK_PATH);
 const competitorSource = readJson(COMPETITORS_PATH);
 const clients = Object.keys(UCR_CLIENT_REGISTRY).sort();
-const liveHandoff = existsSync(LIVE_HANDOFF_PATH)
-  ? readJson(LIVE_HANDOFF_PATH)
+const evidenceIndex = existsSync(EVIDENCE_INDEX_PATH)
+  ? readJson(EVIDENCE_INDEX_PATH)
   : null;
-const liveSourceTreeHash = sha256([
-  readFileSync(join(ROOT, 'ucr', 'protocol.mjs'), 'utf8'),
-  readFileSync(join(ROOT, 'ucr', 'compiler.mjs'), 'utf8'),
-  readFileSync(join(ROOT, 'src', 'server', 'ucr-tools.ts'), 'utf8'),
-]);
 
 console.log('UCR deterministic verification');
 
@@ -103,6 +138,9 @@ const semanticParity = certifications.every(
     canonicalJson(canonicalSemantics(certification)) ===
     canonicalJson(referenceSemantics)
 );
+const sourceEvents = certifications.find(
+  (item) => item.client === 'codex'
+).events;
 check(
   'all registered clients pass schema conformance',
   certifications.every((item) => item.certified),
@@ -113,32 +151,58 @@ check(
   semanticParity,
   `${fixture.inputs.length} lifecycle events each`
 );
+const independentReplay = independentPythonReplay(sourceEvents);
+const referenceSemanticDigest = sha256(referenceSemantics);
+check(
+  'independent Python implementation replays identical cognition semantics',
+  independentReplay.passed &&
+    independentReplay.report?.semanticDigest === referenceSemanticDigest,
+  independentReplay.passed
+    ? independentReplay.report
+    : independentReplay.diagnostic
+);
 check(
   'certification is honest about executable smoke coverage',
   certifications.every((item) => item.executableSmoke === 'unexercised'),
   'schema certification is not labelled live proof'
 );
-const { reportHash: liveReportHash, ...liveReportBody } = liveHandoff || {};
-const liveHandoffValid =
-  Boolean(liveHandoff?.passed) &&
-  liveHandoff?.transcriptPublished === false &&
-  liveHandoff?.arms?.empty?.correct === false &&
-  liveHandoff?.arms?.runtime?.correct === true &&
-  liveHandoff?.eventEvidence?.actorClients?.includes('codex') &&
-  liveHandoff?.eventEvidence?.actorClients?.includes('claude-code') &&
-  liveHandoff?.sourceTreeHash === liveSourceTreeHash &&
-  sha256(liveReportBody) === liveReportHash;
+const { reportHash: evidenceIndexHash, ...evidenceIndexBody } =
+  evidenceIndex || {};
+const evidenceIndexValid =
+  Boolean(evidenceIndex) &&
+  sha256(evidenceIndexBody) === evidenceIndexHash &&
+  evidenceIndex?.summary?.artifactsValid ===
+    evidenceIndex?.summary?.artifactsTotal &&
+  evidenceIndex?.conformanceLedgerVerification?.valid === true &&
+  verifyEvidenceLedger(evidenceIndex?.conformanceLedger, {
+    publicKey: evidenceIndex?.conformancePublicKey,
+  }).valid;
 check(
-  'redacted live Codex-to-Claude handoff smoke is integrity-valid',
-  liveHandoffValid,
-  liveHandoff
-    ? `${liveHandoff.eventEvidence.canonicalEvents} events / ${liveHandoff.eventEvidence.contextDeliveries} delivery`
-    : 'not run'
+  'unified signed evidence index is integrity-valid',
+  evidenceIndexValid,
+  evidenceIndex
+    ? `${evidenceIndex.summary.artifactsValid}/${evidenceIndex.summary.artifactsTotal} artifacts`
+    : 'not assembled'
+);
+check(
+  'live cross-client smoke covers three passing directions without raw transcripts',
+  evidenceIndexValid &&
+    evidenceIndex.summary.liveDirectionsPassed === 3 &&
+    evidenceIndex.summary.liveDirectionsAttempted === 3,
+  evidenceIndex?.summary
+);
+check(
+  'scale, coordination, adapter, and fault artifacts meet frozen targets',
+  evidenceIndexValid &&
+    evidenceIndex.summary.graphEvents === 1_000_000 &&
+    evidenceIndex.summary.coordinationWorkers === 100 &&
+    evidenceIndex.summary.registeredClientProcesses === clients.length &&
+    evidenceIndex.summary.productionFaults === 6 &&
+    evidenceIndex.summary.cognitiveSchemaTokens < 1_500 &&
+    evidenceIndex.summary.cognitiveReductionVsFull > 0.95,
+  evidenceIndex?.summary
 );
 
-const sourceEvents = certifications.find(
-  (item) => item.client === 'codex'
-).events;
 const reordered = [...sourceEvents]
   .reverse()
   .flatMap((event, index) => (index % 2 ? [event, event] : [event]));
@@ -344,18 +408,24 @@ const checkpoint = createCheckpoint(
   {
     goalDag: { nodes: [{ id: 'goal:1' }], edges: [] },
     plan: [{ step: 'regenerate', state: 'pending' }],
+    currentHypothesis: 'the generated client is stale',
+    decisions: [],
+    rejectedAlternatives: [],
     workspace: {
       head: 'old-head',
       dirtyHash: 'clean',
       artifactHashes: { 'generated/client.ts': 'old' },
     },
     attemptedActions: [],
+    edits: [],
     knownFailures: ['direct generated edit'],
     validations: [],
     invariants: ['edit generator'],
     permissions: { filesystem: true },
+    blockers: [],
     ownership: { agent: 'codex' },
     nextSafeAction: 'inspect generator',
+    unresolvedQuestions: [],
     policyHash: 'policy-1',
     dependenciesHash: 'deps-1',
     environmentHash: 'env-1',
@@ -589,7 +659,7 @@ const implementationModules = [
   'rollout',
 ];
 const reportBody = {
-  schemaVersion: 'ucr.deterministic-verification/1',
+  schemaVersion: 'ucr.deterministic-verification/2',
   evidenceClass: 'deterministic-conformance-not-live-effectiveness',
   source: {
     fixtureHash: sha256(fixture),
@@ -609,7 +679,7 @@ const reportBody = {
     schemaCertifiedClients: certifications.filter((item) => item.certified)
       .length,
     lifecycleFamilies: new Set(certifications.map((item) => item.family)).size,
-    executableSmokeClients: liveHandoffValid ? 2 : 0,
+    executableSmokeClients: evidenceIndexValid ? 3 : 0,
     cognitionSemanticParity: semanticParity,
     fixtureEventsPerClient: fixture.inputs.length,
   },
@@ -637,13 +707,16 @@ const reportBody = {
     competitorBaselines: competitorManifests.length,
   },
   liveEvidence: {
-    status: liveHandoffValid ? 'passed-single-pair-smoke' : 'not-run',
-    modelRuns: liveHandoffValid ? 3 : 0,
-    executableClientSmokes: liveHandoffValid ? 2 : 0,
+    status: evidenceIndexValid ? 'passed-three-direction-smoke' : 'not-run',
+    modelRuns: evidenceIndexValid ? 9 : 0,
+    executableClientSmokes: evidenceIndexValid ? 3 : 0,
     competitiveReproductions: 0,
-    reportHash: liveHandoffValid ? liveReportHash : null,
-    reason: liveHandoffValid
-      ? 'one live pair proves executable transfer and control abstention, not effectiveness or superiority'
+    reportHash: evidenceIndexValid ? evidenceIndexHash : null,
+    evidenceTiers: evidenceIndexValid
+      ? evidenceIndex.evidenceContract.tiers
+      : null,
+    reason: evidenceIndexValid
+      ? 'three live directions prove executable transfer and control abstention across three CLIs and two model families, not powered effectiveness or superiority'
       : 'CI conformance must not be represented as model-effectiveness evidence',
   },
   release: verdict,

@@ -76,12 +76,55 @@ export function taintJoin(...labels) {
   );
 }
 
+export function negotiateFederation(source, target) {
+  const sharedProtocols = (source.protocolVersions || [])
+    .filter((version) => (target.protocolVersions || []).includes(version))
+    .sort()
+    .reverse();
+  const sharedSchemas = (source.schemaVersions || [])
+    .filter((version) => (target.schemaVersions || []).includes(version))
+    .sort()
+    .reverse();
+  return {
+    compatible: sharedProtocols.length > 0 && sharedSchemas.length > 0,
+    protocolVersion: sharedProtocols[0] || null,
+    schemaVersion: sharedSchemas[0] || null,
+    reasons: [
+      ...(sharedProtocols.length ? [] : ['no shared protocol version']),
+      ...(sharedSchemas.length ? [] : ['no shared schema version']),
+    ],
+  };
+}
+
+export function federatedContentRisk(value) {
+  const text = typeof value === 'string' ? value : canonicalJson(value);
+  const patterns = [
+    /ignore (?:all )?(?:previous|prior|system) instructions/i,
+    /(?:run|execute|invoke) (?:this )?(?:shell|command|tool)/i,
+    /reveal (?:the )?(?:secret|token|password|system prompt)/i,
+    /<\/?(?:system|assistant|tool)>/i,
+  ];
+  const matched = patterns
+    .filter((pattern) => pattern.test(text))
+    .map((pattern) => pattern.source);
+  return { safe: matched.length === 0, matched, contentHash: sha256(text) };
+}
+
 export class FederationPolicy {
-  constructor({ principal, tenantId, grants = [], revocations = [] } = {}) {
+  constructor({
+    principal,
+    tenantId,
+    grants = [],
+    revocations = [],
+    revokedKeys = [],
+    requireAuthentication = false,
+  } = {}) {
     this.principal = principal;
     this.tenantId = tenantId;
     this.grants = grants;
     this.revocations = new Set(revocations);
+    this.revokedKeys = new Set(revokedKeys);
+    this.requireAuthentication = requireAuthentication;
     this.audit = [];
   }
 
@@ -100,6 +143,14 @@ export class FederationPolicy {
         scopeRank.get(candidate.maximumScope) >= scopeRank.get(requestedScope)
     );
     const denied = [];
+    if (this.requireAuthentication && target.authenticated !== true)
+      denied.push('target principal is not authenticated');
+    if (
+      grant?.principal &&
+      target.principal &&
+      grant.principal !== target.principal
+    )
+      denied.push('grant principal mismatch');
     if (this.revocations.has(object.id)) denied.push('object revoked');
     if (!grant) denied.push('no matching federation grant');
     if (!compatibility.compatible)
@@ -129,12 +180,18 @@ export class FederationPolicy {
     this.revocations.add(objectId);
     this.audit.push({ operation: 'revoke', objectId, reason, at: Date.now() });
   }
+
+  revokeKey(keyId, reason) {
+    this.revokedKeys.add(keyId);
+    this.audit.push({ operation: 'revoke-key', keyId, reason, at: Date.now() });
+  }
 }
 
-export function signedBundle(bundle, privateKey) {
+export function signedBundle(bundle, privateKey, { keyId = null } = {}) {
   const body = {
     schemaVersion: 'ucr.federation-bundle/1',
     ...bundle,
+    keyId: keyId || bundle.keyId || null,
     bundleHash: sha256(bundle),
   };
   const key =
@@ -155,6 +212,7 @@ export function verifyBundle(bundle, publicKey, policy, target) {
     key,
     Buffer.from(signature || '', 'base64')
   );
+  const keyRevoked = Boolean(bundle.keyId && policy.revokedKeys.has(bundle.keyId));
   const objects = bundle.objects || [];
   const decisions = objects.map((object) =>
     policy.authorize(object, target, {
@@ -162,11 +220,16 @@ export function verifyBundle(bundle, publicKey, policy, target) {
     })
   );
   return {
-    valid: validSignature && decisions.every((decision) => decision.authorized),
+    valid:
+      validSignature &&
+      !keyRevoked &&
+      decisions.every((decision) => decision.authorized),
     validSignature,
+    keyRevoked,
     decisions,
     executable:
       validSignature &&
+      !keyRevoked &&
       decisions.every((decision) => decision.authorized) &&
       objects
         .filter((object) => object.type === 'guard')
@@ -182,6 +245,8 @@ export function safeFederatedCapsule(object, authorization) {
     applicability: object.applicability,
   });
   if (redaction.changed) return null;
+  const risk = federatedContentRisk(redaction.redacted);
+  if (!risk.safe) return null;
   return {
     objectId: object.id,
     sourceProject: object.scope?.projectId,
@@ -191,5 +256,64 @@ export function safeFederatedCapsule(object, authorization) {
     content: JSON.parse(redaction.redacted),
     contentIsData: true,
     executable: false,
+    contentRisk: risk,
+  };
+}
+
+export function signedRevocation(revocation, privateKey) {
+  if (!revocation?.objectId && !revocation?.keyId)
+    throw new Error('revocation requires objectId or keyId');
+  const body = {
+    schemaVersion: 'ucr.revocation/1',
+    ...revocation,
+  };
+  return {
+    ...body,
+    signature: sign(
+      null,
+      Buffer.from(canonicalJson(body)),
+      privateKey?.type === 'private' ? privateKey : createPrivateKey(privateKey)
+    ).toString('base64'),
+  };
+}
+
+export function applySignedRevocation(revocation, publicKey, policy) {
+  const { signature, ...body } = revocation || {};
+  let valid = false;
+  try {
+    valid = verify(
+      null,
+      Buffer.from(canonicalJson(body)),
+      publicKey?.type === 'public' ? publicKey : createPublicKey(publicKey),
+      Buffer.from(signature || '', 'base64')
+    );
+  } catch {
+    valid = false;
+  }
+  if (!valid) return { applied: false, reason: 'invalid revocation signature' };
+  if (body.objectId) policy.revoke(body.objectId, body.reason || 'signed revocation');
+  if (body.keyId) policy.revokeKey(body.keyId, body.reason || 'signed revocation');
+  return { applied: true, objectId: body.objectId || null, keyId: body.keyId || null };
+}
+
+export function federationRedTeam(cases) {
+  const results = cases.map((item) => {
+    const risk = federatedContentRisk(item.content);
+    const secret = redactSecrets(item.content);
+    const rejected = !risk.safe || secret.changed;
+    return { id: item.id, expectedReject: item.expectedReject, rejected, risk, secret };
+  });
+  const falseAccepts = results.filter(
+    (item) => item.expectedReject && !item.rejected
+  ).length;
+  const falseRejects = results.filter(
+    (item) => !item.expectedReject && item.rejected
+  ).length;
+  return {
+    cases: results.length,
+    falseAccepts,
+    falseRejects,
+    passed: results.length > 0 && falseAccepts === 0 && falseRejects === 0,
+    results,
   };
 }

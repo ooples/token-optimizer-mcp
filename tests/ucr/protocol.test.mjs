@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -10,10 +11,15 @@ import {
   canonicalReplay,
   compareHlc,
   createEvent,
+  createRunIdentity,
+  migrateEvent,
   negotiateProtocol,
   sha256,
   uuidv7,
   validateEvent,
+  signEvent,
+  verifyEventSignature,
+  verifyRunIdentity,
 } from '../../ucr/index.mjs';
 
 const actor = {
@@ -107,6 +113,56 @@ describe('universal cognitive event protocol', () => {
     expect(
       uuidv7(100, entropy).localeCompare(uuidv7(101, entropy))
     ).toBeLessThan(0);
+  });
+
+  test('attributes resources and artifacts to a signed run and event', () => {
+    const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+    const identity = createRunIdentity(
+      {
+        runId: 'run-a',
+        actor,
+        sourceTreeHash: 'a'.repeat(64),
+        benchmarkHash: 'b'.repeat(64),
+        keyId: 'test-key',
+        issuedAt: '2026-08-09T00:00:00.000Z',
+      },
+      privateKey
+    );
+    expect(verifyRunIdentity(identity, publicKey)).toBe(true);
+    const created = event(3, {
+      run: { runId: identity.runId, identityHash: identity.identityHash },
+      resources: { inputTokens: 50, capsuleTokens: 10, latencyMs: 20 },
+      artifactRefs: [{ uri: `sha256:${'a'.repeat(64)}` }],
+    });
+    const signed = signEvent(created, privateKey, { keyId: 'test-key' });
+    expect(validateEvent(signed).valid).toBe(true);
+    expect(verifyEventSignature(signed, publicKey)).toBe(true);
+    expect(
+      verifyEventSignature(
+        { ...signed, resources: { ...signed.resources, inputTokens: 51 } },
+        publicKey
+      )
+    ).toBe(false);
+  });
+
+  test('migrates the legacy envelope without discarding unknown fields', () => {
+    const migrated = migrateEvent({
+      schemaVersion: 'ucr.event/0',
+      eventId: 'legacy-event',
+      type: 'observation.recorded',
+      timestamp: 1_710_000_000_000,
+      sequence: 2,
+      client: 'legacy-cli',
+      payload: { answer: 42 },
+      futureOptional: { retained: true },
+    });
+    expect(validateEvent(migrated).valid).toBe(true);
+    expect(migrated).toMatchObject({
+      schemaVersion: 'ucr.event/1',
+      migratedFrom: 'ucr.event/0',
+      futureOptional: { retained: true },
+      actor: { client: 'legacy-cli' },
+    });
   });
 });
 

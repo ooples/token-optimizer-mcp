@@ -1,0 +1,198 @@
+{
+  "schemaVersion": "ucr.live-multimodel-handoff/1",
+  "evidenceClass": "live-multimodel-executable-smoke-not-powered-effectiveness",
+  "executedAt": "2026-08-09T23:05:54.634Z",
+  "sourceTreeHash": "83355fd24d8c2ef4a272c2baccee610edbcf7a408439871fa6ecc017b8347bd6",
+  "requestedDirections": [
+    "claude-code->codex"
+  ],
+  "directionsPassed": 1,
+  "directionResults": [
+    {
+      "study": "cross-client-handoff",
+      "direction": "claude-code->codex",
+      "producerClient": "claude-code",
+      "consumerClient": "codex",
+      "producerFamily": "anthropic",
+      "consumerFamily": "openai",
+      "producerModel": "sonnet",
+      "consumerModel": "gpt-5.6-sol",
+      "taskHash": "beb0c42bd8b8d9946a748a8610b3ad490ee38d3eeae9d7bfb09968ef2ea0612b",
+      "control": {
+        "exitCode": 0,
+        "correct": false,
+        "abstained": true,
+        "usage": {
+          "inputTokens": 13244,
+          "cachedInputTokens": 5888,
+          "outputTokens": 11,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 4485
+      },
+      "producer": {
+        "exitCode": 0,
+        "recorded": true,
+        "usage": {
+          "inputTokens": 2,
+          "cachedInputTokens": 43559,
+          "outputTokens": 7,
+          "totalTokens": null,
+          "costUsd": 0.2129156,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 46539
+      },
+      "runtime": {
+        "exitCode": 0,
+        "correct": true,
+        "delivered": true,
+        "mistakeExecuted": false,
+        "usage": {
+          "inputTokens": 41554,
+          "cachedInputTokens": 23040,
+          "outputTokens": 221,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 12332
+      },
+      "eventStreamHash": "3079a8ad20c4c3c7d8dc1239c07fe188d79e35b9abe43a0770b26e6397b102c9",
+      "canonicalEvents": 5,
+      "passed": true,
+      "transcriptPublished": false
+    }
+  ],
+  "clients": {
+    "codex": {
+      "family": "openai",
+      "model": "gpt-5.6-sol",
+      "version": "codex-cli 0.147.0"
+    },
+    "claude-code": {
+      "family": "anthropic",
+      "model": "sonnet",
+      "version": "2.1.225 (Claude Code)"
+    },
+    "copilot": {
+      "family": "anthropic",
+      "model": "claude-sonnet-4.5",
+      "version": "GitHub Copilot CLI 0.0.396.\nRun 'copilot update' to check for updates."
+    }
+  },
+  "modelFamilies": 2,
+  "controlsAbstained": 1,
+  "repeatedVerifiedFailures": 0,
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "live-multimodel-a1e279607a6dd0d3",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "4b2148b8a73d20f9d94a3008e1756f9fb38144818bb527b752ec5ff6ffa06f0e",
+      "sourceTreeHash": "83355fd24d8c2ef4a272c2baccee610edbcf7a408439871fa6ecc017b8347bd6",
+      "runner": {
+        "name": "live-multimodel-handoff",
+        "versions": {
+          "codex": "codex-cli 0.147.0",
+          "claude-code": "2.1.225 (Claude Code)",
+          "copilot": "GitHub Copilot CLI 0.0.396.\nRun 'copilot update' to check for updates."
+        }
+      },
+      "startedAt": "2026-08-09T23:05:54.630Z",
+      "runHash": "8b21cae29c770384f2514ec622772694a99f69e771f501779cdb31235145e36b"
+    },
+    "rows": [
+      {
+        "study": "cross-client-handoff",
+        "direction": "claude-code->codex",
+        "producerClient": "claude-code",
+        "consumerClient": "codex",
+        "producerFamily": "anthropic",
+        "consumerFamily": "openai",
+        "producerModel": "sonnet",
+        "consumerModel": "gpt-5.6-sol",
+        "taskHash": "beb0c42bd8b8d9946a748a8610b3ad490ee38d3eeae9d7bfb09968ef2ea0612b",
+        "control": {
+          "exitCode": 0,
+          "correct": false,
+          "abstained": true,
+          "usage": {
+            "inputTokens": 13244,
+            "cachedInputTokens": 5888,
+            "outputTokens": 11,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 4485
+        },
+        "producer": {
+          "exitCode": 0,
+          "recorded": true,
+          "usage": {
+            "inputTokens": 2,
+            "cachedInputTokens": 43559,
+            "outputTokens": 7,
+            "totalTokens": null,
+            "costUsd": 0.2129156,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 46539
+        },
+        "runtime": {
+          "exitCode": 0,
+          "correct": true,
+          "delivered": true,
+          "mistakeExecuted": false,
+          "usage": {
+            "inputTokens": 41554,
+            "cachedInputTokens": 23040,
+            "outputTokens": 221,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 12332
+        },
+        "eventStreamHash": "3079a8ad20c4c3c7d8dc1239c07fe188d79e35b9abe43a0770b26e6397b102c9",
+        "canonicalEvents": 5,
+        "passed": true,
+        "transcriptPublished": false,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "live-multimodel-a1e279607a6dd0d3",
+        "sequence": 0,
+        "previousHash": "8b21cae29c770384f2514ec622772694a99f69e771f501779cdb31235145e36b",
+        "rowHash": "e605996e7b64fa285cf3ed2b42e9e18ec281a4ff7c4983bbc673bd2327c4cc4f"
+      }
+    ],
+    "rowCount": 1,
+    "chainHead": "e605996e7b64fa285cf3ed2b42e9e18ec281a4ff7c4983bbc673bd2327c4cc4f",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-09T23:05:54.631Z",
+    "ledgerHash": "1c0cf1af21ba062c77628de5780e4cb9b843fe9551edc04ed3e486a611bba675",
+    "signature": "7FHn5Li2SIy9ZWqZD4/u2ri04mzr/QiA3W11YnsKf4rogxNvVpZ75LS5L1/SnfRRSnAzxkFHAYrqjZslIrfRBQ=="
+  },
+  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA21hVdZG6JZ2dk8bZ10jWLQ5AYJmdZ7B9A2TT+b38jUI=\n-----END PUBLIC KEY-----\n",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "1c0cf1af21ba062c77628de5780e4cb9b843fe9551edc04ed3e486a611bba675",
+    "rowCount": 1
+  },
+  "transcriptPublished": false,
+  "passed": true,
+  "limitations": [
+    "one task per direction is executable coverage, not a powered effectiveness estimate",
+    "provider aliases require provider response metadata before exact model-version claims",
+    "the installed standalone Gemini CLI and the advertised Copilot Gemini model were unavailable to the authenticated accounts; their failed attempts remain separate negative evidence",
+    "no competitive superiority claim is permitted from this smoke matrix"
+  ],
+  "reportHash": "c76308d336ee8ef0246b2c2144382ce999dc17de705fff165d3ad2f81096eca7"
+}

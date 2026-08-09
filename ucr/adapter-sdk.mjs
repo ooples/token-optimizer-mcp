@@ -1,4 +1,7 @@
 import { HybridLogicalClock, createEvent, validateEvent } from './protocol.mjs';
+import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const UCR_CLIENT_REGISTRY = Object.freeze({
   'claude-code': { family: 'process-hook', tier: 'continuable' },
@@ -128,4 +131,49 @@ export function certifyAdapter(client, fixture) {
     events,
     executableSmoke: 'unexercised',
   };
+}
+
+export function certifyAdapterProcess(
+  client,
+  fixture,
+  {
+    executable = process.execPath,
+    script = join(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      'scripts',
+      'ucr-adapter-process.mjs'
+    ),
+    timeoutMs = 30_000,
+  } = {}
+) {
+  const result = spawnSync(executable, [script], {
+    input: JSON.stringify({ client, fixture }),
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    return {
+      client,
+      certified: false,
+      executableSmoke: 'failed',
+      diagnostics: [String(result.stderr || result.error?.message || '').trim()],
+    };
+  }
+  try {
+    const report = JSON.parse(result.stdout);
+    return {
+      ...report,
+      executableSmoke: report.certified ? 'passed' : 'failed',
+      subprocess: true,
+    };
+  } catch (error) {
+    return {
+      client,
+      certified: false,
+      executableSmoke: 'failed',
+      diagnostics: [`invalid adapter subprocess output: ${error.message}`],
+    };
+  }
 }

@@ -1,4 +1,7 @@
-import { describe, expect, test } from '@jest/globals';
+import { afterEach, describe, expect, test } from '@jest/globals';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   CognitionGraph,
   ContextVM,
@@ -6,7 +9,18 @@ import {
   RetrievalPlanner,
   exactEpisodeJoin,
   outcomeVerdict,
+  ablationEffect,
+  quarantineLatency,
+  WorkingSetStore,
+  createTiktokenCounter,
+  calibrateRetrievalRouter,
 } from '../../ucr/index.mjs';
+
+const temporary = [];
+afterEach(() => {
+  while (temporary.length)
+    rmSync(temporary.pop(), { recursive: true, force: true });
+});
 
 function joinedEpisode(overrides = {}) {
   const events = [
@@ -111,6 +125,38 @@ describe('causal credit and quarantine', () => {
       mean: 1,
     });
   });
+
+  test('measures attributable ablations and quarantine before redelivery', () => {
+    const rows = Array.from({ length: 6 }, (_, index) => [
+      {
+        pairId: `p${index}`,
+        objectId: 'memory:a',
+        variant: 'ablated',
+        correct: 0,
+      },
+      {
+        pairId: `p${index}`,
+        objectId: 'memory:a',
+        variant: 'included',
+        correct: 1,
+      },
+    ]).flat();
+    expect(ablationEffect(rows, 'memory:a')).toMatchObject({
+      pairs: 6,
+      mean: 1,
+      attributable: true,
+    });
+    expect(
+      quarantineLatency(
+        [
+          { objectId: 'memory:a', severeHarm: true, at: 100 },
+          { objectId: 'memory:a', kind: 'quarantine', at: 101 },
+          { objectId: 'memory:a', kind: 'delivery', at: 102 },
+        ],
+        'memory:a'
+      )
+    ).toMatchObject({ latencyMs: 1, beforeNextDelivery: true });
+  });
 });
 
 describe('adaptive retrieval and context virtual machine', () => {
@@ -156,7 +202,7 @@ describe('adaptive retrieval and context virtual machine', () => {
     });
     expect(result.action).toBe('deliver');
     expect(result.candidates[0].kernels).toEqual(
-      expect.arrayContaining(['failure', 'lexical'])
+      expect.arrayContaining(['failure', 'bm25'])
     );
     expect(result.explanation.family).toBe('failure');
     expect(
@@ -166,6 +212,32 @@ describe('adaptive retrieval and context virtual machine', () => {
       planner.plan('database migration failure', { projectId: 'project-a' })
         .action
     ).toBe('abstain');
+  });
+
+  test('calibrates kernel routing from labelled retrieval outcomes', () => {
+    const rows = Array.from({ length: 5 }, (_, index) => [
+      {
+        family: 'failure',
+        kernel: 'bm25',
+        selected: true,
+        relevant: true,
+        index,
+      },
+      {
+        family: 'failure',
+        kernel: 'temporal',
+        selected: true,
+        relevant: false,
+        index,
+      },
+    ]).flat();
+    const calibration = calibrateRetrievalRouter(rows);
+    expect(calibration.routes.failure[0]).toBe('bm25');
+    expect(calibration.scores).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kernel: 'bm25', precision: 1, recall: 1 }),
+      ])
+    );
   });
 
   test('pages bounded capsules, supports an empty result, and caches raw expansion', () => {
@@ -212,5 +284,42 @@ describe('adaptive retrieval and context virtual machine', () => {
     vm.page('verifier failure', { taskId: 'task', stateHash: 'v1' });
     expect(vm.retain('task', 'v1')).not.toBeNull();
     expect(vm.retain('task', 'v2')).toBeNull();
+  });
+
+  test('uses native token accounting, zero-work startup, deltas, and persistent working sets', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ucr-context-vm-'));
+    temporary.push(root);
+    const tokenCounter = createTiktokenCounter();
+    try {
+      const store = new WorkingSetStore(join(root, 'working-sets.json'));
+      const vm = new ContextVM({
+        planner: new RetrievalPlanner({ graph: graph() }),
+        tokenCounter,
+        workingSetStore: store,
+      });
+      expect(vm.sessionStart()).toMatchObject({ calls: 0, tokens: 0 });
+      const first = vm.page('verifier failure', {
+        taskId: 'task',
+        stateHash: 'v1',
+        delta: true,
+      });
+      const second = vm.page('verifier failure', {
+        taskId: 'task',
+        stateHash: 'v1',
+        delta: true,
+      });
+      expect(first.tokenAccounting).toBe('tiktoken:cl100k_base');
+      expect(first.transmittedTokens).toBeGreaterThan(0);
+      expect(second).toMatchObject({ transmittedTokens: 0 });
+      const resumed = new ContextVM({
+        planner: new RetrievalPlanner({ graph: graph() }),
+        tokenCounter,
+        workingSetStore: store,
+      });
+      expect(resumed.retain('task', 'v1')).not.toBeNull();
+      expect(vm.metrics()).toMatchObject({ startupCalls: 0, startupTokens: 0 });
+    } finally {
+      tokenCounter.close();
+    }
   });
 });

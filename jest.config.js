@@ -16,17 +16,21 @@ export default {
   // .mjs is matched so the hook tests run: the hooks ship as plain ESM Node
   // files (no build step, because Claude Code executes them directly from the
   // installed plugin directory), and they must be covered by the same suite.
-  testMatch: ['**/__tests__/**/*.test.ts', '**/*.test.ts', '**/*.test.mjs', '**/*.bench.ts'],
-  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  testMatch: [
+    '**/__tests__/**/*.test.ts',
+    '**/*.test.ts',
+    '**/*.test.mjs',
+    '**/*.bench.ts',
+  ],
+  // Linked worktrees are independent checkouts, not nested test fixtures. If a
+  // worktree lives under this checkout, discovering it would execute stale PR
+  // tests a second time and contaminate the current branch's evidence.
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/worktrees/'],
   // Points file backups at a temp directory for every worker, so no test can
   // write into the developer's real ~/.token-optimizer/backups. See the file
   // for why this is not left to individual tests to remember.
   setupFiles: ['<rootDir>/tests/setup-isolated-home.cjs'],
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/**/*.test.ts',
-  ],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/**/*.test.ts'],
   // Coverage thresholds disabled for initial release
   // Will be gradually increased as test coverage improves
   // coverageThreshold: {

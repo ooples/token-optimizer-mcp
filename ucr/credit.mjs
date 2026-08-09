@@ -71,10 +71,19 @@ export function exactEpisodeJoin(events, episodeId) {
   const byDelivery = new Map(
     deliveries.map((event) => [event.deliveryId, event])
   );
+  const byCandidate = new Map(
+    candidates.filter((event) => event.candidateId).map((event) => [event.candidateId, event])
+  );
   const byAction = new Map(actions.map((event) => [event.actionId, event]));
   for (const action of actions) {
     if (action.deliveryId && !byDelivery.has(action.deliveryId))
       diagnostics.push(`action ${action.actionId} has no delivery`);
+  }
+  for (const delivery of deliveries) {
+    if (
+      delivery.candidateIds?.some((candidateId) => !byCandidate.has(candidateId))
+    )
+      diagnostics.push(`delivery ${delivery.deliveryId} has no candidate`);
   }
   for (const outcome of outcomes) {
     if (!outcome.actionId || !byAction.has(outcome.actionId))
@@ -96,6 +105,11 @@ export function exactEpisodeJoin(events, episodeId) {
   );
   if (confounded.length)
     diagnostics.push('objects were delivered more than once in one episode');
+  const untrackedConfounders = episode.filter(
+    (event) => event.kind === 'confounder' && event.controlled !== true
+  );
+  if (untrackedConfounders.length)
+    diagnostics.push('episode contains uncontrolled confounders');
   return {
     valid: diagnostics.length === 0 && outcomes.length > 0,
     diagnostics,
@@ -104,6 +118,7 @@ export function exactEpisodeJoin(events, episodeId) {
     guards,
     actions,
     outcomes,
+    confounders: episode.filter((event) => event.kind === 'confounder'),
     joinHash: sha256({
       episodeId,
       candidates,
@@ -112,6 +127,54 @@ export function exactEpisodeJoin(events, episodeId) {
       actions,
       outcomes,
     }),
+  };
+}
+
+export function ablationEffect(rows, objectId, field = 'correct') {
+  const pairs = new Map();
+  for (const row of rows.filter((item) => item.objectId === objectId)) {
+    if (!row.pairId || !['included', 'ablated'].includes(row.variant)) continue;
+    if (!pairs.has(row.pairId)) pairs.set(row.pairId, {});
+    pairs.get(row.pairId)[row.variant] = row;
+  }
+  const deltas = [...pairs.values()]
+    .filter((pair) => pair.included && pair.ablated)
+    .map((pair) => Number(pair.included[field]) - Number(pair.ablated[field]))
+    .filter(Number.isFinite);
+  return {
+    objectId,
+    field,
+    pairs: deltas.length,
+    ...interval(deltas),
+    attributable: deltas.length >= 5 && interval(deltas).low > 0,
+  };
+}
+
+export function quarantineLatency(events, objectId) {
+  const harmful = events.find(
+    (event) => event.objectId === objectId && event.severeHarm === true
+  );
+  const quarantine = events.find(
+    (event) =>
+      event.objectId === objectId &&
+      event.kind === 'quarantine' &&
+      (!harmful || event.at >= harmful.at)
+  );
+  return {
+    objectId,
+    detectedAt: harmful?.at ?? null,
+    quarantinedAt: quarantine?.at ?? null,
+    latencyMs:
+      harmful && quarantine ? Math.max(0, quarantine.at - harmful.at) : null,
+    beforeNextDelivery:
+      Boolean(harmful && quarantine) &&
+      !events.some(
+        (event) =>
+          event.objectId === objectId &&
+          event.kind === 'delivery' &&
+          event.at > harmful.at &&
+          event.at < quarantine.at
+      ),
   };
 }
 

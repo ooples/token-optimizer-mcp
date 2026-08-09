@@ -103,20 +103,35 @@ export function compoundingMetrics(rows) {
 }
 
 export function leaveOneMemoryOut(rows, memories) {
-  const full = rows.filter((row) => row.arm === 'runtime');
   const correctness = (items) =>
     items.length
       ? items.filter((row) => row.correct).length / items.length
       : null;
   return memories.map((memoryId) => {
-    const without = full.filter(
-      (row) => !(row.memoryIds || []).includes(memoryId)
+    const included = rows.filter(
+      (row) =>
+        row.variant === 'included' &&
+        (row.memoryIds || []).includes(memoryId)
     );
+    const without = rows.filter(
+      (row) => row.variant === 'ablated' && row.ablatedMemoryId === memoryId
+    );
+    const fullCorrectness = correctness(included);
+    const withoutCorrectness = correctness(without);
     return {
       memoryId,
-      fullCorrectness: correctness(full),
-      withoutCorrectness: correctness(without),
-      samples: without.length,
+      fullCorrectness,
+      withoutCorrectness,
+      effect:
+        fullCorrectness === null || withoutCorrectness === null
+          ? null
+          : fullCorrectness - withoutCorrectness,
+      includedSamples: included.length,
+      ablatedSamples: without.length,
+      attributable:
+        included.length >= 5 &&
+        without.length >= 5 &&
+        fullCorrectness > withoutCorrectness,
     };
   });
 }

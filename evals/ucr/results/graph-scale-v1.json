@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "ucr.graph-scale/1",
+  "eventCount": 1000000,
+  "objectCount": 4096,
+  "maximumMs": 120000,
+  "maximumRssBytes": 805306368,
+  "elapsedMs": 22484.4152,
+  "eventsPerSecond": 44475.25057267222,
+  "rssDeltaBytes": 241364992,
+  "projection": {
+    "acceptedEvents": 1000000,
+    "duplicates": 0,
+    "writers": 1,
+    "objects": 4096,
+    "relations": 0,
+    "orphaned": 0,
+    "diagnostics": [],
+    "streamHash": "fdf7ff3876eef99afcaeb013036a2faf2c880607a9057f1dd3f1365ac8e7c39b",
+    "projectionHash": "be860bc378a3564128498bd3373dcf454440115cdbdb991d7ca7fce548a1ec30"
+  },
+  "passed": true,
+  "evidenceClass": "conformance-scale-not-model-effectiveness",
+  "sourceHash": "5f0a584fed1e8c233b262296a089ca4236edd4b6f616b13418714989ae32a8d6",
+  "executedAt": "2026-08-09T22:14:45.579Z",
+  "reportHash": "96ee04413a90108b3e0149f6d4d9ee2313666a01b0ecb14efad0674326c7c1ec"
+}

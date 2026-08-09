@@ -95,10 +95,17 @@ export const UCR_TOOL_DEFINITIONS = [
   {
     name: 'cognition_record',
     description:
-      'Propose, verify, and activate evidence-backed cognition authored by the active model.',
+      'Verify external grader evidence, then propose and activate evidence-backed cognition authored by the active model. Use operation=verify-evidence before recording unfamiliar evidence.',
     inputSchema: {
       type: 'object',
       properties: {
+        operation: {
+          type: 'string',
+          enum: ['verify-evidence', 'record'],
+          default: 'record',
+          description:
+            'verify-evidence is read-only and returns authenticated observations; record compiles and persists model-authored cognition.',
+        },
         kind: {
           type: 'string',
           enum: [
@@ -111,12 +118,176 @@ export const UCR_TOOL_DEFINITIONS = [
             'guard',
           ],
         },
-        semanticObject: { type: 'object' },
-        evidenceReceipts: { type: 'array', items: { type: 'object' } },
+        semanticObject: {
+          type: 'object',
+          description:
+            'Structured cognition. The common fields are always required; include the fields documented for the selected kind.',
+          properties: {
+            trigger: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The observable condition that should retrieve this cognition.',
+            },
+            applicability: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', minLength: 1 },
+              description:
+                'Positive conditions under which this cognition applies.',
+            },
+            nonApplicability: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', minLength: 1 },
+              description:
+                'Negative conditions under which this cognition must not apply.',
+            },
+            invalidators: {
+              type: 'array',
+              items: { type: 'string', minLength: 1 },
+              description:
+                'Future observations that would invalidate the cognition.',
+            },
+            scope: {
+              oneOf: [{ type: 'string', minLength: 1 }, { type: 'object' }],
+              description:
+                'The project, task, file, symbol, or environment boundary.',
+            },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+            confidenceLabel: {
+              type: 'string',
+              enum: ['speculative', 'observed', 'verified'],
+            },
+            expectedOutcome: { type: 'string', minLength: 1 },
+            claim: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=claim.',
+            },
+            evidence: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=claim.',
+            },
+            attemptedAction: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=failure or guard.',
+            },
+            observedFailure: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=failure or guard.',
+            },
+            rootCause: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=failure or guard.',
+            },
+            correction: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=failure or guard.',
+            },
+            verificationEvidence: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=failure, guard, or procedure.',
+            },
+            decision: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=decision.',
+            },
+            alternatives: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', minLength: 1 },
+              description: 'Required for kind=decision.',
+            },
+            reason: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=decision.',
+            },
+            steps: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', minLength: 1 },
+              description: 'Required for kind=procedure.',
+            },
+            desiredState: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=goal.',
+            },
+            completionEvidence: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=goal.',
+            },
+            hypothesis: {
+              type: 'string',
+              minLength: 1,
+              description: 'Required for kind=hypothesis.',
+            },
+            discriminatingTests: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string', minLength: 1 },
+              description: 'Required for kind=hypothesis.',
+            },
+            guard: {
+              type: 'object',
+              description: 'Required executable guard policy for kind=guard.',
+            },
+          },
+          required: [
+            'trigger',
+            'applicability',
+            'nonApplicability',
+            'invalidators',
+            'scope',
+            'confidence',
+            'confidenceLabel',
+            'expectedOutcome',
+          ],
+        },
+        evidenceReceipts: {
+          type: 'array',
+          minItems: 1,
+          description:
+            'Receipts signed by the configured external deterministic grader. Models must pass them unchanged.',
+          items: {
+            type: 'object',
+            properties: {
+              graderId: { type: 'string', minLength: 1 },
+              passed: { type: 'boolean', const: true },
+              artifactHash: { type: 'string', minLength: 1 },
+              signature: { type: 'string', minLength: 1 },
+              taskId: { type: 'string' },
+              issuedAt: { type: 'string' },
+              observations: {
+                type: 'object',
+                description:
+                  'Externally observed task facts covered by the signature.',
+              },
+            },
+            required: ['graderId', 'passed', 'artifactHash', 'signature'],
+          },
+        },
         taskId: { type: 'string' },
         sessionId: { type: 'string' },
       },
-      required: ['kind', 'semanticObject', 'evidenceReceipts'],
+      required: ['evidenceReceipts'],
+      anyOf: [
+        {
+          properties: { operation: { const: 'verify-evidence' } },
+          required: ['operation'],
+        },
+        { required: ['kind', 'semanticObject'] },
+      ],
     },
   },
   {
@@ -234,14 +405,35 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         'cognition_record requires TOKEN_OPTIMIZER_GRADER_SECRET for external receipt verification'
       );
     }
-    const receipts = (args.evidenceReceipts || []).map((receipt: any) => {
-      if (!ucr.verifyGraderReceipt(receipt, graderSecret)) {
-        throw new Error(
-          'every evidence receipt must carry a valid external deterministic-grader signature'
-        );
+    const verifiedReceipts = (args.evidenceReceipts || []).map(
+      (receipt: any) => {
+        if (!ucr.verifyGraderReceipt(receipt, graderSecret)) {
+          throw new Error(
+            'every evidence receipt must carry a valid external deterministic-grader signature'
+          );
+        }
+        return receipt;
       }
-      return create('verification.passed', { ...receipt, passed: true });
-    });
+    );
+    if (args.operation === 'verify-evidence') {
+      return {
+        valid: true,
+        receipts: verifiedReceipts.map((receipt: any) => {
+          const { signature: _signature, ...authenticated } = receipt;
+          return authenticated;
+        }),
+        verifier: 'external-deterministic-grader-hmac-sha256',
+        persisted: false,
+      };
+    }
+    if (!args.kind || !args.semanticObject) {
+      throw new Error(
+        'cognition_record operation=record requires kind and semanticObject'
+      );
+    }
+    const receipts = verifiedReceipts.map((receipt: any) =>
+      create('verification.passed', { ...receipt, passed: true })
+    );
     const compiler = new ucr.SemanticCompiler({ eventFactory: create });
     const proposed = compiler.propose(
       args.kind,

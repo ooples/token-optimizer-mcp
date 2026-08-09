@@ -5,6 +5,8 @@ import {
   guardReceipt,
   mistakeImmunityTemplate,
   semanticQuality,
+  semanticApplicability,
+  semanticFieldTrace,
   validateSemanticObject,
   verifyGuardReceipt,
 } from '../../ucr/index.mjs';
@@ -111,6 +113,44 @@ describe('model-native semantic compiler', () => {
       compiler.reflectionRequest('s1', { lifecycleCanContinue: true })
     ).toMatchObject({ requested: false });
   });
+
+  test('deduplicates semantics, attributes harvest cost, and scores hard negatives', () => {
+    const compiler = new SemanticCompiler({ eventFactory });
+    const proposed = compiler.propose('failure', failure(), {
+      producer: 'codex/gpt',
+      resources: { inputTokens: 100, outputTokens: 20, costUsd: 0.01 },
+    });
+    expect(compiler.propose('failure', failure(), { producer: 'claude' })).toMatchObject({
+      accepted: false,
+      duplicate: true,
+      duplicateOf: proposed.proposal.id,
+    });
+    expect(compiler.resourceUsage()).toMatchObject({
+      proposals: 1,
+      inputTokens: 100,
+      outputTokens: 20,
+      costUsd: 0.01,
+    });
+    expect(
+      semanticApplicability(proposed.proposal, {
+        task: 'edit source/beta-policy because target path is generated',
+      }).applicable
+    ).toBe(true);
+    const quality = semanticQuality([proposed.proposal], [
+      {
+        objectId: proposed.proposal.id,
+        expectedApplicable: false,
+        context: { task: 'ordinary read of a hand-authored file' },
+      },
+    ]);
+    expect(quality).toMatchObject({
+      hardNegativeCases: 1,
+      overgeneralizationRate: 0,
+    });
+    expect(semanticFieldTrace(proposed.proposal).every((row) => row.traceable)).toBe(
+      true
+    );
+  });
 });
 
 describe('executable memory guard runtime', () => {
@@ -184,5 +224,25 @@ describe('executable memory guard runtime', () => {
         receipt
       )
     ).toBe(false);
+  });
+
+  test('can downgrade and disable a guard without losing its audit history', () => {
+    const runtime = new GuardRuntime({
+      mode: 'deny',
+      policy: { allowDeny: true },
+    });
+    runtime.register(guard);
+    expect(runtime.setMode('advise')).toEqual({ prior: 'deny', mode: 'advise' });
+    expect(runtime.disableGuard(guard.id, 'negative canary').disabled).toBe(true);
+    expect(
+      runtime.evaluate(
+        { path: 'clients/beta/policy.txt' },
+        { projectId: 'project-a', capabilityTier: 'transactional' }
+      ).matches
+    ).toEqual([]);
+    expect(runtime.enableGuard(guard.id).enabled).toBe(true);
+    expect(runtime.audit.map((item) => item.kind)).toEqual(
+      expect.arrayContaining(['mode-change', 'guard-disabled', 'guard-enabled'])
+    );
   });
 });

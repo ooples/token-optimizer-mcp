@@ -1,4 +1,12 @@
-import { createHash, randomBytes } from 'node:crypto';
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  randomBytes,
+  sign as cryptoSign,
+  timingSafeEqual,
+  verify as cryptoVerify,
+} from 'node:crypto';
 
 export const UCR_PROTOCOL_VERSION = '1.0.0';
 export const UCR_EVENT_SCHEMA = 'ucr.event/1';
@@ -61,6 +69,20 @@ export const CAPABILITY_TIERS = Object.freeze([
   'interceptable',
   'continuable',
   'transactional',
+]);
+
+export const RESOURCE_FIELDS = Object.freeze([
+  'inputTokens',
+  'cachedInputTokens',
+  'outputTokens',
+  'staticSchemaTokens',
+  'instructionTokens',
+  'capsuleTokens',
+  'expansionTokens',
+  'toolCalls',
+  'roundTrips',
+  'latencyMs',
+  'costUsd',
 ]);
 
 const eventTypes = new Set(EVENT_TYPES);
@@ -175,6 +197,111 @@ function requiredString(value, field, diagnostics) {
     diagnostics.push(`${field} must be a non-empty string`);
 }
 
+function keyObject(key, expectedType) {
+  if (key?.type === expectedType) return key;
+  return expectedType === 'private'
+    ? createPrivateKey(key)
+    : createPublicKey(key);
+}
+
+function signableEvent(event) {
+  const { integrity, ...body } = event || {};
+  return body;
+}
+
+export function createRunIdentity(
+  {
+    runId,
+    actor,
+    sourceTreeHash,
+    benchmarkHash = null,
+    issuedAt = new Date().toISOString(),
+    expiresAt = null,
+    keyId,
+  } = {},
+  privateKey
+) {
+  if (!runId || !actor?.agentId || !sourceTreeHash || !keyId)
+    throw new Error(
+      'run identity requires runId, actor.agentId, sourceTreeHash, and keyId'
+    );
+  const body = {
+    schemaVersion: 'ucr.run-identity/1',
+    runId,
+    actor,
+    sourceTreeHash,
+    benchmarkHash,
+    issuedAt,
+    expiresAt,
+    keyId,
+  };
+  const identityHash = sha256(body);
+  const signature = cryptoSign(
+    null,
+    Buffer.from(canonicalJson({ ...body, identityHash })),
+    keyObject(privateKey, 'private')
+  ).toString('base64');
+  return { ...body, identityHash, signature };
+}
+
+export function verifyRunIdentity(identity, publicKey, { now = Date.now() } = {}) {
+  if (!identity?.signature || !identity?.identityHash || !publicKey) return false;
+  const { signature, identityHash, ...body } = identity;
+  if (sha256(body) !== identityHash) return false;
+  if (identity.expiresAt && Date.parse(identity.expiresAt) <= now) return false;
+  try {
+    return cryptoVerify(
+      null,
+      Buffer.from(canonicalJson({ ...body, identityHash })),
+      keyObject(publicKey, 'public'),
+      Buffer.from(signature, 'base64')
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function signEvent(event, privateKey, { keyId } = {}) {
+  const validation = validateEvent(event);
+  if (!validation.valid)
+    throw new Error(`cannot sign invalid event: ${validation.diagnostics.join('; ')}`);
+  if (!keyId) throw new Error('event signature requires keyId');
+  const body = signableEvent(event);
+  const signature = cryptoSign(
+    null,
+    Buffer.from(canonicalJson(body)),
+    keyObject(privateKey, 'private')
+  ).toString('base64');
+  return {
+    ...body,
+    integrity: { algorithm: 'ed25519', keyId, signature },
+  };
+}
+
+export function verifyEventSignature(event, publicKey) {
+  if (
+    event?.integrity?.algorithm !== 'ed25519' ||
+    !event?.integrity?.signature ||
+    !publicKey
+  )
+    return false;
+  try {
+    const expected = Buffer.from(event.integrity.signature, 'base64');
+    const signatureValid = cryptoVerify(
+      null,
+      Buffer.from(canonicalJson(signableEvent(event))),
+      keyObject(publicKey, 'public'),
+      expected
+    );
+    // Force a constant-time comparison over a digest as well, so callers do
+    // not accidentally substitute a textual signature comparison later.
+    const digest = Buffer.from(sha256(signableEvent(event)), 'hex');
+    return signatureValid && timingSafeEqual(digest, Buffer.from(digest));
+  } catch {
+    return false;
+  }
+}
+
 export function validateEvent(event, { acceptUnknownTypes = true } = {}) {
   const diagnostics = [];
   if (!event || typeof event !== 'object' || Array.isArray(event)) {
@@ -218,6 +345,37 @@ export function validateEvent(event, { acceptUnknownTypes = true } = {}) {
   }
   if (!Array.isArray(event.causalParents))
     diagnostics.push('causalParents must be an array');
+  if (event.artifactRefs !== undefined) {
+    if (!Array.isArray(event.artifactRefs)) {
+      diagnostics.push('artifactRefs must be an array');
+    } else {
+      for (const [index, reference] of event.artifactRefs.entries()) {
+        if (
+          !reference ||
+          typeof reference !== 'object' ||
+          !/^sha256:[a-f0-9]{64}$/.test(String(reference.uri || ''))
+        ) {
+          diagnostics.push(`artifactRefs[${index}].uri must be content-addressed`);
+        }
+      }
+    }
+  }
+  if (event.resources !== undefined) {
+    if (!event.resources || typeof event.resources !== 'object') {
+      diagnostics.push('resources must be an object');
+    } else {
+      for (const [field, value] of Object.entries(event.resources)) {
+        if (!RESOURCE_FIELDS.includes(field))
+          diagnostics.push(`unknown resource field ${field}`);
+        else if (!Number.isFinite(value) || value < 0)
+          diagnostics.push(`resources.${field} must be a non-negative number`);
+      }
+    }
+  }
+  if (event.run !== undefined && event.run !== null) {
+    requiredString(event.run?.runId, 'run.runId', diagnostics);
+    requiredString(event.run?.identityHash, 'run.identityHash', diagnostics);
+  }
   if (!eventTypes.has(event.type)) {
     if (event.requiredSemantics === true || !acceptUnknownTypes) {
       diagnostics.push(
@@ -258,6 +416,9 @@ export function createEvent({
   sensitivity = 'internal',
   requiredSemantics = false,
   extensions = {},
+  run = null,
+  resources = {},
+  artifactRefs = [],
 } = {}) {
   if (!(clock instanceof HybridLogicalClock)) {
     throw new Error('createEvent requires a HybridLogicalClock');
@@ -298,6 +459,9 @@ export function createEvent({
     },
     sensitivity,
     requiredSemantics: Boolean(requiredSemantics),
+    run,
+    resources: canonicalize(resources),
+    artifactRefs: canonicalize(artifactRefs),
     payloadHash: sha256(payload),
     payloadRef,
     payload,
@@ -306,6 +470,62 @@ export function createEvent({
   if (!validation.valid)
     throw new Error(`invalid UCR event: ${validation.diagnostics.join('; ')}`);
   return event;
+}
+
+export function migrateEvent(event, { targetSchema = UCR_EVENT_SCHEMA } = {}) {
+  if (targetSchema !== UCR_EVENT_SCHEMA)
+    throw new Error(`unsupported migration target ${targetSchema}`);
+  if (event?.schemaVersion === UCR_EVENT_SCHEMA) return canonicalize(event);
+  if (event?.schemaVersion !== 'ucr.event/0')
+    throw new Error(`no migration from ${String(event?.schemaVersion)}`);
+  const payload = event.payload || {};
+  const migrated = {
+    ...event,
+    schemaVersion: UCR_EVENT_SCHEMA,
+    protocolVersion: UCR_PROTOCOL_VERSION,
+    eventId: event.eventId || `legacy:${sha256(event).slice(0, 32)}`,
+    traceId: event.traceId || `legacy-trace:${sha256(event).slice(0, 24)}`,
+    causalParents: event.causalParents || [],
+    writer: event.writer || {
+      id: event.actor?.agentId || 'legacy-writer',
+      sequence: event.sequence || 0,
+    },
+    time: event.time || {
+      wallMs: event.timestamp,
+      hlc: `${String(event.timestamp).padStart(13, '0')}:00000000:legacy`,
+    },
+    idempotencyKey: event.idempotencyKey || sha256(event),
+    actor: {
+      agentId: event.actor?.agentId || 'legacy-agent',
+      client: event.actor?.client || event.client || 'legacy-client',
+      clientVersion: event.actor?.clientVersion || null,
+      model: event.actor?.model || null,
+      modelVersion: event.actor?.modelVersion || null,
+      capabilityTier: event.actor?.capabilityTier || 'connected',
+    },
+    scope: {
+      taskId: event.scope?.taskId || null,
+      sessionId: event.scope?.sessionId || 'legacy-session',
+      projectId: event.scope?.projectId || 'legacy-project',
+      workspaceId: event.scope?.workspaceId || 'legacy-workspace',
+      branch: event.scope?.branch || null,
+    },
+    sensitivity: event.sensitivity || 'internal',
+    requiredSemantics: Boolean(event.requiredSemantics),
+    payloadHash: sha256(payload),
+    payloadRef: event.payloadRef || null,
+    payload,
+    resources: event.resources || {},
+    artifactRefs: event.artifactRefs || [],
+    migratedFrom: 'ucr.event/0',
+  };
+  delete migrated.timestamp;
+  delete migrated.sequence;
+  delete migrated.client;
+  const validation = validateEvent(migrated);
+  if (!validation.valid)
+    throw new Error(`invalid migrated event: ${validation.diagnostics.join('; ')}`);
+  return canonicalize(migrated);
 }
 
 export function negotiateProtocol(localVersions, remoteVersions) {

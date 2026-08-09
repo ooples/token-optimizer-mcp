@@ -48,9 +48,31 @@ function releaseEvidence(ucr: any): any {
         'live-cross-model-handoff-v1.json'
       )
     ),
+    evidenceIndex: readOptional(
+      path.join(
+        packageRoot,
+        'evals',
+        'ucr',
+        'results',
+        'evidence-index-v2.json'
+      )
+    ),
+    productionExercise: readOptional(
+      path.join(
+        packageRoot,
+        'evals',
+        'ucr',
+        'results',
+        'production-exercise-v1.json'
+      )
+    ),
   };
   if (!existsSync(file))
-    return { verdict: ucr.releaseVerdict({}), metrics: null, ...bundled };
+    return {
+      ...bundled,
+      verdict: bundled.evidenceIndex?.verdict || ucr.releaseVerdict({}),
+      metrics: bundled.evidenceIndex?.derived?.metrics || null,
+    };
   try {
     const parsed = JSON.parse(readFileSync(file, 'utf8'));
     return {
@@ -110,6 +132,32 @@ export function registerUcrRoutes(app: Express): void {
               consumer: evidence.liveHandoff.clients?.consumer,
               events: evidence.liveHandoff.eventEvidence,
               reportHash: evidence.liveHandoff.reportHash,
+            }
+          : null,
+        evidenceIndex: evidence.evidenceIndex
+          ? {
+              reportHash: evidence.evidenceIndex.reportHash,
+              summary: evidence.evidenceIndex.summary,
+              tiers: evidence.evidenceIndex.evidenceContract?.tiers,
+              claims: evidence.evidenceIndex.claims,
+              artifacts: evidence.evidenceIndex.artifacts?.map(
+                (artifact: any) => ({
+                  name: artifact.name,
+                  evidenceClass: artifact.evidenceClass,
+                  valid: artifact.valid,
+                  passed: artifact.passed,
+                  reportHash: artifact.reportHash,
+                })
+              ),
+            }
+          : null,
+        productionExercise: evidence.productionExercise
+          ? {
+              passed: evidence.productionExercise.passed,
+              faults: evidence.productionExercise.faults,
+              slos: evidence.productionExercise.slos,
+              readiness: evidence.productionExercise.readiness,
+              reportHash: evidence.productionExercise.reportHash,
             }
           : null,
       });

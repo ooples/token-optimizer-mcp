@@ -108,14 +108,14 @@ session.
 
 ### Why this is not RAG
 
-| Classic RAG | This |
-|---|---|
-| Retrieves **evidence**; the model re-derives meaning each time | Retrieves **verdicts** — the reasoning already happened |
-| Index built by a **batch ingestion job** | Accretes from **real agent traffic** — coverage follows attention |
-| **Similarity** search | **Traversal** — this symbol *and its callers* |
-| Model must **formulate a query** | Fires when the model **reaches for a file** |
-| Staleness **invisible**; serves rotted chunks confidently | Staleness **computed** from content hashes, served with the invalidating diff |
-| Returns only what is **in the documents** | Returns **dead ends**, which exist nowhere in your source tree |
+| Classic RAG                                                    | This                                                                          |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Retrieves **evidence**; the model re-derives meaning each time | Retrieves **verdicts** — the reasoning already happened                       |
+| Index built by a **batch ingestion job**                       | Accretes from **real agent traffic** — coverage follows attention             |
+| **Similarity** search                                          | **Traversal** — this symbol _and its callers_                                 |
+| Model must **formulate a query**                               | Fires when the model **reaches for a file**                                   |
+| Staleness **invisible**; serves rotted chunks confidently      | Staleness **computed** from content hashes, served with the invalidating diff |
+| Returns only what is **in the documents**                      | Returns **dead ends**, which exist nowhere in your source tree                |
 
 Traversal plus lexical search: deterministic, instant, explainable, and it works
 offline.
@@ -123,7 +123,7 @@ offline.
 ### The zero-turn refusal
 
 A plain deny costs a full turn: the model calls `Read`, is refused, re-plans,
-calls `smart_read`. But at refusal time we already hold the file *and* the
+calls `smart_read`. But at refusal time we already hold the file _and_ the
 snapshot the graph stored — so the refusal **carries the answer inside it**.
 Nothing to re-plan, no second call. Turn cost drops from one to zero.
 
@@ -193,12 +193,12 @@ See [the causal evidence protocol](docs/EVIDENCE_PROTOCOL.md), the
 
 ### Compaction is consolidation, not loss
 
-Everyone else checkpoints and restores what you *had* — which spends the
+Everyone else checkpoints and restores what you _had_ — which spends the
 scarcest budget in the session replaying context you already paid for.
 
 Selection here is **derived**, not a category list: `cost-to-rederive ×
 irrecoverability × reuse-probability`, with dead ends and decisions on a floor,
-because cheap-to-find is not the same as cheap-to-find-*again*. Restoration then
+because cheap-to-find is not the same as cheap-to-find-_again_. Restoration then
 adapts to the situation — mid-problem, cold resume, or in-flow — within a
 measured budget:
 
@@ -240,7 +240,7 @@ cannot:
     about 329,421 tokens re-written per session
 ```
 
-Attributed to a line, priced by what sits *behind* it. Keep-warm is decided by
+Attributed to a line, priced by what sits _behind_ it. Keep-warm is decided by
 expected value from your observed gaps, per TTL tier — and when neither tier
 pays, it says so.
 
@@ -257,7 +257,7 @@ at any price, because four cheap turns that fail are not cheap.
 A report is read once and forgotten. Here a detection produces a **durable,
 measured, reversible fix** — a skip rule, a composite touch — plus a ~50-token
 session-start briefing so the waste never starts. Detectors are a shipped floor
-*plus* patterns derived from your project's own history, each carrying what it
+_plus_ patterns derived from your project's own history, each carrying what it
 has actually saved:
 
 ```
@@ -303,7 +303,7 @@ npx token-optimizer-doctor      # prove they work
 npx token-optimizer-doctor      # or npm run doctor, from a clone
 ```
 
-It feeds a synthetic payload to the *real* hook binary and asserts a large read
+It feeds a synthetic payload to the _real_ hook binary and asserts a large read
 is refused and a small one is not. A checklist would have passed on the exact
 bug this project once shipped, where the plugin was connected, visible in
 `/mcp`, and saving nothing. Every failure names its own fix.
@@ -354,7 +354,7 @@ silent false negative, and dollars get quoted to other people.
 Roo, Kilo, Zed, Amp, Continue, Crush, Droid, Copilot, Gemini, Qwen.
 
 Gemini and Qwen sit in the second tier **despite having hooks**, because their
-only tool hook fires *after* the read is paid for. Claiming enforcement there
+only tool hook fires _after_ the read is paid for. Claiming enforcement there
 would be a lie you would discover on your first large file.
 
 Every config shape is confirmed against that client's published documentation,
@@ -366,13 +366,13 @@ with the source URL recorded in its README.
 npm run verify:all
 ```
 
-| Suite | Checks | What it proves |
-|---|---|---|
-| `test` | 416 | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
-| `verify:clients` | 129 | Every client config matches its documented schema |
-| `verify:harvest` | 26 | Request shape, response parsing, and that **no secret from a tool result crosses the wire** |
-| `verify:ui` | 22 | Real headless Chromium: layout, label collisions, legibility |
-| `doctor` | 10 | The installed hooks actually refuse, and the server actually answers |
+| Suite            | Checks | What it proves                                                                                                          |
+| ---------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `test`           | 416    | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
+| `verify:clients` | 129    | Every client config matches its documented schema                                                                       |
+| `verify:harvest` | 26     | Request shape, response parsing, and that **no secret from a tool result crosses the wire**                             |
+| `verify:ui`      | 22     | Real headless Chromium: layout, label collisions, legibility                                                            |
+| `doctor`         | 10     | The installed hooks actually refuse, and the server actually answers                                                    |
 
 These are not decoration. They found six client configs that would have failed
 **silently**, an installer that destroyed user hooks, a Windows path bug that
@@ -381,27 +381,26 @@ a plan and deleted nothing.
 
 ## Honest comparison
 
-| | Token Optimizer | Typical alternatives |
-|---|---|---|
-| **License** | MIT — commercial use fine | Often noncommercial-only; check before using at work |
-| Default behaviour | Refuses the wasteful call | Suggests a better tool |
-| Re-read of an unchanged file | Returns a diff | Returns the file again |
-| Savings figure | Measured against a withheld control | Computed from the tool's own assumptions |
-| Cross-session memory | Findings, decisions, dead ends | Usually none |
-| Compaction | Consolidation, ranked by cost-to-rederive | Checkpoint and replay |
-| Cache economics | Measured from the transcript, attributed to a line | Rarely addressed |
-| Model routing | Measured from episode outcomes | Guessed from task size |
-| Cross-project | Fixes transfer by content hash | Per-project only |
-| Clients | 15 | 3–6 typical |
-| Telemetry | None | Varies |
-
+|                              | Token Optimizer                                    | Typical alternatives                                 |
+| ---------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| **License**                  | MIT — commercial use fine                          | Often noncommercial-only; check before using at work |
+| Default behaviour            | Refuses the wasteful call                          | Suggests a better tool                               |
+| Re-read of an unchanged file | Returns a diff                                     | Returns the file again                               |
+| Savings figure               | Measured against a withheld control                | Computed from the tool's own assumptions             |
+| Cross-session memory         | Findings, decisions, dead ends                     | Usually none                                         |
+| Compaction                   | Consolidation, ranked by cost-to-rederive          | Checkpoint and replay                                |
+| Cache economics              | Measured from the transcript, attributed to a line | Rarely addressed                                     |
+| Model routing                | Measured from episode outcomes                     | Guessed from task size                               |
+| Cross-project                | Fixes transfer by content hash                     | Per-project only                                     |
+| Clients                      | 15                                                 | 3–6 typical                                          |
+| Telemetry                    | None                                               | Varies                                               |
 
 ---
 
 ## Installation
 
 Every client launches the same stdio server — `npx -y @ooples/token-optimizer-mcp@latest` —
-but they differ in what they let a hook *do*, and that difference is the whole
+but they differ in what they let a hook _do_, and that difference is the whole
 product. A client with a pre-execution veto can have the wasteful call refused;
 one without can only be told. Both are listed honestly below.
 
@@ -411,11 +410,11 @@ Ready-made configuration for all fifteen lives in
 
 ### Enforcing tier — the wasteful call is refused
 
-| Client | Install | What runs |
-| --- | --- | --- |
+| Client          | Install                                                                                                     | What runs                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | **Claude Code** | `/plugin marketplace add ooples/token-optimizer-mcp` then `/plugin install token-optimizer@token-optimizer` | SessionStart policy, PreToolUse router over Read/Grep/Glob/Edit/Write/Bash, PreCompact optimization |
-| **Codex** | Copy [`integrations/codex`](./integrations/codex) to `~/.codex` | SessionStart policy + PreToolUse router |
-| **OpenCode** | Copy [`integrations/opencode`](./integrations/opencode) | Pre-tool router |
+| **Codex**       | Copy [`integrations/codex`](./integrations/codex) to `~/.codex`                                             | SessionStart policy + PreToolUse router                                                             |
+| **OpenCode**    | Copy [`integrations/opencode`](./integrations/opencode)                                                     | Pre-tool router                                                                                     |
 
 ### Directive tier — MCP plus an always-applied rules file
 
@@ -423,21 +422,21 @@ No pre-execution veto exists on these, so the optimizer states the policy on
 every request instead of enforcing it. Each directory holds the MCP config and
 the rules file, both at the paths that client's own documentation specifies.
 
-| Client | Config | Rules |
-| --- | --- | --- |
-| Cursor | `.cursor/mcp.json` | `.cursor/rules/token-optimizer.mdc` (`alwaysApply: true`) |
-| Windsurf | `mcp_config.json` | `.windsurf/rules/token-optimizer.md` |
-| Cline | `~/.cline/mcp.json` | `.clinerules/token-optimizer.md` |
-| Roo Code | `.roo/mcp.json` | `.roo/rules/token-optimizer.md` |
-| Kilo | `.kilo/kilo.jsonc` (`mcp` key) | `.kilo/rules/token-optimizer.md` |
-| Zed | `settings.json` (`context_servers`) | `AGENTS.md` |
-| Amp | `settings.json` (`amp.mcpServers`) | `AGENTS.md` |
-| Continue | `config.yaml` (`mcpServers` **list**) | `.continue/rules/token-optimizer.md` |
-| Crush | `crush.json` (`mcp` key) | `AGENTS.md` |
-| Droid (Factory) | `~/.factory/mcp.json` | `AGENTS.md` |
-| GitHub Copilot CLI | `copilot mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest` | `.github/copilot-instructions.md` |
-| Gemini CLI | `gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest` | Gemini extension context |
-| Qwen Code | Extension config | Extension context |
+| Client             | Config                                                                                  | Rules                                                     |
+| ------------------ | --------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Cursor             | `.cursor/mcp.json`                                                                      | `.cursor/rules/token-optimizer.mdc` (`alwaysApply: true`) |
+| Windsurf           | `mcp_config.json`                                                                       | `.windsurf/rules/token-optimizer.md`                      |
+| Cline              | `~/.cline/mcp.json`                                                                     | `.clinerules/token-optimizer.md`                          |
+| Roo Code           | `.roo/mcp.json`                                                                         | `.roo/rules/token-optimizer.md`                           |
+| Kilo               | `.kilo/kilo.jsonc` (`mcp` key)                                                          | `.kilo/rules/token-optimizer.md`                          |
+| Zed                | `settings.json` (`context_servers`)                                                     | `AGENTS.md`                                               |
+| Amp                | `settings.json` (`amp.mcpServers`)                                                      | `AGENTS.md`                                               |
+| Continue           | `config.yaml` (`mcpServers` **list**)                                                   | `.continue/rules/token-optimizer.md`                      |
+| Crush              | `crush.json` (`mcp` key)                                                                | `AGENTS.md`                                               |
+| Droid (Factory)    | `~/.factory/mcp.json`                                                                   | `AGENTS.md`                                               |
+| GitHub Copilot CLI | `copilot mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`          | `.github/copilot-instructions.md`                         |
+| Gemini CLI         | `gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest` | Gemini extension context                                  |
+| Qwen Code          | Extension config                                                                        | Extension context                                         |
 
 > **These paths are checked, not assumed.** Verifying them against each client's
 > published docs found six configs that would have installed cleanly and never
@@ -536,15 +535,15 @@ turn on.
 From the first message of the next session, expensive built-in calls are
 **refused and redirected** to the optimized equivalent:
 
-| You (or the model) do this | What happens |
-|---|---|
-| `Read` a file over ~25 KB | Denied → `smart_read` (cached) |
-| `Read` **any** file already read this session | Denied → `smart_read` (returns only the diff) |
-| `Grep` file contents / `Glob` for files | Denied → `smart_grep` / `smart_glob` |
-| `Edit` a file over ~25 KB | Denied → `smart_edit` (returns a diff, not the file) |
-| `cat`/`head`/`tail`/`Get-Content` a large file | Denied → `smart_read` |
-| `grep -r` / `rg` across the tree | Denied → `smart_grep` |
-| Context fills and compaction starts | `optimize_session` runs first |
+| You (or the model) do this                     | What happens                                         |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| `Read` a file over ~25 KB                      | Denied → `smart_read` (cached)                       |
+| `Read` **any** file already read this session  | Denied → `smart_read` (returns only the diff)        |
+| `Grep` file contents / `Glob` for files        | Denied → `smart_grep` / `smart_glob`                 |
+| `Edit` a file over ~25 KB                      | Denied → `smart_edit` (returns a diff, not the file) |
+| `cat`/`head`/`tail`/`Get-Content` a large file | Denied → `smart_read`                                |
+| `grep -r` / `rg` across the tree               | Denied → `smart_grep`                                |
+| Context fills and compaction starts            | `optimize_session` runs first                        |
 
 The re-read case is usually the largest single win and the one most often
 missed: a 5 KB config read fifteen times across a session costs far more than
@@ -892,7 +891,7 @@ That verifies without trusting us. A `CHECKSUMS.sha256` is attached to each
 GitHub release for offline checking (`sha256sum -c CHECKSUMS.sha256`) — useful
 for mirrors, but weaker: it shares a trust root with the thing it hashes.
 
-**Check it actually works.** Not that the files are in place — that it *works*:
+**Check it actually works.** Not that the files are in place — that it _works_:
 
 ```bash
 npm run doctor
@@ -1403,9 +1402,13 @@ Control hook behavior with these environment variables:
 
 The MCP server exposes an 18-tool core catalog by default so tool schemas do not
 consume a large share of the model context. Set
-`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 98
+`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 102
 specialized tools. `TOKEN_OPTIMIZER_TOOL_PROFILE=core` is the explicit form of
-the default.
+the default. Live graph capture and continuity evaluations use
+`TOKEN_OPTIMIZER_TOOL_PROFILE=cognitive`, which exposes four operations. A real
+native-token audit measures 1,162 startup schema tokens in cognitive mode,
+4,815 in core, and 30,593 in full mode (96.2% less than full). Other enabled MCP
+servers add their own schemas independently.
 
 #### Performance Controls
 

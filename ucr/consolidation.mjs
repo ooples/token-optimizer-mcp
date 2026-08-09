@@ -115,3 +115,93 @@ export function compactLogicalHistory(objects, relations) {
     canonical,
   };
 }
+
+export function consolidationStudy(
+  sessions,
+  { author = 'consolidation-model', now = Date.now() } = {}
+) {
+  const source = sessions.flatMap((session) => session.objects || []);
+  const sourceHashesBefore = new Map(source.map((object) => [object.id, sha256(object)]));
+  const proposals = consolidationProposals(source, { author });
+  const groups = new Map();
+  for (const object of source) {
+    const key = String(object.trigger || object.claim || object.id).toLowerCase();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(object);
+  }
+  const contradictionResults = [];
+  for (const group of groups.values()) {
+    const corrections = new Set(
+      group.map((object) => object.correction || object.claim).filter(Boolean)
+    );
+    if (corrections.size < 2) continue;
+    const sorted = [...group].sort(
+      (a, b) =>
+        (b.verificationReceiptIds?.length || 0) -
+          (a.verificationReceiptIds?.length || 0) ||
+        (b.learnedAt || 0) - (a.learnedAt || 0)
+    );
+    contradictionResults.push(
+      resolveContradiction(
+        sorted[0],
+        sorted[1],
+        sorted[0].verificationReceiptIds?.length
+          ? [
+              {
+                objectId: sorted[0].id,
+                passed: true,
+                receiptId: sorted[0].verificationReceiptIds[0],
+              },
+            ]
+          : []
+      )
+    );
+  }
+  const states = source.map((object) => ({
+    objectId: object.id,
+    state: decayState(object, {
+      now,
+      utility: object.expectedUtility || 0,
+      dependedOn: Boolean(object.dependedOn),
+    }),
+  }));
+  const activeSources = states.filter((item) => item.state === 'active').length;
+  const uniqueLogicalMemories = new Set(source.map(similarityKey)).size;
+  const sourceMutations = source.filter(
+    (object) => sourceHashesBefore.get(object.id) !== sha256(object)
+  ).length;
+  const delayedReuse = sessions.filter((session) => session.delayedReuseOf).map((session) => ({
+    sessionId: session.id,
+    memoryId: session.delayedReuseOf,
+    retained: source.some(
+      (object) =>
+        object.id === session.delayedReuseOf &&
+        !states.some(
+          (state) =>
+            state.objectId === object.id &&
+            ['tombstoned', 'superseded', 'quarantined'].includes(state.state)
+        )
+    ),
+  }));
+  return {
+    schemaVersion: 'ucr.consolidation-study/1',
+    sessions: sessions.length,
+    sourceObjects: source.length,
+    sourceMutations,
+    proposals: proposals.length,
+    proposalAuthors: [...new Set(proposals.map((proposal) => proposal.author))],
+    activeSources,
+    uniqueLogicalMemories,
+    activeGrowthRatio: source.length
+      ? (uniqueLogicalMemories + proposals.length) / source.length
+      : null,
+    contradictions: contradictionResults,
+    contradictionsResolved: contradictionResults.filter(
+      (result) => result.state === 'resolved'
+    ).length,
+    delayedReuseCases: delayedReuse.length,
+    delayedReuseRetained: delayedReuse.filter((item) => item.retained).length,
+    states,
+    logicalHistoryHash: compactLogicalHistory(source, []).logicalHistoryHash,
+  };
+}

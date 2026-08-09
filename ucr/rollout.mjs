@@ -147,3 +147,140 @@ export function recoveryExercise({
     recoveryTimeMs: recoveredAt - startedAt,
   };
 }
+
+function percentile(values, quantile) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(sorted.length * quantile) - 1)
+  );
+  return sorted[index];
+}
+
+/** Aggregate request-level telemetry into the release SLO contract. */
+export function sloReport(samples, thresholds = {}) {
+  const targets = {
+    availability: 0.995,
+    p95LatencyMs: 250,
+    p95ContextOverhead: 0.05,
+    correctnessDelta: -0.02,
+    severeHarm: 0,
+    unauthorizedAccess: 0,
+    ...thresholds,
+  };
+  const total = samples.length;
+  const metrics = {
+    samples: total,
+    availability: total
+      ? samples.filter((sample) => sample.available !== false).length / total
+      : null,
+    p95LatencyMs: percentile(
+      samples.map((sample) => sample.latencyMs),
+      0.95
+    ),
+    p95ContextOverhead: percentile(
+      samples.map((sample) => sample.contextOverhead),
+      0.95
+    ),
+    correctnessDelta: total
+      ? samples.reduce(
+          (sum, sample) => sum + Number(sample.correctnessDelta || 0),
+          0
+        ) / total
+      : null,
+    severeHarm: samples.reduce(
+      (sum, sample) => sum + Number(sample.severeHarm || 0),
+      0
+    ),
+    unauthorizedAccess: samples.reduce(
+      (sum, sample) => sum + Number(sample.unauthorizedAccess || 0),
+      0
+    ),
+  };
+  const gates = {
+    availability:
+      metrics.availability !== null &&
+      metrics.availability >= targets.availability,
+    latency:
+      metrics.p95LatencyMs !== null &&
+      metrics.p95LatencyMs <= targets.p95LatencyMs,
+    context:
+      metrics.p95ContextOverhead !== null &&
+      metrics.p95ContextOverhead <= targets.p95ContextOverhead,
+    correctness:
+      metrics.correctnessDelta !== null &&
+      metrics.correctnessDelta >= targets.correctnessDelta,
+    severeHarm: metrics.severeHarm <= targets.severeHarm,
+    dataPolicy: metrics.unauthorizedAccess <= targets.unauthorizedAccess,
+  };
+  return {
+    targets,
+    metrics,
+    gates,
+    passed: total > 0 && Object.values(gates).every(Boolean),
+  };
+}
+
+export const REQUIRED_FAULTS = Object.freeze([
+  'dependency-timeout',
+  'malformed-event',
+  'storage-unavailable',
+  'canary-regression',
+  'process-restart',
+  'network-partition',
+]);
+
+/** Grade executable fault receipts without confusing them with production traffic. */
+export function faultInjectionStudy(
+  receipts,
+  { maximumRecoveryMs = 300_000 } = {}
+) {
+  const byFault = new Map(receipts.map((receipt) => [receipt.fault, receipt]));
+  const missing = REQUIRED_FAULTS.filter((fault) => !byFault.has(fault));
+  const failed = REQUIRED_FAULTS.filter((fault) => {
+    const receipt = byFault.get(fault);
+    return (
+      receipt &&
+      (!receipt.contained ||
+        receipt.dataLoss > 0 ||
+        receipt.recoveryTimeMs > maximumRecoveryMs)
+    );
+  });
+  return {
+    required: REQUIRED_FAULTS,
+    exercised: REQUIRED_FAULTS.length - missing.length,
+    missing,
+    failed,
+    maximumRecoveryMs,
+    receiptHash: sha256(receipts),
+    passed: missing.length === 0 && failed.length === 0,
+  };
+}
+
+/** A fail-closed gate: exercises alone cannot authorize a stable rollout. */
+export function productionReadiness({
+  release,
+  evidenceClasses = [],
+  slos,
+  faults,
+  recovery,
+  rolloutStage,
+}) {
+  const missing = [];
+  if (release?.status !== 'passed') missing.push('powered release verdict');
+  if (!evidenceClasses.includes('effectiveness'))
+    missing.push('effectiveness evidence');
+  if (!evidenceClasses.includes('production'))
+    missing.push('production traffic evidence');
+  if (!slos?.passed) missing.push('production SLO window');
+  if (!faults?.passed) missing.push('complete fault-injection study');
+  if (!recovery?.passed || recovery?.recoveryPointEvents !== 0)
+    missing.push('zero-loss recovery exercise');
+  if (rolloutStage !== 'stable') missing.push('stable rollout stage');
+  return {
+    status: missing.length ? 'insufficient' : 'passed',
+    ready: missing.length === 0,
+    missing,
+  };
+}

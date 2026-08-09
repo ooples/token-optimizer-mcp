@@ -23,6 +23,7 @@ const interventions = new Set([
   'deny',
   'replace-parameters',
 ]);
+const failureBehaviors = new Set(['allow', 'advise']);
 
 export function validateGuard(guard) {
   const diagnostics = [];
@@ -44,6 +45,16 @@ export function validateGuard(guard) {
     diagnostics.push('guard replacementAction is required');
   }
   if (!guard?.rollback) diagnostics.push('guard rollback path is required');
+  if (
+    guard.timeoutMs !== undefined &&
+    (!Number.isFinite(guard.timeoutMs) || guard.timeoutMs <= 0)
+  )
+    diagnostics.push('guard timeoutMs must be positive');
+  if (
+    guard.failureBehavior !== undefined &&
+    !failureBehaviors.has(guard.failureBehavior)
+  )
+    diagnostics.push('guard failureBehavior must be allow or advise');
   const serialized = JSON.stringify(guard || {});
   if (/\b(?:eval|exec|spawn|shell|javascript|powershell)\b/i.test(serialized)) {
     diagnostics.push('guard content cannot grant arbitrary code execution');
@@ -95,6 +106,7 @@ export class GuardRuntime {
     this.policy = policy;
     this.disabled = disabled;
     this.guards = new Map();
+    this.disabledGuards = new Map();
     this.audit = [];
   }
 
@@ -120,7 +132,7 @@ export class GuardRuntime {
       };
     }
     const matches = [...this.guards.values()].filter((guard) =>
-      guardMatches(guard, action, context)
+      !this.disabledGuards.has(guard.id) && guardMatches(guard, action, context)
     );
     const canIntercept = [
       'interceptable',
@@ -142,6 +154,7 @@ export class GuardRuntime {
         evidence: guard.evidence,
         replacementAction: guard.replacementAction || null,
         rollback: guard.rollback,
+        scope: guard.scope,
       };
     });
     const decision = interventions.some((item) => item.mode === 'deny')
@@ -164,6 +177,29 @@ export class GuardRuntime {
     return result;
   }
 
+  setMode(mode) {
+    if (!modes.has(mode)) throw new Error(`unknown guard mode ${mode}`);
+    const prior = this.mode;
+    this.mode = mode;
+    this.audit.push({ at: Date.now(), kind: 'mode-change', prior, mode });
+    return { prior, mode };
+  }
+
+  disableGuard(guardId, reason) {
+    if (!this.guards.has(guardId)) return { disabled: false };
+    const record = { guardId, reason, at: Date.now() };
+    this.disabledGuards.set(guardId, record);
+    this.audit.push({ kind: 'guard-disabled', ...record });
+    return { disabled: true, record };
+  }
+
+  enableGuard(guardId) {
+    const prior = this.disabledGuards.get(guardId) || null;
+    this.disabledGuards.delete(guardId);
+    this.audit.push({ kind: 'guard-enabled', guardId, at: Date.now() });
+    return { enabled: this.guards.has(guardId), prior };
+  }
+
   simulate(guardId, traces) {
     const guard = this.guards.get(guardId);
     if (!guard) throw new Error(`guard not found: ${guardId}`);
@@ -177,13 +213,16 @@ export class GuardRuntime {
     const falseNegative = cases.filter(
       (item) => item.expected && !item.matched
     ).length;
+    const negativeCases = cases.filter((item) => !item.expected).length;
+    const positiveCases = cases.filter((item) => item.expected).length;
     return {
       cases: cases.length,
       truePositive: cases.filter((item) => item.expected && item.matched)
         .length,
       falsePositive,
       falseNegative,
-      falsePositiveRate: cases.length ? falsePositive / cases.length : null,
+      falsePositiveRate: negativeCases ? falsePositive / negativeCases : null,
+      falseNegativeRate: positiveCases ? falseNegative / positiveCases : null,
       safeToActivate:
         cases.length > 0 && falsePositive === 0 && falseNegative === 0,
     };

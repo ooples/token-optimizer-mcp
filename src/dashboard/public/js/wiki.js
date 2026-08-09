@@ -244,7 +244,39 @@ async function loadUcr() {
     ['Canonical events', nf.format(status.events)],
     ['Typed objects', nf.format(status.graph?.objects || 0)],
     ['Certified clients', nf.format(status.certifiedClients)],
-    ['Live handoff', status.liveHandoff?.passed ? 'passed' : 'not run'],
+    [
+      'Evidence artifacts',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.artifactsValid}/${status.evidenceIndex.summary.artifactsTotal}`
+        : 'not assembled',
+    ],
+    [
+      'Live directions',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.liveDirectionsPassed}/${status.evidenceIndex.summary.liveDirectionsAttempted}`
+        : 'not run',
+    ],
+    ['Scale events', nf.format(status.evidenceIndex?.summary.graphEvents || 0)],
+    [
+      'Physical writers',
+      nf.format(status.evidenceIndex?.summary.coordinationWorkers || 0),
+    ],
+    [
+      'Fault exercises',
+      `${status.productionExercise?.faults?.exercised || 0}/${status.productionExercise?.faults?.required?.length || 6}`,
+    ],
+    [
+      'Cognitive schema',
+      status.evidenceIndex?.summary.cognitiveSchemaTokens
+        ? `${nf.format(status.evidenceIndex.summary.cognitiveSchemaTokens)} tokens`
+        : 'not measured',
+    ],
+    [
+      'Schema reduction',
+      status.evidenceIndex?.summary.cognitiveReductionVsFull != null
+        ? `${(status.evidenceIndex.summary.cognitiveReductionVsFull * 100).toFixed(1)}% vs full`
+        : 'not measured',
+    ],
   ]
     .map(
       ([label, value]) => `
@@ -266,6 +298,30 @@ async function loadUcr() {
       : verdict === 'harmful'
         ? 'bad'
         : 'insufficient';
+  const tiers = status.evidenceIndex?.tiers || {};
+  el('ucr-tiers').innerHTML = `
+    <thead><tr><th>Tier</th><th>Status</th><th>Ledgers</th><th>Rows</th></tr></thead>
+    <tbody>${Object.entries(tiers)
+      .map(
+        ([tier, value]) => `<tr>
+          <td>${escapeHtml(tier)}</td>
+          <td>${escapeHtml(value.status)}</td>
+          <td>${escapeHtml(value.ledgers)}</td>
+          <td>${escapeHtml(value.rows)}</td>
+        </tr>`
+      )
+      .join('')}</tbody>`;
+  el('ucr-artifacts').innerHTML = `
+    <thead><tr><th>Study</th><th>Evidence class</th><th>Integrity</th></tr></thead>
+    <tbody>${(status.evidenceIndex?.artifacts || [])
+      .map(
+        (artifact) => `<tr>
+          <td>${escapeHtml(artifact.name)}</td>
+          <td>${escapeHtml(artifact.evidenceClass)}</td>
+          <td>${artifact.valid ? 'valid' : 'invalid'}</td>
+        </tr>`
+      )
+      .join('')}</tbody>`;
 }
 
 /* ---- Finding list ---------------------------------------------------- */

@@ -188,3 +188,78 @@ export function contaminationCheck(task, knownCorpus = []) {
     fingerprints,
   };
 }
+
+export function hiddenTaskVariant(task, secret, { nonce = '' } = {}) {
+  if (!secret) throw new Error('hidden task variants require a secret');
+  const hiddenVariantId = createHmac('sha256', secret)
+    .update(`${task.id}:${nonce}:${canonicalJson(task.hiddenVariantSpec || {})}`)
+    .digest('hex');
+  const publicTask = { ...task };
+  delete publicTask.hiddenAnswer;
+  delete publicTask.privateGrader;
+  return {
+    publicTask: {
+      ...publicTask,
+      hiddenVariantId: hiddenVariantId.slice(0, 24),
+    },
+    graderBinding: createHmac('sha256', secret)
+      .update(`${hiddenVariantId}:${canonicalJson(task.grader || {})}`)
+      .digest('hex'),
+  };
+}
+
+export function twoProportionSampleSize({
+  baselineRate,
+  minimumEffect,
+  alpha = 0.05,
+  power = 0.8,
+} = {}) {
+  if (
+    ![baselineRate, minimumEffect, alpha, power].every(Number.isFinite) ||
+    baselineRate <= 0 ||
+    baselineRate >= 1 ||
+    minimumEffect <= 0 ||
+    baselineRate + minimumEffect >= 1
+  )
+    throw new Error('invalid two-proportion power-analysis inputs');
+  // Pre-registered common design points. The approximation remains explicit
+  // instead of pretending a tiny pilot has exact inferential power.
+  const zAlpha = alpha <= 0.01 ? 2.576 : alpha <= 0.05 ? 1.96 : 1.645;
+  const zPower = power >= 0.9 ? 1.282 : power >= 0.8 ? 0.842 : 0.674;
+  const treatmentRate = baselineRate + minimumEffect;
+  const pooled = (baselineRate + treatmentRate) / 2;
+  const numerator =
+    zAlpha * Math.sqrt(2 * pooled * (1 - pooled)) +
+    zPower *
+      Math.sqrt(
+        baselineRate * (1 - baselineRate) +
+          treatmentRate * (1 - treatmentRate)
+      );
+  return {
+    baselineRate,
+    treatmentRate,
+    minimumEffect,
+    alpha,
+    power,
+    perArm: Math.ceil((numerator / minimumEffect) ** 2),
+    method: 'normal-approximation-two-sided-two-proportion',
+  };
+}
+
+export function preRegisterBenchmark(manifest, pilot) {
+  const frozen = freezeBenchmark(manifest);
+  const powerAnalysis = twoProportionSampleSize(pilot);
+  const registration = {
+    schemaVersion: 'ucr.benchmark-registration/1',
+    benchmarkHash: frozen.manifestHash,
+    primaryOutcomes: frozen.primaryOutcomes,
+    exclusions: frozen.exclusions,
+    arms: frozen.arms,
+    powerAnalysis,
+    hiddenGraders: frozen.tasks.every(
+      (task) => task.hiddenVariantSpec && task.grader
+    ),
+    naturalTaskFixtures: frozen.tasks.filter((task) => task.fixture).length,
+  };
+  return { ...registration, registrationHash: sha256(registration) };
+}

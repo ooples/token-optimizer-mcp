@@ -32,44 +32,53 @@
     {
       "kind": "vector-rag",
       "name": "vector-rag-reference",
-      "version": "unreproduced",
-      "command": null,
-      "limitations": ["adapter not yet supplied"]
+      "version": "1",
+      "command": "internal:vector-rag",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
     },
     {
       "kind": "graph-rag",
       "name": "graph-rag-reference",
-      "version": "unreproduced",
-      "command": null,
-      "limitations": ["adapter not yet supplied"]
+      "version": "1",
+      "command": "internal:graph-rag",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a Microsoft GraphRAG product claim"]
     },
     {
       "kind": "temporal-graph",
       "name": "temporal-graph-reference",
-      "version": "unreproduced",
-      "command": null,
-      "limitations": ["adapter not yet supplied"]
+      "version": "1",
+      "command": "internal:temporal-graph",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
     },
     {
       "kind": "memory-os",
       "name": "memory-runtime-reference",
-      "version": "unreproduced",
-      "command": null,
-      "limitations": ["adapter not yet supplied"]
+      "version": "1",
+      "command": "internal:memory-os",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
     },
     {
       "kind": "workflow-library",
       "name": "executable-workflow-reference",
-      "version": "unreproduced",
-      "command": null,
-      "limitations": ["adapter not yet supplied"]
+      "version": "1",
+      "command": "internal:workflow-library",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
     },
     {
       "kind": "vendor-memory",
       "name": "client-native-memory",
-      "version": "unreproduced",
-      "command": null,
-      "limitations": ["version must be recorded by live runner"]
+      "version": "reference-1",
+      "command": "internal:vendor-memory",
+      "license": "MIT",
+      "limitations": [
+        "reference client-native retrieval behavior only",
+        "a named vendor version must be recorded before any vendor comparison claim"
+      ]
     },
     {
       "kind": "oracle-context",

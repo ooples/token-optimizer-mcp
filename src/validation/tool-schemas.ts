@@ -417,21 +417,35 @@ export const ContextPageSchema = z
   .passthrough();
 export const CognitionRecordSchema = z
   .object({
-    kind: z.enum([
-      'claim',
-      'failure',
-      'decision',
-      'procedure',
-      'goal',
-      'hypothesis',
-      'guard',
-    ]),
-    semanticObject: z.record(z.string(), z.unknown()),
-    evidenceReceipts: z.array(z.record(z.string(), z.unknown())),
+    operation: z.enum(['verify-evidence', 'record']).optional(),
+    kind: z
+      .enum([
+        'claim',
+        'failure',
+        'decision',
+        'procedure',
+        'goal',
+        'hypothesis',
+        'guard',
+      ])
+      .optional(),
+    semanticObject: z.record(z.string(), z.unknown()).optional(),
+    evidenceReceipts: z.array(z.record(z.string(), z.unknown())).min(1),
     taskId: z.string().optional(),
     sessionId: z.string().optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((value, context) => {
+    if (value.operation === 'verify-evidence') return;
+    if (!value.kind)
+      context.addIssue({ code: 'custom', path: ['kind'], message: 'Required' });
+    if (!value.semanticObject)
+      context.addIssue({
+        code: 'custom',
+        path: ['semanticObject'],
+        message: 'Required',
+      });
+  });
 export const CheckpointHandoffSchema = z
   .object({
     operation: z.enum(['create', 'restore']),

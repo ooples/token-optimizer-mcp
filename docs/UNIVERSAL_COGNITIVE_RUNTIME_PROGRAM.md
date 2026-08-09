@@ -957,43 +957,41 @@ Pareto frontier. This is a target, not a present product claim.
 
 ## PR #303 implementation and evidence boundary
 
-PR #303 implements a coherent, reviewable foundation for every workstream so
-the protocol, safety boundaries, MCP surface, evidence contract, and dashboard
-cannot drift as isolated design documents. It does **not** promote the runtime
-to production or declare the 18 program exits complete. Automatic behavior
-remains fail-closed and the release verdict remains `insufficient` until the
-powered live and competitive studies pass.
+PR #303 implements the runtime mechanisms, independent verifiers, executable
+harnesses, and signed evidence plumbing for all 18 workstreams. It does **not**
+promote the runtime to production or convert deterministic fixtures into live
+effectiveness. Automatic behavior remains fail-closed and the release verdict
+remains `insufficient` until powered natural-task, competitive, and production
+traffic studies pass.
 
-The committed evidence is split into three classes:
-
-1. Deterministic conformance: reproducible in CI with `npm run verify:ucr`.
-2. Executable model smoke: redacted Codex-to-Claude evidence produced with
-   `npm run eval:ucr:handoff`; failed attempts remain in an append-only ledger.
-3. Release evidence: currently insufficient. A one-pair transfer success is
-   not converted into an efficiency, non-inferiority, or superiority claim.
+The evidence contract has six non-interchangeable classes: transport,
+conformance, executable smoke, effectiveness, superiority, and production.
+`evals/ucr/results/evidence-index-v2.json` verifies 11/11 current artifacts and
+contains signed, hash-chained, redacted ledgers. Conformance and executable
+smoke are present; effectiveness, superiority, and production remain missing.
 
 ## Workstream evidence matrix
 
-| # | Implemented in PR #303 | Evidence now | Program exit still open |
-| -: | --- | --- | --- |
-| 1 | Versioned event envelope, UUIDv7/HLC, canonical replay, artifact references, open schema | Duplicate/out-of-order replay invariant | Independent language implementation, redacted metric replay |
-| 2 | Typed bitemporal/causal graph, deterministic projection, migration entrypoint | Byte-equivalent rebuild and integrity check | One-million-event budget and full wiki migration |
-| 3 | Active-model `propose -> verify -> activate` compiler with signed external receipts | Unsupported/forged verification rejected; applicability coverage 100% in fixtures | Powered semantic-quality corpus and cross-model field audit |
-| 4 | Safe guard DSL, five modes, capability downgrade, simulation, emergency disable | 101 traces, zero false positives and zero misses | Live prevention across two model families and adversarial activation study |
-| 5 | Exact causal joins, correctness-first verdicts, uncertainty, abstention, quarantine | Confounded join rejected and insufficient evidence abstains | Matched live causal cohorts and quarantine-latency distribution |
-| 6 | L0-L4 context VM, capsules, budgets, paging, working-set invalidation, cached expansion | Applicable capsule delivered in 118/128 tokens | p50/p95 empty overhead and long-history growth studies |
-| 7 | Complete checkpoint schema, compatibility checks, atomic storage, takeover receipts | Stale repository state rejected before action | Codex, Claude, and third-family non-inferiority study |
-| 8 | Agent/task registry, DAGs, leases, heartbeats, conflicts, duplicate suppression, recovery | 100 simulated writers retain authoritative ownership | Real concurrent workload and 80% duplicate-work reduction study |
-| 9 | Consolidation proposals, contradiction resolution, decay, archival, logical compaction | Deterministic unit fixtures | Long-horizon autonomous quality and bounded-growth study |
-| 10 | Deny-by-default policy, compatibility, taint/redaction, Ed25519 bundles, revocation | Signed transfer accepted; revoked transfer denied | Cross-tenant red team and revocation-latency SLO |
-| 11 | Adaptive lexical, temporal, procedural, failure, causal, structural, and checkpoint kernels | Risk/scope filtering and explicit abstention fixtures | Frozen recall, precision, cost, and p95 latency comparison |
-| 12 | Exactly four lazy cognitive MCP operations plus compatibility aliases and overhead accounting | MCP profile exposes 4 operations; static surface measured | Live empty-system p50/p95 overhead across clients |
-| 13 | One adapter SDK, 16-client registry, honest lifecycle families and capability tiers | 16/16 schema conformance; Codex and Claude executable smoke | Executable certification for remaining clients and capability tiers |
-| 14 | Frozen 11-family, seven-arm benchmark; deterministic graders, contamination checks, redacted ledgers, paired bootstrap | 11 frozen tasks and 77 scheduled arm runs | Full powered public/internal benchmark execution |
-| 15 | Ten baseline kinds, fairness validation, Pareto analysis, superiority gate | 10/10 manifests validate | Fair reproduction of every strongest comparable baseline |
-| 16 | Linked 100-task curriculum, 700-run cross-model/client/machine schedule, learning curves and ablation | Schedule is deterministic and complete | Paid live execution, positive slope, recurrence and reconstruction gates |
-| 17 | Full funnel, correctness-first release verdict, downloadable evidence API and browser dashboard | 26/26 deterministic gates; dashboard 29/29; one live pair passed | Eleven aggregate live/competitive fields remain missing |
-| 18 | Shadow-to-stable controller, scoped kill switches, automatic rollback, safe mode, circuit breaker, recovery exercise | Harmful canary rolls back; recovery loses zero accepted fixture events | Fault-injected canary traffic, SLOs, security audit, signed release manifest |
+|   # | Implemented in PR #303                                                                                                 | Evidence now                                                                                                                                 | Program exit still open                                      |
+| --: | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+|   1 | Signed run identity, versioned events, content-addressed artifacts, migrations, canonical replay                       | 29/29 runtime checks plus byte-equivalent independent Python replay                                                                          | Production redacted replay corpus                            |
+|   2 | Typed bitemporal/causal graph and streaming validated projection                                                       | 1,000,000 events, 44,475 events/s, zero duplicates/orphans/diagnostics                                                                       | Full legacy-wiki migration audit                             |
+|   3 | Model-authored `propose -> verify -> activate`, receipt verification, dedupe, provenance, hard negatives               | Forged receipts rejected; unfamiliar evidence is verified read-only before persistence                                                       | Powered semantic-quality corpus                              |
+|   4 | Scoped guard DSL, timeouts/fail behavior, five modes, audit, disable/downgrade, FPR/FNR                                | 101 traces, zero false positives and misses                                                                                                  | Powered live prevention study                                |
+|   5 | Exact causal joins, ablations, confounder refusal, quarantine latency                                                  | Confounded credit rejected; counterfactual and quarantine tests pass                                                                         | Matched live causal cohorts                                  |
+|   6 | L0-L4 Context VM, native tokens, persistent working sets, deltas, zero-work starts                                     | 118/128-token applicable capsule; native accounting tests                                                                                    | Paired live empty-session p50/p95                            |
+|   7 | Complete signed checkpoints, atomic storage, deltas, takeover/staleness study                                          | Stale workspace rejected before action; multi-family fixture study                                                                           | Powered live takeover non-inferiority                        |
+|   8 | SQLite/WAL tasks, transactions, leases, recovery, conflict and partition reconciliation                                | 100 physical workers, zero lost writes, 100% duplicate suppression                                                                           | Multi-host production contention                             |
+|   9 | Immutable consolidation proposals, contradictions, decay, bounded growth                                               | 100 sessions, zero source mutations, 88/88 delayed reuse retained                                                                            | Powered semantic retention quality                           |
+|  10 | Negotiation, authenticated principals, taint/redaction, revocation, red-team transfer suite                            | Signed transfer accepted; injection/revoked transfer denied                                                                                  | External security assessment                                 |
+|  11 | BM25, vector, temporal, causal, structural, procedure, checkpoint, and global kernels with calibrated routing          | Kernel, abstention, compatibility, and calibration tests pass                                                                                | Frozen live recall/cost/latency comparison                   |
+|  12 | Four-operation cognitive MCP surface with real `tools/list` native-token audit                                         | 1,162 tokens versus 4,815 core and 30,593 full; 96.2% reduction versus full                                                                  | Paired provider prompt-overhead distribution                 |
+|  13 | One adapter SDK and honest capability tiers for 16 clients                                                             | 16 distinct child processes, 16/16 certified, four lifecycle families, semantic parity                                                       | Paid native CLI execution for unavailable clients            |
+|  14 | Frozen 11-family, seven-arm benchmark, hidden variants, signed graders, preregistration and power analysis             | 11 natural fixtures; required sample size 357 per arm                                                                                        | Full powered model execution                                 |
+|  15 | Ten executable reference implementations, fairness and Pareto gates                                                    | 1,000 reference cases; all labelled non-product baselines                                                                                    | Fair strongest-product reproductions                         |
+|  16 | Linked 100-task/700-arm curriculum, immutable ledger, learning and explicit ablations                                  | 0.88 recurrence and 0.65 reconstruction reductions in deterministic policy fixtures                                                          | Paid live compounding execution                              |
+|  17 | Tiered evidence contract, funnel, release gate, API, dashboard, blinded cross-CLI harness                              | Three committed edges passed with zero repeated failures; a repeated two-direction pilot passed 1/2 and remained smoke-tier; dashboard 31/31 | Powered effectiveness and third-family provider availability |
+|  18 | SLO aggregation, six-class fault injection, staged rollout, scoped kills, safe mode, breaker, recovery, readiness gate | 6/6 local faults contained, zero event loss, signed ledger                                                                                   | Staged production traffic and production-tier SLO window     |
 
 ## PR #303 implementation task checklist
 

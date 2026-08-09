@@ -1,0 +1,248 @@
+{
+  "schemaVersion": "ucr.production-exercise/1",
+  "evidenceClass": "executable-fault-and-slo-mechanism-exercise-not-production-traffic",
+  "executedAt": "2026-08-09T23:09:07.165Z",
+  "sourceTreeHash": "c6edaeb2108ae20b6dee3d94d7f8bdf5978a8290dbc1cacd7101903c64780c6e",
+  "faults": {
+    "required": [
+      "dependency-timeout",
+      "malformed-event",
+      "storage-unavailable",
+      "canary-regression",
+      "process-restart",
+      "network-partition"
+    ],
+    "exercised": 6,
+    "missing": [],
+    "failed": [],
+    "maximumRecoveryMs": 300000,
+    "receiptHash": "4516d90ae928047487c0aea083b1a6f41e1ba85ac31d3e3e621681e95eddbb3c",
+    "passed": true
+  },
+  "faultReceipts": [
+    {
+      "fault": "dependency-timeout",
+      "contained": true,
+      "detail": "circuit opened after three failures and reset after the bounded interval",
+      "recoveryTimeMs": 11,
+      "dataLoss": 0
+    },
+    {
+      "fault": "malformed-event",
+      "contained": true,
+      "detail": "malformed JSONL was quarantined while accepted canonical events replayed",
+      "recoveryTimeMs": 1,
+      "dataLoss": 0
+    },
+    {
+      "fault": "storage-unavailable",
+      "contained": true,
+      "detail": "runtime entered disconnected read-only mode with enforcement disabled",
+      "recoveryTimeMs": 1,
+      "dataLoss": 0
+    },
+    {
+      "fault": "canary-regression",
+      "contained": true,
+      "detail": "correctness regression rolled the stage back and activated a scoped kill switch",
+      "recoveryTimeMs": 1,
+      "dataLoss": 0
+    },
+    {
+      "fault": "process-restart",
+      "contained": true,
+      "detail": "fresh store instance reconstructed the accepted canonical event digest",
+      "recoveryTimeMs": 2,
+      "dataLoss": 0
+    },
+    {
+      "fault": "network-partition",
+      "contained": true,
+      "detail": "split ownership reconciled to an explicit conflict instead of silent overwrite",
+      "recoveryTimeMs": 1,
+      "dataLoss": 0
+    }
+  ],
+  "slos": {
+    "targets": {
+      "availability": 0.995,
+      "p95LatencyMs": 250,
+      "p95ContextOverhead": 0.05,
+      "correctnessDelta": -0.02,
+      "severeHarm": 0,
+      "unauthorizedAccess": 0
+    },
+    "metrics": {
+      "samples": 1000,
+      "availability": 1,
+      "p95LatencyMs": 0.002300000000005298,
+      "p95ContextOverhead": 0,
+      "correctnessDelta": 0,
+      "severeHarm": 0,
+      "unauthorizedAccess": 0
+    },
+    "gates": {
+      "availability": true,
+      "latency": true,
+      "context": true,
+      "correctness": true,
+      "severeHarm": true,
+      "dataPolicy": true
+    },
+    "passed": true
+  },
+  "recovery": {
+    "passed": true,
+    "lost": [],
+    "recoveryPointEvents": 0,
+    "recoveryTimeMs": 2
+  },
+  "readiness": {
+    "status": "insufficient",
+    "ready": false,
+    "missing": [
+      "powered release verdict",
+      "effectiveness evidence",
+      "production traffic evidence",
+      "stable rollout stage"
+    ]
+  },
+  "release": {
+    "status": "insufficient",
+    "passed": false,
+    "missing": [
+      "applicabilityPrecision",
+      "preActionDelivery",
+      "irrelevantDelivery",
+      "staleDelivery",
+      "recurrenceReduction",
+      "recurrenceIntervalLow",
+      "naturalCorrectnessDelta",
+      "severeUnquarantined",
+      "emptyP95Overhead",
+      "reconstructionTokenReduction",
+      "writerIntegrity",
+      "crossClientPassed",
+      "competitivePassed"
+    ],
+    "failed": []
+  },
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "production-exercise-6465084c50998723",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "2149207138958942c48284100db437f9ebb86cded23d1114b4aedb034d3784af",
+      "sourceTreeHash": "c6edaeb2108ae20b6dee3d94d7f8bdf5978a8290dbc1cacd7101903c64780c6e",
+      "runner": {
+        "name": "ucr-production-exercise",
+        "node": "v25.6.0"
+      },
+      "startedAt": "2026-08-09T23:09:07.161Z",
+      "runHash": "bb8d7d81fbfd439d281c03551e210b96656b73ca04e697f5e08b509d2217b0f2"
+    },
+    "rows": [
+      {
+        "fault": "dependency-timeout",
+        "contained": true,
+        "detail": "circuit opened after three failures and reset after the bounded interval",
+        "recoveryTimeMs": 11,
+        "dataLoss": 0,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "production-exercise-6465084c50998723",
+        "sequence": 0,
+        "previousHash": "bb8d7d81fbfd439d281c03551e210b96656b73ca04e697f5e08b509d2217b0f2",
+        "rowHash": "64b96f7b8f71ecbd48291a01d4b5cb0d8fd63493a68720e72e70c00e03f67688"
+      },
+      {
+        "fault": "malformed-event",
+        "contained": true,
+        "detail": "malformed JSONL was quarantined while accepted canonical events replayed",
+        "recoveryTimeMs": 1,
+        "dataLoss": 0,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "production-exercise-6465084c50998723",
+        "sequence": 1,
+        "previousHash": "64b96f7b8f71ecbd48291a01d4b5cb0d8fd63493a68720e72e70c00e03f67688",
+        "rowHash": "f97965c072db5a3f48ffd99c4da2897048560fd6ffcd869a4e610c4542718f8d"
+      },
+      {
+        "fault": "storage-unavailable",
+        "contained": true,
+        "detail": "runtime entered disconnected read-only mode with enforcement disabled",
+        "recoveryTimeMs": 1,
+        "dataLoss": 0,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "production-exercise-6465084c50998723",
+        "sequence": 2,
+        "previousHash": "f97965c072db5a3f48ffd99c4da2897048560fd6ffcd869a4e610c4542718f8d",
+        "rowHash": "ef8e1c7add25f46e1bd538af7355673e1398985b018b28e36d0abd1b5c06bc14"
+      },
+      {
+        "fault": "canary-regression",
+        "contained": true,
+        "detail": "correctness regression rolled the stage back and activated a scoped kill switch",
+        "recoveryTimeMs": 1,
+        "dataLoss": 0,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "production-exercise-6465084c50998723",
+        "sequence": 3,
+        "previousHash": "ef8e1c7add25f46e1bd538af7355673e1398985b018b28e36d0abd1b5c06bc14",
+        "rowHash": "27535573d9e7200103318ddde9a2e47515ded00daf9ecfbfa8d0d05517b15ebb"
+      },
+      {
+        "fault": "process-restart",
+        "contained": true,
+        "detail": "fresh store instance reconstructed the accepted canonical event digest",
+        "recoveryTimeMs": 2,
+        "dataLoss": 0,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "production-exercise-6465084c50998723",
+        "sequence": 4,
+        "previousHash": "27535573d9e7200103318ddde9a2e47515ded00daf9ecfbfa8d0d05517b15ebb",
+        "rowHash": "d19bdf3ce5fbf972257f291d4b047cc1ef445e11eac615d29b52a339c55154c1"
+      },
+      {
+        "fault": "network-partition",
+        "contained": true,
+        "detail": "split ownership reconciled to an explicit conflict instead of silent overwrite",
+        "recoveryTimeMs": 1,
+        "dataLoss": 0,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "production-exercise-6465084c50998723",
+        "sequence": 5,
+        "previousHash": "d19bdf3ce5fbf972257f291d4b047cc1ef445e11eac615d29b52a339c55154c1",
+        "rowHash": "9117807f4e73a6990caf352c29a3625b7cdd932f398c59a926efe745698f845b"
+      }
+    ],
+    "rowCount": 6,
+    "chainHead": "9117807f4e73a6990caf352c29a3625b7cdd932f398c59a926efe745698f845b",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-09T23:09:07.162Z",
+    "ledgerHash": "c0becec243d72c42db68de9c6ba644875ef63a921a9e20d04b7114ded9ea2c24",
+    "signature": "nIa+IYOQS0dybLMO8DDk6NJyV64W4afFSTK77C9kdMoZ61v//gVT6AoBVAK97y2370IpCxf1Er2B1n5uy7MJBg=="
+  },
+  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA7pyXVGXY/UJPiuCH1Hjc0IOxlUjOerd85xGK0PzwOds=\n-----END PUBLIC KEY-----\n",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "c0becec243d72c42db68de9c6ba644875ef63a921a9e20d04b7114ded9ea2c24",
+    "rowCount": 6
+  },
+  "passed": true,
+  "limitations": [
+    "local executable fault injection is not production traffic evidence",
+    "the SLO window measures gate mechanics and local control-path latency, not provider latency",
+    "production readiness intentionally remains insufficient until powered effectiveness and staged production evidence exist"
+  ],
+  "reportHash": "ac2910bbe7b66017c226808d37bedd871f38cac3fb3a5f36814ab709f4de74cc"
+}

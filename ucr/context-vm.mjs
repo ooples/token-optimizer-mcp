@@ -1,3 +1,12 @@
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname } from 'node:path';
+import { get_encoding } from 'tiktoken';
 import { canonicalJson, sha256 } from './protocol.mjs';
 
 export const CONTEXT_TIERS = Object.freeze({
@@ -11,7 +20,54 @@ export const CONTEXT_TIERS = Object.freeze({
 const estimate = (value) =>
   Math.max(1, Math.ceil(canonicalJson(value).length / 4));
 
-export function contextCapsule(candidate, { tier = 'L3' } = {}) {
+export function createTiktokenCounter(encoding = 'cl100k_base') {
+  const tokenizer = get_encoding(encoding);
+  let closed = false;
+  return {
+    method: `tiktoken:${encoding}`,
+    count(value) {
+      if (closed) throw new Error('token counter is closed');
+      return tokenizer.encode(canonicalJson(value)).length;
+    },
+    close() {
+      if (!closed) tokenizer.free();
+      closed = true;
+    },
+  };
+}
+
+export class WorkingSetStore {
+  constructor(path) {
+    this.path = path;
+  }
+
+  read() {
+    if (!existsSync(this.path)) return new Map();
+    const parsed = JSON.parse(readFileSync(this.path, 'utf8'));
+    return new Map(parsed.workingSets || []);
+  }
+
+  write(workingSets) {
+    mkdirSync(dirname(this.path), { recursive: true });
+    const temporary = `${this.path}.next`;
+    writeFileSync(
+      temporary,
+      `${canonicalJson({
+        schemaVersion: 'ucr.working-sets/1',
+        workingSets: [...workingSets.entries()].sort(([a], [b]) =>
+          a.localeCompare(b)
+        ),
+      })}\n`,
+      { mode: 0o600 }
+    );
+    renameSync(temporary, this.path);
+  }
+}
+
+export function contextCapsule(
+  candidate,
+  { tier = 'L3', tokenCounter = null } = {}
+) {
   const object = candidate.object;
   const capsule = {
     schemaVersion: 'ucr.capsule/1',
@@ -36,7 +92,11 @@ export function contextCapsule(candidate, { tier = 'L3' } = {}) {
       kernels: candidate.kernels,
     },
   };
-  return { ...capsule, tokens: estimate(capsule) };
+  return {
+    ...capsule,
+    tokens: tokenCounter ? tokenCounter.count(capsule) : estimate(capsule),
+    tokenAccounting: tokenCounter?.method || 'heuristic:utf8-length-div-4',
+  };
 }
 
 export class ContextVM {
@@ -44,14 +104,31 @@ export class ContextVM {
     planner,
     hardMaximumTokens = 512,
     artifactResolver = null,
+    tokenCounter = null,
+    workingSetStore = null,
   } = {}) {
     if (!planner) throw new Error('ContextVM requires a retrieval planner');
     this.planner = planner;
     this.hardMaximumTokens = hardMaximumTokens;
     this.artifactResolver = artifactResolver;
-    this.workingSets = new Map();
+    this.tokenCounter = tokenCounter;
+    this.workingSetStore = workingSetStore;
+    this.workingSets = workingSetStore?.read() || new Map();
     this.expansionCache = new Map();
     this.events = [];
+    this.started = false;
+  }
+
+  sessionStart() {
+    this.started = true;
+    const result = {
+      action: 'ready',
+      calls: 0,
+      tokens: 0,
+      tokenAccounting: this.tokenCounter?.method || 'unmeasured',
+    };
+    this.events.push({ kind: 'session-start', ...result });
+    return result;
   }
 
   page(
@@ -77,7 +154,10 @@ export class ContextVM {
     }
     const ranked = retrieval.candidates
       .map((candidate) => {
-        const capsule = contextCapsule(candidate, { tier });
+        const capsule = contextCapsule(candidate, {
+          tier,
+          tokenCounter: this.tokenCounter,
+        });
         return {
           capsule,
           valuePerToken:
@@ -97,10 +177,26 @@ export class ContextVM {
       capsules.push(item.capsule);
       tokens += item.capsule.tokens;
     }
+    const prior = context.taskId ? this.workingSets.get(context.taskId) : null;
+    const priorIds = new Set(
+      (prior?.capsules || []).map((capsule) => capsule.capsuleId)
+    );
+    const currentIds = new Set(capsules.map((capsule) => capsule.capsuleId));
+    const delta = {
+      baseHash: prior ? sha256(prior.capsules) : null,
+      added: capsules.filter((capsule) => !priorIds.has(capsule.capsuleId)),
+      removed: [...priorIds].filter((id) => !currentIds.has(id)),
+    };
     const result = {
       action: capsules.length ? 'deliver' : 'abstain',
       capsules,
       tokens,
+      delta,
+      transmittedTokens: context.delta
+        ? delta.added.reduce((sum, capsule) => sum + capsule.tokens, 0)
+        : tokens,
+      tokenAccounting:
+        this.tokenCounter?.method || 'heuristic:utf8-length-div-4',
       explanation: retrieval.explanation,
     };
     if (context.taskId)
@@ -108,6 +204,7 @@ export class ContextVM {
         stateHash: context.stateHash || null,
         capsules,
       });
+    if (context.taskId) this.workingSetStore?.write(this.workingSets);
     this.events.push({
       kind: 'page-fault',
       trigger: context.trigger || 'task',
@@ -121,6 +218,7 @@ export class ContextVM {
     if (!existing) return null;
     if (existing.stateHash && stateHash && existing.stateHash !== stateHash) {
       this.workingSets.delete(taskId);
+      this.workingSetStore?.write(this.workingSets);
       return null;
     }
     return existing.capsules;
@@ -132,6 +230,7 @@ export class ContextVM {
     existing.capsules = existing.capsules.filter((capsule) =>
       preserve.includes(capsule.tier)
     );
+    this.workingSetStore?.write(this.workingSets);
     return existing.capsules;
   }
 
@@ -146,7 +245,9 @@ export class ContextVM {
     this.events.push({
       kind: 'context-expanded',
       referenceHash: sha256(key),
-      tokens: estimate(content),
+      tokens: this.tokenCounter
+        ? this.tokenCounter.count(content)
+        : estimate(content),
     });
     return { cached: false, content };
   }
@@ -162,6 +263,17 @@ export class ContextVM {
         .filter((event) => event.kind === 'context-expanded')
         .reduce((sum, event) => sum + event.tokens, 0),
       workingSets: this.workingSets.size,
+      startupCalls: this.events
+        .filter((event) => event.kind === 'session-start')
+        .reduce((sum, event) => sum + event.calls, 0),
+      startupTokens: this.events
+        .filter((event) => event.kind === 'session-start')
+        .reduce((sum, event) => sum + event.tokens, 0),
+      transmittedTokens: this.events
+        .filter((event) => event.kind === 'page-fault')
+        .reduce((sum, event) => sum + (event.transmittedTokens ?? event.tokens), 0),
+      tokenAccounting:
+        this.tokenCounter?.method || 'heuristic:utf8-length-div-4',
     };
   }
 }

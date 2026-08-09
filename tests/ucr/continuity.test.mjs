@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -13,6 +14,11 @@ import {
   recordTakeoverAction,
   resolveContradiction,
   restoreCheckpoint,
+  checkpointDelta,
+  signCheckpoint,
+  takeoverStudy,
+  verifyCheckpoint,
+  consolidationStudy,
 } from '../../ucr/index.mjs';
 
 let root;
@@ -103,6 +109,59 @@ describe('checkpoints and cross-model takeover', () => {
     store.write(saved);
     expect(store.read(saved.checkpointId)).toEqual(saved);
     expect(store.recover()).toMatchObject({ committedOnly: true });
+  });
+
+  test('signs complete transcript-free checkpoints and creates incremental deltas', () => {
+    const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+    const prior = checkpoint();
+    const next = checkpoint({
+      checkpointId: 'checkpoint:next',
+      plan: [{ step: 'fix', state: 'completed' }],
+    });
+    const signed = signCheckpoint(next, privateKey, { keyId: 'checkpoint-key' });
+    expect(verifyCheckpoint(signed, publicKey)).toBe(true);
+    expect(checkpointDelta(prior, next)).toMatchObject({
+      parentCheckpointHash: prior.checkpointHash,
+      changedFields: ['checkpointId', 'plan'],
+    });
+    expect(() => checkpoint({ transcript: ['hidden'] })).toThrow(
+      /cannot contain a transcript/
+    );
+  });
+
+  test('scores transcript-free takeover non-inferiority and repeated failures', () => {
+    const rows = [
+      { arm: 'uninterrupted', correct: true },
+      {
+        arm: 'takeover',
+        correct: true,
+        modelFamily: 'openai',
+        direction: 'claude->codex',
+        repeatedVerifiedFailure: false,
+      },
+      {
+        arm: 'takeover',
+        correct: true,
+        modelFamily: 'anthropic',
+        direction: 'codex->claude',
+        repeatedVerifiedFailure: false,
+      },
+      {
+        arm: 'takeover',
+        correct: true,
+        modelFamily: 'google',
+        direction: 'codex->gemini',
+        stale: true,
+        staleDetectedBeforeAction: true,
+      },
+    ];
+    expect(takeoverStudy(rows)).toMatchObject({
+      nonInferior: true,
+      modelFamilies: 3,
+      repeatedFailures: 0,
+      staleBeforeAction: 0,
+      passed: true,
+    });
   });
 });
 
@@ -223,5 +282,37 @@ describe('consolidation, contradiction, and forgetting', () => {
     const compacted = compactLogicalHistory(objects, []);
     expect(compacted.logicalHistoryHash).toHaveLength(64);
     expect(compacted.canonical.objects).toHaveLength(2);
+  });
+
+  test('runs one hundred sessions without mutating sources or unbounded active growth', () => {
+    const sessions = Array.from({ length: 100 }, (_, index) => ({
+      id: `session-${index}`,
+      delayedReuseOf: index >= 12 ? `memory-${index % 12}` : null,
+      objects: [
+        {
+          id: `memory-${index}`,
+          type: 'failure',
+          state: 'active',
+          trigger: `gotcha-${index % 12}`,
+          correction: `correction-${index % 12}`,
+          confidence: 0.9,
+          learnedAt: 100 + index,
+          expectedUtility: 0.5,
+        },
+      ],
+    }));
+    const study = consolidationStudy(sessions, {
+      now: 200,
+      author: 'separate-consolidator',
+    });
+    expect(study).toMatchObject({
+      sessions: 100,
+      sourceMutations: 0,
+      uniqueLogicalMemories: 12,
+      delayedReuseCases: 88,
+      delayedReuseRetained: 88,
+    });
+    expect(study.activeGrowthRatio).toBeLessThan(0.25);
+    expect(study.proposalAuthors).toEqual(['separate-consolidator']);
   });
 });
