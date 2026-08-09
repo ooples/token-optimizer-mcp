@@ -52,6 +52,7 @@ import {
   forSharedCommand,
   forTouch,
   noteActClasses,
+  relevantFindingIdsForContext,
   sessionIndex,
   standingRules,
 } from './inject.mjs';
@@ -176,6 +177,24 @@ export function normalizeClientPayload(clientName, event, raw) {
   }
 
   return raw;
+}
+
+/** Extract only user/task text, never cwd, ids, or other metadata. */
+export function sessionTaskContext(raw = {}) {
+  return [
+    raw.prompt,
+    raw.user_prompt,
+    raw.userPrompt,
+    raw.initial_prompt,
+    raw.initialPrompt,
+    raw.task_prompt,
+    raw.taskPrompt,
+    raw.task_description,
+    raw.taskDescription,
+    raw.task?.prompt,
+    raw.task?.text,
+    raw.message?.content,
+  ].filter((value) => typeof value === 'string' && value.trim()).join('\n');
 }
 
 function emit(object) {
@@ -439,7 +458,14 @@ export async function run(clientName, event) {
         const episode = episodeMeta({ client: clientName, raw });
         const rules = standingRules(dir, graph, { episode });
         if (rules) parts.push(rules);
-        const index = sessionIndex(dir, graph, { episode });
+        const relevantFindingIds = relevantFindingIdsForContext(
+          graph,
+          sessionTaskContext(raw)
+        );
+        const index = sessionIndex(dir, graph, {
+          episode,
+          relevantFindingIds,
+        });
         if (index) parts.push(index);
       } catch {
         // Retrieval is optional context; the policy must still reach the model.

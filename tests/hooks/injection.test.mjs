@@ -11,7 +11,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { validate, buildDigest, harvestEnabled } from '../../hooks-core/harvest.mjs';
-import { forTouch, sessionIndex, refusalPayload, linkCoOccurrence } from '../../hooks-core/inject.mjs';
+import {
+  forTouch,
+  relevantFindingIdsForContext,
+  sessionIndex,
+  refusalPayload,
+  linkCoOccurrence,
+} from '../../hooks-core/inject.mjs';
 import { inHoldout, record, readMetrics, report, indexBudget } from '../../hooks-core/metrics.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
@@ -158,6 +164,24 @@ describe('P4 injection', () => {
       findingIds: ['the retry bu'],
     });
     expect(delivery.deliveredTokens).toBeGreaterThan(0);
+  });
+
+  test('task text selects only situational findings with two-term evidence', () => {
+    const path = write('commands.ts', 'export const runner = "npm test";');
+    indexFile(dir, path);
+    seedFinding(path, 'Run npm test instead of npx jest for this repository');
+    seedFinding(path, 'The deployment region is selected by the release job');
+
+    const graph = load(dir);
+    const selected = relevantFindingIdsForContext(
+      graph,
+      'The npx jest command failed; fix the repository test runner.'
+    );
+    expect(selected).toHaveLength(1);
+    expect(
+      [...graph.nodes.values()].find((node) => node.key === selected[0]).claim
+    ).toContain('npm test');
+    expect(relevantFindingIdsForContext(graph, 'test')).toEqual([]);
   });
 
   test('the session index labels invalidated content claims before delivery', () => {

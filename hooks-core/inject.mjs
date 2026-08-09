@@ -770,6 +770,57 @@ export function forSharedCommand(
 }
 
 
+const RELEVANCE_STOP_WORDS = new Set([
+  'about', 'after', 'again', 'before', 'could', 'from', 'have', 'into',
+  'just', 'need', 'that', 'their', 'there', 'these', 'this', 'those',
+  'using', 'want', 'when', 'where', 'which', 'with', 'would', 'your',
+]);
+
+function relevanceTerms(value) {
+  return [...new Set(String(value || '').toLowerCase()
+    .split(/[^a-z0-9_.:/-]+/)
+    .map((term) => term.replace(/^[_.:/-]+|[_.:/-]+$/g, ''))
+    .filter((term) => term.length >= 3 && !RELEVANCE_STOP_WORDS.has(term)))];
+}
+
+/**
+ * Selects finding keys only when a lifecycle payload contains actual task text.
+ * Session-start envelopes that carry only cwd/session metadata deliberately
+ * return no ids; their first file/command event uses the contextual injectors.
+ */
+export function relevantFindingIdsForContext(graph, context, { limit = 8 } = {}) {
+  const query = String(context || '').trim();
+  const queryTerms = relevanceTerms(query);
+  if (queryTerms.length < 2) return [];
+
+  return [...graph.nodes.values()]
+    .filter((finding) =>
+      finding.kind === 'finding'
+      && finding.retired !== true
+      && typeof finding.key === 'string'
+      && typeof finding.claim === 'string')
+    .map((finding) => {
+      const content = [
+        finding.key,
+        finding.claim,
+        finding.trigger,
+        ...(finding.anchors || []),
+      ].filter(Boolean).join(' ');
+      const terms = new Set(relevanceTerms(content));
+      const matches = queryTerms.filter((term) => terms.has(term)).length;
+      return { finding, matches };
+    })
+    // Two independent terms keeps a generic word such as "test" or "file"
+    // from turning the bounded index into an unrelated project-wide dump.
+    .filter(({ matches }) => matches >= 2)
+    .sort((a, b) =>
+      b.matches - a.matches
+      || (b.finding.confidence || 0.5) - (a.finding.confidence || 0.5)
+      || a.finding.key.localeCompare(b.finding.key))
+    .slice(0, Math.max(0, limit))
+    .map(({ finding }) => finding.key);
+}
+
 /**
  * The bounded SessionStart index: titles and ids only, never bodies.
  *
@@ -780,8 +831,8 @@ export function forSharedCommand(
 export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = [] } = {}) {
   const budget = indexBudget(dir);
   const relevant = new Set(relevantFindingIds);
-  // SessionStart has no task signal. Fail closed for situational findings until
-  // a client supplies ids selected from an actual prompt/tool relevance pass.
+  // Some SessionStart payloads have no task signal. Fail closed for situational
+  // findings until the adapter supplies ids selected from actual task text.
   // Universal human/pinned rules are delivered separately by `standingRules`.
   if (!relevant.size) return null;
   // RETIRED findings must not appear. They are excluded from every other read

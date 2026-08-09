@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { sessionIndex, standingRules } from '../../hooks-core/inject.mjs';
+import { readMetrics } from '../../hooks-core/metrics.mjs';
 import { load, putNode, wikiDir } from '../../hooks-core/wiki.mjs';
 import { spawnSync } from 'child_process';
 import { mkdtempSync, rmSync, readFileSync, mkdirSync } from 'fs';
@@ -175,6 +176,40 @@ describe('through the real SessionStart hook', () => {
     expect(ctx).toContain('isolated worktree');
     expect(ctx).not.toContain('# Project wiki');
     expect(ctx).not.toContain('npx jest');
+
+    // Both the custom Claude entry and the generated shared adapter now pass
+    // prompt-selected finding ids through the same fail-closed contract.
+    for (const entry of [
+      join(process.cwd(), 'plugin', 'hooks', 'session-start.mjs'),
+      join(process.cwd(), 'integrations', 'codex', 'hooks', 'session-start.mjs'),
+    ]) {
+      const relevantRun = spawnSync(process.execPath, [entry], {
+        input: JSON.stringify({
+          cwd: project,
+          userPrompt: 'The npx jest command failed; fix the test runner.',
+        }),
+        encoding: 'utf8',
+        timeout: 30_000,
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_WIKI_DIR: graphDir,
+          TOKEN_OPTIMIZER_SHARED_DIR: graphDir,
+          CLAUDE_PROJECT_DIR: project,
+        },
+      });
+      expect(relevantRun.status).toBe(0);
+      expect(relevantRun.stdout).toContain('# Project wiki');
+      expect(relevantRun.stdout).toContain('npx jest');
+    }
+    const adapterDeliveries = readMetrics(graphDir).filter(
+      (event) =>
+        event.kind === 'inject' &&
+        event.surface === 'session-start' &&
+        event.findingIds?.includes('c1')
+    );
+    expect(new Set(adapterDeliveries.map((event) => event.client))).toEqual(
+      new Set(['claude-code', 'codex'])
+    );
 
     // A prompt/tool relevance pass can explicitly select the situational item.
     const relevant = sessionIndex(graphDir, load(graphDir), { relevantFindingIds: ['c1'] });

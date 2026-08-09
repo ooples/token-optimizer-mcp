@@ -19,9 +19,13 @@
  */
 
 import { mode, MODE_OFF, readPayload, loadState } from './lib/policy.mjs';
-import { policyText } from './lib/adapter.mjs';
+import { policyText, sessionTaskContext } from './lib/adapter.mjs';
 import { restorationPlan } from './lib/restore.mjs';
-import { sessionIndex, standingRules } from './lib/inject.mjs';
+import {
+  relevantFindingIdsForContext,
+  sessionIndex,
+  standingRules,
+} from './lib/inject.mjs';
 import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
@@ -103,8 +107,13 @@ try {
     const graph = load(dir);
     const rules = standingRules(dir, graph);
     if (rules) parts.push(rules);
+    const relevantFindingIds = relevantFindingIdsForContext(
+      graph,
+      sessionTaskContext(payload)
+    );
     const index = sessionIndex(dir, graph, {
       episode: episodeMeta({ client: 'claude-code', raw: payload }),
+      relevantFindingIds,
     });
     if (index) parts.push(index);
   }
