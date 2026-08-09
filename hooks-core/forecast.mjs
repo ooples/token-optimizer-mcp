@@ -54,6 +54,15 @@ export const ACTIONABLE_RUNWAY = 8;
 export const MIN_CONTROL_TOUCHES = 10;
 
 /**
+ * Events each arm needs before their disagreement means anything.
+ *
+ * Lower than MIN_CONTROL_TOUCHES because this is a sanity check between two estimates rather than
+ * a number being published as fact -- but not one, because a gap between two single samples is
+ * noise, and this note's whole job is to tell the reader when a number cannot be trusted.
+ */
+export const MIN_DIVERGENCE_EVENTS = 5;
+
+/**
  * Tokens per turn, and how many the graph is removing.
  *
  * The delta is causal because it comes from the arms, not from a model of what
@@ -361,14 +370,33 @@ export function forecastPanel(dir, session = {}, findings = []) {
   // Divergence between the modelled and measured views. Agreement is
   // reassurance; disagreement means the model is wrong and should be said out
   // loud rather than quietly preferred one way or the other.
-  if (shadow && rate?.savedPerTouch != null && rate.treatedTouches > 0) {
-    const modelled = shadow.net / Math.max(1, rate.treatedTouches);
+  //
+  // EACH ARM IS DIVIDED BY ITS OWN EVENT COUNT. `shadow.net` totals SUBSTITUTE events;
+  // `rate.treatedTouches` counts INJECT events. Dividing the first by the second is a category
+  // error -- the same units mistake as adding a per-touch saving to a per-turn cost -- and it does
+  // not merely skew the number, it makes it grow without bound: substitutions accumulate all
+  // session while injections do not, so the ratio climbs forever.
+  //
+  // Observed live on this machine, the note firing on every single tool call with the modelled
+  // figure rising 474,668 -> 519,635 -> 574,595 -> 589,584 per touch against a measured -29. A
+  // credibility check that cries wolf on every call is worse than no check: it trains the reader
+  // to skip the one line that exists to say "do not trust the number above".
+  //
+  // AND BOTH ARMS NEED VOLUME. One substitution makes the modelled figure a single sample, which
+  // is the same reason the runway counterfactual waits for MIN_CONTROL_TOUCHES. A disagreement
+  // between two one-sample estimates is not evidence of anything.
+  const shadowEvents = shadow?.substitutions ?? 0;
+  if (shadow && rate?.savedPerTouch != null
+      && rate.treatedTouches >= MIN_DIVERGENCE_EVENTS
+      && shadowEvents >= MIN_DIVERGENCE_EVENTS) {
+    const modelled = shadow.net / shadowEvents;
     const measured = rate.savedPerTouch;
     const spread = Math.abs(modelled - measured) / Math.max(1, Math.abs(measured));
-    parts.divergence = { modelled, measured, spread };
+    parts.divergence = { modelled, measured, spread, shadowEvents, treatedTouches: rate.treatedTouches };
     if (spread > 0.5) {
-      lines.push(`Note: the modelled saving (${Math.round(modelled)}/touch) and the measured one ` +
-        `(${Math.round(measured)}/touch) disagree; treat the measured figure as authoritative.`);
+      lines.push(`Note: the modelled saving (${Math.round(modelled)}/substitution over ` +
+        `${shadowEvents}) and the measured one (${Math.round(measured)}/touch over ` +
+        `${rate.treatedTouches}) disagree; treat the measured figure as authoritative.`);
     }
   }
 

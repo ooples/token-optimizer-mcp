@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { record, recordRead } from '../../hooks-core/metrics.mjs';
 import {
   burnRate, runway, shadowAvoided, forecastPanel, worthSurfacing, ACTIONABLE_RUNWAY,
-  MIN_CONTROL_TOUCHES, balanceAwareEvents,
+  MIN_CONTROL_TOUCHES, MIN_DIVERGENCE_EVENTS, balanceAwareEvents,
 } from '../../hooks-core/forecast.mjs';
 import {
   logForecast, observeOutcome, reliability, calibrate,
@@ -521,5 +521,84 @@ describe('the panel actually runs the calibration loop', () => {
     expect(after.parts.calibration.publishable).toBe(true);
     expect(after.text).toMatch(/corrected: within 3 on \d+% of \d+ past forecasts/);
     expect(after.text).toContain(`~${raw + 2} turns to compaction`);
+  });
+});
+
+describe('the credibility check divides each arm by its own event count', () => {
+  const session = { sessionId: 'live', used: 60_000, capacity: 200_000, turns: 30, touches: 30 };
+
+  test('a session full of substitutions does not manufacture a divergence', () => {
+    // THE DEFECT, observed live: `shadow.net` totals SUBSTITUTE events and `rate.treatedTouches`
+    // counts INJECT events, so dividing one by the other is a category error -- and because
+    // substitutions accumulate all session while injections do not, the ratio grew without bound.
+    // The note fired on every tool call with the modelled figure rising 474,668 -> 519,635 ->
+    // 574,595 -> 589,584 per touch against a measured -29. A credibility check that cries wolf on
+    // every call trains the reader to skip the one line that says "do not trust the number above".
+    seedArms({ treated: 12, withheld: MIN_CONTROL_TOUCHES + 2 });
+
+    // Many substitutions, each avoiding roughly what the treated arm reads per touch, so the two
+    // views actually AGREE -- and must therefore stay quiet.
+    for (let i = 0; i < 40; i++) {
+      record(dir, { kind: 'substitute', anchor: `/src/real${i}.ts`, bytesAvoided: 18_000, tokens: 100 });
+    }
+
+    const panel = forecastPanel(dir, session, []);
+    expect(panel.text).not.toMatch(/disagree/);
+  });
+
+  test('the modelled figure does not grow as substitutions accumulate', () => {
+    // The signature of the bug: identical per-event economics, more events, a larger number.
+    const measureWith = (n) => {
+      const d2 = join(mkdtempSync(join(tmpdir(), 'div-')), 'wiki');
+      for (let i = 0; i < 12; i++) {
+        record(d2, { kind: 'inject', anchor: `/t${i}.ts`, sessionId: 's', holdout: false, tokens: 100 });
+        recordRead(d2, { anchor: `/t${i}.ts`, sessionId: 's', bytes: 2_000 });
+      }
+      for (let i = 0; i < MIN_CONTROL_TOUCHES + 2; i++) {
+        record(d2, { kind: 'inject', anchor: `/c${i}.ts`, sessionId: 's', holdout: true, tokens: 0 });
+        recordRead(d2, { anchor: `/c${i}.ts`, sessionId: 's', bytes: 20_000 });
+      }
+      for (let i = 0; i < n; i++) {
+        record(d2, { kind: 'substitute', anchor: `/s${i}.ts`, bytesAvoided: 4_000, tokens: 50 });
+      }
+      const p = forecastPanel(d2, { ...session, sessionId: 'x' }, []);
+      expect(p.parts.divergence).toBeDefined();
+      return p.parts.divergence.modelled;
+    };
+
+    const few = measureWith(10);
+    const many = measureWith(80);
+    // Eight times the events at the same per-event economics: the estimate must not move.
+    expect(Math.abs(many - few)).toBeLessThan(Math.abs(few) * 0.1 + 1);
+  });
+
+  test('two single samples are not a disagreement', () => {
+    seedArms({ treated: 12, withheld: MIN_CONTROL_TOUCHES + 2 });
+    record(dir, { kind: 'substitute', anchor: '/src/one.ts', bytesAvoided: 4_000_000, tokens: 10 });
+
+    const panel = forecastPanel(dir, session, []);
+    // One substitution cannot support a claim that the model and the measurement disagree, however
+    // far apart they look -- the same reason the runway waits for MIN_CONTROL_TOUCHES.
+    expect(panel.parts.divergence).toBeUndefined();
+    expect(panel.text).not.toMatch(/disagree/);
+  });
+
+  test('a real disagreement is still reported, with both counts', () => {
+    seedArms({ treated: 12, withheld: MIN_CONTROL_TOUCHES + 2 });
+    for (let i = 0; i < 20; i++) {
+      record(dir, { kind: 'substitute', anchor: `/src/big${i}.ts`, bytesAvoided: 4_000_000, tokens: 10 });
+    }
+    const panel = forecastPanel(dir, session, []);
+    const d = panel.parts.divergence;
+    expect(panel.text).toMatch(/disagree/);
+    // The counts are named, so a reader can weigh the claim rather than simply take it.
+    expect(d.shadowEvents).toBe(20);
+    expect(d.treatedTouches).toBe(12);
+    expect(panel.text).toMatch(/substitution over 20/);
+    expect(panel.text).toMatch(/touch over 12/);
+  });
+
+  test('the threshold is a real bound', () => {
+    expect(MIN_DIVERGENCE_EVENTS).toBe(5);
   });
 });
