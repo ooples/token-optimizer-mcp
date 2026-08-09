@@ -30,6 +30,7 @@ import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { annotatedSkeleton } from './skeleton.mjs';
 import { substitutionBudget } from './metrics.mjs';
+import { assessFindings } from './utility.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
@@ -150,7 +151,7 @@ export function forTouch(
   dir,
   graph,
   rawPath,
-  { budget = touchBudget(), sessionId, alreadyInjected = new Set() } = {}
+  { budget = touchBudget(), sessionId, alreadyInjected = new Set(), episode = {} } = {}
 ) {
   // Canonical, so a touch finds findings anchored under any other spelling.
   const filePath = canonicalPath(rawPath);
@@ -169,16 +170,36 @@ export function forTouch(
   // variance drops out. A session-pinned arm would destroy that.
   const holdout = inHoldout(filePath);
   const served = serve(graph, candidates);
-  const { kept, spent } = fit(served, budget);
+  const assessed = assessFindings(dir, served, {
+    episodeId: episode.episodeId || sessionId,
+    relevanceFor: () => 1,
+    costFor: (finding) => estimate(render(finding)),
+  });
+  if (assessed.rejected.length) {
+    record(dir, {
+      kind: 'retrieval-decision', ...episode, sessionId,
+      surface: 'file', anchor: filePath,
+      rejected: assessed.rejected.map(({ key, reason }) => ({ key, reason })),
+    });
+    for (const rejected of assessed.rejected) alreadyInjected.add(rejected.key);
+  }
+  const { kept, spent } = fit(assessed.eligible.map((item) => item.finding), budget);
+  if (!kept.length) return null;
 
   record(dir, {
     kind: 'inject',
+    ...episode,
     // The surface whose saving CAN be measured: reads of this anchor afterwards.
     surface: 'file',
     anchor: filePath,
     holdout,
     tokens: holdout ? 0 : spent,
-    count: kept.length,
+    deliveredTokens: holdout ? 0 : spent,
+    shadowTokens: spent,
+    count: holdout ? 0 : kept.length,
+    candidateCount: kept.length,
+    findingIds: holdout ? [] : kept.map((finding) => finding.key),
+    shadowFindingIds: kept.map((finding) => finding.key),
     stale: kept.some((f) => f.stale),
     sessionId,
   });
@@ -297,7 +318,7 @@ export function forCommand(
   dir,
   graph,
   command,
-  { budget = touchBudget(), sessionId, alreadyInjected = new Set() } = {}
+  { budget = touchBudget(), sessionId, alreadyInjected = new Set(), episode = {} } = {}
 ) {
   if (!command) return null;
 
@@ -335,7 +356,20 @@ export function forCommand(
   const considered = candidates.slice(0, MAX_COMMAND_CANDIDATES);
 
   const served = serve(graph, considered);
-  const { kept, spent } = fit(served, budget);
+  const assessed = assessFindings(dir, served, {
+    episodeId: episode.episodeId || sessionId,
+    relevanceFor: (finding) => explicit(finding) ? 1 : 0.6,
+    costFor: (finding) => estimate(render(finding)),
+  });
+  if (assessed.rejected.length) {
+    record(dir, {
+      kind: 'retrieval-decision', ...episode, sessionId,
+      surface: 'command', anchor: String(command).slice(0, 120),
+      rejected: assessed.rejected.map(({ key: findingKey, reason }) => ({ key: findingKey, reason })),
+    });
+    for (const rejected of assessed.rejected) alreadyInjected.add(rejected.key);
+  }
+  const { kept, spent } = fit(assessed.eligible.map((item) => item.finding), budget);
   if (!kept.length) return null;
 
   // THE COMMAND PATH TAKES PART IN THE HOLDOUT TOO.
@@ -353,6 +387,7 @@ export function forCommand(
 
   record(dir, {
     kind: 'inject',
+    ...episode,
     trigger: 'command',
     // The surface the report needs to keep these OUT of the file-read balance:
     // a command has no anchor that read events can be joined to.
@@ -360,7 +395,12 @@ export function forCommand(
     anchor: String(command).slice(0, 120),
     holdout,
     tokens: holdout ? 0 : spent,
+    deliveredTokens: holdout ? 0 : spent,
+    shadowTokens: spent,
     count: holdout ? 0 : kept.length,
+    candidateCount: kept.length,
+    findingIds: holdout ? [] : kept.map((finding) => finding.key),
+    shadowFindingIds: kept.map((finding) => finding.key),
     stale: kept.some((f) => f.stale),
     sessionId,
   });
@@ -509,7 +549,7 @@ export function forRepeatedAct(
   projectDir,
   command,
   crossedClasses,
-  { sessionId = null, projectRoot = null } = {}
+  { sessionId = null, projectRoot = null, episode = {} } = {}
 ) {
   if (!crossedClasses || !crossedClasses.size) return null;
 
@@ -527,14 +567,33 @@ export function forRepeatedAct(
       if (![...crossedClasses].some((c) => claimClasses.has(c))) continue;
 
       const cls = [...crossedClasses].find((c) => claimClasses.has(c));
+      const assessed = assessFindings(projectDir, [node], {
+        episodeId: episode.episodeId || sessionId,
+        relevanceFor: () => 1,
+        costFor: (finding) => estimate(render(finding)),
+      });
+      if (!assessed.eligible.length) {
+        record(projectDir, {
+          kind: 'retrieval-decision', ...episode, sessionId,
+          surface: 'shared', anchor: String(command).slice(0, 120),
+          rejected: assessed.rejected.map(({ key, reason }) => ({ key, reason })),
+        });
+        continue;
+      }
       record(projectDir, {
         kind: 'inject',
+        ...episode,
         trigger: 'repeat',
         surface: 'shared',
         anchor: String(command).slice(0, 120),
         holdout: false,
         tokens: estimate(node.claim),
+        deliveredTokens: estimate(node.claim),
+        shadowTokens: estimate(node.claim),
         count: 1,
+        candidateCount: 1,
+        findingIds: [node.key],
+        shadowFindingIds: [node.key],
         stale: false,
         sessionId,
       });
@@ -585,7 +644,10 @@ function appliesCrossProject(finding, command) {
 export function forSharedCommand(
   projectDir,
   command,
-  { budget = sharedBudget(), sessionId = null, alreadyInjected = new Set(), projectRoot = null } = {}
+  {
+    budget = sharedBudget(), sessionId = null, alreadyInjected = new Set(),
+    projectRoot = null, episode = {},
+  } = {}
 ) {
   if (!command) return null;
 
@@ -622,7 +684,21 @@ export function forSharedCommand(
     // No serve() here: these types are not content-dependent, so there is no
     // anchor to re-read and nothing to diff. serve() would spend a file read per
     // finding to answer a question that does not apply to them.
-    const { kept, spent } = fit(candidates.slice(0, MAX_SHARED), budget);
+    const considered = candidates.slice(0, MAX_SHARED);
+    const assessed = assessFindings(projectDir, considered, {
+      episodeId: episode.episodeId || sessionId,
+      relevanceFor: (finding) => explicit(finding) ? 0.8 : 0.5,
+      costFor: (finding) => estimate(render(finding)),
+    });
+    if (assessed.rejected.length) {
+      record(projectDir, {
+        kind: 'retrieval-decision', ...episode, sessionId,
+        surface: 'shared', anchor: String(command).slice(0, 120),
+        rejected: assessed.rejected.map(({ key, reason }) => ({ key, reason })),
+      });
+      for (const rejected of assessed.rejected) alreadyInjected.add(rejected.key);
+    }
+    const { kept, spent } = fit(assessed.eligible.map((item) => item.finding), budget);
     if (!kept.length) return null;
 
     // THE SAME ARM AS THE LOCAL PATH, KEYED THE SAME WAY.
@@ -644,6 +720,7 @@ export function forSharedCommand(
 
     record(projectDir, {
       kind: 'inject',
+      ...episode,
       trigger: 'command',
       // ITS OWN SURFACE. The balance sheet joins `file` injections to later read
       // events; a shared lesson has no anchor in this project to join to, and
@@ -653,7 +730,12 @@ export function forSharedCommand(
       anchor: String(command).slice(0, 120),
       holdout,
       tokens: holdout ? 0 : spent,
+      deliveredTokens: holdout ? 0 : spent,
+      shadowTokens: spent,
       count: holdout ? 0 : kept.length,
+      candidateCount: kept.length,
+      findingIds: holdout ? [] : kept.map((finding) => finding.key),
+      shadowFindingIds: kept.map((finding) => finding.key),
       stale: false,
       sessionId,
     });

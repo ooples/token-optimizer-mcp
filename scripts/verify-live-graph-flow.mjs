@@ -139,6 +139,17 @@ async function main() {
   const write = await wikiWrite({
     claim,
     anchors: [anchor],
+    evidence:
+      'The fixture package test script exits unless Jest is launched through the documented project command.',
+    applicability:
+      'Use when running the fixture verification suite from this project root.',
+    confidenceLabel: 'verified',
+    // This verifier intentionally exercises the explicit cross-project path.
+    // A normal project-specific finding remains project scoped by default.
+    scope: 'global',
+    invalidators: [
+      'The fixture package test script or its documented verification command changes.',
+    ],
     type: 'command',
     trigger: '\\bnpx\\s+jest\\b',
     confidence: 0.99,

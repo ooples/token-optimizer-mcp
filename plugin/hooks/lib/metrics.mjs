@@ -61,6 +61,7 @@ const metricsPath = (dir) => join(dir, 'metrics.jsonl');
  * on it drops BOTH arms proportionally instead of starving the rare one.
  */
 const balancePath = (dir) => join(dir, 'balance.jsonl');
+const evidencePath = (dir) => join(dir, 'evidence.jsonl');
 
 /** Kinds the net balance is computed from, and which therefore must survive. */
 /**
@@ -83,6 +84,24 @@ export const BALANCE_KINDS = new Set([
   // aged out before it was written and the backstop was structurally unable to fire, reporting
   // "only N/10 refreshes observed" for the life of the project.
   'keepwarm',
+]);
+
+/**
+ * Causal records have their own bounded log.  Tool outcomes are much rarer
+ * than read/capture telemetry but more frequent than balance records; mixing
+ * them into either window would eventually evict the evidence needed to join
+ * an injection to its result.
+ */
+export const EVIDENCE_KINDS = new Set([
+  'inject',
+  'harvest',
+  'tool-outcome',
+  'episode-outcome',
+  'eval-run',
+  'finding-feedback',
+  'retrieval-decision',
+  'mcp-client',
+  'mcp-tool',
 ]);
 
 /**
@@ -198,15 +217,30 @@ export function record(dir, event) {
     // single millisecond collapsed to ONE, so a graph with ample data reported
     // 'insufficient data (2 treated, 1 holdout)'. Real events were being
     // discarded by the deduplicator, silently.
-    const line =
-      JSON.stringify({ id: nextId(), ...event, at: event.at ?? Date.now() }) + '\n';
+    const id = event.id || nextId();
+    const complete = {
+      schemaVersion: event.schemaVersion || 2,
+      id,
+      ...event,
+      // An injection id is first-class rather than an inference from the log
+      // record id.  Exporters may rewrite record ids while preserving causal
+      // identity, and downstream tool outcomes refer to this value explicitly.
+      ...(event.kind === 'inject'
+        ? { injectionId: event.injectionId || id }
+        : {}),
+      at: event.at ?? Date.now(),
+    };
+    const line = JSON.stringify(complete) + '\n';
     appendFileSync(metricsPath(dir), line);
     // Balance-critical records go to their own log as well, so the windows on
     // the firehose can never starve the measurement. Written SECOND: a torn
     // write here costs a duplicate the reader dedupes, not a lost event.
     if (BALANCE_KINDS.has(event.kind)) appendFileSync(balancePath(dir), line);
+    if (EVIDENCE_KINDS.has(event.kind)) appendFileSync(evidencePath(dir), line);
+    return complete;
   } catch {
     // Metrics must never break a tool call.
+    return null;
   }
 }
 
@@ -402,6 +436,92 @@ export function readBalance(dir) {
     out.push(e);
   }
   return out;
+}
+
+/** Every causal evidence record inside the byte cap, deduplicated by id. */
+export function readEvidence(dir) {
+  const path = evidencePath(dir);
+  if (!existsSync(path)) return [];
+
+  let text = '';
+  try {
+    const { size } = statSync(path);
+    if (size <= MAX_BYTES) {
+      text = readFileSync(path, 'utf8');
+    } else {
+      const fd = openSync(path, 'r');
+      try {
+        const buffer = Buffer.allocUnsafe(MAX_BYTES);
+        const read = readSync(fd, buffer, 0, MAX_BYTES, size - MAX_BYTES);
+        text = buffer.subarray(0, read).toString('utf8');
+      } finally {
+        closeSync(fd);
+      }
+      text = text.slice(text.indexOf('\n') + 1);
+    }
+  } catch {
+    return [];
+  }
+
+  const seen = new Set();
+  const out = [];
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    try {
+      const event = JSON.parse(line);
+      if (!EVIDENCE_KINDS.has(event.kind)) continue;
+      const id = event.id || JSON.stringify(event);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(event);
+    } catch {
+      // A concurrently appended final line may be torn.  It costs one record,
+      // never the user's tool call or the rest of the evidence report.
+    }
+  }
+  return out;
+}
+
+/**
+ * Joins a post-tool result to the most recent matching injection.  The exact
+ * tool-call id wins; clients that omit it fall back to episode + surface +
+ * anchor, in timestamp order, and the report states the weaker join method.
+ */
+export function recordToolOutcome(dir, outcome) {
+  const evidence = readEvidence(dir);
+  const anchor = String(outcome.anchor || '').slice(0, 120);
+  const candidates = evidence
+    .filter((event) => event.kind === 'inject' && event.episodeId === outcome.episodeId)
+    .filter((event) => {
+      if (outcome.toolCallId && event.toolCallId)
+        return String(event.toolCallId) === String(outcome.toolCallId);
+      return event.surface === outcome.surface && String(event.anchor || '').slice(0, 120) === anchor;
+    })
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+  const injection = candidates[0] || null;
+  const joinMethod = injection
+    ? (outcome.toolCallId && injection.toolCallId ? 'tool-call-id' : 'episode-anchor')
+    : 'none';
+
+  return record(dir, {
+    kind: 'tool-outcome',
+    ...outcome,
+    anchor,
+    injectionId: injection?.injectionId || null,
+    findingIds: injection?.findingIds || [],
+    joinMethod,
+  });
+}
+
+export function recordEpisodeOutcome(dir, outcome) {
+  return record(dir, { kind: 'episode-outcome', ...outcome });
+}
+
+export function recordFindingFeedback(dir, feedback) {
+  const rating = ['helpful', 'neutral', 'harmful'].includes(feedback?.rating)
+    ? feedback.rating
+    : 'neutral';
+  return record(dir, { kind: 'finding-feedback', ...feedback, rating });
 }
 
 /**
@@ -813,4 +933,241 @@ export function indexBudget(dir, { floor = 150, base = 300, ceiling = 1200 } = {
   // 0% hit rate falls to the floor; ~50% and above reaches the ceiling.
   const scaled = Math.round(floor + (ceiling - floor) * Math.min(1, hitRate * 2));
   return Math.max(floor, Math.min(ceiling, scaled));
+}
+
+/* ----------------------------------------------------------------------
+ * Episode-level causal evidence
+ * ------------------------------------------------------------------- */
+
+const numeric = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const average = (values) => {
+  const finite = values.map(numeric).filter((value) => value !== null);
+  return finite.length
+    ? finite.reduce((sum, value) => sum + value, 0) / finite.length
+    : null;
+};
+
+/** Deterministic PRNG so regenerating a report does not move its interval. */
+function seededRandom(seedText) {
+  let seed = 2166136261;
+  for (const char of String(seedText)) {
+    seed ^= char.charCodeAt(0);
+    seed = Math.imul(seed, 16777619);
+  }
+  return () => {
+    seed += 0x6d2b79f5;
+    let value = seed;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Percentile bootstrap interval for a mean, paired delta, or other scalar. */
+export function bootstrapMeanInterval(values, { samples = 1000, seed = 'token-optimizer' } = {}) {
+  const finite = values.map(numeric).filter((value) => value !== null);
+  if (!finite.length) return { mean: null, low: null, high: null, n: 0 };
+  if (finite.length === 1) {
+    return { mean: finite[0], low: finite[0], high: finite[0], n: 1 };
+  }
+
+  const random = seededRandom(`${seed}:${finite.join(',')}`);
+  const means = [];
+  for (let sample = 0; sample < samples; sample++) {
+    let total = 0;
+    for (let index = 0; index < finite.length; index++) {
+      total += finite[Math.floor(random() * finite.length)];
+    }
+    means.push(total / finite.length);
+  }
+  means.sort((a, b) => a - b);
+  return {
+    mean: average(finite),
+    low: means[Math.floor(means.length * 0.025)],
+    high: means[Math.min(means.length - 1, Math.floor(means.length * 0.975))],
+    n: finite.length,
+  };
+}
+
+/** Wilson interval keeps small correctness samples honest and inside 0..1. */
+export function proportionInterval(successes, total, z = 1.96) {
+  if (!total) return { rate: null, low: null, high: null, n: 0 };
+  const rate = successes / total;
+  const denominator = 1 + (z * z) / total;
+  const centre = (rate + (z * z) / (2 * total)) / denominator;
+  const radius =
+    (z / denominator) * Math.sqrt((rate * (1 - rate)) / total + (z * z) / (4 * total * total));
+  return { rate, low: Math.max(0, centre - radius), high: Math.min(1, centre + radius), n: total };
+}
+
+const cohortKey = (run) => [
+  run.client || 'unknown',
+  run.clientVersion || 'unknown',
+  run.model || 'unknown',
+  run.modelVersion || 'unknown',
+  run.taskId || 'unknown',
+].join('|');
+
+function armMetrics(runs) {
+  const correct = runs.filter((run) => run.correct === true).length;
+  const interval = (field) => bootstrapMeanInterval(
+    runs.map((run) => run[field]).filter((value) => numeric(value) !== null),
+    { seed: field }
+  );
+  return {
+    runs: runs.length,
+    correctness: proportionInterval(correct, runs.length),
+    uncachedInputTokens: interval('uncachedInputTokens'),
+    cachedInputTokens: interval('cachedInputTokens'),
+    outputTokens: interval('outputTokens'),
+    totalTokens: interval('totalTokens'),
+    toolCalls: interval('toolCalls'),
+    failedToolCalls: interval('failedToolCalls'),
+    latencyMs: interval('latencyMs'),
+    costUsd: interval('costUsd'),
+    injectedTokens: interval('injectedTokens'),
+    harmfulFindings: runs.reduce((sum, run) => sum + (numeric(run.harmfulFindings) || 0), 0),
+  };
+}
+
+function pairedEffects(runs, treatmentArm) {
+  const pairs = new Map();
+  for (const run of runs) {
+    if (!run.pairId || !['baseline', treatmentArm].includes(run.arm)) continue;
+    if (!pairs.has(run.pairId)) pairs.set(run.pairId, {});
+    pairs.get(run.pairId)[run.arm] = run;
+  }
+  const complete = [...pairs.values()].filter((pair) => pair.baseline && pair[treatmentArm]);
+  const delta = (field, lowerIsBetter = true) => bootstrapMeanInterval(
+    complete
+      .map((pair) => {
+        const baseline = numeric(pair.baseline[field]);
+        const treatment = numeric(pair[treatmentArm][field]);
+        if (baseline === null || treatment === null) return null;
+        return lowerIsBetter ? baseline - treatment : treatment - baseline;
+      })
+      .filter((value) => value !== null),
+    { seed: `${treatmentArm}:${field}` }
+  );
+  return {
+    arm: treatmentArm,
+    pairs: complete.length,
+    // Positive values always mean the treatment improved the metric.
+    totalTokensSaved: delta('totalTokens'),
+    uncachedInputTokensSaved: delta('uncachedInputTokens'),
+    toolCallsAvoided: delta('toolCalls'),
+    latencyMsSaved: delta('latencyMs'),
+    costUsdSaved: delta('costUsd'),
+    correctnessDelta: delta('correct', false),
+  };
+}
+
+function matchesFilters(event, filters) {
+  for (const field of ['client', 'clientVersion', 'model', 'modelVersion', 'taskId', 'arm']) {
+    if (filters[field] && String(event[field] || '') !== String(filters[field])) return false;
+  }
+  return true;
+}
+
+/**
+ * The dashboard-facing evidence console.  Deterministic fixture verification,
+ * live hook traces, and randomized model evals remain visibly distinct: only
+ * `eval-run` records with paired arms can produce a causal effect interval.
+ */
+export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
+  const evidence = readEvidence(dir).filter((event) => matchesFilters(event, filters));
+  const runs = evidence.filter((event) => event.kind === 'eval-run');
+  const injections = evidence.filter((event) => event.kind === 'inject');
+  const outcomes = evidence.filter((event) => event.kind === 'tool-outcome');
+  const feedback = evidence.filter((event) => event.kind === 'finding-feedback');
+
+  const byInjection = new Map(
+    outcomes.filter((event) => event.injectionId).map((event) => [event.injectionId, event])
+  );
+  const traced = injections
+    .slice()
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
+    .slice(0, Math.max(1, Math.min(500, episodeLimit)))
+    .map((injection) => ({
+      injectionId: injection.injectionId,
+      episodeId: injection.episodeId || injection.sessionId || null,
+      at: injection.at,
+      arm: injection.arm || (injection.holdout ? 'holdout' : 'treated'),
+      client: injection.client || 'unknown',
+      clientVersion: injection.clientVersion || null,
+      model: injection.model || null,
+      taskId: injection.taskId || null,
+      surface: injection.surface || injection.trigger || 'file',
+      anchor: injection.anchor,
+      findingIds: injection.findingIds || [],
+      deliveredTokens: injection.deliveredTokens ?? injection.tokens ?? 0,
+      shadowTokens: injection.shadowTokens ?? injection.tokens ?? 0,
+      outcome: byInjection.get(injection.injectionId) || null,
+    }));
+
+  const grouped = new Map();
+  for (const run of runs) {
+    const key = cohortKey(run);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(run);
+  }
+
+  const minimumPairs = Math.max(2, Number(process.env.TOKEN_OPTIMIZER_EVAL_MIN_PAIRS) || 5);
+  const cohorts = [...grouped.entries()].map(([key, cohortRuns]) => {
+    const arms = Object.fromEntries(
+      ['baseline', 'optimizer', 'retrieval', 'full'].map((arm) => [
+        arm,
+        armMetrics(cohortRuns.filter((run) => run.arm === arm)),
+      ])
+    );
+    const effects = ['optimizer', 'retrieval', 'full'].map((arm) => pairedEffects(cohortRuns, arm));
+    const enough = effects.some((effect) => effect.pairs >= minimumPairs);
+    return {
+      key,
+      client: cohortRuns[0]?.client || 'unknown',
+      clientVersion: cohortRuns[0]?.clientVersion || null,
+      model: cohortRuns[0]?.model || null,
+      modelVersion: cohortRuns[0]?.modelVersion || null,
+      taskId: cohortRuns[0]?.taskId || null,
+      arms,
+      effects,
+      evidenceStatus: enough
+        ? 'causal estimate available'
+        : `insufficient paired runs (need ${minimumPairs})`,
+    };
+  });
+
+  const joined = injections.filter((injection) =>
+    byInjection.has(injection.injectionId)
+  ).length;
+  const harmful = feedback.filter((event) => event.rating === 'harmful').length;
+  return {
+    schemaVersion: 2,
+    generatedAt: new Date().toISOString(),
+    filters,
+    summary: {
+      liveInjections: injections.length,
+      joinedOutcomes: joined,
+      causalJoinCoverage: injections.length ? joined / injections.length : null,
+      evalRuns: runs.length,
+      cohorts: cohorts.length,
+      harmfulFeedback: harmful,
+      harmRate: feedback.length ? harmful / feedback.length : null,
+      evidenceStatus: cohorts.some((cohort) => cohort.evidenceStatus === 'causal estimate available')
+        ? 'causal estimates available'
+        : 'insufficient randomized evidence',
+    },
+    cohorts,
+    episodes: traced,
+    methodology: {
+      intervals: 'deterministic percentile bootstrap (95%); Wilson interval for correctness',
+      causalRule: 'only matched eval-run pairs compare an arm with baseline',
+      minimumPairs,
+      deterministicChecksAreCausalProof: false,
+    },
+  };
 }

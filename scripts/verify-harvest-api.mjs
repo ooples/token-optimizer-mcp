@@ -76,7 +76,17 @@ try {
 
   /* ---- Responses a real model actually returns ------------------------ */
 
-  const finding = { type: 'failure', claim: 'the retry loop deadlocks on close', confidence: 0.8, anchors: ['/src/auth.ts'] };
+  const finding = {
+    type: 'failure',
+    claim: 'the retry loop deadlocks on close',
+    evidence: 'the close-path concurrency test timed out',
+    applicability: 'when changing retry shutdown behavior',
+    confidenceLabel: 'probable',
+    confidence: 0.8,
+    scope: 'project',
+    invalidators: ['retry ownership changes'],
+    anchors: ['/src/auth.ts'],
+  };
 
   handler = () => ({ status: 200, body: { content: [{ type: 'text', text: JSON.stringify([finding]) }] } });
   let out = await extract(DIGEST);
@@ -130,10 +140,10 @@ try {
   /* ---- The schema still gates what the model returns ------------------ */
 
   handler = () => ({ status: 200, body: { content: [{ type: 'text', text: JSON.stringify([
-    { type: 'finding', claim: 'no anchor on this one at all', confidence: 0.9, anchors: [] },
-    { type: 'musing', claim: 'wrong type entirely here', confidence: 0.9, anchors: ['/src/auth.ts'] },
-    { type: 'finding', claim: 'x', confidence: 0.9, anchors: ['/src/auth.ts'] },
-    { type: 'finding', claim: 'confidence out of range here', confidence: 9, anchors: ['/src/auth.ts'] },
+    { ...finding, claim: 'no anchor on this one at all', anchors: [] },
+    { ...finding, type: 'musing', claim: 'wrong type entirely here' },
+    { ...finding, claim: 'x' },
+    { ...finding, claim: 'confidence out of range here', confidence: 9 },
     finding,
   ]) }] } });
   const gated = validate(await extract(DIGEST));

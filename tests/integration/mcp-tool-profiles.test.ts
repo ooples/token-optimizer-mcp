@@ -15,7 +15,7 @@ interface ListedTool {
   inputSchema?: unknown;
 }
 
-function runServer(profile?: string, toolCall?: string) {
+function runServer(profile?: string, toolCall?: string, arm?: string) {
   const messages: object[] = [
     {
       jsonrpc: '2.0',
@@ -41,12 +41,14 @@ function runServer(profile?: string, toolCall?: string) {
 
   const env = {
     ...process.env,
-    TOKEN_OPTIMIZER_CACHE_DIR: join(fixture, profile || 'default', 'cache'),
-    TOKEN_OPTIMIZER_WIKI_DIR: join(fixture, profile || 'default', 'wiki'),
-    TOKEN_OPTIMIZER_STATE_DIR: join(fixture, profile || 'default', 'state'),
+    TOKEN_OPTIMIZER_CACHE_DIR: join(fixture, profile || 'default', arm || 'full', 'cache'),
+    TOKEN_OPTIMIZER_WIKI_DIR: join(fixture, profile || 'default', arm || 'full', 'wiki'),
+    TOKEN_OPTIMIZER_STATE_DIR: join(fixture, profile || 'default', arm || 'full', 'state'),
   };
   if (profile !== undefined) env.TOKEN_OPTIMIZER_TOOL_PROFILE = profile;
   else delete env.TOKEN_OPTIMIZER_TOOL_PROFILE;
+  if (arm !== undefined) env.TOKEN_OPTIMIZER_EXPERIMENT_ARM = arm;
+  else delete env.TOKEN_OPTIMIZER_EXPERIMENT_ARM;
 
   const result = spawnSync(process.execPath, [SERVER], {
     cwd: fixture,
@@ -115,5 +117,20 @@ describe('MCP tool profiles over the real stdio transport', () => {
     const result = runServer('everything');
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('Invalid TOKEN_OPTIMIZER_TOOL_PROFILE');
+  });
+
+  it('isolates the four causal experiment arms at the server boundary', () => {
+    const names = (arm: string) => {
+      const result = runServer(undefined, undefined, arm);
+      expect(result.status).toBe(0);
+      return (result.responses.find((message) => message.id === 2)?.result
+        ?.tools as ListedTool[]).map((tool) => tool.name);
+    };
+
+    expect(names('baseline')).toEqual([]);
+    expect(names('optimizer')).not.toEqual(expect.arrayContaining(['wiki_read', 'wiki_write']));
+    expect(names('retrieval')).toContain('wiki_read');
+    expect(names('retrieval')).not.toContain('wiki_write');
+    expect(names('full')).toEqual(expect.arrayContaining(['wiki_read', 'wiki_write']));
   });
 });

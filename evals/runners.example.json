@@ -1,0 +1,34 @@
+{
+  "codex": {
+    "command": "codex",
+    "args": ["exec", "--json", "--cwd", "{workspace}", "{prompt}"],
+    "armArgs": {
+      "baseline": ["--ignore-user-config"],
+      "optimizer": [],
+      "retrieval": [],
+      "full": []
+    },
+    "baselineIsolation": "--ignore-user-config prevents installed plugins and MCP servers from entering the baseline",
+    "model": "set-the-exact-model",
+    "version": "record-codex-version-here",
+    "timeoutMs": 600000,
+    "tokenPatterns": {
+      "total": "tokens used[:\\s]+([0-9,]+)",
+      "costUsd": "cost[:\\s]+\\$?([0-9.]+)"
+    }
+  },
+  "claude-code": {
+    "command": "claude",
+    "args": ["-p", "{prompt}", "--output-format", "json"],
+    "armArgs": {
+      "baseline": ["--settings", "path-to-an-empty-isolated-settings-file"],
+      "optimizer": [],
+      "retrieval": [],
+      "full": []
+    },
+    "baselineIsolation": "replace the placeholder with settings that load no hooks, MCP servers, or user instructions",
+    "model": "set-the-exact-model",
+    "version": "record-claude-code-version-here",
+    "timeoutMs": 600000
+  }
+}

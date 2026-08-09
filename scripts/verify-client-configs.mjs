@@ -27,6 +27,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { capabilityFor, CAPABILITY_TIERS } from '../hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const INTEGRATIONS = join(ROOT, 'integrations');
@@ -99,6 +100,12 @@ function parseJsonc(raw) {
 
 for (const [key, expected] of Object.entries(EXPECTED)) {
   const dir = join(INTEGRATIONS, key);
+  const capability = capabilityFor(key);
+  check(`${key}: capability registry entry exists`, Boolean(capability));
+  check(`${key}: registry tier matches packaged surface`, Boolean(capability)
+    && (expected.nativeHooks
+      ? capability.tier !== CAPABILITY_TIERS.RULES
+      : capability.tier === CAPABILITY_TIERS.RULES));
 
   if (!existsSync(dir)) {
     check(`${key}: integration exists`, false);

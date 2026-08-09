@@ -39,6 +39,10 @@ export interface WikiWriteOptions {
    * dropped and the finding is refused rather than stored unfalsifiable.
    */
   anchors: string[];
+  /** Concrete observation, command result, test, or user decision supporting the claim. */
+  evidence: string;
+  /** Human-readable condition under which a later model should use the claim. */
+  applicability: string;
   /** finding | decision | failure | command | map. */
   type?: string;
   /**
@@ -50,6 +54,12 @@ export interface WikiWriteOptions {
   trigger?: string;
   /** 0..1. Defaults to 0.9 — deliberate, but still a model's assertion. */
   confidence?: number;
+  /** Calibrated status; the numeric value is derived from this when omitted. */
+  confidenceLabel: 'verified' | 'probable' | 'speculative';
+  /** Project-only by default; broader scopes opt into cross-project delivery. */
+  scope?: 'project' | 'organization' | 'global';
+  /** Conditions that should cause a later reader to distrust or re-check it. */
+  invalidators?: string[];
   /** Recorded for provenance so a claim can be traced to the session. */
   sessionId?: string;
   /** Overrides the project the finding belongs to. Defaults to the anchor's repo. */
@@ -106,15 +116,74 @@ export async function wikiWrite(
     };
   }
 
+  const evidence = String(options?.evidence ?? '').trim();
+  if (evidence.length < 8) {
+    return {
+      success: false,
+      ...empty,
+      error:
+        'evidence is required: name the observation, test, command result, or user decision that proved the claim',
+    };
+  }
+
+  const applicability = String(options?.applicability ?? '').trim();
+  if (applicability.length < 8) {
+    return {
+      success: false,
+      ...empty,
+      error:
+        'applicability is required: state when a later model should use this finding',
+    };
+  }
+
   const type = FINDING_TYPES.includes(String(options?.type))
     ? String(options.type)
     : 'finding';
+  const confidenceLabel = ['verified', 'probable', 'speculative'].includes(
+    String(options?.confidenceLabel)
+  )
+    ? options.confidenceLabel
+    : null;
+  if (!confidenceLabel) {
+    return {
+      success: false,
+      ...empty,
+      error: 'confidenceLabel must be verified, probable, or speculative',
+    };
+  }
+  const confidenceDefaults = {
+    verified: 0.95,
+    probable: 0.75,
+    speculative: 0.45,
+  };
+  if (
+    options?.confidence !== undefined &&
+    (!Number.isFinite(options.confidence) ||
+      (options.confidence as number) <= 0 ||
+      (options.confidence as number) > 1)
+  ) {
+    return {
+      success: false,
+      ...empty,
+      error: 'confidence must be greater than 0 and at most 1 when supplied',
+    };
+  }
   const confidence =
     Number.isFinite(options?.confidence) &&
     (options!.confidence as number) > 0 &&
     (options!.confidence as number) <= 1
       ? (options!.confidence as number)
-      : 0.9;
+      : confidenceDefaults[confidenceLabel];
+  const scope = ['project', 'organization', 'global'].includes(
+    String(options?.scope)
+  )
+    ? options.scope
+    : 'project';
+  const invalidators = Array.isArray(options?.invalidators)
+    ? options.invalidators
+        .filter((item) => typeof item === 'string' && item.trim())
+        .slice(0, 10)
+    : [];
 
   try {
     const [wiki, harvestWrite, curate] = await Promise.all([
@@ -133,7 +202,20 @@ export async function wikiWrite(
 
     const keys: string[] = harvestWrite.writeHarvested(
       dir,
-      [{ type, claim, confidence, anchors, trigger: options.trigger }],
+      [
+        {
+          type,
+          claim,
+          confidence,
+          confidenceLabel,
+          anchors,
+          evidence,
+          applicability,
+          scope,
+          invalidators,
+          trigger: options.trigger,
+        },
+      ],
       {
         sessionId: options.sessionId ?? null,
         origin: curate.ORIGIN_AGENT,
@@ -202,6 +284,16 @@ export const WIKI_WRITE_TOOL_DEFINITION = {
         description:
           'Files the claim is about, as absolute paths, or "path#symbol" to anchor to one function.',
       },
+      evidence: {
+        type: 'string',
+        description:
+          'The concrete observation that supports the claim: a test result, command output, rejected approach, or explicit user decision.',
+      },
+      applicability: {
+        type: 'string',
+        description:
+          'When a future model should use this finding. Be specific enough to prevent unrelated injection.',
+      },
       type: {
         type: 'string',
         enum: FINDING_TYPES,
@@ -214,6 +306,24 @@ export const WIKI_WRITE_TOOL_DEFINITION = {
         type: 'number',
         description:
           '0..1, default 0.9. Lower it when the claim is plausible but unverified.',
+      },
+      confidenceLabel: {
+        type: 'string',
+        enum: ['verified', 'probable', 'speculative'],
+        description:
+          'verified = directly proved; probable = strong but incomplete evidence; speculative = a hypothesis that must be re-checked.',
+      },
+      scope: {
+        type: 'string',
+        enum: ['project', 'organization', 'global'],
+        description:
+          'Where the finding may be reused. project is safest; organization/global explicitly opt into cross-project delivery.',
+      },
+      invalidators: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Versions, files, configuration, or assumptions whose change should force re-validation.',
       },
       sessionId: {
         type: 'string',
@@ -233,6 +343,12 @@ export const WIKI_WRITE_TOOL_DEFINITION = {
           'Optional. Defaults to the repository containing the first anchor.',
       },
     },
-    required: ['claim', 'anchors'],
+    required: [
+      'claim',
+      'anchors',
+      'evidence',
+      'applicability',
+      'confidenceLabel',
+    ],
   },
 };

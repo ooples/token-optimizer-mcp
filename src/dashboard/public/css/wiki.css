@@ -179,7 +179,9 @@
 }
 
 #wiki-search,
-#wiki-type {
+#wiki-type,
+.evidence-filters input,
+.evidence-filters select {
   width: 100%;
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -191,7 +193,9 @@
 }
 
 #wiki-search:focus,
-#wiki-type:focus {
+#wiki-type:focus,
+.evidence-filters input:focus,
+.evidence-filters select:focus {
   outline: 2px solid var(--saved);
   outline-offset: 1px;
   border-color: transparent;
@@ -420,6 +424,59 @@
 
 .wiki-figure {
   margin: 0;
+}
+
+/* ------------------------------------------------------------ evidence -- */
+
+.evidence-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.evidence-filters input,
+.evidence-filters select {
+  width: 100%;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin: 10px 0 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.evidence-table th,
+.evidence-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.evidence-table th {
+  color: var(--ink-3);
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.evidence-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.evidence-anchor {
+  max-width: 320px;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
 }
 
 /* -------------------------------------------------------------- drawer -- */
