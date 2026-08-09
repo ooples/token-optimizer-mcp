@@ -11,7 +11,7 @@
 import {
   appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -23,6 +23,16 @@ import { writeHarvested } from '../hooks-core/harvest-write.mjs';
 import { ORIGIN_AGENT } from '../hooks-core/curate.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const gitResult = spawnSync('git', ['rev-parse', 'HEAD'], {
+  cwd: ROOT, encoding: 'utf8', windowsHide: true,
+});
+const statusResult = spawnSync('git', ['status', '--porcelain'], {
+  cwd: ROOT, encoding: 'utf8', windowsHide: true,
+});
+const GIT_PROVENANCE = {
+  commit: gitResult.status === 0 ? gitResult.stdout.trim() : null,
+  dirty: statusResult.status === 0 ? Boolean(statusResult.stdout.trim()) : null,
+};
 
 function parseArgs(argv) {
   const options = {
@@ -131,9 +141,14 @@ function walkNumbers(value, output = {}) {
 }
 
 export function parseUsage(text, profile = {}) {
+  const documents = [];
   const numbers = {};
   for (const line of String(text).split('\n')) {
-    try { Object.assign(numbers, walkNumbers(JSON.parse(line))); } catch { /* non-JSON output */ }
+    try {
+      const document = JSON.parse(line);
+      documents.push(document);
+      Object.assign(numbers, walkNumbers(document));
+    } catch { /* non-JSON output */ }
   }
   const from = (...keys) => {
     for (const key of keys) if (Number.isFinite(numbers[key])) return numbers[key];
@@ -145,17 +160,70 @@ export function parseUsage(text, profile = {}) {
     const value = Number(String(match?.[1] || '').replace(/,/g, ''));
     return Number.isFinite(value) ? value : null;
   };
+  const uncachedInputTokens = from(
+    'uncached_input_tokens', 'uncachedInputTokens', 'input_tokens', 'inputTokens'
+  );
+  const cacheCreationInputTokens = from(
+    'cache_creation_input_tokens', 'cacheCreationInputTokens'
+  );
+  const cachedInputTokens = from(
+    'cached_input_tokens', 'cachedInputTokens', 'cache_read_input_tokens', 'cacheReadInputTokens'
+  );
+  const outputTokens = from('output_tokens', 'outputTokens');
+  const reportedTotal = from('total_tokens', 'totalTokens', 'tokens_used', 'tokensUsed')
+    ?? regexNumber(profile.tokenPatterns?.total);
+  const dimensions = [
+    uncachedInputTokens, cacheCreationInputTokens, cachedInputTokens, outputTokens,
+  ];
+  const totalTokens = reportedTotal ?? (
+    dimensions.every((value) => value !== null)
+      ? dimensions.reduce((sum, value) => sum + value, 0)
+      : null
+  );
+
+  const toolUseIds = new Set();
+  let failedToolCalls = 0;
+  const visit = (value) => {
+    if (!value || typeof value !== 'object') return;
+    if (value.type === 'tool_use') toolUseIds.add(value.id || hash(JSON.stringify(value)));
+    if (value.type === 'tool_result' && value.is_error === true) failedToolCalls += 1;
+    for (const item of Object.values(value)) visit(item);
+  };
+  for (const document of documents) visit(document);
+  const isLifecycleStream = documents.some((document) =>
+    document?.type === 'system' && document?.subtype === 'init'
+  );
+
   return {
-    uncachedInputTokens: from('uncached_input_tokens', 'uncachedInputTokens'),
-    cachedInputTokens: from('cached_input_tokens', 'cachedInputTokens', 'cache_read_input_tokens'),
-    outputTokens: from('output_tokens', 'outputTokens'),
-    totalTokens: from('total_tokens', 'totalTokens', 'tokens_used', 'tokensUsed')
-      ?? regexNumber(profile.tokenPatterns?.total),
+    uncachedInputTokens,
+    cacheCreationInputTokens,
+    cachedInputTokens,
+    outputTokens,
+    totalTokens,
     costUsd: from('cost_usd', 'costUsd', 'total_cost_usd')
       ?? regexNumber(profile.tokenPatterns?.costUsd),
-    toolCalls: from('tool_calls', 'toolCalls') ?? regexNumber(profile.tokenPatterns?.toolCalls),
-    failedToolCalls: from('failed_tool_calls', 'failedToolCalls'),
+    toolCalls: from('tool_calls', 'toolCalls')
+      ?? regexNumber(profile.tokenPatterns?.toolCalls)
+      ?? (isLifecycleStream ? toolUseIds.size : null),
+    failedToolCalls: from('failed_tool_calls', 'failedToolCalls')
+      ?? (isLifecycleStream ? failedToolCalls : null),
   };
+}
+
+export function parseRunIdentity(text) {
+  for (const line of String(text).split('\n')) {
+    try {
+      const document = JSON.parse(line);
+      if (document?.type === 'system' && document?.subtype === 'init') {
+        return {
+          modelVersion: document.model || null,
+          clientVersion: document.claude_code_version || null,
+          sessionId: document.session_id || null,
+        };
+      }
+    } catch { /* non-JSON output */ }
+  }
+  return { modelVersion: null, clientVersion: null, sessionId: null };
 }
 
 async function grade(task, run, workspace, graphDir, evidenceEvents) {
@@ -268,8 +336,14 @@ async function main() {
   const runners = readJson(resolveFromRoot(options.runner));
   const profile = runners[options.client];
   if (!profile) throw new Error(`runner profile not found for ${options.client}`);
-  if (!Array.isArray(profile.armArgs?.baseline) || !profile.baselineIsolation) {
-    throw new Error('runner must declare baseline armArgs and baselineIsolation; an ordinary treated session is not a baseline');
+  if (
+    !Array.isArray(profile.armArgs?.baseline)
+    || !profile.baselineIsolation
+    || !profile.treatmentConfiguration
+  ) {
+    throw new Error(
+      'runner must declare baseline armArgs, baselineIsolation, and treatmentConfiguration'
+    );
   }
 
   const output = resolveFromRoot(options.output);
@@ -319,7 +393,29 @@ async function main() {
       env,
       timeoutMs: Number(profile.timeoutMs) || 600_000,
     });
+    const observedIdentity = parseRunIdentity(run.stdout);
     const localEvidence = readEvidence(isolatedGraph);
+    // Preserve causal joins after the disposable workspace is removed, but do
+    // not copy private fixture paths into the aggregate evidence graph.
+    for (const event of localEvidence) {
+      const { anchor, cwd, projectRoot, ...safeEvent } = event;
+      record(aggregateGraph, {
+        ...safeEvent,
+        anchor: anchor ? `sha256:${hash(anchor)}` : undefined,
+        cwdHash: cwd ? hash(cwd) : undefined,
+        projectRootHash: projectRoot ? hash(projectRoot) : undefined,
+        client: options.client,
+        clientVersion:
+          observedIdentity.clientVersion || profile.version || event.clientVersion || null,
+        model: context.model || event.model || null,
+        modelVersion:
+          observedIdentity.modelVersion || profile.modelVersion || event.modelVersion || null,
+        taskId: item.task.id,
+        pairId: item.pairId,
+        arm: item.arm,
+        evidenceSource: 'live-eval-trace',
+      });
+    }
     const grading = await grade(item.task, run, workspace, isolatedGraph, localEvidence);
     const usage = parseUsage(`${run.stdout}\n${run.stderr}`, profile);
     const result = {
@@ -334,10 +430,12 @@ async function main() {
       order: item.order,
       arm: item.arm,
       client: options.client,
-      clientVersion: profile.version || null,
+      clientVersion: observedIdentity.clientVersion || profile.version || null,
       model: context.model || null,
-      modelVersion: profile.modelVersion || null,
-      repoCommit: process.env.GITHUB_SHA || null,
+      modelVersion: observedIdentity.modelVersion || profile.modelVersion || null,
+      sessionId: observedIdentity.sessionId,
+      repoCommit: process.env.GITHUB_SHA || GIT_PROVENANCE.commit,
+      workingTreeDirty: GIT_PROVENANCE.dirty,
       promptHash: hash(item.task.prompt),
       fixtureHash: hash(JSON.stringify(item.task.seedFindings || []) + (item.task.fixture || '')),
       correct: grading.correct,

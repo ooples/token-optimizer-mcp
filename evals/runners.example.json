@@ -9,6 +9,7 @@
       "full": []
     },
     "baselineIsolation": "--ignore-user-config prevents installed plugins and MCP servers from entering the baseline",
+    "treatmentConfiguration": "replace with the exact local plugin, hook, rules, and MCP configuration under test",
     "model": "set-the-exact-model",
     "version": "record-codex-version-here",
     "timeoutMs": 600000,
@@ -27,6 +28,7 @@
       "full": []
     },
     "baselineIsolation": "replace the placeholder with settings that load no hooks, MCP servers, or user instructions",
+    "treatmentConfiguration": "replace with explicit --plugin-dir and --mcp-config values for the checkout under test",
     "model": "set-the-exact-model",
     "version": "record-claude-code-version-here",
     "timeoutMs": 600000

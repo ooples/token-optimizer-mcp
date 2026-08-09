@@ -51,6 +51,7 @@ describe('tool names normalize across clients', () => {
     ['find_files', 'Glob'], ['glob_file_search', 'Glob'],
     ['apply_patch', 'Edit'], ['search_replace', 'Edit'],
     ['write_file', 'Write'], ['run_terminal_cmd', 'Bash'],
+    ['PowerShell', 'Bash'], ['pwsh', 'Bash'],
   ])('%s -> %s', (alias, canonical) => {
     expect(normalizeTool(alias)).toBe(canonical);
   });

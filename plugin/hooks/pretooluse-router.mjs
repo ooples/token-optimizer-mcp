@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * Claude Code PreToolUse adapter.
  *
@@ -54,6 +54,7 @@ import { indexFile } from './lib/staleness.mjs';
 import { isArchived } from './lib/transcript.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
+import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 
 /**
  * Largest file the hook will read to index. Above this the touch is still
@@ -75,6 +76,8 @@ try {
   // identically to every other client's adapter on the same underlying call.
   const payload = normalizePayload(raw);
   if (!payload.tool_name) allow();
+  const features = featuresForArm();
+  const episode = episodeMeta({ client: 'claude-code', raw });
 
   // The AGENT, not just the session. Subagents inherit the parent's session id,
   // so keying state on the session alone made one agent's reads silence another's
@@ -83,7 +86,7 @@ try {
   // scope, which is right for the main session's own calls.
   const agentScope = payload.transcript_path || null;
   const state = loadState(payload.session_id, agentScope);
-  const verdict = decide(payload, state);
+  const verdict = features.routing ? decide(payload, state) : null;
 
   if (!verdict) {
     // Allowed calls are what BUILD the re-read index -- this is the only place
@@ -171,7 +174,7 @@ try {
     // is anchored to a file nobody opens at the moment they run the command,
     // so file-touch injection alone could never deliver it -- and did not.
     let context = null;
-    try {
+    if (features.retrieval) try {
       // Once per session, per finding. Repeating advice on every call is how a
       // real signal becomes wallpaper, and an ignored injection still costs its
       // tokens every time.
@@ -186,6 +189,7 @@ try {
         const note = forTouch(dir, load(dir), path, {
           sessionId: payload.session_id,
           alreadyInjected,
+          episode,
         });
         if (note) parts.push(note);
       }
@@ -201,6 +205,7 @@ try {
         const note = forCommand(dir, load(dir), command, {
           sessionId: payload.session_id,
           alreadyInjected,
+          episode,
         });
         if (note) parts.push(note);
 
@@ -221,6 +226,7 @@ try {
           sessionId: payload.session_id,
           alreadyInjected,
           projectRoot: root,
+          episode,
         });
         if (shared) parts.push(shared);
 
@@ -236,6 +242,7 @@ try {
         const repeat = forRepeatedAct(dir, command, crossed, {
           sessionId: payload.session_id,
           projectRoot: root,
+          episode,
         });
         if (repeat) parts.push(repeat);
       }
@@ -266,7 +273,7 @@ try {
     // Timing and specificity are what is available -- fired after the work exists, naming the
     // files, exactly once.
     try {
-      if (isSubstantive(payload.tool_name)) {
+      if (features.harvest && isSubstantive(payload.tool_name)) {
         state.edits = (state.edits || 0) + 1;
         const edited = payload.tool_input?.file_path;
         if (edited) state.editedFiles = [edited, ...(state.editedFiles || [])].slice(0, 20);
@@ -315,7 +322,7 @@ ${nudge}` : nudge;
     // refusal, consolidation, re-derivation detection) fed by a producer that
     // never ran. Structural only: it records what demonstrably happened and
     // makes no claims.
-    for (const { path, size } of touched) {
+    if (features.capture) for (const { path, size } of touched) {
       try {
         // NEVER THE TRANSCRIPT ARCHIVE.
         //

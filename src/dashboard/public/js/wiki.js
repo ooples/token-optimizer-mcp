@@ -187,7 +187,7 @@ async function loadEvidence() {
         <td>${escapeHtml(cohort.client)}<br><span class="wiki-muted">${escapeHtml(cohort.clientVersion || 'version unknown')}</span></td>
         <td>${escapeHtml(cohort.model || 'model unknown')}</td>
         <td>${escapeHtml(cohort.taskId || 'task unknown')}</td>
-        <td>${escapeHtml(effect.arm)}</td>
+        <td>${escapeHtml(effect.comparison || effect.arm)}</td>
         <td>${nf.format(effect.pairs)}</td>
         <td>${escapeHtml(formatInterval(effect.totalTokensSaved, ' tokens'))}</td>
         <td>${escapeHtml(formatInterval(effect.toolCallsAvoided, ' calls'))}</td>
@@ -196,7 +196,7 @@ async function loadEvidence() {
     }
   }
   el('evidence-cohorts').innerHTML = `
-    <thead><tr><th>Client</th><th>Model</th><th>Task</th><th>Arm</th><th>Pairs</th><th>Token effect (95% CI)</th><th>Call effect (95% CI)</th><th>Status</th></tr></thead>
+    <thead><tr><th>Client</th><th>Model</th><th>Task</th><th>Comparison</th><th>Pairs</th><th>Token effect (95% CI)</th><th>Call effect (95% CI)</th><th>Status</th></tr></thead>
     <tbody>${cohortRows.join('') || '<tr><td colspan="8">No randomized cohorts match these filters.</td></tr>'}</tbody>`;
 
   const episodeRows = (report.episodes || [])

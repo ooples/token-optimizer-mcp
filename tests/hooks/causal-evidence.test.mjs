@@ -151,7 +151,21 @@ describe('paired evidence report', () => {
     expect(report.cohorts).toHaveLength(1);
     expect(report.summary.evidenceStatus).toBe('causal estimates available');
     expect(report.cohorts[0].arms.full.correctness.rate).toBe(1);
-    const full = report.cohorts[0].effects.find((effect) => effect.arm === 'full');
+    const optimizer = report.cohorts[0].effects.find((effect) =>
+      effect.arm === 'optimizer' && effect.controlArm === 'baseline'
+    );
+    const retrieval = report.cohorts[0].effects.find((effect) =>
+      effect.arm === 'retrieval' && effect.controlArm === 'optimizer'
+    );
+    const harvest = report.cohorts[0].effects.find((effect) =>
+      effect.arm === 'full' && effect.controlArm === 'retrieval'
+    );
+    const full = report.cohorts[0].effects.find((effect) =>
+      effect.arm === 'full' && effect.controlArm === 'baseline'
+    );
+    expect(optimizer.totalTokensSaved.mean).toBe(100);
+    expect(retrieval.totalTokensSaved.mean).toBe(150);
+    expect(harvest.totalTokensSaved.mean).toBe(150);
     expect(full.pairs).toBe(5);
     expect(full.totalTokensSaved.mean).toBe(400);
     expect(full.totalTokensSaved.low).toBeGreaterThan(0);

@@ -1022,6 +1022,7 @@ function armMetrics(runs) {
     runs: runs.length,
     correctness: proportionInterval(correct, runs.length),
     uncachedInputTokens: interval('uncachedInputTokens'),
+    cacheCreationInputTokens: interval('cacheCreationInputTokens'),
     cachedInputTokens: interval('cachedInputTokens'),
     outputTokens: interval('outputTokens'),
     totalTokens: interval('totalTokens'),
@@ -1034,31 +1035,37 @@ function armMetrics(runs) {
   };
 }
 
-function pairedEffects(runs, treatmentArm) {
+function pairedEffects(runs, controlArm, treatmentArm, contrastType = 'incremental') {
   const pairs = new Map();
   for (const run of runs) {
-    if (!run.pairId || !['baseline', treatmentArm].includes(run.arm)) continue;
+    if (!run.pairId || ![controlArm, treatmentArm].includes(run.arm)) continue;
     if (!pairs.has(run.pairId)) pairs.set(run.pairId, {});
     pairs.get(run.pairId)[run.arm] = run;
   }
-  const complete = [...pairs.values()].filter((pair) => pair.baseline && pair[treatmentArm]);
+  const complete = [...pairs.values()].filter((pair) => pair[controlArm] && pair[treatmentArm]);
   const delta = (field, lowerIsBetter = true) => bootstrapMeanInterval(
     complete
       .map((pair) => {
-        const baseline = numeric(pair.baseline[field]);
+        const baseline = numeric(pair[controlArm][field]);
         const treatment = numeric(pair[treatmentArm][field]);
         if (baseline === null || treatment === null) return null;
         return lowerIsBetter ? baseline - treatment : treatment - baseline;
       })
       .filter((value) => value !== null),
-    { seed: `${treatmentArm}:${field}` }
+    { seed: `${controlArm}:${treatmentArm}:${field}` }
   );
   return {
     arm: treatmentArm,
+    controlArm,
+    comparison: `${treatmentArm} vs ${controlArm}`,
+    contrastType,
     pairs: complete.length,
     // Positive values always mean the treatment improved the metric.
     totalTokensSaved: delta('totalTokens'),
     uncachedInputTokensSaved: delta('uncachedInputTokens'),
+    cacheCreationInputTokensSaved: delta('cacheCreationInputTokens'),
+    cachedInputTokensSaved: delta('cachedInputTokens'),
+    outputTokensSaved: delta('outputTokens'),
     toolCallsAvoided: delta('toolCalls'),
     latencyMsSaved: delta('latencyMs'),
     costUsdSaved: delta('costUsd'),
@@ -1124,8 +1131,13 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
         armMetrics(cohortRuns.filter((run) => run.arm === arm)),
       ])
     );
-    const effects = ['optimizer', 'retrieval', 'full'].map((arm) => pairedEffects(cohortRuns, arm));
-    const enough = effects.some((effect) => effect.pairs >= minimumPairs);
+    const effects = [
+      pairedEffects(cohortRuns, 'baseline', 'optimizer'),
+      pairedEffects(cohortRuns, 'optimizer', 'retrieval'),
+      pairedEffects(cohortRuns, 'retrieval', 'full'),
+      pairedEffects(cohortRuns, 'baseline', 'full', 'total-system'),
+    ];
+    const enough = effects.every((effect) => effect.pairs >= minimumPairs);
     return {
       key,
       client: cohortRuns[0]?.client || 'unknown',
@@ -1165,7 +1177,8 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
     episodes: traced,
     methodology: {
       intervals: 'deterministic percentile bootstrap (95%); Wilson interval for correctness',
-      causalRule: 'only matched eval-run pairs compare an arm with baseline',
+      causalRule:
+        'matched pairs estimate optimizer vs baseline, retrieval vs optimizer, full vs retrieval, and full vs baseline',
       minimumPairs,
       deterministicChecksAreCausalProof: false,
     },
