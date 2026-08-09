@@ -11,7 +11,8 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  recordingNudge, compactionNudge, findingCount, isSubstantive, NUDGE_AFTER_EDITS,
+  recordingNudge, compactionNudge, semanticHarvestPrompt, findingCount,
+  isSubstantive, NUDGE_AFTER_EDITS,
 } from '../../hooks-core/recording.mjs';
 import { putNode } from '../../hooks-core/wiki.mjs';
 
@@ -102,5 +103,25 @@ describe('only decisions count as work', () => {
     // Otherwise every session trips the threshold within a minute of reading around, and the
     // nudge fires before there is any conclusion to record.
     for (const t of ['Read', 'Grep', 'Glob', 'Bash', undefined, null]) expect(isSubstantive(t)).toBe(false);
+  });
+});
+
+describe('the active model performs the final semantic harvest', () => {
+  test('asks the model that did the work and forbids delegation', () => {
+    const out = semanticHarvestPrompt({
+      edits: 3,
+      files: ['C:/repo/src/cache.ts'],
+      model: 'gpt-5.6-sol',
+    });
+
+    expect(out).toMatch(/active gpt-5\.6-sol model/i);
+    expect(out).toMatch(/wiki_write/);
+    expect(out).toMatch(/do not delegate/i);
+    expect(out).toContain('cache.ts');
+  });
+
+  test('does not invent work or loop after Codex already continued Stop', () => {
+    expect(semanticHarvestPrompt({ edits: 0 })).toBeNull();
+    expect(semanticHarvestPrompt({ edits: 5, stopHookActive: true })).toBeNull();
   });
 });

@@ -30,10 +30,13 @@ import {
 import { decide, remember, normalizePayload, readCostBytes } from './decide.mjs';
 import { recordRead, fingerprint } from './metrics.mjs';
 import { wikiDir, projectRootFor } from './wiki.mjs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { briefing } from './remedy.mjs';
 import { stableText, transcriptFor } from './cache.mjs';
 import { cachedRoutingBriefing } from './routing.mjs';
+import {
+  isSubstantive, recordingNudge, semanticHarvestPrompt,
+} from './recording.mjs';
 
 /**
  * Per-client capability.
@@ -172,12 +175,13 @@ function projectBriefing() {
  * Runs one hook invocation.
  *
  * @param {string} clientName  Key into CLIENTS.
- * @param {'session-start'|'pre-tool'|'post-tool'} event
+ * @param {'session-start'|'pre-tool'|'post-tool'|'stop'} event
  */
 export async function run(clientName, event) {
   const client = CLIENTS[clientName] || CLIENTS['claude-code'];
   const eventName = event === 'session-start' ? 'SessionStart'
-    : event === 'post-tool' ? 'PostToolUse' : 'PreToolUse';
+    : event === 'post-tool' ? 'PostToolUse'
+      : event === 'stop' ? 'Stop' : 'PreToolUse';
 
   if (mode() === MODE_OFF) process.exit(0);
 
@@ -187,7 +191,25 @@ export async function run(clientName, event) {
   }
 
   const raw = await readStdin();
-  if (!raw) process.exit(0);
+  if (!raw) {
+    // Stop requires JSON on stdout even when it has nothing to add.
+    if (event === 'stop') emit({});
+    process.exit(0);
+  }
+
+  if (event === 'stop') {
+    const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
+    const agentScope = raw.transcript_path ?? raw.transcriptPath ?? null;
+    const state = loadState(sessionId, agentScope);
+    const prompt = semanticHarvestPrompt({
+      edits: state.edits,
+      files: state.editedFiles,
+      model: raw.model,
+      stopHookActive: raw.stop_hook_active === true,
+    });
+    emit(prompt ? { decision: 'block', reason: prompt } : {});
+    process.exit(0);
+  }
 
   const payload = normalizePayload(raw);
   if (!payload.tool_name) process.exit(0);
@@ -201,6 +223,42 @@ export async function run(clientName, event) {
   // falls back to session scope, which is right for a main session's own calls.
   const agentScope = payload.transcript_path || null;
   const state = loadState(payload.session_id, agentScope);
+  let recordingContext = null;
+
+  // Count mutations AFTER Codex reports them, not in PreToolUse where a denied
+  // or failed apply_patch has not changed anything. Codex carries an
+  // apply_patch body under tool_input.command, so recover the file headers from
+  // that body when there is no ordinary file_path field.
+  if (event === 'post-tool' && isSubstantive(payload.tool_name)) {
+    try {
+      const edited = [];
+      if (payload.tool_input.file_path) edited.push(payload.tool_input.file_path);
+      const patch = payload.tool_input.command;
+      if (typeof patch === 'string') {
+        for (const match of patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm)) {
+          const candidate = match[1].trim().replace(/^['"]|['"]$/g, '');
+          if (candidate) edited.push(resolve(payload.cwd || process.cwd(), candidate));
+        }
+      }
+
+      state.edits = (state.edits || 0) + 1;
+      state.editedFiles = [
+        ...edited,
+        ...(state.editedFiles || []),
+      ].filter(Boolean).slice(0, 20);
+      const anchor = state.editedFiles[0]
+        || join(payload.cwd || process.cwd(), '__recording__');
+      const dir = wikiDir(projectRootFor(anchor, payload.cwd));
+      recordingContext = recordingNudge(dir, {
+        state,
+        edits: state.edits,
+        files: state.editedFiles,
+      });
+      if (recordingContext) state.recordingNudged = true;
+    } catch {
+      // Recording pressure is an optimization and must never cost a tool call.
+    }
+  }
   const verdict = decide(payload, state);
 
   if (!verdict) {
@@ -230,6 +288,9 @@ export async function run(clientName, event) {
         fp: fingerprint(payload.tool_input.file_path),
       });
     }
+    if (recordingContext) {
+      emit({ hookSpecificOutput: { hookEventName: eventName, additionalContext: recordingContext } });
+    }
     process.exit(0);
   }
 
@@ -252,7 +313,8 @@ export async function run(clientName, event) {
       },
     });
   } else {
-    emit({ hookSpecificOutput: { hookEventName: eventName, additionalContext: verdict.reason } });
+    const context = [verdict.reason, recordingContext].filter(Boolean).join('\n\n');
+    emit({ hookSpecificOutput: { hookEventName: eventName, additionalContext: context } });
   }
   process.exit(0);
 }

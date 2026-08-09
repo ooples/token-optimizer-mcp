@@ -33,7 +33,7 @@ master
 Select the following checks from the list:
 - `lint-and-format` (from CI workflow)
 - `build` (from CI workflow)
-- `test (18)` (from CI workflow - Node 18)
+- `test (22)` (from CI workflow - Node 22)
 - `test (20)` (from CI workflow - Node 20)
 - `test (22)` (from CI workflow - Node 22)
 - `performance-benchmarks` (from CI workflow)

@@ -20,8 +20,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRIES = [
   ['integrations/codex/hooks', 'codex', 'session-start', 'session-start.mjs'],
   ['integrations/codex/hooks', 'codex', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/codex/hooks', 'codex', 'post-tool', 'post-tool.mjs'],
+  ['integrations/codex/hooks', 'codex', 'stop', 'stop.mjs'],
   ['integrations/codex/plugin/hooks', 'codex', 'session-start', 'session-start.mjs'],
   ['integrations/codex/plugin/hooks', 'codex', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/codex/plugin/hooks', 'codex', 'post-tool', 'post-tool.mjs'],
+  ['integrations/codex/plugin/hooks', 'codex', 'stop', 'stop.mjs'],
   ['integrations/gemini/hooks', 'gemini', 'session-start', 'session-start.mjs'],
   // Gemini's only tool hook is AfterTool, which fires once the read has already
   // been paid for. It advises about the next call rather than pretending to a

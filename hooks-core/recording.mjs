@@ -123,3 +123,40 @@ export function compactionNudge(dir, { edits = 0 } = {}) {
     + 'alternative, an invocation that worked -- call wiki_write with a file anchor before it goes.'
   );
 }
+
+/**
+ * One final reflection by the SAME model that did the work.
+ *
+ * Codex Stop hooks can continue the active turn once with a new prompt. That is
+ * materially different from the detached harvest worker: the active model still
+ * holds the reasoning, spends no second-model call, and decides whether anything
+ * non-obvious is worth writing. `stopHookActive` is Codex's loop guard; honoring
+ * it is what makes this a single reflection rather than an unfinishable turn.
+ */
+export function semanticHarvestPrompt({
+  edits = 0,
+  files = [],
+  model = '',
+  stopHookActive = false,
+} = {}) {
+  if (stopHookActive || edits < 1) return null;
+
+  const named = [...new Set(files)]
+    .slice(0, 3)
+    .map((file) => String(file).split(/[\\/]/).pop())
+    .filter(Boolean);
+  const subject = named.length ? ` Work touched ${named.join(', ')}.` : '';
+  const actor = String(model || '').trim()
+    ? ` You are the active ${String(model).trim()} model that did the reasoning.`
+    : ' You are the active model that did the reasoning.';
+
+  return (
+    'Before finishing, perform the semantic harvest yourself.'
+    + actor
+    + subject
+    + ' If this work produced a durable, non-obvious conclusion -- a failed approach and why, '
+    + 'a decision and its rejected alternative, or a command that finally worked -- call '
+    + 'wiki_write now with a real file anchor. Do not delegate this to another model or an '
+    + 'external harvester. If there is no such conclusion, do not invent one; finish normally.'
+  );
+}

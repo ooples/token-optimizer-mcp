@@ -1,5 +1,5 @@
 {
-  "description": "Load token-optimizer guidance and steer large file reads toward smart_read.",
+  "description": "Enforce token optimization by default: state the policy at session start, and challenge expensive built-in calls before they spend context.",
   "hooks": {
     "SessionStart": [
       {
@@ -7,24 +7,52 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT}/hooks/token-optimizer-advisor.mjs\"",
-            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\token-optimizer-advisor.mjs\"",
+            "command": "node \"${PLUGIN_ROOT}/hooks/session-start.mjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\session-start.mjs\"",
             "timeout": 5,
-            "statusMessage": "Loading token-optimizer guidance"
+            "statusMessage": "Loading token-optimizer policy"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|read_file|view_file",
+        "matcher": "Read|read_file|view_file|Grep|grep|search_file_content|Glob|glob|find_files|Edit|edit_file|apply_patch|Write|write_file|Bash|shell|run_command",
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${PLUGIN_ROOT}/hooks/token-optimizer-advisor.mjs\"",
-            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\token-optimizer-advisor.mjs\"",
+            "command": "node \"${PLUGIN_ROOT}/hooks/pre-tool.mjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\pre-tool.mjs\"",
             "timeout": 5,
-            "statusMessage": "Checking large read"
+            "statusMessage": "Routing to optimized tooling"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write|edit_file|write_file|smart_edit|smart_write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/post-tool.mjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\post-tool.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Tracking durable conclusions",
+            "additionalContextLimit": 800
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/stop.mjs\"",
+            "commandWindows": "node \"$env:PLUGIN_ROOT\\hooks\\stop.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking for durable conclusions"
           }
         ]
       }

@@ -43,7 +43,7 @@ Developer → PR → CI Checks → Merge → Release → npm Publish → Notific
 │  ├── Lint & Format     (~2-3 min)                          │
 │  ├── Build             (~2-3 min)                          │
 │  ├── Test Matrix       (~5-8 min per Node version)         │
-│  │   ├── Node 18                                           │
+│  │   ├── Node 22                                           │
 │  │   ├── Node 20                                           │
 │  │   └── Node 22                                           │
 │  ├── Performance       (~3-5 min)                          │
@@ -233,7 +233,7 @@ All of the following must be GREEN:
 
  ✓ lint-and-format          (CI)
  ✓ build                    (CI)
- ✓ test (Node 18)           (CI)
+ ✓ test (Node 22)           (CI)
  ✓ test (Node 20)           (CI)
  ✓ test (Node 22)           (CI)
  ✓ performance-benchmarks   (CI)

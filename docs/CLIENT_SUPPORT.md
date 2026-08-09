@@ -95,6 +95,10 @@ with the source URL recorded in each integration's README.
 
 ## Configuration, all clients
 
+The MCP server advertises its 18 essential tools by default. Set
+`TOKEN_OPTIMIZER_TOOL_PROFILE=full` in the server environment only when a client
+needs the complete 98-tool specialist catalog.
+
 | Variable | Default | Effect |
 |---|---|---|
 | `TOKEN_OPTIMIZER_MODE` | `enforce` | `advise` = never refuse; `off` = disable |

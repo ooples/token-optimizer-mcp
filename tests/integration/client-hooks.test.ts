@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -182,10 +182,56 @@ describe('native CLI hook integrations', () => {
       expect(() => JSON.parse(readFileSync(manifest, 'utf8'))).not.toThrow();
       expect(dirname(manifest)).toBeTruthy();
     }
+
+    const pluginRoot = join(repoRoot, 'integrations/codex/plugin');
+    const pluginManifest = JSON.parse(
+      readFileSync(join(pluginRoot, 'hooks/hooks.json'), 'utf8')
+    );
+    const standaloneManifest = JSON.parse(
+      readFileSync(join(repoRoot, 'integrations/codex/hooks/hooks.json'), 'utf8')
+    );
+    const pluginHooks = Object.values(pluginManifest.hooks).flatMap((groups: any) =>
+      groups.flatMap((group: any) => group.hooks)
+    ) as Array<{ command: string; commandWindows: string }>;
+
+    expect(pluginHooks).toHaveLength(4);
+    expect(pluginManifest.hooks.SessionStart[0].matcher).toBe(
+      standaloneManifest.hooks.SessionStart[0].matcher
+    );
+    expect(pluginManifest.hooks.PreToolUse[0].matcher).toBe(
+      standaloneManifest.hooks.PreToolUse[0].matcher
+    );
+    expect(pluginManifest.hooks.PostToolUse[0].matcher).toBe(
+      standaloneManifest.hooks.PostToolUse[0].matcher
+    );
+    expect(pluginManifest.hooks.Stop).toBeDefined();
+    for (const hook of pluginHooks) {
+      const relative = hook.command.match(/\$\{PLUGIN_ROOT\}\/([^\"]+\.mjs)/)?.[1];
+      expect(relative).toBeTruthy();
+      expect(existsSync(join(pluginRoot, relative!))).toBe(true);
+      expect(hook.commandWindows).toContain(relative!.replaceAll('/', '\\'));
+    }
+  });
+
+  it('ships a Codex plugin MCP config that Codex can discover', () => {
+    const config = JSON.parse(
+      readFileSync(join(repoRoot, 'integrations/codex/plugin/.mcp.json'), 'utf8')
+    );
+
+    expect(config.mcp_servers).toBeUndefined();
+    expect(config.mcpServers?.['token-optimizer']).toEqual({
+      command: 'npx',
+      args: ['-y', '@ooples/token-optimizer-mcp@latest'],
+    });
   });
 
   it('ships matching Codex plugin and standalone entry points', () => {
-    for (const entry of ['session-start.mjs', 'pre-tool.mjs']) {
+    for (const entry of [
+      'session-start.mjs',
+      'pre-tool.mjs',
+      'post-tool.mjs',
+      'stop.mjs',
+    ]) {
       const standalone = readFileSync(join(repoRoot, 'integrations/codex/hooks', entry), 'utf8');
       const plugin = readFileSync(join(repoRoot, 'integrations/codex/plugin/hooks', entry), 'utf8');
       expect(plugin).toBe(standalone);

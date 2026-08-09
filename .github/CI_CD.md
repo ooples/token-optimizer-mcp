@@ -252,7 +252,7 @@ All PRs must pass the following status checks before merging:
 ### Critical Checks (Must Pass)
 - ✅ `lint-and-format` - Code style and linting
 - ✅ `build` - TypeScript compilation
-- ✅ `test (18)` - Tests on Node 18
+- ✅ `test (22)` - Tests on Node 22
 - ✅ `test (20)` - Tests on Node 20
 - ✅ `test (22)` - Tests on Node 22
 - ✅ `commitlint` - Commit message format

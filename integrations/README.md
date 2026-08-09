@@ -19,7 +19,7 @@ unchanged into clients with different event contracts.
 | Gemini CLI         | `gemini/gemini-extension.json`      | `gemini/GEMINI.md`          | `gemini/hooks/`                                  |
 | OpenCode           | `opencode/opencode.json`            | `AGENTS.md`                 | `opencode/.opencode/plugins/`                    |
 
-Prerequisite: Node.js 18 or newer so `npx` can launch the server. The first
+Prerequisite: Node.js 22 or newer so `npx` can launch the server. The first
 launch downloads the package; later launches use the local npm cache.
 
 ## Codex
@@ -43,13 +43,17 @@ codex mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest
 
 Add `AGENTS.md` at project scope or append its contents once to
 `~/.codex/AGENTS.md`. If you also want lifecycle hooks, copy
-`codex/hooks/token-optimizer-advisor.mjs` to `~/.codex/hooks/` and merge
+`codex/hooks/session-start.mjs`, `codex/hooks/pre-tool.mjs`,
+`codex/hooks/post-tool.mjs`, `codex/hooks/stop.mjs`, and the generated
+`codex/hooks/lib/` directory to `~/.codex/hooks/`, then merge
 `codex/hooks/hooks.json` into `~/.codex/hooks.json`; do not overwrite unrelated
 hooks already present. Review and trust the new definition with `/hooks`.
 
-The hooks inject guidance at `SessionStart` and advise on first-class large read
-tools. Codex exposes shell reads such as `cat` or `Get-Content` as `Bash`, so the
-adapter deliberately does not parse and rewrite arbitrary shell commands.
+The hooks inject guidance at `SessionStart`, route first-class large reads,
+track completed edits at `PostToolUse`, and give the active Codex model one
+non-looping semantic-harvest continuation at `Stop`. Codex exposes shell reads
+such as `cat` or `Get-Content` as `Bash`, so the adapter deliberately does not
+parse and rewrite arbitrary shell commands.
 
 ## Claude Code
 

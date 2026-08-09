@@ -207,6 +207,58 @@ for (const relative of [
   check(`${relative}: names the package`, raw.includes(PACKAGE));
 }
 
+/* ---- Codex plugin: companion MCP config and bundled hooks -------------- */
+
+const codexPlugin = join(INTEGRATIONS, 'codex', 'plugin');
+const codexPluginMcp = join(codexPlugin, '.mcp.json');
+if (!existsSync(codexPluginMcp)) {
+  check('codex plugin: .mcp.json exists', false);
+} else {
+  const raw = readFileSync(codexPluginMcp, 'utf8');
+  try {
+    const parsed = JSON.parse(raw);
+    const entry = parsed.mcpServers?.['token-optimizer'];
+    check('codex plugin: .mcp.json is valid JSON', true);
+    check('codex plugin: top-level key is "mcpServers"', Boolean(parsed.mcpServers),
+      Object.keys(parsed).join(','));
+    check('codex plugin: rejects legacy "mcp_servers"', parsed.mcp_servers === undefined);
+    check('codex plugin: declares token-optimizer', Boolean(entry));
+    check(`codex plugin: launches ${PACKAGE}`,
+      Array.isArray(entry?.args) && entry.args.includes(PACKAGE));
+  } catch (error) {
+    check('codex plugin: .mcp.json is valid JSON', false, error.message);
+  }
+}
+
+const codexPluginHooks = join(codexPlugin, 'hooks', 'hooks.json');
+if (!existsSync(codexPluginHooks)) {
+  check('codex plugin: hooks/hooks.json exists', false);
+} else {
+  const raw = readFileSync(codexPluginHooks, 'utf8');
+  try {
+    const parsed = JSON.parse(raw);
+    const commands = Object.values(parsed.hooks || {})
+      .flatMap((groups) => groups)
+      .flatMap((group) => group.hooks || [])
+      .map((hook) => hook.command || '');
+    const referenced = commands
+      .map((command) => command.match(/\$\{PLUGIN_ROOT\}\/([^\"]+\.mjs)/)?.[1])
+      .filter(Boolean);
+    const missing = referenced.filter((path) => !existsSync(join(codexPlugin, path)));
+    check('codex plugin: hooks.json is valid JSON', true);
+    check('codex plugin: declares SessionStart', Boolean(parsed.hooks?.SessionStart));
+    check('codex plugin: declares PreToolUse', Boolean(parsed.hooks?.PreToolUse));
+    check('codex plugin: declares PostToolUse', Boolean(parsed.hooks?.PostToolUse));
+    check('codex plugin: declares Stop', Boolean(parsed.hooks?.Stop));
+    check('codex plugin: every hook command names a plugin-relative script',
+      referenced.length === commands.length);
+    check('codex plugin: every referenced hook script exists', missing.length === 0,
+      missing.join(','));
+  } catch (error) {
+    check('codex plugin: hooks.json is valid JSON', false, error.message);
+  }
+}
+
 for (const [key, file, why] of RETIRED) {
   check(`${key}: superseded ${file} removed (${why})`, !existsSync(join(INTEGRATIONS, key, file)));
 }

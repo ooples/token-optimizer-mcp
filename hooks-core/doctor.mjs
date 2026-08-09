@@ -149,8 +149,10 @@ function hooksDirFor({ hooksDir, install, root }) {
  * for weeks: 340 read events in one project's graph, 48 in another, and ZERO findings, ZERO
  * harvests, ZERO injections in either. A default that nobody discovers is not a conservative
  * default, it is a dead feature -- and everything downstream of the harvest is inert without it.
- * Extraction is now on unless turned off, so this check reports a MISSING CREDENTIAL as the
- * blocking case and a deliberate opt-out as a choice rather than a fault.
+ * The primary path is now model-driven: the active session is continued once at Stop and calls
+ * wiki_write itself when it has a durable conclusion. The detached model harvest remains an
+ * optional fallback. A missing credential can therefore disable only that fallback; it must not
+ * make a healthy, private, zero-extra-model semantic path fail its doctor check.
  */
 export function probeHarvest() {
   const mode = harvestMode();
@@ -160,28 +162,28 @@ export function probeHarvest() {
   if (mode === 'off:mode') return [];
 
   if (mode === 'local') {
-    return [ok('finding extraction is on', 'local endpoint -- free and private')];
+    return [ok('finding extraction is available',
+      'active-model wiki_write is primary; local endpoint also enables fallback extraction')];
   }
   if (mode === 'remote') {
-    return [ok('finding extraction is on',
-      'on by default, with a credential -- a digest of paths, commands and conclusions, never ' +
-      'file contents, is sent to extract findings. TOKEN_OPTIMIZER_HARVEST=0 turns it off')];
+    return [ok('finding extraction is available',
+      'active-model wiki_write is primary; a credential also enables fallback extraction from ' +
+      'the bounded digest. TOKEN_OPTIMIZER_HARVEST=0 turns only that fallback off')];
   }
 
-  // THE COMMON BLOCKING CASE now that extraction is on by default: wanted, but unable to run.
+  // No second-model credential is required for the primary path. The Codex/agent session that
+  // already paid to derive the conclusion is the extractor and wiki_write is local.
   if (mode === 'off:no-key') {
-    return [bad('finding extraction is on',
-      'on, but there is no credential to call a model with -- so the graph will keep collecting ' +
-      'files and symbols and never a finding, a lesson or a correction',
-      'set TOKEN_OPTIMIZER_API_KEY, or point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a ' +
-      'local model to run it free and without one')];
+    return [ok('finding extraction is available',
+      'active model records durable conclusions through local wiki_write; no separate-model ' +
+      'credential is configured, so fallback transcript extraction is unavailable')];
   }
 
   // off:opted-out -- a deliberate choice, reported as one. Nagging about a setting somebody chose
   // is how a diagnostic gets ignored, and the point of this check is that it is worth reading.
-  return [ok('finding extraction is on',
-    'off by your choice (TOKEN_OPTIMIZER_HARVEST is set to a false value) -- the graph will ' +
-    'collect files and symbols but no findings, lessons or corrections')];
+  return [ok('finding extraction is available',
+    'active-model wiki_write remains available; separate-model fallback extraction is off by ' +
+    'your choice (TOKEN_OPTIMIZER_HARVEST is set to a false value)')];
 }
 
 export function probeVersion({ install }) {
@@ -455,9 +457,15 @@ export function probeServer({ root, timeoutMs = 20_000 }) {
     });
     const line = out.split('\n').find((l) => l.startsWith('{'));
     const tools = line ? JSON.parse(line)?.result?.tools : null;
-    return [Array.isArray(tools) && tools.length
-      ? ok('MCP server responds', `${tools.length} tools listed`)
-      : bad('MCP server responds', 'started but listed no tools', 'run `npm run build` and try again')];
+    if (!Array.isArray(tools) || !tools.length) {
+      return [bad('MCP server responds', 'started but listed no tools',
+        'run `npm run build` and try again')];
+    }
+    if (!tools.some((tool) => tool?.name === 'wiki_write')) {
+      return [bad('MCP server responds', `${tools.length} tools listed, but wiki_write is missing`,
+        'use the core or full tool profile; semantic harvesting requires wiki_write')];
+    }
+    return [ok('MCP server responds', `${tools.length} tools listed; wiki_write available`)];
   } catch (error) {
     return [bad('MCP server responds', String(error?.message || error).slice(0, 160),
       'run `npm run build`; if it persists the install is incomplete')];
