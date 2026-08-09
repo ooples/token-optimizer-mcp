@@ -11,13 +11,18 @@ directory contains ready-made, client-native configurations; Claude Code's
 seven-phase PowerShell hook system is documented separately and is not copied
 unchanged into clients with different event contracts.
 
-| Client             | MCP configuration                   | Guidance                    | Native lifecycle integration                     |
-| ------------------ | ----------------------------------- | --------------------------- | ------------------------------------------------ |
-| Codex              | `codex/config.toml` or Codex plugin | `AGENTS.md` or plugin skill | `codex/hooks/` or plugin `hooks/hooks.json`      |
-| Claude Code        | `../plugin/.mcp.json`               | Plugin skill                | Plugin large-read hook; optional global pipeline |
-| GitHub Copilot CLI | `copilot/mcp-config.json`           | `AGENTS.md`                 | `copilot/.github/hooks/`                         |
-| Gemini CLI         | `gemini/gemini-extension.json`      | `gemini/GEMINI.md`          | `gemini/hooks/`                                  |
-| OpenCode           | `opencode/opencode.json`            | `AGENTS.md`                 | `opencode/.opencode/plugins/`                    |
+| Client             | MCP configuration                   | Guidance                    | Native lifecycle integration               |
+| ------------------ | ----------------------------------- | --------------------------- | ------------------------------------------ |
+| Codex              | `codex/config.toml` or Codex plugin | `AGENTS.md` or plugin skill | route + capture + active-model `Stop`      |
+| Claude Code        | `../plugin/.mcp.json`               | Plugin skill                | route + capture + active-model `Stop`      |
+| GitHub Copilot CLI | `copilot/mcp-config.json`           | `AGENTS.md`                 | route + capture + `agentStop`              |
+| Gemini CLI         | `gemini/gemini-extension.json`      | `gemini/GEMINI.md`          | `BeforeTool`/`AfterTool`/`AfterAgent`      |
+| Qwen Code          | Qwen settings                       | extension context           | `PreToolUse`/`PostToolUse`/`Stop`          |
+| Cursor             | `cursor/mcp.json`                   | always-on `.mdc` rule       | pre/post tool + `stop`                     |
+| Cline              | `cline/mcp.json`                    | `.clinerules`               | task start + pre/post tool                 |
+| Windsurf           | `windsurf/mcp_config.json`          | Cascade rule                | pre read/write/command + post write        |
+| OpenCode           | `opencode/opencode.json`            | `AGENTS.md`                 | shared-engine plugin bridge                |
+| Kilo               | `kilo/kilo.jsonc`                   | Kilo rule                   | shared-engine plugin bridge                |
 
 Prerequisite: Node.js 22 or newer so `npx` can launch the server. The first
 launch downloads the package; later launches use the local npm cache.
@@ -89,14 +94,14 @@ mkdir -p /path/to/project/.github/hooks
 cp copilot/.github/hooks/token-optimizer* /path/to/project/.github/hooks/
 ```
 
-The hooks inject session guidance, advise after a large `view`, and provide an
-opt-in `preToolUse` redirect. Repository hooks are easier to install safely than
-overwriting user hooks.
+The hooks inject session guidance, enforce expensive-call routing, deliver and
+capture graph context, and give the active model one guarded `agentStop`
+continuation for semantic harvesting.
 
 ## Gemini CLI
 
 Recommended: install the extension, which bundles MCP, `GEMINI.md`, and native
-`SessionStart`/`AfterTool` hooks.
+`SessionStart`/`BeforeTool`/`AfterTool`/`AfterAgent` hooks.
 
 ```bash
 gemini extensions install https://github.com/ooples/token-optimizer-mcp --auto-update
@@ -109,11 +114,10 @@ package the integration separately. Direct MCP setup is also available:
 gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest
 ```
 
-By default, the `AfterTool` hook suggests `smart_read` after a large full-file
-read. Run `gemini extensions config token-optimizer` and set **Automatic
-large-read routing** to `true` to use Gemini's native `tailToolCallRequest`; the
-`smart_read` result then replaces the built-in result before it reaches the
-model.
+`BeforeTool` redirects expensive operations before their output enters context,
+`AfterTool` captures completed edits, and `AfterAgent` gives the same active
+Gemini model one guarded retry to call `wiki_write` when it learned something
+durable.
 
 ## OpenCode
 
@@ -124,23 +128,25 @@ cp opencode/opencode.json /path/to/project/
 cp AGENTS.md /path/to/project/
 mkdir -p /path/to/project/.opencode/plugins
 cp opencode/.opencode/plugins/token-optimizer.js /path/to/project/.opencode/plugins/
+mkdir -p /path/to/project/.opencode/hooks/token-optimizer
+cp -R opencode/hooks/* /path/to/project/.opencode/hooks/token-optimizer/
 ```
 
-The local plugin preserves Token Optimizer guidance during context compaction.
-Its strict large-read redirect is opt-in because OpenCode's before-hook blocks
-the original tool rather than transparently replacing its result.
+The local plugin invokes the generated shared-engine entries, preserves guidance
+during compaction, and appends applicable graph findings to tool results.
 
 ## Hook behavior and controls
 
 All adapters are fail-open for malformed payloads, missing files, small files,
 and partial reads. The default threshold is 25,600 bytes.
 
-- `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true` enables strict native routing.
+- `TOKEN_OPTIMIZER_MODE=advise` disables native vetoes while keeping guidance.
 - `TOKEN_OPTIMIZER_LARGE_READ_BYTES=<bytes>` changes the threshold.
 - Codex and Copilot deny the large built-in read so the agent retries with
   `smart_read`.
-- Gemini replaces the result with an MCP tail call.
-- OpenCode rejects the built-in read with a `smart_read` instruction.
+- Gemini and Qwen deny before the built-in call runs and tell the active model
+  to retry with the optimized MCP tool.
+- OpenCode and Kilo reject through their native before-hook plugin bridge.
 
 The environment variables are optional. Default mode injects guidance without
 blocking normal operations.

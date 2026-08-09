@@ -29,16 +29,18 @@ beforeAll(() => {
 
 afterAll(() => rmSync(workspace, { recursive: true, force: true }));
 
-function runEntry(relativePath, payload) {
+function runEntry(relativePath, payload, env = {}) {
   const result = spawnSync(process.execPath, [join(ROOT, relativePath)], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
+    env: { ...process.env, ...env },
   });
   if (!result.stdout.trim()) return { decision: 'allow', reason: '' };
-  const out = JSON.parse(result.stdout).hookSpecificOutput || {};
+  const parsed = JSON.parse(result.stdout);
+  const out = parsed.hookSpecificOutput || parsed;
   return {
-    decision: out.permissionDecision || (out.additionalContext ? 'advise' : 'allow'),
-    reason: out.permissionDecisionReason || out.additionalContext || '',
+    decision: parsed.decision || out.permissionDecision || (out.additionalContext ? 'advise' : 'allow'),
+    reason: parsed.reason || out.permissionDecisionReason || out.additionalContext || '',
   };
 }
 
@@ -87,20 +89,35 @@ describe('enforcement matches protocol capability, exactly', () => {
     expect(r.reason).toContain('smart_read');
   });
 
-  test('Gemini has only AfterTool, so it advises and never denies', () => {
-    // The read is already paid for by the time this fires. Denying would cost a
-    // turn and save nothing on this call, so it must not claim to enforce.
-    const r = runEntry('integrations/gemini/hooks/post-tool.mjs', {
+  test('Gemini BeforeTool denies before execution using its top-level schema', () => {
+    const r = runEntry('integrations/gemini/hooks/pre-tool.mjs', {
       session_id: 'gem-1', tool: 'read_file', args: { absolute_path: big },
     });
-    expect(r.decision).toBe('advise');
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toContain('smart_read');
+  });
+
+  test('Qwen PreToolUse denies before execution', () => {
+    const r = runEntry('integrations/qwen/hooks/pre-tool.mjs', {
+      session_id: 'qwen-1', tool_name: 'read_file', tool_input: { file_path: big },
+    });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toContain('smart_read');
+  });
+
+  test('Copilot parses string toolArgs and denies before execution', () => {
+    const r = runEntry('integrations/copilot/.github/hooks/pre-tool.mjs', {
+      sessionId: 'copilot-1', toolName: 'view', toolArgs: JSON.stringify({ path: big }),
+    });
+    expect(r.decision).toBe('deny');
+    expect(r.reason).toContain('smart_read');
   });
 
   test('every client declares its capability explicitly', () => {
     for (const [name, capability] of Object.entries(CLIENTS)) {
       expect(typeof capability.canDeny).toBe('boolean');
-      // A client that can deny must say which field carries the verdict.
-      if (capability.canDeny) expect(capability.denyField).toBeTruthy();
+      // A client that can deny must declare the protocol shape it emits.
+      if (capability.canDeny) expect(capability.denyStyle).toBeTruthy();
     }
   });
 });

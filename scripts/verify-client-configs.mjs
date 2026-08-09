@@ -45,13 +45,13 @@ const check = (name, pass, detail = '') => {
  * file can be perfect and the server still never starts.
  */
 const EXPECTED = {
-  cursor:   { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.mdc', frontmatter: true },
-  windsurf: { file: 'mcp_config.json', topKey: 'mcpServers',      rules: 'token-optimizer.md' },
-  cline:    { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.md' },
+  cursor:   { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.mdc', frontmatter: true, nativeHooks: true },
+  windsurf: { file: 'mcp_config.json', topKey: 'mcpServers',      rules: 'token-optimizer.md', nativeHooks: true },
+  cline:    { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.md', nativeHooks: true },
   roo:      { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.md' },
   // Kilo's schema is genuinely different: an `mcp` key, type "local", command
   // as an ARRAY, and `environment` rather than `env`.
-  kilo:     { file: 'kilo.jsonc',      topKey: 'mcp',             rules: 'token-optimizer.md', kiloShape: true },
+  kilo:     { file: 'kilo.jsonc',      topKey: 'mcp',             rules: 'token-optimizer.md', kiloShape: true, nativeHooks: true },
   zed:      { file: 'settings.json',   topKey: 'context_servers', rules: 'AGENTS.md' },
   amp:      { file: 'settings.json',   topKey: 'amp.mcpServers',  rules: 'AGENTS.md' },
   continue: { file: 'config.yaml',     yaml: true,                rules: 'token-optimizer.md' },
@@ -170,8 +170,12 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
     const rules = readFileSync(rulesPath, 'utf8');
     check(`${key}: rules name the optimized tools`,
       rules.includes('smart_read') && rules.includes('smart_grep'));
-    // Directive-tier rules must not claim enforcement the client cannot do.
-    check(`${key}: rules do not claim enforcement`, !/\bDENIED\b/.test(rules));
+    check(`${key}: rules require active-model semantic harvesting`,
+      rules.includes('wiki_write') && /active model/i.test(rules) && /do not delegate/i.test(rules));
+    // Rules-only clients must not claim a native veto they do not have.
+    check(`${key}: capability claim matches package`, expected.nativeHooks
+      ? /native hook/i.test(rules)
+      : !/native hook/i.test(rules));
 
     if (expected.frontmatter) {
       // Without alwaysApply the rule is retrieved only when Cursor judges it
@@ -263,21 +267,30 @@ for (const [key, file, why] of RETIRED) {
   check(`${key}: superseded ${file} removed (${why})`, !existsSync(join(INTEGRATIONS, key, file)));
 }
 
-/* ---- Enforcing tier: hooks must actually be wired ---------------------- */
+/* ---- Native tier: hook bundles must actually ship ---------------------- */
 
-for (const key of ['codex', 'gemini', 'opencode', 'qwen']) {
-  const hooks = join(INTEGRATIONS, key, 'hooks');
+for (const [key, relative] of [
+  ['codex', 'hooks'],
+  ['gemini', 'hooks'],
+  ['opencode', 'hooks'],
+  ['qwen', 'hooks'],
+  ['copilot', '.github/hooks'],
+  ['cline', 'hooks/token-optimizer'],
+  ['cursor', 'hooks'],
+  ['windsurf', 'hooks'],
+  ['kilo', 'hooks'],
+]) {
+  const hooks = join(INTEGRATIONS, key, relative);
   if (!existsSync(hooks)) {
     check(`${key}: hooks directory exists`, false);
     continue;
   }
   const files = readdirSync(hooks);
-  check(`${key}: ships a session-start entry`, files.includes('session-start.mjs'));
   check(`${key}: ships a tool entry`, files.includes('pre-tool.mjs') || files.includes('post-tool.mjs'));
   check(`${key}: vendored core is present`, existsSync(join(hooks, 'lib', 'decide.mjs')));
 }
 
-for (const key of ['codex', 'gemini']) {
+for (const key of ['codex', 'gemini', 'qwen']) {
   const manifest = join(INTEGRATIONS, key, 'hooks', 'hooks.json');
   if (!existsSync(manifest)) {
     check(`${key}: hooks.json exists`, false);
@@ -301,8 +314,94 @@ for (const key of ['codex', 'gemini']) {
   check(`${key}: declares a session-start hook`, Boolean(parsed.hooks?.SessionStart));
 }
 
+/* ---- Native host wiring: validate the files each CLI actually discovers -- */
+
+function readJsonHookManifest(label, relative, expectedEvents, scriptRoot) {
+  const path = join(ROOT, relative);
+  if (!existsSync(path)) {
+    check(`${label}: native hook manifest exists`, false);
+    return;
+  }
+
+  let parsed;
+  const raw = readFileSync(path, 'utf8');
+  try {
+    parsed = JSON.parse(raw);
+    check(`${label}: native hook manifest is valid JSON`, true);
+  } catch (error) {
+    check(`${label}: native hook manifest is valid JSON`, false, error.message);
+    return;
+  }
+
+  for (const event of expectedEvents) {
+    check(`${label}: native manifest declares ${event}`,
+      Array.isArray(parsed.hooks?.[event]) && parsed.hooks[event].length > 0);
+  }
+
+  const referenced = [...raw.matchAll(/([a-z-]+\.mjs)/g)].map((match) => match[1]);
+  const missing = [...new Set(referenced)]
+    .filter((name) => !existsSync(join(ROOT, scriptRoot, name)));
+  check(`${label}: every native manifest script exists`,
+    referenced.length > 0 && missing.length === 0, missing.join(','));
+}
+
+readJsonHookManifest(
+  'copilot',
+  'integrations/copilot/.github/hooks/token-optimizer.json',
+  ['sessionStart', 'preToolUse', 'postToolUse', 'agentStop'],
+  'integrations/copilot/.github/hooks',
+);
+readJsonHookManifest(
+  'cursor',
+  'integrations/cursor/hooks.json',
+  ['sessionStart', 'preToolUse', 'postToolUse', 'stop'],
+  'integrations/cursor/hooks',
+);
+readJsonHookManifest(
+  'windsurf',
+  'integrations/windsurf/hooks.json',
+  ['pre_read_code', 'pre_write_code', 'pre_run_command', 'post_write_code'],
+  'integrations/windsurf/hooks',
+);
+readJsonHookManifest(
+  'claude-code',
+  'plugin/hooks/hooks.json',
+  ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
+  'plugin/hooks',
+);
+
+for (const event of ['TaskStart', 'TaskResume', 'PreToolUse', 'PostToolUse']) {
+  for (const suffix of ['', '.ps1']) {
+    const path = join(INTEGRATIONS, 'cline', 'hooks', `${event}${suffix}`);
+    check(`cline: ships ${event}${suffix || ' POSIX'} wrapper`, existsSync(path));
+    if (existsSync(path)) {
+      const raw = readFileSync(path, 'utf8');
+      const entry = /^(?:TaskStart|TaskResume)$/.test(event) ? 'session-start.mjs'
+        : event === 'PreToolUse' ? 'pre-tool.mjs' : 'post-tool.mjs';
+      check(`cline: ${event}${suffix || ' POSIX'} reaches ${entry}`, raw.includes(entry));
+    }
+  }
+}
+
+for (const [client, relative, required] of [
+  ['opencode', 'integrations/opencode/.opencode/plugins/token-optimizer.js',
+    ['experimental.chat.system.transform', 'tool.execute.before', 'tool.execute.after']],
+  ['kilo', 'integrations/kilo/.kilo/plugin/token-optimizer.js',
+    ['experimental.chat.system.transform', 'tool.execute.before', 'tool.execute.after']],
+]) {
+  const path = join(ROOT, relative);
+  check(`${client}: native plugin exists`, existsSync(path));
+  if (!existsSync(path)) continue;
+  const raw = readFileSync(path, 'utf8');
+  for (const hook of required) {
+    check(`${client}: native plugin implements ${hook}`, raw.includes(`'${hook}'`));
+  }
+  check(`${client}: native plugin invokes generated shared entries`,
+    raw.includes("invoke('session-start'") && raw.includes("invoke('pre-tool'") && raw.includes("invoke('post-tool'"));
+}
+
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-console.log('NOTE: all ten directive-tier shapes are confirmed against published docs;');
+console.log('NOTE: all ten generated config shapes are confirmed against published docs;');
 console.log('      the source URL is recorded in each integration README.');
 process.exit(failed.length ? 1 : 0);

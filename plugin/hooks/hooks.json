@@ -31,12 +31,23 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write|Bash|mcp__.*__(?:smart_edit|smart_write)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/post-tool.mjs\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-harvest.mjs\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stop.mjs\""
           }
         ]
       }

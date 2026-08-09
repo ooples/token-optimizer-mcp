@@ -27,14 +27,34 @@ const ENTRIES = [
   ['integrations/codex/plugin/hooks', 'codex', 'post-tool', 'post-tool.mjs'],
   ['integrations/codex/plugin/hooks', 'codex', 'stop', 'stop.mjs'],
   ['integrations/gemini/hooks', 'gemini', 'session-start', 'session-start.mjs'],
-  // Gemini's only tool hook is AfterTool, which fires once the read has already
-  // been paid for. It advises about the next call rather than pretending to a
-  // veto it does not have.
+  ['integrations/gemini/hooks', 'gemini', 'pre-tool', 'pre-tool.mjs'],
   ['integrations/gemini/hooks', 'gemini', 'post-tool', 'post-tool.mjs'],
+  ['integrations/gemini/hooks', 'gemini', 'stop', 'stop.mjs'],
   ['integrations/qwen/hooks', 'qwen', 'session-start', 'session-start.mjs'],
+  ['integrations/qwen/hooks', 'qwen', 'pre-tool', 'pre-tool.mjs'],
   ['integrations/qwen/hooks', 'qwen', 'post-tool', 'post-tool.mjs'],
+  ['integrations/qwen/hooks', 'qwen', 'stop', 'stop.mjs'],
   ['integrations/opencode/hooks', 'opencode', 'session-start', 'session-start.mjs'],
   ['integrations/opencode/hooks', 'opencode', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/opencode/hooks', 'opencode', 'post-tool', 'post-tool.mjs'],
+  ['plugin/hooks', 'claude-code', 'post-tool', 'post-tool.mjs'],
+  ['plugin/hooks', 'claude-code', 'stop', 'stop.mjs'],
+  ['integrations/copilot/.github/hooks', 'copilot', 'session-start', 'session-start.mjs'],
+  ['integrations/copilot/.github/hooks', 'copilot', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/copilot/.github/hooks', 'copilot', 'post-tool', 'post-tool.mjs'],
+  ['integrations/copilot/.github/hooks', 'copilot', 'stop', 'stop.mjs'],
+  ['integrations/cline/hooks/token-optimizer', 'cline', 'session-start', 'session-start.mjs'],
+  ['integrations/cline/hooks/token-optimizer', 'cline', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/cline/hooks/token-optimizer', 'cline', 'post-tool', 'post-tool.mjs'],
+  ['integrations/cursor/hooks', 'cursor', 'session-start', 'session-start.mjs'],
+  ['integrations/cursor/hooks', 'cursor', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/cursor/hooks', 'cursor', 'post-tool', 'post-tool.mjs'],
+  ['integrations/cursor/hooks', 'cursor', 'stop', 'stop.mjs'],
+  ['integrations/windsurf/hooks', 'windsurf', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/windsurf/hooks', 'windsurf', 'post-tool', 'post-tool.mjs'],
+  ['integrations/kilo/hooks', 'kilo', 'session-start', 'session-start.mjs'],
+  ['integrations/kilo/hooks', 'kilo', 'pre-tool', 'pre-tool.mjs'],
+  ['integrations/kilo/hooks', 'kilo', 'post-tool', 'post-tool.mjs'],
 ];
 
 // --check verifies rather than writes. Without it CI validated only the

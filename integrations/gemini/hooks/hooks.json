@@ -13,16 +13,43 @@
         ]
       }
     ],
-    "AfterTool": [
+    "BeforeTool": [
       {
         "matcher": "read_file|search_file_content|glob|replace|write_file|run_shell_command",
         "hooks": [
           {
             "type": "command",
             "name": "token-optimizer-route",
+            "command": "node \"${extensionPath}${/}hooks${/}pre-tool.mjs\"",
+            "timeout": 5000,
+            "description": "Route expensive built-in operations to token-optimizer before they consume context."
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "replace|write_file|run_shell_command",
+        "hooks": [
+          {
+            "type": "command",
+            "name": "token-optimizer-capture",
             "command": "node \"${extensionPath}${/}hooks${/}post-tool.mjs\"",
             "timeout": 5000,
-            "description": "Advise routing the NEXT equivalent call to optimized tooling. Gemini exposes only AfterTool, which fires once the call has already been paid for, so this advises rather than refuses."
+            "description": "Capture completed changes and inject relevant graph findings."
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "name": "token-optimizer-semantic-harvest",
+            "command": "node \"${extensionPath}${/}hooks${/}stop.mjs\"",
+            "timeout": 5000,
+            "description": "Let the active Gemini model record durable conclusions before finishing."
           }
         ]
       }

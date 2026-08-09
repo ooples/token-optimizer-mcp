@@ -1,8 +1,6 @@
 # Cline integration
 
-Tier: **directive** -- Cline exposes MCP but no pre-execution hook, so
-the optimizer cannot refuse an expensive call. The rules file below is loaded on
-every request, which is the strongest lever available on this client.
+Tier: **native hook + rules** -- Cline's native lifecycle bridge routes expensive calls, captures structural graph evidence, and injects applicable findings. The rules require the active model to perform semantic wiki_write harvesting.
 
 ## Install
 
@@ -10,6 +8,8 @@ every request, which is the strongest lever available on this client.
    (in this directory) into your `mcp.json`.
 2. **Rules** -- copy `token-optimizer.md` (in this directory)
    to `.clinerules/token-optimizer.md` in your project.
+3. **Hooks** -- copy the contents of `hooks/` to `.clinerules/hooks/`; on macOS/Linux mark the extensionless wrappers executable and enable them.
+
 
 Both destinations are the paths Cline's own documentation specifies;
 the file names in this directory are flat because a repository cannot ship a
@@ -19,7 +19,7 @@ matters.
 ## Provenance
 
 Verified against https://docs.cline.bot/mcp/configuring-mcp-servers
-(mcpServers key confirmed; CLI reads ~/.cline/mcp.json, the VS Code extension reads cline_mcp_settings.json).
+(mcpServers key confirmed; CLI reads ~/.cline/mcp.json; project hooks use .clinerules/hooks with OS-specific wrappers).
 
 Both files in this directory are generated from
 `scripts/generate-client-configs.mjs`; edit that, not these.

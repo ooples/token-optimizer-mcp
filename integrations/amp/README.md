@@ -1,8 +1,6 @@
 # Amp integration
 
-Tier: **directive** -- Amp exposes MCP but no pre-execution hook, so
-the optimizer cannot refuse an expensive call. The rules file below is loaded on
-every request, which is the strongest lever available on this client.
+Tier: **rules** -- Amp has no packaged lifecycle continuation, so its always-applied rules route expensive calls and require the active model to perform semantic wiki_write harvesting before completion.
 
 ## Install
 
@@ -10,6 +8,7 @@ every request, which is the strongest lever available on this client.
    (in this directory) into your `settings.json`.
 2. **Rules** -- copy `AGENTS.md` (in this directory)
    to `AGENTS.md` in your project.
+
 
 Both destinations are the paths Amp's own documentation specifies;
 the file names in this directory are flat because a repository cannot ship a

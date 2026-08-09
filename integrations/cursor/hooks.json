@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/token-optimizer/session-start.mjs"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node .cursor/hooks/token-optimizer/pre-tool.mjs"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": "node .cursor/hooks/token-optimizer/post-tool.mjs"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node .cursor/hooks/token-optimizer/stop.mjs"
+      }
+    ]
+  }
+}

@@ -549,7 +549,7 @@ export function normalizePayload(raw) {
   // still carried a tool name, so the hook ran, found no path and no command,
   // and allowed every call. A total no-op with nothing in stderr and no failing
   // check anywhere -- the worst way for an integration to be broken.
-  const input =
+  const rawInput =
     raw.tool_input ||
     raw.toolInput ||
     raw.tool_args ||
@@ -558,6 +558,17 @@ export function normalizePayload(raw) {
     raw.args ||
     raw.parameters ||
     {};
+  let input = rawInput;
+  // Copilot CLI serializes toolArgs as a JSON string. Treating that string as
+  // an object preserved the tool name but discarded every argument, so every
+  // hook invocation silently allowed the call.
+  if (typeof rawInput === 'string') {
+    try {
+      input = JSON.parse(rawInput);
+    } catch {
+      input = {};
+    }
+  }
   const filePath =
     input.file_path ??
     input.path ??
