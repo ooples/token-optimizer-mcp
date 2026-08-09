@@ -44,8 +44,9 @@ Developer → PR → CI Checks → Merge → Release → npm Publish → Notific
 │  ├── Build             (~2-3 min)                          │
 │  ├── Test Matrix       (~5-8 min per Node version)         │
 │  │   ├── Node 22                                           │
-│  │   ├── Node 20                                           │
-│  │   └── Node 22                                           │
+│  │   ├── Node 24                                           │
+│  │   ├── Node 25                                           │
+│  │   └── Node 26                                           │
 │  ├── Performance       (~3-5 min)                          │
 │  └── Integration       (~3-5 min)                          │
 │                                                             │
@@ -231,19 +232,20 @@ Breaking Change Examples:
 
 All of the following must be GREEN:
 
- ✓ lint-and-format          (CI)
- ✓ build                    (CI)
- ✓ test (Node 22)           (CI)
- ✓ test (Node 20)           (CI)
- ✓ test (Node 22)           (CI)
- ✓ performance-benchmarks   (CI)
- ✓ integration-test         (CI)
- ✓ bundle-size              (Quality Gates)
- ✓ security-audit           (Quality Gates)
- ✓ license-compliance       (Quality Gates)
- ✓ dependency-vulnerabilities (Quality Gates)
- ✓ code-quality             (Quality Gates)
- ✓ commitlint               (Commit Lint)
+ ✓ Lint and Format Check         (CI)
+ ✓ Build                         (CI)
+ ✓ Test (Node 22)                (CI)
+ ✓ Test (Node 24)                (CI)
+ ✓ Test (Node 25)                (CI)
+ ✓ Test (Node 26)                (CI)
+ ✓ Performance Benchmarks        (CI)
+ ✓ Integration Tests             (CI)
+ ✓ Bundle Size Analysis          (Quality Gates)
+ ✓ Security Audit                (Quality Gates)
+ ✓ License Compliance            (Quality Gates)
+ ✓ Dependency Vulnerability Scan (Quality Gates)
+ ✓ Code Quality Metrics          (Quality Gates)
+ ✓ Lint Commit Messages          (Commit Lint)
 
 Plus:
 

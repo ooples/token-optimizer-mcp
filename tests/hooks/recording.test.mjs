@@ -124,4 +124,11 @@ describe('the active model performs the final semantic harvest', () => {
     expect(semanticHarvestPrompt({ edits: 0 })).toBeNull();
     expect(semanticHarvestPrompt({ edits: 5, stopHookActive: true })).toBeNull();
   });
+
+  test('uses the active-model fallback and omits an empty file subject', () => {
+    const out = semanticHarvestPrompt({ edits: 1, model: '', files: [] });
+
+    expect(out).toMatch(/the active model that did the reasoning/i);
+    expect(out).not.toMatch(/Work touched/);
+  });
 });

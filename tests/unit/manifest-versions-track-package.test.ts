@@ -68,6 +68,11 @@ function targets(): Target[] {
       value: read('gemini-extension.json').version,
     },
     {
+      path: 'plugin/.claude-plugin/plugin.json',
+      jsonpath: '$.version',
+      value: read('plugin/.claude-plugin/plugin.json').version,
+    },
+    {
       path: 'integrations/codex/plugin/.codex-plugin/plugin.json',
       jsonpath: '$.version',
       value: read('integrations/codex/plugin/.codex-plugin/plugin.json').version,
@@ -81,7 +86,7 @@ describe('manifest versions track package.json', () => {
   it('finds every version field it is meant to check', () => {
     // Without this, a manifest that stopped declaring a version would empty the
     // list and turn every assertion below into a vacuous pass.
-    expect(required.length).toBeGreaterThanOrEqual(5);
+    expect(required.length).toBeGreaterThanOrEqual(6);
   });
 
   it.each(required.map((t) => [`${t.path} ${t.jsonpath}`, t] as const))(

@@ -96,6 +96,9 @@ describe('Codex semantic harvest lifecycle', () => {
     expect(output.reason).toMatch(/do not delegate/i);
 
     expect(run(STOP, { ...payload, stop_hook_active: true })).toEqual({});
+    // Some clients clear stop_hook_active after the continuation completes.
+    // The persisted edit watermark must still prevent a third Stop loop.
+    expect(run(STOP, { ...payload, stop_hook_active: false })).toEqual({});
   });
 
   test('does not interrupt a read-only turn', () => {

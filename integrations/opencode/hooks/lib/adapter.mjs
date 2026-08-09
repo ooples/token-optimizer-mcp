@@ -105,6 +105,38 @@ export const CLIENTS = {
 const HARVEST_MAX_BYTES =
   Number(process.env.TOKEN_OPTIMIZER_HARVEST_MAX_BYTES) || 4_000_000;
 
+/**
+ * A post-tool event is not universally proof of success. Some clients split
+ * success and failure into distinct events; others expose a result status.
+ * Keep mutation accounting conservative so a failed edit cannot arm Stop.
+ */
+export function mutationSucceeded(clientName, raw) {
+  if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
+    return false;
+  if (raw?.postToolUse?.success === false || raw?.success === false) return false;
+
+  const status =
+    raw?.tool_response?.status ??
+    raw?.tool_response?.result_type ??
+    raw?.toolResponse?.status ??
+    raw?.toolResponse?.resultType ??
+    raw?.tool_result?.result_type ??
+    raw?.tool_result?.status ??
+    raw?.toolResult?.resultType ??
+    raw?.toolResult?.status;
+  if (status !== undefined) {
+    return /^(?:ok|success|succeeded|complete|completed)$/i.test(String(status));
+  }
+
+  if (raw?.postToolUse?.success === true || raw?.success === true) return true;
+  if (clientName === 'gemini' && raw?.tool_response) return true;
+
+  // These lifecycle contracts fire this event only after a successful tool,
+  // or are called by our in-process bridge only from its successful after hook.
+  return new Set(['claude-code', 'qwen', 'opencode', 'kilo', 'windsurf'])
+    .has(clientName);
+}
+
 function contextOutput(client, eventName, additionalContext) {
   if (client.contextStyle === 'top-level') return { additionalContext };
   if (client.contextStyle === 'cline') {
@@ -405,6 +437,9 @@ export async function run(clientName, event) {
     const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
     const agentScope = raw.transcript_path ?? raw.transcriptPath ?? null;
     const state = loadState(sessionId, agentScope);
+    const alreadyHarvested =
+      Number(state.edits || 0) > 0 &&
+      Number(state.harvestedEdits || 0) >= Number(state.edits || 0);
     const prompt = semanticHarvestPrompt({
       edits: state.edits,
       files: state.editedFiles,
@@ -412,8 +447,13 @@ export async function run(clientName, event) {
       stopHookActive:
         raw.stop_hook_active === true ||
         raw.stopHookActive === true ||
+        alreadyHarvested ||
         (clientName === 'cursor' && Number(raw.loop_count || 0) > 0),
     });
+    if (prompt) {
+      state.harvestedEdits = Number(state.edits || 0);
+      saveState(sessionId, state, agentScope);
+    }
     if (prompt && client.stopStyle === 'followup') {
       emit({ followup_message: prompt });
     } else {
@@ -442,7 +482,11 @@ export async function run(clientName, event) {
   // or failed apply_patch has not changed anything. Codex carries an
   // apply_patch body under tool_input.command, so recover the file headers from
   // that body when there is no ordinary file_path field.
-  if (event === 'post-tool' && isSubstantive(payload.tool_name)) {
+  if (
+    event === 'post-tool' &&
+    isSubstantive(payload.tool_name) &&
+    mutationSucceeded(clientName, raw)
+  ) {
     try {
       const edited = [];
       if (payload.tool_input.file_path) edited.push(payload.tool_input.file_path);

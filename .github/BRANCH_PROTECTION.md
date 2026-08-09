@@ -31,19 +31,20 @@ master
 
 ##### Required Status Checks (must pass)
 Select the following checks from the list:
-- `lint-and-format` (from CI workflow)
-- `build` (from CI workflow)
-- `test (22)` (from CI workflow - Node 22)
-- `test (20)` (from CI workflow - Node 20)
-- `test (22)` (from CI workflow - Node 22)
-- `performance-benchmarks` (from CI workflow)
-- `integration-test` (from CI workflow)
-- `bundle-size` (from Quality Gates workflow)
-- `security-audit` (from Quality Gates workflow)
-- `license-compliance` (from Quality Gates workflow)
-- `dependency-vulnerabilities` (from Quality Gates workflow)
-- `code-quality` (from Quality Gates workflow)
-- `commitlint` (from Commitlint workflow)
+- `Lint and Format Check` (from CI workflow)
+- `Build` (from CI workflow)
+- `Test (Node 22)` (from CI workflow)
+- `Test (Node 24)` (from CI workflow)
+- `Test (Node 25)` (from CI workflow)
+- `Test (Node 26)` (from CI workflow)
+- `Performance Benchmarks` (from CI workflow)
+- `Integration Tests` (from CI workflow)
+- `Bundle Size Analysis` (from Quality Gates workflow)
+- `Security Audit` (from Quality Gates workflow)
+- `License Compliance` (from Quality Gates workflow)
+- `Dependency Vulnerability Scan` (from Quality Gates workflow)
+- `Code Quality Metrics` (from Quality Gates workflow)
+- `Lint Commit Messages` (from Commit Lint workflow)
 
 > Note: Status checks will only appear in the list after they have run at least once. Create a test PR to populate this list.
 

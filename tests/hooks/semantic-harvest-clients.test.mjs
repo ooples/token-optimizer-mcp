@@ -8,11 +8,23 @@ import { spawnSync } from 'node:child_process';
 const ROOT = process.cwd();
 const CLIENTS = [
   { name: 'Claude Code', root: 'plugin/hooks', decision: 'block' },
-  { name: 'Codex', root: 'integrations/codex/hooks', decision: 'block' },
-  { name: 'Copilot', root: 'integrations/copilot/.github/hooks', decision: 'block' },
-  { name: 'Gemini', root: 'integrations/gemini/hooks', decision: 'deny' },
+  {
+    name: 'Codex', root: 'integrations/codex/hooks', decision: 'block',
+    result: { tool_response: { status: 'completed' } },
+  },
+  {
+    name: 'Copilot', root: 'integrations/copilot/.github/hooks', decision: 'block',
+    result: { toolResult: { resultType: 'success', textResultForLlm: 'ok' } },
+  },
+  {
+    name: 'Gemini', root: 'integrations/gemini/hooks', decision: 'deny',
+    result: { tool_response: { llmContent: 'ok' } },
+  },
   { name: 'Qwen', root: 'integrations/qwen/hooks', decision: 'block' },
-  { name: 'Cursor', root: 'integrations/cursor/hooks', followup: true },
+  {
+    name: 'Cursor', root: 'integrations/cursor/hooks', followup: true,
+    result: { success: true },
+  },
 ];
 
 let workspace;
@@ -57,6 +69,7 @@ describe.each(CLIENTS)('$name semantic lifecycle', (client) => {
       toolName: 'write_file',
       tool_input: { file_path: edited, content: 'export const choice = true;\n' },
       toolArgs: JSON.stringify({ path: edited, content: 'export const choice = true;\n' }),
+      ...(client.result || {}),
     });
 
     const stop = {
@@ -81,6 +94,42 @@ describe.each(CLIENTS)('$name semantic lifecycle', (client) => {
       loop_count: 1,
     });
     expect(guarded).toEqual({});
+
+    const persisted = run(client.root, 'stop', {
+      ...stop,
+      stop_hook_active: false,
+      loop_count: 0,
+    });
+    expect(persisted).toEqual({});
+  });
+});
+
+describe.each([
+  {
+    name: 'Codex plugin', root: 'integrations/codex/plugin/hooks',
+    failed: { tool_response: { status: 'failed' } },
+  },
+  {
+    name: 'Gemini', root: 'integrations/gemini/hooks',
+    failed: { tool_response: { error: { message: 'write failed' } } },
+  },
+])('$name failed mutation', (client) => {
+  test('does not arm semantic harvest after an unsuccessful edit', () => {
+    const session = `failed-${client.name}-${Date.now()}-${Math.random()}`;
+    run(client.root, 'post-tool', {
+      session_id: session,
+      cwd: workspace,
+      tool_name: 'write_file',
+      tool_input: { file_path: edited, content: 'not written' },
+      ...client.failed,
+    });
+
+    expect(run(client.root, 'stop', {
+      session_id: session,
+      cwd: workspace,
+      model: 'active-model',
+      stop_hook_active: false,
+    })).toEqual({});
   });
 });
 

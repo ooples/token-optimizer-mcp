@@ -241,22 +241,28 @@ if (!existsSync(codexPluginHooks)) {
   const raw = readFileSync(codexPluginHooks, 'utf8');
   try {
     const parsed = JSON.parse(raw);
-    const commands = Object.values(parsed.hooks || {})
+    const requiredEvents = ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'];
+    const validGroups = requiredEvents.every((event) =>
+      Array.isArray(parsed.hooks?.[event])
+      && parsed.hooks[event].length > 0
+      && parsed.hooks[event].every((group) =>
+        Array.isArray(group?.hooks) && group.hooks.length > 0
+      )
+    );
+    const commands = validGroups ? Object.values(parsed.hooks || {})
       .flatMap((groups) => groups)
       .flatMap((group) => group.hooks || [])
-      .map((hook) => hook.command || '');
+      .map((hook) => hook.command || '') : [];
     const referenced = commands
       .map((command) => command.match(/\$\{PLUGIN_ROOT\}\/([^\"]+\.mjs)/)?.[1])
       .filter(Boolean);
     const missing = referenced.filter((path) => !existsSync(join(codexPlugin, path)));
     check('codex plugin: hooks.json is valid JSON', true);
-    check('codex plugin: declares SessionStart', Boolean(parsed.hooks?.SessionStart));
-    check('codex plugin: declares PreToolUse', Boolean(parsed.hooks?.PreToolUse));
-    check('codex plugin: declares PostToolUse', Boolean(parsed.hooks?.PostToolUse));
-    check('codex plugin: declares Stop', Boolean(parsed.hooks?.Stop));
+    check('codex plugin: declares valid lifecycle hook groups', validGroups);
     check('codex plugin: every hook command names a plugin-relative script',
-      referenced.length === commands.length);
-    check('codex plugin: every referenced hook script exists', missing.length === 0,
+      validGroups && commands.length > 0 && referenced.length === commands.length);
+    check('codex plugin: every referenced hook script exists',
+      validGroups && referenced.length > 0 && missing.length === 0,
       missing.join(','));
   } catch (error) {
     check('codex plugin: hooks.json is valid JSON', false, error.message);
