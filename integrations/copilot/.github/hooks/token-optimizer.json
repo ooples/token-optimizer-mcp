@@ -4,26 +4,34 @@
     "sessionStart": [
       {
         "type": "command",
-        "bash": "node .github/hooks/token-optimizer-advisor.mjs session-start",
-        "powershell": "node .github/hooks/token-optimizer-advisor.mjs session-start",
+        "bash": "node .github/hooks/session-start.mjs",
+        "powershell": "node .github/hooks/session-start.mjs",
         "timeoutSec": 5
       }
     ],
     "preToolUse": [
       {
         "type": "command",
-        "matcher": "view",
-        "bash": "node .github/hooks/token-optimizer-advisor.mjs before-read",
-        "powershell": "node .github/hooks/token-optimizer-advisor.mjs before-read",
+        "matcher": "view|grep|glob|edit|create|bash",
+        "bash": "node .github/hooks/pre-tool.mjs",
+        "powershell": "node .github/hooks/pre-tool.mjs",
         "timeoutSec": 5
       }
     ],
     "postToolUse": [
       {
         "type": "command",
-        "matcher": "view",
-        "bash": "node .github/hooks/token-optimizer-advisor.mjs after-read",
-        "powershell": "node .github/hooks/token-optimizer-advisor.mjs after-read",
+        "matcher": "edit|create|bash",
+        "bash": "node .github/hooks/post-tool.mjs",
+        "powershell": "node .github/hooks/post-tool.mjs",
+        "timeoutSec": 5
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "node .github/hooks/stop.mjs",
+        "powershell": "node .github/hooks/stop.mjs",
         "timeoutSec": 5
       }
     ]

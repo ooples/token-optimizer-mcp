@@ -2,21 +2,13 @@
 /**
  * Generates MCP config + always-on rules for clients that expose no hook API.
  *
- * TWO TIERS, AND THE DIFFERENCE IS PROTOCOL, NOT EFFORT:
+ * Generates the MCP declaration and always-on rules for clients whose config
+ * is project-file based. Cursor, Windsurf, Cline, and Kilo additionally ship
+ * native lifecycle bridges; the remaining entries use the rules as their
+ * strongest available active-model lever.
  *
- *   ENFORCING tier -- Claude Code, Codex, OpenCode. These expose a hook that
- *   runs BEFORE a tool executes and can refuse it. The optimizer denies the
- *   expensive call outright, so optimized tooling is not a suggestion.
- *
- *   DIRECTIVE tier -- Cursor, Windsurf, Cline, Roo, Zed, Amp, Continue, Kilo,
- *   Crush, Droid, Copilot, Gemini, Qwen. These expose MCP but no pre-execution
- *   veto. The strongest available lever is the client's ALWAYS-APPLIED rules
- *   file, which is loaded unconditionally into every request -- unlike a skill,
- *   which the model must first decide to consult.
- *
- * The distinction is stated in the docs rather than blurred. Claiming
- * enforcement on a client that cannot enforce would be a lie a user discovers
- * on their first large read.
+ * Capability differences are stated in the generated README rather than
+ * blurred into one promise.
  *
  * The rules text is generated from one source below, so a policy change reaches
  * every client at once instead of being hand-copied thirteen times.
@@ -83,17 +75,20 @@ const CLIENTS = [
   // silently does nothing -- it installs cleanly, reports no error, and never
   // loads. Recording the source is what makes these re-checkable when a client
   // changes its schema, rather than trusting a memory of how it worked once.
-  { key: 'cursor',   name: 'Cursor',          mcpFile: '.cursor/mcp.json',        mcpShape: 'mcpServers',      rulesFile: '.cursor/rules/token-optimizer.mdc', rulesFormat: 'mdc',
-    docs: 'https://cursor.com/docs/context/rules', verified: 'rules path, .mdc extension and alwaysApply frontmatter confirmed' },
+  { key: 'cursor',   name: 'Cursor', nativeHooks: true, mcpFile: '.cursor/mcp.json',        mcpShape: 'mcpServers',      rulesFile: '.cursor/rules/token-optimizer.mdc', rulesFormat: 'mdc',
+    docs: 'https://cursor.com/docs/context/rules', verified: 'rules path, .mdc extension and alwaysApply frontmatter confirmed; project hooks use .cursor/hooks.json',
+    hookInstall: 'copy `hooks/` to `.cursor/hooks/token-optimizer/`, then merge `hooks.json` into `.cursor/hooks.json`' },
 
   // CORRECTED: `.windsurfrules` is the LEGACY single-file form. Current
   // Windsurf reads per-rule markdown from a rules directory; the old path is
   // still honoured, so this targets the current one.
-  { key: 'windsurf', name: 'Windsurf',        mcpFile: 'mcp_config.json',         mcpShape: 'mcpServers',      rulesFile: '.windsurf/rules/token-optimizer.md', rulesFormat: 'md',
-    docs: 'https://docs.windsurf.com/windsurf/cascade/memories', verified: 'directory form is current, .windsurfrules is legacy' },
+  { key: 'windsurf', name: 'Windsurf', nativeHooks: true, mcpFile: 'mcp_config.json',         mcpShape: 'mcpServers',      rulesFile: '.windsurf/rules/token-optimizer.md', rulesFormat: 'md',
+    docs: 'https://docs.windsurf.com/windsurf/cascade/memories', verified: 'directory form is current, .windsurfrules is legacy; Cascade pre/post hook contract verified',
+    hookInstall: 'copy `hooks/` to `.windsurf/hooks/token-optimizer/`, then merge `hooks.json` into `.windsurf/hooks.json`' },
 
-  { key: 'cline',    name: 'Cline',           mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: '.clinerules/token-optimizer.md',    rulesFormat: 'md',
-    docs: 'https://docs.cline.bot/mcp/configuring-mcp-servers', verified: 'mcpServers key confirmed; CLI reads ~/.cline/mcp.json, the VS Code extension reads cline_mcp_settings.json' },
+  { key: 'cline',    name: 'Cline', nativeHooks: true, mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: '.clinerules/token-optimizer.md',    rulesFormat: 'md',
+    docs: 'https://docs.cline.bot/mcp/configuring-mcp-servers', verified: 'mcpServers key confirmed; CLI reads ~/.cline/mcp.json; project hooks use .clinerules/hooks with OS-specific wrappers',
+    hookInstall: 'copy the contents of `hooks/` to `.clinerules/hooks/`; on macOS/Linux mark the extensionless wrappers executable and enable them' },
 
   // Project-level .roo/mcp.json is preferred over the global mcp_settings.json:
   // it is version-controllable and takes precedence.
@@ -105,8 +100,9 @@ const CLIENTS = [
   // reads kilo.jsonc under an `mcp` key, with type "local", `command` as an
   // ARRAY, and `environment` rather than `env`. The previous mcp_settings.json
   // /mcpServers config would never have loaded.
-  { key: 'kilo',     name: 'Kilo',            mcpFile: '.kilo/kilo.jsonc',        mcpShape: 'kilo',            rulesFile: '.kilo/rules/token-optimizer.md',    rulesFormat: 'md',
-    docs: 'https://kilo.ai/docs/features/mcp/using-mcp-in-kilo-code', verified: 'kilo.jsonc with mcp key, type local, command ARRAY and environment -- confirmed' },
+  { key: 'kilo',     name: 'Kilo', nativeHooks: true, mcpFile: '.kilo/kilo.jsonc',        mcpShape: 'kilo',            rulesFile: '.kilo/rules/token-optimizer.md',    rulesFormat: 'md',
+    docs: 'https://kilo.ai/docs/features/mcp/using-mcp-in-kilo-code', verified: 'kilo.jsonc MCP schema confirmed; Kilo plugin tool before/after and system-transform hooks verified',
+    hookInstall: 'copy `.kilo/plugin/token-optimizer.js` to the same project path, and copy `hooks/` to `.kilo/hooks/token-optimizer/`' },
 
   // CORRECTED: Zed's current schema has no `source` key; command is a string
   // beside an args array.
@@ -129,11 +125,12 @@ const CLIENTS = [
 ];
 
 /** The policy, written once. */
-function rules(clientName) {
+function rules(client) {
+  const enforcement = client.nativeHooks
+    ? `${client.name}'s packaged native hook enforces the pre-tool routes below and injects graph findings when its lifecycle permits.`
+    : `${client.name} has no packaged pre-execution bridge, so following these always-on rules is what produces the saving.`;
   return `Prefer the token-optimizer MCP tools over built-in file and search tools.
-They cut context usage 60-90% by caching, diffing, and bounding output. ${clientName}
-has no pre-execution hook, so nothing enforces this automatically -- following it
-is what produces the saving.
+They cut context usage by caching, diffing, and bounding output. ${enforcement}
 
 ALWAYS:
 - Reading a file over ~25 KB, or ANY file already read this session
@@ -150,6 +147,16 @@ of context. Call get_optimization_report to show the user what was saved.
 STASHING BULKY OUTPUT: optimize_text stores it under a key, out of context.
 Do NOT use compress_text for that -- its base64 output has MORE tokens than the
 input; it is for at-rest storage only.
+
+LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
+- Call wiki_write as soon as you establish a durable, non-obvious conclusion:
+  a failed approach and why, a decision and its rejected alternative, or the
+  command that finally worked.
+- Anchor every claim to a real file path or path#symbol. Never invent a claim
+  merely to populate the graph, and do not delegate harvesting to another model.
+- Before finishing substantive work, reflect once and write any still-unrecorded
+  conclusion while you hold the reasoning. This is what makes the lesson
+  available across sessions and projects instead of losing it to compaction.
 
 NOT WORTH IT: small one-off reads, tiny edits. The built-ins are fine there --
 the overhead would exceed the saving.`;
@@ -213,7 +220,7 @@ for (const client of CLIENTS) {
 
   emit(join(dir, client.mcpFile.split('/').pop()), mcpConfig(client.mcpShape));
 
-  const body = rules(client.name);
+  const body = rules(client);
   // Cursor's .mdc format needs frontmatter, and alwaysApply is the whole point:
   // without it the rule is retrieved only when Cursor judges it relevant, which
   // reproduces exactly the skill problem this redesign exists to fix.
@@ -225,9 +232,9 @@ for (const client of CLIENTS) {
   emit(join(dir, 'README.md'),
 `# ${client.name} integration
 
-Tier: **directive** -- ${client.name} exposes MCP but no pre-execution hook, so
-the optimizer cannot refuse an expensive call. The rules file below is loaded on
-every request, which is the strongest lever available on this client.
+Tier: **${client.nativeHooks ? 'native hook + rules' : 'rules'}** -- ${client.nativeHooks
+  ? `${client.name}'s native lifecycle bridge routes expensive calls, captures structural graph evidence, and injects applicable findings. The rules require the active model to perform semantic wiki_write harvesting.`
+  : `${client.name} has no packaged lifecycle continuation, so its always-applied rules route expensive calls and require the active model to perform semantic wiki_write harvesting before completion.`}
 
 ## Install
 
@@ -235,6 +242,7 @@ every request, which is the strongest lever available on this client.
    (in this directory) into your \`${client.mcpFile}\`.
 2. **Rules** -- copy \`${client.rulesFile.split('/').pop()}\` (in this directory)
    to \`${client.rulesFile}\` in your project.
+${client.nativeHooks ? `3. **Hooks** -- ${client.hookInstall}.\n` : ''}
 
 Both destinations are the paths ${client.name}'s own documentation specifies;
 the file names in this directory are flat because a repository cannot ship a
@@ -259,4 +267,4 @@ ${drifted} generated config file(s) differ. Run: npm run sync:hooks`);
 
 console.log(check
   ? 'client configs in sync'
-  : `generated configs for ${CLIENTS.length} directive-tier client(s)`);
+  : `generated configs for ${CLIENTS.length} client integration(s)`);

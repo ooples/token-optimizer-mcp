@@ -270,7 +270,10 @@ function statePath(sessionId, agent) {
 
 /** A usable state object, whatever was on disk. */
 function emptyState() {
-  return { seen: {}, denied: {}, injected: [], actCounts: {}, forecast: null, edits: 0, editedFiles: [], recordingNudged: false };
+  return {
+    seen: {}, denied: {}, injected: [], actCounts: {}, forecast: null,
+    edits: 0, editedFiles: [], harvestedEdits: 0, recordingNudged: false,
+  };
 }
 
 /**
@@ -331,6 +334,12 @@ export function loadState(sessionId, agent) {
       // threshold -- which is exactly how the act counter came to sit at one forever.
       edits: Number.isFinite(parsed.edits) ? parsed.edits : 0,
       editedFiles: Array.isArray(parsed.editedFiles) ? parsed.editedFiles : [],
+      // Stop hooks run in a fresh process. Remember how many confirmed edits
+      // the active model has already been asked to harvest so a client that
+      // clears stop_hook_active after continuation cannot restart the loop.
+      harvestedEdits: Number.isFinite(parsed.harvestedEdits)
+        ? parsed.harvestedEdits
+        : 0,
       recordingNudged: parsed.recordingNudged === true,
     };
   } catch {
@@ -413,6 +422,12 @@ export function saveState(sessionId, state, agent) {
       // exact here -- undercounting delays a nudge, overcounting invents one.
       edits: Math.max(Number(current.edits) || 0, Number(state.edits) || 0),
       editedFiles: [...new Set([...(state.editedFiles || []), ...(current.editedFiles || [])])].slice(0, 20),
+      // A later confirmed mutation increments edits beyond this watermark and
+      // legitimately arms one new harvest. A boolean could never do that.
+      harvestedEdits: Math.max(
+        Number(current.harvestedEdits) || 0,
+        Number(state.harvestedEdits) || 0,
+      ),
       // ONCE SET, STAYS SET. A nudge that can un-fire is a nudge that repeats.
       recordingNudged: Boolean(current.recordingNudged || state.recordingNudged),
       forecast: (() => {

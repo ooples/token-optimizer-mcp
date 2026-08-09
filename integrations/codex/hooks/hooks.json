@@ -28,6 +28,34 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write|edit_file|write_file|smart_edit|smart_write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.codex/hooks/post-tool.mjs\"",
+            "commandWindows": "node \"$env:USERPROFILE\\.codex\\hooks\\post-tool.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Tracking durable conclusions",
+            "additionalContextLimit": 800
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.codex/hooks/stop.mjs\"",
+            "commandWindows": "node \"$env:USERPROFILE\\.codex\\hooks\\stop.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking for durable conclusions"
+          }
+        ]
+      }
     ]
   }
 }

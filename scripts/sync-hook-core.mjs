@@ -32,6 +32,11 @@ const TARGETS = [
   join(ROOT, 'integrations', 'gemini', 'hooks', 'lib'),
   join(ROOT, 'integrations', 'opencode', 'hooks', 'lib'),
   join(ROOT, 'integrations', 'qwen', 'hooks', 'lib'),
+  join(ROOT, 'integrations', 'copilot', '.github', 'hooks', 'lib'),
+  join(ROOT, 'integrations', 'cline', 'hooks', 'token-optimizer', 'lib'),
+  join(ROOT, 'integrations', 'cursor', 'hooks', 'lib'),
+  join(ROOT, 'integrations', 'windsurf', 'hooks', 'lib'),
+  join(ROOT, 'integrations', 'kilo', 'hooks', 'lib'),
 ];
 
 const check = process.argv.includes('--check');

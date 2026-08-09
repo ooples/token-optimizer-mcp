@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "pre_read_code": [
+      {
+        "command": "node .windsurf/hooks/token-optimizer/pre-tool.mjs",
+        "powershell": "node .windsurf/hooks/token-optimizer/pre-tool.mjs",
+        "show_output": true
+      }
+    ],
+    "pre_write_code": [
+      {
+        "command": "node .windsurf/hooks/token-optimizer/pre-tool.mjs",
+        "powershell": "node .windsurf/hooks/token-optimizer/pre-tool.mjs",
+        "show_output": true
+      }
+    ],
+    "pre_run_command": [
+      {
+        "command": "node .windsurf/hooks/token-optimizer/pre-tool.mjs",
+        "powershell": "node .windsurf/hooks/token-optimizer/pre-tool.mjs",
+        "show_output": true
+      }
+    ],
+    "post_write_code": [
+      {
+        "command": "node .windsurf/hooks/token-optimizer/post-tool.mjs",
+        "powershell": "node .windsurf/hooks/token-optimizer/post-tool.mjs",
+        "show_output": false
+      }
+    ]
+  }
+}

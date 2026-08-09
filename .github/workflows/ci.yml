@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -61,7 +61,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -97,7 +97,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: ['18', '20', '22']
+        node-version: ['22', '24', '25', '26']
       fail-fast: false
 
     steps:
@@ -130,13 +130,13 @@ jobs:
           NODE_OPTIONS: --experimental-vm-modules
 
       - name: Generate coverage report
-        if: matrix.node-version == '20'
+        if: matrix.node-version == '22'
         run: npm run test:coverage
         env:
           NODE_OPTIONS: --experimental-vm-modules
 
       - name: Upload coverage to Codecov
-        if: matrix.node-version == '20'
+        if: matrix.node-version == '22'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -146,7 +146,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Check coverage threshold
-        if: matrix.node-version == '20'
+        if: matrix.node-version == '22'
         run: |
           npm run test:coverage
           if [ $? -ne 0 ]; then
@@ -157,7 +157,7 @@ jobs:
           NODE_OPTIONS: --experimental-vm-modules
 
       - name: Upload coverage artifacts
-        if: matrix.node-version == '20' && always()
+        if: matrix.node-version == '22' && always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ github.sha }}
@@ -180,7 +180,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -276,7 +276,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies

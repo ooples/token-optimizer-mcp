@@ -15,7 +15,7 @@ The comprehensive session logging system provides detailed tracking of token usa
 
 - Claude Code installed and configured
 - token-optimizer-mcp MCP server enabled in claude_desktop_config.json
-- Node.js 18+ (for running the MCP server)
+- Node.js 22+ (for running the MCP server)
 
 ## Step 1: Verify MCP Server is Running
 

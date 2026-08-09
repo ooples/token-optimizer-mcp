@@ -1,9 +1,7 @@
 # Token optimization
 
 Prefer the token-optimizer MCP tools over built-in file and search tools.
-They cut context usage 60-90% by caching, diffing, and bounding output. Crush
-has no pre-execution hook, so nothing enforces this automatically -- following it
-is what produces the saving.
+They cut context usage by caching, diffing, and bounding output. Crush has no packaged pre-execution bridge, so following these always-on rules is what produces the saving.
 
 ALWAYS:
 - Reading a file over ~25 KB, or ANY file already read this session
@@ -20,6 +18,16 @@ of context. Call get_optimization_report to show the user what was saved.
 STASHING BULKY OUTPUT: optimize_text stores it under a key, out of context.
 Do NOT use compress_text for that -- its base64 output has MORE tokens than the
 input; it is for at-rest storage only.
+
+LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
+- Call wiki_write as soon as you establish a durable, non-obvious conclusion:
+  a failed approach and why, a decision and its rejected alternative, or the
+  command that finally worked.
+- Anchor every claim to a real file path or path#symbol. Never invent a claim
+  merely to populate the graph, and do not delegate harvesting to another model.
+- Before finishing substantive work, reflect once and write any still-unrecorded
+  conclusion while you hold the reasoning. This is what makes the lesson
+  available across sessions and projects instead of losing it to compaction.
 
 NOT WORTH IT: small one-off reads, tiny edits. The built-ins are fine there --
 the overhead would exceed the saving.

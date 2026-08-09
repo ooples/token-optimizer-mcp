@@ -49,25 +49,22 @@ afterEach(() => {
 });
 
 describe('probeHarvest', () => {
-  it('fails when extraction is off because nobody opted in', () => {
+  it('passes without a second-model credential because the active model writes findings', () => {
     envOnly({});
     const [check] = probeHarvest();
 
-    expect(check.pass).toBe(false);
-    // The graph will never acquire a finding in this state, which is the thing
-    // the user cannot currently discover.
+    expect(check.pass).toBe(true);
     expect(check.name).toMatch(/harvest|finding/i);
+    expect(check.detail).toMatch(/active model|wiki_write/i);
   });
 
-  it('names the variable that changes it, because a diagnosis without a next step is a complaint', () => {
-    // With extraction on by default, the blocking state is a MISSING CREDENTIAL rather than a
-    // missing opt-in, so the remedy names the key and the free local alternative.
+  it('reports the external transcript harvester as an optional fallback', () => {
     envOnly({});
     const [check] = probeHarvest();
 
-    expect(check.pass).toBe(false);
-    expect(check.remedy).toMatch(/TOKEN_OPTIMIZER_API_KEY/);
-    expect(check.remedy).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+    expect(check.pass).toBe(true);
+    expect(check.detail).toMatch(/fallback/i);
+    expect(check.detail).toMatch(/credential/i);
   });
 
   it('reports a deliberate opt-out as a choice, not a fault', () => {
@@ -80,11 +77,11 @@ describe('probeHarvest', () => {
     expect(check.detail).toMatch(/your choice/i);
   });
 
-  it('fails differently when opted in but with no credential', () => {
+  it('does not fail when fallback extraction is requested without a credential', () => {
     envOnly({ TOKEN_OPTIMIZER_HARVEST: '1' });
     const [check] = probeHarvest();
 
-    expect(check.pass).toBe(false);
+    expect(check.pass).toBe(true);
     expect(check.detail).toMatch(/credential|key/i);
   });
 

@@ -84,11 +84,13 @@ describe('published required fields are enforced', () => {
     expect(server).toContain('const TOOL_DEFINITIONS = [');
     // Both guards are constructed from that array and nothing else.
     expect(server).toContain('createToolArgumentChecker(');
-    expect(server).toContain('TOOL_DEFINITIONS as ToolDefinitionLike[]');
+    expect(server).toContain(
+      'ADVERTISED_TOOL_DEFINITIONS as ToolDefinitionLike[]'
+    );
     expect(server).toContain('assertRequiredFields(name, args)');
     expect(server).toContain('assertKnownFields(name, args)');
     // And the handler serves that same array rather than a second literal.
-    expect(server).toContain('tools: TOOL_DEFINITIONS');
+    expect(server).toContain('tools: ADVERTISED_TOOL_DEFINITIONS');
 
     // The checker itself must read the definitions it was handed, rather than
     // keeping its own list of names alongside them.

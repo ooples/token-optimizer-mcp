@@ -7,8 +7,9 @@ description: Use the token-optimizer MCP tools to reduce context/token usage whe
 
 This plugin ships a `token-optimizer` MCP server whose tools cut context usage
 60–90% via caching, diffing, and compression. Prefer them over the built-in
-tools in the situations below. All tools are model-invoked — you must call them;
-nothing rewrites the built-in read/grep output automatically.
+tools in the situations below. The native hook refuses expensive built-in calls
+and injects applicable graph findings; the active model still makes every MCP
+tool call itself.
 
 ## When to use which tool
 
@@ -42,6 +43,17 @@ nothing rewrites the built-in read/grep output automatically.
 
 - **`count_tokens`** to measure how expensive a chunk of text is before you
   decide how to handle it.
+
+## Live graph
+
+- Call **`wiki_write`** when you establish a durable, non-obvious conclusion:
+  a failed approach and why, a decision and its rejected alternative, or a
+  command that finally worked. Anchor it to a real file or `path#symbol`.
+- Perform this semantic harvest yourself while you still hold the reasoning.
+  Do not delegate it to another model, and do not invent a finding merely to
+  populate the graph.
+- Applicable findings are injected automatically when their file or command is
+  touched. Use **`wiki_read`** for an explicit lookup.
 
 ## Storing bulky content out of context
 

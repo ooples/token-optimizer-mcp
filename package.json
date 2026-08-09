@@ -57,8 +57,9 @@
     "sync:hooks:check": "node scripts/sync-hook-core.mjs --check && node scripts/generate-client-entries.mjs --check && node scripts/generate-client-configs.mjs --check && node scripts/pin-mcp-version.mjs --check",
     "verify:ui": "node scripts/verify-wiki-ui.mjs",
     "verify:harvest": "node scripts/verify-harvest-api.mjs",
+    "verify:live-graph": "node scripts/verify-live-graph-flow.mjs",
     "verify:clients": "node scripts/verify-client-configs.mjs",
-    "verify:all": "npm run sync:hooks:check && npm run verify:clients && npm run verify:harvest && npm run verify:ui && npm run verify:interactions",
+    "verify:all": "npm run sync:hooks:check && npm run verify:clients && npm run verify:harvest && npm run verify:live-graph && npm run verify:ui && npm run verify:interactions",
     "verify:interactions": "node scripts/verify-wiki-interactions.mjs",
     "explore:wiki": "node scripts/explore-wiki.mjs"
   },
@@ -94,7 +95,7 @@
     }
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=22.0.0",
     "npm": ">=9.0.0"
   },
   "bugs": {
@@ -147,7 +148,7 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@typescript-eslint/typescript-estree": "^8.65.0",
     "async-mutex": "^0.5.0",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^13.0.3",
     "chalk": "^4.1.2",
     "chart.js": "4.4.0",
     "cors": "^2.8.5",

@@ -250,22 +250,24 @@ After first successful build:
 All PRs must pass the following status checks before merging:
 
 ### Critical Checks (Must Pass)
-- ✅ `lint-and-format` - Code style and linting
-- ✅ `build` - TypeScript compilation
-- ✅ `test (18)` - Tests on Node 18
-- ✅ `test (20)` - Tests on Node 20
-- ✅ `test (22)` - Tests on Node 22
-- ✅ `commitlint` - Commit message format
+- ✅ `Lint and Format Check` - Code style and linting
+- ✅ `Build` - TypeScript compilation
+- ✅ `Test (Node 22)` - Tests on Node 22
+- ✅ `Test (Node 24)` - Tests on Node 24
+- ✅ `Test (Node 25)` - Tests on Node 25
+- ✅ `Test (Node 26)` - Tests on Node 26
+- ✅ `Lint Commit Messages` - Commit message format
 
 ### Quality Checks (Must Pass)
-- ✅ `bundle-size` - Bundle size within limits
-- ✅ `security-audit` - No critical vulnerabilities
-- ✅ `license-compliance` - License compatibility
+- ✅ `Bundle Size Analysis` - Bundle size within limits
+- ✅ `Security Audit` - No critical vulnerabilities
+- ✅ `License Compliance` - License compatibility
+- ✅ `Dependency Vulnerability Scan` - Dependency risk scan
+- ✅ `Code Quality Metrics` - Code metrics and analysis
 
 ### Optional Checks (Can Warn)
-- ⚠️ `performance-benchmarks` - Performance metrics
-- ⚠️ `integration-test` - Integration test suite
-- ⚠️ `code-quality` - Code metrics and analysis
+- ⚠️ `Performance Benchmarks` - Performance metrics
+- ⚠️ `Integration Tests` - Integration test suite
 
 ## Release Process
 

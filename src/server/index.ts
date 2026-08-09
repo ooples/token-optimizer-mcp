@@ -8,6 +8,7 @@ import {
   createToolArgumentChecker,
   type ToolDefinitionLike,
 } from './tool-arguments.js';
+import { selectToolDefinitions } from './tool-profile.js';
 import { wasteAudit, WASTE_TOOL } from './waste-tool.js';
 import { cacheAudit, CACHE_TOOL } from './cache-tool.js';
 import { modelRouting, ROUTING_TOOL } from './routing-tool.js';
@@ -908,18 +909,23 @@ const TOOL_DEFINITIONS = [
   CONTEXT_DELTA_TOOL_DEFINITION,
 ];
 
+const ADVERTISED_TOOL_DEFINITIONS = selectToolDefinitions(TOOL_DEFINITIONS);
+const ADVERTISED_TOOL_NAMES = new Set(
+  ADVERTISED_TOOL_DEFINITIONS.map((tool) => tool.name)
+);
+
 /**
  * Both argument checks, built from the definitions this server publishes -- so
  * neither can drift from what callers read out of `tools/list`.
  */
 const { assertRequiredFields, assertKnownFields } = createToolArgumentChecker(
-  TOOL_DEFINITIONS as ToolDefinitionLike[]
+  ADVERTISED_TOOL_DEFINITIONS as ToolDefinitionLike[]
 );
 
 // Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: TOOL_DEFINITIONS,
+    tools: ADVERTISED_TOOL_DEFINITIONS,
   };
 });
 
@@ -2861,6 +2867,22 @@ async function handleToolCall(request: {
 }
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  if (!ADVERTISED_TOOL_NAMES.has(request.params.name)) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            error:
+              `Tool ${request.params.name} is not available in the active MCP tool profile. ` +
+              'Set TOKEN_OPTIMIZER_TOOL_PROFILE=full before starting the server to expose the full catalog.',
+          }),
+        },
+      ],
+      isError: true,
+    };
+  }
+
   // Following a pointer is handled here rather than in the tool switch, because
   // it is not an operation on the codebase -- it is an operation on what we
   // already said about it.

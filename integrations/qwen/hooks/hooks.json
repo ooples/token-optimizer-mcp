@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$QWEN_PROJECT_DIR/.qwen/hooks/token-optimizer/session-start.mjs\"",
+            "name": "token-optimizer-policy",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "read_file|grep_search|glob|edit|write_file|run_shell_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$QWEN_PROJECT_DIR/.qwen/hooks/token-optimizer/pre-tool.mjs\"",
+            "name": "token-optimizer-route",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "edit|write_file|run_shell_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$QWEN_PROJECT_DIR/.qwen/hooks/token-optimizer/post-tool.mjs\"",
+            "name": "token-optimizer-capture",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$QWEN_PROJECT_DIR/.qwen/hooks/token-optimizer/stop.mjs\"",
+            "name": "token-optimizer-semantic-harvest",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

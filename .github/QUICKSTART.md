@@ -5,7 +5,7 @@ Get your CI/CD pipeline up and running in under 10 minutes.
 ## Prerequisites
 
 - [x] Git repository initialized
-- [x] Node.js 18+ installed
+- [x] Node.js 22+ installed
 - [x] npm account created (https://www.npmjs.com/)
 - [x] GitHub repository created (ooples/token-optimizer-mcp)
 
