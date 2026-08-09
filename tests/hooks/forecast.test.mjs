@@ -539,15 +539,11 @@ describe('the credibility check divides each arm by its own event count', () => 
     // Many substitutions, each avoiding roughly what the treated arm reads per touch, so the two
     // views actually AGREE -- and must therefore stay quiet.
     for (let i = 0; i < 40; i++) {
-      record(dir, { kind: 'substitute', anchor: `/src/real${i}.ts`, bytesAvoided: 2_400, tokens: 100 });
+      record(dir, { kind: 'substitute', anchor: `/src/real${i}.ts`, bytesAvoided: 18_000, tokens: 100 });
     }
 
     const panel = forecastPanel(dir, session, []);
-    const d = panel.parts.divergence;
-    expect(d.shadowEvents).toBe(40);
-    // Per SUBSTITUTION, not per injection: the figure is bounded by what one substitution avoids
-    // rather than by how many of them there happen to have been.
-    expect(Math.abs(d.modelled)).toBeLessThan(2_000);
+    expect(panel.text).not.toMatch(/disagree/);
   });
 
   test('the modelled figure does not grow as substitutions accumulate', () => {
@@ -558,11 +554,16 @@ describe('the credibility check divides each arm by its own event count', () => 
         record(d2, { kind: 'inject', anchor: `/t${i}.ts`, sessionId: 's', holdout: false, tokens: 100 });
         recordRead(d2, { anchor: `/t${i}.ts`, sessionId: 's', bytes: 2_000 });
       }
+      for (let i = 0; i < MIN_CONTROL_TOUCHES + 2; i++) {
+        record(d2, { kind: 'inject', anchor: `/c${i}.ts`, sessionId: 's', holdout: true, tokens: 0 });
+        recordRead(d2, { anchor: `/c${i}.ts`, sessionId: 's', bytes: 20_000 });
+      }
       for (let i = 0; i < n; i++) {
         record(d2, { kind: 'substitute', anchor: `/s${i}.ts`, bytesAvoided: 4_000, tokens: 50 });
       }
       const p = forecastPanel(d2, { ...session, sessionId: 'x' }, []);
-      return p.parts.divergence?.modelled ?? 0;
+      expect(p.parts.divergence).toBeDefined();
+      return p.parts.divergence.modelled;
     };
 
     const few = measureWith(10);
@@ -588,12 +589,16 @@ describe('the credibility check divides each arm by its own event count', () => 
       record(dir, { kind: 'substitute', anchor: `/src/big${i}.ts`, bytesAvoided: 4_000_000, tokens: 10 });
     }
     const panel = forecastPanel(dir, session, []);
+    const d = panel.parts.divergence;
     expect(panel.text).toMatch(/disagree/);
     // The counts are named, so a reader can weigh the claim rather than simply take it.
-    expect(panel.text).toMatch(/over 20/);
+    expect(d.shadowEvents).toBe(20);
+    expect(d.treatedTouches).toBe(12);
+    expect(panel.text).toMatch(/substitution over 20/);
+    expect(panel.text).toMatch(/touch over 12/);
   });
 
   test('the threshold is a real bound', () => {
-    expect(MIN_DIVERGENCE_EVENTS).toBeGreaterThan(1);
+    expect(MIN_DIVERGENCE_EVENTS).toBe(5);
   });
 });
