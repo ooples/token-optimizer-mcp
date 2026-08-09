@@ -3,7 +3,10 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { CORE_TOOL_NAMES } from '../../src/server/tool-profile.js';
+import {
+  COGNITIVE_TOOL_NAMES,
+  CORE_TOOL_NAMES,
+} from '../../src/server/tool-profile.js';
 
 const ROOT = process.cwd();
 const SERVER = join(ROOT, 'dist', 'server', 'index.js');
@@ -86,7 +89,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
     );
   });
 
-  it('keeps the complete 98-tool catalog behind the full profile', () => {
+  it('keeps the complete 102-tool catalog behind the full profile', () => {
     const core = runServer();
     const full = runServer('full');
     expect(full.status).toBe(0);
@@ -95,7 +98,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
       ?.tools as ListedTool[];
     const fullTools = full.responses.find((message) => message.id === 2)?.result
       ?.tools as ListedTool[];
-    expect(fullTools).toHaveLength(98);
+    expect(fullTools).toHaveLength(102);
     expect(fullTools.map((tool) => tool.name)).toContain('cache_benchmark');
     expect(JSON.stringify(coreTools).length).toBeLessThan(
       JSON.stringify(fullTools).length * 0.35
@@ -117,6 +120,17 @@ describe('MCP tool profiles over the real stdio transport', () => {
     const result = runServer('everything');
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('Invalid TOKEN_OPTIMIZER_TOOL_PROFILE');
+  });
+
+  it('offers the four-operation cognitive bootstrap as an opt-in profile', () => {
+    const result = runServer('cognitive');
+    expect(result.status).toBe(0);
+    const tools = result.responses.find((message) => message.id === 2)?.result
+      ?.tools as ListedTool[];
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
+      [...COGNITIVE_TOOL_NAMES].sort()
+    );
+    expect(JSON.stringify(tools).length).toBeLessThan(2500);
   });
 
   it('isolates the four causal experiment arms at the server boundary', () => {

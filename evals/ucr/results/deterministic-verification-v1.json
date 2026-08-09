@@ -1,0 +1,266 @@
+{
+  "schemaVersion": "ucr.deterministic-verification/1",
+  "evidenceClass": "deterministic-conformance-not-live-effectiveness",
+  "source": {
+    "fixtureHash": "cbcf660b87d8714ada6c445ddd761947c3db01d2292edad0956e677ad90e7d73",
+    "benchmarkHash": "9a53db5b863fe7796620db51774378f27ff27a43bbd4b91996a9c5c31bc65d6c",
+    "competitorRegistryHash": "84d8de6f730164269d9492ec38e3fe7990e7cfb9ec0ffebd5705e4c81e49135a"
+  },
+  "implementation": {
+    "workstreamsWithRuntimeModules": 18,
+    "workstreamsTotal": 18,
+    "bootstrapOperations": 4,
+    "staticSurfaceTokens": 164
+  },
+  "conformance": {
+    "registeredClients": 16,
+    "schemaCertifiedClients": 16,
+    "lifecycleFamilies": 4,
+    "executableSmokeClients": 2,
+    "cognitionSemanticParity": true,
+    "fixtureEventsPerClient": 5
+  },
+  "deterministicProof": {
+    "checksPassed": 26,
+    "checksTotal": 26,
+    "replayInvariant": true,
+    "graphRebuildInvariant": true,
+    "guardFalsePositiveRate": 0,
+    "guardFalseNegativeCount": 0,
+    "contextCapsuleTokens": 118,
+    "contextBudgetTokens": 128,
+    "coordinatedWriters": 100,
+    "lostAcceptedEventsInRecovery": 0
+  },
+  "benchmarkProtocol": {
+    "taskFamilies": 11,
+    "frozenTasks": 11,
+    "arms": 7,
+    "deterministicArmRuns": 77,
+    "compoundingTasks": 100,
+    "plannedCompoundingRuns": 700,
+    "competitorBaselines": 10
+  },
+  "liveEvidence": {
+    "status": "passed-single-pair-smoke",
+    "modelRuns": 3,
+    "executableClientSmokes": 2,
+    "competitiveReproductions": 0,
+    "reportHash": "0435ffc877a5702cf32b61efe8059e8673463fb0d16f68fa4895532ab55949b2",
+    "reason": "one live pair proves executable transfer and control abstention, not effectiveness or superiority"
+  },
+  "release": {
+    "status": "insufficient",
+    "passed": false,
+    "missing": [
+      "applicabilityPrecision",
+      "preActionDelivery",
+      "staleDelivery",
+      "recurrenceReduction",
+      "recurrenceIntervalLow",
+      "naturalCorrectnessDelta",
+      "severeUnquarantined",
+      "emptyP95Overhead",
+      "reconstructionTokenReduction",
+      "crossClientPassed",
+      "competitivePassed"
+    ],
+    "failed": []
+  },
+  "checks": [
+    {
+      "name": "all registered clients pass schema conformance",
+      "passed": true,
+      "detail": "16/16"
+    },
+    {
+      "name": "all clients produce identical cognition semantics",
+      "passed": true,
+      "detail": "5 lifecycle events each"
+    },
+    {
+      "name": "certification is honest about executable smoke coverage",
+      "passed": true,
+      "detail": "schema certification is not labelled live proof"
+    },
+    {
+      "name": "redacted live Codex-to-Claude handoff smoke is integrity-valid",
+      "passed": true,
+      "detail": "5 events / 1 delivery"
+    },
+    {
+      "name": "duplicate and out-of-order replay is projection invariant",
+      "passed": true,
+      "detail": "2 duplicates suppressed"
+    },
+    {
+      "name": "graph rebuild is byte-equivalent after canonical ordering",
+      "passed": true,
+      "detail": {
+        "valid": true,
+        "objects": 1,
+        "relations": 0,
+        "events": 5,
+        "orphaned": [],
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "semantic compiler enforces propose, verify, activate",
+      "passed": true,
+      "detail": {
+        "total": 1,
+        "positiveApplicabilityRate": 1,
+        "negativeApplicabilityRate": 1,
+        "verifiedReceiptCoverage": 1,
+        "duplicateRate": 0
+      }
+    },
+    {
+      "name": "semantic object has positive and negative applicability",
+      "passed": true,
+      "detail": {
+        "total": 1,
+        "positiveApplicabilityRate": 1,
+        "negativeApplicabilityRate": 1,
+        "verifiedReceiptCoverage": 1,
+        "duplicateRate": 0
+      }
+    },
+    {
+      "name": "guard simulation has no false activation or miss",
+      "passed": true,
+      "detail": {
+        "cases": 101,
+        "truePositive": 1,
+        "falsePositive": 0,
+        "falseNegative": 0,
+        "falsePositiveRate": 0,
+        "safeToActivate": true
+      }
+    },
+    {
+      "name": "known mistake requires verification before action",
+      "passed": true,
+      "detail": "require-verification"
+    },
+    {
+      "name": "emergency disable always permits recovery",
+      "passed": true
+    },
+    {
+      "name": "causal credit refuses a confounded join",
+      "passed": true,
+      "detail": [
+        "objects were delivered more than once in one episode"
+      ]
+    },
+    {
+      "name": "credit policy abstains without minimum causal evidence",
+      "passed": true
+    },
+    {
+      "name": "applicable context capsule is delivered within the decision budget",
+      "passed": true,
+      "detail": {
+        "action": "deliver",
+        "tokens": 118,
+        "maximum": 128
+      }
+    },
+    {
+      "name": "cross-model takeover rejects stale workspace state",
+      "passed": true,
+      "detail": [
+        "workspace.head",
+        "workspace.artifactHashes"
+      ]
+    },
+    {
+      "name": "100 simulated concurrent writers retain authoritative ownership",
+      "passed": true,
+      "detail": "100/100"
+    },
+    {
+      "name": "coordination rejects duplicate work intent",
+      "passed": true,
+      "detail": {
+        "defined": false,
+        "duplicateOf": "task-0"
+      }
+    },
+    {
+      "name": "signed compatible federation bundle is authorized",
+      "passed": true,
+      "detail": {
+        "authorized": true,
+        "objectId": "claim:federated",
+        "sourceTenant": "tenant-a",
+        "targetTenant": "tenant-b",
+        "operation": "retrieve",
+        "compatibility": {
+          "compatible": true,
+          "reasons": [
+            "language=typescript"
+          ],
+          "mismatches": []
+        },
+        "grantId": "grant-1",
+        "denied": []
+      }
+    },
+    {
+      "name": "revocation prevents subsequent cross-project retrieval",
+      "passed": true,
+      "detail": [
+        "object revoked"
+      ]
+    },
+    {
+      "name": "minimal cognitive profile exposes exactly four bootstrap operations",
+      "passed": true,
+      "detail": [
+        "context_page",
+        "cognition_record",
+        "checkpoint_handoff",
+        "outcome_report"
+      ]
+    },
+    {
+      "name": "benchmark covers all eleven cognitive-continuity families",
+      "passed": true,
+      "detail": "11 tasks / 77 scheduled arm runs"
+    },
+    {
+      "name": "competitive registry covers ten frozen baseline kinds",
+      "passed": true,
+      "detail": "10/10"
+    },
+    {
+      "name": "compounding protocol schedules 100 linked tasks across models, clients and machines",
+      "passed": true,
+      "detail": "100 tasks / 700 arm runs"
+    },
+    {
+      "name": "release gate refuses to infer effectiveness from deterministic conformance",
+      "passed": true,
+      "detail": "11 live fields missing"
+    },
+    {
+      "name": "canary regression automatically rolls back and scopes a kill switch",
+      "passed": true,
+      "detail": "observe-only"
+    },
+    {
+      "name": "recovery exercise restores every accepted event",
+      "passed": true,
+      "detail": {
+        "passed": true,
+        "lost": [],
+        "recoveryPointEvents": 0,
+        "recoveryTimeMs": 30
+      }
+    }
+  ],
+  "reportHash": "1cd7f3a07f829d2614b8b965407cad6a5e0e2bb5b6f5df77fdd5f22534bd03b8"
+}

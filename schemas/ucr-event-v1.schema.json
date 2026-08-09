@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://token-optimizer.dev/schemas/ucr-event-v1.schema.json",
+  "title": "Universal Cognitive Event v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "type",
+    "traceId",
+    "causalParents",
+    "writer",
+    "time",
+    "idempotencyKey",
+    "actor",
+    "scope",
+    "sensitivity",
+    "payloadHash"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "ucr.event/1" },
+    "protocolVersion": { "type": "string" },
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": { "type": "string", "minLength": 1 },
+    "traceId": { "type": "string", "minLength": 1 },
+    "causalParents": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "writer": {
+      "type": "object",
+      "required": ["id", "sequence"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sequence": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "time": {
+      "type": "object",
+      "required": ["hlc", "wallMs"],
+      "properties": {
+        "hlc": { "type": "string", "pattern": "^[0-9]{13}:[0-9]{8}:.+$" },
+        "wallMs": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "actor": {
+      "type": "object",
+      "required": ["agentId", "client", "capabilityTier"],
+      "properties": {
+        "agentId": { "type": "string", "minLength": 1 },
+        "client": { "type": "string", "minLength": 1 },
+        "capabilityTier": {
+          "enum": [
+            "connected",
+            "observed",
+            "interceptable",
+            "continuable",
+            "transactional"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "scope": {
+      "type": "object",
+      "required": ["sessionId", "projectId", "workspaceId"],
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string", "minLength": 1 },
+        "workspaceId": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "sensitivity": {
+      "enum": ["public", "internal", "confidential", "restricted"]
+    },
+    "payloadHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "payloadRef": { "type": ["object", "null"] },
+    "payload": {},
+    "requiredSemantics": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}

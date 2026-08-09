@@ -1,6 +1,6 @@
 # Universal Cognitive Runtime program
 
-- Status: proposed architecture program
+- Status: implementation foundation delivered; empirical release gates open
 - Planning baseline: `master` at `59656c2`
 - Empirical baseline: draft PR
   [#302](https://github.com/ooples/token-optimizer-mcp/pull/302) at `8023ac9`
@@ -955,47 +955,70 @@ Pareto frontier. This is a target, not a present product claim.
 - PR #302 ledgers remain immutable before-state evidence and are never rewritten
   to make a later cohort look better.
 
-## Proposed implementation PR sequence
+## PR #303 implementation and evidence boundary
 
-This planning PR authorizes no production behavior by itself. After approval,
-implementation should use stacked or sequential PRs with these reviewable
-boundaries:
+PR #303 implements a coherent, reviewable foundation for every workstream so
+the protocol, safety boundaries, MCP surface, evidence contract, and dashboard
+cannot drift as isolated design documents. It does **not** promote the runtime
+to production or declare the 18 program exits complete. Automatic behavior
+remains fail-closed and the release verdict remains `insufficient` until the
+powered live and competitive studies pass.
 
-1. `ucr-protocol`: workstream 1 plus evidence schema foundations.
-2. `ucr-graph`: workstreams 2 and migration scaffolding.
-3. `ucr-semantic-compiler`: workstream 3.
-4. `ucr-executable-memory`: workstreams 4 and 5 in shadow mode.
-5. `ucr-context-runtime`: workstreams 6, 11, and 12.
-6. `ucr-continuity`: workstreams 7, 8, and 9.
-7. `ucr-federation`: workstream 10 security and policy gates.
-8. `ucr-client-sdk`: workstream 13 and all-client certification.
-9. `ucr-benchmarks`: workstreams 14 and 15.
-10. `ucr-live-learning`: workstreams 16 and 17.
-11. `ucr-production`: workstream 18 only after all release evidence passes.
+The committed evidence is split into three classes:
 
-Each implementation PR must update this program's evidence matrix and may not
-mark a workstream complete merely because its code merged.
+1. Deterministic conformance: reproducible in CI with `npm run verify:ucr`.
+2. Executable model smoke: redacted Codex-to-Claude evidence produced with
+   `npm run eval:ucr:handoff`; failed attempts remain in an append-only ledger.
+3. Release evidence: currently insufficient. A one-pair transfer success is
+   not converted into an efficiency, non-inferiority, or superiority claim.
 
-## Program task checklist
+## Workstream evidence matrix
 
-- [ ] 1. Universal Cognitive Event Protocol
-- [ ] 2. Typed temporal and causal cognitive graph
-- [ ] 3. Model-native semantic compiler
-- [ ] 4. Executable memory and action guards
-- [ ] 5. Causal credit and harm quarantine
-- [ ] 6. Context virtual machine
-- [ ] 7. Complete agent checkpoints and cross-model takeover
-- [ ] 8. Distributed multi-agent coordination
-- [ ] 9. Autonomous consolidation, contradiction handling, and forgetting
-- [ ] 10. Secure cross-project federation
-- [ ] 11. Adaptive multi-kernel retrieval
-- [ ] 12. Minimal and lazy MCP capability surface
-- [ ] 13. All-client adapter SDK and conformance certification
-- [ ] 14. Cognitive Continuity Benchmark
-- [ ] 15. Reproducible competitive baseline harnesses
-- [ ] 16. Live compounding-learning experiments
-- [ ] 17. Effectiveness dashboard and release gates
-- [ ] 18. Shadow mode, canary rollout, rollback, and production hardening
+| # | Implemented in PR #303 | Evidence now | Program exit still open |
+| -: | --- | --- | --- |
+| 1 | Versioned event envelope, UUIDv7/HLC, canonical replay, artifact references, open schema | Duplicate/out-of-order replay invariant | Independent language implementation, redacted metric replay |
+| 2 | Typed bitemporal/causal graph, deterministic projection, migration entrypoint | Byte-equivalent rebuild and integrity check | One-million-event budget and full wiki migration |
+| 3 | Active-model `propose -> verify -> activate` compiler with signed external receipts | Unsupported/forged verification rejected; applicability coverage 100% in fixtures | Powered semantic-quality corpus and cross-model field audit |
+| 4 | Safe guard DSL, five modes, capability downgrade, simulation, emergency disable | 101 traces, zero false positives and zero misses | Live prevention across two model families and adversarial activation study |
+| 5 | Exact causal joins, correctness-first verdicts, uncertainty, abstention, quarantine | Confounded join rejected and insufficient evidence abstains | Matched live causal cohorts and quarantine-latency distribution |
+| 6 | L0-L4 context VM, capsules, budgets, paging, working-set invalidation, cached expansion | Applicable capsule delivered in 118/128 tokens | p50/p95 empty overhead and long-history growth studies |
+| 7 | Complete checkpoint schema, compatibility checks, atomic storage, takeover receipts | Stale repository state rejected before action | Codex, Claude, and third-family non-inferiority study |
+| 8 | Agent/task registry, DAGs, leases, heartbeats, conflicts, duplicate suppression, recovery | 100 simulated writers retain authoritative ownership | Real concurrent workload and 80% duplicate-work reduction study |
+| 9 | Consolidation proposals, contradiction resolution, decay, archival, logical compaction | Deterministic unit fixtures | Long-horizon autonomous quality and bounded-growth study |
+| 10 | Deny-by-default policy, compatibility, taint/redaction, Ed25519 bundles, revocation | Signed transfer accepted; revoked transfer denied | Cross-tenant red team and revocation-latency SLO |
+| 11 | Adaptive lexical, temporal, procedural, failure, causal, structural, and checkpoint kernels | Risk/scope filtering and explicit abstention fixtures | Frozen recall, precision, cost, and p95 latency comparison |
+| 12 | Exactly four lazy cognitive MCP operations plus compatibility aliases and overhead accounting | MCP profile exposes 4 operations; static surface measured | Live empty-system p50/p95 overhead across clients |
+| 13 | One adapter SDK, 16-client registry, honest lifecycle families and capability tiers | 16/16 schema conformance; Codex and Claude executable smoke | Executable certification for remaining clients and capability tiers |
+| 14 | Frozen 11-family, seven-arm benchmark; deterministic graders, contamination checks, redacted ledgers, paired bootstrap | 11 frozen tasks and 77 scheduled arm runs | Full powered public/internal benchmark execution |
+| 15 | Ten baseline kinds, fairness validation, Pareto analysis, superiority gate | 10/10 manifests validate | Fair reproduction of every strongest comparable baseline |
+| 16 | Linked 100-task curriculum, 700-run cross-model/client/machine schedule, learning curves and ablation | Schedule is deterministic and complete | Paid live execution, positive slope, recurrence and reconstruction gates |
+| 17 | Full funnel, correctness-first release verdict, downloadable evidence API and browser dashboard | 26/26 deterministic gates; dashboard 29/29; one live pair passed | Eleven aggregate live/competitive fields remain missing |
+| 18 | Shadow-to-stable controller, scoped kill switches, automatic rollback, safe mode, circuit breaker, recovery exercise | Harmful canary rolls back; recovery loses zero accepted fixture events | Fault-injected canary traffic, SLOs, security audit, signed release manifest |
+
+## PR #303 implementation task checklist
+
+- [x] 1. Universal Cognitive Event Protocol foundation
+- [x] 2. Typed temporal and causal cognitive graph foundation
+- [x] 3. Model-native semantic compiler foundation
+- [x] 4. Executable memory and action guards foundation
+- [x] 5. Causal credit and harm quarantine foundation
+- [x] 6. Context virtual machine foundation
+- [x] 7. Complete agent checkpoints and cross-model takeover foundation
+- [x] 8. Distributed multi-agent coordination foundation
+- [x] 9. Autonomous consolidation, contradiction handling, and forgetting foundation
+- [x] 10. Secure cross-project federation foundation
+- [x] 11. Adaptive multi-kernel retrieval foundation
+- [x] 12. Minimal and lazy MCP capability surface
+- [x] 13. All-client adapter SDK and conformance certification foundation
+- [x] 14. Cognitive Continuity Benchmark protocol
+- [x] 15. Reproducible competitive baseline harness foundations
+- [x] 16. Live compounding-learning experiment protocol
+- [x] 17. Effectiveness dashboard and fail-closed release gates
+- [x] 18. Shadow mode, canary rollback, and production-hardening controls
+
+These checks mean the PR implementation exists and is tested. They do not
+override the exit-gate definition above; the matrix names every empirical gate
+that remains open.
 
 ## Definition of program success
 

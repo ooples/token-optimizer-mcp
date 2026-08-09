@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "ucr.competitor-registry/1",
+  "frozenAt": "2026-08-09T00:00:00.000Z",
+  "fairnessContract": [
+    "same model and version",
+    "same permissions",
+    "same context, retry, and tool budgets",
+    "same task inputs and deterministic graders"
+  ],
+  "baselines": [
+    {
+      "kind": "no-memory",
+      "name": "isolated-empty",
+      "version": "1",
+      "command": "internal:empty",
+      "license": "MIT"
+    },
+    {
+      "kind": "full-history",
+      "name": "full-transcript",
+      "version": "1",
+      "command": "internal:full-history",
+      "license": "MIT"
+    },
+    {
+      "kind": "static-instructions",
+      "name": "repository-instructions",
+      "version": "1",
+      "command": "internal:static-instructions",
+      "license": "MIT"
+    },
+    {
+      "kind": "vector-rag",
+      "name": "vector-rag-reference",
+      "version": "unreproduced",
+      "command": null,
+      "limitations": ["adapter not yet supplied"]
+    },
+    {
+      "kind": "graph-rag",
+      "name": "graph-rag-reference",
+      "version": "unreproduced",
+      "command": null,
+      "limitations": ["adapter not yet supplied"]
+    },
+    {
+      "kind": "temporal-graph",
+      "name": "temporal-graph-reference",
+      "version": "unreproduced",
+      "command": null,
+      "limitations": ["adapter not yet supplied"]
+    },
+    {
+      "kind": "memory-os",
+      "name": "memory-runtime-reference",
+      "version": "unreproduced",
+      "command": null,
+      "limitations": ["adapter not yet supplied"]
+    },
+    {
+      "kind": "workflow-library",
+      "name": "executable-workflow-reference",
+      "version": "unreproduced",
+      "command": null,
+      "limitations": ["adapter not yet supplied"]
+    },
+    {
+      "kind": "vendor-memory",
+      "name": "client-native-memory",
+      "version": "unreproduced",
+      "command": null,
+      "limitations": ["version must be recorded by live runner"]
+    },
+    {
+      "kind": "oracle-context",
+      "name": "hidden-answer-oracle",
+      "version": "1",
+      "command": "internal:oracle",
+      "license": "MIT"
+    }
+  ]
+}

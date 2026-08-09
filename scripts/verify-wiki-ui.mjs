@@ -44,6 +44,8 @@ const BASE = `http://localhost:${PORT}`;
  */
 const GRAPH = mkdtempSync(join(tmpdir(), 'wiki-ui-graph-'));
 process.env.TOKEN_OPTIMIZER_WIKI_DIR = GRAPH;
+const UCR = mkdtempSync(join(tmpdir(), 'wiki-ui-ucr-'));
+process.env.TOKEN_OPTIMIZER_UCR_DIR = UCR;
 
 const results = [];
 const check = (name, pass, detail = '') => {
@@ -56,6 +58,27 @@ async function seed() {
   const { putNode, putEdge, nodeId } = await import('../hooks-core/wiki.mjs');
   const { indexFile } = await import('../hooks-core/staleness.mjs');
   const { record } = await import('../hooks-core/metrics.mjs');
+  const ucr = await import('../ucr/index.mjs');
+
+  const store = new ucr.EventStore(UCR);
+  const clock = new ucr.HybridLogicalClock('dashboard-writer');
+  store.append(ucr.createEvent({
+    type: 'finding.activated',
+    payload: { object: {
+      id: 'claim:dashboard', type: 'claim', state: 'active', confidence: 0.99,
+      claim: 'Dashboard UCR fixture', applicability: ['dashboard verification'],
+    } },
+    traceId: 'dashboard-trace', writer: { id: 'dashboard-writer', sequence: 0 },
+    actor: { agentId: 'dashboard-agent', client: 'codex', capabilityTier: 'continuable' },
+    scope: { sessionId: 'dashboard', projectId: 'dashboard', workspaceId: 'dashboard' },
+    clock,
+  }));
+  // Exercise the honest initial state. Deterministic UI fixtures cannot make a
+  // live-model release verdict pass.
+  const metrics = { writerIntegrity: true };
+  writeFileSync(join(UCR, 'release-evidence.json'), JSON.stringify({
+    metrics, verdict: ucr.releaseVerdict(metrics),
+  }));
 
   const src = join(GRAPH, 'demo-src');
   mkdirSync(src, { recursive: true });
@@ -312,6 +335,14 @@ async function main() {
         check('evidence lists all supported client capabilities', capabilityCount === 16, String(capabilityCount));
         const capabilityText = await page.textContent('#evidence-capabilities');
         check('rules-only clients are labelled MCP-visible only', /mcp-visible-only/i.test(capabilityText || ''));
+        await page.waitForSelector('#ucr-summary .stat-card', { timeout: 5000 });
+        const ucrText = await page.textContent('#ucr-summary');
+        const ucrState = await page.getAttribute('#ucr-verdict', 'data-state');
+        check('UCR dashboard renders event, graph, and client coverage',
+          /1\.0\.0/.test(ucrText || '') && /1/.test(ucrText || '') && /16/.test(ucrText || ''));
+        check('UCR dashboard renders the redacted live cross-model handoff',
+          /Live handoff\s*passed/i.test(ucrText || ''));
+        check('UCR dashboard fails closed without live effectiveness evidence', ucrState === 'insufficient', ucrState);
         await page.screenshot({ path: join(SHOTS, 'evidence.png'), fullPage: true });
       } else {
         await page.screenshot({ path: join(SHOTS, 'narrow.png'), fullPage: true });
@@ -325,6 +356,7 @@ async function main() {
     await browser.close();
     server.kill();
     rmSync(GRAPH, { recursive: true, force: true });
+    rmSync(UCR, { recursive: true, force: true });
   }
 
   const failed = results.filter((r) => !r.pass);
