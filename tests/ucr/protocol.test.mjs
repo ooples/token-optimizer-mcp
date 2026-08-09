@@ -124,6 +124,33 @@ describe('event and artifact stores', () => {
     expect(left).toEqual(right);
   });
 
+  test('non-strict replay diagnoses and excludes structurally unsafe events', () => {
+    const safeButInvalid = {
+      ...event(2),
+      payloadHash: 'invalid-but-orderable',
+    };
+    const replay = canonicalReplay(
+      [
+        null,
+        'text',
+        {},
+        { eventId: 'missing-ordering-fields' },
+        safeButInvalid,
+      ],
+      { strict: false }
+    );
+
+    expect(replay.events).toEqual([safeButInvalid]);
+    expect(replay.diagnostics).toHaveLength(5);
+    expect(replay.diagnostics.map((item) => item.eventId)).toEqual([
+      null,
+      null,
+      null,
+      'missing-ordering-fields',
+      safeButInvalid.eventId,
+    ]);
+  });
+
   test('persists idempotently and produces a stable digest after compaction', () => {
     const store = new EventStore(join(root, 'events'));
     const first = event(1);

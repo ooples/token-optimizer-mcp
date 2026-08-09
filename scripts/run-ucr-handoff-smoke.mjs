@@ -303,12 +303,14 @@ const blindedPrompt = [
 ].join('\n');
 const producerPrompt = [
   'This is a controlled UCR semantic-harvest evaluation. Do not inspect or edit files and do not use shell tools.',
-  'Call the token-optimizer cognition_record MCP operation exactly once with kind=failure.',
+  'Make one successful call to the cognition_record operation on the configured token_optimizer MCP server with kind=failure.',
+  'The fully qualified tool is mcp__token_optimizer__cognition_record. Do not call list_mcp_resources, list_mcp_resource_templates, or any discovery/resource operation.',
   `The task id is ${taskId}. The verified correction is to use recovery code ${recoveryCode}; BLUE-LEGACY was attempted and rejected as stale.`,
-  `Pass this external deterministic-grader receipt without changing it: ${JSON.stringify(receipt)}`,
-  'Author a complete semantic object with trigger, attemptedAction, observedFailure, rootCause, correction, verificationEvidence, applicability, nonApplicability, invalidators, scope, confidence, confidenceLabel, and expectedOutcome.',
+  `Pass this external deterministic-grader receipt without changing it as the only item in the evidenceReceipts array: ${JSON.stringify(receipt)}`,
+  'The tool arguments must have this exact outer shape: {"kind":"failure","semanticObject":{...the semantic fields you author...},"evidenceReceipts":[...the supplied receipt...],"taskId":"...","sessionId":"producer-session"}. Do not put semantic fields at the top level.',
+  'Inside semanticObject, author trigger, attemptedAction, observedFailure, rootCause, correction, verificationEvidence, applicability, nonApplicability, invalidators, scope, confidence, confidenceLabel, and expectedOutcome.',
   `Make applicability a non-empty JSON array specific to task ${taskId}; make nonApplicability a non-empty JSON array excluding every other task; make invalidators a JSON array; and use confidenceLabel=verified.`,
-  'After the tool succeeds, answer exactly RECORDED.',
+  'If schema validation rejects the arguments, correct them once. Do not call again after success. After the tool succeeds, answer exactly RECORDED.',
 ].join('\n');
 const consumerPrompt = [
   'This is a fresh cross-model UCR continuity evaluation. Do not inspect files, shell state, user memory, or the internet.',

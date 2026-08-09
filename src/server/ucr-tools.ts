@@ -257,20 +257,17 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
     const verified = compiler.verify(proposed.proposal.id, receipts);
     if (!verified.verified) return verified;
     const activated = compiler.activate(proposed.proposal.id);
-    for (const event of [
+    const appended = [
       ...receipts,
       proposed.event,
       verified.event,
       activated.event,
-    ])
-      store.append(event);
+    ];
+    for (const event of appended) store.append(event);
     return {
       accepted: true,
       object: activated.object,
-      eventIds: store
-        .read()
-        .events.slice(-4 - receipts.length)
-        .map((event: any) => event.eventId),
+      eventIds: appended.map((event: any) => event.eventId),
     };
   }
 

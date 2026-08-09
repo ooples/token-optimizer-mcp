@@ -1,11 +1,11 @@
 {
   "schemaVersion": "ucr.live-handoff-smoke/1",
   "evidenceClass": "live-cross-model-executable-smoke-not-superiority-study",
-  "executedAt": "2026-08-09T19:12:09.998Z",
-  "taskId": "live-handoff-fe22f9db102406de",
-  "taskHash": "e8c099ed2bf0e8e2b2a7e7d2d071a883454fae3175e019a3011049b33279974a",
-  "recoveryCodeHash": "c544a936762be47db1db146ea616cbc4ef72bbd2cf1005c3d3be1226dbfcf125",
-  "sourceTreeHash": "dd128d4c54e6ad2bdcdb6f21ee62bef95727afc1dec68a40a921f2f2a65c9d9b",
+  "executedAt": "2026-08-09T21:54:29.594Z",
+  "taskId": "live-handoff-edc83d4d79cb354e",
+  "taskHash": "9568590b5a0df1005638e972e259902b50362aab67b28c26b996350a6a2c0c80",
+  "recoveryCodeHash": "8c8cdc3902bb8cadf12aa64c043ec861fc6370a94d815a7a3be7a358be760242",
+  "sourceTreeHash": "5dd1b1811a20e77503e47776f04fc75341d55377550434eae1fe0f862a1b0d9e",
   "clients": {
     "producer": {
       "client": "codex",
@@ -25,12 +25,12 @@
       "abstained": true,
       "usage": {
         "inputTokens": 2,
-        "cachedInputTokens": 28882,
+        "cachedInputTokens": 30804,
         "outputTokens": 20,
         "totalTokens": null,
-        "costUsd": 0.044593600000000004
+        "costUsd": 0.028930200000000003
       },
-      "latencyMs": 4770
+      "latencyMs": 3697
     },
     "runtime": {
       "exitCode": 0,
@@ -38,25 +38,25 @@
       "delivered": true,
       "usage": {
         "inputTokens": 2,
-        "cachedInputTokens": 60184,
-        "outputTokens": 39,
+        "cachedInputTokens": 59331,
+        "outputTokens": 34,
         "totalTokens": null,
-        "costUsd": 0.2444211
+        "costUsd": 0.2040783
       },
-      "latencyMs": 10295
+      "latencyMs": 12024
     }
   },
   "producer": {
     "exitCode": 0,
     "recorded": true,
     "usage": {
-      "inputTokens": 42880,
-      "cachedInputTokens": 38144,
-      "outputTokens": 837,
+      "inputTokens": 28930,
+      "cachedInputTokens": 19968,
+      "outputTokens": 684,
       "totalTokens": null,
       "costUsd": null
     },
-    "latencyMs": 22843
+    "latencyMs": 18814
   },
   "eventEvidence": {
     "canonicalEvents": 5,
@@ -66,7 +66,7 @@
       "claude-code",
       "codex"
     ],
-    "eventStreamHash": "24c57afd973c9ee6d867b5d085a65bceb50436535df256090238c76a5b656996"
+    "eventStreamHash": "5d84035c64f370e55b32310f38fc18fec3758f9f1e2046f620e2dfc9ccf42578"
   },
   "transcriptPublished": false,
   "passed": true,
@@ -75,5 +75,5 @@
     "the smoke measures cross-model transfer and abstention, not competitive superiority",
     "the consumer model alias must be resolved from provider-side run metadata before a model-version claim"
   ],
-  "reportHash": "0435ffc877a5702cf32b61efe8059e8673463fb0d16f68fa4895532ab55949b2"
+  "reportHash": "32cf870ffa29dcc76ef73656f395515c546506780eb10ed7a74bd41ecdab31d3"
 }

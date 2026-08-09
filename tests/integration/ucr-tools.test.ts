@@ -52,6 +52,11 @@ function semanticFailure() {
 describe('four-operation UCR MCP runtime', () => {
   test('records verified active-model cognition and pages it back selectively', async () => {
     const { signGraderReceipt } = await import('../../ucr/index.mjs');
+    const priorDelivery = await runUcrTool('context_page', {
+      query: 'an unrelated empty-graph request',
+      taskId: 'earlier-task',
+      budget: 128,
+    });
     const receipt = signGraderReceipt(
       {
         graderId: 'sync-check',
@@ -71,6 +76,9 @@ describe('four-operation UCR MCP runtime', () => {
       accepted: true,
       object: { state: 'active', type: 'failure' },
     });
+    expect(recorded.eventIds).toHaveLength(4);
+    expect(new Set(recorded.eventIds).size).toBe(4);
+    expect(recorded.eventIds).not.toContain(priorDelivery.deliveryEventId);
 
     const context = await runUcrTool('context_page', {
       query: 'avoid editing the generated policy output',

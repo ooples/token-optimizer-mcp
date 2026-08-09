@@ -34,6 +34,27 @@ function parseLines(path) {
   return { events, malformed };
 }
 
+function isReplayOrderable(event) {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return false;
+  if (
+    typeof event.eventId !== 'string' ||
+    !event.eventId ||
+    typeof event.idempotencyKey !== 'string' ||
+    !event.idempotencyKey ||
+    typeof event.time?.hlc !== 'string' ||
+    typeof event.writer?.id !== 'string' ||
+    !event.writer.id ||
+    !Number.isSafeInteger(event.writer.sequence)
+  )
+    return false;
+  try {
+    compareHlc(event.time.hlc, event.time.hlc);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function canonicalReplay(events, { strict = true } = {}) {
   const diagnostics = [];
   const byEvent = new Map();
@@ -45,7 +66,7 @@ export function canonicalReplay(events, { strict = true } = {}) {
         eventId: event?.eventId ?? null,
         errors: validation.diagnostics,
       });
-      if (strict) continue;
+      if (strict || !isReplayOrderable(event)) continue;
     }
     if (byEvent.has(event.eventId)) continue;
     const prior = byIdempotency.get(event.idempotencyKey);
