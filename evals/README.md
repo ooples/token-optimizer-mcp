@@ -29,3 +29,7 @@ node scripts/run-evidence-eval.mjs \
 Each arm receives a fresh fixture copy, graph, and hook-state directory. The
 aggregate result is a schema-v2 `eval-run` record. Use `--include-transcript`
 only when raw model output is appropriate to retain locally.
+
+Published, redacted live cohorts:
+
+- [Claude Code 2.1.225 / Claude Sonnet 5 / command recovery / five pairs](results/2026-08-09-claude-sonnet-5-command-recovery.md)
