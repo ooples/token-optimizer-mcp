@@ -571,6 +571,10 @@ export function forRepeatedAct(
         episodeId: episode.episodeId || sessionId,
         relevanceFor: () => 1,
         costFor: (finding) => estimate(render(finding)),
+        // This surface exists specifically to re-surface a lesson once the
+        // session crosses the repeat threshold. Ordinary retrieval remains
+        // cooldown-protected; harm quarantine and utility gating still apply.
+        bypassCooldown: true,
       });
       if (!assessed.eligible.length) {
         record(projectDir, {

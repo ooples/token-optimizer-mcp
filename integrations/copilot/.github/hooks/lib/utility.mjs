@@ -64,6 +64,7 @@ export function assessFindings(
     episodeId = null,
     now = Date.now(),
     policy = retrievalPolicy(),
+    bypassCooldown = false,
   } = {}
 ) {
   const events = readEvidence(dir);
@@ -84,7 +85,7 @@ export function assessFindings(
       rejected.push({ key, reason: 'quarantined-harm', helpful, neutral, harmful });
       continue;
     }
-    if (deliveredRecently(events, key, episodeId, now, policy.cooldownMs)) {
+    if (!bypassCooldown && deliveredRecently(events, key, episodeId, now, policy.cooldownMs)) {
       rejected.push({ key, reason: 'cooldown' });
       continue;
     }
