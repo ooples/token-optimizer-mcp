@@ -134,7 +134,7 @@ describe('the budget', () => {
 });
 
 describe('through the real SessionStart hook', () => {
-  it('delivers standing rules alongside the policy notice, and nothing else', () => {
+  it('delivers standing rules and the bounded project index before the first tool call', () => {
     // The unit tests prove the selection. This proves the hook actually emits
     // it -- the distinction that mattered for forTouch, which was correct and
     // called by nothing for its entire life.
@@ -173,9 +173,12 @@ describe('through the real SessionStart hook', () => {
     expect(ctx).toContain('# Standing rules');
     expect(ctx).toContain('Report the number you measured');
     expect(ctx).toContain('isolated worktree');
-    // A situational finding must NOT be in the always-on block; it waits for
-    // its trigger, which is the whole reason the always-on set can stay small.
-    expect(ctx).not.toContain('npx jest');
+    // A situational finding is catalogued, not promoted into the full standing
+    // rules block. This makes it available before the first action while the
+    // tighter block remains limited to genuinely universal rules.
+    expect(ctx).toContain('# Project wiki');
+    expect(ctx).toContain('npx jest');
+    expect(ctx.indexOf('# Project wiki')).toBeGreaterThan(ctx.indexOf('# Standing rules'));
 
     try { rmSync(project, { recursive: true, force: true }); } catch { /* windows */ }
   });

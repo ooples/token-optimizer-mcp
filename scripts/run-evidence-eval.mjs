@@ -211,19 +211,30 @@ export function parseUsage(text, profile = {}) {
 }
 
 export function parseRunIdentity(text) {
+  let identity = { modelVersion: null, clientVersion: null, sessionId: null };
   for (const line of String(text).split('\n')) {
     try {
       const document = JSON.parse(line);
       if (document?.type === 'system' && document?.subtype === 'init') {
-        return {
+        identity = {
           modelVersion: document.model || null,
           clientVersion: document.claude_code_version || null,
           sessionId: document.session_id || null,
         };
       }
+      // Codex JSONL identifies the ephemeral thread separately from turn
+      // events. Keep scanning because future versions may add explicit model
+      // or client metadata later in the stream.
+      if (document?.type === 'thread.started') {
+        identity.sessionId = document.thread_id || document.threadId || identity.sessionId;
+      }
+      identity.modelVersion = document.model_version || document.modelVersion
+        || document.model || identity.modelVersion;
+      identity.clientVersion = document.client_version || document.clientVersion
+        || identity.clientVersion;
     } catch { /* non-JSON output */ }
   }
-  return { modelVersion: null, clientVersion: null, sessionId: null };
+  return identity;
 }
 
 async function grade(task, run, workspace, graphDir, evidenceEvents) {

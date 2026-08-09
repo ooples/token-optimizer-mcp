@@ -98,6 +98,8 @@ export const EVIDENCE_KINDS = new Set([
   'tool-outcome',
   'episode-outcome',
   'eval-run',
+  'handoff-run',
+  'concurrency-run',
   'finding-feedback',
   'retrieval-decision',
   'mcp-client',
@@ -1075,9 +1077,164 @@ function pairedEffects(runs, controlArm, treatmentArm, contrastType = 'increment
 
 function matchesFilters(event, filters) {
   for (const field of ['client', 'clientVersion', 'model', 'modelVersion', 'taskId', 'arm']) {
-    if (filters[field] && String(event[field] || '') !== String(filters[field])) return false;
+    if (!filters[field]) continue;
+    let actual = event[field];
+    if (event.kind === 'handoff-run') {
+      actual = field === 'taskId' ? event.scenarioId : (event.consumer?.[field] ?? event.producer?.[field]);
+    } else if (event.kind === 'concurrency-run') {
+      actual = field === 'taskId' ? 'concurrent-combined' : (event.consumer?.[field] ?? event[field]);
+    }
+    if (String(actual || '') !== String(filters[field])) return false;
   }
   return true;
+}
+
+function handoffArmMetrics(runs) {
+  const consumers = runs.map((run) => run.consumer || {});
+  const count = (field) => consumers.filter((consumer) => consumer[field] === true).length;
+  const interval = (field) => bootstrapMeanInterval(
+    consumers.map((consumer) => consumer[field]).filter((value) => numeric(value) !== null),
+    { seed: `handoff:${field}` }
+  );
+  return {
+    runs: runs.length,
+    correctness: proportionInterval(count('correct'), runs.length),
+    firstPass: proportionInterval(count('firstPass'), runs.length),
+    mistakeAttempted: proportionInterval(count('mistakeAttempted'), runs.length),
+    mistakeExecuted: proportionInterval(count('mistakeExecuted'), runs.length),
+    totalTokens: interval('totalTokens'),
+    toolCalls: interval('toolCalls'),
+    failedToolCalls: interval('failedToolCalls'),
+    latencyMs: interval('latencyMs'),
+  };
+}
+
+function handoffPairedEffect(runs, controlArm, treatmentArm) {
+  const pairs = new Map();
+  for (const run of runs) {
+    if (!run.pairId || ![controlArm, treatmentArm].includes(run.arm)) continue;
+    if (!pairs.has(run.pairId)) pairs.set(run.pairId, {});
+    pairs.get(run.pairId)[run.arm] = run;
+  }
+  const complete = [...pairs.values()].filter((pair) => pair[controlArm] && pair[treatmentArm]);
+  const effect = (field, positiveWhenLower = true) => bootstrapMeanInterval(
+    complete.map((pair) => {
+      const control = numeric(pair[controlArm].consumer?.[field]);
+      const treatment = numeric(pair[treatmentArm].consumer?.[field]);
+      if (control === null || treatment === null) return null;
+      return positiveWhenLower ? control - treatment : treatment - control;
+    }).filter((value) => value !== null),
+    { seed: `handoff:${controlArm}:${treatmentArm}:${field}` }
+  );
+  return {
+    comparison: `${treatmentArm} vs ${controlArm}`,
+    pairs: complete.length,
+    attemptedMistakesPrevented: effect('mistakeAttempted'),
+    executedMistakesPrevented: effect('mistakeExecuted'),
+    firstPassDelta: effect('firstPass', false),
+    correctnessDelta: effect('correct', false),
+    totalTokensSaved: effect('totalTokens'),
+    toolCallsAvoided: effect('toolCalls'),
+    failedToolCallsAvoided: effect('failedToolCalls'),
+    latencyMsSaved: effect('latencyMs'),
+  };
+}
+
+const handoffKey = (run) => [
+  run.producer?.client || 'unknown', run.producer?.model || 'unknown',
+  run.consumer?.client || 'unknown', run.consumer?.model || 'unknown',
+  run.scenarioId || 'unknown',
+].join('|');
+
+function handoffCohorts(runs) {
+  const grouped = new Map();
+  for (const run of runs) {
+    const key = handoffKey(run);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(run);
+  }
+  const minimumPairs = Math.max(2, Number(process.env.TOKEN_OPTIMIZER_HANDOFF_MIN_PAIRS) || 10);
+  return [...grouped.entries()].map(([key, rows]) => {
+    const arms = Object.fromEntries(HANDOFF_REPORT_ARMS.map((arm) => [
+      arm, handoffArmMetrics(rows.filter((row) => row.arm === arm)),
+    ]));
+    const naturalRows = rows.filter((row) => row.arm === 'natural');
+    const naturalVsEmpty = handoffPairedEffect(rows, 'empty', 'natural');
+    const naturalVsOracle = handoffPairedEffect(rows, 'oracle', 'natural');
+    const captureRate = naturalRows.length
+      ? naturalRows.filter((row) => row.producer?.captureSuccess).length / naturalRows.length
+      : null;
+    const preActionDeliveryRate = naturalRows.length
+      ? naturalRows.filter((row) => row.delivery?.beforeFirstExecutedMistake).length / naturalRows.length
+      : null;
+    const emptyRecurrence = arms.empty.mistakeExecuted.rate;
+    const naturalRecurrence = arms.natural.mistakeExecuted.rate;
+    const relativeRecurrenceReduction = emptyRecurrence
+      ? (emptyRecurrence - naturalRecurrence) / emptyRecurrence
+      : null;
+    const controlsSafe = ['irrelevant', 'stale'].every((arm) =>
+      arms[arm].correctness.rate === null
+      || arms.empty.correctness.rate === null
+      || arms[arm].correctness.rate >= arms.empty.correctness.rate - 0.1
+    );
+    const gates = {
+      minimumPairs: naturalVsEmpty.pairs >= minimumPairs,
+      capture: captureRate !== null && captureRate >= 0.8,
+      recurrenceMagnitude:
+        relativeRecurrenceReduction !== null && relativeRecurrenceReduction >= 0.5,
+      recurrenceInterval: (naturalVsEmpty.executedMistakesPrevented.low ?? -Infinity) > 0,
+      correctness:
+        (arms.natural.correctness.rate ?? -Infinity) >= (arms.empty.correctness.rate ?? 0) - 0.1,
+      preActionDelivery: preActionDeliveryRate !== null && preActionDeliveryRate >= 0.8,
+      negativeControls: controlsSafe,
+    };
+    const claimReady = Object.values(gates).every(Boolean);
+    return {
+      key,
+      producerClient: rows[0]?.producer?.client || 'unknown',
+      producerModel: rows[0]?.producer?.model || null,
+      consumerClient: rows[0]?.consumer?.client || 'unknown',
+      consumerModel: rows[0]?.consumer?.model || null,
+      scenarioId: rows[0]?.scenarioId || null,
+      arms,
+      effects: { naturalVsEmpty, naturalVsOracle },
+      captureRate,
+      preActionDeliveryRate,
+      relativeRecurrenceReduction,
+      gates,
+      evidenceStatus: claimReady
+        ? 'pre-registered transfer gates passed'
+        : `insufficient or failed transfer gates (need ${minimumPairs} pairs)`,
+    };
+  });
+}
+
+const HANDOFF_REPORT_ARMS = ['empty', 'natural', 'oracle', 'irrelevant', 'stale'];
+
+function concurrencySummary(runs) {
+  const natural = runs.filter((run) => run.arm === 'natural');
+  const writers = natural.reduce((sum, run) => sum + (run.writerCount || 0), 0);
+  const captures = natural.reduce((sum, run) => sum + (run.captureSuccesses || 0), 0);
+  const integrityPasses = natural.filter((run) =>
+    run.integrity?.zeroLoss
+    && run.integrity?.parseable
+    && run.integrity?.orphanedFindings === 0
+  ).length;
+  const delivered = natural.reduce((sum, run) => sum + (run.delivery?.delivered || 0), 0);
+  const expected = natural.reduce((sum, run) => sum + (run.delivery?.expected || 0), 0);
+  const effect = handoffPairedEffect(runs, 'empty', 'natural');
+  return {
+    runs: runs.length,
+    naturalRuns: natural.length,
+    writers,
+    captureRate: writers ? captures / writers : null,
+    integrityPassRate: natural.length ? integrityPasses / natural.length : null,
+    deliveryCoverage: expected ? delivered / expected : null,
+    naturalCorrectness: proportionInterval(
+      natural.filter((run) => run.consumer?.correct).length, natural.length
+    ),
+    effect,
+  };
 }
 
 /**
@@ -1088,6 +1245,8 @@ function matchesFilters(event, filters) {
 export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
   const evidence = readEvidence(dir).filter((event) => matchesFilters(event, filters));
   const runs = evidence.filter((event) => event.kind === 'eval-run');
+  const handoffRuns = evidence.filter((event) => event.kind === 'handoff-run');
+  const concurrencyRuns = evidence.filter((event) => event.kind === 'concurrency-run');
   const injections = evidence.filter((event) => event.kind === 'inject');
   const outcomes = evidence.filter((event) => event.kind === 'tool-outcome');
   const feedback = evidence.filter((event) => event.kind === 'finding-feedback');
@@ -1157,8 +1316,10 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
     byInjection.has(injection.injectionId)
   ).length;
   const harmful = feedback.filter((event) => event.rating === 'harmful').length;
+  const transferCohorts = handoffCohorts(handoffRuns);
+  const concurrency = concurrencySummary(concurrencyRuns);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: new Date().toISOString(),
     filters,
     summary: {
@@ -1166,6 +1327,8 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
       joinedOutcomes: joined,
       causalJoinCoverage: injections.length ? joined / injections.length : null,
       evalRuns: runs.length,
+      handoffRuns: handoffRuns.length,
+      concurrencyRuns: concurrencyRuns.length,
       cohorts: cohorts.length,
       harmfulFeedback: harmful,
       harmRate: feedback.length ? harmful / feedback.length : null,
@@ -1174,12 +1337,16 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
         : 'insufficient randomized evidence',
     },
     cohorts,
+    transferCohorts,
+    concurrency,
     episodes: traced,
     methodology: {
       intervals: 'deterministic percentile bootstrap (95%); Wilson interval for correctness',
       causalRule:
         'matched pairs estimate optimizer vs baseline, retrieval vs optimizer, full vs retrieval, and full vs baseline',
       minimumPairs,
+      handoffMinimumPairs:
+        Math.max(2, Number(process.env.TOKEN_OPTIMIZER_HANDOFF_MIN_PAIRS) || 10),
       deterministicChecksAreCausalProof: false,
     },
   };

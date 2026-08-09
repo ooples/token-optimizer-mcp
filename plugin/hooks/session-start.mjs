@@ -21,8 +21,9 @@
 import { mode, MODE_OFF, readPayload, loadState } from './lib/policy.mjs';
 import { policyText } from './lib/adapter.mjs';
 import { restorationPlan } from './lib/restore.mjs';
-import { standingRules } from './lib/inject.mjs';
+import { sessionIndex, standingRules } from './lib/inject.mjs';
 import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
+import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
 
 if (mode() === MODE_OFF) process.exit(0);
@@ -40,12 +41,11 @@ if (mode() === MODE_OFF) process.exit(0);
  * is the one place restoration text cannot survive. The `compact` source is the
  * harness telling us exactly this case.
  */
-async function restoration() {
+async function restoration(parsed) {
   // `readPayload` returns the PARSED object, not the raw text. Parsing it again
   // throws on `[object Object]`, and the throw is swallowed by the catch below,
   // so the restoration block simply never appeared -- the failure mode a
   // fail-open hook is most likely to hide.
-  const parsed = await readPayload();
   if (!parsed) return null;
 
   // Only after a compaction. A cold start has nothing to restore, and paying
@@ -81,6 +81,8 @@ async function restoration() {
 // clients and silently skipped Claude Code, the one client most users are on.
 // Claude Code keeps its own entry point because its PreToolUse router does more
 // than the shared one; the standing notice is not a place it needs to differ.
+const payload = await readPayload() || {};
+const features = featuresForArm();
 const parts = [policyText(true)];
 
 // THE ALWAYS-ON HALF OF DELIVERY. Trigger-fired injection answers "this
@@ -93,10 +95,19 @@ const parts = [policyText(true)];
 // corrections qualify. An always-on block that grows with the project is how it
 // becomes wallpaper, and a model stops reading what it always sees.
 try {
-  const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+  const cwd = payload.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd();
   const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
-  const rules = standingRules(dir, load(dir));
-  if (rules) parts.push(rules);
+  if (features.retrieval) {
+    // The index renders claims and freshness state, never snapshot bodies.
+    // Skipping the sidecar keeps startup bounded on mature graphs.
+    const graph = load(dir);
+    const rules = standingRules(dir, graph);
+    if (rules) parts.push(rules);
+    const index = sessionIndex(dir, graph, {
+      episode: episodeMeta({ client: 'claude-code', raw: payload }),
+    });
+    if (index) parts.push(index);
+  }
 } catch {
   // The policy notice must still arrive if the graph is unreadable.
 }
@@ -105,7 +116,7 @@ try {
 // speaks only to a session resuming from a compaction, so it reads as the more
 // specific note after the general one.
 try {
-  const restored = await restoration();
+  const restored = await restoration(payload);
   if (restored) parts.push(restored);
 } catch {
   // The policy notice must still arrive if anything above fails.

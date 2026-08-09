@@ -147,6 +147,11 @@
                 <option value="optimizer">optimizer</option>
                 <option value="retrieval">retrieval</option>
                 <option value="full">full</option>
+                <option value="empty">empty graph</option>
+                <option value="natural">natural capture</option>
+                <option value="oracle">oracle finding</option>
+                <option value="irrelevant">irrelevant finding</option>
+                <option value="stale">stale finding</option>
               </select>
             </label>
           </div>
@@ -155,6 +160,21 @@
 
           <h2>Causal cohorts</h2>
           <div class="table-scroll"><table class="evidence-table" id="evidence-cohorts"></table></div>
+
+          <h2>Cross-client mistake transfer</h2>
+          <p class="wiki-muted">
+            Natural producer harvests are kept separate from oracle controls.
+            A claim passes only when the pre-registered capture, prevention,
+            correctness, timing, and negative-control gates all pass.
+          </p>
+          <div class="table-scroll"><table class="evidence-table" id="evidence-transfer"></table></div>
+
+          <h2>Concurrent writer integrity</h2>
+          <p class="wiki-muted">
+            Accepted-write loss, JSONL corruption, orphaned findings,
+            later-consumer delivery, and behavior remain separate facts.
+          </p>
+          <div class="table-scroll"><table class="evidence-table" id="evidence-concurrency"></table></div>
 
           <h2>Recent injection traces</h2>
           <div class="table-scroll"><table class="evidence-table" id="evidence-episodes"></table></div>

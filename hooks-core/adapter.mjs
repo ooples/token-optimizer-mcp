@@ -50,6 +50,8 @@ import {
   forSharedCommand,
   forTouch,
   noteActClasses,
+  sessionIndex,
+  standingRules,
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
 import { isArchived } from './transcript.mjs';
@@ -418,7 +420,30 @@ export async function run(clientName, event) {
 
   if (event === 'session-start') {
     if (!features.routing && !features.retrieval && !features.harvest) process.exit(0);
-    const output = contextOutput(client, eventName, policyText(client.canDeny));
+    // Some hook hosts invoke SessionStart without closing stdin. Waiting the
+    // full pre-tool timeout would turn optional context into a five-second
+    // startup tax; lifecycle payloads are tiny and arrive immediately when
+    // the host supplies one.
+    const raw = await readStdin({ timeoutMs: 250 }) || {};
+    const parts = [policyText(client.canDeny)];
+    if (features.retrieval) {
+      try {
+        const cwd = raw.cwd || raw.working_directory || process.cwd();
+        const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+        // SessionStart needs hashes and claims, not stored file bodies. Parsing
+        // the snapshot sidecar here would make startup scale with repository
+        // history even though this compact index never renders a diff.
+        const graph = load(dir);
+        const episode = episodeMeta({ client: clientName, raw });
+        const rules = standingRules(dir, graph);
+        if (rules) parts.push(rules);
+        const index = sessionIndex(dir, graph, { episode });
+        if (index) parts.push(index);
+      } catch {
+        // Retrieval is optional context; the policy must still reach the model.
+      }
+    }
+    const output = contextOutput(client, eventName, parts.join('\n\n'));
     if (output) emit(output);
     process.exit(0);
   }

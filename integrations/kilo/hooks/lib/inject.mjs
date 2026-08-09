@@ -779,13 +779,21 @@ export function forSharedCommand(
  * graph that demonstrably gets queried grows its allowance while a noisy one
  * shrinks toward the floor. See metrics.indexBudget.
  */
-export function sessionIndex(dir, graph) {
+export function sessionIndex(dir, graph, { episode = {} } = {}) {
   const budget = indexBudget(dir);
   // RETIRED findings must not appear. They are excluded from every other read
   // path, so listing them here would advertise claims a human has explicitly
   // withdrawn -- and the index is the first thing the model reads.
   const findings = [...graph.nodes.values()]
-    .filter((n) => n.kind === 'finding' && !n.retired && typeof n.claim === 'string');
+    .filter((n) =>
+      n.kind === 'finding'
+      && !n.retired
+      && typeof n.claim === 'string'
+      // These are already rendered in full by `standingRules`; listing them a
+      // second time spends tokens without adding information.
+      && n.pinned !== true
+      && !(n.type === 'feedback' && n.origin === 'human')
+    );
   if (!findings.length) return null;
 
   const now = Date.now();
@@ -793,20 +801,68 @@ export function sessionIndex(dir, graph) {
     ((b.confidence || 0.5) / (1 + (now - (b.at || now)) / 2.6e9)) -
     ((a.confidence || 0.5) / (1 + (now - (a.at || now)) / 2.6e9)));
 
-  const lines = [];
-  let spent = 0;
+  const selected = [];
   for (const finding of ranked) {
-    const line = `- ${finding.key}: ${finding.claim.slice(0, 90)}`;  // claim guaranteed above
-    const cost = estimate(line);
-    if (spent + cost > budget) break;
-    lines.push(line);
-    spent += cost;
+    // Staleness checks can touch disk, so bound the candidates BEFORE serving
+    // them rather than checking an arbitrarily large graph on SessionStart.
+    const candidate = [...selected, finding];
+    const preview = renderSessionIndex(findings.length, candidate);
+    if (estimate(preview) > budget) break;
+    selected.push(finding);
   }
-  if (!lines.length) return null;
+  if (!selected.length) return null;
 
-  record(dir, { kind: 'index', count: lines.length, tokens: spent });
+  // `serve` is the only path allowed to hand a finding to a model. In
+  // particular, activating this previously-unwired index must not create a new
+  // path that labels an invalidated content claim as current.
+  const served = serve(graph, selected);
+  if (!served.length) return null;
+  // A stale marker is longer than the fresh preview used for candidate
+  // selection. Trim from the lowest-ranked end until the ACTUAL message fits.
+  while (served.length && estimate(renderSessionIndex(findings.length, served)) > budget) {
+    served.pop();
+  }
+  if (!served.length) return null;
+  const text = renderSessionIndex(findings.length, served);
+  const spent = estimate(text);
+  const findingIds = served.map((finding) => finding.key);
 
-  return `# Project wiki (${findings.length} findings, ${lines.length} listed)
+  record(dir, {
+    ...episode,
+    kind: 'index',
+    surface: 'session-start',
+    count: served.length,
+    tokens: spent,
+    findingIds,
+    staleCount: served.filter((finding) => finding.stale).length,
+  });
+  record(dir, {
+    ...episode,
+    kind: 'inject',
+    surface: 'session-start',
+    anchor: 'session-index',
+    holdout: false,
+    tokens: spent,
+    deliveredTokens: spent,
+    shadowTokens: spent,
+    count: served.length,
+    candidateCount: selected.length,
+    findingIds,
+    shadowFindingIds: findingIds,
+    stale: served.some((finding) => finding.stale),
+  });
+
+  return text;
+}
+
+function renderSessionIndex(total, findings) {
+  const lines = findings.map((finding) => {
+    const freshness = finding.stale
+      ? ` [STALE: ${finding.staleReason || 'anchor evidence changed'}]`
+      : '';
+    return `- ${finding.key}${freshness}: ${finding.claim.slice(0, 90)}`;
+  });
+  return `# Project wiki (${total} findings, ${findings.length} listed)
 
 Established in previous sessions. Call wiki_query with a key for detail, or just
 work -- findings anchored to a file are surfaced automatically when you touch it.
