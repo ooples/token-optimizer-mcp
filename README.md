@@ -929,6 +929,11 @@ you to remove — we do not rewrite your `settings.json`.
 
 The detailed operational material below is intentionally retained for users who want to understand the complete tool surface, hooks pipeline, performance controls, analytics, and troubleshooting behavior.
 
+The proposed category-level successor architecture, its 18 required
+workstreams, and the evidence gates for claiming a universal cognitive runtime
+are documented in
+[`docs/UNIVERSAL_COGNITIVE_RUNTIME_PROGRAM.md`](docs/UNIVERSAL_COGNITIVE_RUNTIME_PROGRAM.md).
+
 ### Complete Tool Reference (74 Total)
 
 #### Core Caching & Optimization (8 tools)
