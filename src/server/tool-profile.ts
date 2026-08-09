@@ -24,7 +24,9 @@ export type ToolProfile = 'core' | 'full';
 export function resolveToolProfile(
   value = process.env.TOKEN_OPTIMIZER_TOOL_PROFILE
 ): ToolProfile {
-  const profile = String(value || 'core').trim().toLowerCase();
+  const profile = String(value || 'core')
+    .trim()
+    .toLowerCase();
   if (profile === 'core' || profile === 'full') return profile;
 
   throw new Error(
