@@ -142,6 +142,7 @@ describe('P4 injection', () => {
 
     const index = sessionIndex(dir, load(dir), {
       episode: { episodeId: 'consumer-1', client: 'codex', pairId: 'pair-1' },
+      relevantFindingIds: ['the retry bu'],
     });
     expect(index).toContain('retry budget');
     expect(index).toContain('wiki_query');
@@ -165,7 +166,9 @@ describe('P4 injection', () => {
     seedFinding(path, 'the old mode is always required');
     writeFileSync(path, 'export const mode = "new";');
 
-    const index = sessionIndex(dir, load(dir, { snapshots: true }));
+    const graph = load(dir, { snapshots: true });
+    const key = [...graph.nodes.values()].find((node) => node.kind === 'finding').key;
+    const index = sessionIndex(dir, graph, { relevantFindingIds: [key] });
     expect(index).toContain('STALE: file changed');
     expect(index).toContain('old mode');
   });

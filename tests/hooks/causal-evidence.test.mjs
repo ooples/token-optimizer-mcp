@@ -194,7 +194,7 @@ describe('paired evidence report', () => {
             latencyMs: prevented ? 8000 : 10000,
           },
           delivery: {
-            delivered: arm !== 'empty',
+            delivered: ['natural', 'oracle', 'stale'].includes(arm),
             beforeFirstExecutedMistake: arm === 'natural',
           },
         });
@@ -210,7 +210,45 @@ describe('paired evidence report', () => {
     expect(cohort.arms.natural.mistakeExecuted.rate).toBe(0);
     expect(cohort.effects.naturalVsEmpty.executedMistakesPrevented.low).toBe(1);
     expect(cohort.effects.naturalVsOracle.executedMistakesPrevented.mean).toBe(0);
+    expect(cohort.arms.irrelevant.delivery.rate).toBe(0);
     expect(cohort.evidenceStatus).toBe('pre-registered transfer gates passed');
+  });
+
+  test('fails transfer gates when control evidence is absent or irrelevant content is delivered', () => {
+    for (let pair = 1; pair <= 10; pair++) {
+      for (const arm of ['empty', 'natural', 'irrelevant']) {
+        record(dir, {
+          kind: 'handoff-run', pairId: `negative-${pair}`,
+          scenarioId: 'verification-entry-point', arm,
+          producer: { client: 'codex', model: 'gpt-5.6-sol', captureSuccess: true },
+          consumer: {
+            client: 'claude-code', model: 'claude-sonnet-5', correct: true,
+            mistakeExecuted: arm === 'empty',
+          },
+          delivery: {
+            delivered: arm !== 'empty',
+            beforeFirstExecutedMistake: arm === 'natural',
+          },
+        });
+      }
+    }
+
+    const cohort = evidenceReport(dir).transferCohorts[0];
+    expect(cohort.gates.negativeControls).toBe(false);
+    expect(cohort.evidenceStatus).toMatch(/insufficient or failed/);
+  });
+
+  test('filters handoff arms from the top-level arm field', () => {
+    for (const arm of ['empty', 'natural']) {
+      record(dir, {
+        kind: 'handoff-run', pairId: 'filter-1', scenarioId: 'filter-task', arm,
+        producer: { client: 'codex' }, consumer: { client: 'claude-code' },
+      });
+    }
+    const filtered = evidenceReport(dir, { filters: { arm: 'natural' } });
+    expect(filtered.summary.handoffRuns).toBe(1);
+    expect(filtered.transferCohorts[0].arms.natural.runs).toBe(1);
+    expect(filtered.transferCohorts[0].arms.empty.runs).toBe(0);
   });
 
   test('reports concurrent graph integrity separately from consumer behavior', () => {

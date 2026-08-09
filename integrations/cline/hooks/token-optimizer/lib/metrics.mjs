@@ -761,8 +761,12 @@ export function report(dir) {
   // file 95 historical command injections into the file-read balance -- exactly
   // the dilution the split exists to prevent.
   const isCommand = (e) => e.surface === 'command' || e.trigger === 'command';
-  const commandInjections = allInjections.filter(isCommand);
-  const injections = allInjections.filter((e) => !isCommand(e));
+  // Session-start delivery has no file anchor or downstream read join either.
+  // Report its cost independently so it cannot dilute the file-touch estimate.
+  const isSessionStart = (e) => e.surface === 'session-start';
+  const sessionStartInjections = allInjections.filter(isSessionStart);
+  const commandInjections = allInjections.filter((e) => !isSessionStart(e) && isCommand(e));
+  const injections = allInjections.filter((e) => !isSessionStart(e) && !isCommand(e));
   const treated = injections.filter((e) => !e.holdout);
   const withheld = injections.filter((e) => e.holdout);
 
@@ -840,6 +844,10 @@ export function report(dir) {
 
   return {
     injections: treated.length,
+    sessionStartInjections: sessionStartInjections.length,
+    sessionStartInjectedTokens: sessionStartInjections.reduce(
+      (sum, event) => sum + (event.deliveredTokens ?? event.tokens ?? 0), 0
+    ),
     commandInjections: commandInjections.length,
     commandHoldouts: commandInjections.filter((e) => e.holdout).length,
     holdouts: withheld.length,
@@ -1080,7 +1088,9 @@ function matchesFilters(event, filters) {
     if (!filters[field]) continue;
     let actual = event[field];
     if (event.kind === 'handoff-run') {
-      actual = field === 'taskId' ? event.scenarioId : (event.consumer?.[field] ?? event.producer?.[field]);
+      actual = field === 'taskId'
+        ? event.scenarioId
+        : (event.consumer?.[field] ?? event.producer?.[field] ?? event[field]);
     } else if (event.kind === 'concurrency-run') {
       actual = field === 'taskId' ? 'concurrent-combined' : (event.consumer?.[field] ?? event[field]);
     }
@@ -1098,6 +1108,10 @@ function handoffArmMetrics(runs) {
   );
   return {
     runs: runs.length,
+    delivery: proportionInterval(
+      runs.filter((run) => run.delivery?.delivered === true).length,
+      runs.length
+    ),
     correctness: proportionInterval(count('correct'), runs.length),
     firstPass: proportionInterval(count('firstPass'), runs.length),
     mistakeAttempted: proportionInterval(count('mistakeAttempted'), runs.length),
@@ -1146,6 +1160,10 @@ const handoffKey = (run) => [
   run.scenarioId || 'unknown',
 ].join('|');
 
+const HANDOFF_REPORT_ARMS = ['empty', 'natural', 'oracle', 'irrelevant', 'stale'];
+const handoffMinimumPairs = () =>
+  Math.max(2, Number(process.env.TOKEN_OPTIMIZER_HANDOFF_MIN_PAIRS) || 10);
+
 function handoffCohorts(runs) {
   const grouped = new Map();
   for (const run of runs) {
@@ -1153,7 +1171,7 @@ function handoffCohorts(runs) {
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(run);
   }
-  const minimumPairs = Math.max(2, Number(process.env.TOKEN_OPTIMIZER_HANDOFF_MIN_PAIRS) || 10);
+  const minimumPairs = handoffMinimumPairs();
   return [...grouped.entries()].map(([key, rows]) => {
     const arms = Object.fromEntries(HANDOFF_REPORT_ARMS.map((arm) => [
       arm, handoffArmMetrics(rows.filter((row) => row.arm === arm)),
@@ -1169,14 +1187,18 @@ function handoffCohorts(runs) {
       : null;
     const emptyRecurrence = arms.empty.mistakeExecuted.rate;
     const naturalRecurrence = arms.natural.mistakeExecuted.rate;
-    const relativeRecurrenceReduction = emptyRecurrence
+    const relativeRecurrenceReduction = emptyRecurrence !== null
+      && naturalRecurrence !== null
+      && emptyRecurrence !== 0
       ? (emptyRecurrence - naturalRecurrence) / emptyRecurrence
       : null;
     const controlsSafe = ['irrelevant', 'stale'].every((arm) =>
-      arms[arm].correctness.rate === null
-      || arms.empty.correctness.rate === null
-      || arms[arm].correctness.rate >= arms.empty.correctness.rate - 0.1
+      arms[arm].correctness.rate !== null
+      && arms.empty.correctness.rate !== null
+      && arms[arm].correctness.rate >= arms.empty.correctness.rate - 0.1
     );
+    const irrelevantSuppressed = arms.irrelevant.delivery.rate !== null
+      && arms.irrelevant.delivery.rate === 0;
     const gates = {
       minimumPairs: naturalVsEmpty.pairs >= minimumPairs,
       capture: captureRate !== null && captureRate >= 0.8,
@@ -1184,9 +1206,11 @@ function handoffCohorts(runs) {
         relativeRecurrenceReduction !== null && relativeRecurrenceReduction >= 0.5,
       recurrenceInterval: (naturalVsEmpty.executedMistakesPrevented.low ?? -Infinity) > 0,
       correctness:
-        (arms.natural.correctness.rate ?? -Infinity) >= (arms.empty.correctness.rate ?? 0) - 0.1,
+        arms.natural.correctness.rate !== null
+        && arms.empty.correctness.rate !== null
+        && arms.natural.correctness.rate >= arms.empty.correctness.rate - 0.1,
       preActionDelivery: preActionDeliveryRate !== null && preActionDeliveryRate >= 0.8,
-      negativeControls: controlsSafe,
+      negativeControls: controlsSafe && irrelevantSuppressed,
     };
     const claimReady = Object.values(gates).every(Boolean);
     return {
@@ -1208,8 +1232,6 @@ function handoffCohorts(runs) {
     };
   });
 }
-
-const HANDOFF_REPORT_ARMS = ['empty', 'natural', 'oracle', 'irrelevant', 'stale'];
 
 function concurrencySummary(runs) {
   const natural = runs.filter((run) => run.arm === 'natural');
@@ -1345,8 +1367,7 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
       causalRule:
         'matched pairs estimate optimizer vs baseline, retrieval vs optimizer, full vs retrieval, and full vs baseline',
       minimumPairs,
-      handoffMinimumPairs:
-        Math.max(2, Number(process.env.TOKEN_OPTIMIZER_HANDOFF_MIN_PAIRS) || 10),
+      handoffMinimumPairs: handoffMinimumPairs(),
       deterministicChecksAreCausalProof: false,
     },
   };

@@ -11,7 +11,7 @@
  * is narrow and the budget is fixed rather than earned.
  */
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { standingRules } from '../../hooks-core/inject.mjs';
+import { sessionIndex, standingRules } from '../../hooks-core/inject.mjs';
 import { load, putNode, wikiDir } from '../../hooks-core/wiki.mjs';
 import { spawnSync } from 'child_process';
 import { mkdtempSync, rmSync, readFileSync, mkdirSync } from 'fs';
@@ -134,7 +134,7 @@ describe('the budget', () => {
 });
 
 describe('through the real SessionStart hook', () => {
-  it('delivers standing rules and the bounded project index before the first tool call', () => {
+  it('delivers universal rules but withholds situational findings until relevance exists', () => {
     // The unit tests prove the selection. This proves the hook actually emits
     // it -- the distinction that mattered for forTouch, which was correct and
     // called by nothing for its entire life.
@@ -173,12 +173,13 @@ describe('through the real SessionStart hook', () => {
     expect(ctx).toContain('# Standing rules');
     expect(ctx).toContain('Report the number you measured');
     expect(ctx).toContain('isolated worktree');
-    // A situational finding is catalogued, not promoted into the full standing
-    // rules block. This makes it available before the first action while the
-    // tighter block remains limited to genuinely universal rules.
-    expect(ctx).toContain('# Project wiki');
-    expect(ctx).toContain('npx jest');
-    expect(ctx.indexOf('# Project wiki')).toBeGreaterThan(ctx.indexOf('# Standing rules'));
+    expect(ctx).not.toContain('# Project wiki');
+    expect(ctx).not.toContain('npx jest');
+
+    // A prompt/tool relevance pass can explicitly select the situational item.
+    const relevant = sessionIndex(graphDir, load(graphDir), { relevantFindingIds: ['c1'] });
+    expect(relevant).toContain('# Project wiki');
+    expect(relevant).toContain('npx jest');
 
     try { rmSync(project, { recursive: true, force: true }); } catch { /* windows */ }
   });

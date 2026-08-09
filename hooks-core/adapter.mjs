@@ -435,7 +435,7 @@ export async function run(clientName, event) {
         // history even though this compact index never renders a diff.
         const graph = load(dir);
         const episode = episodeMeta({ client: clientName, raw });
-        const rules = standingRules(dir, graph);
+        const rules = standingRules(dir, graph, { episode });
         if (rules) parts.push(rules);
         const index = sessionIndex(dir, graph, { episode });
         if (index) parts.push(index);

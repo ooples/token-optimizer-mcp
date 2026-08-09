@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -12,6 +12,7 @@ import {
   targetFindingMatches,
 } from '../../scripts/run-handoff-eval.mjs';
 import { capturesByWriter } from '../../scripts/run-concurrent-handoff-eval.mjs';
+import { audit as writeFixtureAudit } from '../../evals/fixtures/mistake-transfer/scripts/audit.mjs';
 
 const ROOT = resolve(process.cwd());
 const suite = JSON.parse(
@@ -126,6 +127,16 @@ describe('hidden behavioral graders', () => {
     expect(direct).toMatchObject({ correct: true, firstPass: false, mistakeExecuted: true });
   });
 
+  test('generated-file grading fails closed when a generated or source file is missing', () => {
+    const scenario = suite.scenarios.find((item) => item.grader.kind === 'generated');
+    rmSync(join(workspace, 'source', 'beta-policy.txt'), { force: true });
+
+    expect(() => gradeBehavior(scenario, 'consumer', workspace, [], [])).not.toThrow();
+    expect(gradeBehavior(scenario, 'consumer', workspace, [], [])).toMatchObject({
+      correct: false, proof: false,
+    });
+  });
+
   test('validation requires the scoped sentinel and rejects a zero-target PASS as first-pass', () => {
     const scenario = suite.scenarios.find((item) => item.grader.kind === 'validation');
     writeFileSync(join(workspace, 'targets', 'beta.json'), '{"ready":true}\n');
@@ -138,6 +149,38 @@ describe('hidden behavioral graders', () => {
 
     expect(clean).toMatchObject({ correct: true, firstPass: true });
     expect(falsePositive).toMatchObject({ correct: true, firstPass: false, mistakeExecuted: true });
+  });
+});
+
+describe('fixture audit provenance', () => {
+  test('uses runner-owned provenance and an authoritative timestamp', () => {
+    const auditPath = join(workspace, 'audit.jsonl');
+    const keys = [
+      'TOKEN_OPTIMIZER_EVAL_AUDIT', 'TOKEN_OPTIMIZER_EVAL_WRITER_ID',
+      'TOKEN_OPTIMIZER_EVAL_SCENARIO_ID', 'TOKEN_OPTIMIZER_EVAL_PHASE',
+    ];
+    const before = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    try {
+      process.env.TOKEN_OPTIMIZER_EVAL_AUDIT = auditPath;
+      process.env.TOKEN_OPTIMIZER_EVAL_WRITER_ID = 'writer-real';
+      process.env.TOKEN_OPTIMIZER_EVAL_SCENARIO_ID = 'scenario-real';
+      process.env.TOKEN_OPTIMIZER_EVAL_PHASE = 'producer';
+      writeFixtureAudit({
+        kind: 'sentinel', at: 1, writerId: 'writer-spoofed',
+        scenarioId: 'scenario-spoofed', phase: 'consumer',
+      });
+      const row = JSON.parse(readFileSync(auditPath, 'utf8').trim());
+      expect(row).toMatchObject({
+        kind: 'sentinel', writerId: 'writer-real',
+        scenarioId: 'scenario-real', phase: 'producer',
+      });
+      expect(row.at).toBeGreaterThan(1);
+    } finally {
+      for (const key of keys) {
+        if (before[key] === undefined) delete process.env[key];
+        else process.env[key] = before[key];
+      }
+    }
   });
 });
 

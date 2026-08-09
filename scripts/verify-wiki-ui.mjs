@@ -125,8 +125,8 @@ async function seed() {
       integrity: { zeroLoss: true, parseable: true, orphanedFindings: 0 },
       delivery: { expected: arm === 'natural' ? 3 : 0, delivered: arm === 'natural' ? 3 : 0 },
       consumer: {
-        client: 'claude-code', model: 'claude-sonnet-5', correct: true,
-        firstPass: arm === 'natural', mistakeExecuted: arm === 'empty',
+        client: 'claude-code', model: 'claude-sonnet-5', correct: arm === 'empty',
+        firstPass: false, mistakeAttempted: true, mistakeExecuted: true,
       },
     });
   }
@@ -343,7 +343,8 @@ async function main() {
           && /gates passed/i.test(transferText || ''));
         const concurrencyText = await page.textContent('#evidence-concurrency');
         check('evidence renders concurrent writer integrity and later delivery',
-          /100%/.test(concurrencyText || '') && /3/.test(concurrencyText || ''));
+          /100%/.test(concurrencyText || '') && /0%/.test(concurrencyText || '')
+          && /3/.test(concurrencyText || ''));
         const capabilityCount = await page.locator('#evidence-capabilities tbody tr').count();
         check('evidence lists all supported client capabilities', capabilityCount === 16, String(capabilityCount));
         const capabilityText = await page.textContent('#evidence-capabilities');

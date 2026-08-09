@@ -11,7 +11,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
-  extractToolTrace, findNaturalCapture, gradeBehavior, readJsonl, runClient,
+  extractToolTrace, findNaturalCapture, gradeBehavior, graphDigest, readJsonl, runClient,
 } from './run-handoff-eval.mjs';
 import { parseRunIdentity, parseUsage } from './run-evidence-eval.mjs';
 import { audit as auditGraph } from '../hooks-core/curate.mjs';
@@ -41,11 +41,16 @@ function options(argv) {
     graphDir: wikiDir(ROOT),
     keepWorkspaces: false,
   };
+  const valueOptions = new Set([
+    'suite', 'repetitions', 'output', 'graphDir', 'runner', 'producer',
+    'consumer', 'producerModel', 'consumerModel',
+  ]);
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
     if (arg === '--keep-workspaces') out.keepWorkspaces = true;
     else if (arg.startsWith('--')) {
       const key = arg.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (!valueOptions.has(key)) throw new Error(`unknown option: ${arg}`);
       const value = argv[++index];
       if (value === undefined) throw new Error(`${arg} requires a value`);
       out[key] = value;
@@ -138,15 +143,21 @@ async function main() {
   for (let repetition = 0; repetition < cli.repetitions; repetition++) {
     const pairId = `concurrent-${repetition + 1}`;
     const root = mkdtempSync(join(tmpdir(), `token-optimizer-${pairId}-`));
-    const workspace = join(root, 'workspace');
-    cpSync(fromRoot(scenarios[0].fixture), workspace, { recursive: true });
+    try {
     const graphDir = join(root, 'shared-graph');
-    const auditPath = join(root, 'producer-audit.jsonl');
     mkdirSync(graphDir, { recursive: true });
+    const producerWorkspaces = scenarios.map((scenario, index) => {
+      const workspace = join(root, `writer-${index}-${scenario.id}`);
+      cpSync(fromRoot(scenario.fixture), workspace, { recursive: true });
+      return workspace;
+    });
+    const producerAuditPaths = scenarios.map(
+      (scenario, index) => join(root, `writer-${index}-${scenario.id}-audit.jsonl`)
+    );
 
     // Promise.all is deliberate: these are separate CLI processes appending to
     // the same graph and metrics logs, not sequential calls labeled concurrent.
-    const producers = await Promise.all(scenarios.map((scenario) => runClient({
+    const producers = await Promise.all(scenarios.map((scenario, index) => runClient({
       profile: producerProfile,
       client: cli.producer,
       model: cli.producerModel || producerProfile.model,
@@ -154,11 +165,17 @@ async function main() {
       phase: `writer-${scenario.id}`,
       scenario,
       pairId,
-      workspace,
+      workspace: producerWorkspaces[index],
       graphDir,
-      auditPath,
+      auditPath: producerAuditPaths[index],
     })));
-    const producerAudit = readJsonl(auditPath);
+    const producerAudits = producers.map((producer, index) =>
+      readJsonl(producerAuditPaths[index]).filter((event) =>
+        event.writerId === producer.episodeId
+        && event.scenarioId === scenarios[index].id
+        && event.phase === `writer-${scenarios[index].id}`
+      )
+    );
     const graph = loadGraph(graphDir);
     const captures = capturesByWriter(graph, scenarios, producers);
     const findingIds = [...new Set(captures.flat().map((finding) => finding.key))];
@@ -176,7 +193,13 @@ async function main() {
         clientVersion: identity.clientVersion || producerProfile.version || null,
         model: cli.producerModel || producerProfile.model || null,
         modelVersion: identity.modelVersion || producerProfile.modelVersion || null,
-        ...gradeBehavior(scenario, 'producer', workspace, producerAudit, producer.trace),
+        ...gradeBehavior(
+          scenario,
+          'producer',
+          producerWorkspaces[index],
+          producerAudits[index],
+          producer.trace
+        ),
         captureSuccess: captures[index].length > 0,
         capturedFindingIds: captures[index].map((finding) => finding.key),
         acceptedFindingIds: producer.acceptedFindingIds,
@@ -191,7 +214,7 @@ async function main() {
     });
     const integrity = graphIntegrity(graphDir, acceptedFindingIds);
     const frozen = join(root, 'frozen');
-    cpSync(workspace, frozen, { recursive: true });
+    cpSync(fromRoot(scenarios[0].fixture), frozen, { recursive: true });
     const arms = repetition % 2 ? ['natural', 'empty'] : ['empty', 'natural'];
 
     for (const [order, arm] of arms.entries()) {
@@ -218,9 +241,7 @@ async function main() {
       const behaviors = scenarios.map((scenario) =>
         gradeBehavior(scenario, 'consumer', consumerWorkspace, consumerAudit, consumer.trace)
       );
-      const deliveryEvents = consumer.evidence.filter((event) =>
-        event.kind === 'inject' && event.surface === 'session-start'
-      );
+      const deliveryEvents = consumer.evidence.filter((event) => event.kind === 'inject');
       const deliveredIds = new Set(deliveryEvents.flatMap((event) => event.findingIds || []));
       const identity = parseRunIdentity(consumer.run.stdout);
       const usage = parseUsage(
@@ -267,18 +288,14 @@ async function main() {
           delivered: arm === 'natural'
             ? findingIds.filter((id) => deliveredIds.has(id)).length
             : 0,
-          allBeforeFirstAction: arm === 'natural'
+          allExpectedFindingsDelivered: arm === 'natural' && findingIds.length
             ? findingIds.every((id) => deliveredIds.has(id))
             : null,
           deliveredTokens: deliveryEvents.reduce(
             (sum, event) => sum + (event.deliveredTokens || 0), 0
           ),
         },
-        graphHash: hash(
-          existsSync(join(graphDir, 'graph.jsonl'))
-            ? readFileSync(join(graphDir, 'graph.jsonl'), 'utf8')
-            : 'empty'
-        ),
+        graphHash: graphDigest(graphDir),
         producerPromptHashes: scenarios.map((scenario) => hash(scenario.producerPrompt)),
         consumerPromptHash: hash(combinedPrompt()),
         repoCommit: process.env.GITHUB_SHA || PROVENANCE.commit,
@@ -294,7 +311,9 @@ async function main() {
       );
     }
 
-    if (!cli.keepWorkspaces) rmSync(root, { recursive: true, force: true });
+    } finally {
+      if (!cli.keepWorkspaces) rmSync(root, { recursive: true, force: true });
+    }
   }
   process.stdout.write(`Concurrency evidence artifact: ${output}\n`);
 }

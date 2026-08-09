@@ -51,6 +51,10 @@ function parseArgs(argv) {
     keepWorkspaces: false,
     includeTranscript: false,
   };
+  const valueOptions = new Set([
+    'suite', 'repetitions', 'output', 'graphDir', 'scenarios', 'arms',
+    'runner', 'producer', 'consumer', 'producerModel', 'consumerModel',
+  ]);
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
     if (arg === '--dry-run') options.dryRun = true;
@@ -58,6 +62,7 @@ function parseArgs(argv) {
     else if (arg === '--include-transcript') options.includeTranscript = true;
     else if (arg.startsWith('--')) {
       const key = arg.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (!valueOptions.has(key)) throw new Error(`unknown option: ${arg}`);
       const value = argv[++index];
       if (value === undefined) throw new Error(`${arg} requires a value`);
       options[key] = value;
@@ -100,23 +105,31 @@ function execute(command, args, { cwd, env, timeoutMs }) {
     const stdout = [];
     const stderr = [];
     let timedOut = false;
+    let killTimer = null;
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
+      finish(result);
+    };
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
+      killTimer = setTimeout(() => child.kill('SIGKILL'), 5_000);
     }, timeoutMs);
     child.stdout.on('data', (chunk) => stdout.push(chunk));
     child.stderr.on('data', (chunk) => stderr.push(chunk));
     child.on('error', (error) => {
-      clearTimeout(timer);
-      finish({
+      settle({
         exitCode: null, signal: null, timedOut, latencyMs: Date.now() - started,
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: `${Buffer.concat(stderr).toString('utf8')}\n${error.message}`.trim(),
       });
     });
     child.on('close', (exitCode, signal) => {
-      clearTimeout(timer);
-      finish({
+      settle({
         exitCode, signal, timedOut, latencyMs: Date.now() - started,
         stdout: Buffer.concat(stdout).toString('utf8'),
         stderr: Buffer.concat(stderr).toString('utf8'),
@@ -272,6 +285,10 @@ function readFixtureJson(workspace, path) {
   try { return JSON.parse(readFileSync(join(workspace, path), 'utf8')); } catch { return null; }
 }
 
+function readFixtureText(workspace, path) {
+  try { return readFileSync(join(workspace, path), 'utf8').trim(); } catch { return null; }
+}
+
 /** Hidden behavioral grader; it never scores claims made in the final answer. */
 export function gradeBehavior(scenario, phase, workspace, audit, trace) {
   const target = phase === 'producer'
@@ -299,8 +316,8 @@ export function gradeBehavior(scenario, phase, workspace, audit, trace) {
     const synchronized = audit.some(
       (event) => event.kind === 'sync-check' && event.synchronized === true
     );
-    const source = readFileSync(join(workspace, 'source', `${target}-policy.txt`), 'utf8').trim();
-    const client = readFileSync(join(workspace, 'clients', target, 'policy.txt'), 'utf8').trim();
+    const source = readFixtureText(workspace, `source/${target}-policy.txt`);
+    const client = readFixtureText(workspace, `clients/${target}/policy.txt`);
     proof = synchronized;
     correct = source === 'modern' && client === 'modern' && synchronized;
   } else if (scenario.grader.kind === 'validation') {
@@ -374,7 +391,7 @@ function seedArm(arm, scenario, workspace, graphDir) {
   return keys;
 }
 
-function graphDigest(dir) {
+export function graphDigest(dir) {
   if (!existsSync(dir)) return hash('empty');
   const files = [];
   const visit = (current) => {
@@ -424,6 +441,9 @@ export async function runClient({
     TOKEN_OPTIMIZER_SHARED_DIR: graphDir,
     TOKEN_OPTIMIZER_STATE_DIR: stateDir,
     TOKEN_OPTIMIZER_EVAL_AUDIT: auditPath,
+    TOKEN_OPTIMIZER_EVAL_WRITER_ID: episodeId,
+    TOKEN_OPTIMIZER_EVAL_SCENARIO_ID: scenario.id,
+    TOKEN_OPTIMIZER_EVAL_PHASE: phase,
   };
   const run = await execute(profile.command, args, {
     cwd: workspace,
@@ -453,7 +473,7 @@ function deliveryGrade(evidence, findingIds, audit, behavior) {
     deliveredTokens: relevant.reduce((sum, event) => sum + (event.deliveredTokens || 0), 0),
     beforeFirstExecutedMistake: first
       ? (firstMistakeAt === null || Number(first.at) <= Number(firstMistakeAt))
-      : false,
+      : null,
   };
 }
 
@@ -518,6 +538,7 @@ async function main() {
   for (const item of schedule) {
     const pairRoot = mkdtempSync(join(tmpdir(), `token-optimizer-handoff-${item.pairId}-`));
     const producerWorkspace = materialize(item.scenario.fixture, `producer-${item.pairId}-`);
+    try {
     const producerGraph = join(pairRoot, 'producer-graph');
     const producerAuditPath = join(pairRoot, 'producer-audit.jsonl');
     mkdirSync(producerGraph, { recursive: true });
@@ -637,7 +658,9 @@ async function main() {
         workingTreeDirty: PROVENANCE.dirty,
         producerPromptHash: hash(item.scenario.producerPrompt),
         consumerPromptHash: hash(item.scenario.consumerPrompt),
-        fixtureHash: hash(JSON.stringify(item.scenario.grader) + item.scenario.fixture),
+        fixtureHash: hash(
+          JSON.stringify(item.scenario.grader) + graphDigest(fromRoot(item.scenario.fixture))
+        ),
         stdoutHash: hash(consumer.run.stdout),
         stderrHash: hash(consumer.run.stderr),
         ...(options.includeTranscript
@@ -657,8 +680,10 @@ async function main() {
       );
     }
 
-    rmSync(producerWorkspace, { recursive: true, force: true });
-    if (!options.keepWorkspaces) rmSync(pairRoot, { recursive: true, force: true });
+    } finally {
+      rmSync(producerWorkspace, { recursive: true, force: true });
+      if (!options.keepWorkspaces) rmSync(pairRoot, { recursive: true, force: true });
+    }
   }
   process.stdout.write(`Handoff evidence artifact: ${output}\n`);
 }

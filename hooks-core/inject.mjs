@@ -777,16 +777,24 @@ export function forSharedCommand(
  * graph that demonstrably gets queried grows its allowance while a noisy one
  * shrinks toward the floor. See metrics.indexBudget.
  */
-export function sessionIndex(dir, graph, { episode = {} } = {}) {
+export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = [] } = {}) {
   const budget = indexBudget(dir);
+  const relevant = new Set(relevantFindingIds);
+  // SessionStart has no task signal. Fail closed for situational findings until
+  // a client supplies ids selected from an actual prompt/tool relevance pass.
+  // Universal human/pinned rules are delivered separately by `standingRules`.
+  if (!relevant.size) return null;
   // RETIRED findings must not appear. They are excluded from every other read
   // path, so listing them here would advertise claims a human has explicitly
   // withdrawn -- and the index is the first thing the model reads.
-  const findings = [...graph.nodes.values()]
+  const allFindings = [...graph.nodes.values()]
+    .filter((n) => n.kind === 'finding');
+  const findings = allFindings
     .filter((n) =>
-      n.kind === 'finding'
-      && !n.retired
+      !n.retired
       && typeof n.claim === 'string'
+      && typeof n.key === 'string'
+      && relevant.has(n.key)
       // These are already rendered in full by `standingRules`; listing them a
       // second time spends tokens without adding information.
       && n.pinned !== true
@@ -804,7 +812,7 @@ export function sessionIndex(dir, graph, { episode = {} } = {}) {
     // Staleness checks can touch disk, so bound the candidates BEFORE serving
     // them rather than checking an arbitrarily large graph on SessionStart.
     const candidate = [...selected, finding];
-    const preview = renderSessionIndex(findings.length, candidate);
+    const preview = renderSessionIndex(allFindings.length, candidate);
     if (estimate(preview) > budget) break;
     selected.push(finding);
   }
@@ -817,11 +825,11 @@ export function sessionIndex(dir, graph, { episode = {} } = {}) {
   if (!served.length) return null;
   // A stale marker is longer than the fresh preview used for candidate
   // selection. Trim from the lowest-ranked end until the ACTUAL message fits.
-  while (served.length && estimate(renderSessionIndex(findings.length, served)) > budget) {
+  while (served.length && estimate(renderSessionIndex(allFindings.length, served)) > budget) {
     served.pop();
   }
   if (!served.length) return null;
-  const text = renderSessionIndex(findings.length, served);
+  const text = renderSessionIndex(allFindings.length, served);
   const spent = estimate(text);
   const findingIds = served.map((finding) => finding.key);
 
@@ -855,9 +863,11 @@ export function sessionIndex(dir, graph, { episode = {} } = {}) {
 
 function renderSessionIndex(total, findings) {
   const lines = findings.map((finding) => {
-    const freshness = finding.stale
+    const freshness = finding.stale && finding.staleEvidence
       ? ` [STALE: ${finding.staleReason || 'anchor evidence changed'}]`
-      : '';
+      : finding.stale
+        ? ' [possibly stale; verify before use]'
+        : '';
     return `- ${finding.key}${freshness}: ${finding.claim.slice(0, 90)}`;
   });
   return `# Project wiki (${total} findings, ${findings.length} listed)
@@ -893,7 +903,7 @@ ${lines.join('\n')}`;
  * is the one that already happened here: an always-on block that grows until it
  * is wallpaper, and the model stops reading the thing it always sees.
  */
-export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
+export function standingRules(dir, graph, { budget = standingBudget(), episode = {} } = {}) {
   const rules = [...graph.nodes.values()].filter(
     (n) =>
       n.kind === 'finding' &&
@@ -951,6 +961,7 @@ export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
   // measurement shows no sign of it.
   const truncated = noticeFor(dropped);
   record(dir, {
+    ...episode,
     kind: 'standing',
     count: lines.length,
     dropped,
