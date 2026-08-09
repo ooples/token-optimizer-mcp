@@ -5,6 +5,7 @@ import {
   appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync,
   rmSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -21,6 +22,16 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const hash = (value) => createHash('sha256').update(String(value)).digest('hex');
 const fromRoot = (path) => isAbsolute(path) ? path : resolve(ROOT, path);
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
+const git = spawnSync('git', ['rev-parse', 'HEAD'], {
+  cwd: ROOT, encoding: 'utf8', windowsHide: true,
+});
+const status = spawnSync('git', ['status', '--porcelain'], {
+  cwd: ROOT, encoding: 'utf8', windowsHide: true,
+});
+const PROVENANCE = {
+  commit: git.status === 0 ? git.stdout.trim() : null,
+  dirty: status.status === 0 ? Boolean(status.stdout.trim()) : null,
+};
 
 function options(argv) {
   const out = {
@@ -264,6 +275,8 @@ async function main() {
         ),
         producerPromptHashes: scenarios.map((scenario) => hash(scenario.producerPrompt)),
         consumerPromptHash: hash(combinedPrompt()),
+        repoCommit: process.env.GITHUB_SHA || PROVENANCE.commit,
+        workingTreeDirty: PROVENANCE.dirty,
       };
       appendFileSync(output, `${JSON.stringify(result)}\n`);
       record(aggregate, result);
