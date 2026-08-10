@@ -1,0 +1,681 @@
+{
+  "schemaVersion": "ucr.evidence-index/2",
+  "generatedAt": "2026-08-10T04:54:55.796Z",
+  "evidenceContract": {
+    "claimPolicy": "metrics are derived only from ledgers at or above each metric evidence requirement",
+    "tiers": {
+      "transport": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "conformance": {
+        "status": "present",
+        "ledgers": 2,
+        "rows": 706,
+        "hashes": [
+          "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+          "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
+        ]
+      },
+      "executable-smoke": {
+        "status": "present",
+        "ledgers": 6,
+        "rows": 14,
+        "hashes": [
+          "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
+          "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+          "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+          "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
+          "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
+          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+        ]
+      },
+      "effectiveness": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "superiority": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "production": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      }
+    }
+  },
+  "artifacts": [
+    {
+      "name": "graph-scale",
+      "filename": "graph-scale-v1.json",
+      "evidenceClass": "conformance",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "96ee04413a90108b3e0149f6d4d9ee2313666a01b0ecb14efad0674326c7c1ec",
+      "schemaVersion": "ucr.graph-scale/1",
+      "passed": true,
+      "executedAt": "2026-08-09T22:14:45.579Z",
+      "sourceTreeHash": "5f0a584fed1e8c233b262296a089ca4236edd4b6f616b13418714989ae32a8d6",
+      "ledgerHash": null,
+      "ledgerVerification": null
+    },
+    {
+      "name": "coordination-scale",
+      "filename": "coordination-scale-v1.json",
+      "evidenceClass": "conformance",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "d6138521b675d3f7b17486c6b97d6fe89bb90936d6b5bc95f3cca70f34835eba",
+      "schemaVersion": "ucr.coordination-scale/1",
+      "passed": true,
+      "executedAt": "2026-08-09T22:23:49.552Z",
+      "sourceTreeHash": "ea29500316b80d8806095cff65bd3ece6e4682a9d574c6bf3c6d02f6c0e18e58",
+      "ledgerHash": null,
+      "ledgerVerification": null
+    },
+    {
+      "name": "consolidation",
+      "filename": "consolidation-study-v1.json",
+      "evidenceClass": "conformance",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "38a0021a9db0c644d083cd37ad95f694728ccf09334edddb7579f76b44b6a130",
+      "schemaVersion": "ucr.consolidation-study/1",
+      "passed": true,
+      "executedAt": "2026-08-09T22:24:48.511Z",
+      "sourceTreeHash": "a34a5ebd8aa6604f8291e4f39a3e6a50636579635cab2d4ec262cb78cfd266b2",
+      "ledgerHash": null,
+      "ledgerVerification": null
+    },
+    {
+      "name": "adapter-processes",
+      "filename": "adapter-process-certification-v1.json",
+      "evidenceClass": "conformance",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "e1446c7bca174a700371e2de7af2b7fb6a1903e3d11836d96797dfbd6b880c6c",
+      "schemaVersion": "ucr.adapter-process-certification/1",
+      "passed": true,
+      "executedAt": "2026-08-10T04:42:26.916Z",
+      "sourceTreeHash": "8a36da74f0111c1d4a252dc257fc1fe24d7f3b7a8057ce5488cec6b4a83e61d5",
+      "ledgerHash": null,
+      "ledgerVerification": null
+    },
+    {
+      "name": "mcp-context",
+      "filename": "mcp-context-audit-v1.json",
+      "evidenceClass": "conformance",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "3841fd34a174c1b9e1822dbc21b570d1050ff2c2ff5b976252b95287d0b967ca",
+      "schemaVersion": "ucr.mcp-context-audit/1",
+      "passed": true,
+      "executedAt": "2026-08-10T04:42:33.220Z",
+      "sourceTreeHash": null,
+      "ledgerHash": null,
+      "ledgerVerification": null
+    },
+    {
+      "name": "compounding",
+      "filename": "compounding-study-v1.json",
+      "evidenceClass": "conformance",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "0fc2409ae4d4ac81f02b0e7d2d6c2aaee8b6f8ece744734b50725f1c08a00945",
+      "schemaVersion": "ucr.compounding-study/1",
+      "passed": true,
+      "executedAt": "2026-08-09T22:32:29.662Z",
+      "sourceTreeHash": "2043a34858302951d7d414ec003c2fa69676ac58d93d27527257fecef18ea8d0",
+      "ledgerHash": "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
+        "rowCount": 700
+      }
+    },
+    {
+      "name": "production-exercise",
+      "filename": "production-exercise-v1.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "152576dede451bc29589792fbf0ca0a75a940d2336b8b71f95b584013ec35843",
+      "schemaVersion": "ucr.production-exercise/1",
+      "passed": true,
+      "executedAt": "2026-08-10T04:42:24.783Z",
+      "sourceTreeHash": "c6edaeb2108ae20b6dee3d94d7f8bdf5978a8290dbc1cacd7101903c64780c6e",
+      "ledgerHash": "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
+        "rowCount": 6
+      }
+    },
+    {
+      "name": "stateful-codex-to-claude",
+      "filename": "stateful-preflight-codex-to-claude-v4.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "16f20a57c882fb91cf7eef90bf8a0daa92cfdbcb09f177e9aadd71a31fc9bda7",
+      "schemaVersion": "ucr.live-multimodel-handoff/1",
+      "passed": true,
+      "executedAt": "2026-08-10T04:26:46.370Z",
+      "sourceTreeHash": "3eba9476a6ad29ff4ddaa3a91b15846a1e7c95779157bee7927e4ff1a4372828",
+      "ledgerHash": "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+        "rowCount": 1
+      }
+    },
+    {
+      "name": "stateful-claude-to-codex",
+      "filename": "stateful-preflight-claude-to-codex-v3.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "0d01eb4eb9f21ddb5c590095c270ef4564267e856afe01fcd49d16cb0f3603aa",
+      "schemaVersion": "ucr.live-multimodel-handoff/1",
+      "passed": true,
+      "executedAt": "2026-08-10T04:32:49.612Z",
+      "sourceTreeHash": "620eeab06b88a32a04b9a069f1b27c2451ff32bf5d3128790a3416b4a64dcdc6",
+      "ledgerHash": "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+        "rowCount": 1
+      }
+    },
+    {
+      "name": "transport-negative-claude-plugin",
+      "filename": "stateful-preflight-codex-to-claude-v3.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "962660eeab856545842f1d55d7275a5e0259ffea74a51838258282207cc69228",
+      "schemaVersion": "ucr.live-multimodel-handoff/1",
+      "passed": true,
+      "executedAt": "2026-08-10T04:23:07.907Z",
+      "sourceTreeHash": "bfac3532ebfefc9d5159b146d666d37fb17fbc1fc30b45b10b589f279e88f5c4",
+      "ledgerHash": "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
+        "rowCount": 1
+      }
+    },
+    {
+      "name": "stateful-claude-to-copilot-quota",
+      "filename": "stateful-preflight-claude-to-copilot-v1.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "787c0493625a097dbf1d353b781c0a97bb6846ba6d799795e0c2bf4f1b5139a3",
+      "schemaVersion": "ucr.live-multimodel-handoff/1",
+      "passed": false,
+      "executedAt": "2026-08-10T02:14:09.434Z",
+      "sourceTreeHash": "9361d24561616599b123af79f622b421e8690be06be7dbd83899ea2e713a26f3",
+      "ledgerHash": "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
+        "rowCount": 1
+      }
+    },
+    {
+      "name": "effectiveness-pilot-negative",
+      "filename": "handoff-effectiveness-pilot-v1.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "0eb1e55e8abfc443245fedb6cea36feaf7ca296906fdef3e35f4bb27523ed6e7",
+      "schemaVersion": "ucr.handoff-effectiveness/1",
+      "passed": false,
+      "executedAt": "2026-08-09T23:39:26.033Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+        "rowCount": 4
+      }
+    }
+  ],
+  "summary": {
+    "artifactsValid": 12,
+    "artifactsTotal": 12,
+    "liveDirectionsPassed": 2,
+    "liveDirectionsAttempted": 3,
+    "liveDirectionMetrics": [
+      {
+        "direction": "codex->claude-code",
+        "integrityValid": true,
+        "passed": true,
+        "controlCorrect": true,
+        "runtimeCorrect": true,
+        "predecessorMistakeObserved": true,
+        "predecessorCorrectionVerified": true,
+        "repeatedFailure": false,
+        "controlMistake": false,
+        "delivered": true,
+        "nativeGuardWired": true,
+        "nativeGuardEnforced": false,
+        "captureModelCalls": 0,
+        "consumerStaticSchemaTokens": 0,
+        "capsuleTokens": 64,
+        "controlTokenTraffic": 476301,
+        "runtimeTokenTraffic": 285194,
+        "tokenTrafficDelta": -0.4012315741516394,
+        "controlLatencyMs": 73503.72200000001,
+        "runtimeLatencyMs": 66832.0761,
+        "latencyDelta": -0.09076609617129323
+      },
+      {
+        "direction": "claude-code->codex",
+        "integrityValid": true,
+        "passed": true,
+        "controlCorrect": true,
+        "runtimeCorrect": true,
+        "predecessorMistakeObserved": true,
+        "predecessorCorrectionVerified": true,
+        "repeatedFailure": false,
+        "controlMistake": true,
+        "delivered": true,
+        "nativeGuardWired": true,
+        "nativeGuardEnforced": true,
+        "captureModelCalls": 0,
+        "consumerStaticSchemaTokens": 0,
+        "capsuleTokens": 91,
+        "controlTokenTraffic": 402956,
+        "runtimeTokenTraffic": 408931,
+        "tokenTrafficDelta": 0.01482792165894043,
+        "controlLatencyMs": 115158.38889999998,
+        "runtimeLatencyMs": 87188.1611,
+        "latencyDelta": -0.24288484813979527
+      },
+      {
+        "direction": "claude-code->copilot",
+        "integrityValid": true,
+        "passed": false,
+        "controlCorrect": false,
+        "runtimeCorrect": false,
+        "predecessorMistakeObserved": true,
+        "predecessorCorrectionVerified": true,
+        "repeatedFailure": false,
+        "controlMistake": false,
+        "delivered": true,
+        "nativeGuardWired": null,
+        "nativeGuardEnforced": null,
+        "captureModelCalls": null,
+        "consumerStaticSchemaTokens": 0,
+        "capsuleTokens": 317,
+        "controlTokenTraffic": null,
+        "runtimeTokenTraffic": null,
+        "tokenTrafficDelta": null,
+        "controlLatencyMs": 3331,
+        "runtimeLatencyMs": 2807,
+        "latencyDelta": -0.15731011708195736
+      }
+    ],
+    "liveDirectionsWithLowerTokenTraffic": 1,
+    "liveDirectionsWithLowerLatency": 2,
+    "combinedLiveTokenReduction": 0.210555048182727,
+    "combinedLiveLatencyReduction": 0.183618605425028,
+    "blindedControlMistakes": 1,
+    "runtimeKnownMistakeRecurrences": 0,
+    "nativeGuardEnforcements": 1,
+    "maximumCaptureModelCalls": 0,
+    "maximumConsumerStaticSchemaTokens": 0,
+    "registeredClientProcesses": 16,
+    "graphEvents": 1000000,
+    "coordinationWorkers": 100,
+    "productionFaults": 6,
+    "cognitiveSchemaTokens": 480,
+    "cognitiveReductionVsFull": 0.9840663900414938
+  },
+  "conformanceLedger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "conformance",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "evidence-index-e31ecd01c96413f2",
+      "evidenceClass": "conformance",
+      "benchmarkHash": "4b2148b8a73d20f9d94a3008e1756f9fb38144818bb527b752ec5ff6ffa06f0e",
+      "sourceTreeHash": "c231cfe3c8d74ce5899e1ceab6612a81c4ced6dd83fe37ce77eab65d6b7fd7a4",
+      "runner": {
+        "name": "assemble-ucr-evidence",
+        "node": "v25.6.0"
+      },
+      "startedAt": "2026-08-10T04:54:55.752Z",
+      "runHash": "3dd77b1dbeb10e2b6f67e7fb0e825c615e86247653f67cfdfa9bf6e42fd2c3bf"
+    },
+    "rows": [
+      {
+        "study": "graph-scale",
+        "artifact": "graph-scale-v1.json",
+        "artifactHash": "96ee04413a90108b3e0149f6d4d9ee2313666a01b0ecb14efad0674326c7c1ec",
+        "passed": true,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "evidence-index-e31ecd01c96413f2",
+        "sequence": 0,
+        "previousHash": "3dd77b1dbeb10e2b6f67e7fb0e825c615e86247653f67cfdfa9bf6e42fd2c3bf",
+        "rowHash": "ca76e14f13b1b80cd9b5fcf21528fe9b5b010cdde94c405b1e9e73c3166d20f0"
+      },
+      {
+        "study": "writer-integrity",
+        "artifact": "coordination-scale-v1.json",
+        "artifactHash": "d6138521b675d3f7b17486c6b97d6fe89bb90936d6b5bc95f3cca70f34835eba",
+        "passed": true,
+        "acceptedWrites": 100,
+        "restoredWrites": 100,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "evidence-index-e31ecd01c96413f2",
+        "sequence": 1,
+        "previousHash": "ca76e14f13b1b80cd9b5fcf21528fe9b5b010cdde94c405b1e9e73c3166d20f0",
+        "rowHash": "a7bfe89de2668017b1642ca7627951286dc4e1b93b12f0f1c78f64a144962482"
+      },
+      {
+        "study": "consolidation",
+        "artifact": "consolidation-study-v1.json",
+        "artifactHash": "38a0021a9db0c644d083cd37ad95f694728ccf09334edddb7579f76b44b6a130",
+        "passed": true,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "evidence-index-e31ecd01c96413f2",
+        "sequence": 2,
+        "previousHash": "a7bfe89de2668017b1642ca7627951286dc4e1b93b12f0f1c78f64a144962482",
+        "rowHash": "03790418e71fa1187d4fad2928c251dda4d17a12e9ea13511c3dfd17479a3601"
+      },
+      {
+        "study": "adapter-processes",
+        "artifact": "adapter-process-certification-v1.json",
+        "artifactHash": "e1446c7bca174a700371e2de7af2b7fb6a1903e3d11836d96797dfbd6b880c6c",
+        "passed": true,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "evidence-index-e31ecd01c96413f2",
+        "sequence": 3,
+        "previousHash": "03790418e71fa1187d4fad2928c251dda4d17a12e9ea13511c3dfd17479a3601",
+        "rowHash": "c2be5c7c49c462ff5a91a2aafb4484e2f628438657625f4a26043d29942addca"
+      },
+      {
+        "study": "mcp-context",
+        "artifact": "mcp-context-audit-v1.json",
+        "artifactHash": "3841fd34a174c1b9e1822dbc21b570d1050ff2c2ff5b976252b95287d0b967ca",
+        "passed": true,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "evidence-index-e31ecd01c96413f2",
+        "sequence": 4,
+        "previousHash": "c2be5c7c49c462ff5a91a2aafb4484e2f628438657625f4a26043d29942addca",
+        "rowHash": "18c0931d5a535c602af5e4e47fa5deceeab431f80d3c1d4e84b7858717068c58"
+      },
+      {
+        "study": "compounding",
+        "artifact": "compounding-study-v1.json",
+        "artifactHash": "0fc2409ae4d4ac81f02b0e7d2d6c2aaee8b6f8ece744734b50725f1c08a00945",
+        "passed": true,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "evidence-index-e31ecd01c96413f2",
+        "sequence": 5,
+        "previousHash": "18c0931d5a535c602af5e4e47fa5deceeab431f80d3c1d4e84b7858717068c58",
+        "rowHash": "30a75a808509053c22488bb77bef0ec308fa36abe5264d1ee9f81870116d8468"
+      }
+    ],
+    "rowCount": 6,
+    "chainHead": "30a75a808509053c22488bb77bef0ec308fa36abe5264d1ee9f81870116d8468",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-10T04:54:55.753Z",
+    "ledgerHash": "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+    "signature": "KHRbxr53zHMn3NNc+UAPhzhrO4RUSSn5OvdcRUn+xhBbdgodinxUV5QQUdCW5VSj+nfsc39RbtzG1pa6KSPpCg=="
+  },
+  "conformancePublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAg/XLxB+5w/dkUMXCv+EyIfqd3umzOhLnxfbkRvBdFf8=\n-----END PUBLIC KEY-----\n",
+  "conformanceLedgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+    "rowCount": 6
+  },
+  "derived": {
+    "schemaVersion": "ucr.derived-metrics/2",
+    "metrics": {
+      "applicabilityPrecision": null,
+      "preActionDelivery": null,
+      "irrelevantDelivery": null,
+      "staleDelivery": null,
+      "recurrenceReduction": null,
+      "recurrenceIntervalLow": null,
+      "naturalCorrectnessDelta": null,
+      "naturalCorrectnessIntervalLow": null,
+      "severeUnquarantined": 0,
+      "emptyP95Overhead": null,
+      "reconstructionTokenReduction": null,
+      "firstSuccessorTokenReduction": null,
+      "firstSuccessorTokenIntervalLow": null,
+      "latencyOverheadP95": null,
+      "knownMistakeRecurrence": null,
+      "contradictoryDelivery": null,
+      "consumerSchemaTokensP95": null,
+      "captureModelCallsP95": null,
+      "writerIntegrity": true,
+      "crossClientPassed": false,
+      "competitivePassed": false
+    },
+    "intervals": {
+      "recurrence": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "correctness": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "reconstruction": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "firstSuccessorTokens": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    },
+    "sources": {
+      "applicabilityPrecision": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessDelta": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "severeUnquarantined": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "emptyP95Overhead": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "reconstructionTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "latencyOverheadP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "knownMistakeRecurrence": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "contradictoryDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "consumerSchemaTokensP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "captureModelCallsP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "writerIntegrity": {
+        "requiredClass": "conformance",
+        "eligibleLedgerHashes": [
+          "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+          "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
+          "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
+          "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+          "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+          "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
+          "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
+          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+        ]
+      },
+      "crossClientPassed": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "competitivePassed": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      }
+    },
+    "inputLedgerHashes": [
+      "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+      "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+      "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
+      "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+      "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
+      "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
+      "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+      "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7"
+    ],
+    "rejectedLedgers": 0,
+    "derivedHash": "7228efea57ac886898ee2ab1ea6e9410133515b6091c1ab15480283cfbbae15b"
+  },
+  "verdict": {
+    "status": "insufficient",
+    "passed": false,
+    "missing": [
+      "applicabilityPrecision",
+      "preActionDelivery",
+      "irrelevantDelivery",
+      "staleDelivery",
+      "recurrenceReduction",
+      "recurrenceIntervalLow",
+      "naturalCorrectnessDelta",
+      "naturalCorrectnessIntervalLow",
+      "emptyP95Overhead",
+      "reconstructionTokenReduction",
+      "firstSuccessorTokenReduction",
+      "firstSuccessorTokenIntervalLow",
+      "latencyOverheadP95",
+      "knownMistakeRecurrence",
+      "contradictoryDelivery",
+      "consumerSchemaTokensP95",
+      "captureModelCallsP95"
+    ],
+    "failed": []
+  },
+  "claims": {
+    "conformance": true,
+    "executableCrossClient": true,
+    "effectiveness": false,
+    "superiority": false,
+    "production": false
+  },
+  "reportHash": "fe648170e0a37e83367ad1847221c6969fa66997532e38cbb22758178ce3ad2e"
+}

@@ -11,11 +11,11 @@ The tier is a protocol guarantee, not a product preference. A rules/MCP-only
 client cannot observe arbitrary built-in shell or file operations, so it is
 never presented as having native automatic capture.
 
-| Client group | Tier | Automatic guarantee |
-|---|---|---|
-| Claude Code, Codex, Copilot CLI, Gemini CLI, Qwen Code, Cursor | lifecycle continuation | native routing/capture/delivery and one active-model completion reflection |
-| Cline, OpenCode, Kilo, Windsurf | native observation | native routing/capture/delivery; semantic write through the active-model rule |
-| Roo Code, Zed, Amp, Continue, Crush, Droid | MCP + rules | MCP-visible activity and explicit graph tools; no claim over hidden built-in calls |
+| Client group                                                   | Tier                   | Automatic guarantee                                                                |
+| -------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| Claude Code, Codex, Copilot CLI, Gemini CLI, Qwen Code, Cursor | lifecycle continuation | native routing/capture/delivery and one active-model completion reflection         |
+| Cline, OpenCode, Kilo, Windsurf                                | native observation     | native routing/capture/delivery; semantic write through the active-model rule      |
+| Roo Code, Zed, Amp, Continue, Crush, Droid                     | MCP + rules            | MCP-visible activity and explicit graph tools; no claim over hidden built-in calls |
 
 The executable registry in `hooks-core/capabilities.mjs` contains the exact
 per-client surfaces and prevents the adapter, generator, verifier, dashboard,
@@ -56,14 +56,14 @@ and the URL is recorded in each integration's README. That check found four real
 errors, each of which would have failed **silently** -- the file installs, the
 client reports nothing, and the server never loads:
 
-| Client | Was | Should be |
-|---|---|---|
+| Client   | Was                                | Should be                                                                                                                                                                     |
+| -------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Kilo** | `mcp_settings.json` / `mcpServers` | **wrong at the schema level.** Kilo rebranded; it reads `kilo.jsonc` under an `mcp` key, with `type: "local"`, `command` as an **array**, and `environment` rather than `env` |
-| Zed | a `source` key | not in the current schema; removed |
-| Windsurf | `.windsurfrules` | the legacy single-file form; now `.windsurf/rules/` |
-| Crush | `CRUSH.md` | the per-user file; the project one is `AGENTS.md` |
-| Cline | `cline_mcp_settings.json` | the VS Code filename; the CLI reads `~/.cline/mcp.json` |
-| Roo | `mcp_settings.json` | the global path; project-level `.roo/mcp.json` takes precedence |
+| Zed      | a `source` key                     | not in the current schema; removed                                                                                                                                            |
+| Windsurf | `.windsurfrules`                   | the legacy single-file form; now `.windsurf/rules/`                                                                                                                           |
+| Crush    | `CRUSH.md`                         | the per-user file; the project one is `AGENTS.md`                                                                                                                             |
+| Cline    | `cline_mcp_settings.json`          | the VS Code filename; the CLI reads `~/.cline/mcp.json`                                                                                                                       |
+| Roo      | `mcp_settings.json`                | the global path; project-level `.roo/mcp.json` takes precedence                                                                                                               |
 
 Kilo is the one worth dwelling on: **six of ten clients share the `mcpServers`
 convention, and assuming the seventh did too would have shipped a config that
@@ -80,13 +80,15 @@ with the source URL recorded in each integration's README.
 
 The MCP server advertises its 18 essential tools by default. Set
 `TOKEN_OPTIMIZER_TOOL_PROFILE=full` in the server environment only when a client
-needs the complete 98-tool specialist catalog.
+needs the complete 102-tool specialist catalog. Use the four-operation
+`cognitive` profile for UCR/live-graph sessions; its measured static schema is
+1,162 `cl100k_base` tokens versus 30,593 for the full catalog.
 
-| Variable | Default | Effect |
-|---|---|---|
-| `TOKEN_OPTIMIZER_MODE` | `enforce` | `advise` = never refuse; `off` = disable |
-| `TOKEN_OPTIMIZER_LARGE_READ_BYTES` | `25600` | Size at which a read stops being cheap |
-| `TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS` | `8000` | Cap on pre-compaction work |
+| Variable                                | Default   | Effect                                   |
+| --------------------------------------- | --------- | ---------------------------------------- |
+| `TOKEN_OPTIMIZER_MODE`                  | `enforce` | `advise` = never refuse; `off` = disable |
+| `TOKEN_OPTIMIZER_LARGE_READ_BYTES`      | `25600`   | Size at which a read stops being cheap   |
+| `TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS` | `8000`    | Cap on pre-compaction work               |
 
 An unrecognised `TOKEN_OPTIMIZER_MODE` falls back to `enforce`, so a typo cannot
 quietly turn the product off.

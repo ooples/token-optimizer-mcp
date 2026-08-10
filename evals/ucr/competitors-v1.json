@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "ucr.competitor-registry/1",
+  "frozenAt": "2026-08-09T00:00:00.000Z",
+  "fairnessContract": [
+    "same model and version",
+    "same permissions",
+    "same context, retry, and tool budgets",
+    "same task inputs and deterministic graders"
+  ],
+  "baselines": [
+    {
+      "kind": "no-memory",
+      "name": "isolated-empty",
+      "version": "1",
+      "command": "internal:empty",
+      "license": "MIT"
+    },
+    {
+      "kind": "full-history",
+      "name": "full-transcript",
+      "version": "1",
+      "command": "internal:full-history",
+      "license": "MIT"
+    },
+    {
+      "kind": "static-instructions",
+      "name": "repository-instructions",
+      "version": "1",
+      "command": "internal:static-instructions",
+      "license": "MIT"
+    },
+    {
+      "kind": "vector-rag",
+      "name": "vector-rag-reference",
+      "version": "1",
+      "command": "internal:vector-rag",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
+    },
+    {
+      "kind": "graph-rag",
+      "name": "graph-rag-reference",
+      "version": "1",
+      "command": "internal:graph-rag",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a Microsoft GraphRAG product claim"]
+    },
+    {
+      "kind": "temporal-graph",
+      "name": "temporal-graph-reference",
+      "version": "1",
+      "command": "internal:temporal-graph",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
+    },
+    {
+      "kind": "memory-os",
+      "name": "memory-runtime-reference",
+      "version": "1",
+      "command": "internal:memory-os",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
+    },
+    {
+      "kind": "workflow-library",
+      "name": "executable-workflow-reference",
+      "version": "1",
+      "command": "internal:workflow-library",
+      "license": "MIT",
+      "limitations": ["reference algorithm; not a vendor-product reproduction"]
+    },
+    {
+      "kind": "vendor-memory",
+      "name": "client-native-memory",
+      "version": "reference-1",
+      "command": "internal:vendor-memory",
+      "license": "MIT",
+      "limitations": [
+        "reference client-native retrieval behavior only",
+        "a named vendor version must be recorded before any vendor comparison claim"
+      ]
+    },
+    {
+      "kind": "oracle-context",
+      "name": "hidden-answer-oracle",
+      "version": "1",
+      "command": "internal:oracle",
+      "license": "MIT"
+    }
+  ]
+}

@@ -18,8 +18,18 @@
  * refused, which wastes a turn per tool family.
  */
 
-import { mode, MODE_OFF, readPayload, loadState } from './lib/policy.mjs';
+import {
+  mode,
+  MODE_OFF,
+  readPayload,
+  loadState,
+  saveState,
+} from './lib/policy.mjs';
 import { policyText, sessionTaskContext } from './lib/adapter.mjs';
+import {
+  optimizerToolEvidence,
+  rememberOptimizerTools,
+} from './lib/capabilities.mjs';
 import { restorationPlan } from './lib/restore.mjs';
 import {
   relevantFindingIdsForContext,
@@ -85,9 +95,15 @@ async function restoration(parsed) {
 // clients and silently skipped Claude Code, the one client most users are on.
 // Claude Code keeps its own entry point because its PreToolUse router does more
 // than the shared one; the standing notice is not a place it needs to differ.
-const payload = await readPayload() || {};
+const payload = (await readPayload()) || {};
 const features = featuresForArm();
-const parts = [policyText(true)];
+const toolEvidence = optimizerToolEvidence(payload);
+if (payload.session_id && toolEvidence.proven) {
+  const state = loadState(payload.session_id);
+  rememberOptimizerTools(state, toolEvidence);
+  saveState(payload.session_id, state);
+}
+const parts = [policyText(true, toolEvidence.names, toolEvidence.proven)];
 
 // THE ALWAYS-ON HALF OF DELIVERY. Trigger-fired injection answers "this
 // situation is happening now", which cannot cover a rule about how the work is

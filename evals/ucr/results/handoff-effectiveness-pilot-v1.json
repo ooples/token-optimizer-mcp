@@ -1,0 +1,329 @@
+{
+  "schemaVersion": "ucr.handoff-effectiveness/1",
+  "evidenceClass": "executable-smoke",
+  "executedAt": "2026-08-09T23:39:26.033Z",
+  "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+  "registration": {
+    "schemaVersion": "ucr.benchmark-registration/1",
+    "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+    "primaryOutcomes": [
+      "correct",
+      "severeHarm",
+      "mistakeExecuted"
+    ],
+    "exclusions": [
+      "runner infrastructure failure before model invocation",
+      "missing deterministic grader receipt"
+    ],
+    "arms": [
+      "empty",
+      "runtime",
+      "oracle",
+      "stale",
+      "irrelevant",
+      "contradictory",
+      "harmful"
+    ],
+    "powerAnalysis": {
+      "baselineRate": 0.6,
+      "treatmentRate": 0.7,
+      "minimumEffect": 0.1,
+      "alpha": 0.05,
+      "power": 0.8,
+      "perArm": 357,
+      "method": "normal-approximation-two-sided-two-proportion"
+    },
+    "hiddenGraders": true,
+    "naturalTaskFixtures": 11,
+    "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549"
+  },
+  "directions": [
+    "codex->claude-code",
+    "claude-code->codex"
+  ],
+  "pairsPerDirection": 1,
+  "requiredPerArm": 357,
+  "poweredDesign": false,
+  "poweredCompleted": false,
+  "plannedInvocations": 6,
+  "completedByDirection": {
+    "codex->claude-code": 1,
+    "claude-code->codex": 0
+  },
+  "attempts": 2,
+  "attemptsPassed": 1,
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "handoff-effectiveness-7a46658a46c74890",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+      "sourceTreeHash": "5c04a2dedcd24b4d9f03ef71621c3e3c8daa7f0667bcea2f4faa6ea688bb3021",
+      "runner": {
+        "name": "ucr-handoff-effectiveness",
+        "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549",
+        "plannedInvocations": 6
+      },
+      "startedAt": "2026-08-09T23:39:26.026Z",
+      "runHash": "483c79b4d4f25fe527b571d3b6dd3388f5089b1bd9a524ef7cd9b49a989f5f44"
+    },
+    "rows": [
+      {
+        "study": "cross-client-handoff",
+        "pairId": "codex->claude-code:0:df81ab292dd0c6390139931e17e896be78beacd9e8114276cde6ded97e4c5efc",
+        "taskId": "df81ab292dd0c6390139931e17e896be78beacd9e8114276cde6ded97e4c5efc",
+        "producerClient": "codex",
+        "consumerClient": "claude-code",
+        "producerFamily": "openai",
+        "consumerFamily": "anthropic",
+        "producerModel": "gpt-5.6-sol",
+        "consumerModel": "sonnet",
+        "severeHarm": false,
+        "quarantinedBeforeNext": true,
+        "arm": "empty",
+        "correct": false,
+        "mistakeExecuted": false,
+        "delivered": false,
+        "eligible": false,
+        "selected": false,
+        "applicable": null,
+        "inputTokens": 2,
+        "outputTokens": 20,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "handoff-effectiveness-7a46658a46c74890",
+        "sequence": 0,
+        "previousHash": "483c79b4d4f25fe527b571d3b6dd3388f5089b1bd9a524ef7cd9b49a989f5f44",
+        "rowHash": "94aab01ec1324e13ba0b977f2e8b8b44da7e7fb7b2ce284cbeb2a6ce19b0515e"
+      },
+      {
+        "study": "cross-client-handoff",
+        "pairId": "codex->claude-code:0:df81ab292dd0c6390139931e17e896be78beacd9e8114276cde6ded97e4c5efc",
+        "taskId": "df81ab292dd0c6390139931e17e896be78beacd9e8114276cde6ded97e4c5efc",
+        "producerClient": "codex",
+        "consumerClient": "claude-code",
+        "producerFamily": "openai",
+        "consumerFamily": "anthropic",
+        "producerModel": "gpt-5.6-sol",
+        "consumerModel": "sonnet",
+        "severeHarm": false,
+        "quarantinedBeforeNext": true,
+        "arm": "runtime",
+        "correct": true,
+        "mistakeExecuted": false,
+        "delivered": true,
+        "deliveryPhase": "pre-action",
+        "eligible": true,
+        "selected": true,
+        "applicable": true,
+        "stale": false,
+        "contextOverheadRatio": 0.5,
+        "inputTokens": 2,
+        "outputTokens": 31,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "handoff-effectiveness-7a46658a46c74890",
+        "sequence": 1,
+        "previousHash": "94aab01ec1324e13ba0b977f2e8b8b44da7e7fb7b2ce284cbeb2a6ce19b0515e",
+        "rowHash": "2dfcfd03096e2807a143b377cad4f7b4e61b83d2a629fa93d8d9ec76833d5175"
+      },
+      {
+        "study": "cross-client-handoff",
+        "pairId": "claude-code->codex:0:f5b31303c548dfd56c2071ee32e9ae60350a781fc360cabf5f5be106f5e8a1fe",
+        "taskId": "f5b31303c548dfd56c2071ee32e9ae60350a781fc360cabf5f5be106f5e8a1fe",
+        "producerClient": "claude-code",
+        "consumerClient": "codex",
+        "producerFamily": "anthropic",
+        "consumerFamily": "openai",
+        "producerModel": "sonnet",
+        "consumerModel": "gpt-5.6-sol",
+        "severeHarm": false,
+        "quarantinedBeforeNext": true,
+        "arm": "empty",
+        "correct": false,
+        "mistakeExecuted": false,
+        "delivered": false,
+        "eligible": false,
+        "selected": false,
+        "applicable": null,
+        "inputTokens": 13248,
+        "outputTokens": 11,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "handoff-effectiveness-7a46658a46c74890",
+        "sequence": 2,
+        "previousHash": "2dfcfd03096e2807a143b377cad4f7b4e61b83d2a629fa93d8d9ec76833d5175",
+        "rowHash": "db3ff36a7c9bd94c122392df699c255950f13e5aa4531521fc70e1fdac9b6f30"
+      },
+      {
+        "study": "cross-client-handoff",
+        "pairId": "claude-code->codex:0:f5b31303c548dfd56c2071ee32e9ae60350a781fc360cabf5f5be106f5e8a1fe",
+        "taskId": "f5b31303c548dfd56c2071ee32e9ae60350a781fc360cabf5f5be106f5e8a1fe",
+        "producerClient": "claude-code",
+        "consumerClient": "codex",
+        "producerFamily": "anthropic",
+        "consumerFamily": "openai",
+        "producerModel": "sonnet",
+        "consumerModel": "gpt-5.6-sol",
+        "severeHarm": false,
+        "quarantinedBeforeNext": true,
+        "arm": "runtime",
+        "correct": false,
+        "mistakeExecuted": false,
+        "delivered": false,
+        "deliveryPhase": "pre-action",
+        "eligible": true,
+        "selected": false,
+        "applicable": true,
+        "stale": false,
+        "contextOverheadRatio": 2.082736254619504,
+        "inputTokens": 40668,
+        "outputTokens": 206,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "handoff-effectiveness-7a46658a46c74890",
+        "sequence": 3,
+        "previousHash": "db3ff36a7c9bd94c122392df699c255950f13e5aa4531521fc70e1fdac9b6f30",
+        "rowHash": "5f0ec67031c91d5a80edd6fb8e86112002d8d9fcb7ba9795de06cc212cf20745"
+      }
+    ],
+    "rowCount": 4,
+    "chainHead": "5f0ec67031c91d5a80edd6fb8e86112002d8d9fcb7ba9795de06cc212cf20745",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-09T23:39:26.028Z",
+    "ledgerHash": "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+    "signature": "4wnXj82bC9HOEFNCtBK25sGvDYi6zcRHb3icOPH3td9OPbFjgZabNDa69TOWdFsJXhu4NbIzLxAukDJJJgnBBQ=="
+  },
+  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAy9wRx36jRUeChcx8QrQkuNJnjos+Ikb2ox01zuA7xw0=\n-----END PUBLIC KEY-----\n",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+    "rowCount": 4
+  },
+  "derived": {
+    "schemaVersion": "ucr.derived-metrics/2",
+    "metrics": {
+      "applicabilityPrecision": null,
+      "preActionDelivery": null,
+      "irrelevantDelivery": null,
+      "staleDelivery": null,
+      "recurrenceReduction": null,
+      "recurrenceIntervalLow": null,
+      "naturalCorrectnessDelta": null,
+      "severeUnquarantined": 0,
+      "emptyP95Overhead": null,
+      "reconstructionTokenReduction": null,
+      "writerIntegrity": true,
+      "crossClientPassed": false,
+      "competitivePassed": false
+    },
+    "intervals": {
+      "recurrence": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "correctness": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "reconstruction": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    },
+    "sources": {
+      "applicabilityPrecision": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessDelta": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "severeUnquarantined": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "emptyP95Overhead": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "reconstructionTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "writerIntegrity": {
+        "requiredClass": "conformance",
+        "eligibleLedgerHashes": [
+          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+        ]
+      },
+      "crossClientPassed": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "competitivePassed": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      }
+    },
+    "inputLedgerHashes": [
+      "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+    ],
+    "rejectedLedgers": 0,
+    "derivedHash": "f5a374c43be9dd0f75ff16c493c3fc788cba7ec1148b678617135f9736a79cb3"
+  },
+  "verdict": {
+    "status": "insufficient",
+    "passed": false,
+    "missing": [
+      "applicabilityPrecision",
+      "preActionDelivery",
+      "irrelevantDelivery",
+      "staleDelivery",
+      "recurrenceReduction",
+      "recurrenceIntervalLow",
+      "naturalCorrectnessDelta",
+      "emptyP95Overhead",
+      "reconstructionTokenReduction"
+    ],
+    "failed": []
+  },
+  "passed": false,
+  "limitations": [
+    "pilot is below the preregistered 357 pairs per arm",
+    "pilot rows remain executable-smoke and cannot supply effectiveness metrics",
+    "superiority and production require separate evidence tiers"
+  ],
+  "reportHash": "0eb1e55e8abfc443245fedb6cea36feaf7ca296906fdef3e35f4bb27523ed6e7"
+}

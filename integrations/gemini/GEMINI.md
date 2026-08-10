@@ -1,7 +1,9 @@
 # Token optimization (Gemini CLI)
 
-This extension adds the `token-optimizer` MCP server. Its tools cut context/token
-usage 60–90% via caching, diffing, and compression. Prefer them:
+This extension configures the `token-optimizer` MCP server. Use a named optimizer
+tool only when that exact schema is visible in the current Gemini tool inventory;
+configuration alone does not prove registration. If absent, keep the native
+operation available and bound its output. When registered, prefer:
 
 - **`smart_read`** instead of reading a file directly when the file is **large**
   (>~400 lines / >25 KB) or already read this session — re-reads return a **diff**.
@@ -13,7 +15,7 @@ usage 60–90% via caching, diffing, and compression. Prefer them:
   breakdown by action/hook/server (returns a ready-to-display `formatted` summary).
 - **`optimize_text`** to stash bulky text out-of-context under a key.
   **`compress_text`** is at-rest byte compression only — its base64 output usually
-  costs *more* tokens, so never put it back into context.
+  costs _more_ tokens, so never put it back into context.
 - **`count_tokens`** to measure a chunk first.
 
 Small files / one-off reads: built-in reading is fine — don't add overhead.

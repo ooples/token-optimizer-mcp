@@ -19,7 +19,27 @@ export const CORE_TOOL_NAMES = [
   'fleet_audit',
 ] as const;
 
-export type ToolProfile = 'core' | 'full';
+export const COGNITIVE_TOOL_NAMES = [
+  'context_page',
+  'context_receipt_verify',
+  'cognition_record',
+  'checkpoint_handoff',
+  'outcome_report',
+] as const;
+
+export const CONTINUITY_TOOL_NAMES = [
+  'context_page',
+  'cognition_record',
+] as const;
+
+export const ATTESTATION_TOOL_NAMES = ['context_receipt_verify'] as const;
+
+export type ToolProfile =
+  | 'attestation'
+  | 'continuity'
+  | 'cognitive'
+  | 'core'
+  | 'full';
 export type ExperimentArm = 'baseline' | 'optimizer' | 'retrieval' | 'full';
 
 export function resolveExperimentArm(
@@ -42,11 +62,18 @@ export function resolveToolProfile(
   const profile = String(value || 'core')
     .trim()
     .toLowerCase();
-  if (profile === 'core' || profile === 'full') return profile;
+  if (
+    profile === 'attestation' ||
+    profile === 'continuity' ||
+    profile === 'cognitive' ||
+    profile === 'core' ||
+    profile === 'full'
+  )
+    return profile;
 
   throw new Error(
     `Invalid TOKEN_OPTIMIZER_TOOL_PROFILE=${JSON.stringify(value)}. ` +
-      'Expected "core" (the default) or "full".'
+      'Expected "attestation", "continuity", "cognitive", "core" (the default), or "full".'
   );
 }
 
@@ -65,21 +92,47 @@ export function selectToolDefinitions<T extends { name: string }>(
   arm = resolveExperimentArm()
 ): T[] {
   const core = new Set<string>(CORE_TOOL_NAMES);
+  const cognitive = new Set<string>(COGNITIVE_TOOL_NAMES);
+  const continuity = new Set<string>(CONTINUITY_TOOL_NAMES);
+  const attestation = new Set<string>(ATTESTATION_TOOL_NAMES);
   const selected =
     profile === 'full'
       ? [...tools]
-      : tools.filter((tool) => core.has(tool.name));
+      : tools.filter((tool) =>
+          profile === 'attestation'
+            ? attestation.has(tool.name)
+            : profile === 'continuity'
+              ? continuity.has(tool.name)
+              : profile === 'cognitive'
+                ? cognitive.has(tool.name)
+                : core.has(tool.name)
+        );
   const selectedNames = new Set(selected.map((tool) => tool.name));
   const missing =
-    profile === 'core'
-      ? CORE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
-      : [];
+    profile === 'attestation'
+      ? ATTESTATION_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+      : profile === 'continuity'
+        ? CONTINUITY_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+        : profile === 'core'
+          ? CORE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+          : profile === 'cognitive'
+            ? COGNITIVE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+            : [];
 
   if (missing.length) {
-    throw new Error(`Core MCP tool profile is missing: ${missing.join(', ')}`);
+    throw new Error(
+      `${profile} MCP tool profile is missing required tools: ${missing.join(', ')}`
+    );
   }
 
   if (arm === 'baseline') return [];
+  if (profile === 'attestation') return selected;
+  if (profile === 'continuity' || profile === 'cognitive') {
+    if (arm === 'optimizer') return [];
+    if (arm === 'retrieval')
+      return selected.filter((tool) => tool.name !== 'cognition_record');
+    return selected;
+  }
   if (arm === 'optimizer')
     return selected.filter(
       (tool) => !['wiki_read', 'wiki_write'].includes(tool.name)

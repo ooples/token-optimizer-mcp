@@ -18,7 +18,14 @@
  */
 
 import {
-  loadState, saveState, alreadyDenied, mode, MODE_OFF, MODE_ADVISE, largeFileBytes, withEscape,
+  loadState,
+  saveState,
+  alreadyDenied,
+  mode,
+  MODE_OFF,
+  MODE_ADVISE,
+  largeFileBytes,
+  withEscape,
 } from './policy.mjs';
 import {
   commandProjectRoot,
@@ -30,7 +37,10 @@ import {
   touchedFiles,
 } from './decide.mjs';
 import {
-  recordRead, fingerprint, recordToolOutcome, recordEpisodeOutcome,
+  recordRead,
+  fingerprint,
+  recordToolOutcome,
+  recordEpisodeOutcome,
 } from './metrics.mjs';
 import {
   contentHash,
@@ -58,10 +68,19 @@ import { indexFile } from './staleness.mjs';
 import { isArchived } from './transcript.mjs';
 import { isFsSafePath } from './paths.mjs';
 import {
-  isSubstantive, recordingNudge, semanticHarvestPrompt,
+  isSubstantive,
+  recordingNudge,
+  semanticHarvestPrompt,
 } from './recording.mjs';
-import { nativeClientProfiles } from './capabilities.mjs';
+import {
+  HOOK_MCP_TOOLS,
+  nativeClientProfiles,
+  optimizerToolEvidence,
+  optimizerToolsForHook,
+  rememberOptimizerTools,
+} from './capabilities.mjs';
 import { episodeMeta, featuresForArm, usageFrom } from './experiment.mjs';
+import { evaluateUcrGuards } from './ucr-guard.mjs';
 
 /**
  * Per-client capability.
@@ -84,7 +103,8 @@ const HARVEST_MAX_BYTES =
 export function mutationSucceeded(clientName, raw) {
   if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
     return false;
-  if (raw?.postToolUse?.success === false || raw?.success === false) return false;
+  if (raw?.postToolUse?.success === false || raw?.success === false)
+    return false;
 
   const status =
     raw?.tool_response?.status ??
@@ -96,7 +116,9 @@ export function mutationSucceeded(clientName, raw) {
     raw?.toolResult?.resultType ??
     raw?.toolResult?.status;
   if (status !== undefined) {
-    return /^(?:ok|success|succeeded|complete|completed)$/i.test(String(status));
+    return /^(?:ok|success|succeeded|complete|completed)$/i.test(
+      String(status)
+    );
   }
 
   if (raw?.postToolUse?.success === true || raw?.success === true) return true;
@@ -104,21 +126,31 @@ export function mutationSucceeded(clientName, raw) {
 
   // These lifecycle contracts fire this event only after a successful tool,
   // or are called by our in-process bridge only from its successful after hook.
-  return new Set(['claude-code', 'qwen', 'opencode', 'kilo', 'windsurf'])
-    .has(clientName);
+  return new Set(['claude-code', 'qwen', 'opencode', 'kilo', 'windsurf']).has(
+    clientName
+  );
 }
 
 /** Conservative success classification for any completed tool call. */
 export function toolSucceeded(raw) {
   if (raw?.error || raw?.tool_response?.error || raw?.toolResponse?.error)
     return false;
-  if (raw?.postToolUse?.success === false || raw?.success === false) return false;
+  if (raw?.postToolUse?.success === false || raw?.success === false)
+    return false;
   const status =
-    raw?.tool_response?.status ?? raw?.toolResponse?.status ??
-    raw?.tool_result?.status ?? raw?.toolResult?.status;
+    raw?.tool_response?.status ??
+    raw?.toolResponse?.status ??
+    raw?.tool_result?.status ??
+    raw?.toolResult?.status;
   if (status !== undefined) {
-    if (/^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(String(status))) return false;
-    if (/^(?:ok|success|succeeded|complete|completed)$/i.test(String(status))) return true;
+    if (
+      /^(?:error|failed|failure|cancelled|canceled|denied)$/i.test(
+        String(status)
+      )
+    )
+      return false;
+    if (/^(?:ok|success|succeeded|complete|completed)$/i.test(String(status)))
+      return true;
   }
   // A post-tool lifecycle event is evidence that the call completed, but not
   // that its output proved the task.  `success` here is deliberately scoped to
@@ -129,13 +161,19 @@ export function toolSucceeded(raw) {
 function contextOutput(client, eventName, additionalContext) {
   if (client.contextStyle === 'top-level') return { additionalContext };
   if (client.contextStyle === 'cline') {
-    return { cancel: false, contextModification: additionalContext, errorMessage: '' };
+    return {
+      cancel: false,
+      contextModification: additionalContext,
+      errorMessage: '',
+    };
   }
   if (client.contextStyle === 'cursor') {
     return { continue: true, agent_message: additionalContext };
   }
   if (client.contextStyle === 'silent') return null;
-  return { hookSpecificOutput: { hookEventName: eventName, additionalContext } };
+  return {
+    hookSpecificOutput: { hookEventName: eventName, additionalContext },
+  };
 }
 
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
@@ -156,9 +194,12 @@ export function normalizeClientPayload(clientName, event, raw) {
   if (clientName === 'windsurf') {
     const info = raw.tool_info || {};
     const action = String(raw.agent_action_name || '');
-    const tool = action.includes('read_code') ? 'read_file'
-      : action.includes('write_code') ? 'write_file'
-        : action.includes('run_command') ? 'run_shell_command'
+    const tool = action.includes('read_code')
+      ? 'read_file'
+      : action.includes('write_code')
+        ? 'write_file'
+        : action.includes('run_command')
+          ? 'run_shell_command'
           : null;
     return {
       ...raw,
@@ -192,7 +233,9 @@ export function sessionTaskContext(raw = {}) {
     raw.task?.prompt,
     raw.task?.text,
     raw.message?.content,
-  ].filter((value) => typeof value === 'string' && value.trim()).join('\n');
+  ]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .join('\n');
 }
 
 function emit(object) {
@@ -211,8 +254,14 @@ async function readStdin({ timeoutMs = 5000 } = {}) {
     const timer = setTimeout(() => resolve(null), timeoutMs);
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () => { clearTimeout(timer); resolve(chunks.join('')); });
-    process.stdin.on('error', () => { clearTimeout(timer); resolve(null); });
+    process.stdin.on('end', () => {
+      clearTimeout(timer);
+      resolve(chunks.join(''));
+    });
+    process.stdin.on('error', () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
   });
 
   if (raw === null) return null;
@@ -224,46 +273,67 @@ async function readStdin({ timeoutMs = 5000 } = {}) {
 }
 
 /** The session-start notice, shared verbatim so no client drifts its own copy. */
-export function policyText(canDeny) {
+export function policyText(
+  canDeny,
+  availableTools = undefined,
+  registrationProven = availableTools !== undefined
+) {
   const kb = Math.round(largeFileBytes() / 1024);
-  const enforcement = (canDeny && mode() !== MODE_ADVISE)
-    ? 'Built-in calls matching these cases are DENIED and must be reissued against ' +
-      'the tool named in the refusal. A second attempt at the same target is always ' +
-      'allowed, so you can never be stuck.'
-    : 'These are strong recommendations; the built-in tools remain available.';
+  // Direct library callers historically asked for policyText(true) to render
+  // the core policy. Runtime entry points always pass an explicit Set, where
+  // an empty set means "do not claim or redirect to any MCP schema".
+  const tools =
+    availableTools === undefined
+      ? new Set(HOOK_MCP_TOOLS)
+      : new Set(availableTools);
+  const routes = [];
+  if (tools.has('smart_read')) {
+    routes.push(
+      `- Reading a file larger than ~${kb} KB, re-reading a file, or printing a large file -> smart_read`
+    );
+  }
+  if (tools.has('smart_grep'))
+    routes.push(
+      '- Searching file contents or running a recursive shell search -> smart_grep'
+    );
+  if (tools.has('smart_glob'))
+    routes.push('- Finding files with an unbounded pattern -> smart_glob');
+  if (tools.has('smart_edit'))
+    routes.push(`- Editing a file larger than ~${kb} KB -> smart_edit`);
+  if (tools.has('smart_write'))
+    routes.push(`- Writing a file larger than ~${kb} KB -> smart_write`);
 
-  return `# Token optimization is active
+  const connection =
+    tools.size > 0 && registrationProven
+      ? `The host supplied positive runtime inventory evidence for ${tools.size} optimizer MCP tool(s).`
+      : tools.size > 0
+        ? 'The following optimizer MCP tools are available to this policy caller.'
+        : registrationProven
+          ? 'The host supplied a proven empty optimizer MCP inventory for this session.'
+          : 'This hook received no positive evidence that optimizer MCP tools are registered in this session.';
+  const routing = routes.length
+    ? `\n\nPrefer only the registered replacements listed below; they cache, diff, or bound output:\n\n${routes.join('\n')}`
+    : "\n\nKeep the CLI's native tools available and bound their output. Do not redirect to or call an optimizer MCP tool unless its schema is visible in the current tool inventory.";
+  const enforcement = routes.length
+    ? canDeny && mode() !== MODE_ADVISE
+      ? '\n\nA built-in call is denied only when its exact replacement has positive registration evidence. A second attempt at the same target remains available.'
+      : '\n\nThese are recommendations; the built-in tools remain available.'
+    : '';
+  const utilities = [
+    tools.has('optimize_session')
+      ? 'When the context window gets tight, call optimize_session.'
+      : null,
+    tools.has('get_optimization_report')
+      ? 'Use get_optimization_report for measured savings.'
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const recording = tools.has('wiki_write')
+    ? `\n\n## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.`
+    : '\n\nStructural graph capture remains active through lifecycle hooks. Durable semantic MCP writes are not requested because the writer schema is not proven available.';
 
-The token-optimizer MCP server is connected. Prefer its tools over the built-ins
-in these cases -- they cut context usage 60-90% by caching, diffing and bounding
-output:
-
-- Reading a file larger than ~${kb} KB, or ANY file already read this session
-  -> smart_read (returns only what changed since the last read)
-- Searching file contents -> smart_grep ; finding files -> smart_glob
-- Editing a file larger than ~${kb} KB -> smart_edit (returns a diff, not the file)
-- Printing a large file via cat/head/tail/type/Get-Content -> smart_read
-- Recursive shell searches (grep -r, rg) -> smart_grep
-
-${enforcement}
-
-When the context window gets tight, call optimize_session. To report savings,
-call get_optimization_report. Small one-off reads are fine with the built-ins.
-
-## Record what you work out
-
-Call wiki_write when you establish something durable about this project, while
-you still hold the context. Every claim needs at least one anchor -- a real file
-path, or path#symbol -- because an unanchored claim can never be checked against
-the code again and would be served as current forever; unanchored writes are
-refused.
-
-Worth recording: a decision and why the alternative was rejected, a failure and
-what actually caused it, a command that turned out to be the one that works.
-Not worth recording: what the code plainly says. Every wiki_write must include
-the concrete evidence, when it applies, a calibrated confidence label, its
-scope, and what would invalidate it. Prefer the thing someone had to work out,
-because that exists nowhere in the source tree.${projectBriefing()}`;
+  return `# Token optimization is active\n\nLive graph capture is active through the lifecycle adapter.\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${recording}${projectBriefing()}`;
 }
 
 /**
@@ -296,7 +366,9 @@ function projectBriefing() {
     let routing = null;
     try {
       routing = cachedRoutingBriefing(dir, transcriptFor(cwd));
-    } catch { /* no transcript, no routing facts; the rest still applies */ }
+    } catch {
+      /* no transcript, no routing facts; the rest still applies */
+    }
 
     const text = briefing(dir, { extra: routing ? [routing] : [] });
     if (!text) return '';
@@ -308,7 +380,9 @@ function projectBriefing() {
     // dropped rather than emitted: missing guidance costs a little, a volatile
     // line costs the whole prefix.
     const { text: safe } = stableText(text);
-    return safe.trim() ? `\n\n## What we have learned about this project\n\n${safe}` : '';
+    return safe.trim()
+      ? `\n\n## What we have learned about this project\n\n${safe}`
+      : '';
   } catch {
     // A briefing is a bonus. It must never be the reason a session starts badly.
     return '';
@@ -397,23 +471,24 @@ function observeAndInject(payload, state, episode, features) {
   // Structural capture is evidence about what was touched, not a semantic
   // conclusion. It is therefore safe to automate for every client and leaves
   // the active model responsible for wiki_write at completion.
-  if (features.capture) for (const { path, size } of touched) {
-    try {
-      if (isArchived(path) || size > HARVEST_MAX_BYTES || !isFsSafePath(path))
-        continue;
-      const source = readFileSync(path, 'utf8');
-      const dir = dirFor(path);
-      harvest(dir, {
-        filePath: path,
-        sessionId: payload.session_id,
-        action: payload.tool_name,
-        hash: contentHash(path, source),
-      });
-      indexFile(dir, path, source);
-    } catch {
-      // Graph bookkeeping must never break the user's tool call.
+  if (features.capture)
+    for (const { path, size } of touched) {
+      try {
+        if (isArchived(path) || size > HARVEST_MAX_BYTES || !isFsSafePath(path))
+          continue;
+        const source = readFileSync(path, 'utf8');
+        const dir = dirFor(path);
+        harvest(dir, {
+          filePath: path,
+          sessionId: payload.session_id,
+          action: payload.tool_name,
+          hash: contentHash(path, source),
+        });
+        indexFile(dir, path, source);
+      } catch {
+        // Graph bookkeeping must never break the user's tool call.
+      }
     }
-  }
 
   return parts.join('\n\n');
 }
@@ -426,25 +501,43 @@ function observeAndInject(payload, state, episode, features) {
  */
 export async function run(clientName, event) {
   const client = CLIENTS[clientName] || CLIENTS['claude-code'];
-  const eventName = event === 'session-start' ? 'SessionStart'
-    : event === 'post-tool'
-      ? (clientName === 'gemini' ? 'AfterTool' : 'PostToolUse')
-      : event === 'stop'
-        ? (clientName === 'gemini' ? 'AfterAgent' : 'Stop')
-        : (clientName === 'gemini' ? 'BeforeTool' : 'PreToolUse');
+  const eventName =
+    event === 'session-start'
+      ? 'SessionStart'
+      : event === 'post-tool'
+        ? clientName === 'gemini'
+          ? 'AfterTool'
+          : 'PostToolUse'
+        : event === 'stop'
+          ? clientName === 'gemini'
+            ? 'AfterAgent'
+            : 'Stop'
+          : clientName === 'gemini'
+            ? 'BeforeTool'
+            : 'PreToolUse';
 
   if (mode() === MODE_OFF) process.exit(0);
 
   const features = featuresForArm();
 
   if (event === 'session-start') {
-    if (!features.routing && !features.retrieval && !features.harvest) process.exit(0);
+    if (!features.routing && !features.retrieval && !features.harvest)
+      process.exit(0);
     // Some hook hosts invoke SessionStart without closing stdin. Waiting the
     // full pre-tool timeout would turn optional context into a five-second
     // startup tax; lifecycle payloads are tiny and arrive immediately when
     // the host supplies one.
-    const raw = await readStdin({ timeoutMs: 250 }) || {};
-    const parts = [policyText(client.canDeny)];
+    const raw = (await readStdin({ timeoutMs: 250 })) || {};
+    const toolEvidence = optimizerToolEvidence(raw);
+    const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id;
+    if (sessionId && toolEvidence.proven) {
+      const state = loadState(sessionId);
+      rememberOptimizerTools(state, toolEvidence);
+      saveState(sessionId, state);
+    }
+    const parts = [
+      policyText(client.canDeny, toolEvidence.names, toolEvidence.proven),
+    ];
     if (features.retrieval) {
       try {
         const cwd = raw.cwd || raw.working_directory || process.cwd();
@@ -482,9 +575,12 @@ export async function run(clientName, event) {
   }
 
   if (event === 'stop') {
-    const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
+    const sessionId =
+      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
     const agentScope = raw.transcript_path ?? raw.transcriptPath ?? null;
     const state = loadState(sessionId, agentScope);
+    const toolEvidence = optimizerToolsForHook(raw, state);
+    rememberOptimizerTools(state, toolEvidence);
     const episode = episodeMeta({ client: clientName, raw });
     try {
       const cwd = raw.cwd || raw.working_directory || process.cwd();
@@ -500,16 +596,19 @@ export async function run(clientName, event) {
     const alreadyHarvested =
       Number(state.edits || 0) > 0 &&
       Number(state.harvestedEdits || 0) >= Number(state.edits || 0);
-    const prompt = features.harvest ? semanticHarvestPrompt({
-      edits: state.edits,
-      files: state.editedFiles,
-      model: raw.model,
-      stopHookActive:
-        raw.stop_hook_active === true ||
-        raw.stopHookActive === true ||
-        alreadyHarvested ||
-        (clientName === 'cursor' && Number(raw.loop_count || 0) > 0),
-    }) : null;
+    const prompt =
+      features.harvest && toolEvidence.names.has('wiki_write')
+        ? semanticHarvestPrompt({
+            edits: state.edits,
+            files: state.editedFiles,
+            model: raw.model,
+            stopHookActive:
+              raw.stop_hook_active === true ||
+              raw.stopHookActive === true ||
+              alreadyHarvested ||
+              (clientName === 'cursor' && Number(raw.loop_count || 0) > 0),
+          })
+        : null;
     if (prompt) {
       state.harvestedEdits = Number(state.edits || 0);
       saveState(sessionId, state, agentScope);
@@ -522,9 +621,15 @@ export async function run(clientName, event) {
     process.exit(0);
   }
 
-  if (clientName === 'cline' && event === 'post-tool' && raw.postToolUse?.success === false)
+  if (
+    clientName === 'cline' &&
+    event === 'post-tool' &&
+    raw.postToolUse?.success === false
+  )
     process.exit(0);
-  const payload = normalizePayload(normalizeClientPayload(clientName, event, raw));
+  const payload = normalizePayload(
+    normalizeClientPayload(clientName, event, raw)
+  );
   if (!payload.tool_name) process.exit(0);
   const episode = episodeMeta({ client: clientName, raw, payload });
 
@@ -537,6 +642,8 @@ export async function run(clientName, event) {
   // falls back to session scope, which is right for a main session's own calls.
   const agentScope = payload.transcript_path || null;
   const state = loadState(payload.session_id, agentScope);
+  const toolEvidence = optimizerToolsForHook(raw, state);
+  rememberOptimizerTools(state, toolEvidence);
   let recordingContext = null;
 
   // Count mutations AFTER Codex reports them, not in PreToolUse where a denied
@@ -550,28 +657,35 @@ export async function run(clientName, event) {
   ) {
     try {
       const edited = [];
-      if (payload.tool_input.file_path) edited.push(payload.tool_input.file_path);
+      if (payload.tool_input.file_path)
+        edited.push(payload.tool_input.file_path);
       const patch = payload.tool_input.command;
       if (typeof patch === 'string') {
-        for (const match of patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm)) {
+        for (const match of patch.matchAll(
+          /^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm
+        )) {
           const candidate = match[1].trim().replace(/^['"]|['"]$/g, '');
-          if (candidate) edited.push(resolve(payload.cwd || process.cwd(), candidate));
+          if (candidate)
+            edited.push(resolve(payload.cwd || process.cwd(), candidate));
         }
       }
 
       state.edits = (state.edits || 0) + 1;
-      state.editedFiles = [
-        ...edited,
-        ...(state.editedFiles || []),
-      ].filter(Boolean).slice(0, 20);
-      const anchor = state.editedFiles[0]
-        || join(payload.cwd || process.cwd(), '__recording__');
+      state.editedFiles = [...edited, ...(state.editedFiles || [])]
+        .filter(Boolean)
+        .slice(0, 20);
+      const anchor =
+        state.editedFiles[0] ||
+        join(payload.cwd || process.cwd(), '__recording__');
       const dir = wikiDir(projectRootFor(anchor, payload.cwd));
-      recordingContext = features.harvest ? recordingNudge(dir, {
-        state,
-        edits: state.edits,
-        files: state.editedFiles,
-      }) : null;
+      recordingContext =
+        features.harvest && toolEvidence.names.has('wiki_write')
+          ? recordingNudge(dir, {
+              state,
+              edits: state.edits,
+              files: state.editedFiles,
+            })
+          : null;
       if (recordingContext) state.recordingNudged = true;
     } catch {
       // Recording pressure is an optimization and must never cost a tool call.
@@ -586,14 +700,20 @@ export async function run(clientName, event) {
         : touched[0]?.path || payload.tool_input?.file_path || '';
       const root = command
         ? commandProjectRoot(payload, payload.cwd)
-        : projectRootFor(anchor || join(payload.cwd || process.cwd(), '__tool__'), payload.cwd);
+        : projectRootFor(
+            anchor || join(payload.cwd || process.cwd(), '__tool__'),
+            payload.cwd
+          );
       recordToolOutcome(wikiDir(root), {
         ...episode,
         surface: command ? 'command' : 'file',
         anchor,
         toolName: payload.tool_name,
         success: toolSucceeded(raw),
-        durationMs: Number(raw.duration_ms ?? raw.durationMs ?? raw.elapsed_ms ?? raw.elapsedMs) || null,
+        durationMs:
+          Number(
+            raw.duration_ms ?? raw.durationMs ?? raw.elapsed_ms ?? raw.elapsedMs
+          ) || null,
         ...usageFrom(raw),
       });
     } catch {
@@ -601,15 +721,29 @@ export async function run(clientName, event) {
     }
   }
 
-  const verdict = features.routing ? decide(payload, state) : null;
-  const repeat = verdict && event === 'pre-tool'
-    ? alreadyDenied(state, verdict.key)
-    : false;
+  const ucrGuardVerdict =
+    event === 'pre-tool'
+      ? evaluateUcrGuards(
+          payload,
+          touchedFiles(payload).map((item) => item.path)
+        )
+      : null;
+  const verdict =
+    ucrGuardVerdict ||
+    (features.routing ? decide(payload, state, toolEvidence.names) : null);
+  const repeat =
+    verdict && event === 'pre-tool' && !verdict.persistent
+      ? alreadyDenied(state, verdict.key)
+      : false;
 
   // A post-tool hook has already paid for the call, so a denial would cost a
   // turn and save nothing. It advises about the NEXT one instead.
   const canRefuse = Boolean(
-    verdict && client.canDeny && event === 'pre-tool' && !repeat && mode() !== MODE_ADVISE
+    verdict &&
+      client.canDeny &&
+      event === 'pre-tool' &&
+      !repeat &&
+      mode() !== MODE_ADVISE
   );
 
   if (canRefuse) {
@@ -625,13 +759,18 @@ export async function run(clientName, event) {
         permissionDecisionReason: withEscape(verdict.reason),
       });
     } else if (client.denyStyle === 'cline') {
-      emit({ cancel: true, contextModification: '', errorMessage: withEscape(verdict.reason) });
+      emit({
+        cancel: true,
+        contextModification: '',
+        errorMessage: withEscape(verdict.reason),
+      });
     } else if (client.denyStyle === 'cursor') {
       emit({
         continue: true,
         permission: 'deny',
         agent_message: withEscape(verdict.reason),
-        user_message: 'Token Optimizer redirected an expensive built-in operation.',
+        user_message:
+          'Token Optimizer redirected an expensive built-in operation.',
       });
     } else if (client.denyStyle === 'exit-2') {
       process.stderr.write(withEscape(verdict.reason));
@@ -662,11 +801,9 @@ export async function run(clientName, event) {
   }
   saveState(payload.session_id, state, agentScope);
 
-  const context = [
-    verdict?.reason,
-    graphContext,
-    recordingContext,
-  ].filter(Boolean).join('\n\n');
+  const context = [verdict?.reason, graphContext, recordingContext]
+    .filter(Boolean)
+    .join('\n\n');
   if (context) {
     const output = contextOutput(client, eventName, context);
     if (output) emit(output);

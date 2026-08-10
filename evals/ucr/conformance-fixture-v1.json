@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "ucr.adapter-fixture/1",
+  "fixtureId": "universal-lifecycle-v1",
+  "description": "Language-neutral lifecycle inputs every registered adapter must translate without client-specific cognition logic.",
+  "inputs": [
+    {
+      "kind": "session_start",
+      "required": true,
+      "traceId": "018f05b8-1d80-7000-8000-000000000001",
+      "wallMs": 1710000000000,
+      "idempotencyKey": "fixture-session-start",
+      "payload": { "task": "repair generated output safely" }
+    },
+    {
+      "kind": "pre_tool",
+      "required": true,
+      "traceId": "018f05b8-1d80-7000-8000-000000000001",
+      "wallMs": 1710000000001,
+      "idempotencyKey": "fixture-pre-tool",
+      "payload": { "tool": "edit", "path": "generated/client.ts" }
+    },
+    {
+      "kind": "tool_result",
+      "required": true,
+      "traceId": "018f05b8-1d80-7000-8000-000000000001",
+      "wallMs": 1710000000002,
+      "idempotencyKey": "fixture-tool-result",
+      "payload": { "success": false, "diagnostic": "generated source drift" }
+    },
+    {
+      "kind": "feedback",
+      "required": true,
+      "traceId": "018f05b8-1d80-7000-8000-000000000001",
+      "wallMs": 1710000000003,
+      "idempotencyKey": "fixture-feedback",
+      "payload": { "correction": "edit the generator and regenerate" }
+    },
+    {
+      "kind": "stop",
+      "required": true,
+      "traceId": "018f05b8-1d80-7000-8000-000000000001",
+      "wallMs": 1710000000004,
+      "idempotencyKey": "fixture-stop",
+      "payload": { "boundary": "session-end" }
+    }
+  ]
+}

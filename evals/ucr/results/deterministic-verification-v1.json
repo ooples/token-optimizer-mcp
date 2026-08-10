@@ -1,0 +1,529 @@
+{
+  "schemaVersion": "ucr.deterministic-verification/2",
+  "evidenceClass": "deterministic-conformance-not-live-effectiveness",
+  "source": {
+    "fixtureHash": "cbcf660b87d8714ada6c445ddd761947c3db01d2292edad0956e677ad90e7d73",
+    "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+    "competitorRegistryHash": "c25fcd84a3e383ddfbbd0148e0a673ed7607d73da6ff75bdd8a64a5b188b68de"
+  },
+  "implementation": {
+    "workstreamsWithRuntimeModules": 18,
+    "workstreamsTotal": 18,
+    "bootstrapOperations": 2,
+    "staticSurfaceTokens": 84
+  },
+  "conformance": {
+    "registeredClients": 16,
+    "schemaCertifiedClients": 16,
+    "lifecycleFamilies": 4,
+    "executableSmokeClients": 3,
+    "cognitionSemanticParity": true,
+    "fixtureEventsPerClient": 5
+  },
+  "deterministicProof": {
+    "checksPassed": 29,
+    "checksTotal": 29,
+    "replayInvariant": true,
+    "graphRebuildInvariant": true,
+    "guardFalsePositiveRate": 0,
+    "guardFalseNegativeCount": 0,
+    "contextCapsuleTokens": 27,
+    "contextBudgetTokens": 128,
+    "coordinatedWriters": 100,
+    "lostAcceptedEventsInRecovery": 0
+  },
+  "benchmarkProtocol": {
+    "taskFamilies": 11,
+    "frozenTasks": 11,
+    "arms": 7,
+    "deterministicArmRuns": 77,
+    "compoundingTasks": 100,
+    "plannedCompoundingRuns": 700,
+    "competitorBaselines": 10
+  },
+  "liveEvidence": {
+    "status": "passed-three-direction-smoke",
+    "modelRuns": 9,
+    "executableClientSmokes": 3,
+    "competitiveReproductions": 0,
+    "reportHash": "fe648170e0a37e83367ad1847221c6969fa66997532e38cbb22758178ce3ad2e",
+    "evidenceTiers": {
+      "transport": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "conformance": {
+        "status": "present",
+        "ledgers": 2,
+        "rows": 706,
+        "hashes": [
+          "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+          "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
+        ]
+      },
+      "executable-smoke": {
+        "status": "present",
+        "ledgers": 6,
+        "rows": 14,
+        "hashes": [
+          "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
+          "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+          "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+          "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
+          "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
+          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+        ]
+      },
+      "effectiveness": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "superiority": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      },
+      "production": {
+        "status": "missing",
+        "ledgers": 0,
+        "rows": 0,
+        "hashes": []
+      }
+    },
+    "reason": "three live directions prove executable transfer and control abstention across three CLIs and two model families, not powered effectiveness or superiority"
+  },
+  "release": {
+    "status": "insufficient",
+    "passed": false,
+    "missing": [
+      "applicabilityPrecision",
+      "preActionDelivery",
+      "staleDelivery",
+      "recurrenceReduction",
+      "recurrenceIntervalLow",
+      "naturalCorrectnessDelta",
+      "naturalCorrectnessIntervalLow",
+      "severeUnquarantined",
+      "emptyP95Overhead",
+      "reconstructionTokenReduction",
+      "firstSuccessorTokenReduction",
+      "firstSuccessorTokenIntervalLow",
+      "latencyOverheadP95",
+      "knownMistakeRecurrence",
+      "contradictoryDelivery",
+      "consumerSchemaTokensP95",
+      "captureModelCallsP95",
+      "crossClientPassed",
+      "competitivePassed"
+    ],
+    "failed": []
+  },
+  "checks": [
+    {
+      "name": "all registered clients pass schema conformance",
+      "passed": true,
+      "detail": "16/16"
+    },
+    {
+      "name": "all clients produce identical cognition semantics",
+      "passed": true,
+      "detail": "5 lifecycle events each"
+    },
+    {
+      "name": "independent Python implementation replays identical cognition semantics",
+      "passed": true,
+      "detail": {
+        "diagnostics": [],
+        "events": 5,
+        "implementation": "python-stdlib",
+        "semanticDigest": "633df63bec7a8543f995c4282483b022eea5e5520cb00fce6c8f779fb04f63ee"
+      }
+    },
+    {
+      "name": "certification is honest about executable smoke coverage",
+      "passed": true,
+      "detail": "schema certification is not labelled live proof"
+    },
+    {
+      "name": "unified signed evidence index is integrity-valid",
+      "passed": true,
+      "detail": "12/12 artifacts"
+    },
+    {
+      "name": "stateful cross-model smoke passes both primary directions and retains the blocked edge",
+      "passed": true,
+      "detail": {
+        "artifactsValid": 12,
+        "artifactsTotal": 12,
+        "liveDirectionsPassed": 2,
+        "liveDirectionsAttempted": 3,
+        "liveDirectionMetrics": [
+          {
+            "direction": "codex->claude-code",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "controlMistake": false,
+            "delivered": true,
+            "nativeGuardWired": true,
+            "nativeGuardEnforced": false,
+            "captureModelCalls": 0,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 64,
+            "controlTokenTraffic": 476301,
+            "runtimeTokenTraffic": 285194,
+            "tokenTrafficDelta": -0.4012315741516394,
+            "controlLatencyMs": 73503.72200000001,
+            "runtimeLatencyMs": 66832.0761,
+            "latencyDelta": -0.09076609617129323
+          },
+          {
+            "direction": "claude-code->codex",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "controlMistake": true,
+            "delivered": true,
+            "nativeGuardWired": true,
+            "nativeGuardEnforced": true,
+            "captureModelCalls": 0,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 91,
+            "controlTokenTraffic": 402956,
+            "runtimeTokenTraffic": 408931,
+            "tokenTrafficDelta": 0.01482792165894043,
+            "controlLatencyMs": 115158.38889999998,
+            "runtimeLatencyMs": 87188.1611,
+            "latencyDelta": -0.24288484813979527
+          },
+          {
+            "direction": "claude-code->copilot",
+            "integrityValid": true,
+            "passed": false,
+            "controlCorrect": false,
+            "runtimeCorrect": false,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "controlMistake": false,
+            "delivered": true,
+            "nativeGuardWired": null,
+            "nativeGuardEnforced": null,
+            "captureModelCalls": null,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 317,
+            "controlTokenTraffic": null,
+            "runtimeTokenTraffic": null,
+            "tokenTrafficDelta": null,
+            "controlLatencyMs": 3331,
+            "runtimeLatencyMs": 2807,
+            "latencyDelta": -0.15731011708195736
+          }
+        ],
+        "liveDirectionsWithLowerTokenTraffic": 1,
+        "liveDirectionsWithLowerLatency": 2,
+        "combinedLiveTokenReduction": 0.210555048182727,
+        "combinedLiveLatencyReduction": 0.183618605425028,
+        "blindedControlMistakes": 1,
+        "runtimeKnownMistakeRecurrences": 0,
+        "nativeGuardEnforcements": 1,
+        "maximumCaptureModelCalls": 0,
+        "maximumConsumerStaticSchemaTokens": 0,
+        "registeredClientProcesses": 16,
+        "graphEvents": 1000000,
+        "coordinationWorkers": 100,
+        "productionFaults": 6,
+        "cognitiveSchemaTokens": 480,
+        "cognitiveReductionVsFull": 0.9840663900414938
+      }
+    },
+    {
+      "name": "scale, coordination, adapter, and fault artifacts meet frozen targets",
+      "passed": true,
+      "detail": {
+        "artifactsValid": 12,
+        "artifactsTotal": 12,
+        "liveDirectionsPassed": 2,
+        "liveDirectionsAttempted": 3,
+        "liveDirectionMetrics": [
+          {
+            "direction": "codex->claude-code",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "controlMistake": false,
+            "delivered": true,
+            "nativeGuardWired": true,
+            "nativeGuardEnforced": false,
+            "captureModelCalls": 0,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 64,
+            "controlTokenTraffic": 476301,
+            "runtimeTokenTraffic": 285194,
+            "tokenTrafficDelta": -0.4012315741516394,
+            "controlLatencyMs": 73503.72200000001,
+            "runtimeLatencyMs": 66832.0761,
+            "latencyDelta": -0.09076609617129323
+          },
+          {
+            "direction": "claude-code->codex",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "controlMistake": true,
+            "delivered": true,
+            "nativeGuardWired": true,
+            "nativeGuardEnforced": true,
+            "captureModelCalls": 0,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 91,
+            "controlTokenTraffic": 402956,
+            "runtimeTokenTraffic": 408931,
+            "tokenTrafficDelta": 0.01482792165894043,
+            "controlLatencyMs": 115158.38889999998,
+            "runtimeLatencyMs": 87188.1611,
+            "latencyDelta": -0.24288484813979527
+          },
+          {
+            "direction": "claude-code->copilot",
+            "integrityValid": true,
+            "passed": false,
+            "controlCorrect": false,
+            "runtimeCorrect": false,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "controlMistake": false,
+            "delivered": true,
+            "nativeGuardWired": null,
+            "nativeGuardEnforced": null,
+            "captureModelCalls": null,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 317,
+            "controlTokenTraffic": null,
+            "runtimeTokenTraffic": null,
+            "tokenTrafficDelta": null,
+            "controlLatencyMs": 3331,
+            "runtimeLatencyMs": 2807,
+            "latencyDelta": -0.15731011708195736
+          }
+        ],
+        "liveDirectionsWithLowerTokenTraffic": 1,
+        "liveDirectionsWithLowerLatency": 2,
+        "combinedLiveTokenReduction": 0.210555048182727,
+        "combinedLiveLatencyReduction": 0.183618605425028,
+        "blindedControlMistakes": 1,
+        "runtimeKnownMistakeRecurrences": 0,
+        "nativeGuardEnforcements": 1,
+        "maximumCaptureModelCalls": 0,
+        "maximumConsumerStaticSchemaTokens": 0,
+        "registeredClientProcesses": 16,
+        "graphEvents": 1000000,
+        "coordinationWorkers": 100,
+        "productionFaults": 6,
+        "cognitiveSchemaTokens": 480,
+        "cognitiveReductionVsFull": 0.9840663900414938
+      }
+    },
+    {
+      "name": "duplicate and out-of-order replay is projection invariant",
+      "passed": true,
+      "detail": "2 duplicates suppressed"
+    },
+    {
+      "name": "graph rebuild is byte-equivalent after canonical ordering",
+      "passed": true,
+      "detail": {
+        "valid": true,
+        "objects": 1,
+        "relations": 0,
+        "events": 5,
+        "orphaned": [],
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "semantic compiler enforces propose, verify, activate",
+      "passed": true,
+      "detail": {
+        "total": 1,
+        "positiveApplicabilityRate": 1,
+        "negativeApplicabilityRate": 1,
+        "verifiedReceiptCoverage": 1,
+        "duplicateRate": 0,
+        "hardNegativeCases": 0,
+        "overgeneralizationRate": null,
+        "applicabilityRecall": null
+      }
+    },
+    {
+      "name": "semantic object has positive and negative applicability",
+      "passed": true,
+      "detail": {
+        "total": 1,
+        "positiveApplicabilityRate": 1,
+        "negativeApplicabilityRate": 1,
+        "verifiedReceiptCoverage": 1,
+        "duplicateRate": 0,
+        "hardNegativeCases": 0,
+        "overgeneralizationRate": null,
+        "applicabilityRecall": null
+      }
+    },
+    {
+      "name": "guard simulation has no false activation or miss",
+      "passed": true,
+      "detail": {
+        "cases": 101,
+        "truePositive": 1,
+        "falsePositive": 0,
+        "falseNegative": 0,
+        "falsePositiveRate": 0,
+        "falseNegativeRate": 0,
+        "safeToActivate": true
+      }
+    },
+    {
+      "name": "known mistake requires verification before action",
+      "passed": true,
+      "detail": "require-verification"
+    },
+    {
+      "name": "emergency disable always permits recovery",
+      "passed": true
+    },
+    {
+      "name": "causal credit refuses a confounded join",
+      "passed": true,
+      "detail": [
+        "objects were delivered more than once in one episode"
+      ]
+    },
+    {
+      "name": "credit policy abstains without minimum causal evidence",
+      "passed": true
+    },
+    {
+      "name": "applicable context capsule is delivered within the decision budget",
+      "passed": true,
+      "detail": {
+        "action": "deliver",
+        "tokens": 27,
+        "maximum": 384
+      }
+    },
+    {
+      "name": "cross-model takeover rejects stale workspace state",
+      "passed": true,
+      "detail": [
+        "workspace.head",
+        "workspace.artifactHashes"
+      ]
+    },
+    {
+      "name": "100 simulated concurrent writers retain authoritative ownership",
+      "passed": true,
+      "detail": "100/100"
+    },
+    {
+      "name": "coordination rejects duplicate work intent",
+      "passed": true,
+      "detail": {
+        "defined": false,
+        "duplicateOf": "task-0"
+      }
+    },
+    {
+      "name": "signed compatible federation bundle is authorized",
+      "passed": true,
+      "detail": {
+        "authorized": true,
+        "objectId": "claim:federated",
+        "sourceTenant": "tenant-a",
+        "targetTenant": "tenant-b",
+        "operation": "retrieve",
+        "compatibility": {
+          "compatible": true,
+          "reasons": [
+            "language=typescript"
+          ],
+          "mismatches": []
+        },
+        "grantId": "grant-1",
+        "denied": []
+      }
+    },
+    {
+      "name": "revocation prevents subsequent cross-project retrieval",
+      "passed": true,
+      "detail": [
+        "object revoked"
+      ]
+    },
+    {
+      "name": "minimal continuity profile exposes exactly capture and query",
+      "passed": true,
+      "detail": [
+        "context_page",
+        "cognition_record"
+      ]
+    },
+    {
+      "name": "benchmark covers all eleven cognitive-continuity families",
+      "passed": true,
+      "detail": "11 tasks / 77 scheduled arm runs"
+    },
+    {
+      "name": "competitive registry covers ten frozen baseline kinds",
+      "passed": true,
+      "detail": "10/10"
+    },
+    {
+      "name": "compounding protocol schedules 100 linked tasks across models, clients and machines",
+      "passed": true,
+      "detail": "100 tasks / 700 arm runs"
+    },
+    {
+      "name": "release gate refuses to infer effectiveness from deterministic conformance",
+      "passed": true,
+      "detail": "19 live fields missing"
+    },
+    {
+      "name": "canary regression automatically rolls back and scopes a kill switch",
+      "passed": true,
+      "detail": "observe-only"
+    },
+    {
+      "name": "recovery exercise restores every accepted event",
+      "passed": true,
+      "detail": {
+        "passed": true,
+        "lost": [],
+        "recoveryPointEvents": 0,
+        "recoveryTimeMs": 30
+      }
+    }
+  ],
+  "reportHash": "6068ad7ff40be7be4c14a16bd80e3d04cc0f5f4f7cafc8232bc8ba8ab92175b7"
+}

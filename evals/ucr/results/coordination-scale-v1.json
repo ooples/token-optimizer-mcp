@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "ucr.coordination-scale/1",
+  "evidenceClass": "conformance-concurrent-not-model-effectiveness",
+  "writers": 100,
+  "physicalWorkers": 100,
+  "claimsAccepted": 100,
+  "claimsRejected": 0,
+  "leases": 100,
+  "acceptedEvents": 100,
+  "lostAcceptedEvents": 0,
+  "duplicateIntents": 100,
+  "duplicateSuppressed": 100,
+  "duplicateSuppressionRate": 1,
+  "deterministicReopen": true,
+  "elapsedMs": 2089.0241,
+  "sourceHash": "ea29500316b80d8806095cff65bd3ece6e4682a9d574c6bf3c6d02f6c0e18e58",
+  "passed": true,
+  "executedAt": "2026-08-09T22:23:49.552Z",
+  "reportHash": "d6138521b675d3f7b17486c6b97d6fe89bb90936d6b5bc95f3cca70f34835eba"
+}

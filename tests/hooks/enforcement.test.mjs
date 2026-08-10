@@ -17,7 +17,14 @@ import { canonicalPath } from '../../hooks-core/paths.mjs';
 import { dirname } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROUTER = join(HERE, '..', '..', 'plugin', 'hooks', 'pretooluse-router.mjs');
+const ROUTER = join(
+  HERE,
+  '..',
+  '..',
+  'plugin',
+  'hooks',
+  'pretooluse-router.mjs'
+);
 
 /** An empty graph, so no stored finding can influence an enforcement decision. */
 const ISOLATED_GRAPH = mkdtempSync(join(tmpdir(), 'enforcement-graph-'));
@@ -51,21 +58,37 @@ afterAll(() => rmSync(workspace, { recursive: true, force: true }));
  */
 function run(payload, env = {}) {
   const result = spawnSync(process.execPath, [ROUTER], {
-    input: JSON.stringify({ session_id: payload.session_id || 's-default', ...payload }),
+    input: JSON.stringify({
+      session_id: payload.session_id || 's-default',
+      ...payload,
+    }),
     encoding: 'utf8',
-    env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH, TOKEN_OPTIMIZER_SHARED_DIR: ISOLATED_GRAPH, ...env },
+    env: {
+      ...process.env,
+      // These tests exercise enforcement, so they provide the same positive
+      // runtime inventory evidence production now requires before redirecting.
+      TOKEN_OPTIMIZER_MCP_CAPABILITIES:
+        'smart_read,smart_write,smart_edit,smart_glob,smart_grep,wiki_write',
+      TOKEN_OPTIMIZER_WIKI_DIR: ISOLATED_GRAPH,
+      TOKEN_OPTIMIZER_SHARED_DIR: ISOLATED_GRAPH,
+      ...env,
+    },
   });
   if (!result.stdout.trim()) return { decision: 'allow' };
   const parsed = JSON.parse(result.stdout);
   const out = parsed.hookSpecificOutput || {};
   return {
-    decision: out.permissionDecision || (out.additionalContext ? 'advise' : 'allow'),
+    decision:
+      out.permissionDecision || (out.additionalContext ? 'advise' : 'allow'),
     reason: out.permissionDecisionReason || out.additionalContext || '',
   };
 }
 
-
-const read = (path, extra = {}) => ({ tool_name: 'Read', tool_input: { file_path: path }, ...extra });
+const read = (path, extra = {}) => ({
+  tool_name: 'Read',
+  tool_input: { file_path: path },
+  ...extra,
+});
 
 describe('enforcement is the default', () => {
   test('a large read is denied and names its replacement', () => {
@@ -82,7 +105,10 @@ describe('enforcement is the default', () => {
   });
 
   test('a paged read is untouched -- it is already bounded', () => {
-    const r = run({ ...read(big, { session_id: 'paged-1' }), tool_input: { file_path: big, offset: 0, limit: 50 } });
+    const r = run({
+      ...read(big, { session_id: 'paged-1' }),
+      tool_input: { file_path: big, offset: 0, limit: 50 },
+    });
     expect(r.decision).toBe('allow');
   });
 });
@@ -98,7 +124,9 @@ describe('re-read detection -- the case size-gating never caught', () => {
     // is unchanged and that it already has the contents -- which costs zero
     // turns, where "call smart_read instead" costs one. Asserting the property
     // rather than the old wording.
-    expect(second.reason).toMatch(/unchanged since you last read it|already read/i);
+    expect(second.reason).toMatch(
+      /unchanged since you last read it|already read/i
+    );
     expect(second.reason).toMatch(/nothing to re-read|smart_read/i);
   });
 });
@@ -115,14 +143,22 @@ describe('loop breaking bounds every failure mode', () => {
 
 describe('the shell bypass is closed', () => {
   test('cat of a large file is denied', () => {
-    const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${big}` }, session_id: 'bash-1' });
+    const r = run({
+      tool_name: 'Bash',
+      tool_input: { command: `cat ${big}` },
+      session_id: 'bash-1',
+    });
     expect(r.decision).toBe('deny');
     expect(r.reason).toContain('smart_read');
   });
 
   test('a pipeline with no file operand is untouched', () => {
     // `git log | head -30` must not be mistaken for a file dump.
-    const r = run({ tool_name: 'Bash', tool_input: { command: 'git log --oneline | head -30' }, session_id: 'bash-2' });
+    const r = run({
+      tool_name: 'Bash',
+      tool_input: { command: 'git log --oneline | head -30' },
+      session_id: 'bash-2',
+    });
     expect(r.decision).toBe('allow');
   });
 
@@ -141,7 +177,11 @@ describe('the shell bypass is closed', () => {
     // pointing the optimizer at a real repository.
     const drive = big[0];
     const msys = `/${drive.toLowerCase()}${big.slice(2).replace(/\\/g, '/')}`;
-    const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${msys}` }, session_id: 'msys-1' });
+    const r = run({
+      tool_name: 'Bash',
+      tool_input: { command: `cat ${msys}` },
+      session_id: 'msys-1',
+    });
     expect(r.decision).toBe('deny');
     expect(r.reason).toContain('smart_read');
   });
@@ -149,37 +189,55 @@ describe('the shell bypass is closed', () => {
   test('the two spellings of one path are one identity, on every platform', () => {
     // The half of the MSYS guarantee that is testable everywhere: whatever the
     // host, a path written two ways must not become two different nodes.
-    expect(canonicalPath('/c/Users/me/auth.ts')).toBe(canonicalPath('C:\\Users\\me\\auth.ts'));
-    expect(canonicalPath('C:/Users/me/auth.ts')).toBe(canonicalPath('C:\\Users\\me\\auth.ts'));
+    expect(canonicalPath('/c/Users/me/auth.ts')).toBe(
+      canonicalPath('C:\\Users\\me\\auth.ts')
+    );
+    expect(canonicalPath('C:/Users/me/auth.ts')).toBe(
+      canonicalPath('C:\\Users\\me\\auth.ts')
+    );
   });
 
   test('cat of a SMALL file is untouched', () => {
-    const r = run({ tool_name: 'Bash', tool_input: { command: `cat ${small}` }, session_id: 'bash-3' });
+    const r = run({
+      tool_name: 'Bash',
+      tool_input: { command: `cat ${small}` },
+      session_id: 'bash-3',
+    });
     expect(r.decision).toBe('allow');
   });
 });
 
 describe('the escape hatch works', () => {
   test('MODE=off allows what enforce denies', () => {
-    const r = run(read(big, { session_id: 'off-1' }), { TOKEN_OPTIMIZER_MODE: 'off' });
+    const r = run(read(big, { session_id: 'off-1' }), {
+      TOKEN_OPTIMIZER_MODE: 'off',
+    });
     expect(r.decision).toBe('allow');
   });
 
   test('MODE=advise never denies', () => {
-    const r = run(read(big, { session_id: 'advise-1' }), { TOKEN_OPTIMIZER_MODE: 'advise' });
+    const r = run(read(big, { session_id: 'advise-1' }), {
+      TOKEN_OPTIMIZER_MODE: 'advise',
+    });
     expect(r.decision).toBe('advise');
   });
 });
 
 describe('fail-open', () => {
   test('malformed input allows the call', () => {
-    const result = spawnSync(process.execPath, [ROUTER], { input: 'not json', encoding: 'utf8' });
+    const result = spawnSync(process.execPath, [ROUTER], {
+      input: 'not json',
+      encoding: 'utf8',
+    });
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('');
   });
 
   test('a missing file allows the call', () => {
-    expect(run(read(join(workspace, 'nope.ts'), { session_id: 'missing-1' })).decision).toBe('allow');
+    expect(
+      run(read(join(workspace, 'nope.ts'), { session_id: 'missing-1' }))
+        .decision
+    ).toBe('allow');
   });
 
   test('a binary path is never size-gated', () => {

@@ -9,20 +9,28 @@ const ROOT = process.cwd();
 const CLIENTS = [
   { name: 'Claude Code', root: 'plugin/hooks', decision: 'block' },
   {
-    name: 'Codex', root: 'integrations/codex/hooks', decision: 'block',
+    name: 'Codex',
+    root: 'integrations/codex/hooks',
+    decision: 'block',
     result: { tool_response: { status: 'completed' } },
   },
   {
-    name: 'Copilot', root: 'integrations/copilot/.github/hooks', decision: 'block',
+    name: 'Copilot',
+    root: 'integrations/copilot/.github/hooks',
+    decision: 'block',
     result: { toolResult: { resultType: 'success', textResultForLlm: 'ok' } },
   },
   {
-    name: 'Gemini', root: 'integrations/gemini/hooks', decision: 'deny',
+    name: 'Gemini',
+    root: 'integrations/gemini/hooks',
+    decision: 'deny',
     result: { tool_response: { llmContent: 'ok' } },
   },
   { name: 'Qwen', root: 'integrations/qwen/hooks', decision: 'block' },
   {
-    name: 'Cursor', root: 'integrations/cursor/hooks', followup: true,
+    name: 'Cursor',
+    root: 'integrations/cursor/hooks',
+    followup: true,
     result: { success: true },
   },
 ];
@@ -37,6 +45,7 @@ beforeEach(() => {
   writeFileSync(edited, 'export const choice = true;\n');
   env = {
     ...process.env,
+    TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'wiki_write',
     TOKEN_OPTIMIZER_STATE_DIR: join(workspace, '.state'),
     TOKEN_OPTIMIZER_WIKI_DIR: join(workspace, '.wiki'),
     TOKEN_OPTIMIZER_SHARED_DIR: join(workspace, '.shared'),
@@ -46,12 +55,16 @@ beforeEach(() => {
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 
 function run(root, entry, payload) {
-  const result = spawnSync(process.execPath, [join(ROOT, root, `${entry}.mjs`)], {
-    cwd: workspace,
-    env,
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    process.execPath,
+    [join(ROOT, root, `${entry}.mjs`)],
+    {
+      cwd: workspace,
+      env,
+      input: JSON.stringify(payload),
+      encoding: 'utf8',
+    }
+  );
   expect(result.status).toBe(0);
   expect(result.stderr).toBe('');
   return result.stdout.trim() ? JSON.parse(result.stdout) : null;
@@ -67,8 +80,14 @@ describe.each(CLIENTS)('$name semantic lifecycle', (client) => {
       cwd: workspace,
       tool_name: 'write_file',
       toolName: 'write_file',
-      tool_input: { file_path: edited, content: 'export const choice = true;\n' },
-      toolArgs: JSON.stringify({ path: edited, content: 'export const choice = true;\n' }),
+      tool_input: {
+        file_path: edited,
+        content: 'export const choice = true;\n',
+      },
+      toolArgs: JSON.stringify({
+        path: edited,
+        content: 'export const choice = true;\n',
+      }),
       ...(client.result || {}),
     });
 
@@ -106,11 +125,13 @@ describe.each(CLIENTS)('$name semantic lifecycle', (client) => {
 
 describe.each([
   {
-    name: 'Codex plugin', root: 'integrations/codex/plugin/hooks',
+    name: 'Codex plugin',
+    root: 'integrations/codex/plugin/hooks',
     failed: { tool_response: { status: 'failed' } },
   },
   {
-    name: 'Gemini', root: 'integrations/gemini/hooks',
+    name: 'Gemini',
+    root: 'integrations/gemini/hooks',
     failed: { tool_response: { error: { message: 'write failed' } } },
   },
 ])('$name failed mutation', (client) => {
@@ -124,12 +145,14 @@ describe.each([
       ...client.failed,
     });
 
-    expect(run(client.root, 'stop', {
-      session_id: session,
-      cwd: workspace,
-      model: 'active-model',
-      stop_hook_active: false,
-    })).toEqual({});
+    expect(
+      run(client.root, 'stop', {
+        session_id: session,
+        cwd: workspace,
+        model: 'active-model',
+        stop_hook_active: false,
+      })
+    ).toEqual({});
   });
 });
 
@@ -141,7 +164,11 @@ describe('rules-only clients', () => {
       const file = candidates
         .map((name) => join(ROOT, 'integrations', client, name))
         .find((path) => {
-          try { return Boolean(readFileSync(path, 'utf8')); } catch { return false; }
+          try {
+            return Boolean(readFileSync(path, 'utf8'));
+          } catch {
+            return false;
+          }
         });
       const rules = readFileSync(file, 'utf8');
       expect(rules).toContain('wiki_write');

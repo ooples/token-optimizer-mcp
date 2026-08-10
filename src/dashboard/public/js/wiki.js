@@ -266,6 +266,150 @@ async function loadEvidence() {
     <tbody>${capabilityRows}</tbody>`;
 }
 
+async function loadUcr() {
+  let status;
+  try {
+    status = await api('/api/ucr/status');
+  } catch {
+    el('ucr-summary').innerHTML = '';
+    el('ucr-verdict').textContent = 'UCR runtime unavailable';
+    el('ucr-verdict').dataset.state = 'bad';
+    return;
+  }
+  el('ucr-summary').innerHTML = [
+    ['Protocol', status.protocolVersion],
+    ['Canonical events', nf.format(status.events)],
+    ['Typed objects', nf.format(status.graph?.objects || 0)],
+    ['Certified clients', nf.format(status.certifiedClients)],
+    [
+      'Evidence artifacts',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.artifactsValid}/${status.evidenceIndex.summary.artifactsTotal}`
+        : 'not assembled',
+    ],
+    [
+      'Live directions',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.liveDirectionsPassed}/${status.evidenceIndex.summary.liveDirectionsAttempted}`
+        : 'not run',
+    ],
+    [
+      'Lower token traffic',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.liveDirectionsWithLowerTokenTraffic || 0}/${status.evidenceIndex.summary.liveDirectionsPassed || 0} passing`
+        : 'not measured',
+    ],
+    [
+      'Lower latency',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.liveDirectionsWithLowerLatency || 0}/${status.evidenceIndex.summary.liveDirectionsPassed || 0} passing`
+        : 'not measured',
+    ],
+    [
+      'Combined token reduction',
+      status.evidenceIndex?.summary.combinedLiveTokenReduction != null
+        ? `${(status.evidenceIndex.summary.combinedLiveTokenReduction * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
+      'Combined latency reduction',
+      status.evidenceIndex?.summary.combinedLiveLatencyReduction != null
+        ? `${(status.evidenceIndex.summary.combinedLiveLatencyReduction * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
+      'Known mistake recurrence',
+      status.evidenceIndex?.summary.runtimeKnownMistakeRecurrences != null
+        ? `${nf.format(status.evidenceIndex.summary.blindedControlMistakes || 0)} control → ${nf.format(status.evidenceIndex.summary.runtimeKnownMistakeRecurrences)} runtime`
+        : 'not measured',
+    ],
+    [
+      'Native guard denials',
+      status.evidenceIndex?.summary.nativeGuardEnforcements != null
+        ? nf.format(status.evidenceIndex.summary.nativeGuardEnforcements)
+        : 'not measured',
+    ],
+    [
+      'Capture model calls',
+      status.evidenceIndex?.summary.maximumCaptureModelCalls != null
+        ? `${nf.format(status.evidenceIndex.summary.maximumCaptureModelCalls)} additional max`
+        : 'not measured',
+    ],
+    [
+      'Consumer MCP schema',
+      status.evidenceIndex?.summary.maximumConsumerStaticSchemaTokens != null
+        ? `${nf.format(status.evidenceIndex.summary.maximumConsumerStaticSchemaTokens)} tokens max`
+        : 'not measured',
+    ],
+    ['Scale events', nf.format(status.evidenceIndex?.summary.graphEvents || 0)],
+    [
+      'Physical writers',
+      nf.format(status.evidenceIndex?.summary.coordinationWorkers || 0),
+    ],
+    [
+      'Fault exercises',
+      `${status.productionExercise?.faults?.exercised || 0}/${status.productionExercise?.faults?.required?.length || 6}`,
+    ],
+    [
+      'Cognitive schema',
+      status.evidenceIndex?.summary.cognitiveSchemaTokens
+        ? `${nf.format(status.evidenceIndex.summary.cognitiveSchemaTokens)} tokens`
+        : 'not measured',
+    ],
+    [
+      'Schema reduction',
+      status.evidenceIndex?.summary.cognitiveReductionVsFull != null
+        ? `${(status.evidenceIndex.summary.cognitiveReductionVsFull * 100).toFixed(1)}% vs full`
+        : 'not measured',
+    ],
+  ]
+    .map(
+      ([label, value]) => `
+    <div class="stat-card"><div class="stat-content">
+      <div class="stat-label">${escapeHtml(label)}</div>
+      <div class="stat-value wiki-figure">${escapeHtml(value)}</div>
+    </div></div>`
+    )
+    .join('');
+  const verdict = status.verdict?.status || 'insufficient';
+  const deterministic = status.deterministicEvidence
+    ? `${status.deterministicEvidence.checksPassed}/${status.deterministicEvidence.checksTotal} deterministic gates`
+    : 'no deterministic ledger';
+  el('ucr-verdict').textContent =
+    `${verdict} · ${deterministic} · ${status.cognitiveOperations?.length || 0} lazy cognitive operations · ${status.malformed || 0} malformed events`;
+  el('ucr-verdict').dataset.state =
+    verdict === 'passed'
+      ? 'ok'
+      : verdict === 'harmful'
+        ? 'bad'
+        : 'insufficient';
+  const tiers = status.evidenceIndex?.tiers || {};
+  el('ucr-tiers').innerHTML = `
+    <thead><tr><th>Tier</th><th>Status</th><th>Ledgers</th><th>Rows</th></tr></thead>
+    <tbody>${Object.entries(tiers)
+      .map(
+        ([tier, value]) => `<tr>
+          <td>${escapeHtml(tier)}</td>
+          <td>${escapeHtml(value.status)}</td>
+          <td>${escapeHtml(value.ledgers)}</td>
+          <td>${escapeHtml(value.rows)}</td>
+        </tr>`
+      )
+      .join('')}</tbody>`;
+  el('ucr-artifacts').innerHTML = `
+    <thead><tr><th>Study</th><th>Evidence class</th><th>Integrity</th><th>Outcome</th></tr></thead>
+    <tbody>${(status.evidenceIndex?.artifacts || [])
+      .map(
+        (artifact) => `<tr>
+          <td>${escapeHtml(artifact.name)}</td>
+          <td>${escapeHtml(artifact.evidenceClass)}</td>
+          <td>${artifact.valid ? 'valid' : 'invalid'}</td>
+          <td>${artifact.passed ? 'passed' : 'negative / incomplete'}</td>
+        </tr>`
+      )
+      .join('')}</tbody>`;
+}
+
 /* ---- Finding list ---------------------------------------------------- */
 
 function tagsFor(item) {
@@ -918,5 +1062,11 @@ if (typeof ResizeObserver !== 'undefined') {
     el('graph-stats').textContent = 'Graph unavailable';
     return;
   }
-  await Promise.all([loadBalance(), search(), loadAudit(), loadEvidence()]);
+  await Promise.all([
+    loadBalance(),
+    search(),
+    loadAudit(),
+    loadEvidence(),
+    loadUcr(),
+  ]);
 })();

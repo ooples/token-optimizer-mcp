@@ -34,7 +34,11 @@
       <section class="wiki-balance">
         <h2 id="balance-heading" class="card-title">
           Is remembering worth it?
-          <button class="explain" type="button" aria-label="How is this judged?">
+          <button
+            class="explain"
+            type="button"
+            aria-label="How is this judged?"
+          >
             ?
             <span class="tip" role="tooltip">
               Some reads are deliberately left alone as a comparison group.
@@ -49,13 +53,28 @@
       </section>
 
       <nav class="wiki-tabs" role="tablist">
-        <button class="wiki-tab is-active" role="tab" aria-selected="true" data-tab="explore">
+        <button
+          class="wiki-tab is-active"
+          role="tab"
+          aria-selected="true"
+          data-tab="explore"
+        >
           Explore
         </button>
-        <button class="wiki-tab" role="tab" aria-selected="false" data-tab="audit">
+        <button
+          class="wiki-tab"
+          role="tab"
+          aria-selected="false"
+          data-tab="audit"
+        >
           Needs a look
         </button>
-        <button class="wiki-tab" role="tab" aria-selected="false" data-tab="evidence">
+        <button
+          class="wiki-tab"
+          role="tab"
+          aria-selected="false"
+          data-tab="evidence"
+        >
           Evidence
         </button>
       </nav>
@@ -65,7 +84,11 @@
           <div class="wiki-controls">
             <label class="ctl-search">
               <span class="ctl-label">Search what it knows</span>
-              <input type="search" id="wiki-search" placeholder="a file, a symbol, an idea&hellip;" />
+              <input
+                type="search"
+                id="wiki-search"
+                placeholder="a file, a symbol, an idea&hellip;"
+              />
             </label>
             <label class="ctl-type">
               <span class="ctl-label">Kind</span>
@@ -79,10 +102,18 @@
               </select>
             </label>
             <div class="wiki-modes" role="group" aria-label="Graph view mode">
-              <button class="wiki-mode is-active" id="mode-focus" aria-pressed="true">
+              <button
+                class="wiki-mode is-active"
+                id="mode-focus"
+                aria-pressed="true"
+              >
                 One at a time
               </button>
-              <button class="wiki-mode" id="mode-constellation" aria-pressed="false">
+              <button
+                class="wiki-mode"
+                id="mode-constellation"
+                aria-pressed="false"
+              >
                 See it all
               </button>
             </div>
@@ -98,7 +129,11 @@
             </div>
 
             <div class="wiki-graph-pane">
-              <svg id="wiki-graph" role="img" aria-labelledby="graph-title"></svg>
+              <svg
+                id="wiki-graph"
+                role="img"
+                aria-labelledby="graph-title"
+              ></svg>
               <title id="graph-title">Knowledge graph</title>
               <p class="wiki-muted wiki-graph-hint" id="graph-hint">
                 Pick something on the left to see what it was worked out from.
@@ -110,8 +145,13 @@
               -->
               <ul class="wiki-legend" id="wiki-legend">
                 <li><span class="wiki-swatch" data-kind="file"></span>File</li>
-                <li><span class="wiki-swatch" data-kind="symbol"></span>Symbol</li>
-                <li><span class="wiki-swatch" data-kind="finding"></span>Discovered</li>
+                <li>
+                  <span class="wiki-swatch" data-kind="symbol"></span>Symbol
+                </li>
+                <li>
+                  <span class="wiki-swatch" data-kind="finding"></span
+                  >Discovered
+                </li>
                 <li><span class="wiki-swatch" data-kind="task"></span>Task</li>
               </ul>
               <div class="graph-stats" id="graph-stats"></div>
@@ -131,14 +171,23 @@
 
         <section id="tab-evidence" class="wiki-panel" role="tabpanel" hidden>
           <p class="wiki-muted panel-intro">
-            Deterministic wiring checks, passive lifecycle traces, and randomized
-            model evaluations are kept separate. Only matched evaluation pairs
-            produce a causal effect interval.
+            Deterministic wiring checks, passive lifecycle traces, and
+            randomized model evaluations are kept separate. Only matched
+            evaluation pairs produce a causal effect interval.
           </p>
           <div class="evidence-filters">
-            <label><span class="ctl-label">Client</span><input id="evidence-client" placeholder="all clients" /></label>
-            <label><span class="ctl-label">Model</span><input id="evidence-model" placeholder="all models" /></label>
-            <label><span class="ctl-label">Task</span><input id="evidence-task" placeholder="all tasks" /></label>
+            <label
+              ><span class="ctl-label">Client</span
+              ><input id="evidence-client" placeholder="all clients"
+            /></label>
+            <label
+              ><span class="ctl-label">Model</span
+              ><input id="evidence-model" placeholder="all models"
+            /></label>
+            <label
+              ><span class="ctl-label">Task</span
+              ><input id="evidence-task" placeholder="all tasks"
+            /></label>
             <label>
               <span class="ctl-label">Arm</span>
               <select id="evidence-arm">
@@ -158,8 +207,28 @@
           <div class="stats-grid" id="evidence-summary"></div>
           <p class="verdict-line" id="evidence-status"></p>
 
+          <h2>Universal Cognitive Runtime</h2>
+          <p class="wiki-muted">
+            Event integrity, typed projection, cross-client efficiency,
+            mistake recurrence, native guard enforcement, and the
+            correctness-first release verdict. Smoke results remain separate
+            from powered effectiveness claims.
+          </p>
+          <div class="stats-grid" id="ucr-summary"></div>
+          <p class="verdict-line" id="ucr-verdict"></p>
+          <h3>Evidence tiers</h3>
+          <div class="table-scroll">
+            <table class="evidence-table" id="ucr-tiers"></table>
+          </div>
+          <h3>Executable artifacts</h3>
+          <div class="table-scroll">
+            <table class="evidence-table" id="ucr-artifacts"></table>
+          </div>
+
           <h2>Causal cohorts</h2>
-          <div class="table-scroll"><table class="evidence-table" id="evidence-cohorts"></table></div>
+          <div class="table-scroll">
+            <table class="evidence-table" id="evidence-cohorts"></table>
+          </div>
 
           <h2>Cross-client mistake transfer</h2>
           <p class="wiki-muted">
@@ -177,11 +246,17 @@
           <div class="table-scroll"><table class="evidence-table" id="evidence-concurrency"></table></div>
 
           <h2>Recent injection traces</h2>
-          <div class="table-scroll"><table class="evidence-table" id="evidence-episodes"></table></div>
+          <div class="table-scroll">
+            <table class="evidence-table" id="evidence-episodes"></table>
+          </div>
 
           <h2>Client capability contract</h2>
-          <p class="wiki-muted">Rules/MCP-only clients are not labelled as native capture clients.</p>
-          <div class="table-scroll"><table class="evidence-table" id="evidence-capabilities"></table></div>
+          <p class="wiki-muted">
+            Rules/MCP-only clients are not labelled as native capture clients.
+          </p>
+          <div class="table-scroll">
+            <table class="evidence-table" id="evidence-capabilities"></table>
+          </div>
         </section>
       </main>
     </div>

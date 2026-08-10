@@ -25,8 +25,15 @@
 
 import { spawn } from 'node:child_process';
 import {
-  existsSync, mkdirSync, chmodSync, readFileSync,
-  openSync, writeSync, closeSync, lstatSync, constants,
+  existsSync,
+  mkdirSync,
+  chmodSync,
+  readFileSync,
+  openSync,
+  writeSync,
+  closeSync,
+  lstatSync,
+  constants,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
@@ -41,15 +48,16 @@ import { detectRefusals, recordRefusal } from './lib/harvest-write.mjs';
 const OFF_REASON = {
   'off:mode': null, // The whole optimizer is off; saying more would be noise.
   'off:not-opted-in':
-    'token-optimizer: automatic finding-extraction is OFF. It costs a model call and '
-    + 'sends a digest (paths, commands, prompts, conclusions -- never file contents) off '
-    + 'this machine, so it is opt-in: set TOKEN_OPTIMIZER_HARVEST=1 with an API key, or '
-    + 'point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model to run it free and private. '
-    + 'Meanwhile the structural graph and anything written with wiki_write keep working.',
+    'token-optimizer: automatic finding-extraction is OFF. It costs a model call and ' +
+    'sends a digest (paths, commands, prompts, conclusions -- never file contents) off ' +
+    'this machine, so it is opt-in: set TOKEN_OPTIMIZER_HARVEST=1 with an API key, or ' +
+    'point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model to run it free and private. ' +
+    'Meanwhile lifecycle-based structural graph capture keeps working. Durable semantic MCP ' +
+    'writes require a writer schema that is actually registered in the current CLI session.',
   'off:no-key':
-    'token-optimizer: finding-extraction is opted in but has no credential. Set '
-    + 'TOKEN_OPTIMIZER_API_KEY, or point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model '
-    + 'to run it without one.',
+    'token-optimizer: finding-extraction is opted in but has no credential. Set ' +
+    'TOKEN_OPTIMIZER_API_KEY, or point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model ' +
+    'to run it without one.',
 };
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -89,7 +97,8 @@ function stateDir() {
   const base =
     process.platform === 'win32'
       ? process.env.LOCALAPPDATA || tmpdir()
-      : process.env.XDG_STATE_HOME || (home ? join(home, '.local', 'state') : tmpdir());
+      : process.env.XDG_STATE_HOME ||
+        (home ? join(home, '.local', 'state') : tmpdir());
 
   const dir = join(base, 'token-optimizer');
   try {
@@ -128,7 +137,8 @@ function ownedRegularFile(path) {
   }
   if (!info.isFile()) return false;
   // getuid is undefined on Windows, where stateDir() is already per-user.
-  if (typeof process.getuid === 'function' && info.uid !== process.getuid()) return false;
+  if (typeof process.getuid === 'function' && info.uid !== process.getuid())
+    return false;
   return true;
 }
 
@@ -205,7 +215,11 @@ function dueForHarvest(sessionId) {
   // > 0 matters: readMarker returns null when the marker is missing or is not
   // ours, and Number(null) is 0, which is finite -- so without this an absent
   // marker would read as a harvest at the epoch.
-  if (Number.isFinite(last) && last > 0 && Date.now() - last < HARVEST_INTERVAL_MS) {
+  if (
+    Number.isFinite(last) &&
+    last > 0 &&
+    Date.now() - last < HARVEST_INTERVAL_MS
+  ) {
     return false;
   }
 
@@ -241,9 +255,18 @@ async function main() {
   // It also has to happen before the early return below, or a session with
   // harvesting off would archive nothing at all.
   try {
-    archive(wikiDir(projectRootFor(join(payload.cwd || process.cwd(), '__session__'), payload.cwd)), transcript, {
-      sessionId: payload.session_id,
-    });
+    archive(
+      wikiDir(
+        projectRootFor(
+          join(payload.cwd || process.cwd(), '__session__'),
+          payload.cwd
+        )
+      ),
+      transcript,
+      {
+        sessionId: payload.session_id,
+      }
+    );
   } catch {
     // The archive is a convenience. Failing to write it must not affect Stop.
   }
@@ -263,7 +286,8 @@ async function main() {
     );
     if (lessons.length) {
       const text = readFileSync(transcript, 'utf8');
-      for (const key of detectRefusals(lessons, text)) recordRefusal(shared, key);
+      for (const key of detectRefusals(lessons, text))
+        recordRefusal(shared, key);
     }
   } catch {
     // Feedback is a refinement; a failure here must not affect Stop.
@@ -305,8 +329,18 @@ async function main() {
   // holding Stop open for a model round-trip.
   const child = spawn(
     process.execPath,
-    [worker, transcript, String(payload.session_id || ''), String(payload.cwd || process.cwd())],
-    { detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env } }
+    [
+      worker,
+      transcript,
+      String(payload.session_id || ''),
+      String(payload.cwd || process.cwd()),
+    ],
+    {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: { ...process.env },
+    }
   );
   child.unref();
 }

@@ -14,6 +14,7 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { registerWikiRoutes } from './wiki-routes.js';
+import { registerUcrRoutes } from './ucr-routes.js';
 import { isValidSessionId } from '../utils/session-id.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -565,6 +566,7 @@ app.get('/api/health', (_req, res) => {
 // routes are matched first, and isolated in its own module because it loads the
 // graph from plain ESM under hooks-core/ rather than from this build.
 registerWikiRoutes(app);
+registerUcrRoutes(app);
 
 // Serve the wiki graph browser.
 app.get('/wiki', (_req, res) => {

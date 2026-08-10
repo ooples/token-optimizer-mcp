@@ -61,6 +61,13 @@ jobs:
       - name: Verify the harvest API contract
         run: npm run verify:harvest
 
+      # UCR evidence is a checked-in, reproducible deterministic ledger. The
+      # verifier fails when runtime behavior changes without an intentional
+      # evidence refresh, and its release verdict stays insufficient until
+      # separate live-model and competitive ledgers exist.
+      - name: Verify Universal Cognitive Runtime conformance and evidence
+        run: npm run verify:ucr
+
       # BROWSER GATES. These verify the wiki dashboard actually works -- they
       # caught a real defect the moment they were first run: an open detail panel
       # overlaid the toolbar and list, so those controls could not be clicked at

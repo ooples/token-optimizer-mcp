@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "ucr.live-handoff-smoke/1",
+  "evidenceClass": "live-cross-model-executable-smoke-not-superiority-study",
+  "executedAt": "2026-08-09T21:54:29.594Z",
+  "taskId": "live-handoff-edc83d4d79cb354e",
+  "taskHash": "9568590b5a0df1005638e972e259902b50362aab67b28c26b996350a6a2c0c80",
+  "recoveryCodeHash": "8c8cdc3902bb8cadf12aa64c043ec861fc6370a94d815a7a3be7a358be760242",
+  "sourceTreeHash": "5dd1b1811a20e77503e47776f04fc75341d55377550434eae1fe0f862a1b0d9e",
+  "clients": {
+    "producer": {
+      "client": "codex",
+      "version": "codex-cli 0.147.0",
+      "model": "gpt-5.6-sol"
+    },
+    "consumer": {
+      "client": "claude-code",
+      "version": "2.1.225 (Claude Code)",
+      "model": "sonnet"
+    }
+  },
+  "arms": {
+    "empty": {
+      "exitCode": 0,
+      "correct": false,
+      "abstained": true,
+      "usage": {
+        "inputTokens": 2,
+        "cachedInputTokens": 30804,
+        "outputTokens": 20,
+        "totalTokens": null,
+        "costUsd": 0.028930200000000003
+      },
+      "latencyMs": 3697
+    },
+    "runtime": {
+      "exitCode": 0,
+      "correct": true,
+      "delivered": true,
+      "usage": {
+        "inputTokens": 2,
+        "cachedInputTokens": 59331,
+        "outputTokens": 34,
+        "totalTokens": null,
+        "costUsd": 0.2040783
+      },
+      "latencyMs": 12024
+    }
+  },
+  "producer": {
+    "exitCode": 0,
+    "recorded": true,
+    "usage": {
+      "inputTokens": 28930,
+      "cachedInputTokens": 19968,
+      "outputTokens": 684,
+      "totalTokens": null,
+      "costUsd": null
+    },
+    "latencyMs": 18814
+  },
+  "eventEvidence": {
+    "canonicalEvents": 5,
+    "activatedFindings": 1,
+    "contextDeliveries": 1,
+    "actorClients": [
+      "claude-code",
+      "codex"
+    ],
+    "eventStreamHash": "5d84035c64f370e55b32310f38fc18fec3758f9f1e2046f620e2dfc9ccf42578"
+  },
+  "transcriptPublished": false,
+  "passed": true,
+  "limitations": [
+    "one task and one pair cannot establish a statistical effect",
+    "the smoke measures cross-model transfer and abstention, not competitive superiority",
+    "the consumer model alias must be resolved from provider-side run metadata before a model-version claim"
+  ],
+  "reportHash": "32cf870ffa29dcc76ef73656f395515c546506780eb10ed7a74bd41ecdab31d3"
+}

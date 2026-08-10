@@ -10,7 +10,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { load, putNode, putNodeWithEdges, wikiDir } from '../../hooks-core/wiki.mjs';
+import {
+  load,
+  putNode,
+  putNodeWithEdges,
+  wikiDir,
+} from '../../hooks-core/wiki.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 const ROOT = process.cwd();
@@ -29,7 +34,10 @@ const CLIENTS = [
     name: 'Codex',
     entry: 'integrations/codex/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
-      session_id: session, cwd, tool_name: 'Bash', tool_input: { command },
+      session_id: session,
+      cwd,
+      tool_name: 'Bash',
+      tool_input: { command },
     }),
     context: (out) => out?.hookSpecificOutput?.additionalContext,
   },
@@ -37,7 +45,10 @@ const CLIENTS = [
     name: 'Gemini',
     entry: 'integrations/gemini/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
-      session_id: session, cwd, tool_name: 'run_shell_command', tool_input: { command },
+      session_id: session,
+      cwd,
+      tool_name: 'run_shell_command',
+      tool_input: { command },
     }),
     context: (out) => out?.hookSpecificOutput?.additionalContext,
   },
@@ -45,7 +56,10 @@ const CLIENTS = [
     name: 'Qwen',
     entry: 'integrations/qwen/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
-      session_id: session, cwd, tool_name: 'run_shell_command', tool_input: { command },
+      session_id: session,
+      cwd,
+      tool_name: 'run_shell_command',
+      tool_input: { command },
     }),
     context: (out) => out?.hookSpecificOutput?.additionalContext,
   },
@@ -53,7 +67,10 @@ const CLIENTS = [
     name: 'Copilot',
     entry: 'integrations/copilot/.github/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
-      sessionId: session, cwd, toolName: 'bash', toolArgs: JSON.stringify({ command }),
+      sessionId: session,
+      cwd,
+      toolName: 'bash',
+      toolArgs: JSON.stringify({ command }),
     }),
     context: (out) => out?.additionalContext,
   },
@@ -61,7 +78,10 @@ const CLIENTS = [
     name: 'Cursor',
     entry: 'integrations/cursor/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
-      conversation_id: session, cwd, tool_name: 'Bash', tool_input: { command },
+      conversation_id: session,
+      cwd,
+      tool_name: 'Bash',
+      tool_input: { command },
     }),
     context: (out) => out?.agent_message,
   },
@@ -69,7 +89,10 @@ const CLIENTS = [
     name: 'Kilo',
     entry: 'integrations/kilo/hooks/pre-tool.mjs',
     payload: (session, cwd, command) => ({
-      session_id: session, cwd, tool_name: 'bash', tool_input: { command },
+      session_id: session,
+      cwd,
+      tool_name: 'bash',
+      tool_input: { command },
     }),
     context: (out) => out?.hookSpecificOutput?.additionalContext,
   },
@@ -122,18 +145,30 @@ function run(client, payload) {
 describe.each(CLIENTS)('$name adapter', (client) => {
   test('injects an applicable cross-session finding into the active model', () => {
     const session = `${client.name}-${Date.now()}-${Math.random()}`;
-    const output = run(client, client.payload(session, project, 'npx jest tests/unit'));
+    const output = run(
+      client,
+      client.payload(session, project, 'npx jest tests/unit')
+    );
     expect(client.context(output)).toContain('Run npm test');
   });
 
   test('structurally captures ordinary file touches', () => {
     const session = `${client.name}-capture-${Date.now()}-${Math.random()}`;
-    run(client, client.payload(session, project, `node ${JSON.stringify(anchor)}`));
+    run(
+      client,
+      client.payload(session, project, `node ${JSON.stringify(anchor)}`)
+    );
     const graph = load(dir);
-    expect([...graph.nodes.values()].some(
-      (node) => node.kind === 'file' && node.key === canonicalPath(anchor)
-    )).toBe(true);
-    expect([...graph.nodes.values()].some((node) => node.kind === 'task' && node.key === session)).toBe(true);
+    expect(
+      [...graph.nodes.values()].some(
+        (node) => node.kind === 'file' && node.key === canonicalPath(anchor)
+      )
+    ).toBe(true);
+    expect(
+      [...graph.nodes.values()].some(
+        (node) => node.kind === 'task' && node.key === session
+      )
+    ).toBe(true);
   });
 });
 
@@ -151,7 +186,11 @@ describe('Windsurf adapter', () => {
           tool_info: { file_path: large },
         }),
         encoding: 'utf8',
-        env: { ...process.env, TOKEN_OPTIMIZER_STATE_DIR: join(project, '.state') },
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read',
+          TOKEN_OPTIMIZER_STATE_DIR: join(project, '.state'),
+        },
       }
     );
     expect(result.status).toBe(2);
@@ -179,8 +218,10 @@ describe('Windsurf adapter', () => {
     );
     expect(result.status).toBe(0);
     const graph = load(dir);
-    expect([...graph.nodes.values()].some(
-      (node) => node.kind === 'task' && node.key === 'windsurf-capture'
-    )).toBe(true);
+    expect(
+      [...graph.nodes.values()].some(
+        (node) => node.kind === 'task' && node.key === 'windsurf-capture'
+      )
+    ).toBe(true);
   });
 });

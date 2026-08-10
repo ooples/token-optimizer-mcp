@@ -1,0 +1,439 @@
+{
+  "schemaVersion": "ucr.live-multimodel-handoff/1",
+  "evidenceClass": "live-multimodel-executable-smoke-not-powered-effectiveness",
+  "executedAt": "2026-08-09T22:41:37.547Z",
+  "sourceTreeHash": "aaeaf0d8b5aad3790c5de13fea15114dbd3d12e505402d9c6b0b531e5037fde5",
+  "requestedDirections": [
+    "codex->claude-code",
+    "claude-code->gemini",
+    "gemini->codex"
+  ],
+  "directionsPassed": 0,
+  "directionResults": [
+    {
+      "study": "cross-client-handoff",
+      "direction": "codex->claude-code",
+      "producerClient": "codex",
+      "consumerClient": "claude-code",
+      "producerFamily": "openai",
+      "consumerFamily": "anthropic",
+      "producerModel": "gpt-5.6-sol",
+      "consumerModel": "sonnet",
+      "taskHash": "094cea25470464b6a0350aeae99b7f51ebaa6985c0a9819ad906f42f56df91f1",
+      "control": {
+        "exitCode": 0,
+        "correct": false,
+        "abstained": true,
+        "usage": {
+          "inputTokens": 2,
+          "cachedInputTokens": 28882,
+          "outputTokens": 179,
+          "totalTokens": null,
+          "costUsd": 0.040305600000000004,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 5081
+      },
+      "producer": {
+        "exitCode": 0,
+        "recorded": false,
+        "usage": {
+          "inputTokens": 57150,
+          "cachedInputTokens": 36096,
+          "outputTokens": 1510,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 39768
+      },
+      "runtime": {
+        "exitCode": 0,
+        "correct": false,
+        "delivered": false,
+        "mistakeExecuted": false,
+        "usage": {
+          "inputTokens": 2,
+          "cachedInputTokens": 59035,
+          "outputTokens": 20,
+          "totalTokens": null,
+          "costUsd": 0.23158890000000001,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 8372
+      },
+      "eventStreamHash": "1e135524c540dbca3a1cd693b779fd8f86cc6f219b70dd70a993b186670d7527",
+      "canonicalEvents": 1,
+      "passed": false,
+      "transcriptPublished": false
+    },
+    {
+      "study": "cross-client-handoff",
+      "direction": "claude-code->gemini",
+      "producerClient": "claude-code",
+      "consumerClient": "gemini",
+      "producerFamily": "anthropic",
+      "consumerFamily": "google",
+      "producerModel": "sonnet",
+      "consumerModel": "provider-default",
+      "taskHash": "b0378ea64a371fc6a463034e67e832b674212b8d042cd7e169a54048be9616e4",
+      "control": {
+        "exitCode": 1,
+        "correct": false,
+        "abstained": false,
+        "usage": {
+          "inputTokens": null,
+          "cachedInputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 5027
+      },
+      "producer": {
+        "exitCode": 0,
+        "recorded": false,
+        "usage": {
+          "inputTokens": 2,
+          "cachedInputTokens": 28882,
+          "outputTokens": 973,
+          "totalTokens": null,
+          "costUsd": 0.2041896,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 16469
+      },
+      "runtime": {
+        "exitCode": 1,
+        "correct": false,
+        "delivered": false,
+        "mistakeExecuted": false,
+        "usage": {
+          "inputTokens": null,
+          "cachedInputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 14369
+      },
+      "eventStreamHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonicalEvents": 0,
+      "passed": false,
+      "transcriptPublished": false
+    },
+    {
+      "study": "cross-client-handoff",
+      "direction": "gemini->codex",
+      "producerClient": "gemini",
+      "consumerClient": "codex",
+      "producerFamily": "google",
+      "consumerFamily": "openai",
+      "producerModel": "provider-default",
+      "consumerModel": "gpt-5.6-sol",
+      "taskHash": "78a498a8538074a1188b67bf5b4ee0b68144f7442c49dbbfdc96516dfa663ea6",
+      "control": {
+        "exitCode": 0,
+        "correct": false,
+        "abstained": true,
+        "usage": {
+          "inputTokens": 13240,
+          "cachedInputTokens": 9984,
+          "outputTokens": 11,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 4381
+      },
+      "producer": {
+        "exitCode": 1,
+        "recorded": false,
+        "usage": {
+          "inputTokens": null,
+          "cachedInputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 13270
+      },
+      "runtime": {
+        "exitCode": 0,
+        "correct": false,
+        "delivered": false,
+        "mistakeExecuted": false,
+        "usage": {
+          "inputTokens": 40673,
+          "cachedInputTokens": 36096,
+          "outputTokens": 234,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 15099
+      },
+      "eventStreamHash": "cbcd31e551a5327a025f833451f3341026568218ecd972826bf8ddc105f0e455",
+      "canonicalEvents": 1,
+      "passed": false,
+      "transcriptPublished": false
+    }
+  ],
+  "clients": {
+    "codex": {
+      "family": "openai",
+      "model": "gpt-5.6-sol",
+      "version": "codex-cli 0.147.0"
+    },
+    "claude-code": {
+      "family": "anthropic",
+      "model": "sonnet",
+      "version": "2.1.225 (Claude Code)"
+    },
+    "gemini": {
+      "family": "google",
+      "model": "provider-default",
+      "version": "0.28.1"
+    }
+  },
+  "modelFamilies": 3,
+  "controlsAbstained": 2,
+  "repeatedVerifiedFailures": 0,
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "live-multimodel-138943198e7f0728",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "4b2148b8a73d20f9d94a3008e1756f9fb38144818bb527b752ec5ff6ffa06f0e",
+      "sourceTreeHash": "aaeaf0d8b5aad3790c5de13fea15114dbd3d12e505402d9c6b0b531e5037fde5",
+      "runner": {
+        "name": "live-multimodel-handoff",
+        "versions": {
+          "codex": "codex-cli 0.147.0",
+          "claude-code": "2.1.225 (Claude Code)",
+          "gemini": "0.28.1"
+        }
+      },
+      "startedAt": "2026-08-09T22:41:37.543Z",
+      "runHash": "137c4174cc2eb7a5b9ed7ecffac19886a17041c48c8e5a71cce110dd5eae2bf2"
+    },
+    "rows": [
+      {
+        "study": "cross-client-handoff",
+        "direction": "codex->claude-code",
+        "producerClient": "codex",
+        "consumerClient": "claude-code",
+        "producerFamily": "openai",
+        "consumerFamily": "anthropic",
+        "producerModel": "gpt-5.6-sol",
+        "consumerModel": "sonnet",
+        "taskHash": "094cea25470464b6a0350aeae99b7f51ebaa6985c0a9819ad906f42f56df91f1",
+        "control": {
+          "exitCode": 0,
+          "correct": false,
+          "abstained": true,
+          "usage": {
+            "inputTokens": 2,
+            "cachedInputTokens": 28882,
+            "outputTokens": 179,
+            "totalTokens": null,
+            "costUsd": 0.040305600000000004,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 5081
+        },
+        "producer": {
+          "exitCode": 0,
+          "recorded": false,
+          "usage": {
+            "inputTokens": 57150,
+            "cachedInputTokens": 36096,
+            "outputTokens": 1510,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 39768
+        },
+        "runtime": {
+          "exitCode": 0,
+          "correct": false,
+          "delivered": false,
+          "mistakeExecuted": false,
+          "usage": {
+            "inputTokens": 2,
+            "cachedInputTokens": 59035,
+            "outputTokens": 20,
+            "totalTokens": null,
+            "costUsd": 0.23158890000000001,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 8372
+        },
+        "eventStreamHash": "1e135524c540dbca3a1cd693b779fd8f86cc6f219b70dd70a993b186670d7527",
+        "canonicalEvents": 1,
+        "passed": false,
+        "transcriptPublished": false,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "live-multimodel-138943198e7f0728",
+        "sequence": 0,
+        "previousHash": "137c4174cc2eb7a5b9ed7ecffac19886a17041c48c8e5a71cce110dd5eae2bf2",
+        "rowHash": "ea73cb6b3757f3612670a1bb94bed06cf20e171b8f4eefe08e80fa4863106cf7"
+      },
+      {
+        "study": "cross-client-handoff",
+        "direction": "claude-code->gemini",
+        "producerClient": "claude-code",
+        "consumerClient": "gemini",
+        "producerFamily": "anthropic",
+        "consumerFamily": "google",
+        "producerModel": "sonnet",
+        "consumerModel": "provider-default",
+        "taskHash": "b0378ea64a371fc6a463034e67e832b674212b8d042cd7e169a54048be9616e4",
+        "control": {
+          "exitCode": 1,
+          "correct": false,
+          "abstained": false,
+          "usage": {
+            "inputTokens": null,
+            "cachedInputTokens": null,
+            "outputTokens": null,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 5027
+        },
+        "producer": {
+          "exitCode": 0,
+          "recorded": false,
+          "usage": {
+            "inputTokens": 2,
+            "cachedInputTokens": 28882,
+            "outputTokens": 973,
+            "totalTokens": null,
+            "costUsd": 0.2041896,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 16469
+        },
+        "runtime": {
+          "exitCode": 1,
+          "correct": false,
+          "delivered": false,
+          "mistakeExecuted": false,
+          "usage": {
+            "inputTokens": null,
+            "cachedInputTokens": null,
+            "outputTokens": null,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 14369
+        },
+        "eventStreamHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "canonicalEvents": 0,
+        "passed": false,
+        "transcriptPublished": false,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "live-multimodel-138943198e7f0728",
+        "sequence": 1,
+        "previousHash": "ea73cb6b3757f3612670a1bb94bed06cf20e171b8f4eefe08e80fa4863106cf7",
+        "rowHash": "632f72c95fd6bfd399efeacc5d3e9292b5ec67de701a13428bfee157044cbedb"
+      },
+      {
+        "study": "cross-client-handoff",
+        "direction": "gemini->codex",
+        "producerClient": "gemini",
+        "consumerClient": "codex",
+        "producerFamily": "google",
+        "consumerFamily": "openai",
+        "producerModel": "provider-default",
+        "consumerModel": "gpt-5.6-sol",
+        "taskHash": "78a498a8538074a1188b67bf5b4ee0b68144f7442c49dbbfdc96516dfa663ea6",
+        "control": {
+          "exitCode": 0,
+          "correct": false,
+          "abstained": true,
+          "usage": {
+            "inputTokens": 13240,
+            "cachedInputTokens": 9984,
+            "outputTokens": 11,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 4381
+        },
+        "producer": {
+          "exitCode": 1,
+          "recorded": false,
+          "usage": {
+            "inputTokens": null,
+            "cachedInputTokens": null,
+            "outputTokens": null,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 13270
+        },
+        "runtime": {
+          "exitCode": 0,
+          "correct": false,
+          "delivered": false,
+          "mistakeExecuted": false,
+          "usage": {
+            "inputTokens": 40673,
+            "cachedInputTokens": 36096,
+            "outputTokens": 234,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 15099
+        },
+        "eventStreamHash": "cbcd31e551a5327a025f833451f3341026568218ecd972826bf8ddc105f0e455",
+        "canonicalEvents": 1,
+        "passed": false,
+        "transcriptPublished": false,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "live-multimodel-138943198e7f0728",
+        "sequence": 2,
+        "previousHash": "632f72c95fd6bfd399efeacc5d3e9292b5ec67de701a13428bfee157044cbedb",
+        "rowHash": "2219019e969f94ce72286dc18ac7fa897b30b023745e927d9e17b2dc53af128e"
+      }
+    ],
+    "rowCount": 3,
+    "chainHead": "2219019e969f94ce72286dc18ac7fa897b30b023745e927d9e17b2dc53af128e",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-09T22:41:37.544Z",
+    "ledgerHash": "b2d9fb588438c43eccb24cbf555574ff75317dc9a13be6f072f252fef6395a71",
+    "signature": "uT1XzptFFi8dSDNyceHhyxFsr0BffvemHRFLnQNtXFV+a8S0m6SFFCn6dN+GT2VAnz8MGl5GXMpW4IA/0RIbDA=="
+  },
+  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAfwbAnRaXxAZuOz0EHb9aCVN7QQwFgDxNpQJIB9AOf/Y=\n-----END PUBLIC KEY-----\n",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "b2d9fb588438c43eccb24cbf555574ff75317dc9a13be6f072f252fef6395a71",
+    "rowCount": 3
+  },
+  "transcriptPublished": false,
+  "passed": false,
+  "limitations": [
+    "one task per direction is executable coverage, not a powered effectiveness estimate",
+    "provider-default model aliases require provider metadata before exact model-version claims",
+    "no competitive superiority claim is permitted from this smoke matrix"
+  ],
+  "reportHash": "bbef6622e4add7fa5550241aee195f2253bccf6aa3a0325556b03e05cba249f3"
+}

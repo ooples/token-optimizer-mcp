@@ -18,7 +18,10 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
-import { capabilityFor, CAPABILITY_TIERS } from '../hooks-core/capabilities.mjs';
+import {
+  capabilityFor,
+  CAPABILITY_TIERS,
+} from '../hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -76,61 +79,159 @@ const CLIENTS = [
   // silently does nothing -- it installs cleanly, reports no error, and never
   // loads. Recording the source is what makes these re-checkable when a client
   // changes its schema, rather than trusting a memory of how it worked once.
-  { key: 'cursor',   name: 'Cursor', nativeHooks: true, mcpFile: '.cursor/mcp.json',        mcpShape: 'mcpServers',      rulesFile: '.cursor/rules/token-optimizer.mdc', rulesFormat: 'mdc',
-    docs: 'https://cursor.com/docs/context/rules', verified: 'rules path, .mdc extension and alwaysApply frontmatter confirmed; project hooks use .cursor/hooks.json',
-    hookInstall: 'copy `hooks/` to `.cursor/hooks/token-optimizer/`, then merge `hooks.json` into `.cursor/hooks.json`' },
+  {
+    key: 'cursor',
+    name: 'Cursor',
+    nativeHooks: true,
+    mcpFile: '.cursor/mcp.json',
+    mcpShape: 'mcpServers',
+    rulesFile: '.cursor/rules/token-optimizer.mdc',
+    rulesFormat: 'mdc',
+    docs: 'https://cursor.com/docs/context/rules',
+    verified:
+      'rules path, .mdc extension and alwaysApply frontmatter confirmed; project hooks use .cursor/hooks.json',
+    hookInstall:
+      'copy `hooks/` to `.cursor/hooks/token-optimizer/`, then merge `hooks.json` into `.cursor/hooks.json`',
+  },
 
   // CORRECTED: `.windsurfrules` is the LEGACY single-file form. Current
   // Windsurf reads per-rule markdown from a rules directory; the old path is
   // still honoured, so this targets the current one.
-  { key: 'windsurf', name: 'Windsurf', nativeHooks: true, mcpFile: 'mcp_config.json',         mcpShape: 'mcpServers',      rulesFile: '.windsurf/rules/token-optimizer.md', rulesFormat: 'md',
-    docs: 'https://docs.windsurf.com/windsurf/cascade/memories', verified: 'directory form is current, .windsurfrules is legacy; Cascade pre/post hook contract verified',
-    hookInstall: 'copy `hooks/` to `.windsurf/hooks/token-optimizer/`, then merge `hooks.json` into `.windsurf/hooks.json`' },
+  {
+    key: 'windsurf',
+    name: 'Windsurf',
+    nativeHooks: true,
+    mcpFile: 'mcp_config.json',
+    mcpShape: 'mcpServers',
+    rulesFile: '.windsurf/rules/token-optimizer.md',
+    rulesFormat: 'md',
+    docs: 'https://docs.windsurf.com/windsurf/cascade/memories',
+    verified:
+      'directory form is current, .windsurfrules is legacy; Cascade pre/post hook contract verified',
+    hookInstall:
+      'copy `hooks/` to `.windsurf/hooks/token-optimizer/`, then merge `hooks.json` into `.windsurf/hooks.json`',
+  },
 
-  { key: 'cline',    name: 'Cline', nativeHooks: true, mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: '.clinerules/token-optimizer.md',    rulesFormat: 'md',
-    docs: 'https://docs.cline.bot/mcp/configuring-mcp-servers', verified: 'mcpServers key confirmed; CLI reads ~/.cline/mcp.json; project hooks use .clinerules/hooks with OS-specific wrappers',
-    hookInstall: 'copy the contents of `hooks/` to `.clinerules/hooks/`; on macOS/Linux mark the extensionless wrappers executable and enable them' },
+  {
+    key: 'cline',
+    name: 'Cline',
+    nativeHooks: true,
+    mcpFile: 'mcp.json',
+    mcpShape: 'mcpServers',
+    rulesFile: '.clinerules/token-optimizer.md',
+    rulesFormat: 'md',
+    docs: 'https://docs.cline.bot/mcp/configuring-mcp-servers',
+    verified:
+      'mcpServers key confirmed; CLI reads ~/.cline/mcp.json; project hooks use .clinerules/hooks with OS-specific wrappers',
+    hookInstall:
+      'copy the contents of `hooks/` to `.clinerules/hooks/`; on macOS/Linux mark the extensionless wrappers executable and enable them',
+  },
 
   // Project-level .roo/mcp.json is preferred over the global mcp_settings.json:
   // it is version-controllable and takes precedence.
-  { key: 'roo',      name: 'Roo Code',        mcpFile: '.roo/mcp.json',           mcpShape: 'mcpServers',      rulesFile: '.roo/rules/token-optimizer.md',     rulesFormat: 'md',
-    docs: 'https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo', verified: 'mcpServers key and project-level .roo/mcp.json precedence confirmed' },
+  {
+    key: 'roo',
+    name: 'Roo Code',
+    mcpFile: '.roo/mcp.json',
+    mcpShape: 'mcpServers',
+    rulesFile: '.roo/rules/token-optimizer.md',
+    rulesFormat: 'md',
+    docs: 'https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo',
+    verified:
+      'mcpServers key and project-level .roo/mcp.json precedence confirmed',
+  },
 
   // CORRECTED, and the largest error found: Kilo rebranded (kilocode.ai now
   // redirects to kilo.ai) and its schema is nothing like the common one. It
   // reads kilo.jsonc under an `mcp` key, with type "local", `command` as an
   // ARRAY, and `environment` rather than `env`. The previous mcp_settings.json
   // /mcpServers config would never have loaded.
-  { key: 'kilo',     name: 'Kilo', nativeHooks: true, mcpFile: '.kilo/kilo.jsonc',        mcpShape: 'kilo',            rulesFile: '.kilo/rules/token-optimizer.md',    rulesFormat: 'md',
-    docs: 'https://kilo.ai/docs/features/mcp/using-mcp-in-kilo-code', verified: 'kilo.jsonc MCP schema confirmed; Kilo plugin tool before/after and system-transform hooks verified',
-    hookInstall: 'copy `.kilo/plugin/token-optimizer.js` to the same project path, and copy `hooks/` to `.kilo/hooks/token-optimizer/`' },
+  {
+    key: 'kilo',
+    name: 'Kilo',
+    nativeHooks: true,
+    mcpFile: '.kilo/kilo.jsonc',
+    mcpShape: 'kilo',
+    rulesFile: '.kilo/rules/token-optimizer.md',
+    rulesFormat: 'md',
+    docs: 'https://kilo.ai/docs/features/mcp/using-mcp-in-kilo-code',
+    verified:
+      'kilo.jsonc MCP schema confirmed; Kilo plugin tool before/after and system-transform hooks verified',
+    hookInstall:
+      'copy `.kilo/plugin/token-optimizer.js` to the same project path, and copy `hooks/` to `.kilo/hooks/token-optimizer/`',
+  },
 
   // CORRECTED: Zed's current schema has no `source` key; command is a string
   // beside an args array.
-  { key: 'zed',      name: 'Zed',             mcpFile: 'settings.json',           mcpShape: 'context_servers', rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
-    docs: 'https://zed.dev/docs/ai/mcp', verified: 'context_servers shape confirmed; no source key in the current schema' },
+  {
+    key: 'zed',
+    name: 'Zed',
+    mcpFile: 'settings.json',
+    mcpShape: 'context_servers',
+    rulesFile: 'AGENTS.md',
+    rulesFormat: 'md',
+    docs: 'https://zed.dev/docs/ai/mcp',
+    verified:
+      'context_servers shape confirmed; no source key in the current schema',
+  },
 
-  { key: 'amp',      name: 'Amp',             mcpFile: 'settings.json',           mcpShape: 'amp.mcpServers',  rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
-    docs: 'https://ampcode.com/manual', verified: 'amp.mcpServers key and AGENTS.md both confirmed' },
+  {
+    key: 'amp',
+    name: 'Amp',
+    mcpFile: 'settings.json',
+    mcpShape: 'amp.mcpServers',
+    rulesFile: 'AGENTS.md',
+    rulesFormat: 'md',
+    docs: 'https://ampcode.com/manual',
+    verified: 'amp.mcpServers key and AGENTS.md both confirmed',
+  },
 
-  { key: 'continue', name: 'Continue',        mcpFile: 'config.yaml',             mcpShape: 'yaml',            rulesFile: '.continue/rules/token-optimizer.md', rulesFormat: 'md',
-    docs: 'https://docs.continue.dev/reference', verified: 'mcpServers is a LIST of name/command/args -- confirmed' },
+  {
+    key: 'continue',
+    name: 'Continue',
+    mcpFile: 'config.yaml',
+    mcpShape: 'yaml',
+    rulesFile: '.continue/rules/token-optimizer.md',
+    rulesFormat: 'md',
+    docs: 'https://docs.continue.dev/reference',
+    verified: 'mcpServers is a LIST of name/command/args -- confirmed',
+  },
 
   // CORRECTED: Crush reads AGENTS.md for project instructions by default.
   // CRUSH.md is the global per-user file, not the project one.
-  { key: 'crush',    name: 'Crush',           mcpFile: 'crush.json',              mcpShape: 'mcp',             rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
-    docs: 'https://github.com/charmbracelet/crush', verified: 'mcp key with type:stdio confirmed; AGENTS.md is the project default' },
+  {
+    key: 'crush',
+    name: 'Crush',
+    mcpFile: 'crush.json',
+    mcpShape: 'mcp',
+    rulesFile: 'AGENTS.md',
+    rulesFormat: 'md',
+    docs: 'https://github.com/charmbracelet/crush',
+    verified:
+      'mcp key with type:stdio confirmed; AGENTS.md is the project default',
+  },
 
-  { key: 'droid',    name: 'Droid (Factory)', mcpFile: 'mcp.json',                mcpShape: 'mcpServers',      rulesFile: 'AGENTS.md',                         rulesFormat: 'md',
-    docs: 'https://docs.factory.ai/cli/configuration/mcp', verified: 'mcpServers key confirmed; the CLI reads ~/.factory/mcp.json' },
+  {
+    key: 'droid',
+    name: 'Droid (Factory)',
+    mcpFile: 'mcp.json',
+    mcpShape: 'mcpServers',
+    rulesFile: 'AGENTS.md',
+    rulesFormat: 'md',
+    docs: 'https://docs.factory.ai/cli/configuration/mcp',
+    verified: 'mcpServers key confirmed; the CLI reads ~/.factory/mcp.json',
+  },
 ];
 
 for (const client of CLIENTS) {
   const capability = capabilityFor(client.key);
-  if (!capability) throw new Error(`missing capability registry entry for ${client.key}`);
+  if (!capability)
+    throw new Error(`missing capability registry entry for ${client.key}`);
   const registrySaysNative = capability.tier !== CAPABILITY_TIERS.RULES;
   if (Boolean(client.nativeHooks) !== registrySaysNative) {
-    throw new Error(`capability drift for ${client.key}: generator and registry disagree`);
+    throw new Error(
+      `capability drift for ${client.key}: generator and registry disagree`
+    );
   }
 }
 
@@ -139,8 +240,14 @@ function rules(client) {
   const enforcement = client.nativeHooks
     ? `${client.name}'s packaged native hook enforces the pre-tool routes below and injects graph findings when its lifecycle permits.`
     : `${client.name} has no packaged pre-execution bridge, so following these always-on rules is what produces the saving.`;
-  return `Prefer the token-optimizer MCP tools over built-in file and search tools.
-They cut context usage by caching, diffing, and bounding output. ${enforcement}
+  return `Use a token-optimizer MCP tool only when that exact tool is visible in
+the current CLI's registered tool inventory. A config file or installed plugin
+is not proof that the server started successfully. If a named optimizer tool is
+absent, keep the native tool available and use a bounded native operation; never
+retry or redirect to an unregistered schema.
+
+When registered, prefer the token-optimizer MCP tools over built-in file and
+search tools. They cache, diff, and bound output. ${enforcement}
 
 ALWAYS:
 - Reading a file over ~25 KB, or ANY file already read this session
@@ -159,7 +266,8 @@ Do NOT use compress_text for that -- its base64 output has MORE tokens than the
 input; it is for at-rest storage only.
 
 LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
-- Call wiki_write as soon as you establish a durable, non-obvious conclusion:
+- When wiki_write is visible in the current tool inventory, call it as soon as
+  you establish a durable, non-obvious conclusion:
   a failed approach and why, a decision and its rejected alternative, or the
   command that finally worked.
 - Anchor every claim to a real file path or path#symbol. Never invent a claim
@@ -171,6 +279,8 @@ LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
 - Before finishing substantive work, reflect once and write any still-unrecorded
   conclusion while you hold the reasoning. This is what makes the lesson
   available across sessions and projects instead of losing it to compaction.
+- If wiki_write is absent, do not claim the conclusion was harvested. Continue
+  the work with native tools; lifecycle hooks may still capture structural facts.
 
 NOT WORTH IT: small one-off reads, tiny edits. The built-ins are fine there --
 the overhead would exceed the saving.`;
@@ -183,28 +293,55 @@ function mcpConfig(shape) {
   if (shape === 'context_servers') {
     // No `source` key: it is not in Zed's current schema, and an unrecognised
     // key is how a config file loads without the server ever appearing.
-    return JSON.stringify({ context_servers: { 'token-optimizer': MCP_STDIO } }, null, 2) + '\n';
+    return (
+      JSON.stringify(
+        { context_servers: { 'token-optimizer': MCP_STDIO } },
+        null,
+        2
+      ) + '\n'
+    );
   }
   if (shape === 'amp.mcpServers') {
-    return JSON.stringify({ 'amp.mcpServers': { 'token-optimizer': MCP_STDIO } }, null, 2) + '\n';
+    return (
+      JSON.stringify(
+        { 'amp.mcpServers': { 'token-optimizer': MCP_STDIO } },
+        null,
+        2
+      ) + '\n'
+    );
   }
   if (shape === 'kilo') {
-    return JSON.stringify({
-      mcp: {
-        'token-optimizer': {
-          type: 'local',
-          // An array, not a string plus args -- Kilo's schema differs here.
-          command: ['npx', '-y', PACKAGE_SPEC],
-          environment: {},
-          enabled: true,
+    return (
+      JSON.stringify(
+        {
+          mcp: {
+            'token-optimizer': {
+              type: 'local',
+              // An array, not a string plus args -- Kilo's schema differs here.
+              command: ['npx', '-y', PACKAGE_SPEC],
+              environment: {},
+              enabled: true,
+            },
+          },
         },
-      },
-    }, null, 2) + '\n';
+        null,
+        2
+      ) + '\n'
+    );
   }
   if (shape === 'mcp') {
-    return JSON.stringify({ mcp: { 'token-optimizer': { type: 'stdio', ...MCP_STDIO } } }, null, 2) + '\n';
+    return (
+      JSON.stringify(
+        { mcp: { 'token-optimizer': { type: 'stdio', ...MCP_STDIO } } },
+        null,
+        2
+      ) + '\n'
+    );
   }
-  return JSON.stringify({ mcpServers: { 'token-optimizer': MCP_STDIO } }, null, 2) + '\n';
+  return (
+    JSON.stringify({ mcpServers: { 'token-optimizer': MCP_STDIO } }, null, 2) +
+    '\n'
+  );
 }
 
 const check = process.argv.includes('--check');
@@ -238,17 +375,21 @@ for (const client of CLIENTS) {
   // Cursor's .mdc format needs frontmatter, and alwaysApply is the whole point:
   // without it the rule is retrieved only when Cursor judges it relevant, which
   // reproduces exactly the skill problem this redesign exists to fix.
-  const text = client.rulesFormat === 'mdc'
-    ? `---\ndescription: Route file and search operations through token-optimizer MCP tools\nalwaysApply: true\n---\n\n${body}\n`
-    : `# Token optimization\n\n${body}\n`;
+  const text =
+    client.rulesFormat === 'mdc'
+      ? `---\ndescription: Route file and search operations through token-optimizer MCP tools\nalwaysApply: true\n---\n\n${body}\n`
+      : `# Token optimization\n\n${body}\n`;
   emit(join(dir, client.rulesFile.split('/').pop()), text);
 
-  emit(join(dir, 'README.md'),
-`# ${client.name} integration
+  emit(
+    join(dir, 'README.md'),
+    `# ${client.name} integration
 
-Tier: **${client.nativeHooks ? 'native hook + rules' : 'rules'}** -- ${client.nativeHooks
-  ? `${client.name}'s native lifecycle bridge routes expensive calls, captures structural graph evidence, and injects applicable findings. The rules require the active model to perform semantic wiki_write harvesting.`
-  : `${client.name} has no packaged lifecycle continuation, so its always-applied rules route expensive calls and require the active model to perform semantic wiki_write harvesting before completion.`}
+Tier: **${client.nativeHooks ? 'native hook + rules' : 'rules'}** -- ${
+      client.nativeHooks
+        ? `${client.name}'s native lifecycle bridge routes expensive calls, captures structural graph evidence, and injects applicable findings. The rules require the active model to perform semantic wiki_write harvesting.`
+        : `${client.name} has no packaged lifecycle continuation, so its always-applied rules route expensive calls and require the active model to perform semantic wiki_write harvesting before completion.`
+    }
 
 ## Install
 
@@ -270,7 +411,8 @@ Verified against ${client.docs}
 
 Both files in this directory are generated from
 \`scripts/generate-client-configs.mjs\`; edit that, not these.
-`);
+`
+  );
 }
 
 if (check && drifted > 0) {
@@ -279,6 +421,8 @@ ${drifted} generated config file(s) differ. Run: npm run sync:hooks`);
   process.exit(1);
 }
 
-console.log(check
-  ? 'client configs in sync'
-  : `generated configs for ${CLIENTS.length} client integration(s)`);
+console.log(
+  check
+    ? 'client configs in sync'
+    : `generated configs for ${CLIENTS.length} client integration(s)`
+);

@@ -28,6 +28,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { runUcrTool, UCR_TOOL_DEFINITIONS } from './ucr-tools.js';
 
 import { CacheEngine } from '../core/cache-engine.js';
 import { TokenCounter } from '../core/token-counter.js';
@@ -632,6 +633,7 @@ const TOOL_DEFINITIONS = [
   FLEET_TOOL,
   WIKI_WRITE_TOOL_DEFINITION,
   WIKI_READ_TOOL_DEFINITION,
+  ...UCR_TOOL_DEFINITIONS,
   EXPAND_TOOL,
   WASTE_TOOL,
   CACHE_TOOL,
@@ -2608,6 +2610,16 @@ async function handleToolCall(request: {
         // deliberate write path and no deliberate read path, so a subagent -- which
         // never receives the SessionStart briefing -- could not reach it at all.
         const result = await wikiRead(args as any);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+      case 'context_page':
+      case 'context_receipt_verify':
+      case 'cognition_record':
+      case 'checkpoint_handoff':
+      case 'outcome_report': {
+        const result = await runUcrTool(name, args);
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };

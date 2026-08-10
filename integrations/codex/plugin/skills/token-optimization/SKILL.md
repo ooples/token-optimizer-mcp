@@ -5,11 +5,15 @@ description: Use the token-optimizer MCP tools to reduce context/token usage whe
 
 # Token optimization
 
-This plugin ships a `token-optimizer` MCP server whose tools cut context usage
-60–90% via caching, diffing, and compression. Prefer them over the built-in
-tools in the situations below. The native hook refuses expensive built-in calls
-and injects applicable graph findings; the active model still makes every MCP
-tool call itself.
+First inspect the current tool inventory. Use a named token-optimizer MCP tool
+only when that exact schema is visible; an installed plugin or MCP config is not
+proof that its server registered successfully. If the tool is absent, keep the
+native operation available, bound its output, and do not retry an unavailable
+schema.
+
+When registered, these tools cache, diff, and bound context. The native hook
+refuses a built-in call only after positive registration evidence and injects
+applicable graph findings; the active model still makes every MCP tool call.
 
 ## When to use which tool
 
@@ -46,7 +50,8 @@ tool call itself.
 
 ## Live graph
 
-- Call **`wiki_write`** when you establish a durable, non-obvious conclusion:
+- When **`wiki_write`** is visible, call it when you establish a durable,
+  non-obvious conclusion:
   a failed approach and why, a decision and its rejected alternative, or a
   command that finally worked. Anchor it to a real file or `path#symbol`, and
   include its concrete evidence, applicability, calibrated `confidenceLabel`,
@@ -54,6 +59,7 @@ tool call itself.
 - Perform this semantic harvest yourself while you still hold the reasoning.
   Do not delegate it to another model, and do not invent a finding merely to
   populate the graph.
+- If `wiki_write` is absent, do not claim semantic harvesting succeeded.
 - Applicable findings are injected automatically when their file or command is
   touched. Use **`wiki_read`** for an explicit lookup.
 

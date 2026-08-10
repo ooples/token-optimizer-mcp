@@ -1,0 +1,425 @@
+{
+  "schemaVersion": "ucr.consolidation-study/1",
+  "sessions": 100,
+  "sourceObjects": 100,
+  "sourceMutations": 0,
+  "proposals": 12,
+  "proposalAuthors": [
+    "separate-consolidation-runtime"
+  ],
+  "activeSources": 100,
+  "uniqueLogicalMemories": 12,
+  "activeGrowthRatio": 0.24,
+  "contradictions": [],
+  "contradictionsResolved": 0,
+  "delayedReuseCases": 88,
+  "delayedReuseRetained": 88,
+  "states": [
+    {
+      "objectId": "memory-0",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-1",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-2",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-3",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-4",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-5",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-6",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-7",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-8",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-9",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-10",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-11",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-12",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-13",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-14",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-15",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-16",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-17",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-18",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-19",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-20",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-21",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-22",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-23",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-24",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-25",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-26",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-27",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-28",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-29",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-30",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-31",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-32",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-33",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-34",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-35",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-36",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-37",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-38",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-39",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-40",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-41",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-42",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-43",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-44",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-45",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-46",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-47",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-48",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-49",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-50",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-51",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-52",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-53",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-54",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-55",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-56",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-57",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-58",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-59",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-60",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-61",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-62",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-63",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-64",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-65",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-66",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-67",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-68",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-69",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-70",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-71",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-72",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-73",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-74",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-75",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-76",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-77",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-78",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-79",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-80",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-81",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-82",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-83",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-84",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-85",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-86",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-87",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-88",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-89",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-90",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-91",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-92",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-93",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-94",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-95",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-96",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-97",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-98",
+      "state": "active"
+    },
+    {
+      "objectId": "memory-99",
+      "state": "active"
+    }
+  ],
+  "logicalHistoryHash": "83df23472d22389d5b2a6a272b00dd4401d5b5b4b37c053576d7e804c3284e12",
+  "evidenceClass": "conformance-long-horizon-not-live-model-effectiveness",
+  "sourceHash": "a34a5ebd8aa6604f8291e4f39a3e6a50636579635cab2d4ec262cb78cfd266b2",
+  "passed": true,
+  "executedAt": "2026-08-09T22:24:48.511Z",
+  "reportHash": "38a0021a9db0c644d083cd37ad95f694728ccf09334edddb7579f76b44b6a130"
+}
