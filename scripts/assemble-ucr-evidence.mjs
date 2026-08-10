@@ -9,8 +9,8 @@ import {
   createEvidenceRun,
   deriveReleaseMetrics,
   evidenceTierReport,
-  loadProvisionedEvidenceIdentity,
   releaseVerdict,
+  resolveEvidenceVerificationPublicKey,
   sealEvidenceLedger,
   sha256,
   tieredReleaseVerdict,
@@ -73,19 +73,17 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
   const report = JSON.parse(readFileSync(path, 'utf8'));
   const { reportHash, ...body } = report;
   const reportHashValid = sha256(body) === reportHash;
-  let verificationPublicKey = report.ledgerPublicKey || null;
+  const promotable = ['effectiveness', 'superiority', 'production'].includes(
+    evidenceClass
+  );
+  let verificationPublicKey = null;
   let keyResolutionError = null;
-  if (report.ledgerKeyId) {
-    try {
-      verificationPublicKey = loadProvisionedEvidenceIdentity({
-        requirePrivate: false,
-        expectedKeyId: report.ledgerKeyId,
-      }).publicKey;
-    } catch (error) {
-      verificationPublicKey = null;
-      keyResolutionError =
-        error instanceof Error ? error.message : String(error);
-    }
+  try {
+    verificationPublicKey = resolveEvidenceVerificationPublicKey(report, {
+      promotable,
+    });
+  } catch (error) {
+    keyResolutionError = error instanceof Error ? error.message : String(error);
   }
   const ledgerVerification = report.ledger
     ? verifyEvidenceLedger(report.ledger, {
@@ -102,6 +100,7 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
       reportHashValid &&
       keyResolutionError === null &&
       (!requiredPass || report.passed === true) &&
+      (!promotable || ledgerVerification?.valid === true) &&
       (!ledgerVerification || ledgerVerification.valid),
     reportHashValid,
     reportHash,

@@ -143,6 +143,7 @@ if (
   effectiveness.evidenceClass !== 'effectiveness' ||
   effectiveness.complete !== true ||
   effectiveness.ledgerKeyId !== signingIdentity.keyId ||
+  !effectiveness.ledger?.run ||
   !verifyEvidenceLedger(effectiveness.ledger, {
     publicKey: signingIdentity.publicKey,
   }).valid

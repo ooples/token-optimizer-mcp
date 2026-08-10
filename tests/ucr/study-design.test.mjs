@@ -80,6 +80,13 @@ describe('full effectiveness study design', () => {
       sameSession: true,
       crossSession: true,
     });
+    const malformedPlan = structuredClone(plan);
+    delete malformedPlan.trials[0].successorAgentIds;
+    expect(() => studyDesignCoverage(malformedPlan)).not.toThrow();
+    expect(studyDesignCoverage(malformedPlan)).toMatchObject({
+      passed: false,
+      checks: { executionTopology: false },
+    });
   });
 
   test('preflights every effectiveness and superiority metric source', () => {

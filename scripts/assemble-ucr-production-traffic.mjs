@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  PRODUCTION_TIMESTAMP_BUCKET_MS,
   REQUIRED_TRAFFIC_STAGES,
   canonicalJson,
   createEvidenceRun,
@@ -136,6 +137,7 @@ const rawSamples = readFileSync(options.input, 'utf8')
 const samples = pseudonymizeProductionSamples(rawSamples, {
   secret: pseudonymSecret,
   keyId: pseudonymKeyId,
+  timestampBucketMs: PRODUCTION_TIMESTAMP_BUCKET_MS,
 });
 const releaseEvidence = JSON.parse(
   readFileSync(options.releaseEvidence, 'utf8')

@@ -442,12 +442,16 @@ export function studyDesignCoverage(plan) {
       const sameSession =
         trial.producerContinuitySessionId === trial.consumerContinuitySessionId;
       const sameProject = trial.producerProjectId === trial.consumerProjectId;
-      const concurrent = trial.successorAgentIds?.length > 1;
+      const successors = Array.isArray(trial.successorAgentIds)
+        ? trial.successorAgentIds
+        : null;
+      if (!successors) return false;
+      const concurrent = successors.length > 1;
       return (
         sameSession === (trial.sessionMode === 'same-session') &&
         sameProject === (trial.projectMode === 'same-project') &&
         concurrent === (trial.agentMode === 'concurrent-successors') &&
-        trial.expectedProviderInvocations === 1 + trial.successorAgentIds.length
+        trial.expectedProviderInvocations === 1 + successors.length
       );
     }),
   };

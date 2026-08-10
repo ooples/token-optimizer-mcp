@@ -53,3 +53,27 @@ export function loadProvisionedEvidenceIdentity({
     );
   return { keyId, privateKey, publicKey, privateKeyPath, publicKeyPath };
 }
+
+/**
+ * Resolve the verification key for an evidence artifact. Promotable evidence
+ * must name an externally provisioned key and may never authenticate itself
+ * with public key material embedded in the artifact.
+ */
+export function resolveEvidenceVerificationPublicKey(
+  report,
+  { environment = process.env, promotable = false } = {}
+) {
+  if (report?.ledgerKeyId)
+    return loadProvisionedEvidenceIdentity({
+      environment,
+      requirePrivate: false,
+      expectedKeyId: report.ledgerKeyId,
+    }).publicKey;
+  if (promotable)
+    throw new Error(
+      'promotable evidence requires ledgerKeyId and an externally provisioned public key'
+    );
+  return report?.ledgerPublicKey
+    ? createPublicKey(report.ledgerPublicKey)
+    : null;
+}

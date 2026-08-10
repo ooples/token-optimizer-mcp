@@ -3,7 +3,10 @@ import { generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadProvisionedEvidenceIdentity } from '../../ucr/index.mjs';
+import {
+  loadProvisionedEvidenceIdentity,
+  resolveEvidenceVerificationPublicKey,
+} from '../../ucr/index.mjs';
 
 const roots = [];
 afterEach(() => {
@@ -40,5 +43,19 @@ describe('provisioned evidence identity', () => {
         expectedKeyId: 'another-key',
       })
     ).toThrow(/does not match artifact key/);
+    expect(
+      resolveEvidenceVerificationPublicKey(
+        { ledgerKeyId: 'published-key-v1' },
+        { environment, promotable: true }
+      )
+    ).toBeDefined();
+    expect(() =>
+      resolveEvidenceVerificationPublicKey(
+        {
+          ledgerPublicKey: publicKey.export({ type: 'spki', format: 'pem' }),
+        },
+        { environment, promotable: true }
+      )
+    ).toThrow(/promotable evidence requires ledgerKeyId/);
   });
 });

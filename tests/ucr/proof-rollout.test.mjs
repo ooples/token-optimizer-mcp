@@ -529,14 +529,19 @@ describe('effectiveness gates and production rollout', () => {
     const pseudonymous = pseudonymizeProductionSamples(samples, {
       secret: 'private-test-secret',
       keyId: 'traffic-key-v1',
+      timestampBucketMs: 60_000,
     });
     expect(pseudonymous[0].client).not.toBe(samples[0].client);
     expect(pseudonymous[0].projectId).not.toBe(samples[0].projectId);
+    expect(
+      pseudonymous.every((sample) => sample.timestamp % 60_000 === 0)
+    ).toBe(true);
     expect(pseudonymousProductionIdentity(pseudonymous[0])).toEqual(
       pseudonymousProductionIdentity(
         pseudonymizeProductionSamples([samples[0]], {
           secret: 'private-test-secret',
           keyId: 'traffic-key-v1',
+          timestampBucketMs: 60_000,
         })[0]
       )
     );

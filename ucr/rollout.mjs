@@ -10,12 +10,29 @@ export const ROLLOUT_STAGES = Object.freeze([
   'stable',
 ]);
 
+export const PRODUCTION_TIMESTAMP_BUCKET_MS = 60_000;
+
 /** Remove stable production identifiers before any durable evidence is sealed. */
-export function pseudonymizeProductionSamples(samples, { secret, keyId } = {}) {
+export function pseudonymizeProductionSamples(
+  samples,
+  { secret, keyId, timestampBucketMs = null } = {}
+) {
   if (!secret || !keyId)
     throw new Error('production pseudonymization requires secret and keyId');
+  if (
+    timestampBucketMs != null &&
+    (!Number.isInteger(timestampBucketMs) || timestampBucketMs <= 0)
+  )
+    throw new Error('timestampBucketMs must be a positive integer');
   return (samples || []).map((sample) => ({
     ...sample,
+    ...(timestampBucketMs != null
+      ? {
+          timestamp:
+            Math.floor(sample.timestamp / timestampBucketMs) *
+            timestampBucketMs,
+        }
+      : {}),
     client: sha256([secret, keyId, 'client', sample.client]),
     projectId: sha256([secret, keyId, 'project', sample.projectId]),
   }));
