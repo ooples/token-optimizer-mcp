@@ -121,8 +121,13 @@ export function stratifiedCostDiagnostics(
     if (!pairs.has(row.pairId)) pairs.set(row.pairId, {});
     pairs.get(row.pairId)[row.arm] = row;
   }
+  // A rejected arm is not a measurement. In particular, do not turn latency
+  // or token values emitted by an integrity-invalid runtime into a reported
+  // regression: both halves of a pair must have passed the trial gate.
   const complete = [...pairs.values()].filter(
-    (pair) => pair.empty && pair.runtime
+    (pair) =>
+      pair.empty?.trialIntegrityValid === true &&
+      pair.runtime?.trialIntegrityValid === true
   );
   const keys = new Set(
     complete.flatMap((pair) => [
@@ -134,9 +139,9 @@ export function stratifiedCostDiagnostics(
   const groups = [...keys].map((key) => {
     const [dimension, value] = key.split(':');
     const selected = complete.filter(
-      (pair) => pair.runtime[
-        dimension === 'client' ? 'consumerClient' : dimension
-      ] === value
+      (pair) =>
+        pair.runtime[dimension === 'client' ? 'consumerClient' : dimension] ===
+        value
     );
     const ratios = (field) =>
       selected

@@ -161,13 +161,16 @@ async function main() {
   await page.locator('#mode-constellation').click();
   await page.waitForTimeout(1200);
   await page.locator('#wiki-list li').first().click();
-  const modeAfterSelect = await page
+  const modesAfterSelect = await page
     .locator('.wiki-mode.is-active')
-    .getAttribute('id');
-  if (modeAfterSelect !== 'mode-constellation') {
+    .evaluateAll((modes) => modes.map((mode) => mode.id));
+  if (
+    modesAfterSelect.length !== 1 ||
+    modesAfterSelect[0] !== 'mode-constellation'
+  ) {
     note(
       'mode desync',
-      `selecting a node left "${modeAfterSelect}" marked active`
+      `selecting a node left ${JSON.stringify(modesAfterSelect)} marked active`
     );
   } else ok('selecting a node preserves the 3D view');
   await page.locator('#mode-focus').click();
@@ -203,28 +206,44 @@ async function main() {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(1500);
   drain('resize 3D scene');
-  const spread = await page.evaluate(() => {
-    const nodes =
-      document
-        .getElementById('wiki-graph-3d')
-        ?.__knowledgeGraph3d?.projectedNodes() || [];
-    if (nodes.length < 2) return -1;
+  const projection = await page.evaluate(() => {
+    const host = document.getElementById('wiki-graph-3d');
+    if (!host) return { hostPresent: false, spread: null };
+    const nodes = host.__knowledgeGraph3d?.projectedNodes() || [];
+    if (nodes.length < 2) return { hostPresent: true, spread: -1 };
     const xs = nodes.map((node) => node.x);
-    return Math.round(Math.max(...xs) - Math.min(...xs));
+    return {
+      hostPresent: true,
+      spread: Math.round(Math.max(...xs) - Math.min(...xs)),
+    };
   });
-  if (spread <= 0) note('resize 3D scene', 'all nodes collapsed to one point');
-  else ok(`3D layout survives resize (${spread}px spread)`);
+  if (!projection.hostPresent)
+    note('resize 3D scene', '3D graph host is missing after resize');
+  else if (projection.spread === -1)
+    note(
+      'resize 3D scene',
+      'fewer than two projected nodes remain after resize'
+    );
+  else if (projection.spread <= 0)
+    note('resize 3D scene', 'all nodes collapsed to one point');
+  else ok(`3D layout survives resize (${projection.spread}px spread)`);
 
   const clipped = await page.evaluate(() => {
     const host = document.getElementById('wiki-graph-3d');
+    if (!host) return null;
     const box = host.getBoundingClientRect();
-    const nodes = host?.__knowledgeGraph3d?.projectedNodes() || [];
+    const nodes = host.__knowledgeGraph3d?.projectedNodes() || [];
     return nodes.filter(
       (node) =>
         node.x < 0 || node.y < 0 || node.x > box.width || node.y > box.height
     ).length;
   });
-  if (clipped)
+  if (clipped === null)
+    note(
+      'resize 3D scene',
+      'cannot check clipping because the 3D host is missing'
+    );
+  else if (clipped)
     note('resize 3D scene', `${clipped} projected nodes clipped after resize`);
   else ok('no projected nodes clipped after resize');
 
@@ -326,15 +345,16 @@ async function main() {
     .locator('#balance-verdict')
     .innerText()
     .catch(() => '');
-  const auditText = await page.evaluate(() => {
-    document.querySelector('.wiki-tab[data-tab="audit"]').click();
-    return new Promise((r) =>
-      setTimeout(
-        () => r(document.getElementById('audit-groups').innerText),
-        700
-      )
-    );
-  });
+  await page
+    .locator('.wiki-tab[data-tab="audit"]')
+    .click()
+    .catch(() => note('empty state', 'audit tab is missing'));
+  await page.waitForTimeout(700);
+  const auditText = await page
+    .locator('#audit-groups')
+    .innerText()
+    .catch(() => '');
+  if (!auditText) note('empty state', 'audit groups are missing or empty');
 
   if (emptyIndexNull === 0) {
     if (!/0 findings|No graph|healthy|Nothing/i.test(`${stats} ${auditText}`)) {

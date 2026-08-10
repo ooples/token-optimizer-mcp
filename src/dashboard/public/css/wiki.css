@@ -254,7 +254,8 @@
   align-items: start;
 }
 
-@media (max-width: 900px) {
+/* Stack before the 280px + 520px tracks, gap, and page padding can overflow. */
+@media (max-width: 920px) {
   .wiki-split {
     grid-template-columns: 1fr;
   }

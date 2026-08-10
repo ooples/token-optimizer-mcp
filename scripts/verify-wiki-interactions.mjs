@@ -173,12 +173,13 @@ async function main() {
       '${x}',
       '</script>',
     ]) {
+      const errorsBefore = errors.length;
       await search.fill(hostile);
       await page.waitForTimeout(220);
       check(
         `search survives ${JSON.stringify(hostile)}`,
-        errors.length === 0,
-        errors[0] || ''
+        errors.length === errorsBefore,
+        errors.slice(errorsBefore).join(' | ')
       );
     }
 
@@ -191,23 +192,46 @@ async function main() {
 
     /* ---- Type filter -------------------------------------------------- */
 
-    for (const value of [
-      'finding',
-      'decision',
-      'failure',
-      'command',
-      'map',
-      '',
-    ]) {
+    await page.selectOption('#wiki-type', '');
+    await page.waitForTimeout(300);
+    const allIds = await page
+      .locator('#wiki-list li')
+      .evaluateAll((items) => items.map((item) => item.dataset.id));
+
+    for (const value of ['finding', 'decision', 'failure', 'command', 'map']) {
       await page.selectOption('#wiki-type', value);
       await page.waitForTimeout(300);
-      const count = await page.locator('#wiki-list li').count();
+      const actualIds = await page
+        .locator('#wiki-list li')
+        .evaluateAll((items) => items.map((item) => item.dataset.id));
+      const expectedIds = await page.evaluate(async (type) => {
+        const result = await (
+          await fetch(
+            `/api/wiki/search?type=${encodeURIComponent(type)}&limit=50`
+          )
+        ).json();
+        return result.items.map((item) => item.id);
+      }, value);
       check(
-        `type filter "${value || 'all'}" applies`,
-        count >= 0,
-        `${count} results`
+        `type filter "${value}" shows exactly that API slice`,
+        actualIds.length <= allIds.length &&
+          actualIds.length === expectedIds.length &&
+          actualIds.every((id, index) => id === expectedIds[index]),
+        `${actualIds.length} of ${allIds.length}`
       );
     }
+
+    await page.selectOption('#wiki-type', '');
+    await page.waitForTimeout(300);
+    const restoredIds = await page
+      .locator('#wiki-list li')
+      .evaluateAll((items) => items.map((item) => item.dataset.id));
+    check(
+      'clearing the type filter restores the unfiltered list',
+      restoredIds.length === allIds.length &&
+        restoredIds.every((id, index) => id === allIds[index]),
+      `${restoredIds.length} of ${allIds.length}`
+    );
 
     /* ---- Selecting a finding ------------------------------------------ */
 
@@ -303,6 +327,8 @@ async function main() {
         document.querySelector('#wiki-graph .wiki-node:not(.is-center)')
           ?.dataset.id || ''
     );
+
+    check('the focus graph renders a neighbour node', Boolean(neighbourId));
 
     if (neighbourId) {
       await page

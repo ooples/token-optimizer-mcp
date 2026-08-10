@@ -68,7 +68,9 @@ function rotate(point, yaw, pitch) {
 
 function roundedRect(ctx, x, y, width, height, radius) {
   ctx.beginPath();
-  ctx.roundRect(x, y, width, height, radius);
+  if (typeof ctx.roundRect === 'function')
+    ctx.roundRect(x, y, width, height, radius);
+  else ctx.rect(x, y, width, height);
   ctx.fill();
 }
 
@@ -80,14 +82,18 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
   const canvas = document.createElement('canvas');
   canvas.className = 'knowledge-graph-canvas';
   canvas.tabIndex = 0;
-  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('role', 'application');
+  canvas.setAttribute(
+    'aria-keyshortcuts',
+    'Alt+ArrowLeft Alt+ArrowRight Enter Space ArrowLeft ArrowRight ArrowUp ArrowDown Plus Minus R'
+  );
   host.appendChild(canvas);
 
   const chrome = document.createElement('div');
   chrome.className = 'graph-3d-chrome';
   chrome.innerHTML =
     '<span class="graph-3d-badge">Interactive 3D</span>' +
-    '<span class="graph-3d-help">Drag to orbit · scroll to zoom · click a node</span>' +
+    '<span class="graph-3d-help">Drag to orbit · scroll to zoom · click a node · Alt+←/→ then Enter by keyboard</span>' +
     '<button class="graph-3d-reset" type="button" aria-label="Reset 3D graph view">Reset view</button>';
   host.appendChild(chrome);
 
@@ -124,6 +130,8 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
       node,
       ...coordinates(node, index, nodes.length),
     }));
+    if (!points.some((point) => point.node.id === view.selected))
+      view.selected = null;
     const index = new Map(points.map((point) => [point.node.id, point]));
     points.forEach((point) => {
       point.degree = 0;
@@ -217,8 +225,13 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
       context.stroke();
     }
 
-    const front = [...projected].reverse();
-    front.forEach((point, index) => {
+    // Paint farthest-first so nearer nodes, glows, and labels remain visible.
+    // Label priority runs in the opposite direction without changing paint order.
+    const nearestRank = new Map(
+      [...projected].reverse().map((point, index) => [point.node.id, index])
+    );
+    projected.forEach((point) => {
+      const rank = nearestRank.get(point.node.id) ?? Infinity;
       const selected = point.node.id === view.selected;
       const hovered = point.node.id === view.hovered;
       const colour =
@@ -262,7 +275,7 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
 
       // Keep the field readable: label the selected/hovered nodes and the most
       // connected front-facing nodes, not all 150 at once.
-      const label = selected || hovered || (point.degree > 0 && index < 8);
+      const label = selected || hovered || (point.degree > 0 && rank < 8);
       if (label && !options.compact) {
         const text = caption(point.node).slice(
           0,
@@ -411,7 +424,27 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
 
   canvas.addEventListener('keydown', (event) => {
     const step = 0.1;
-    if (event.key === 'ArrowLeft') view.yaw -= step;
+    if (
+      event.altKey &&
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
+      points.length
+    ) {
+      const ids = points.map((point) => point.node.id);
+      const current = ids.indexOf(view.selected);
+      const direction = event.key === 'ArrowLeft' ? -1 : 1;
+      const start = current < 0 ? (direction < 0 ? 0 : -1) : current;
+      view.selected = ids[(start + direction + ids.length) % ids.length];
+      canvas.setAttribute(
+        'aria-label',
+        `Selected ${caption(points.find((point) => point.node.id === view.selected).node)} in the interactive 3D knowledge graph. Press Enter to open.`
+      );
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      const selected =
+        points.find((point) => point.node.id === view.selected) || points[0];
+      if (!selected) return;
+      view.selected = selected.node.id;
+      options.onSelect?.(selected.node);
+    } else if (event.key === 'ArrowLeft') view.yaw -= step;
     else if (event.key === 'ArrowRight') view.yaw += step;
     else if (event.key === 'ArrowUp')
       view.pitch = Math.max(-1.22, view.pitch - step);
@@ -450,7 +483,8 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
       draw();
     },
     select(id) {
-      view.selected = id || null;
+      view.selected =
+        id && points.some((point) => point.node.id === id) ? id : null;
       draw();
     },
     reset,

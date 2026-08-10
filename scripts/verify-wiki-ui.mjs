@@ -366,6 +366,18 @@ async function main() {
         overflow.scroll <= overflow.client + 1,
         `${overflow.scroll} vs ${overflow.client}`
       );
+      if (label === 'narrow') {
+        const splitTracks = await page
+          .locator('.wiki-split')
+          .evaluate((split) =>
+            getComputedStyle(split).gridTemplateColumns.trim().split(/\s+/)
+          );
+        check(
+          'narrow: knowledge layout stacks into one column',
+          splitTracks.length === 1,
+          splitTracks.join(' | ')
+        );
+      }
 
       if (label === 'desktop') {
         const stats = await page.textContent('#graph-stats');
@@ -475,6 +487,31 @@ async function main() {
           graph3d.spread > 60,
           `${Math.round(graph3d.spread)}px extent`
         );
+
+        const graphCanvas = page.locator(
+          '#wiki-graph-3d .knowledge-graph-canvas'
+        );
+        check(
+          '3D graph exposes an interactive accessibility role',
+          (await graphCanvas.getAttribute('role')) === 'application'
+        );
+        await graphCanvas.focus();
+        await page.keyboard.press('Alt+ArrowRight');
+        const keyboardSelection = await page
+          .locator('#wiki-graph-3d')
+          .getAttribute('data-selected');
+        check(
+          'keyboard selection moves to a 3D node',
+          Boolean(keyboardSelection),
+          keyboardSelection || ''
+        );
+        await page.keyboard.press('Enter');
+        await page.waitForSelector('#wiki-detail:not([hidden])');
+        check(
+          'keyboard selection opens the node record',
+          await page.isVisible('#wiki-detail')
+        );
+        await page.click('#detail-close');
 
         const graphHost = page.locator('#wiki-graph-3d');
         await graphHost.scrollIntoViewIfNeeded();
@@ -656,10 +693,16 @@ async function main() {
         // Returning to 3D must preserve a functional renderer after focus and
         // drawer reflow, not recreate a blank surface.
         await page.click('#detail-close');
+        const frameBeforeRoundTrip = Number(
+          await page.getAttribute('#wiki-graph-3d', 'data-frame')
+        );
         await page.click('#mode-constellation');
         await page.waitForFunction(
-          () =>
-            Number(document.querySelector('#wiki-graph-3d')?.dataset.frame) > 1
+          (baseline) =>
+            Number(document.querySelector('#wiki-graph-3d')?.dataset.frame) >
+            baseline,
+          frameBeforeRoundTrip,
+          { timeout: 5000 }
         );
         check(
           '3D graph survives focus-mode round trip',
