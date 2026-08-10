@@ -11,8 +11,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { validate, buildDigest, harvestEnabled } from '../../hooks-core/harvest.mjs';
-import { forTouch, sessionIndex, refusalPayload, linkCoOccurrence } from '../../hooks-core/inject.mjs';
-import { inHoldout, record, report, indexBudget } from '../../hooks-core/metrics.mjs';
+import {
+  forTouch,
+  relevantFindingIdsForContext,
+  sessionIndex,
+  refusalPayload,
+  linkCoOccurrence,
+} from '../../hooks-core/inject.mjs';
+import { inHoldout, record, readMetrics, report, indexBudget } from '../../hooks-core/metrics.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 
@@ -140,9 +146,55 @@ describe('P4 injection', () => {
     indexFile(dir, path);
     seedFinding(path, 'the retry budget is shared across all outbound calls');
 
-    const index = sessionIndex(dir, load(dir));
+    const index = sessionIndex(dir, load(dir), {
+      episode: { episodeId: 'consumer-1', client: 'codex', pairId: 'pair-1' },
+      relevantFindingIds: ['the retry bu'],
+    });
     expect(index).toContain('retry budget');
     expect(index).toContain('wiki_query');
+
+    const delivery = readMetrics(dir).find(
+      (event) => event.kind === 'inject' && event.surface === 'session-start'
+    );
+    expect(delivery).toMatchObject({
+      episodeId: 'consumer-1',
+      client: 'codex',
+      pairId: 'pair-1',
+      holdout: false,
+      findingIds: ['the retry bu'],
+    });
+    expect(delivery.deliveredTokens).toBeGreaterThan(0);
+  });
+
+  test('task text selects only situational findings with two-term evidence', () => {
+    const path = write('commands.ts', 'export const runner = "npm test";');
+    indexFile(dir, path);
+    seedFinding(path, 'Run npm test instead of npx jest for this repository');
+    seedFinding(path, 'The deployment region is selected by the release job');
+
+    const graph = load(dir);
+    const selected = relevantFindingIdsForContext(
+      graph,
+      'The npx jest command failed; fix the repository test runner.'
+    );
+    expect(selected).toHaveLength(1);
+    expect(
+      [...graph.nodes.values()].find((node) => node.key === selected[0]).claim
+    ).toContain('npm test');
+    expect(relevantFindingIdsForContext(graph, 'test')).toEqual([]);
+  });
+
+  test('the session index labels invalidated content claims before delivery', () => {
+    const path = write('stale.ts', 'export const mode = "old";');
+    indexFile(dir, path);
+    seedFinding(path, 'the old mode is always required');
+    writeFileSync(path, 'export const mode = "new";');
+
+    const graph = load(dir, { snapshots: true });
+    const key = [...graph.nodes.values()].find((node) => node.kind === 'finding').key;
+    const index = sessionIndex(dir, graph, { relevantFindingIds: [key] });
+    expect(index).toContain('STALE: file changed');
+    expect(index).toContain('old mode');
   });
 
   test('an empty graph produces no index', () => {

@@ -1,0 +1,11 @@
+{
+  "name": "token-optimizer-mistake-transfer-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/test.mjs",
+    "sync": "node scripts/sync.mjs",
+    "sync:check": "node scripts/sync.mjs --check",
+    "validate": "node scripts/validate.mjs"
+  }
+}

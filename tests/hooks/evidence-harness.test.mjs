@@ -36,4 +36,21 @@ describe('live evidence harness', () => {
       modelVersion: 'claude-sonnet-5', clientVersion: '2.1.225', sessionId: 's1',
     });
   });
+
+  test('does not let later sparse events overwrite the authoritative run identity', () => {
+    const stream = [
+      JSON.stringify({
+        type: 'system', subtype: 'init', model: 'model-first',
+        claude_code_version: 'client-first', session_id: 'session-first',
+      }),
+      JSON.stringify({
+        type: 'thread.started', thread_id: 'session-later',
+        model_version: 'model-later', client_version: 'client-later',
+      }),
+    ].join('\n');
+
+    expect(parseRunIdentity(stream)).toEqual({
+      modelVersion: 'model-first', clientVersion: 'client-first', sessionId: 'session-first',
+    });
+  });
 });

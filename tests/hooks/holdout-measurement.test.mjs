@@ -183,4 +183,20 @@ describe('the command path takes part in the holdout', () => {
     expect(r.commandInjections).toBe(2);
     expect(r.commandHoldouts).toBe(1);
   });
+
+  it('keeps session-start delivery out of the file-read balance', () => {
+    record(dir, {
+      kind: 'inject', surface: 'session-start', anchor: 'session-index',
+      holdout: false, tokens: 80, deliveredTokens: 80,
+    });
+    record(dir, {
+      kind: 'inject', surface: 'file', anchor: '/a.ts', holdout: false, tokens: 20,
+    });
+
+    const r = report(dir);
+    expect(r.injections).toBe(1);
+    expect(r.injectedTokens).toBe(20);
+    expect(r.sessionStartInjections).toBe(1);
+    expect(r.sessionStartInjectedTokens).toBe(80);
+  });
 });

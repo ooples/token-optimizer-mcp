@@ -98,12 +98,6 @@ const ALLOWED = new Map([
   // entries left this list at once, which is what wiring a whole feature looks
   // like -- and is why it was worth doing rather than annotating.
 
-  // SURFACED BY TIGHTENING THE SCAN. Previously counted as reachable only
-  // because the bare word match read comment prose as a call site. Verified
-  // orphaned: in shipped code it appears as its own declaration plus two
-  // mentions in comments, and its only importer is a test.
-  ['sessionIndex', 'UNWIRED: lists graph keys and truncated claims for a session. Found by the comment-stripping fix; only a test imports it.'],
-
   // CONSOLIDATION. forecast.mjs imports aggregateConsolidation from this module,
   // so it is partly live -- but the selection, the ratio and the content anchor
   // are not reached, meaning nothing ever decides WHAT to consolidate.
