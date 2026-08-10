@@ -770,6 +770,57 @@ export function forSharedCommand(
 }
 
 
+const RELEVANCE_STOP_WORDS = new Set([
+  'about', 'after', 'again', 'before', 'could', 'from', 'have', 'into',
+  'just', 'need', 'that', 'their', 'there', 'these', 'this', 'those',
+  'using', 'want', 'when', 'where', 'which', 'with', 'would', 'your',
+]);
+
+function relevanceTerms(value) {
+  return [...new Set(String(value || '').toLowerCase()
+    .split(/[^a-z0-9_.:/-]+/)
+    .map((term) => term.replace(/^[_.:/-]+|[_.:/-]+$/g, ''))
+    .filter((term) => term.length >= 3 && !RELEVANCE_STOP_WORDS.has(term)))];
+}
+
+/**
+ * Selects finding keys only when a lifecycle payload contains actual task text.
+ * Session-start envelopes that carry only cwd/session metadata deliberately
+ * return no ids; their first file/command event uses the contextual injectors.
+ */
+export function relevantFindingIdsForContext(graph, context, { limit = 8 } = {}) {
+  const query = String(context || '').trim();
+  const queryTerms = relevanceTerms(query);
+  if (queryTerms.length < 2) return [];
+
+  return [...graph.nodes.values()]
+    .filter((finding) =>
+      finding.kind === 'finding'
+      && finding.retired !== true
+      && typeof finding.key === 'string'
+      && typeof finding.claim === 'string')
+    .map((finding) => {
+      const content = [
+        finding.key,
+        finding.claim,
+        finding.trigger,
+        ...(finding.anchors || []),
+      ].filter(Boolean).join(' ');
+      const terms = new Set(relevanceTerms(content));
+      const matches = queryTerms.filter((term) => terms.has(term)).length;
+      return { finding, matches };
+    })
+    // Two independent terms keeps a generic word such as "test" or "file"
+    // from turning the bounded index into an unrelated project-wide dump.
+    .filter(({ matches }) => matches >= 2)
+    .sort((a, b) =>
+      b.matches - a.matches
+      || (b.finding.confidence || 0.5) - (a.finding.confidence || 0.5)
+      || a.finding.key.localeCompare(b.finding.key))
+    .slice(0, Math.max(0, limit))
+    .map(({ finding }) => finding.key);
+}
+
 /**
  * The bounded SessionStart index: titles and ids only, never bodies.
  *
@@ -777,13 +828,29 @@ export function forSharedCommand(
  * graph that demonstrably gets queried grows its allowance while a noisy one
  * shrinks toward the floor. See metrics.indexBudget.
  */
-export function sessionIndex(dir, graph) {
+export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = [] } = {}) {
   const budget = indexBudget(dir);
+  const relevant = new Set(relevantFindingIds);
+  // Some SessionStart payloads have no task signal. Fail closed for situational
+  // findings until the adapter supplies ids selected from actual task text.
+  // Universal human/pinned rules are delivered separately by `standingRules`.
+  if (!relevant.size) return null;
   // RETIRED findings must not appear. They are excluded from every other read
   // path, so listing them here would advertise claims a human has explicitly
   // withdrawn -- and the index is the first thing the model reads.
-  const findings = [...graph.nodes.values()]
-    .filter((n) => n.kind === 'finding' && !n.retired && typeof n.claim === 'string');
+  const allFindings = [...graph.nodes.values()]
+    .filter((n) => n.kind === 'finding');
+  const findings = allFindings
+    .filter((n) =>
+      !n.retired
+      && typeof n.claim === 'string'
+      && typeof n.key === 'string'
+      && relevant.has(n.key)
+      // These are already rendered in full by `standingRules`; listing them a
+      // second time spends tokens without adding information.
+      && n.pinned !== true
+      && !(n.type === 'feedback' && n.origin === 'human')
+    );
   if (!findings.length) return null;
 
   const now = Date.now();
@@ -791,20 +858,70 @@ export function sessionIndex(dir, graph) {
     ((b.confidence || 0.5) / (1 + (now - (b.at || now)) / 2.6e9)) -
     ((a.confidence || 0.5) / (1 + (now - (a.at || now)) / 2.6e9)));
 
-  const lines = [];
-  let spent = 0;
+  const selected = [];
   for (const finding of ranked) {
-    const line = `- ${finding.key}: ${finding.claim.slice(0, 90)}`;  // claim guaranteed above
-    const cost = estimate(line);
-    if (spent + cost > budget) break;
-    lines.push(line);
-    spent += cost;
+    // Staleness checks can touch disk, so bound the candidates BEFORE serving
+    // them rather than checking an arbitrarily large graph on SessionStart.
+    const candidate = [...selected, finding];
+    const preview = renderSessionIndex(allFindings.length, candidate);
+    if (estimate(preview) > budget) break;
+    selected.push(finding);
   }
-  if (!lines.length) return null;
+  if (!selected.length) return null;
 
-  record(dir, { kind: 'index', count: lines.length, tokens: spent });
+  // `serve` is the only path allowed to hand a finding to a model. In
+  // particular, activating this previously-unwired index must not create a new
+  // path that labels an invalidated content claim as current.
+  const served = serve(graph, selected);
+  if (!served.length) return null;
+  // A stale marker is longer than the fresh preview used for candidate
+  // selection. Trim from the lowest-ranked end until the ACTUAL message fits.
+  while (served.length && estimate(renderSessionIndex(allFindings.length, served)) > budget) {
+    served.pop();
+  }
+  if (!served.length) return null;
+  const text = renderSessionIndex(allFindings.length, served);
+  const spent = estimate(text);
+  const findingIds = served.map((finding) => finding.key);
 
-  return `# Project wiki (${findings.length} findings, ${lines.length} listed)
+  record(dir, {
+    ...episode,
+    kind: 'index',
+    surface: 'session-start',
+    count: served.length,
+    tokens: spent,
+    findingIds,
+    staleCount: served.filter((finding) => finding.stale).length,
+  });
+  record(dir, {
+    ...episode,
+    kind: 'inject',
+    surface: 'session-start',
+    anchor: 'session-index',
+    holdout: false,
+    tokens: spent,
+    deliveredTokens: spent,
+    shadowTokens: spent,
+    count: served.length,
+    candidateCount: selected.length,
+    findingIds,
+    shadowFindingIds: findingIds,
+    stale: served.some((finding) => finding.stale),
+  });
+
+  return text;
+}
+
+function renderSessionIndex(total, findings) {
+  const lines = findings.map((finding) => {
+    const freshness = finding.stale && finding.staleEvidence
+      ? ` [STALE: ${finding.staleReason || 'anchor evidence changed'}]`
+      : finding.stale
+        ? ' [possibly stale; verify before use]'
+        : '';
+    return `- ${finding.key}${freshness}: ${finding.claim.slice(0, 90)}`;
+  });
+  return `# Project wiki (${total} findings, ${findings.length} listed)
 
 Established in previous sessions. Call wiki_query with a key for detail, or just
 work -- findings anchored to a file are surfaced automatically when you touch it.
@@ -837,7 +954,7 @@ ${lines.join('\n')}`;
  * is the one that already happened here: an always-on block that grows until it
  * is wallpaper, and the model stops reading the thing it always sees.
  */
-export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
+export function standingRules(dir, graph, { budget = standingBudget(), episode = {} } = {}) {
   const rules = [...graph.nodes.values()].filter(
     (n) =>
       n.kind === 'finding' &&
@@ -895,6 +1012,7 @@ export function standingRules(dir, graph, { budget = standingBudget() } = {}) {
   // measurement shows no sign of it.
   const truncated = noticeFor(dropped);
   record(dir, {
+    ...episode,
     kind: 'standing',
     count: lines.length,
     dropped,

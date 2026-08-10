@@ -211,6 +211,35 @@ async function seed() {
       });
     }
   }
+  for (let pair = 1; pair <= 10; pair++) {
+    for (const arm of ['empty', 'natural', 'oracle', 'irrelevant', 'stale']) {
+      const prevented = ['natural', 'oracle'].includes(arm);
+      record(GRAPH, {
+        kind: 'handoff-run', pairId: `ui-handoff-${pair}`,
+        scenarioId: 'verification-entry-point', arm,
+        producer: { client: 'codex', model: 'gpt-5.6-sol', captureSuccess: true },
+        consumer: {
+          client: 'claude-code', model: 'claude-sonnet-5', correct: true,
+          firstPass: prevented, mistakeAttempted: !prevented,
+          mistakeExecuted: !prevented, totalTokens: prevented ? 800 : 1000,
+          toolCalls: prevented ? 5 : 7, failedToolCalls: prevented ? 0 : 1,
+        },
+        delivery: { beforeFirstExecutedMistake: arm === 'natural' },
+      });
+    }
+  }
+  for (const arm of ['empty', 'natural']) {
+    record(GRAPH, {
+      kind: 'concurrency-run', pairId: 'ui-concurrent-1', arm,
+      writerCount: 3, captureSuccesses: 3,
+      integrity: { zeroLoss: true, parseable: true, orphanedFindings: 0 },
+      delivery: { expected: arm === 'natural' ? 3 : 0, delivered: arm === 'natural' ? 3 : 0 },
+      consumer: {
+        client: 'claude-code', model: 'claude-sonnet-5', correct: arm === 'empty',
+        firstPass: false, mistakeAttempted: true, mistakeExecuted: true,
+      },
+    });
+  }
 }
 
 async function waitForServer(attempts = 40) {
@@ -575,6 +604,22 @@ async function main() {
         check(
           'evidence renders matched effect intervals',
           /full/i.test(cohortText || '') && /400/.test(cohortText || '')
+        );
+        const transferText = await page.textContent('#evidence-transfer');
+        check(
+          'evidence renders cross-client natural transfer separately',
+          /codex/i.test(transferText || '') &&
+            /claude-code/i.test(transferText || '') &&
+            /gates passed/i.test(transferText || '')
+        );
+        const concurrencyText = await page.textContent(
+          '#evidence-concurrency'
+        );
+        check(
+          'evidence renders concurrent writer integrity and later delivery',
+          /100%/.test(concurrencyText || '') &&
+            /0%/.test(concurrencyText || '') &&
+            /3/.test(concurrencyText || '')
         );
         const capabilityCount = await page
           .locator('#evidence-capabilities tbody tr')

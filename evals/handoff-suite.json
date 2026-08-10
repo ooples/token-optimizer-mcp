@@ -1,0 +1,124 @@
+{
+  "name": "token-optimizer-cross-client-mistake-transfer",
+  "version": 1,
+  "arms": ["empty", "natural", "oracle", "irrelevant", "stale"],
+  "scenarios": [
+    {
+      "id": "verification-entry-point",
+      "family": "command-recovery-transfer",
+      "fixture": "evals/fixtures/mistake-transfer",
+      "producerPrompt": "Set src/alpha.json state to ready. Before editing, run node scripts/verify-alpha.mjs exactly once. Diagnose that result, complete the change, and verify alpha correctly using the supported project command.",
+      "consumerPrompt": "Continue the work by setting src/beta.json state to ready and verify beta correctly. Use the most appropriate project command and report the result.",
+      "producerClientTarget": "alpha",
+      "consumerClientTarget": "beta",
+      "targetFinding": {
+        "claimAny": ["npm test", "package-level", "package test"],
+        "claimAnySecondary": ["verify", "direct", "unsupported"],
+        "behavior": "supported-verification"
+      },
+      "oracleFinding": {
+        "type": "command",
+        "claim": "Direct scripts/verify-*.mjs probes are unsupported; run npm test -- <target> from the project root.",
+        "evidence": "The direct alpha probe exited non-zero while npm test -- alpha exercised the target and passed.",
+        "applicability": "When verifying an alpha or beta target in this project.",
+        "confidenceLabel": "verified",
+        "confidence": 0.99,
+        "scope": "project",
+        "invalidators": ["package.json test script or verification scripts change"],
+        "trigger": "(?:verify-(?:alpha|beta)|npm test)",
+        "anchors": ["package.json", "scripts/test.mjs"]
+      },
+      "irrelevantFinding": {
+        "type": "finding",
+        "claim": "Generated policy copies must be refreshed from their source files.",
+        "evidence": "A synchronization check detected a generated policy mismatch.",
+        "applicability": "Only when changing generated policy files.",
+        "confidenceLabel": "verified",
+        "confidence": 0.99,
+        "scope": "project",
+        "invalidators": ["the policy generator changes"],
+        "trigger": "sync:check",
+        "anchors": ["scripts/sync.mjs"]
+      },
+      "grader": { "kind": "verification", "producerTarget": "alpha", "consumerTarget": "beta" }
+    },
+    {
+      "id": "generated-source-of-truth",
+      "family": "generated-file-transfer",
+      "fixture": "evals/fixtures/mistake-transfer",
+      "producerPrompt": "Change clients/alpha/policy.txt from legacy to modern first, then run npm run sync:check. Diagnose the failure, make the change in the maintainable source of truth, regenerate outputs, and leave the project synchronized.",
+      "consumerPrompt": "Continue the migration by changing the beta policy from legacy to modern without leaving generated outputs out of sync. Verify the result.",
+      "producerClientTarget": "alpha",
+      "consumerClientTarget": "beta",
+      "targetFinding": {
+        "claimAny": ["source", "source of truth", "generated"],
+        "claimAnySecondary": ["sync", "regenerate", "generated copy"],
+        "behavior": "sync-check"
+      },
+      "oracleFinding": {
+        "type": "failure",
+        "claim": "Edit source/<target>-policy.txt, never clients/<target>/policy.txt directly, then run npm run sync and npm run sync:check.",
+        "evidence": "Editing the generated alpha copy made sync:check fail until the source was changed and outputs regenerated.",
+        "applicability": "When changing alpha or beta policy text.",
+        "confidenceLabel": "verified",
+        "confidence": 0.99,
+        "scope": "project",
+        "invalidators": ["scripts/sync.mjs mapping changes"],
+        "trigger": "(?:clients[/\\\\](?:alpha|beta)[/\\\\]policy|sync:check)",
+        "anchors": ["scripts/sync.mjs", "source/alpha-policy.txt"]
+      },
+      "irrelevantFinding": {
+        "type": "command",
+        "claim": "Use the package test command instead of direct verification probes.",
+        "evidence": "A direct verification probe was unsupported.",
+        "applicability": "Only when verifying runtime targets.",
+        "confidenceLabel": "verified",
+        "confidence": 0.99,
+        "scope": "project",
+        "invalidators": ["the package test command changes"],
+        "trigger": "verify-(?:alpha|beta)",
+        "anchors": ["package.json"]
+      },
+      "grader": { "kind": "generated", "producerTarget": "alpha", "consumerTarget": "beta" }
+    },
+    {
+      "id": "false-positive-validation",
+      "family": "validation-scope-transfer",
+      "fixture": "evals/fixtures/mistake-transfer",
+      "producerPrompt": "Set targets/alpha.json ready to true. First run node scripts/check-alpha.mjs exactly once and determine whether its PASS result exercised alpha. Then complete the change and validate alpha with a command that proves the target ran.",
+      "consumerPrompt": "Continue by setting targets/beta.json ready to true and validate beta with evidence that the target was actually exercised.",
+      "producerClientTarget": "alpha",
+      "consumerClientTarget": "beta",
+      "targetFinding": {
+        "claimAny": ["target", "scoped", "exercise"],
+        "claimAnySecondary": ["false", "zero", "validate"],
+        "behavior": "scoped-validation"
+      },
+      "oracleFinding": {
+        "type": "failure",
+        "claim": "The scripts/check-*.mjs PASS is a false positive that exercises zero targets; run npm run validate -- <target> and require the target sentinel.",
+        "evidence": "check-alpha reported PASS with zero targets while the scoped validator recorded and checked alpha.",
+        "applicability": "When validating alpha or beta readiness.",
+        "confidenceLabel": "verified",
+        "confidence": 0.99,
+        "scope": "project",
+        "invalidators": ["the check scripts begin exercising their named target"],
+        "trigger": "(?:check-(?:alpha|beta)|npm run validate)",
+        "anchors": ["scripts/validate.mjs", "scripts/check-alpha.mjs"]
+      },
+      "irrelevantFinding": {
+        "type": "finding",
+        "claim": "Generated policy copies must be refreshed from source files.",
+        "evidence": "A synchronization check detected a mismatch.",
+        "applicability": "Only for generated policy changes.",
+        "confidenceLabel": "verified",
+        "confidence": 0.99,
+        "scope": "project",
+        "invalidators": ["the generator changes"],
+        "trigger": "sync:check",
+        "anchors": ["scripts/sync.mjs"]
+      },
+      "grader": { "kind": "validation", "producerTarget": "alpha", "consumerTarget": "beta" }
+    }
+  ]
+}

@@ -160,6 +160,8 @@ async function loadEvidence() {
       : `${Math.round(summary.causalJoinCoverage * 100)}%`;
   el('evidence-summary').innerHTML = [
     ['Randomized runs', nf.format(summary.evalRuns)],
+    ['Handoff runs', nf.format(summary.handoffRuns || 0)],
+    ['Concurrency runs', nf.format(summary.concurrencyRuns || 0)],
     ['Live injections', nf.format(summary.liveInjections)],
     ['Outcome join coverage', coverage],
     ['Harmful feedback', nf.format(summary.harmfulFeedback)],
@@ -198,6 +200,41 @@ async function loadEvidence() {
   el('evidence-cohorts').innerHTML = `
     <thead><tr><th>Client</th><th>Model</th><th>Task</th><th>Comparison</th><th>Pairs</th><th>Token effect (95% CI)</th><th>Call effect (95% CI)</th><th>Status</th></tr></thead>
     <tbody>${cohortRows.join('') || '<tr><td colspan="8">No randomized cohorts match these filters.</td></tr>'}</tbody>`;
+
+  const pct = (value) =>
+    value === null || value === undefined ? '—' : `${Math.round(value * 100)}%`;
+  const transferRows = (report.transferCohorts || [])
+    .map((cohort) => {
+      const effect = cohort.effects?.naturalVsEmpty || {};
+      return `<tr>
+      <td>${escapeHtml(cohort.producerClient)}<br><span class="wiki-muted">${escapeHtml(cohort.producerModel || 'model unknown')}</span></td>
+      <td>${escapeHtml(cohort.consumerClient)}<br><span class="wiki-muted">${escapeHtml(cohort.consumerModel || 'model unknown')}</span></td>
+      <td>${escapeHtml(cohort.scenarioId || 'scenario unknown')}</td>
+      <td>${nf.format(effect.pairs || 0)}</td>
+      <td>${escapeHtml(pct(cohort.captureRate))}</td>
+      <td>${escapeHtml(pct(cohort.arms?.empty?.mistakeExecuted?.rate))} → ${escapeHtml(pct(cohort.arms?.natural?.mistakeExecuted?.rate))}</td>
+      <td>${escapeHtml(formatInterval(effect.executedMistakesPrevented))}</td>
+      <td>${escapeHtml(pct(cohort.preActionDeliveryRate))}</td>
+      <td>${escapeHtml(cohort.evidenceStatus)}</td>
+    </tr>`;
+    })
+    .join('');
+  el('evidence-transfer').innerHTML = `
+    <thead><tr><th>Producer</th><th>Consumer</th><th>Scenario</th><th>Pairs</th><th>Natural capture</th><th>Executed recurrence empty → natural</th><th>Paired prevention (95% CI)</th><th>Pre-action delivery</th><th>Gate status</th></tr></thead>
+    <tbody>${transferRows || '<tr><td colspan="9">No cross-client handoff cohorts match these filters.</td></tr>'}</tbody>`;
+
+  const concurrency = report.concurrency || {};
+  el('evidence-concurrency').innerHTML = `
+    <thead><tr><th>Natural runs</th><th>Concurrent writers</th><th>Capture</th><th>Integrity pass</th><th>Finding delivery</th><th>Consumer correctness</th><th>Executed mistakes prevented (95% CI)</th></tr></thead>
+    <tbody><tr>
+      <td>${nf.format(concurrency.naturalRuns || 0)}</td>
+      <td>${nf.format(concurrency.writers || 0)}</td>
+      <td>${escapeHtml(pct(concurrency.captureRate))}</td>
+      <td>${escapeHtml(pct(concurrency.integrityPassRate))}</td>
+      <td>${escapeHtml(pct(concurrency.deliveryCoverage))}</td>
+      <td>${escapeHtml(pct(concurrency.naturalCorrectness?.rate))}</td>
+      <td>${escapeHtml(formatInterval(concurrency.effect?.executedMistakesPrevented))}</td>
+    </tr></tbody>`;
 
   const episodeRows = (report.episodes || [])
     .map(

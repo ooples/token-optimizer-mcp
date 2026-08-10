@@ -171,4 +171,112 @@ describe('paired evidence report', () => {
     expect(full.totalTokensSaved.low).toBeGreaterThan(0);
     expect(report.methodology.deterministicChecksAreCausalProof).toBe(false);
   });
+
+  test('keeps natural transfer distinct from oracle and enforces every claim gate', () => {
+    for (let pair = 1; pair <= 10; pair++) {
+      for (const arm of ['empty', 'natural', 'oracle', 'irrelevant', 'stale']) {
+        const prevented = ['natural', 'oracle'].includes(arm);
+        record(dir, {
+          kind: 'handoff-run',
+          pairId: `h${pair}`,
+          scenarioId: 'verification-entry-point',
+          arm,
+          producer: {
+            client: 'codex', model: 'gpt-5.6-sol', captureSuccess: true,
+          },
+          consumer: {
+            client: 'claude-code', model: 'claude-sonnet-5',
+            correct: true, firstPass: prevented,
+            mistakeAttempted: !prevented, mistakeExecuted: !prevented,
+            totalTokens: prevented ? 800 : 1000,
+            toolCalls: prevented ? 5 : 7,
+            failedToolCalls: prevented ? 0 : 1,
+            latencyMs: prevented ? 8000 : 10000,
+          },
+          delivery: {
+            delivered: ['natural', 'oracle', 'stale'].includes(arm),
+            beforeFirstExecutedMistake: arm === 'natural',
+          },
+        });
+      }
+    }
+
+    const report = evidenceReport(dir);
+    expect(report.summary.handoffRuns).toBe(50);
+    expect(report.transferCohorts).toHaveLength(1);
+    const cohort = report.transferCohorts[0];
+    expect(cohort.captureRate).toBe(1);
+    expect(cohort.arms.empty.mistakeExecuted.rate).toBe(1);
+    expect(cohort.arms.natural.mistakeExecuted.rate).toBe(0);
+    expect(cohort.effects.naturalVsEmpty.executedMistakesPrevented.low).toBe(1);
+    expect(cohort.effects.naturalVsOracle.executedMistakesPrevented.mean).toBe(0);
+    expect(cohort.arms.irrelevant.delivery.rate).toBe(0);
+    expect(cohort.evidenceStatus).toBe('pre-registered transfer gates passed');
+  });
+
+  test('fails transfer gates when control evidence is absent or irrelevant content is delivered', () => {
+    for (let pair = 1; pair <= 10; pair++) {
+      for (const arm of ['empty', 'natural', 'irrelevant']) {
+        record(dir, {
+          kind: 'handoff-run', pairId: `negative-${pair}`,
+          scenarioId: 'verification-entry-point', arm,
+          producer: { client: 'codex', model: 'gpt-5.6-sol', captureSuccess: true },
+          consumer: {
+            client: 'claude-code', model: 'claude-sonnet-5', correct: true,
+            mistakeExecuted: arm === 'empty',
+          },
+          delivery: {
+            delivered: arm !== 'empty',
+            beforeFirstExecutedMistake: arm === 'natural',
+          },
+        });
+      }
+    }
+
+    const cohort = evidenceReport(dir).transferCohorts[0];
+    expect(cohort.gates.negativeControls).toBe(false);
+    expect(cohort.evidenceStatus).toMatch(/insufficient or failed/);
+  });
+
+  test('filters handoff arms from the top-level arm field', () => {
+    for (const arm of ['empty', 'natural']) {
+      record(dir, {
+        kind: 'handoff-run', pairId: 'filter-1', scenarioId: 'filter-task', arm,
+        producer: { client: 'codex', arm: 'nested-producer-value' },
+        consumer: { client: 'claude-code', arm: 'nested-consumer-value' },
+      });
+    }
+    const filtered = evidenceReport(dir, { filters: { arm: 'natural' } });
+    expect(filtered.summary.handoffRuns).toBe(1);
+    expect(filtered.transferCohorts[0].arms.natural.runs).toBe(1);
+    expect(filtered.transferCohorts[0].arms.empty.runs).toBe(0);
+  });
+
+  test('reports concurrent graph integrity separately from consumer behavior', () => {
+    for (const arm of ['empty', 'natural']) {
+      record(dir, {
+        kind: 'concurrency-run', pairId: 'c1', arm, writerCount: 3,
+        captureSuccesses: 3,
+        integrity: {
+          zeroLoss: true, parseable: true, orphanedFindings: 0,
+        },
+        delivery: { expected: arm === 'natural' ? 3 : 0, delivered: arm === 'natural' ? 3 : 0 },
+        consumer: {
+          client: 'claude-code', model: 'claude-sonnet-5', correct: true,
+          firstPass: arm === 'natural', mistakeExecuted: arm === 'empty',
+        },
+      });
+    }
+
+    const report = evidenceReport(dir);
+    expect(report.summary.concurrencyRuns).toBe(2);
+    expect(report.concurrency).toMatchObject({
+      naturalRuns: 1,
+      writers: 3,
+      captureRate: 1,
+      integrityPassRate: 1,
+      deliveryCoverage: 1,
+    });
+    expect(report.concurrency.effect.executedMistakesPrevented.mean).toBe(1);
+  });
 });
