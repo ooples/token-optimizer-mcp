@@ -123,8 +123,7 @@ export function effectivenessVerdict(metrics) {
         metrics.staleDelivery < 0.01 &&
         metrics.staleDeliveryIntervalHigh < 0.01,
       recurrenceReduction:
-        metrics.recurrenceReduction >= 0.8 &&
-        metrics.recurrenceIntervalLow > 0,
+        metrics.recurrenceReduction >= 0.8 && metrics.recurrenceIntervalLow > 0,
       naturalCorrectness:
         metrics.naturalCorrectnessDelta >= 0.1 &&
         metrics.naturalCorrectnessIntervalLow > 0,
@@ -139,8 +138,7 @@ export function effectivenessVerdict(metrics) {
       noContradiction:
         metrics.contradictoryDelivery === 0 &&
         metrics.contradictoryDeliveryIntervalHigh < 0.01,
-      directionNegativeDelivery:
-        metrics.negativeDeliveryIntervalHigh < 0.01,
+      directionNegativeDelivery: metrics.negativeDeliveryIntervalHigh < 0.01,
       zeroConsumerSchema: metrics.consumerSchemaTokensP95 === 0,
       zeroCaptureInference: metrics.captureModelCallsP95 === 0,
       writerIntegrity: metrics.writerIntegrity === true,
@@ -164,8 +162,7 @@ export function superiorityVerdict(metrics) {
   return verdict(metrics, SUPERIORITY_REQUIRED_METRICS, {
     competitive: metrics.competitivePassed === true,
     competitiveCoverage: metrics.competitiveCoverage === 1,
-    competitiveReproducibility:
-      metrics.competitiveReproducibility === true,
+    competitiveReproducibility: metrics.competitiveReproducibility === true,
   });
 }
 
@@ -182,9 +179,19 @@ export function tieredReleaseVerdict(metrics, { production = null } = {}) {
     productionVerdict.status === 'passed' && productionVerdict.ready !== false;
   const passed = effectiveness.passed && superiority.passed && productionPassed;
   const harmful =
-    effectiveness.status === 'harmful' || productionVerdict.status === 'harmful';
+    effectiveness.status === 'harmful' ||
+    productionVerdict.status === 'harmful';
+  const failed = [effectiveness, superiority, productionVerdict].some(
+    (tier) => tier.status === 'failed'
+  );
   return {
-    status: harmful ? 'harmful' : passed ? 'passed' : 'insufficient',
+    status: harmful
+      ? 'harmful'
+      : passed
+        ? 'passed'
+        : failed
+          ? 'failed'
+          : 'insufficient',
     passed: !harmful && passed,
     effectiveness,
     superiority,
@@ -208,10 +215,7 @@ export function releaseVerdict(metrics) {
   const effectiveness = effectivenessVerdict(metrics);
   const superiority = superiorityVerdict(metrics);
   const harmful = effectiveness.status === 'harmful';
-  const failed = [
-    ...effectiveness.failed,
-    ...superiority.failed,
-  ];
+  const failed = [...effectiveness.failed, ...superiority.failed];
   return {
     status: harmful ? 'harmful' : failed.length ? 'failed' : 'passed',
     passed: !harmful && failed.length === 0,

@@ -679,7 +679,7 @@ async function main() {
         );
         check(
           'UCR dashboard separates frozen design from observed evidence',
-          /Frozen study design\s*52,074 trials \/ 108,882 calls/i.test(
+          /Frozen study design\s*54,054 trials \/ 113,022 calls/i.test(
             ucrText || ''
           ) &&
             /Release metrics mapped\s*37/i.test(ucrText || '') &&

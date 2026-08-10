@@ -15,17 +15,16 @@ provider call. The current design contains:
   concurrent-agent trials;
 - 363 paired empty/runtime observations per direction, exceeding the
   preregistered 357-pair correctness requirement;
-- 1,012 opportunities per direction for each hard-negative arm. With zero
+- 1,056 opportunities per direction for each hard-negative arm. With zero
   false deliveries, the Bonferroni-adjusted 95% family-wise Wilson upper bound
-  across 9 directions × 4 safety arms is below 1%; and
+  across 9 directions × 5 safety arms is below 1%; and
 - a unique hidden variant, session, and mutable workspace for every arm.
 
-The plan has 52,074 trial envelopes. Ordinary envelopes require a matched
+The plan has 54,054 trial envelopes and 113,022 provider calls. Ordinary envelopes require a matched
 predecessor and successor; concurrent-coordination envelopes require one
-producer plus two overlapping successors, for 108,882 provider calls. The
-larger count is deliberate:
-2,856 calls repeated one handoff task and could not establish family coverage or
-a sub-1% negative-delivery confidence bound.
+producer plus two overlapping successors. The larger count is deliberate: the
+previous handoff plan made only 2,856 calls, repeated one handoff task, and could
+not establish family coverage or a sub-1% negative-delivery confidence bound.
 
 The parent process materializes each repository fixture and grades its filesystem
 state after the model exits. Provider prose and claimed success are ignored.
@@ -46,7 +45,8 @@ stdin and returns one `ucr.study-driver/1` object on stdout. The driver must:
    concurrent-coordination trials, with zero MCP tools and zero static MCP schema;
 6. retain complete pre-tool action telemetry; and
 7. return provider-native token, cache, latency, cost, CLI/model version, and
-observed session/project/agent topology telemetry for every call.
+   observed session/project/agent topology telemetry for every call, plus the
+   executed top-level `promptHash`, `permissionsHash`, and `budgets` bindings.
 
 Drivers may attest only the capture-through-use portion of the causal chain.
 The parent grader alone appends behavior change, mistake prevention, and task
@@ -71,6 +71,14 @@ graders, thresholds, or source, run the frozen powered study:
 ```text
 UCR_STUDY_SECRET=<private frozen secret> npm run eval:ucr:full-study
 ```
+
+Promotable effectiveness, superiority, and production ledgers must use the same
+externally provisioned Ed25519 identity. Configure
+`UCR_EVIDENCE_SIGNING_KEY_ID`, `UCR_EVIDENCE_PRIVATE_KEY_FILE`, and
+`UCR_EVIDENCE_PUBLIC_KEY_FILE`; artifacts retain only the published key id, not
+either key. Production assembly additionally requires
+`UCR_TRAFFIC_PSEUDONYM_SECRET` and `UCR_TRAFFIC_PSEUDONYM_KEY_ID`, and persists
+only stable pseudonyms for client and project identifiers.
 
 The effectiveness verdict additionally requires all-family and all-arm coverage,
 direction- and family-level correctness non-inferiority, direction-level token

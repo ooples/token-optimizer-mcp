@@ -29,8 +29,10 @@ import {
   preRegisterBenchmark,
   productionReadiness,
   productionTrafficReport,
+  pseudonymizeProductionSamples,
   REQUIRED_FAULTS,
   sloReport,
+  tieredReleaseVerdict,
 } from '../../ucr/index.mjs';
 
 describe('Cognitive Continuity Benchmark', () => {
@@ -517,12 +519,41 @@ describe('effectiveness gates and production rollout', () => {
       productionTrafficReport(
         [{ ...samples[0], detail: { transcript: 'private' } }],
         {
-        minimumSamples: 1,
-        minimumDurationMs: 0,
-        minimumClients: 1,
-        minimumProjects: 1,
+          minimumSamples: 1,
+          minimumDurationMs: 0,
+          minimumClients: 1,
+          minimumProjects: 1,
         }
       ).checks.noRawContent
     ).toBe(false);
+    const pseudonymous = pseudonymizeProductionSamples(samples, {
+      secret: 'private-test-secret',
+      keyId: 'traffic-key-v1',
+    });
+    expect(pseudonymous[0].client).not.toBe(samples[0].client);
+    expect(pseudonymous[0].projectId).not.toBe(samples[0].projectId);
+    expect(pseudonymousProductionIdentity(pseudonymous[0])).toEqual(
+      pseudonymousProductionIdentity(
+        pseudonymizeProductionSamples([samples[0]], {
+          secret: 'private-test-secret',
+          keyId: 'traffic-key-v1',
+        })[0]
+      )
+    );
+  });
+
+  test('keeps measured tier failures distinct from missing evidence', () => {
+    expect(
+      tieredReleaseVerdict(
+        {},
+        {
+          production: { status: 'failed', ready: false, missing: [] },
+        }
+      )
+    ).toMatchObject({ status: 'failed', passed: false });
   });
 });
+
+function pseudonymousProductionIdentity(sample) {
+  return { client: sample.client, projectId: sample.projectId };
+}

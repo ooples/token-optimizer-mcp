@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Assemble privacy-safe real shadow/canary telemetry into production evidence. */
 
-import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,8 +9,10 @@ import {
   REQUIRED_TRAFFIC_STAGES,
   canonicalJson,
   createEvidenceRun,
+  loadProvisionedEvidenceIdentity,
   productionReadiness,
   productionTrafficReport,
+  pseudonymizeProductionSamples,
   sealEvidenceLedger,
   sha256,
   sloReport,
@@ -22,8 +24,20 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const options = {
   execute: false,
   input: null,
-  releaseEvidence: join(ROOT, 'evals', 'ucr', 'results', 'evidence-index-v2.json'),
-  faultEvidence: join(ROOT, 'evals', 'ucr', 'results', 'production-exercise-v1.json'),
+  releaseEvidence: join(
+    ROOT,
+    'evals',
+    'ucr',
+    'results',
+    'evidence-index-v2.json'
+  ),
+  faultEvidence: join(
+    ROOT,
+    'evals',
+    'ucr',
+    'results',
+    'production-exercise-v1.json'
+  ),
   output: join(ROOT, 'evals', 'ucr', 'results', 'production-traffic-v1.json'),
   rolloutStage: 'stable',
   minimumSamples: 1000,
@@ -95,9 +109,19 @@ if (!options.execute) {
 if (!options.input || !existsSync(options.input))
   throw new Error('--input must identify an existing real-traffic JSONL file');
 for (const path of [options.releaseEvidence, options.faultEvidence])
-  if (!existsSync(path)) throw new Error(`required evidence is missing: ${path}`);
+  if (!existsSync(path))
+    throw new Error(`required evidence is missing: ${path}`);
+const signingIdentity = loadProvisionedEvidenceIdentity();
+const pseudonymSecret = process.env.UCR_TRAFFIC_PSEUDONYM_SECRET;
+const pseudonymKeyId = String(
+  process.env.UCR_TRAFFIC_PSEUDONYM_KEY_ID || ''
+).trim();
+if (!pseudonymSecret || !pseudonymKeyId)
+  throw new Error(
+    'UCR_TRAFFIC_PSEUDONYM_SECRET and UCR_TRAFFIC_PSEUDONYM_KEY_ID are required'
+  );
 
-const samples = readFileSync(options.input, 'utf8')
+const rawSamples = readFileSync(options.input, 'utf8')
   .split(/\r?\n/)
   .filter(Boolean)
   .map((line, index) => {
@@ -109,7 +133,13 @@ const samples = readFileSync(options.input, 'utf8')
       );
     return sample;
   });
-const releaseEvidence = JSON.parse(readFileSync(options.releaseEvidence, 'utf8'));
+const samples = pseudonymizeProductionSamples(rawSamples, {
+  secret: pseudonymSecret,
+  keyId: pseudonymKeyId,
+});
+const releaseEvidence = JSON.parse(
+  readFileSync(options.releaseEvidence, 'utf8')
+);
 const faultEvidence = JSON.parse(readFileSync(options.faultEvidence, 'utf8'));
 const traffic = productionTrafficReport(samples, {
   minimumSamples: options.minimumSamples,
@@ -127,14 +157,17 @@ const sourceTreeHash = sha256([
 const run = createEvidenceRun({
   runId: `production-traffic-${randomBytes(8).toString('hex')}`,
   evidenceClass: 'production',
-  benchmarkHash: releaseEvidence.derived?.derivedHash || releaseEvidence.reportHash,
+  benchmarkHash:
+    releaseEvidence.derived?.derivedHash || releaseEvidence.reportHash,
   sourceTreeHash,
   runner: { name: 'ucr-production-traffic', node: process.version },
 });
-const { privateKey, publicKey } = generateKeyPairSync('ed25519');
-const ledger = sealEvidenceLedger(run, samples, { privateKey });
-const ledgerPublicKey = publicKey.export({ type: 'spki', format: 'pem' });
-const ledgerVerification = verifyEvidenceLedger(ledger, { publicKey });
+const ledger = sealEvidenceLedger(run, samples, {
+  privateKey: signingIdentity.privateKey,
+});
+const ledgerVerification = verifyEvidenceLedger(ledger, {
+  publicKey: signingIdentity.publicKey,
+});
 const readiness = productionReadiness({
   release: releaseEvidence.verdict,
   evidenceClasses: ['effectiveness', 'superiority', 'production'],
@@ -152,7 +185,9 @@ const body = {
   slos,
   readiness,
   ledger,
-  ledgerPublicKey,
+  ledgerKeyId: signingIdentity.keyId,
+  identifiersPseudonymized: true,
+  pseudonymizationKeyId: pseudonymKeyId,
   ledgerVerification,
   passed: readiness.ready && ledgerVerification.valid,
 };

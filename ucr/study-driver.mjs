@@ -3,6 +3,40 @@ import { sha256 } from './protocol.mjs';
 
 export const STUDY_DRIVER_PROTOCOL = 'ucr.study-driver/1';
 
+const DEFAULT_DRIVER_ENVIRONMENT = Object.freeze([
+  'APPDATA',
+  'HOME',
+  'LOCALAPPDATA',
+  'PATH',
+  'PATHEXT',
+  'SHELL',
+  'SystemDrive',
+  'SystemRoot',
+  'TEMP',
+  'TMP',
+  'USERPROFILE',
+]);
+const FORBIDDEN_DRIVER_ENVIRONMENT = new Set([
+  'UCR_STUDY_SECRET',
+  'UCR_EVIDENCE_PRIVATE_KEY_FILE',
+  'UCR_TRAFFIC_PSEUDONYM_SECRET',
+]);
+
+/** Build the explicit environment passed to an operator-provided study driver. */
+export function studyDriverChildEnvironment(environment = process.env) {
+  const additional = String(environment?.UCR_STUDY_DRIVER_ENV_ALLOWLIST || '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const allowed = new Set([...DEFAULT_DRIVER_ENVIRONMENT, ...additional]);
+  for (const name of FORBIDDEN_DRIVER_ENVIRONMENT) allowed.delete(name);
+  return Object.fromEntries(
+    [...allowed]
+      .filter((name) => environment?.[name] != null)
+      .map((name) => [name, environment[name]])
+  );
+}
+
 export function studyDriverEnvironmentKey(client) {
   if (!UCR_CLIENT_REGISTRY[client])
     throw new Error(`unknown UCR study client ${client}`);
@@ -41,8 +75,10 @@ export function validateStudyDriverResult(result, trial) {
     diagnostics.push('producer client mismatch');
   if (result?.consumerClient !== trial?.consumerClient)
     diagnostics.push('consumer client mismatch');
-  const expectedInvocations = trial?.expectedProviderInvocations || 2;
-  if (result?.providerInvocations !== expectedInvocations)
+  const expectedInvocations = trial?.expectedProviderInvocations;
+  if (!Number.isInteger(expectedInvocations) || expectedInvocations < 2)
+    diagnostics.push('trial omits a valid expectedProviderInvocations count');
+  else if (result?.providerInvocations !== expectedInvocations)
     diagnostics.push(
       `trial requires exactly ${expectedInvocations} planned provider calls`
     );
@@ -77,13 +113,12 @@ export function validateStudyDriverResult(result, trial) {
     semanticDelta.evidenceRefs.length === 0
   )
     diagnostics.push('model-authored semantic delta is incomplete');
-  if (
-    result?.semanticHarvest?.deltaHash !== sha256(semanticDelta || {})
-  )
+  if (result?.semanticHarvest?.deltaHash !== sha256(semanticDelta || {}))
     diagnostics.push('semantic delta hash mismatch');
   if (
     producerInvocations.length !== 1 ||
-    result?.semanticHarvest?.authorInvocationId !== producerInvocations[0]?.invocationId
+    result?.semanticHarvest?.authorInvocationId !==
+      producerInvocations[0]?.invocationId
   )
     diagnostics.push('semantic delta is not bound to the producer invocation');
   if (result?.semanticHarvest?.additionalModelCalls !== 0)
@@ -100,10 +135,13 @@ export function validateStudyDriverResult(result, trial) {
     diagnostics.push('provider-native total token accounting is missing');
   if (!Number.isFinite(result?.latencyMs) || result.latencyMs < 0)
     diagnostics.push('provider latency accounting is missing');
-  if (!result?.producerVersion || !result?.consumerVersion)
-    diagnostics.push('CLI versions are not pinned in the result');
-  if (!result?.modelVersion)
-    diagnostics.push('model version is not pinned in the result');
+  if (
+    result?.producerVersion !== trial?.producerVersion ||
+    result?.consumerVersion !== trial?.consumerVersion
+  )
+    diagnostics.push('executed CLI versions differ from the frozen plan');
+  if (result?.modelVersion !== trial?.consumerModelVersion)
+    diagnostics.push('executed model version differs from the frozen plan');
   if (
     telemetry.length !== expectedInvocations ||
     producerInvocations.length !== 1 ||
@@ -144,8 +182,9 @@ export function validateStudyDriverResult(result, trial) {
   )
     diagnostics.push('successor agent topology mismatch');
   if (
-    JSON.stringify(consumerInvocations.map((invocation) => invocation.agentId)) !==
-    JSON.stringify(trial?.successorAgentIds || [])
+    JSON.stringify(
+      consumerInvocations.map((invocation) => invocation.agentId)
+    ) !== JSON.stringify(trial?.successorAgentIds || [])
   )
     diagnostics.push('consumer invocations are not bound to planned agents');
   const concurrentOverlapObserved =
@@ -163,10 +202,7 @@ export function validateStudyDriverResult(result, trial) {
     (topology.concurrentOverlapObserved !== true || !concurrentOverlapObserved)
   )
     diagnostics.push('concurrent successors did not overlap');
-  if (
-    result?.delivered === true &&
-    result?.deliveryPhase !== 'pre-action'
-  )
+  if (result?.delivered === true && result?.deliveryPhase !== 'pre-action')
     diagnostics.push('delivered cognition was not available pre-action');
   return {
     valid: diagnostics.length === 0,

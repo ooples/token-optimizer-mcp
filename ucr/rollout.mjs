@@ -10,6 +10,17 @@ export const ROLLOUT_STAGES = Object.freeze([
   'stable',
 ]);
 
+/** Remove stable production identifiers before any durable evidence is sealed. */
+export function pseudonymizeProductionSamples(samples, { secret, keyId } = {}) {
+  if (!secret || !keyId)
+    throw new Error('production pseudonymization requires secret and keyId');
+  return (samples || []).map((sample) => ({
+    ...sample,
+    client: sha256([secret, keyId, 'client', sample.client]),
+    projectId: sha256([secret, keyId, 'project', sample.projectId]),
+  }));
+}
+
 export class RolloutController {
   constructor({ stage = 'offline-replay', thresholds = {} } = {}) {
     if (!ROLLOUT_STAGES.includes(stage))
@@ -255,7 +266,8 @@ export function validateProductionSample(sample) {
   const diagnostics = [];
   if (sample?.realTraffic !== true) diagnostics.push('not real traffic');
   if (sample?.optIn !== true) diagnostics.push('missing explicit opt-in');
-  if (!Number.isFinite(sample?.timestamp)) diagnostics.push('invalid timestamp');
+  if (!Number.isFinite(sample?.timestamp))
+    diagnostics.push('invalid timestamp');
   if (!REQUIRED_TRAFFIC_STAGES.includes(sample?.rolloutStage))
     diagnostics.push('invalid rollout stage');
   if (!sample?.client) diagnostics.push('missing client');

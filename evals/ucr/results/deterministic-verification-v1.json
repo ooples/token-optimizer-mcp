@@ -46,7 +46,7 @@
     "modelRuns": 9,
     "executableClientSmokes": 3,
     "competitiveReproductions": 0,
-    "reportHash": "ccb15e6663d5b252d2bd18adca952212cf13c5701d261096107658854ce1680d",
+    "reportHash": "d07b82ca74c0a4685ada4fd82b18fdb9d78770e2cc2f3e3d7ba9bc181ad16e45",
     "evidenceTiers": {
       "transport": {
         "status": "missing",
@@ -59,7 +59,7 @@
         "ledgers": 2,
         "rows": 707,
         "hashes": [
-          "fd8acf44434538a3eb638389dfccdde5c89c8f3d89da6886044750c64426f6a1",
+          "6180a43af1ef60b93812c8b0e71b3038f867e5c6c725fa79f51b7e3e2d90234c",
           "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
         ]
       },
@@ -266,8 +266,8 @@
         "cognitiveReductionVsFull": 0.9840663900414938,
         "studyDesign": {
           "passed": true,
-          "trials": 52074,
-          "providerInvocations": 108882,
+          "trials": 54054,
+          "providerInvocations": 113022,
           "mappedMetrics": 37,
           "representativeStudyClients": 3,
           "universalDriverClients": 16,
@@ -378,8 +378,8 @@
         "cognitiveReductionVsFull": 0.9840663900414938,
         "studyDesign": {
           "passed": true,
-          "trials": 52074,
-          "providerInvocations": 108882,
+          "trials": 54054,
+          "providerInvocations": 113022,
           "mappedMetrics": 37,
           "representativeStudyClients": 3,
           "universalDriverClients": 16,
@@ -573,5 +573,5 @@
       }
     }
   ],
-  "reportHash": "523c2c0797944c2e3b09aeefbddfd2d751f9f3dda3d39ace79eff756058de085"
+  "reportHash": "75fe6674854df2d5c8baa5b3a6fa84ae1cab2793e91d555329962ffe7901c164"
 }

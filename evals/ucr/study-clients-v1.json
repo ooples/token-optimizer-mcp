@@ -4,21 +4,27 @@
     {
       "id": "codex",
       "model": "gpt-5.6-sol",
+      "modelVersion": "gpt-5.6-sol",
       "modelFamily": "openai",
+      "version": "codex-cli 0.147.0",
       "lifecycleFamily": "process-hook",
       "commandEnvironment": "UCR_CODEX_COMMAND"
     },
     {
       "id": "claude-code",
-      "model": "sonnet",
+      "model": "claude-sonnet-5",
+      "modelVersion": "claude-sonnet-5",
       "modelFamily": "anthropic",
+      "version": "2.1.225 (Claude Code)",
       "lifecycleFamily": "process-hook",
       "commandEnvironment": "UCR_CLAUDE_COMMAND"
     },
     {
       "id": "gemini",
-      "model": "configured-live-model",
+      "model": "gemini-2.5-pro",
+      "modelVersion": "gemini-2.5-pro",
       "modelFamily": "google",
+      "version": "gemini-cli 0.28.1",
       "lifecycleFamily": "process-hook",
       "commandEnvironment": "UCR_GEMINI_COMMAND"
     }

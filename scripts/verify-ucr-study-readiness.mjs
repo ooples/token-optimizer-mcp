@@ -11,6 +11,8 @@ import {
   preRegisterBenchmark,
   releaseMetricCoveragePreflight,
   sha256,
+  STUDY_DRIVER_PROTOCOL,
+  STUDY_NEGATIVE_ARMS,
   studyDriverRegistry,
   UCR_CLIENT_REGISTRY,
   zeroFailureWilsonSampleSize,
@@ -34,8 +36,9 @@ const pairedRepetitionsPerCell = Math.ceil(
   registration.powerAnalysis.perArm / benchmark.tasks.length
 );
 const negativeRepetitionsPerCell = Math.ceil(
-  zeroFailureWilsonSampleSize({ comparisons: clients.length ** 2 * 4 }).samples /
-    benchmark.tasks.length
+  zeroFailureWilsonSampleSize({
+    comparisons: clients.length ** 2 * STUDY_NEGATIVE_ARMS.length,
+  }).samples / benchmark.tasks.length
 );
 const plan = buildFullStudyPlan({
   benchmark,
@@ -59,9 +62,10 @@ const coverage = releaseMetricCoveragePreflight({
 });
 const driverRegistry = studyDriverRegistry();
 const driverContractPassed =
-  Object.keys(driverRegistry).length === Object.keys(UCR_CLIENT_REGISTRY).length &&
+  Object.keys(driverRegistry).length ===
+    Object.keys(UCR_CLIENT_REGISTRY).length &&
   Object.values(driverRegistry).every(
-    (driver) => driver.protocol === 'ucr.study-driver/1'
+    (driver) => driver.protocol === STUDY_DRIVER_PROTOCOL
   );
 const powered =
   plan.primaryPairsPerDirection >= registration.powerAnalysis.perArm &&
@@ -84,10 +88,16 @@ const body = {
   negativeSamplesPerDirectionPerArm: plan.negativeSamplesPerDirectionPerArm,
   negativeConfidence: plan.negativeConfidence,
   trials: plan.trials.length,
-  providerInvocations: plan.trials.reduce(
-    (sum, trial) => sum + trial.expectedProviderInvocations,
-    0
-  ),
+  providerInvocations: plan.trials.reduce((sum, trial) => {
+    if (
+      !Number.isInteger(trial.expectedProviderInvocations) ||
+      trial.expectedProviderInvocations < 2
+    )
+      throw new Error(
+        `trial ${trial.trialId} omits expectedProviderInvocations`
+      );
+    return sum + trial.expectedProviderInvocations;
+  }, 0),
   mappedMetrics: Object.keys(coverage.metricSources).length,
   representativeStudyClients: clients.length,
   universalDriverClients: Object.keys(driverRegistry).length,
@@ -97,11 +107,13 @@ const body = {
   checks: coverage.design.checks,
 };
 const report = { ...body, reportHash: sha256(body) };
-if (write) writeFileSync(OUTPUT, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+if (write)
+  writeFileSync(OUTPUT, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 let artifactValid = false;
 if (existsSync(OUTPUT)) {
   try {
-    artifactValid = canonicalJson(JSON.parse(readFileSync(OUTPUT, 'utf8'))) ===
+    artifactValid =
+      canonicalJson(JSON.parse(readFileSync(OUTPUT, 'utf8'))) ===
       canonicalJson(report);
   } catch {
     artifactValid = false;
@@ -117,8 +129,7 @@ console.log(
     pairedRepetitionsPerCell,
     primaryPairsPerDirection: plan.primaryPairsPerDirection,
     negativeRepetitionsPerCell,
-    negativeSamplesPerDirectionPerArm:
-      plan.negativeSamplesPerDirectionPerArm,
+    negativeSamplesPerDirectionPerArm: plan.negativeSamplesPerDirectionPerArm,
     trials: plan.trials.length,
     providerInvocations: body.providerInvocations,
     mappedMetrics: Object.keys(coverage.metricSources).length,

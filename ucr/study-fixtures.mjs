@@ -209,10 +209,11 @@ export function gradeStudyFixture({ task, fixture, actionAudit = [] }) {
     outcome = {};
   }
   const answerCorrect = outcome.answer === fixture.private.expectedAnswer;
+  const accepted = answerCorrect && changedProtected.length === 0;
   const state = Object.fromEntries(
-    Object.keys(task.grader?.requiredState || {}).map((key) => [
+    Object.entries(task.grader?.requiredState || {}).map(([key, value]) => [
       key,
-      answerCorrect && changedProtected.length === 0,
+      accepted ? value : undefined,
     ])
   );
   const receipts = new Set(
@@ -221,10 +222,7 @@ export function gradeStudyFixture({ task, fixture, actionAudit = [] }) {
       : []
   );
   for (const action of actionAudit) {
-    if (
-      action?.executed === true &&
-      typeof action?.receipt === 'string'
-    )
+    if (action?.executed === true && typeof action?.receipt === 'string')
       receipts.add(action.receipt);
   }
   if (!answerCorrect)

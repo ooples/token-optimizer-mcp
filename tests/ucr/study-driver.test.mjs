@@ -3,6 +3,7 @@ import {
   STUDY_DRIVER_PROTOCOL,
   UCR_CLIENT_REGISTRY,
   sha256,
+  studyDriverChildEnvironment,
   studyDriverRegistry,
   studyDirectionEnvironmentKey,
   validateStudyDriverResult,
@@ -24,10 +25,26 @@ describe('universal live-study driver contract', () => {
     );
   });
 
+  test('passes only allowlisted driver environment without study secrets', () => {
+    expect(
+      studyDriverChildEnvironment({
+        PATH: 'bin',
+        OPENAI_API_KEY: 'provider-key',
+        UCR_STUDY_SECRET: 'hidden-variant-secret',
+        UCR_EVIDENCE_PRIVATE_KEY_FILE: 'private.pem',
+        UCR_STUDY_DRIVER_ENV_ALLOWLIST:
+          'OPENAI_API_KEY,UCR_STUDY_SECRET,UCR_EVIDENCE_PRIVATE_KEY_FILE',
+      })
+    ).toEqual({ PATH: 'bin', OPENAI_API_KEY: 'provider-key' });
+  });
+
   test('requires the planned calls, zero capture calls, and complete telemetry', () => {
     const trial = {
       producerClient: 'codex',
       consumerClient: 'claude-code',
+      producerVersion: 'codex-v1',
+      consumerVersion: 'claude-v1',
+      consumerModelVersion: 'claude-model-v1',
       expectedProviderInvocations: 2,
       producerContinuitySessionId: 's1',
       consumerContinuitySessionId: 's2',
@@ -69,9 +86,9 @@ describe('universal live-study driver contract', () => {
       actionAuditComplete: true,
       totalTokens: 100,
       latencyMs: 20,
-      producerVersion: '1',
-      consumerVersion: '1',
-      modelVersion: 'pinned',
+      producerVersion: 'codex-v1',
+      consumerVersion: 'claude-v1',
+      modelVersion: 'claude-model-v1',
       executionTopology: {
         producerContinuitySessionId: 's1',
         consumerContinuitySessionId: 's2',
@@ -109,10 +126,19 @@ describe('universal live-study driver contract', () => {
       ],
     };
     result.semanticHarvest.deltaHash = sha256(delta);
-    expect(validateStudyDriverResult(result, trial)).toMatchObject({ valid: true });
+    expect(validateStudyDriverResult(result, trial)).toMatchObject({
+      valid: true,
+    });
     expect(
-      validateStudyDriverResult({ ...result, providerInvocations: 1 }, trial).valid
+      validateStudyDriverResult({ ...result, providerInvocations: 1 }, trial)
+        .valid
     ).toBe(false);
+    expect(
+      validateStudyDriverResult(result, {
+        ...trial,
+        expectedProviderInvocations: undefined,
+      }).diagnostics
+    ).toContain('trial omits a valid expectedProviderInvocations count');
 
     const concurrentTrial = {
       ...trial,

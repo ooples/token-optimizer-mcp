@@ -9,6 +9,7 @@ import {
   createEvidenceRun,
   deriveReleaseMetrics,
   evidenceTierReport,
+  loadProvisionedEvidenceIdentity,
   releaseVerdict,
   sealEvidenceLedger,
   sha256,
@@ -72,9 +73,23 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
   const report = JSON.parse(readFileSync(path, 'utf8'));
   const { reportHash, ...body } = report;
   const reportHashValid = sha256(body) === reportHash;
+  let verificationPublicKey = report.ledgerPublicKey || null;
+  let keyResolutionError = null;
+  if (report.ledgerKeyId) {
+    try {
+      verificationPublicKey = loadProvisionedEvidenceIdentity({
+        requirePrivate: false,
+        expectedKeyId: report.ledgerKeyId,
+      }).publicKey;
+    } catch (error) {
+      verificationPublicKey = null;
+      keyResolutionError =
+        error instanceof Error ? error.message : String(error);
+    }
+  }
   const ledgerVerification = report.ledger
     ? verifyEvidenceLedger(report.ledger, {
-        publicKey: report.ledgerPublicKey || null,
+        publicKey: verificationPublicKey,
       })
     : null;
   return {
@@ -85,6 +100,7 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
     present: true,
     valid:
       reportHashValid &&
+      keyResolutionError === null &&
       (!requiredPass || report.passed === true) &&
       (!ledgerVerification || ledgerVerification.valid),
     reportHashValid,
@@ -95,6 +111,8 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
     sourceTreeHash: report.sourceTreeHash || report.sourceHash || null,
     ledgerHash: ledgerVerification?.ledgerHash || null,
     ledgerVerification,
+    keyResolutionError,
+    verificationPublicKey,
     report,
   };
 }
@@ -153,7 +171,7 @@ const ledgerInputs = [
     .filter((artifact) => artifact.valid && artifact.report?.ledger)
     .map((artifact) => ({
       ledger: artifact.report.ledger,
-      publicKey: artifact.report.ledgerPublicKey || null,
+      publicKey: artifact.verificationPublicKey,
     })),
 ];
 const derived = deriveReleaseMetrics(ledgerInputs);
@@ -162,8 +180,14 @@ const verdict = releaseVerdict(derived.metrics);
 const productionTraffic = artifacts.find(
   (artifact) => artifact.name === 'production-traffic'
 );
+const studyReadiness = artifacts.find(
+  (artifact) => artifact.name === 'study-readiness'
+);
 const tieredVerdict = tieredReleaseVerdict(derived.metrics, {
-  production: productionTraffic?.report?.readiness || null,
+  production:
+    productionTraffic?.valid === true
+      ? productionTraffic.report?.readiness || null
+      : null,
 });
 const validArtifacts = artifacts.filter((artifact) => artifact.valid);
 const liveArtifacts = artifacts.filter(
@@ -174,7 +198,8 @@ const liveArtifacts = artifacts.filter(
 const totalTraffic = (usage) =>
   Number.isFinite(usage?.totalTokens)
     ? usage.totalTokens
-    : Number.isFinite(usage?.inputTokens) && Number.isFinite(usage?.outputTokens)
+    : Number.isFinite(usage?.inputTokens) &&
+        Number.isFinite(usage?.outputTokens)
       ? usage.inputTokens + usage.outputTokens
       : null;
 const percentDelta = (control, runtime) =>
@@ -206,8 +231,7 @@ const liveDirectionMetrics = liveArtifacts.map((artifact) => {
     nativeGuardEnforced: row?.runtime?.nativeGuardEnforced ?? null,
     captureModelCalls:
       row?.runtime?.firstSuccessorCost?.additionalModelCalls ?? null,
-    consumerStaticSchemaTokens:
-      row?.runtime?.usage?.staticSchemaTokens ?? null,
+    consumerStaticSchemaTokens: row?.runtime?.usage?.staticSchemaTokens ?? null,
     capsuleTokens: row?.runtime?.usage?.capsuleTokens ?? null,
     controlTokenTraffic: controlTraffic,
     runtimeTokenTraffic: runtimeTraffic,
@@ -253,7 +277,13 @@ const body = {
       'metrics are derived only from ledgers at or above each metric evidence requirement',
     tiers,
   },
-  artifacts: artifacts.map(({ report: _report, ...artifact }) => artifact),
+  artifacts: artifacts.map(
+    ({
+      report: _report,
+      verificationPublicKey: _verificationPublicKey,
+      ...artifact
+    }) => artifact
+  ),
   summary: {
     artifactsValid: validArtifacts.length,
     artifactsTotal: artifacts.length,
@@ -315,31 +345,16 @@ const body = {
     cognitiveReductionVsFull: artifacts.find(
       (artifact) => artifact.name === 'mcp-context'
     )?.report?.findings?.graphCaptureReductionVsFull,
-    studyDesign: artifacts.find(
-      (artifact) => artifact.name === 'study-readiness'
-    )?.report
+    studyDesign: studyReadiness?.report
       ? {
-          passed: artifacts.find(
-            (artifact) => artifact.name === 'study-readiness'
-          ).report.passed,
-          trials: artifacts.find(
-            (artifact) => artifact.name === 'study-readiness'
-          ).report.trials,
-          providerInvocations: artifacts.find(
-            (artifact) => artifact.name === 'study-readiness'
-          ).report.providerInvocations,
-          mappedMetrics: artifacts.find(
-            (artifact) => artifact.name === 'study-readiness'
-          ).report.mappedMetrics,
-          representativeStudyClients: artifacts.find(
-            (artifact) => artifact.name === 'study-readiness'
-          ).report.representativeStudyClients,
-          universalDriverClients: artifacts.find(
-            (artifact) => artifact.name === 'study-readiness'
-          ).report.universalDriverClients,
-          coverage: artifacts.find(
-            (artifact) => artifact.name === 'study-readiness'
-          ).report.coverage,
+          passed: studyReadiness.report.passed,
+          trials: studyReadiness.report.trials,
+          providerInvocations: studyReadiness.report.providerInvocations,
+          mappedMetrics: studyReadiness.report.mappedMetrics,
+          representativeStudyClients:
+            studyReadiness.report.representativeStudyClients,
+          universalDriverClients: studyReadiness.report.universalDriverClients,
+          coverage: studyReadiness.report.coverage,
         }
       : null,
   },
@@ -353,15 +368,11 @@ const body = {
   tieredVerdict,
   claims: {
     conformance: validArtifacts.length === artifacts.length,
-    executableCrossClient:
-      passedLiveDirections.length >= 2,
+    executableCrossClient: passedLiveDirections.length >= 2,
     effectiveness: tiers.effectiveness.status === 'present',
     superiority: tiers.superiority.status === 'present',
     production: tiers.production.status === 'present',
-    replacement:
-      tieredVerdict.effectiveness.passed &&
-      tieredVerdict.superiority.passed &&
-      tieredVerdict.production.ready === true,
+    replacement: tieredVerdict.passed === true,
   },
 };
 const report = { ...body, reportHash: sha256(body) };

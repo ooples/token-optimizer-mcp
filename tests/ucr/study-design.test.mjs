@@ -2,11 +2,13 @@ import { describe, expect, test } from '@jest/globals';
 import {
   BENCHMARK_ARMS,
   BENCHMARK_FAMILIES,
+  STUDY_NEGATIVE_ARMS,
   buildFullStudyPlan,
   buildCausalChain,
   freezeBenchmark,
   preRegisterBenchmark,
   releaseMetricCoveragePreflight,
+  sha256,
   studyDesignCoverage,
   validateCausalChain,
   validateTrialResult,
@@ -29,9 +31,27 @@ const source = {
 };
 const benchmark = freezeBenchmark(source);
 const clients = [
-  { id: 'codex', model: 'gpt', modelFamily: 'openai' },
-  { id: 'claude-code', model: 'claude', modelFamily: 'anthropic' },
-  { id: 'gemini', model: 'gemini', modelFamily: 'google' },
+  {
+    id: 'codex',
+    model: 'gpt',
+    modelVersion: 'gpt-v1',
+    modelFamily: 'openai',
+    version: 'codex-v1',
+  },
+  {
+    id: 'claude-code',
+    model: 'claude',
+    modelVersion: 'claude-v1',
+    modelFamily: 'anthropic',
+    version: 'claude-v1',
+  },
+  {
+    id: 'gemini',
+    model: 'gemini',
+    modelVersion: 'gemini-v1',
+    modelFamily: 'google',
+    version: 'gemini-v1',
+  },
 ];
 
 describe('full effectiveness study design', () => {
@@ -47,12 +67,19 @@ describe('full effectiveness study design', () => {
       passed: true,
       coverage: { families: 1, arms: 1, clients: 3, modelFamilies: 3 },
     });
-    expect(new Set(plan.trials.map((trial) => trial.workspaceIsolationId)).size).toBe(
-      plan.trials.length
+    expect(
+      new Set(plan.trials.map((trial) => trial.workspaceIsolationId)).size
+    ).toBe(plan.trials.length);
+    expect(
+      plan.trials.every((trial) => trial.hiddenVariantId.length === 24)
+    ).toBe(true);
+    expect(new Set(plan.trials.map((trial) => trial.sessionMode))).toEqual(
+      new Set(['same-session', 'cross-session'])
     );
-    expect(plan.trials.every((trial) => trial.hiddenVariantId.length === 24)).toBe(
-      true
-    );
+    expect(coverage.checks).toMatchObject({
+      sameSession: true,
+      crossSession: true,
+    });
   });
 
   test('preflights every effectiveness and superiority metric source', () => {
@@ -85,10 +112,11 @@ describe('full effectiveness study design', () => {
   });
 
   test('powers one-percent negative-delivery claims instead of relying on zero point estimates', () => {
-    const requirement = zeroFailureWilsonSampleSize();
+    const comparisons = clients.length ** 2 * STUDY_NEGATIVE_ARMS.length;
+    const requirement = zeroFailureWilsonSampleSize({ comparisons });
     expect(requirement.samples).toBeGreaterThan(1000);
     expect(requirement).toMatchObject({
-      comparisons: 36,
+      comparisons,
       familyAlpha: 0.05,
       method: 'bonferroni-familywise-wilson-zero-failure-upper-bound',
     });
@@ -101,6 +129,9 @@ describe('full effectiveness study design', () => {
     });
     expect(plan.negativeSamplesPerDirectionPerArm).toBeGreaterThanOrEqual(
       requirement.samples
+    );
+    expect(plan.negativeConfidence.comparisons).toBe(
+      plan.directions.length * STUDY_NEGATIVE_ARMS.length
     );
   });
 
@@ -125,6 +156,18 @@ describe('full effectiveness study design', () => {
         { ...empty, promptHash: 'different' }
       )
     ).toMatchObject({ valid: false });
+    expect(
+      validateTrialResult(
+        { ...runtime, graderVerified: true, promptHash: 'executed-different' },
+        runtime,
+        empty
+      )
+    ).toMatchObject({
+      valid: false,
+      diagnostics: expect.arrayContaining([
+        'executed promptHash differs from the planned trial',
+      ]),
+    });
     expect(validateCausalChain({ stages: [] })).toMatchObject({ valid: false });
     const chain = buildCausalChain(
       [
@@ -151,5 +194,13 @@ describe('full effectiveness study design', () => {
       }
     );
     expect(validateCausalChain(chain)).toMatchObject({ valid: true });
+    const reorderedEvents = [...chain.events].reverse();
+    expect(
+      validateCausalChain({
+        ...chain,
+        events: reorderedEvents,
+        evidenceLedgerHash: sha256(reorderedEvents),
+      })
+    ).toMatchObject({ valid: true });
   });
 });

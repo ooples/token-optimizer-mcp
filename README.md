@@ -1423,9 +1423,9 @@ keeps the release verdict `insufficient` until its confidence, competitive, and
 production gates pass.
 
 The replacement-grade protocol is intentionally larger than that smoke:
-52,074 all-family/all-arm trial envelopes, 108,882 provider
+54,054 all-family/all-arm trial envelopes, 113,022 provider
 calls, three independent model families, direction-level non-inferiority, and
-1,012 hard-negative opportunities per direction and arm so the Bonferroni-adjusted
+1,056 hard-negative opportunities per direction and arm so the Bonferroni-adjusted
 95% family-wise false-delivery upper bound—not only the point estimate—must
 remain below 1%. Run
 `npm run verify:ucr:study-design` to validate the frozen metric coverage. The

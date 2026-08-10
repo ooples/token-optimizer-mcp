@@ -94,8 +94,8 @@ npm run verify:ucr:study-design
 
 The full plan covers all 11 families, seven arms, three independent model
 families, and nine same/cross-client directions. It requires 363 paired
-empty/runtime observations and 1,012 hard-negative opportunities per direction
-and arm: 52,074 trial envelopes and 108,882 provider calls. Concurrent-agent
+empty/runtime observations and 1,056 hard-negative opportunities per direction
+and arm: 54,054 trial envelopes and 113,022 provider calls. Concurrent-agent
 trials use one producer plus two overlapping successors instead of being labels.
 Hard-negative and subgroup intervals control family-wise error across the
 preregistered direction/arm comparisons.

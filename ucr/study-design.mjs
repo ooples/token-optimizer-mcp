@@ -1,4 +1,8 @@
-import { BENCHMARK_ARMS, BENCHMARK_FAMILIES, hiddenTaskVariant } from './benchmark.mjs';
+import {
+  BENCHMARK_ARMS,
+  BENCHMARK_FAMILIES,
+  hiddenTaskVariant,
+} from './benchmark.mjs';
 import { REQUIRED_COMPETITIVE_BASELINES } from './competitors.mjs';
 import {
   EFFECTIVENESS_REQUIRED_METRICS,
@@ -12,6 +16,10 @@ export const STUDY_MODES = Object.freeze({
   agents: Object.freeze(['single-successor', 'concurrent-successors']),
 });
 
+export const STUDY_NEGATIVE_ARMS = Object.freeze(
+  BENCHMARK_ARMS.filter((arm) => !['empty', 'runtime'].includes(arm))
+);
+
 export const REQUIRED_PRODUCTION_STAGES = Object.freeze([
   'shadow-selection',
   'observe-only',
@@ -24,27 +32,25 @@ function normalQuantile(probability) {
   if (!(probability > 0 && probability < 1))
     throw new Error('normal quantile probability must be between zero and one');
   const a = [
-    -39.6968302866538, 220.946098424521, -275.928510446969,
-    138.357751867269, -30.6647980661472, 2.50662827745924,
+    -39.6968302866538, 220.946098424521, -275.928510446969, 138.357751867269,
+    -30.6647980661472, 2.50662827745924,
   ];
   const b = [
-    -54.4760987982241, 161.585836858041, -155.698979859887,
-    66.8013118877197, -13.2806815528857,
+    -54.4760987982241, 161.585836858041, -155.698979859887, 66.8013118877197,
+    -13.2806815528857,
   ];
   const c = [
     -0.00778489400243029, -0.322396458041136, -2.40075827716184,
     -2.54973253934373, 4.37466414146497, 2.93816398269878,
   ];
   const d = [
-    0.00778469570904146, 0.32246712907004, 2.445134137143,
-    3.75440866190742,
+    0.00778469570904146, 0.32246712907004, 2.445134137143, 3.75440866190742,
   ];
   const low = 0.02425;
   if (probability < low) {
     const q = Math.sqrt(-2 * Math.log(probability));
     return (
-      (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q +
-        c[5]) /
+      (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
       ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
     );
   }
@@ -52,9 +58,8 @@ function normalQuantile(probability) {
   const q = probability - 0.5;
   const r = q * q;
   return (
-    (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r +
-      a[5]) *
-    q /
+    ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) *
+      q) /
     (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
   );
 }
@@ -75,12 +80,12 @@ export function bonferroniNormalZ({
 /** Minimum zero-failure opportunities with a family-wise Wilson upper bound. */
 export function zeroFailureWilsonSampleSize({
   maximumRate = 0.01,
-  comparisons = 36,
+  comparisons = 1,
   familyAlpha = 0.05,
   z = null,
 } = {}) {
-  const critical = z ??
-    bonferroniNormalZ({ comparisons, familyAlpha, twoSided: true });
+  const critical =
+    z ?? bonferroniNormalZ({ comparisons, familyAlpha, twoSided: true });
   if (!(maximumRate > 0 && maximumRate < 1) || !(critical > 0))
     throw new Error('invalid zero-failure confidence inputs');
   let samples = 1;
@@ -120,13 +125,22 @@ function shuffle(values, seed) {
 
 function normalizeClients(clients) {
   return (clients || []).map((client) => {
-    if (!client?.id || !client?.model || !client?.modelFamily)
-      throw new Error('study clients require id, model, and modelFamily');
+    if (
+      !client?.id ||
+      !client?.model ||
+      !client?.modelFamily ||
+      !client?.version ||
+      !client?.modelVersion
+    )
+      throw new Error(
+        'study clients require id, model, modelFamily, version, and modelVersion'
+      );
     return {
       id: client.id,
       model: client.model,
       modelFamily: client.modelFamily,
-      version: client.version || 'resolve-at-execution',
+      version: client.version,
+      modelVersion: client.modelVersion,
       lifecycleFamily: client.lifecycleFamily || null,
     };
   });
@@ -144,9 +158,10 @@ function allDirections(clients, includeSameClient) {
   );
 }
 
-function dimensionsFor(task, repetition) {
+function dimensionsFor(task, repetition, taskIndex) {
   return {
-    sessionMode: repetition % 2 ? 'same-session' : 'cross-session',
+    sessionMode:
+      (taskIndex + repetition) % 2 ? 'same-session' : 'cross-session',
     projectMode:
       task.family === 'cross-project-generalization'
         ? 'cross-project'
@@ -208,7 +223,8 @@ export function buildFullStudyPlan({
 } = {}) {
   if (!benchmark?.manifestHash)
     throw new Error('a frozen benchmark with manifestHash is required');
-  if (!secret) throw new Error('study planning requires a hidden-variant secret');
+  if (!secret)
+    throw new Error('study planning requires a hidden-variant secret');
   if (
     !Number.isInteger(pairedRepetitionsPerCell) ||
     pairedRepetitionsPerCell < 1 ||
@@ -227,7 +243,7 @@ export function buildFullStudyPlan({
   };
   const trials = [];
   for (const direction of directions) {
-    for (const task of benchmark.tasks || []) {
+    for (const [taskIndex, task] of (benchmark.tasks || []).entries()) {
       for (
         let repetition = 0;
         repetition < pairedRepetitionsPerCell;
@@ -238,7 +254,7 @@ export function buildFullStudyPlan({
         const armOrder = shuffle(['empty', 'runtime'], `${seed}:${pairId}`);
         for (const arm of armOrder) {
           const trialId = `${pairId}:${arm}`;
-          const dimensions = dimensionsFor(task, repetition);
+          const dimensions = dimensionsFor(task, repetition, taskIndex);
           trials.push({
             trialId,
             pairId,
@@ -252,6 +268,10 @@ export function buildFullStudyPlan({
             consumerFamily: direction.consumer.modelFamily,
             producerModel: direction.producer.model,
             consumerModel: direction.consumer.model,
+            producerVersion: direction.producer.version,
+            consumerVersion: direction.consumer.version,
+            producerModelVersion: direction.producer.modelVersion,
+            consumerModelVersion: direction.consumer.modelVersion,
             hiddenVariantId: variant.publicTask.hiddenVariantId,
             publicVariant: variant.publicTask.publicVariant,
             variantPrompt: variant.publicTask.prompt,
@@ -271,13 +291,11 @@ export function buildFullStudyPlan({
         repetition < negativeRepetitionsPerCell;
         repetition++
       ) {
-        for (const arm of BENCHMARK_ARMS.filter(
-          (candidate) => !['empty', 'runtime'].includes(candidate)
-        )) {
+        for (const arm of STUDY_NEGATIVE_ARMS) {
           const nonce = `${direction.id}:${task.id}:${arm}:${repetition}`;
           const variant = hiddenTaskVariant(task, secret, { nonce });
           const trialId = `${nonce}:negative`;
-          const dimensions = dimensionsFor(task, repetition);
+          const dimensions = dimensionsFor(task, repetition, taskIndex);
           trials.push({
             trialId,
             pairId: null,
@@ -291,6 +309,10 @@ export function buildFullStudyPlan({
             consumerFamily: direction.consumer.modelFamily,
             producerModel: direction.producer.model,
             consumerModel: direction.consumer.model,
+            producerVersion: direction.producer.version,
+            consumerVersion: direction.consumer.version,
+            producerModelVersion: direction.producer.modelVersion,
+            consumerModelVersion: direction.consumer.modelVersion,
             hiddenVariantId: variant.publicTask.hiddenVariantId,
             publicVariant: variant.publicTask.publicVariant,
             variantPrompt: variant.publicTask.prompt,
@@ -320,7 +342,7 @@ export function buildFullStudyPlan({
     }
   );
   const negativeConfidence = zeroFailureWilsonSampleSize({
-    comparisons: directions.length * 4,
+    comparisons: directions.length * STUDY_NEGATIVE_ARMS.length,
   });
   const body = {
     schemaVersion: 'ucr.full-study-plan/1',
@@ -376,11 +398,10 @@ export function studyDesignCoverage(plan) {
       ) === 1,
     clients: clients.size >= 3,
     modelFamilies: modelFamilies.size >= 3,
-    bidirectional:
-      [...directions].some((direction) => {
-        const [left, right] = direction.split('->');
-        return directions.has(`${right}->${left}`);
-      }),
+    bidirectional: [...directions].some((direction) => {
+      const [left, right] = direction.split('->');
+      return directions.has(`${right}->${left}`);
+    }),
     sameClient: [...directions].some((direction) => {
       const [left, right] = direction.split('->');
       return left === right;
@@ -389,6 +410,7 @@ export function studyDesignCoverage(plan) {
       const [left, right] = direction.split('->');
       return left !== right;
     }),
+    sameSession: trials.some((trial) => trial.sessionMode === 'same-session'),
     crossSession: trials.some((trial) => trial.sessionMode === 'cross-session'),
     crossProject: trials.some((trial) => trial.projectMode === 'cross-project'),
     concurrentAgents: trials.some(
@@ -418,16 +440,14 @@ export function studyDesignCoverage(plan) {
     ),
     executionTopology: trials.every((trial) => {
       const sameSession =
-        trial.producerContinuitySessionId ===
-        trial.consumerContinuitySessionId;
+        trial.producerContinuitySessionId === trial.consumerContinuitySessionId;
       const sameProject = trial.producerProjectId === trial.consumerProjectId;
       const concurrent = trial.successorAgentIds?.length > 1;
       return (
         sameSession === (trial.sessionMode === 'same-session') &&
         sameProject === (trial.projectMode === 'same-project') &&
         concurrent === (trial.agentMode === 'concurrent-successors') &&
-        trial.expectedProviderInvocations ===
-          1 + trial.successorAgentIds.length
+        trial.expectedProviderInvocations === 1 + trial.successorAgentIds.length
       );
     }),
   };
@@ -473,9 +493,18 @@ export function validateTrialResult(result, trial, pairedTrial = null) {
     diagnostics.push('workspace isolation mismatch');
   if (result?.sessionIsolationId !== trial?.sessionIsolationId)
     diagnostics.push('session isolation mismatch');
+  for (const path of ['promptHash', 'permissionsHash', 'budgets']) {
+    if (
+      canonicalJson(field(result, path)) !== canonicalJson(field(trial, path))
+    )
+      diagnostics.push(`executed ${path} differs from the planned trial`);
+  }
   if (pairedTrial) {
     for (const path of ['promptHash', 'permissionsHash', 'budgets']) {
-      if (canonicalJson(field(trial, path)) !== canonicalJson(field(pairedTrial, path)))
+      if (
+        canonicalJson(field(trial, path)) !==
+        canonicalJson(field(pairedTrial, path))
+      )
         diagnostics.push(`paired ${path} differs`);
     }
     if (trial.workspaceIsolationId === pairedTrial.workspaceIsolationId)
@@ -505,27 +534,41 @@ export function validateCausalChain(chain) {
   for (let index = 0; index < required.length; index++) {
     const stage = stages[index];
     if (stage?.stage !== required[index])
-      diagnostics.push(`causal stage ${required[index]} is missing or out of order`);
+      diagnostics.push(
+        `causal stage ${required[index]} is missing or out of order`
+      );
     if (!stage?.eventId || !stage?.artifactHash)
-      diagnostics.push(`causal stage ${required[index]} lacks evidence binding`);
+      diagnostics.push(
+        `causal stage ${required[index]} lacks evidence binding`
+      );
     if (index > 0 && stage?.parentEventId !== stages[index - 1]?.eventId)
       diagnostics.push(`causal stage ${required[index]} has the wrong parent`);
     const event = eventById.get(stage?.eventId);
     if (!event || event.stage !== required[index])
-      diagnostics.push(`causal stage ${required[index]} is absent from its evidence ledger`);
+      diagnostics.push(
+        `causal stage ${required[index]} is absent from its evidence ledger`
+      );
     else if (sha256(event.artifact ?? event) !== stage.artifactHash)
-      diagnostics.push(`causal stage ${required[index]} artifact hash mismatch`);
+      diagnostics.push(
+        `causal stage ${required[index]} artifact hash mismatch`
+      );
     if (event?.observer !== 'host')
       diagnostics.push(`causal stage ${required[index]} was not host-observed`);
     if (!Number.isFinite(event?.observedAt))
-      diagnostics.push(`causal stage ${required[index]} lacks an observed sequence`);
+      diagnostics.push(
+        `causal stage ${required[index]} lacks an observed sequence`
+      );
+    const parentEvent =
+      index > 0 ? eventById.get(stages[index - 1]?.eventId) : null;
     if (
       index > 0 &&
       Number.isFinite(event?.observedAt) &&
-      Number.isFinite(events[index - 1]?.observedAt) &&
-      event.observedAt <= events[index - 1].observedAt
+      Number.isFinite(parentEvent?.observedAt) &&
+      event.observedAt <= parentEvent.observedAt
     )
-      diagnostics.push(`causal stage ${required[index]} is not ordered after its parent`);
+      diagnostics.push(
+        `causal stage ${required[index]} is not ordered after its parent`
+      );
   }
   if (chain?.controlOutcomeHash == null || chain?.treatmentOutcomeHash == null)
     diagnostics.push('causal chain lacks paired outcome bindings');
@@ -557,12 +600,15 @@ export function buildCausalChain(
     'mistakePrevented',
     'taskCorrect',
   ];
-  const byStage = new Map((inputEvents || []).map((event) => [event.stage, event]));
+  const byStage = new Map(
+    (inputEvents || []).map((event) => [event.stage, event])
+  );
   const events = required.map((stage, index) => {
     const source = byStage.get(stage);
     if (!source) throw new Error(`missing causal event ${stage}`);
     const artifact = source.artifact || {};
-    const eventId = source.eventId ||
+    const eventId =
+      source.eventId ||
       `causal:${sha256({ stage, artifact, index }).slice(0, 24)}`;
     return {
       eventId,
@@ -592,7 +638,9 @@ export function buildCausalChain(
   };
   const validation = validateCausalChain(chain);
   if (!validation.valid)
-    throw new Error(`invalid causal chain: ${validation.diagnostics.join('; ')}`);
+    throw new Error(
+      `invalid causal chain: ${validation.diagnostics.join('; ')}`
+    );
   return chain;
 }
 
@@ -606,7 +654,9 @@ export function releaseMetricCoveragePreflight({
   const metricSources = Object.fromEntries(
     EFFECTIVENESS_REQUIRED_METRICS.map((metric) => [
       metric,
-      metric === 'writerIntegrity' ? 'writer-conformance' : 'full-effectiveness',
+      metric === 'writerIntegrity'
+        ? 'writer-conformance'
+        : 'full-effectiveness',
     ])
   );
   for (const metric of SUPERIORITY_REQUIRED_METRICS)
