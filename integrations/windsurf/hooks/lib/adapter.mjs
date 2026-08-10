@@ -82,6 +82,7 @@ import {
   rememberOptimizerTools,
 } from './capabilities.mjs';
 import { episodeMeta, featuresForArm, usageFrom } from './experiment.mjs';
+import { evaluateUcrGuards } from './ucr-guard.mjs';
 
 /**
  * Per-client capability.
@@ -722,11 +723,20 @@ export async function run(clientName, event) {
     }
   }
 
-  const verdict = features.routing
-    ? decide(payload, state, toolEvidence.names)
-    : null;
+  const ucrGuardVerdict =
+    event === 'pre-tool'
+      ? evaluateUcrGuards(
+          payload,
+          touchedFiles(payload).map((item) => item.path)
+        )
+      : null;
+  const verdict =
+    ucrGuardVerdict ||
+    (features.routing ? decide(payload, state, toolEvidence.names) : null);
   const repeat =
-    verdict && event === 'pre-tool' ? alreadyDenied(state, verdict.key) : false;
+    verdict && event === 'pre-tool' && !verdict.persistent
+      ? alreadyDenied(state, verdict.key)
+      : false;
 
   // A post-tool hook has already paid for the call, so a denial would cost a
   // turn and save nothing. It advises about the NEXT one instead.

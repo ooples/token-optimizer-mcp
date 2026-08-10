@@ -1,7 +1,7 @@
 {
   "schemaVersion": "ucr.production-exercise/1",
   "evidenceClass": "executable-fault-and-slo-mechanism-exercise-not-production-traffic",
-  "executedAt": "2026-08-09T23:09:07.165Z",
+  "executedAt": "2026-08-10T04:42:24.783Z",
   "sourceTreeHash": "c6edaeb2108ae20b6dee3d94d7f8bdf5978a8290dbc1cacd7101903c64780c6e",
   "faults": {
     "required": [
@@ -75,7 +75,7 @@
     "metrics": {
       "samples": 1000,
       "availability": 1,
-      "p95LatencyMs": 0.002300000000005298,
+      "p95LatencyMs": 0.002299999999991087,
       "p95ContextOverhead": 0,
       "correctnessDelta": 0,
       "severeHarm": 0,
@@ -118,9 +118,17 @@
       "recurrenceReduction",
       "recurrenceIntervalLow",
       "naturalCorrectnessDelta",
+      "naturalCorrectnessIntervalLow",
       "severeUnquarantined",
       "emptyP95Overhead",
       "reconstructionTokenReduction",
+      "firstSuccessorTokenReduction",
+      "firstSuccessorTokenIntervalLow",
+      "latencyOverheadP95",
+      "knownMistakeRecurrence",
+      "contradictoryDelivery",
+      "consumerSchemaTokensP95",
+      "captureModelCallsP95",
       "writerIntegrity",
       "crossClientPassed",
       "competitivePassed"
@@ -132,7 +140,7 @@
     "evidenceClass": "executable-smoke",
     "run": {
       "schemaVersion": "ucr.evidence-run/2",
-      "runId": "production-exercise-6465084c50998723",
+      "runId": "production-exercise-b1156f2006a18f7d",
       "evidenceClass": "executable-smoke",
       "benchmarkHash": "2149207138958942c48284100db437f9ebb86cded23d1114b4aedb034d3784af",
       "sourceTreeHash": "c6edaeb2108ae20b6dee3d94d7f8bdf5978a8290dbc1cacd7101903c64780c6e",
@@ -140,8 +148,8 @@
         "name": "ucr-production-exercise",
         "node": "v25.6.0"
       },
-      "startedAt": "2026-08-09T23:09:07.161Z",
-      "runHash": "bb8d7d81fbfd439d281c03551e210b96656b73ca04e697f5e08b509d2217b0f2"
+      "startedAt": "2026-08-10T04:42:24.778Z",
+      "runHash": "2e1b5f07c4c1c695a45da892c87c2f7cfcdae5a2fe06dfef4e3ce57153b14d76"
     },
     "rows": [
       {
@@ -152,10 +160,10 @@
         "dataLoss": 0,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "production-exercise-6465084c50998723",
+        "runId": "production-exercise-b1156f2006a18f7d",
         "sequence": 0,
-        "previousHash": "bb8d7d81fbfd439d281c03551e210b96656b73ca04e697f5e08b509d2217b0f2",
-        "rowHash": "64b96f7b8f71ecbd48291a01d4b5cb0d8fd63493a68720e72e70c00e03f67688"
+        "previousHash": "2e1b5f07c4c1c695a45da892c87c2f7cfcdae5a2fe06dfef4e3ce57153b14d76",
+        "rowHash": "68b027915ab7a0956cc6ced34e474b3a35f2752f7a225f4c41ff91108d198693"
       },
       {
         "fault": "malformed-event",
@@ -165,10 +173,10 @@
         "dataLoss": 0,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "production-exercise-6465084c50998723",
+        "runId": "production-exercise-b1156f2006a18f7d",
         "sequence": 1,
-        "previousHash": "64b96f7b8f71ecbd48291a01d4b5cb0d8fd63493a68720e72e70c00e03f67688",
-        "rowHash": "f97965c072db5a3f48ffd99c4da2897048560fd6ffcd869a4e610c4542718f8d"
+        "previousHash": "68b027915ab7a0956cc6ced34e474b3a35f2752f7a225f4c41ff91108d198693",
+        "rowHash": "4186ef412eb4c363cd78d63387f3b8297ac264eed23029c0b7739f69f6b062b4"
       },
       {
         "fault": "storage-unavailable",
@@ -178,10 +186,10 @@
         "dataLoss": 0,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "production-exercise-6465084c50998723",
+        "runId": "production-exercise-b1156f2006a18f7d",
         "sequence": 2,
-        "previousHash": "f97965c072db5a3f48ffd99c4da2897048560fd6ffcd869a4e610c4542718f8d",
-        "rowHash": "ef8e1c7add25f46e1bd538af7355673e1398985b018b28e36d0abd1b5c06bc14"
+        "previousHash": "4186ef412eb4c363cd78d63387f3b8297ac264eed23029c0b7739f69f6b062b4",
+        "rowHash": "f929563004fd8f76c7916c587398c391e156f566b2d97a81334fd7212f86f72f"
       },
       {
         "fault": "canary-regression",
@@ -191,10 +199,10 @@
         "dataLoss": 0,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "production-exercise-6465084c50998723",
+        "runId": "production-exercise-b1156f2006a18f7d",
         "sequence": 3,
-        "previousHash": "ef8e1c7add25f46e1bd538af7355673e1398985b018b28e36d0abd1b5c06bc14",
-        "rowHash": "27535573d9e7200103318ddde9a2e47515ded00daf9ecfbfa8d0d05517b15ebb"
+        "previousHash": "f929563004fd8f76c7916c587398c391e156f566b2d97a81334fd7212f86f72f",
+        "rowHash": "a2b6d8c46bfb7996c857b7aff58ea5bca585d43bef82b9fafa604a0310c53320"
       },
       {
         "fault": "process-restart",
@@ -204,10 +212,10 @@
         "dataLoss": 0,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "production-exercise-6465084c50998723",
+        "runId": "production-exercise-b1156f2006a18f7d",
         "sequence": 4,
-        "previousHash": "27535573d9e7200103318ddde9a2e47515ded00daf9ecfbfa8d0d05517b15ebb",
-        "rowHash": "d19bdf3ce5fbf972257f291d4b047cc1ef445e11eac615d29b52a339c55154c1"
+        "previousHash": "a2b6d8c46bfb7996c857b7aff58ea5bca585d43bef82b9fafa604a0310c53320",
+        "rowHash": "57352a2dd781e80140223ca8894d9fdc4a9799e9600bfafaf37c4f54cd48b7ef"
       },
       {
         "fault": "network-partition",
@@ -217,25 +225,25 @@
         "dataLoss": 0,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "production-exercise-6465084c50998723",
+        "runId": "production-exercise-b1156f2006a18f7d",
         "sequence": 5,
-        "previousHash": "d19bdf3ce5fbf972257f291d4b047cc1ef445e11eac615d29b52a339c55154c1",
-        "rowHash": "9117807f4e73a6990caf352c29a3625b7cdd932f398c59a926efe745698f845b"
+        "previousHash": "57352a2dd781e80140223ca8894d9fdc4a9799e9600bfafaf37c4f54cd48b7ef",
+        "rowHash": "bff55d051e5f4114b25720840852f947dfbb509d354137b9bd30cad87bca8358"
       }
     ],
     "rowCount": 6,
-    "chainHead": "9117807f4e73a6990caf352c29a3625b7cdd932f398c59a926efe745698f845b",
+    "chainHead": "bff55d051e5f4114b25720840852f947dfbb509d354137b9bd30cad87bca8358",
     "transcriptsPublished": false,
-    "endedAt": "2026-08-09T23:09:07.162Z",
-    "ledgerHash": "c0becec243d72c42db68de9c6ba644875ef63a921a9e20d04b7114ded9ea2c24",
-    "signature": "nIa+IYOQS0dybLMO8DDk6NJyV64W4afFSTK77C9kdMoZ61v//gVT6AoBVAK97y2370IpCxf1Er2B1n5uy7MJBg=="
+    "endedAt": "2026-08-10T04:42:24.780Z",
+    "ledgerHash": "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
+    "signature": "O27iEQDX4izc0n01lKwXB3eINjbxpqhA1E2IL0LPm8/sP9YxE+X/p2PECpCI+bag+CU4V24sGh7s7je10UOPDw=="
   },
-  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA7pyXVGXY/UJPiuCH1Hjc0IOxlUjOerd85xGK0PzwOds=\n-----END PUBLIC KEY-----\n",
+  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAcqNsoUkW7HAwD5jHWSpBy5VLfLExEKCaNynvzp9e2DA=\n-----END PUBLIC KEY-----\n",
   "ledgerVerification": {
     "valid": true,
     "diagnostics": [],
     "validSignature": true,
-    "ledgerHash": "c0becec243d72c42db68de9c6ba644875ef63a921a9e20d04b7114ded9ea2c24",
+    "ledgerHash": "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
     "rowCount": 6
   },
   "passed": true,
@@ -244,5 +252,5 @@
     "the SLO window measures gate mechanics and local control-path latency, not provider latency",
     "production readiness intentionally remains insufficient until powered effectiveness and staged production evidence exist"
   ],
-  "reportHash": "ac2910bbe7b66017c226808d37bedd871f38cac3fb3a5f36814ab709f4de74cc"
+  "reportHash": "152576dede451bc29589792fbf0ca0a75a940d2336b8b71f95b584013ec35843"
 }

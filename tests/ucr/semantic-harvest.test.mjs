@@ -105,4 +105,79 @@ describe('SemanticHarvestController', () => {
     assert.equal(persists, 1);
     assert.equal(result.receipt.attempts, 2);
   });
+
+  it('commits an in-turn delta with zero additional inference', async () => {
+    const order = [];
+    const controller = new SemanticHarvestController({
+      maximumDeltaTokens: 256,
+      verifyEvidence: async () => {
+        order.push('verify');
+        return { valid: true, receipts: [{ observations: { corrected: true } }] };
+      },
+      persist: async ({ semanticObject: object }) => {
+        order.push('persist');
+        assert.deepEqual(object, semanticObject);
+        return { accepted: true, object: { id: 'failure:one' }, eventIds: ['e1'] };
+      },
+    });
+    const raw = [
+      'Work completed.',
+      `<ucr-semantic-delta>${JSON.stringify(semanticObject)}</ucr-semantic-delta>`,
+      'IMPLEMENTATION_CHOICE=GREEN-1',
+    ].join('\n');
+    const result = await controller.commitAuthoredDelta({
+      kind: 'failure',
+      raw,
+      evidenceReceipts: [{ signature: 'signed' }],
+      evidenceBindings: [
+        { path: 'attemptedAction', includes: 'STALE-1' },
+        { path: 'correction', includes: 'GREEN-1' },
+      ],
+      taskId: 'one',
+      sessionId: 'producer',
+      scope: { taskId: 'one' },
+    });
+    assert.deepEqual(order, ['verify', 'persist']);
+    assert.equal(result.receipt.authoredDuringWorkTurn, true);
+    assert.equal(result.receipt.evidenceAuthenticatedBeforeActivation, true);
+    assert.equal(result.receipt.additionalModelCalls, 0);
+    assert.ok(result.receipt.deltaTokens > 0);
+  });
+
+  it('rejects over-budget or evidence-inconsistent in-turn deltas', async () => {
+    let persists = 0;
+    const controller = new SemanticHarvestController({
+      maximumDeltaTokens: 256,
+      verifyEvidence: async () => ({ valid: true, receipts: [{}] }),
+      persist: async () => {
+        persists++;
+      },
+    });
+    await assert.rejects(
+      controller.commitAuthoredDelta({
+        kind: 'failure',
+        raw: JSON.stringify(semanticObject),
+        evidenceReceipts: [{}],
+        evidenceBindings: [{ path: 'correction', includes: 'OTHER' }],
+        scope: { taskId: 'one' },
+      }),
+      /contradicted authenticated evidence/
+    );
+    assert.equal(persists, 0);
+
+    const tiny = new SemanticHarvestController({
+      maximumDeltaTokens: 1,
+      verifyEvidence: async () => assert.fail('budget fails before auth'),
+      persist: async () => assert.fail('must not persist'),
+    });
+    await assert.rejects(
+      tiny.commitAuthoredDelta({
+        kind: 'failure',
+        raw: JSON.stringify(semanticObject),
+        evidenceReceipts: [{}],
+        scope: { taskId: 'one' },
+      }),
+      /exceeded 1 tokens/
+    );
+  });
 });

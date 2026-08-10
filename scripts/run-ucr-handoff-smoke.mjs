@@ -265,7 +265,7 @@ const receipt = signGraderReceipt(
 );
 
 const commonEnv = {
-  TOKEN_OPTIMIZER_TOOL_PROFILE: 'cognitive',
+  TOKEN_OPTIMIZER_TOOL_PROFILE: 'continuity',
   TOKEN_OPTIMIZER_UCR_DIR: ucrRoot,
   TOKEN_OPTIMIZER_PROJECT_ID: projectId,
   TOKEN_OPTIMIZER_WORKSPACE_ID: `workspace:${projectId}`,
@@ -278,7 +278,7 @@ const codexMcpArgs = [
   '-c',
   `mcp_servers.token-optimizer.args=[${tomlLiteral(serverPath)}]`,
   '-c',
-  `mcp_servers.token-optimizer.env={TOKEN_OPTIMIZER_TOOL_PROFILE=${tomlLiteral('cognitive')},TOKEN_OPTIMIZER_UCR_DIR=${tomlLiteral(ucrRoot)},TOKEN_OPTIMIZER_PROJECT_ID=${tomlLiteral(projectId)},TOKEN_OPTIMIZER_WORKSPACE_ID=${tomlLiteral(`workspace:${projectId}`)},TOKEN_OPTIMIZER_GRADER_SECRET=${tomlLiteral(graderSecret)},TOKEN_OPTIMIZER_CLIENT=${tomlLiteral('codex')},TOKEN_OPTIMIZER_AGENT_ID=${tomlLiteral('producer-codex')},TOKEN_OPTIMIZER_MODEL=${tomlLiteral(options.codexModel)}}`,
+  `mcp_servers.token-optimizer.env={TOKEN_OPTIMIZER_TOOL_PROFILE=${tomlLiteral('continuity')},TOKEN_OPTIMIZER_UCR_DIR=${tomlLiteral(ucrRoot)},TOKEN_OPTIMIZER_PROJECT_ID=${tomlLiteral(projectId)},TOKEN_OPTIMIZER_WORKSPACE_ID=${tomlLiteral(`workspace:${projectId}`)},TOKEN_OPTIMIZER_GRADER_SECRET=${tomlLiteral(graderSecret)},TOKEN_OPTIMIZER_CLIENT=${tomlLiteral('codex')},TOKEN_OPTIMIZER_AGENT_ID=${tomlLiteral('producer-codex')},TOKEN_OPTIMIZER_MODEL=${tomlLiteral(options.codexModel)}}`,
 ];
 const claudeMcp = JSON.stringify({
   mcpServers: {

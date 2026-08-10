@@ -61,7 +61,8 @@ describe('PreActionController', () => {
     const prepared = await controller.prepare({ query: 'unknown', budget: 64 });
     assert.equal(prepared.receipt.action, 'abstain');
     assert.equal(prepared.receipt.delivered, false);
-    assert.match(prepared.injection, /no applicable verified/);
+    assert.equal(prepared.injection, '');
+    assert.equal(prepared.receipt.injectionTokens, 0);
   });
 
   it('fails closed before invocation for invalid or over-budget delivery', async () => {

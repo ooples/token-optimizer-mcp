@@ -120,6 +120,8 @@ describe('evidence contract v2', () => {
         correct: 0,
         mistakeExecuted: 1,
         reconstructionTokens: 100,
+        totalTokens: 100,
+        latencyMs: 100,
       },
       {
         pairId: 'p1',
@@ -127,12 +129,19 @@ describe('evidence contract v2', () => {
         correct: 1,
         mistakeExecuted: 0,
         reconstructionTokens: 40,
+        totalTokens: 60,
+        latencyMs: 102,
         selected: true,
         applicable: true,
         eligible: true,
         delivered: true,
         deliveryPhase: 'pre-action',
         contextOverheadRatio: 0.01,
+        contradictory: false,
+        phaseAccounting: {
+          staticSchemaTokens: 0,
+          captureModelCalls: 0,
+        },
       },
     ]);
     expect(deriveReleaseMetrics([ledger]).metrics).toMatchObject({
@@ -141,6 +150,12 @@ describe('evidence contract v2', () => {
       recurrenceReduction: 1,
       naturalCorrectnessDelta: 1,
       reconstructionTokenReduction: 0.6,
+      firstSuccessorTokenReduction: 0.4,
+      latencyOverheadP95: 0.02,
+      knownMistakeRecurrence: 0,
+      contradictoryDelivery: 0,
+      consumerSchemaTokensP95: 0,
+      captureModelCallsP95: 0,
     });
   });
 });

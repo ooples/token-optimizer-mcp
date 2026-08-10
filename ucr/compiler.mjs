@@ -60,6 +60,47 @@ function hasValue(value) {
   );
 }
 
+function normalizedIdentity(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+/** Stable identity for the fact being corrected, independent of its version. */
+export function canonicalSemanticKey(kind, semantic) {
+  return sha256({
+    kind,
+    scope: {
+      taskId: semantic?.scope?.taskId || null,
+      projectId: semantic?.scope?.projectId || null,
+      workspaceId: semantic?.scope?.workspaceId || null,
+    },
+    actionType: normalizedIdentity(semantic?.actionType),
+    trigger: normalizedIdentity(semantic?.trigger),
+    failedAction: ['failure', 'guard'].includes(kind)
+      ? normalizedIdentity(semantic?.attemptedAction)
+      : null,
+  });
+}
+
+function semanticFingerprint(kind, semantic) {
+  return sha256({
+    kind,
+    trigger: semantic.trigger,
+    attemptedAction: semantic.attemptedAction,
+    observedFailure: semantic.observedFailure,
+    rootCause: semantic.rootCause,
+    correction: semantic.correction,
+    verificationEvidence: semantic.verificationEvidence,
+    claim: semantic.claim,
+    scope: semantic.scope,
+    applicability: semantic.applicability,
+    nonApplicability: semantic.nonApplicability,
+    invalidators: semantic.invalidators,
+  });
+}
+
 export function validateSemanticObject(
   kind,
   semantic,
@@ -120,7 +161,7 @@ function receiptSucceeded(receipt) {
 }
 
 export class SemanticCompiler {
-  constructor({ eventFactory, receiptVerifier = null }) {
+  constructor({ eventFactory, receiptVerifier = null, existingObjects = [] }) {
     if (typeof eventFactory !== 'function')
       throw new Error('SemanticCompiler requires eventFactory');
     this.eventFactory = eventFactory;
@@ -129,7 +170,18 @@ export class SemanticCompiler {
     this.verified = new Map();
     this.reflectedSessions = new Set();
     this.fingerprints = new Map();
+    this.currentBySemanticKey = new Map();
     this.costs = [];
+    for (const object of existingObjects) {
+      if (!object?.id || !SEMANTIC_OBJECT_KINDS.includes(object.type)) continue;
+      const fingerprint =
+        object.semanticFingerprint || semanticFingerprint(object.type, object);
+      const semanticKey =
+        object.semanticKey || canonicalSemanticKey(object.type, object);
+      this.fingerprints.set(fingerprint, object.id);
+      if (object.state === 'active')
+        this.currentBySemanticKey.set(semanticKey, object.id);
+    }
   }
 
   propose(
@@ -140,15 +192,8 @@ export class SemanticCompiler {
     const validation = validateSemanticObject(kind, semantic);
     if (!validation.valid)
       return { accepted: false, diagnostics: validation.diagnostics };
-    const fingerprint = sha256({
-      kind,
-      trigger: semantic.trigger,
-      correction: semantic.correction,
-      claim: semantic.claim,
-      scope: semantic.scope,
-      applicability: semantic.applicability,
-      nonApplicability: semantic.nonApplicability,
-    });
+    const fingerprint = semanticFingerprint(kind, semantic);
+    const semanticKey = canonicalSemanticKey(kind, semantic);
     const duplicateOf = this.fingerprints.get(fingerprint);
     if (duplicateOf)
       return {
@@ -157,14 +202,16 @@ export class SemanticCompiler {
         duplicateOf,
         diagnostics: [`semantic duplicate of ${duplicateOf}`],
       };
-    const id =
-      proposalId || `${kind}:${sha256({ producer, semantic }).slice(0, 24)}`;
+    const id = proposalId || `${kind}:${fingerprint.slice(0, 24)}`;
+    const supersedes = this.currentBySemanticKey.get(semanticKey) || null;
     const proposal = {
       id,
       type: kind,
       state: 'proposed',
       producer,
       semanticFingerprint: fingerprint,
+      semanticKey,
+      supersedes: supersedes === id ? null : supersedes,
       ...semantic,
       fieldProvenance: Object.fromEntries(
         Object.keys(semantic).map((field) => [
@@ -259,11 +306,15 @@ export class SemanticCompiler {
         diagnostics: ['proposal has not been verified'],
       };
     const active = { ...verified, state: 'active' };
+    const relations = active.supersedes
+      ? [{ from: active.id, to: active.supersedes, type: 'supersedes' }]
+      : [];
+    this.currentBySemanticKey.set(active.semanticKey, active.id);
     return {
       activated: true,
       diagnostics: [],
       object: active,
-      event: this.eventFactory('finding.activated', { object: active }),
+      event: this.eventFactory('finding.activated', { object: active, relations }),
     };
   }
 

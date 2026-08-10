@@ -1,5 +1,6 @@
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { mkdirSync, renameSync, writeFileSync } from 'fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -13,6 +14,42 @@ function runtimeRoot(): string {
   return process.env.TOKEN_OPTIMIZER_UCR_DIR
     ? path.resolve(process.env.TOKEN_OPTIMIZER_UCR_DIR)
     : path.join(process.cwd(), '.token-optimizer', 'ucr');
+}
+
+function writeActiveGuardIndex(ucr: any, events: any[]): void {
+  const graph = ucr.rebuildGraph(events);
+  const guards = [...graph.objects.values()]
+    .filter((object: any) => object.state === 'active' && object.guard)
+    .map((object: any) => ({
+      id: `guard:${object.id}`,
+      state: 'active',
+      triggers: object.guard.triggers,
+      intervention: object.guard.intervention,
+      replacementAction: object.guard.replacementAction,
+      rollback: object.guard.rollback || 'disable this guard',
+      timeoutMs: object.guard.timeoutMs,
+      failureBehavior: object.guard.failureBehavior || 'advise',
+      evidence: object.verificationReceiptIds || [],
+      scope: object.scope,
+      sourceObjectId: object.id,
+    }))
+    .filter((guard: any) => ucr.validateGuard(guard).valid)
+    .sort((left: any, right: any) => left.id.localeCompare(right.id));
+  const body = {
+    schemaVersion: 'ucr.active-guards/1',
+    guards,
+    eventDigest: ucr.sha256(events),
+  };
+  const output = { ...body, indexHash: ucr.sha256(body) };
+  const root = runtimeRoot();
+  mkdirSync(root, { recursive: true });
+  const target = path.join(root, 'active-guards.json');
+  const temporary = `${target}.${process.pid}.next`;
+  writeFileSync(temporary, `${ucr.canonicalJson(output)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  renameSync(temporary, target);
 }
 
 function identity() {
@@ -137,139 +174,8 @@ export const UCR_TOOL_DEFINITIONS = [
         semanticObject: {
           type: 'object',
           description:
-            'Structured cognition. The common fields are always required; include the fields documented for the selected kind.',
-          properties: {
-            trigger: {
-              type: 'string',
-              minLength: 1,
-              description:
-                'The observable condition that should retrieve this cognition.',
-            },
-            applicability: {
-              type: 'array',
-              minItems: 1,
-              items: { type: 'string', minLength: 1 },
-              description:
-                'Positive conditions under which this cognition applies.',
-            },
-            nonApplicability: {
-              type: 'array',
-              minItems: 1,
-              items: { type: 'string', minLength: 1 },
-              description:
-                'Negative conditions under which this cognition must not apply.',
-            },
-            invalidators: {
-              type: 'array',
-              minItems: 1,
-              items: { type: 'string', minLength: 1 },
-              description:
-                'Future observations that would invalidate the cognition.',
-            },
-            scope: {
-              oneOf: [{ type: 'string', minLength: 1 }, { type: 'object' }],
-              description:
-                'The project, task, file, symbol, or environment boundary.',
-            },
-            confidence: { type: 'number', minimum: 0, maximum: 1 },
-            confidenceLabel: {
-              type: 'string',
-              enum: ['speculative', 'observed', 'verified'],
-            },
-            expectedOutcome: { type: 'string', minLength: 1 },
-            claim: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=claim.',
-            },
-            evidence: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=claim.',
-            },
-            attemptedAction: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=failure or guard.',
-            },
-            observedFailure: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=failure or guard.',
-            },
-            rootCause: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=failure or guard.',
-            },
-            correction: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=failure or guard.',
-            },
-            verificationEvidence: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=failure, guard, or procedure.',
-            },
-            decision: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=decision.',
-            },
-            alternatives: {
-              type: 'array',
-              minItems: 1,
-              items: { type: 'string', minLength: 1 },
-              description: 'Required for kind=decision.',
-            },
-            reason: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=decision.',
-            },
-            steps: {
-              type: 'array',
-              minItems: 1,
-              items: { type: 'string', minLength: 1 },
-              description: 'Required for kind=procedure.',
-            },
-            desiredState: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=goal.',
-            },
-            completionEvidence: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=goal.',
-            },
-            hypothesis: {
-              type: 'string',
-              minLength: 1,
-              description: 'Required for kind=hypothesis.',
-            },
-            discriminatingTests: {
-              type: 'array',
-              minItems: 1,
-              items: { type: 'string', minLength: 1 },
-              description: 'Required for kind=hypothesis.',
-            },
-            guard: {
-              type: 'object',
-              description: 'Required executable guard policy for kind=guard.',
-            },
-          },
-          required: [
-            'trigger',
-            'applicability',
-            'nonApplicability',
-            'invalidators',
-            'scope',
-            'confidence',
-            'confidenceLabel',
-            'expectedOutcome',
-          ],
+            'Compact model-authored delta. Always include trigger, applicability, nonApplicability, invalidators, scope, confidence, confidenceLabel, and expectedOutcome. A failure/guard also includes attemptedAction, observedFailure, rootCause, correction, and verificationEvidence. Other kinds include their kind-specific evidence fields. The server validates the complete contract and rejects omissions.',
+          additionalProperties: true,
         },
         evidenceReceipts: {
           type: 'array',
@@ -529,7 +435,11 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
     const receipts = verifiedReceipts.map((receipt: any) =>
       create('verification.passed', { ...receipt, passed: true })
     );
-    const compiler = new ucr.SemanticCompiler({ eventFactory: create });
+    const existingGraph = ucr.rebuildGraph(current);
+    const compiler = new ucr.SemanticCompiler({
+      eventFactory: create,
+      existingObjects: [...existingGraph.objects.values()],
+    });
     const proposed = compiler.propose(
       args.kind,
       {
@@ -540,7 +450,19 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         producer: `${identity().client}/${identity().model || 'unknown-model'}`,
       }
     );
-    if (!proposed.accepted) return proposed;
+    if (!proposed.accepted) {
+      if (proposed.duplicate && proposed.duplicateOf) {
+        writeActiveGuardIndex(ucr, current);
+        return {
+          accepted: true,
+          duplicate: true,
+          object: existingGraph.objects.get(proposed.duplicateOf) || null,
+          eventIds: [],
+          diagnostics: proposed.diagnostics,
+        };
+      }
+      return proposed;
+    }
     const verified = compiler.verify(proposed.proposal.id, receipts);
     if (!verified.verified) return verified;
     const activated = compiler.activate(proposed.proposal.id);
@@ -551,6 +473,7 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
       activated.event,
     ];
     for (const event of appended) store.append(event);
+    writeActiveGuardIndex(ucr, [...current, ...appended]);
     return {
       accepted: true,
       object: activated.object,

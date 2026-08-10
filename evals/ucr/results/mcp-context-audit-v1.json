@@ -1,8 +1,8 @@
 {
   "schemaVersion": "ucr.mcp-context-audit/1",
   "evidenceClass": "native-tokenized-real-tools-list-conformance-not-model-effectiveness",
-  "executedAt": "2026-08-10T01:55:36.773Z",
-  "serverSourceHash": "ba1741d4028e6d7d14a4fa00e59db5fb12f5bdad7205f7397b6683733f50308c",
+  "executedAt": "2026-08-10T04:42:33.220Z",
+  "serverSourceHash": "1753baaa743ad320f491ac0d2d7a19354e23f664eb9e84a4a96b7a6895d89550",
   "surfaces": [
     {
       "name": "baseline",
@@ -13,7 +13,7 @@
       "schemaBytes": 2,
       "schemaTokens": 1,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.9999673905954477,
+      "reductionVsFull": 0.9999668049792532,
       "shareOf128kContext": 0.0000078125,
       "shareOf1mContext": 0.000001
     },
@@ -28,9 +28,25 @@
       "schemaBytes": 382,
       "schemaTokens": 71,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.9976847322767887,
+      "reductionVsFull": 0.997643153526971,
       "shareOf128kContext": 0.0005546875,
       "shareOf1mContext": 0.000071
+    },
+    {
+      "name": "continuity",
+      "profile": "continuity",
+      "arm": "full",
+      "tools": 2,
+      "toolNames": [
+        "context_page",
+        "cognition_record"
+      ],
+      "schemaBytes": 2393,
+      "schemaTokens": 480,
+      "tokenAccounting": "tiktoken:cl100k_base",
+      "reductionVsFull": 0.9840663900414938,
+      "shareOf128kContext": 0.00375,
+      "shareOf1mContext": 0.00048
     },
     {
       "name": "cognitive",
@@ -44,12 +60,12 @@
         "checkpoint_handoff",
         "outcome_report"
       ],
-      "schemaBytes": 5895,
-      "schemaTokens": 1235,
+      "schemaBytes": 3519,
+      "schemaTokens": 694,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.959727385377943,
-      "shareOf128kContext": 0.0096484375,
-      "shareOf1mContext": 0.001235
+      "reductionVsFull": 0.9769626556016597,
+      "shareOf128kContext": 0.005421875,
+      "shareOf1mContext": 0.000694
     },
     {
       "name": "core",
@@ -79,7 +95,7 @@
       "schemaBytes": 23367,
       "schemaTokens": 4815,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.8429857170808062,
+      "reductionVsFull": 0.8401659751037345,
       "shareOf128kContext": 0.0376171875,
       "shareOf1mContext": 0.004815
     },
@@ -193,27 +209,28 @@
         "optimization_storage",
         "context_delta"
       ],
-      "schemaBytes": 148510,
-      "schemaTokens": 30666,
+      "schemaBytes": 146134,
+      "schemaTokens": 30125,
       "tokenAccounting": "tiktoken:cl100k_base",
       "reductionVsFull": 0,
-      "shareOf128kContext": 0.239578125,
-      "shareOf1mContext": 0.030666
+      "shareOf128kContext": 0.2353515625,
+      "shareOf1mContext": 0.030125
     }
   ],
   "findings": {
     "defaultProfile": "core",
-    "graphCaptureProfile": "cognitive",
-    "graphCaptureTools": 5,
+    "graphCaptureProfile": "continuity",
+    "graphCaptureTools": 2,
     "attestationProfile": "attestation",
     "attestationTools": 1,
     "attestationSchemaTokens": 71,
     "fullCatalogTools": 103,
-    "graphCaptureSchemaTokens": 1235,
+    "graphCaptureSchemaTokens": 480,
+    "extendedCognitiveSchemaTokens": 694,
     "defaultCoreSchemaTokens": 4815,
-    "fullCatalogSchemaTokens": 30666,
-    "graphCaptureReductionVsFull": 0.959727385377943,
-    "graphCaptureReductionVsCore": 0.7435098650051921,
+    "fullCatalogSchemaTokens": 30125,
+    "graphCaptureReductionVsFull": 0.9840663900414938,
+    "graphCaptureReductionVsCore": 0.9003115264797508,
     "appliesToRegisteredClients": 16,
     "userMcpServersAreAdditive": "Every enabled MCP server adds its own tool schemas and instructions; client isolation must disable unrelated servers during evals."
   },
@@ -223,5 +240,5 @@
     "client hosts may add wrappers, instructions, resources, or other MCP servers beyond this server response",
     "model effectiveness and empty-session p95 overhead require paired live provider runs"
   ],
-  "reportHash": "131c7eef68a9f4aa864afdeeb601ad97f94d957cc6a4cd9bba306ec36a1f695a"
+  "reportHash": "3841fd34a174c1b9e1822dbc21b570d1050ff2c2ff5b976252b95287d0b967ca"
 }

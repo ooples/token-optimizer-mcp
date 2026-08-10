@@ -59,6 +59,7 @@ import {
   optimizerToolsForHook,
   rememberOptimizerTools,
 } from './lib/capabilities.mjs';
+import { evaluateUcrGuards } from './lib/ucr-guard.mjs';
 
 /**
  * Largest file the hook will read to index. Above this the touch is still
@@ -92,9 +93,13 @@ try {
   const state = loadState(payload.session_id, agentScope);
   const toolEvidence = optimizerToolsForHook(raw, state);
   rememberOptimizerTools(state, toolEvidence);
-  const verdict = features.routing
-    ? decide(payload, state, toolEvidence.names)
-    : null;
+  const ucrGuardVerdict = evaluateUcrGuards(
+    payload,
+    touchedFiles(payload).map((item) => item.path)
+  );
+  const verdict =
+    ucrGuardVerdict ||
+    (features.routing ? decide(payload, state, toolEvidence.names) : null);
 
   if (!verdict) {
     // Allowed calls are what BUILD the re-read index -- this is the only place
@@ -407,7 +412,9 @@ ${nudge}`
     allowWithContext(context);
   }
 
-  const repeat = alreadyDenied(state, verdict.key);
+  const repeat = verdict.persistent
+    ? false
+    : alreadyDenied(state, verdict.key);
   // BEFORE `remember`, which is about to mark this very call as seen. What
   // licenses a diff or an "unchanged" claim is what the session held on the way
   // IN, not what this call adds.

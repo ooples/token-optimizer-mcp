@@ -83,30 +83,28 @@ export function contextCapsule(
       object.title ||
       object.desiredState ||
       object.steps,
-    provenance: object.provenance || object.verificationReceiptIds || [],
-    ...(object.verificationReceiptIds?.length
-      ? {
-          verification: {
-            confidenceLabel: object.confidenceLabel || null,
-            receiptIds: object.verificationReceiptIds,
-            receiptHash: object.verificationReceiptHash || null,
-          },
-        }
-      : {}),
-    applicability: object.applicability || [],
-    nonApplicability: object.nonApplicability || [],
-    uncertainty: { confidence: object.confidence ?? null, state: object.state },
-    expansion: object.artifactRef || object.payloadRef || null,
-    retrieval: {
-      // Full path explanations remain available on the page result. Repeating
-      // them inside every capsule wastes the exact context this VM protects.
-      score: candidate.score,
-      kernels: candidate.kernels,
-    },
+    rejectedAction: object.attemptedAction || null,
+    reason: object.rootCause || null,
+    verificationEvidence: object.verificationEvidence || null,
+    // Scope, exclusions, receipt chains, retrieval paths, and expansion
+    // references remain host-side. Repeating them here made a short correction
+    // miss its own delivery budget even though none of that metadata crossed
+    // the model boundary.
+  };
+  const transmitted = {
+    payload: capsule.payload,
+    rejectedAction: capsule.rejectedAction,
+    reason: capsule.reason,
+    verificationEvidence: capsule.verificationEvidence,
   };
   return {
     ...capsule,
-    tokens: tokenCounter ? tokenCounter.count(capsule) : estimate(capsule),
+    // Budget only bytes that can cross the model boundary. Internal IDs, tier,
+    // and schema metadata remain host-side and previously caused a 126-token
+    // correction to be rejected as a 174-token capsule.
+    tokens: tokenCounter
+      ? tokenCounter.count(transmitted)
+      : estimate(transmitted),
     tokenAccounting: tokenCounter?.method || 'heuristic:utf8-length-div-4',
   };
 }
@@ -118,6 +116,7 @@ export class ContextVM {
     artifactResolver = null,
     tokenCounter = null,
     workingSetStore = null,
+    maximumCapsules = 1,
   } = {}) {
     if (!planner) throw new Error('ContextVM requires a retrieval planner');
     this.planner = planner;
@@ -125,6 +124,7 @@ export class ContextVM {
     this.artifactResolver = artifactResolver;
     this.tokenCounter = tokenCounter;
     this.workingSetStore = workingSetStore;
+    this.maximumCapsules = maximumCapsules;
     this.workingSets = workingSetStore?.read() || new Map();
     this.expansionCache = new Map();
     this.events = [];
@@ -185,6 +185,7 @@ export class ContextVM {
     const capsules = [];
     let tokens = 0;
     for (const item of ranked) {
+      if (capsules.length >= this.maximumCapsules) break;
       if (tokens + item.capsule.tokens > maximum) continue;
       capsules.push(item.capsule);
       tokens += item.capsule.tokens;

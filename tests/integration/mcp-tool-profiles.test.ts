@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from '@jest/globals';
+import { afterAll, describe, expect, it, jest } from '@jest/globals';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,12 +6,18 @@ import { spawn } from 'node:child_process';
 import {
   ATTESTATION_TOOL_NAMES,
   COGNITIVE_TOOL_NAMES,
+  CONTINUITY_TOOL_NAMES,
   CORE_TOOL_NAMES,
 } from '../../src/server/tool-profile.js';
 
 const ROOT = process.cwd();
 const SERVER = join(ROOT, 'dist', 'server', 'index.js');
 const fixture = mkdtempSync(join(tmpdir(), 'mcp-tool-profiles-'));
+
+// Real stdio startup loads the compiled server and can exceed Jest's five
+// second unit-test default on Windows and shared CI runners. The child process
+// retains its own stricter 30-second hang detector below.
+jest.setTimeout(60_000);
 
 interface ListedTool {
   name: string;
@@ -260,6 +266,24 @@ describe('MCP tool profiles over the real stdio transport', () => {
     );
     expect(JSON.stringify(tools).length).toBeLessThan(
       JSON.stringify(coreTools).length * 0.35
+    );
+  });
+
+  it('offers only capture and query in the continuity profile', async () => {
+    const [continuity, cognitive] = await Promise.all([
+      runServer('continuity'),
+      runServer('cognitive'),
+    ]);
+    expect(continuity.status).toBe(0);
+    const tools = continuity.responses.find((message) => message.id === 2)
+      ?.result?.tools as ListedTool[];
+    const cognitiveTools = cognitive.responses.find((message) => message.id === 2)
+      ?.result?.tools as ListedTool[];
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
+      [...CONTINUITY_TOOL_NAMES].sort()
+    );
+    expect(JSON.stringify(tools).length).toBeLessThan(
+      JSON.stringify(cognitiveTools).length
     );
   });
 

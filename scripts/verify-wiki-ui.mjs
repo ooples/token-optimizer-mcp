@@ -647,9 +647,16 @@ async function main() {
         );
         check(
           'UCR dashboard renders signed artifacts and live directions',
-          /Evidence artifacts\s*11\/11/i.test(ucrText || '') &&
+          /Evidence artifacts\s*12\/12/i.test(ucrText || '') &&
             /Live directions\s*2\/3/i.test(ucrText || '') &&
-            /Consumer MCP schema\s*0 tokens max/i.test(ucrText || '')
+            /Consumer MCP schema\s*0 tokens max/i.test(ucrText || '') &&
+            /Combined token reduction\s*21\.06%/i.test(ucrText || '') &&
+            /Combined latency reduction\s*18\.36%/i.test(ucrText || '') &&
+            /Known mistake recurrence\s*1 control → 0 runtime/i.test(
+              ucrText || ''
+            ) &&
+            /Native guard denials\s*1/i.test(ucrText || '') &&
+            /Capture model calls\s*0 additional max/i.test(ucrText || '')
         );
         const tierCount = await page.locator('#ucr-tiers tbody tr').count();
         const artifactCount = await page
@@ -662,7 +669,7 @@ async function main() {
         );
         check(
           'UCR dashboard exposes every integrity-checked study',
-          artifactCount === 11,
+          artifactCount === 12,
           String(artifactCount)
         );
         check(

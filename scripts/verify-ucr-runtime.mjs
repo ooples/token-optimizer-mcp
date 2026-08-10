@@ -557,12 +557,12 @@ check(
   revoked.decisions[0].denied
 );
 
-// Workstream 12: four bootstrap operations, with measured static surface.
-const capabilities = negotiateCapabilities({ profile: 'cognitive' });
+// Workstream 12: capture and query only, with measured static surface.
+const capabilities = negotiateCapabilities({ profile: 'continuity' });
 const surface = surfaceOverhead({ schemas: BOOTSTRAP_COGNITIVE_OPERATIONS });
 check(
-  'minimal cognitive profile exposes exactly four bootstrap operations',
-  capabilities.operations.length === 4,
+  'minimal continuity profile exposes exactly capture and query',
+  capabilities.operations.length === 2,
   capabilities.operations
 );
 

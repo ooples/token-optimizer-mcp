@@ -11,6 +11,9 @@ export const BOOTSTRAP_COGNITIVE_OPERATIONS = Object.freeze([
       'Propose and verify durable cognition authored by the active model.',
     input: ['kind', 'semanticObject', 'evidenceReceipts'],
   },
+]);
+
+export const ADVANCED_COGNITIVE_OPERATIONS = Object.freeze([
   {
     name: 'checkpoint_handoff',
     description: 'Create, restore, or acknowledge a resumable task checkpoint.',
@@ -33,13 +36,13 @@ export const COMPATIBILITY_ALIASES = Object.freeze({
 export function negotiateCapabilities({
   dynamicExposure = false,
   requested = [],
-  profile = 'cognitive',
+  profile = 'continuity',
   advanced = [],
 } = {}) {
   const bootstrap = BOOTSTRAP_COGNITIVE_OPERATIONS.map(
     (operation) => operation.name
   );
-  if (profile !== 'cognitive') {
+  if (!['continuity', 'cognitive'].includes(profile)) {
     return { profile, operations: requested, dynamic: false, migration: [] };
   }
   const operations = dynamicExposure

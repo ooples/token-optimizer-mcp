@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
-import { mkdtempSync, rmSync } from 'fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { runUcrTool } from '../../src/server/ucr-tools.js';
@@ -31,21 +31,38 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-function semanticFailure() {
+function semanticFailure(
+  correction = 'edit source/beta-policy.txt and regenerate'
+) {
   return {
     trigger: 'a direct generated-output edit',
     attemptedAction: 'edit clients/beta/policy.txt',
     observedFailure: 'regeneration overwrote the change',
     rootCause: 'the file is generated',
-    correction: 'edit source/beta-policy.txt and regenerate',
+    correction,
     verificationEvidence: 'sync grader passed',
     applicability: ['the client policy is generated'],
     nonApplicability: ['the target is a source file'],
     invalidators: ['generator manifest changes'],
-    scope: 'project',
+    scope: { projectId: 'ucr-tools-test' },
     confidence: 0.98,
     confidenceLabel: 'observed',
     expectedOutcome: 'source and generated outputs remain synchronized',
+    guard: {
+      triggers: [
+        {
+          field: 'path',
+          operator: 'equals',
+          value: 'clients/beta/policy.txt',
+        },
+      ],
+      intervention: { type: 'replace-parameters' },
+      replacementAction: {
+        path: correction.split(' ')[1],
+        then: 'regenerate',
+      },
+      rollback: 'disable this guard',
+    },
   };
 }
 
@@ -102,9 +119,10 @@ describe('bounded UCR MCP runtime', () => {
     const context = await runUcrTool('context_page', {
       query: 'avoid editing the generated policy output',
       taskId: 'task',
-      budget: 512,
+      budget: 160,
     });
     expect(context.action).toBe('deliver');
+    expect(context.tokens).toBeLessThanOrEqual(160);
     expect(context.capsules[0]).toMatchObject({
       recordMeaning: 'verified correction to a prior failed attempt',
       payload: expect.stringContaining('edit source/beta-policy.txt'),
@@ -205,5 +223,62 @@ describe('bounded UCR MCP runtime', () => {
         ],
       })
     ).rejects.toThrow('external deterministic-grader signature');
+  });
+
+  test('atomically replaces, supersedes, and rematerializes active guards', async () => {
+    const { signGraderReceipt } = await import('../../ucr/index.mjs');
+    const receipt = signGraderReceipt(
+      {
+        graderId: 'sync-check',
+        passed: true,
+        artifactHash: 'd'.repeat(64),
+      },
+      'integration-test-secret'
+    );
+    const first = await runUcrTool('cognition_record', {
+      kind: 'failure',
+      semanticObject: semanticFailure(),
+      evidenceReceipts: [receipt],
+      taskId: 'task',
+      sessionId: 'session',
+    });
+    const indexPath = join(root, 'active-guards.json');
+    expect(existsSync(indexPath)).toBe(true);
+    expect(JSON.parse(readFileSync(indexPath, 'utf8')).guards).toEqual([
+      expect.objectContaining({ sourceObjectId: first.object.id }),
+    ]);
+
+    const secondSemantic = semanticFailure(
+      'edit source/beta-policy-v2.txt and regenerate'
+    );
+    const second = await runUcrTool('cognition_record', {
+      kind: 'failure',
+      semanticObject: secondSemantic,
+      evidenceReceipts: [receipt],
+      taskId: 'task',
+      sessionId: 'session',
+    });
+    expect(second.object.supersedes).toBe(first.object.id);
+    expect(JSON.parse(readFileSync(indexPath, 'utf8')).guards).toEqual([
+      expect.objectContaining({ sourceObjectId: second.object.id }),
+    ]);
+
+    unlinkSync(indexPath);
+    const duplicate = await runUcrTool('cognition_record', {
+      kind: 'failure',
+      semanticObject: secondSemantic,
+      evidenceReceipts: [receipt],
+      taskId: 'task',
+      sessionId: 'session',
+    });
+    expect(duplicate).toMatchObject({
+      accepted: true,
+      duplicate: true,
+      object: { id: second.object.id },
+      eventIds: [],
+    });
+    expect(JSON.parse(readFileSync(indexPath, 'utf8')).guards).toEqual([
+      expect.objectContaining({ sourceObjectId: second.object.id }),
+    ]);
   });
 });

@@ -306,6 +306,36 @@ async function loadUcr() {
         : 'not measured',
     ],
     [
+      'Combined token reduction',
+      status.evidenceIndex?.summary.combinedLiveTokenReduction != null
+        ? `${(status.evidenceIndex.summary.combinedLiveTokenReduction * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
+      'Combined latency reduction',
+      status.evidenceIndex?.summary.combinedLiveLatencyReduction != null
+        ? `${(status.evidenceIndex.summary.combinedLiveLatencyReduction * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
+      'Known mistake recurrence',
+      status.evidenceIndex?.summary.runtimeKnownMistakeRecurrences != null
+        ? `${nf.format(status.evidenceIndex.summary.blindedControlMistakes || 0)} control → ${nf.format(status.evidenceIndex.summary.runtimeKnownMistakeRecurrences)} runtime`
+        : 'not measured',
+    ],
+    [
+      'Native guard denials',
+      status.evidenceIndex?.summary.nativeGuardEnforcements != null
+        ? nf.format(status.evidenceIndex.summary.nativeGuardEnforcements)
+        : 'not measured',
+    ],
+    [
+      'Capture model calls',
+      status.evidenceIndex?.summary.maximumCaptureModelCalls != null
+        ? `${nf.format(status.evidenceIndex.summary.maximumCaptureModelCalls)} additional max`
+        : 'not measured',
+    ],
+    [
       'Consumer MCP schema',
       status.evidenceIndex?.summary.maximumConsumerStaticSchemaTokens != null
         ? `${nf.format(status.evidenceIndex.summary.maximumConsumerStaticSchemaTokens)} tokens max`

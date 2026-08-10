@@ -151,6 +151,51 @@ describe('model-native semantic compiler', () => {
       true
     );
   });
+
+  test('creates one canonical correction chain and supersedes stale versions', () => {
+    const firstCompiler = new SemanticCompiler({ eventFactory });
+    const first = firstCompiler.propose('failure', failure(), {
+      producer: 'codex/gpt',
+    });
+    firstCompiler.verify(first.proposal.id, [
+      {
+        eventId: 'receipt-1',
+        type: 'verification.passed',
+        payload: { passed: true },
+      },
+    ]);
+    const active = firstCompiler.activate(first.proposal.id).object;
+
+    const nextCompiler = new SemanticCompiler({
+      eventFactory,
+      existingObjects: [active],
+    });
+    expect(
+      nextCompiler.propose('failure', failure(), { producer: 'claude' })
+    ).toMatchObject({
+      accepted: false,
+      duplicate: true,
+      duplicateOf: active.id,
+    });
+
+    const next = nextCompiler.propose(
+      'failure',
+      failure({ correction: 'edit source/beta-policy-v2.txt and regenerate' }),
+      { producer: 'claude' }
+    );
+    expect(next.proposal.supersedes).toBe(active.id);
+    nextCompiler.verify(next.proposal.id, [
+      {
+        eventId: 'receipt-1',
+        type: 'verification.passed',
+        payload: { passed: true },
+      },
+    ]);
+    const activated = nextCompiler.activate(next.proposal.id);
+    expect(activated.event.payload.relations).toEqual([
+      { from: next.proposal.id, to: active.id, type: 'supersedes' },
+    ]);
+  });
 });
 
 describe('executable memory guard runtime', () => {

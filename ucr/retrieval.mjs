@@ -79,6 +79,13 @@ function scopeCompatibility(object, context) {
     if (object.scope?.[field] && object.scope[field] !== context?.[field])
       reasons.push(`${field} scope mismatch`);
   }
+  if (
+    object.taskFingerprint &&
+    context?.taskFingerprint &&
+    object.taskFingerprint !== context.taskFingerprint
+  ) {
+    reasons.push('task fingerprint mismatch');
+  }
   return { compatible: reasons.length === 0, reasons };
 }
 
@@ -286,7 +293,7 @@ export class RetrievalPlanner {
     );
   }
 
-  plan(query, context = {}, { minimumScore = 0.35, limit = 10 } = {}) {
+  plan(query, context = {}, { minimumScore = 0.35, limit = 1 } = {}) {
     const family = classifyQuery(query);
     const routed =
       this.router?.routes?.[family] || DEFAULT_ROUTES[family] || ['bm25'];
@@ -325,7 +332,10 @@ export class RetrievalPlanner {
           continue;
         }
         const risk =
-          row.object.state === 'stale' || row.object.state === 'quarantined'
+          row.object.state === 'stale' ||
+          row.object.state === 'quarantined' ||
+          row.object.state === 'superseded' ||
+          row.object.contradicted === true
             ? 1
             : 0;
         const confidence = row.object.confidence ?? 0.5;
@@ -353,6 +363,7 @@ export class RetrievalPlanner {
           confidence,
           recency,
           expectedUtility: utility,
+          semanticRelevance: relevance(row.object, query?.text || String(query)),
           tokenCost: tokenEstimate(row.object),
         };
         if (!prior || candidate.score > prior.score)
@@ -367,7 +378,15 @@ export class RetrievalPlanner {
     }
     const candidates = [...union.values()]
       .filter(
-        (candidate) => candidate.score >= minimumScore && candidate.risk < 1
+        (candidate) =>
+          candidate.score >= minimumScore &&
+          candidate.risk < 1 &&
+          // Exact scope is authoritative. Otherwise require agreement between
+          // independent retrieval kernels so a single lexical coincidence does
+          // not spend context or transfer an unrelated correction.
+          (candidate.kernels.includes('scope') ||
+            candidate.kernels.length >= 2 ||
+            (candidate.semanticRelevance >= 0.5 && candidate.confidence >= 0.8))
       )
       .sort((a, b) => b.score - a.score || a.objectId.localeCompare(b.objectId))
       .slice(0, limit);

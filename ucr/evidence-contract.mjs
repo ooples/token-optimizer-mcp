@@ -23,9 +23,17 @@ export const METRIC_EVIDENCE_REQUIREMENTS = Object.freeze({
   recurrenceReduction: 'effectiveness',
   recurrenceIntervalLow: 'effectiveness',
   naturalCorrectnessDelta: 'effectiveness',
+  naturalCorrectnessIntervalLow: 'effectiveness',
   severeUnquarantined: 'effectiveness',
   emptyP95Overhead: 'effectiveness',
   reconstructionTokenReduction: 'effectiveness',
+  firstSuccessorTokenReduction: 'effectiveness',
+  firstSuccessorTokenIntervalLow: 'effectiveness',
+  latencyOverheadP95: 'effectiveness',
+  knownMistakeRecurrence: 'effectiveness',
+  contradictoryDelivery: 'effectiveness',
+  consumerSchemaTokensP95: 'effectiveness',
+  captureModelCallsP95: 'effectiveness',
   writerIntegrity: 'conformance',
   crossClientPassed: 'effectiveness',
   competitivePassed: 'superiority',
@@ -219,6 +227,23 @@ function pairedMetric(rows, field) {
   return interval;
 }
 
+function pairedRatios(rows, field) {
+  const pairs = new Map();
+  for (const row of rows) {
+    if (!['empty', 'runtime'].includes(row.arm)) continue;
+    if (!pairs.has(row.pairId)) pairs.set(row.pairId, {});
+    pairs.get(row.pairId)[row.arm] = row;
+  }
+  return [...pairs.values()]
+    .filter(
+      (pair) =>
+        Number.isFinite(pair.empty?.[field]) &&
+        pair.empty[field] > 0 &&
+        Number.isFinite(pair.runtime?.[field])
+    )
+    .map((pair) => (pair.runtime[field] - pair.empty[field]) / pair.empty[field]);
+}
+
 export function deriveReleaseMetrics(ledgers) {
   const validLedgers = verifiedLedgerInputs(ledgers);
   const effectiveness = rowsAtLeast(validLedgers, 'effectiveness');
@@ -232,6 +257,8 @@ export function deriveReleaseMetrics(ledgers) {
   const recurrence = pairedMetric(effectiveness, 'mistakeExecuted');
   const correctness = pairedMetric(effectiveness, 'correct');
   const reconstruction = pairedMetric(effectiveness, 'reconstructionTokens');
+  const firstSuccessorTokens = pairedMetric(effectiveness, 'totalTokens');
+  const latencyRatios = pairedRatios(effectiveness, 'latencyMs');
   const emptyOverhead = effectiveness
     .filter((row) => row.arm === 'runtime' && row.applicable === false)
     .map((row) => Number(row.contextOverheadRatio));
@@ -265,6 +292,7 @@ export function deriveReleaseMetrics(ledgers) {
     recurrenceReduction: recurrence.mean === null ? null : -recurrence.mean,
     recurrenceIntervalLow: recurrence.high === null ? null : -recurrence.high,
     naturalCorrectnessDelta: correctness.mean,
+    naturalCorrectnessIntervalLow: correctness.low,
     severeUnquarantined: effectiveness.filter(
       (row) => row.severeHarm === true && row.quarantinedBeforeNext !== true
     ).length,
@@ -285,6 +313,55 @@ export function deriveReleaseMetrics(ledgers) {
               : null;
             return meanControl ? -reconstruction.mean / meanControl : null;
           })(),
+    firstSuccessorTokenReduction:
+      firstSuccessorTokens.mean === null
+        ? null
+        : (() => {
+            const controls = effectiveness.filter(
+              (row) => row.arm === 'empty' && Number.isFinite(row.totalTokens)
+            );
+            const meanControl = controls.length
+              ? controls.reduce((sum, row) => sum + row.totalTokens, 0) /
+                controls.length
+              : null;
+            return meanControl ? -firstSuccessorTokens.mean / meanControl : null;
+          })(),
+    firstSuccessorTokenIntervalLow:
+      firstSuccessorTokens.high === null
+        ? null
+        : (() => {
+            const controls = effectiveness.filter(
+              (row) => row.arm === 'empty' && Number.isFinite(row.totalTokens)
+            );
+            const meanControl = controls.length
+              ? controls.reduce((sum, row) => sum + row.totalTokens, 0) /
+                controls.length
+              : null;
+            return meanControl ? -firstSuccessorTokens.high / meanControl : null;
+          })(),
+    latencyOverheadP95: percentile(latencyRatios, 0.95),
+    knownMistakeRecurrence: rate(
+      effectiveness.filter(
+        (row) => row.arm === 'runtime' && row.applicable === true
+      ),
+      (row) => row.mistakeExecuted === true
+    ),
+    contradictoryDelivery: rate(
+      delivered,
+      (row) => row.contradictory === true
+    ),
+    consumerSchemaTokensP95: percentile(
+      effectiveness
+        .filter((row) => row.arm === 'runtime')
+        .map((row) => Number(row.phaseAccounting?.staticSchemaTokens)),
+      0.95
+    ),
+    captureModelCallsP95: percentile(
+      effectiveness
+        .filter((row) => row.arm === 'runtime')
+        .map((row) => Number(row.phaseAccounting?.captureModelCalls)),
+      0.95
+    ),
     writerIntegrity:
       writerRows.length > 0 &&
       writerRows.every(
@@ -323,7 +400,12 @@ export function deriveReleaseMetrics(ledgers) {
   return {
     schemaVersion: 'ucr.derived-metrics/2',
     metrics,
-    intervals: { recurrence, correctness, reconstruction },
+    intervals: {
+      recurrence,
+      correctness,
+      reconstruction,
+      firstSuccessorTokens,
+    },
     sources,
     inputLedgerHashes: validLedgers.map((ledger) => ledger.ledgerHash).sort(),
     rejectedLedgers: ledgers.length - validLedgers.length,

@@ -28,13 +28,19 @@ const definitions = [
   ['production-exercise', 'production-exercise-v1.json', 'executable-smoke'],
   [
     'stateful-codex-to-claude',
-    'stateful-preflight-codex-to-claude-v1.json',
+    'stateful-preflight-codex-to-claude-v4.json',
     'executable-smoke',
   ],
   [
     'stateful-claude-to-codex',
-    'stateful-preflight-claude-to-codex-v1.json',
+    'stateful-preflight-claude-to-codex-v3.json',
     'executable-smoke',
+  ],
+  [
+    'transport-negative-claude-plugin',
+    'stateful-preflight-codex-to-claude-v3.json',
+    'executable-smoke',
+    false,
   ],
   [
     'stateful-claude-to-copilot-quota',
@@ -162,8 +168,12 @@ const percentDelta = (control, runtime) =>
     : null;
 const liveDirectionMetrics = liveArtifacts.map((artifact) => {
   const row = artifact.report?.directionResults?.[0];
-  const controlTraffic = totalTraffic(row?.control?.usage);
-  const runtimeTraffic = totalTraffic(row?.runtime?.usage);
+  const controlTraffic = totalTraffic(
+    row?.control?.pipelineUsage || row?.control?.usage
+  );
+  const runtimeTraffic = totalTraffic(
+    row?.runtime?.pipelineUsage || row?.runtime?.usage
+  );
   return {
     direction: row?.direction || artifact.name,
     integrityValid: artifact.valid,
@@ -175,23 +185,50 @@ const liveDirectionMetrics = liveArtifacts.map((artifact) => {
     predecessorCorrectionVerified:
       row?.producer?.predecessorCorrectionVerified ?? null,
     repeatedFailure: row?.runtime?.mistakeExecuted ?? null,
+    controlMistake: row?.control?.mistakeExecuted ?? null,
     delivered: row?.runtime?.delivered ?? null,
+    nativeGuardWired: row?.runtime?.nativeGuardWired ?? null,
+    nativeGuardEnforced: row?.runtime?.nativeGuardEnforced ?? null,
+    captureModelCalls:
+      row?.runtime?.firstSuccessorCost?.additionalModelCalls ?? null,
     consumerStaticSchemaTokens:
       row?.runtime?.usage?.staticSchemaTokens ?? null,
     capsuleTokens: row?.runtime?.usage?.capsuleTokens ?? null,
     controlTokenTraffic: controlTraffic,
     runtimeTokenTraffic: runtimeTraffic,
     tokenTrafficDelta: percentDelta(controlTraffic, runtimeTraffic),
-    controlLatencyMs: row?.control?.latencyMs ?? null,
-    runtimeLatencyMs: row?.runtime?.latencyMs ?? null,
+    controlLatencyMs:
+      row?.control?.costLedger?.totals?.latencyMs ??
+      row?.control?.latencyMs ??
+      null,
+    runtimeLatencyMs:
+      row?.runtime?.costLedger?.totals?.latencyMs ??
+      row?.runtime?.latencyMs ??
+      null,
     latencyDelta: percentDelta(
-      row?.control?.latencyMs,
-      row?.runtime?.latencyMs
+      row?.control?.costLedger?.totals?.latencyMs ?? row?.control?.latencyMs,
+      row?.runtime?.costLedger?.totals?.latencyMs ?? row?.runtime?.latencyMs
     ),
   };
 });
 const passedLiveDirections = liveDirectionMetrics.filter(
   (direction) => direction.integrityValid && direction.passed
+);
+const combinedControlTraffic = passedLiveDirections.reduce(
+  (sum, direction) => sum + (direction.controlTokenTraffic || 0),
+  0
+);
+const combinedRuntimeTraffic = passedLiveDirections.reduce(
+  (sum, direction) => sum + (direction.runtimeTokenTraffic || 0),
+  0
+);
+const combinedControlLatency = passedLiveDirections.reduce(
+  (sum, direction) => sum + (direction.controlLatencyMs || 0),
+  0
+);
+const combinedRuntimeLatency = passedLiveDirections.reduce(
+  (sum, direction) => sum + (direction.runtimeLatencyMs || 0),
+  0
 );
 const body = {
   schemaVersion: 'ucr.evidence-index/2',
@@ -214,6 +251,31 @@ const body = {
     liveDirectionsWithLowerLatency: passedLiveDirections.filter(
       (direction) => direction.latencyDelta < 0
     ).length,
+    combinedLiveTokenReduction:
+      combinedControlTraffic > 0
+        ? (combinedControlTraffic - combinedRuntimeTraffic) /
+          combinedControlTraffic
+        : null,
+    combinedLiveLatencyReduction:
+      combinedControlLatency > 0
+        ? (combinedControlLatency - combinedRuntimeLatency) /
+          combinedControlLatency
+        : null,
+    blindedControlMistakes: passedLiveDirections.filter(
+      (direction) => direction.controlMistake === true
+    ).length,
+    runtimeKnownMistakeRecurrences: passedLiveDirections.filter(
+      (direction) => direction.repeatedFailure === true
+    ).length,
+    nativeGuardEnforcements: passedLiveDirections.filter(
+      (direction) => direction.nativeGuardEnforced === true
+    ).length,
+    maximumCaptureModelCalls: Math.max(
+      0,
+      ...passedLiveDirections
+        .map((direction) => direction.captureModelCalls)
+        .filter(Number.isFinite)
+    ),
     maximumConsumerStaticSchemaTokens: Math.max(
       0,
       ...passedLiveDirections

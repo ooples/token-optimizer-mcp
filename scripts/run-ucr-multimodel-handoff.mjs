@@ -10,6 +10,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import {
   appendFileSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -19,11 +20,11 @@ import {
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  CognitiveCostLedger,
   EventStore,
   PreActionController,
-  SEMANTIC_HARVEST_FAILURE_SCHEMA,
   SemanticHarvestController,
   canonicalJson,
   createEvidenceRun,
@@ -159,7 +160,7 @@ if (!options.execute) {
           ([producer, consumer]) => `${producer}->${consumer}`
         ),
         modelInvocations: directions.length * 4,
-        note: 'Each direction uses a paid stateful control, predecessor, semantic-harvest, and fresh-consumer invocation.',
+        note: 'Each direction uses matched no-capture and in-turn-capture predecessors plus matched control and runtime consumers. Semantic harvesting adds zero model calls.',
       },
       null,
       2
@@ -452,72 +453,154 @@ function tomlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function configureClaudeContextPlugin(workspace, trustedContext) {
-  const pluginRoot = join(workspace, 'ucr-preaction-plugin');
-  const manifestDirectory = join(pluginRoot, '.claude-plugin');
-  const hooksDirectory = join(pluginRoot, 'hooks');
-  mkdirSync(manifestDirectory, { recursive: true });
-  mkdirSync(hooksDirectory, { recursive: true });
+function guardHookSource(client) {
+  const adapterUrl = pathToFileURL(join(ROOT, 'hooks-core', 'adapter.mjs')).href;
+  return [
+    '#!/usr/bin/env node',
+    `import { run } from ${JSON.stringify(adapterUrl)};`,
+    `run(${JSON.stringify(client)}, 'pre-tool').catch(() => process.exit(0));`,
+    '',
+  ].join('\n');
+}
+
+function configureClaudeGuardSettings(workspace) {
+  const hooksRoot = join(workspace, '.ucr-live-hooks');
+  const settingsPath = join(hooksRoot, 'claude-settings.json');
+  mkdirSync(hooksRoot, { recursive: true });
   writeFileSync(
-    join(manifestDirectory, 'plugin.json'),
-    `${JSON.stringify(
-      {
-        name: 'ucr-preaction-context',
-        description: 'Injects host-retrieved UCR context at SessionStart.',
-        version: '1.0.0',
+    settingsPath,
+    `${JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Edit|MultiEdit|Write|Bash|PowerShell',
+            hooks: [
+              {
+                type: 'command',
+                command: `node ${JSON.stringify(join(hooksRoot, 'pre-tool.mjs'))}`,
+              },
+            ],
+          },
+        ],
       },
-      null,
-      2
-    )}\n`,
+    })}\n`,
     'utf8'
   );
   writeFileSync(
-    join(hooksDirectory, 'hooks.json'),
-    `${JSON.stringify(
-      {
-        hooks: {
-          SessionStart: [
-            {
-              hooks: [
-                {
-                  type: 'command',
-                  command:
-                    'node "${CLAUDE_PLUGIN_ROOT}/hooks/inject-context.mjs"',
-                },
-              ],
-            },
-          ],
+    join(hooksRoot, 'pre-tool.mjs'),
+    guardHookSource('claude-code'),
+    'utf8'
+  );
+  return settingsPath;
+}
+
+function configureCodexGuardPlugin(workspace) {
+  const codexHome = join(workspace, '.codex-live-home');
+  const marketplaceRoot = join(workspace, 'ucr-live-marketplace');
+  const marketplaceManifest = join(
+    marketplaceRoot,
+    '.agents',
+    'plugins',
+    'marketplace.json'
+  );
+  const pluginRoot = join(
+    marketplaceRoot,
+    'plugins',
+    'ucr-live-guard'
+  );
+  const manifestRoot = join(pluginRoot, '.codex-plugin');
+  const hooksRoot = join(pluginRoot, 'hooks');
+  mkdirSync(codexHome, { recursive: true });
+  mkdirSync(manifestRoot, { recursive: true });
+  mkdirSync(hooksRoot, { recursive: true });
+  mkdirSync(dirname(marketplaceManifest), { recursive: true });
+  const sourceCodexHome = process.env.CODEX_HOME || join(homedir(), '.codex');
+  for (const name of ['auth.json', 'cap_sid']) {
+    const source = join(sourceCodexHome, name);
+    if (existsSync(source)) copyFileSync(source, join(codexHome, name));
+  }
+  writeFileSync(
+    join(manifestRoot, 'plugin.json'),
+    `${JSON.stringify({
+      name: 'ucr-live-guard',
+      version: '1.0.0',
+      description: 'Minimal live UCR guard enforcement harness.',
+    })}\n`,
+    'utf8'
+  );
+  writeFileSync(
+    join(hooksRoot, 'hooks.json'),
+    `${JSON.stringify({
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Edit|edit_file|apply_patch|Write|write_file|Bash|shell|run_command',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node "${PLUGIN_ROOT}/hooks/pre-tool.mjs"',
+                commandWindows: 'node "$env:PLUGIN_ROOT\\hooks\\pre-tool.mjs"',
+                timeout: 5,
+              },
+            ],
+          },
+        ],
+      },
+    })}\n`,
+    'utf8'
+  );
+  writeFileSync(
+    join(hooksRoot, 'pre-tool.mjs'),
+    guardHookSource('codex'),
+    'utf8'
+  );
+  writeFileSync(
+    marketplaceManifest,
+    `${JSON.stringify({
+      name: 'ucr-live',
+      interface: { displayName: 'UCR Live' },
+      plugins: [
+        {
+          name: 'ucr-live-guard',
+          source: { source: 'local', path: './plugins/ucr-live-guard' },
+          policy: { installation: 'AVAILABLE', authentication: 'ON_INSTALL' },
+          category: 'Productivity',
         },
-      },
-      null,
-      2
-    )}\n`,
+      ],
+    })}\n`,
     'utf8'
   );
-  writeFileSync(
-    join(hooksDirectory, 'context.json'),
-    `${JSON.stringify({ trustedContext })}\n`,
-    'utf8'
-  );
-  writeFileSync(
-    join(hooksDirectory, 'inject-context.mjs'),
-    [
-      "import { readFileSync } from 'node:fs';",
-      "import { dirname, join } from 'node:path';",
-      "import { fileURLToPath } from 'node:url';",
-      'const here = dirname(fileURLToPath(import.meta.url));',
-      "const { trustedContext } = JSON.parse(readFileSync(join(here, 'context.json'), 'utf8'));",
-      "process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: trustedContext } }));",
-      '',
-    ].join('\n'),
-    'utf8'
-  );
-  return pluginRoot;
+  const environment = { ...process.env, CODEX_HOME: codexHome };
+  for (const args of [
+    ['plugin', 'marketplace', 'add', marketplaceRoot],
+    ['plugin', 'add', 'ucr-live-guard@ucr-live'],
+  ]) {
+    const result = spawnSync(commands.codex.command, [...commands.codex.prefix, ...args], {
+      cwd: workspace,
+      env: environment,
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    if (result.status !== 0)
+      throw new Error(`failed to configure isolated Codex guard plugin: ${result.stderr}`);
+  }
+  return codexHome;
 }
 
 async function invoke(client, role, prompt, context) {
   const invocation = commands[client];
-  const processEnvironment = { ...process.env, ...context.environment };
+  const processEnvironment = {
+    ...process.env,
+    ...context.environment,
+    ...(context.guardEnforcement
+      ? { TOKEN_OPTIMIZER_EXPERIMENT_ARM: 'baseline' }
+      : {}),
+  };
+  if (client === 'codex' && context.guardEnforcement) {
+    processEnvironment.CODEX_HOME = configureCodexGuardPlugin(
+      context.workspace
+    );
+  }
   const attestationEnvironment = context.attestation
     ? {
         ...context.environment,
@@ -561,10 +644,13 @@ async function invoke(client, role, prompt, context) {
         ...invocation.prefix,
         'exec',
         '--json',
-        '--ignore-user-config',
+        ...(context.guardEnforcement ? [] : ['--ignore-user-config']),
         '--ignore-rules',
         '--ephemeral',
         '--dangerously-bypass-approvals-and-sandbox',
+        ...(context.guardEnforcement
+          ? ['--dangerously-bypass-hook-trust']
+          : []),
         '--model',
         clients[client].model,
         ...(outputSchemaPath ? ['--output-schema', outputSchemaPath] : []),
@@ -612,9 +698,11 @@ async function invoke(client, role, prompt, context) {
     if (context.outputSchema)
       args.push('--json-schema', JSON.stringify(context.outputSchema));
     if (context.trustedContext)
+      args.push('--append-system-prompt', context.trustedContext);
+    if (context.guardEnforcement)
       args.push(
-        '--plugin-dir',
-        configureClaudeContextPlugin(context.workspace, context.trustedContext)
+        '--settings',
+        configureClaudeGuardSettings(context.workspace)
       );
     return run(invocation.command, args, {
       cwd: context.workspace,
@@ -676,6 +764,12 @@ async function invoke(client, role, prompt, context) {
 function finalResponse(client, stdout) {
   const normalize = (value) => {
     const text = String(value).trim();
+    if (
+      text.includes('<ucr-semantic-delta>') &&
+      text.includes('</ucr-semantic-delta>')
+    ) {
+      return text;
+    }
     const answers = text.match(/IMPLEMENTATION_CHOICE=[A-Z0-9-]+/g);
     return answers?.at(-1) || text;
   };
@@ -715,7 +809,7 @@ const attemptsPath = join(
 mkdirSync(dirname(options.output), { recursive: true });
 const graderSecret = randomBytes(32).toString('hex');
 
-const fixtureBanner = '// GENERATED FROM hooks-core; DO NOT EDIT DIRECTLY.\n';
+const fixtureBanner = '// Codex hook runtime.\n';
 
 function fixtureSource(taskId, mode) {
   return [
@@ -801,6 +895,7 @@ function readFixtureAudit(path) {
 }
 
 function gradeImplementationWorkspace(fixture) {
+  const startedAt = performance.now();
   const protectedFilesUnchanged =
     sha256(readFileSync(fixture.syncPath, 'utf8')) ===
       fixture.protectedHashes.sync &&
@@ -811,6 +906,7 @@ function gradeImplementationWorkspace(fixture) {
       passed: false,
       protectedFilesUnchanged: false,
       reason: 'fixture sync or verifier was modified',
+      latencyMs: performance.now() - startedAt,
     };
   }
   const verification = spawnSync(process.execPath, [fixture.verifyPath], {
@@ -836,6 +932,7 @@ function gradeImplementationWorkspace(fixture) {
     verifierOutput: String(verification.stdout || '').trim(),
     sourceHash: sha256(source),
     generatedHash: sha256(generated),
+    latencyMs: performance.now() - startedAt,
   };
 }
 
@@ -900,24 +997,82 @@ try {
       return path;
     };
     const predecessorWorkspace = workspace('predecessor', producerClient);
+    const controlPredecessorWorkspace = workspace(
+      'control-predecessor',
+      producerClient
+    );
     const predecessorAuditPath = join(
       temporary,
       taskId,
       'predecessor-audit.jsonl'
     );
+    const controlPredecessorAuditPath = join(
+      temporary,
+      taskId,
+      'control-predecessor-audit.jsonl'
+    );
     const predecessorFixture = prepareImplementationWorkspace(
       predecessorWorkspace,
       taskId
     );
-    const predecessorPrompt = [
+    const controlPredecessorFixture = prepareImplementationWorkspace(
+      controlPredecessorWorkspace,
+      taskId
+    );
+    const predecessorTaskPrompt = [
       `Complete implementation task ${taskId} in this repository.`,
       "The generated client hook currently exports mode='legacy'; the required end state is mode='hardened' and must survive regeneration.",
       'For this predecessor-mistake fixture, perform this exact sequence with your file and shell tools:',
       "1. Edit only integrations/codex/hooks/lib/inject.mjs to mode='hardened', then run node scripts/verify-hooks.mjs and observe the expected failure.",
       "2. Correct the mistake by editing hooks-core/inject.mjs to mode='hardened', then run node scripts/verify-hooks.mjs and observe success.",
       'Do not modify scripts/sync-hooks.mjs or scripts/verify-hooks.mjs.',
+    ];
+    const predecessorPrompt = [
+      ...predecessorTaskPrompt,
+      `3. After the verifier succeeds, finish with IMPLEMENTATION_CHOICE=${recoveryCode} and semantically harvest the verified correction yourself in this same final response.`,
+      'The final response is incomplete unless it contains <ucr-semantic-delta> followed by exactly one minified JSON object and </ucr-semantic-delta>. Do not put a code fence inside the markers. The JSON must stay under 384 tokens.',
+      'The JSON must contain non-empty strings trigger, attemptedAction, observedFailure, rootCause, correction, verificationEvidence, expectedOutcome; non-empty string arrays applicability, nonApplicability, invalidators; numeric confidence; confidenceLabel="verified"; scope; and guard.',
+      'Use exactly one item in each array. Keep trigger, observedFailure, rootCause, verificationEvidence, expectedOutcome, and every array item at most 48 characters. Keep attemptedAction and correction at most 96 characters. Do not repeat evidence or explain the JSON.',
+      `Use exact scope={"taskId":"${taskId}","projectId":"${projectId}","workspaceId":"workspace:${projectId}"}. attemptedAction must include ${staleCode}; correction must include ${recoveryCode}.`,
+      'Use exact guard={"triggers":[{"field":"path","operator":"matches","value":"integrations.*codex.*hooks.*lib.*inject\\\\.mjs$"}],"intervention":{"type":"replace-parameters"},"replacementAction":{"path":"hooks-core/inject.mjs","then":"node scripts/verify-hooks.mjs"},"rollback":"disable this guard"}.',
+    ].join('\n');
+    const controlPredecessorPrompt = [
+      ...predecessorTaskPrompt,
       `Finish with IMPLEMENTATION_CHOICE=${recoveryCode}.`,
     ].join('\n');
+    console.log(
+      `running ${producerClient}->${consumerClient} no-capture predecessor control...`
+    );
+    const controlPredecessor = await invoke(
+      producerClient,
+      'predecessor',
+      controlPredecessorPrompt,
+      {
+        workspace: controlPredecessorWorkspace,
+        environment: {
+          UCR_FIXTURE_AUDIT_LOG: controlPredecessorAuditPath,
+        },
+      }
+    );
+    const controlPredecessorGrade = gradeImplementationWorkspace(
+      controlPredecessorFixture
+    );
+    const controlPredecessorObservations = predecessorObservations({
+      taskId,
+      recoveryCode,
+      staleCode,
+      auditEvents: readFixtureAudit(controlPredecessorAuditPath),
+      finalGrade: controlPredecessorGrade,
+    });
+    if (
+      controlPredecessor.exitCode !== 0 ||
+      !controlPredecessorObservations.staleAttemptObserved ||
+      !controlPredecessorObservations.correctedAttemptAccepted
+    ) {
+      throw new Error(
+        `${producerClient} did not complete the no-capture predecessor control`
+      );
+    }
     console.log(
       `running ${producerClient}->${consumerClient} stateful predecessor mistake and correction...`
     );
@@ -961,10 +1116,11 @@ try {
       graderSecret
     );
     const baseEnvironment = {
-      TOKEN_OPTIMIZER_TOOL_PROFILE: 'cognitive',
+      TOKEN_OPTIMIZER_TOOL_PROFILE: 'continuity',
       TOKEN_OPTIMIZER_UCR_DIR: ucrRoot,
       TOKEN_OPTIMIZER_PROJECT_ID: projectId,
       TOKEN_OPTIMIZER_WORKSPACE_ID: `workspace:${projectId}`,
+      TOKEN_OPTIMIZER_TASK_ID: taskId,
       TOKEN_OPTIMIZER_GRADER_SECRET: graderSecret,
     };
     const controlWorkspace = workspace('control', consumerClient);
@@ -981,21 +1137,15 @@ try {
     );
     const controlPrompt = [
       `Complete implementation task ${taskId} in this repository.`,
-      "Change the hook behavior from mode='legacy' to mode='hardened' so it survives regeneration and node scripts/verify-hooks.mjs passes.",
+      "In integrations/codex/hooks/lib/inject.mjs, change the Codex hook behavior from mode='legacy' to mode='hardened'.",
       'Inspect the repository, make the necessary edits, and run the verifier.',
       'Do not modify scripts/sync-hooks.mjs or scripts/verify-hooks.mjs.',
       'This blinded control has no cross-session task evidence.',
       'Finish by reporting IMPLEMENTATION_CHOICE=<the approach you used>.',
     ].join('\n');
-    const consumerPrompt = [
-      `Take over and complete implementation task ${taskId} in this repository.`,
-      "Change the hook behavior from mode='legacy' to mode='hardened' so it survives regeneration and node scripts/verify-hooks.mjs passes.",
-      'The user authorizes the installed Token Optimizer adapter and its scope-matched, externally verified pre-action context.',
-      'Corroborate that context with the local files, make the edits, and run the verifier.',
-      'Do not modify scripts/sync-hooks.mjs or scripts/verify-hooks.mjs.',
-      'Do not repeat a rejected predecessor action.',
-      'Finish by reporting IMPLEMENTATION_CHOICE=<the approach you used>.',
-    ].join('\n');
+    // The control and runtime receive byte-identical user prompts. The only
+    // treatment is the host-authenticated, bounded pre-action capsule.
+    const consumerPrompt = controlPrompt;
 
     console.log(
       `running ${producerClient}->${consumerClient} blinded control...`
@@ -1005,10 +1155,10 @@ try {
       environment: { UCR_FIXTURE_AUDIT_LOG: controlAuditPath },
     });
     console.log(
-      `running ${producerClient}->${consumerClient} authenticated model-authored harvest...`
+      `committing ${producerClient}->${consumerClient} in-turn semantic delta...`
     );
     const producerContext = {
-      workspace: workspace('producer', producerClient),
+      workspace: predecessorWorkspace,
       environment: {
         ...baseEnvironment,
         TOKEN_OPTIMIZER_CLIENT: producerClient,
@@ -1016,8 +1166,8 @@ try {
         TOKEN_OPTIMIZER_MODEL: clients[producerClient].model,
       },
     };
-    const producerRuns = [];
     const harvestController = new SemanticHarvestController({
+      maximumDeltaTokens: 384,
       verifyEvidence: async ({ evidenceReceipts }) =>
         runCognitionSidecar(
           { operation: 'verify-evidence', evidenceReceipts },
@@ -1026,35 +1176,31 @@ try {
       persist: async (request) =>
         runCognitionSidecar(request, producerContext),
     });
-    const harvest = await harvestController.harvest(
-      {
-        kind: 'failure',
-        evidenceReceipts: [receipt],
+    const harvest = await harvestController.commitAuthoredDelta({
+      kind: 'failure',
+      raw: finalResponse(producerClient, predecessor.stdout),
+      evidenceReceipts: [receipt],
+      evidenceBindings: [
+        { path: 'attemptedAction', includes: staleCode },
+        { path: 'correction', includes: recoveryCode },
+      ],
+      taskId,
+      sessionId: 'producer-session',
+      scope: {
         taskId,
-        sessionId: 'producer-session',
-        scope: {
-          taskId,
-          projectId,
-          workspaceId: `workspace:${projectId}`,
-        },
+        projectId,
+        workspaceId: `workspace:${projectId}`,
       },
-      async ({ prompt }) => {
-        const modelRun = await invoke(
-          producerClient,
-          'harvester',
-          prompt,
-          {
-            ...producerContext,
-            outputSchema: SEMANTIC_HARVEST_FAILURE_SCHEMA,
-          }
-        );
-        producerRuns.push(modelRun);
-        if (modelRun.exitCode !== 0)
-          throw new Error(`producer model exited ${modelRun.exitCode}`);
-        return finalResponse(producerClient, modelRun.stdout);
-      }
+    });
+    const guardIndexPath = join(ucrRoot, 'active-guards.json');
+    const guardIndex = existsSync(guardIndexPath)
+      ? JSON.parse(readFileSync(guardIndexPath, 'utf8'))
+      : null;
+    const guardMaterialized = Boolean(
+      guardIndex?.guards?.some(
+        (guard) => guard.sourceObjectId === harvest.persisted.object?.id
+      )
     );
-    const producer = producerRuns.at(-1);
     console.log(
       `running ${producerClient}->${consumerClient} mandatory preflight and consumer...`
     );
@@ -1069,10 +1215,10 @@ try {
       },
     };
     const controller = new PreActionController({
-      hardMaximumTokens: 384,
+      hardMaximumTokens: 160,
       injectionChannel:
         consumerClient === 'claude-code'
-          ? 'claude-session-start-hook-additional-context'
+          ? 'claude-host-appended-system-prompt'
           : consumerClient === 'codex'
             ? 'codex-developer-instructions'
             : 'host-preaction-prompt-envelope',
@@ -1088,7 +1234,7 @@ try {
         taskId,
         sessionId: 'consumer-session',
         trigger: 'task',
-        budget: 384,
+        budget: 160,
         prompt: consumerPrompt,
       },
       ({ prompt, trustedContext }) =>
@@ -1096,6 +1242,7 @@ try {
           ...consumerContext,
           trustedContext,
           attestation: false,
+          guardEnforcement: true,
         })
     );
     const consumer = takeover.result;
@@ -1113,6 +1260,15 @@ try {
     const consumerGrade = gradeImplementationWorkspace(consumerFixture);
     const controlAuditEvents = readFixtureAudit(controlAuditPath);
     const consumerAuditEvents = readFixtureAudit(consumerAuditPath);
+    const guardAuditEvents = readFixtureAudit(
+      join(ucrRoot, 'guard-audit.jsonl')
+    );
+    const guardEnforced = guardAuditEvents.some(
+      (event) =>
+        event.taskId === taskId &&
+        event.decision === 'deny' &&
+        event.executed === false
+    );
     const generatedOnlyAttempt = (auditEvents) =>
       auditEvents.some(
         (event) =>
@@ -1154,16 +1310,95 @@ try {
     );
     const consumerCorrect = consumerGrade.passed;
     const repeatedFailure = generatedOnlyAttempt(consumerAuditEvents);
+    const controlPredecessorUsage = collectUsage(
+      controlPredecessor.stdout,
+      producerClient
+    );
+    const predecessorUsage = collectUsage(predecessor.stdout, producerClient);
+    const controlConsumerUsage = collectUsage(control.stdout, consumerClient);
+    const runtimeConsumerUsage = collectUsage(consumer.stdout, consumerClient);
+    const costLedger = ({ runtime }) => {
+      const ledger = new CognitiveCostLedger({
+        runId: `${taskId}:${runtime ? 'runtime' : 'control'}`,
+      });
+      ledger.record({
+        phase: 'schema',
+        inputTokens: 0,
+        accountingMethod: 'consumer-tools-list:tiktoken',
+        detail: { exposedTools: 0 },
+      });
+      const producerUsage = runtime
+        ? predecessorUsage
+        : controlPredecessorUsage;
+      ledger.record({
+        phase: 'capture',
+        inputTokens: producerUsage.inputTokens,
+        outputTokens: producerUsage.outputTokens,
+        latencyMs:
+          (runtime ? predecessor.latencyMs : controlPredecessor.latencyMs) +
+          (runtime ? harvest.receipt.hostLatencyMs : 0),
+        modelCalls: 1,
+        accountingMethod: producerUsage.tokenAccounting,
+        detail: runtime
+          ? {
+              semanticDeltaTokens: harvest.receipt.deltaTokens,
+              additionalModelCalls: harvest.receipt.additionalModelCalls,
+            }
+          : { semanticDeltaTokens: 0, additionalModelCalls: 0 },
+      });
+      ledger.record({
+        phase: 'retrieval',
+        latencyMs: runtime ? preAction.latencyMs : 0,
+        toolCalls: runtime ? 1 : 0,
+        accountingMethod: 'host-preaction-timer',
+      });
+      ledger.record({
+        phase: 'injection',
+        inputTokens: runtime ? preAction.injectionTokens : 0,
+        accountingMethod: 'trusted-context:utf8-length-div-4',
+        includedInTotal: false,
+        detail: {
+          alreadyIncludedInConsumerInput: true,
+          capsuleTokens: runtime ? preAction.capsuleTokens : 0,
+        },
+      });
+      const consumerUsage = runtime
+        ? runtimeConsumerUsage
+        : controlConsumerUsage;
+      ledger.record({
+        phase: 'consumer',
+        inputTokens: consumerUsage.inputTokens,
+        outputTokens: consumerUsage.outputTokens,
+        latencyMs: runtime ? consumer.latencyMs : control.latencyMs,
+        modelCalls: 1,
+        accountingMethod: consumerUsage.tokenAccounting,
+      });
+      ledger.record({
+        phase: 'validation',
+        latencyMs: runtime
+          ? predecessorGrade.latencyMs + consumerGrade.latencyMs
+          : controlPredecessorGrade.latencyMs + controlGrade.latencyMs,
+        toolCalls: 2,
+        accountingMethod: 'independent-grader-timer',
+      });
+      return ledger.report();
+    };
+    const controlCostLedger = costLedger({ runtime: false });
+    const runtimeCostLedger = costLedger({ runtime: true });
     const passed =
       control.exitCode === 0 &&
+      controlPredecessor.exitCode === 0 &&
+      controlPredecessorObservations.correctedAttemptAccepted &&
       predecessor.exitCode === 0 &&
-      producerRuns.every((run) => run.exitCode === 0) &&
       consumer.exitCode === 0 &&
       observations.staleAttemptObserved &&
       observations.correctedAttemptAccepted &&
       producerRecorded &&
       harvest.receipt.modelAuthored &&
-      harvest.receipt.evidenceAuthenticatedBeforeAuthoring &&
+      harvest.receipt.authoredDuringWorkTurn &&
+      harvest.receipt.evidenceAuthenticatedBeforeActivation &&
+      harvest.receipt.additionalModelCalls === 0 &&
+      guardMaterialized &&
       delivered &&
       preAction.retrievalAttempted &&
       !preAction.consumerMcpExposed &&
@@ -1188,30 +1423,41 @@ try {
         abstained: controlAbstained,
         mistakeExecuted: generatedOnlyAttempt(controlAuditEvents),
         outcomeGrade: controlGrade,
-        usage: collectUsage(control.stdout, consumerClient),
+        usage: controlConsumerUsage,
         latencyMs: control.latencyMs,
+        predecessorUsage: controlPredecessorUsage,
+        predecessorLatencyMs: controlPredecessor.latencyMs,
+        costLedger: controlCostLedger,
+        pipelineUsage: {
+          ...controlCostLedger.totals,
+          tokenAccounting: 'phase-ledger:provider-native',
+        },
       },
       producer: {
-        exitCode:
-          predecessor.exitCode === 0 &&
-          producerRuns.every((run) => run.exitCode === 0)
-            ? 0
-            : 1,
+        exitCode: predecessor.exitCode,
         recorded: producerRecorded,
         modelAuthored: harvest.receipt.modelAuthored,
-        evidenceAuthenticatedBeforeAuthoring:
-          harvest.receipt.evidenceAuthenticatedBeforeAuthoring,
+        authoredDuringWorkTurn: harvest.receipt.authoredDuringWorkTurn,
+        evidenceAuthenticatedBeforeActivation:
+          harvest.receipt.evidenceAuthenticatedBeforeActivation,
+        additionalModelCalls: harvest.receipt.additionalModelCalls,
+        guardMaterialized,
         predecessorMistakeObserved: observations.staleAttemptObserved,
         predecessorCorrectionVerified:
           observations.correctedAttemptAccepted,
         predecessorEvidence: observations,
         semanticHarvestReceipt: harvest.receipt,
-        workUsage: collectUsage(predecessor.stdout, producerClient),
-        harvestUsage: aggregateUsage(producerRuns, producerClient),
-        usage: aggregateUsage([predecessor, ...producerRuns], producerClient),
-        latencyMs:
-          predecessor.latencyMs +
-          producerRuns.reduce((total, run) => total + run.latencyMs, 0),
+        workUsage: predecessorUsage,
+        harvestUsage: {
+          inputTokens: 0,
+          outputTokens: harvest.receipt.deltaTokens,
+          totalTokens: harvest.receipt.deltaTokens,
+          modelCalls: 0,
+          tokenAccounting: 'model-output-delta:tiktoken-compatible-estimate',
+        },
+        usage: predecessorUsage,
+        latencyMs: predecessor.latencyMs,
+        harvestHostLatencyMs: harvest.receipt.hostLatencyMs,
       },
       runtime: {
         exitCode: consumer.exitCode,
@@ -1222,16 +1468,29 @@ try {
         attested,
         attestationFailed,
         deliveryPhase: 'adapter-pre-action',
+        nativeGuardWired: true,
+        nativeGuardEnforced: guardEnforced,
+        nativeGuardAuditEvents: guardAuditEvents.length,
         mistakeExecuted: repeatedFailure,
         outcomeGrade: consumerGrade,
         usage: {
-          ...collectUsage(consumer.stdout, consumerClient),
+          ...runtimeConsumerUsage,
           staticSchemaTokens: preAction.staticSchemaTokens,
           capsuleTokens: preAction.capsuleTokens,
           instructionTokens: preAction.injectionTokens,
         },
         latencyMs: consumer.latencyMs,
         preflightLatencyMs: preAction.latencyMs,
+        firstSuccessorCost: {
+          captureTokens: harvest.receipt.deltaTokens,
+          additionalModelCalls: harvest.receipt.additionalModelCalls,
+          hostCaptureLatencyMs: harvest.receipt.hostLatencyMs,
+        },
+        costLedger: runtimeCostLedger,
+        pipelineUsage: {
+          ...runtimeCostLedger.totals,
+          tokenAccounting: 'phase-ledger:provider-native',
+        },
         consumerMcpExposed: preAction.consumerMcpExposed,
         preActionReceipt: preAction,
       },
@@ -1257,9 +1516,11 @@ try {
           .replaceAll(staleCode, '[REJECTED_CHOICE_REDACTED]')
           .replaceAll(graderSecret, '[GRADER_SECRET_REDACTED]')
           .slice(-3000);
-      console.error(`${row.direction} producer: ${redact(producer.stdout)}`);
       console.error(
-        `${row.direction} producer stderr: ${redact(producer.stderr)}`
+        `${row.direction} predecessor: ${redact(predecessor.stdout)}`
+      );
+      console.error(
+        `${row.direction} predecessor stderr: ${redact(predecessor.stderr)}`
       );
       console.error(`${row.direction} consumer: ${redact(consumer.stdout)}`);
       console.error(

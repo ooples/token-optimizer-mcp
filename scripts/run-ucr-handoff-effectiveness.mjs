@@ -77,7 +77,7 @@ const registration = preRegisterBenchmark(
 const requiredPerArm = registration.powerAnalysis.perArm;
 const poweredDesign =
   directions.length >= 2 && options.pairsPerDirection >= requiredPerArm;
-const plannedInvocations = directions.length * options.pairsPerDirection * 3;
+const plannedInvocations = directions.length * options.pairsPerDirection * 4;
 if (!options.execute) {
   console.log(
     JSON.stringify(
@@ -175,8 +175,18 @@ try {
       appendFileSync(attemptsPath, `${canonicalJson(attempt)}\n`, 'utf8');
       if (!result) continue;
       const pairId = `${direction}:${repetition}:${result.taskHash}`;
-      const baselineTokens = totalTokens(result.control.usage);
-      const runtimeTokens = totalTokens(result.runtime.usage);
+      const baselineTokens = totalTokens(
+        result.control.pipelineUsage || result.control.usage
+      );
+      const runtimeTokens = totalTokens(
+        result.runtime.pipelineUsage || result.runtime.usage
+      );
+      const captureTokens =
+        result.runtime.firstSuccessorCost?.captureTokens ?? null;
+      const firstSuccessorTokens = runtimeTokens;
+      const firstSuccessorLatencyMs =
+        result.runtime.costLedger?.totals?.latencyMs ??
+        result.runtime.latencyMs + (result.runtime.preflightLatencyMs || 0);
       const common = {
         study: 'cross-client-handoff',
         pairId,
@@ -195,13 +205,21 @@ try {
           ...common,
           arm: 'empty',
           correct: result.control.correct,
-          mistakeExecuted: false,
+          mistakeExecuted: result.control.mistakeExecuted,
           delivered: false,
           eligible: false,
           selected: false,
           applicable: null,
-          inputTokens: result.control.usage.inputTokens,
-          outputTokens: result.control.usage.outputTokens,
+          inputTokens:
+            result.control.pipelineUsage?.inputTokens ??
+            result.control.usage.inputTokens,
+          outputTokens:
+            result.control.pipelineUsage?.outputTokens ??
+            result.control.usage.outputTokens,
+          totalTokens: baselineTokens,
+          latencyMs:
+            result.control.costLedger?.totals?.latencyMs ??
+            result.control.latencyMs,
         },
         {
           ...common,
@@ -214,12 +232,36 @@ try {
           selected: result.runtime.delivered,
           applicable: true,
           stale: false,
+          contradictory: false,
           contextOverheadRatio:
-            baselineTokens && runtimeTokens !== null
-              ? (runtimeTokens - baselineTokens) / baselineTokens
+            baselineTokens && firstSuccessorTokens !== null
+              ? (firstSuccessorTokens - baselineTokens) / baselineTokens
               : null,
-          inputTokens: result.runtime.usage.inputTokens,
-          outputTokens: result.runtime.usage.outputTokens,
+          inputTokens:
+            result.runtime.pipelineUsage?.inputTokens ??
+            result.runtime.usage.inputTokens,
+          outputTokens:
+            result.runtime.pipelineUsage?.outputTokens ??
+            result.runtime.usage.outputTokens,
+          totalTokens: firstSuccessorTokens,
+          latencyMs: firstSuccessorLatencyMs,
+          phaseAccounting: {
+            captureTokens,
+            staticSchemaTokens: result.runtime.usage.staticSchemaTokens,
+            capsuleTokens: result.runtime.usage.capsuleTokens,
+            instructionTokens: result.runtime.usage.instructionTokens,
+            consumerInputTokens: result.runtime.usage.inputTokens,
+            consumerOutputTokens: result.runtime.usage.outputTokens,
+            captureModelCalls:
+              result.runtime.firstSuccessorCost?.additionalModelCalls,
+            retrievalLatencyMs: result.runtime.preflightLatencyMs,
+            captureHostLatencyMs:
+              result.runtime.firstSuccessorCost?.hostCaptureLatencyMs,
+            consumerLatencyMs: result.runtime.latencyMs,
+            ledgerHash: result.runtime.costLedger?.ledgerHash,
+            attributionComplete:
+              result.runtime.costLedger?.attributionComplete === true,
+          },
         }
       );
     }

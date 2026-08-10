@@ -190,14 +190,14 @@ describe('secure cross-project federation', () => {
 });
 
 describe('minimal lazy capability surface and adapter SDK', () => {
-  test('exposes exactly four bootstrap cognitive operations with migration aliases', () => {
-    expect(BOOTSTRAP_COGNITIVE_OPERATIONS).toHaveLength(4);
+  test('exposes exactly two bootstrap continuity operations with migration aliases', () => {
+    expect(BOOTSTRAP_COGNITIVE_OPERATIONS).toHaveLength(2);
     const capabilities = negotiateCapabilities({
       dynamicExposure: true,
       requested: ['benchmark_run'],
       advanced: ['benchmark_run'],
     });
-    expect(capabilities.operations).toHaveLength(5);
+    expect(capabilities.operations).toHaveLength(3);
     expect(capabilities.migration).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

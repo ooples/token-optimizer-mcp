@@ -76,6 +76,7 @@ try {
   const configurations = [
     ['baseline', 'core', 'baseline'],
     ['attestation', 'attestation', 'full'],
+    ['continuity', 'continuity', 'full'],
     ['cognitive', 'cognitive', 'full'],
     ['core', 'core', 'full'],
     ['full', 'full', 'full'],
@@ -105,6 +106,7 @@ try {
     shareOf1mContext: surface.schemaTokens / 1_000_000,
   }));
   const cognitive = enriched.find((surface) => surface.name === 'cognitive');
+  const continuity = enriched.find((surface) => surface.name === 'continuity');
   const attestation = enriched.find(
     (surface) => surface.name === 'attestation'
   );
@@ -122,27 +124,30 @@ try {
     surfaces: enriched,
     findings: {
       defaultProfile: 'core',
-      graphCaptureProfile: 'cognitive',
-      graphCaptureTools: cognitive.tools,
+      graphCaptureProfile: 'continuity',
+      graphCaptureTools: continuity.tools,
       attestationProfile: 'attestation',
       attestationTools: attestation.tools,
       attestationSchemaTokens: attestation.schemaTokens,
       fullCatalogTools: full.tools,
-      graphCaptureSchemaTokens: cognitive.schemaTokens,
+      graphCaptureSchemaTokens: continuity.schemaTokens,
+      extendedCognitiveSchemaTokens: cognitive.schemaTokens,
       defaultCoreSchemaTokens: core.schemaTokens,
       fullCatalogSchemaTokens: full.schemaTokens,
-      graphCaptureReductionVsFull: cognitive.reductionVsFull,
+      graphCaptureReductionVsFull: continuity.reductionVsFull,
       graphCaptureReductionVsCore:
-        1 - cognitive.schemaTokens / core.schemaTokens,
+        1 - continuity.schemaTokens / core.schemaTokens,
       appliesToRegisteredClients: Object.keys(UCR_CLIENT_REGISTRY).length,
       userMcpServersAreAdditive:
         'Every enabled MCP server adds its own tool schemas and instructions; client isolation must disable unrelated servers during evals.',
     },
     passed:
       attestation.tools === 1 &&
+      continuity.tools === 2 &&
       cognitive.tools === 5 &&
       full.tools === 103 &&
       attestation.schemaTokens < cognitive.schemaTokens &&
+      continuity.schemaTokens < cognitive.schemaTokens &&
       cognitive.schemaTokens < core.schemaTokens &&
       core.schemaTokens < full.schemaTokens,
     limitations: [

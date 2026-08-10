@@ -1404,14 +1404,22 @@ The MCP server exposes an 18-tool core catalog by default so tool schemas do not
 consume a large share of the model context. Set
 `TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 103
 specialized tools. `TOKEN_OPTIMIZER_TOOL_PROFILE=core` is the explicit form of
-the default. Live graph capture and continuity evaluations use
-`TOKEN_OPTIMIZER_TOOL_PROFILE=cognitive`, which exposes four cognitive
-operations plus bounded receipt attestation. A real native-token audit measures
-71 startup schema tokens for attestation alone, 1,235 in cognitive mode, 4,815
-in core, and 30,666 in full mode. Stateful consumers normally receive zero MCP
-tools: host pre-action delivery adds only the selected capsule through the
-client lifecycle channel. Other enabled MCP servers add their own schemas
-independently.
+the default. Live graph capture uses
+`TOKEN_OPTIMIZER_TOOL_PROFILE=continuity`, which exposes only capture and query.
+The extended `cognitive` profile adds checkpoints, outcomes, and receipt
+attestation. The native-token audit measures 480 startup tokens for continuity,
+694 for extended cognitive, 4,815 for core, and 30,125 for full. Stateful
+consumers normally receive zero MCP tools: host pre-action delivery adds only
+the selected capsule through the client lifecycle channel. Other enabled MCP
+servers add their own schemas independently.
+
+The current two-direction Codex/Claude executable smoke records 21.06% lower
+combined predecessor-to-successor token traffic, 18.36% lower combined latency,
+one known-mistake recurrence in blinded control versus zero in runtime, and one
+native pre-execution denial. These are signed smoke observations, not powered
+effectiveness or universal-superiority claims; the evidence index deliberately
+keeps the release verdict `insufficient` until its confidence, competitive, and
+production gates pass.
 
 #### Performance Controls
 

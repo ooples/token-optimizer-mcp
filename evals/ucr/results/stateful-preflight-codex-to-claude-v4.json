@@ -1,0 +1,893 @@
+{
+  "schemaVersion": "ucr.live-multimodel-handoff/1",
+  "evidenceClass": "live-multimodel-executable-smoke-not-powered-effectiveness",
+  "executedAt": "2026-08-10T04:26:46.370Z",
+  "sourceTreeHash": "3eba9476a6ad29ff4ddaa3a91b15846a1e7c95779157bee7927e4ff1a4372828",
+  "requestedDirections": [
+    "codex->claude-code"
+  ],
+  "directionsPassed": 1,
+  "directionResults": [
+    {
+      "study": "cross-client-handoff",
+      "direction": "codex->claude-code",
+      "producerClient": "codex",
+      "consumerClient": "claude-code",
+      "producerFamily": "openai",
+      "consumerFamily": "anthropic",
+      "producerModel": "gpt-5.6-sol",
+      "consumerModel": "sonnet",
+      "taskHash": "f385bfc14873249bb0d00a1061fabb7a4669bd3e40520041a367490cc813193c",
+      "control": {
+        "exitCode": 0,
+        "correct": true,
+        "abstained": false,
+        "mistakeExecuted": false,
+        "outcomeGrade": {
+          "passed": true,
+          "protectedFilesUnchanged": true,
+          "canonicalSourceChanged": true,
+          "generatedSynchronized": true,
+          "verifierExitCode": 0,
+          "verifierOutput": "verification passed",
+          "sourceHash": "ade16e63dac5269eb9edb98eca42051d9bdcb45baf5f7384e9006a730a92edca",
+          "generatedHash": "268cd25e33474294d7ee092605412dd0b70ac127cbcb3be99d2d0f9fc8dcd0b6",
+          "latencyMs": 140.94940000001225
+        },
+        "usage": {
+          "inputTokens": 356243,
+          "cachedInputTokens": 343975,
+          "outputTokens": 1715,
+          "totalTokens": 357958,
+          "costUsd": 0.20320549999999998,
+          "tokenAccounting": "provider-cli-native-logical-input"
+        },
+        "latencyMs": 25987,
+        "predecessorUsage": {
+          "inputTokens": 117227,
+          "cachedInputTokens": 102400,
+          "outputTokens": 1116,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "predecessorLatencyMs": 47234,
+        "costLedger": {
+          "schemaVersion": "ucr.cognitive-cost-ledger/1",
+          "runId": "multimodel-codex-claude-code-fbe7042afe1bda85:control",
+          "entries": [
+            {
+              "phase": "schema",
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "latencyMs": 0,
+              "toolCalls": 0,
+              "modelCalls": 0,
+              "accountingMethod": "consumer-tools-list:tiktoken",
+              "includedInTotal": true,
+              "detail": {
+                "exposedTools": 0
+              }
+            },
+            {
+              "phase": "capture",
+              "inputTokens": 117227,
+              "outputTokens": 1116,
+              "latencyMs": 47234,
+              "toolCalls": 0,
+              "modelCalls": 1,
+              "accountingMethod": "provider-cli-native",
+              "includedInTotal": true,
+              "detail": {
+                "semanticDeltaTokens": 0,
+                "additionalModelCalls": 0
+              }
+            },
+            {
+              "phase": "retrieval",
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "latencyMs": 0,
+              "toolCalls": 0,
+              "modelCalls": 0,
+              "accountingMethod": "host-preaction-timer",
+              "includedInTotal": true,
+              "detail": null
+            },
+            {
+              "phase": "injection",
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "latencyMs": 0,
+              "toolCalls": 0,
+              "modelCalls": 0,
+              "accountingMethod": "trusted-context:utf8-length-div-4",
+              "includedInTotal": false,
+              "detail": {
+                "alreadyIncludedInConsumerInput": true,
+                "capsuleTokens": 0
+              }
+            },
+            {
+              "phase": "consumer",
+              "inputTokens": 356243,
+              "outputTokens": 1715,
+              "latencyMs": 25987,
+              "toolCalls": 0,
+              "modelCalls": 1,
+              "accountingMethod": "provider-cli-native-logical-input",
+              "includedInTotal": true,
+              "detail": null
+            },
+            {
+              "phase": "validation",
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "latencyMs": 282.72200000000885,
+              "toolCalls": 2,
+              "modelCalls": 0,
+              "accountingMethod": "independent-grader-timer",
+              "includedInTotal": true,
+              "detail": null
+            }
+          ],
+          "totals": {
+            "inputTokens": 473470,
+            "outputTokens": 2831,
+            "totalTokens": 476301,
+            "latencyMs": 73503.72200000001,
+            "toolCalls": 2,
+            "modelCalls": 2
+          },
+          "missingPhases": [],
+          "attributionComplete": true,
+          "ledgerHash": "5614e71ed7849476dabff9e6c094352812cfee575d042d501ff9154f9d806b84"
+        },
+        "pipelineUsage": {
+          "inputTokens": 473470,
+          "outputTokens": 2831,
+          "totalTokens": 476301,
+          "latencyMs": 73503.72200000001,
+          "toolCalls": 2,
+          "modelCalls": 2,
+          "tokenAccounting": "phase-ledger:provider-native"
+        }
+      },
+      "producer": {
+        "exitCode": 0,
+        "recorded": true,
+        "modelAuthored": true,
+        "authoredDuringWorkTurn": true,
+        "evidenceAuthenticatedBeforeActivation": true,
+        "additionalModelCalls": 0,
+        "guardMaterialized": true,
+        "predecessorMistakeObserved": true,
+        "predecessorCorrectionVerified": true,
+        "predecessorEvidence": {
+          "trigger": "continuing implementation task multimodel-codex-claude-code-fbe7042afe1bda85",
+          "attemptedAction": "apply implementation choice EDIT-GENERATED-CLIENT-HOOK",
+          "observedFailure": "regeneration verifier rejected EDIT-GENERATED-CLIENT-HOOK after overwriting the direct generated-hook edit",
+          "rootCause": "client hook copies are generated from hooks-core and direct edits do not survive synchronization",
+          "correction": "apply verified implementation choice EDIT-HOOKS-CORE-THEN-SYNC",
+          "verificationEvidence": "external audit observed failed regeneration followed by a passing end-state grade for EDIT-HOOKS-CORE-THEN-SYNC",
+          "expectedOutcome": "task multimodel-codex-claude-code-fbe7042afe1bda85 updates hooks-core, regenerates clients, and does not repeat EDIT-GENERATED-CLIENT-HOOK",
+          "staleAttemptObserved": true,
+          "correctionObserved": true,
+          "correctedAttemptAccepted": true,
+          "auditHash": "f5dce5e6d60e3c280823d0e601d8764150fb6f793cf30dc644b88d74146f8559",
+          "finalGrade": {
+            "passed": true,
+            "protectedFilesUnchanged": true,
+            "canonicalSourceChanged": true,
+            "generatedSynchronized": true,
+            "verifierExitCode": 0,
+            "verifierOutput": "verification passed",
+            "sourceHash": "ade16e63dac5269eb9edb98eca42051d9bdcb45baf5f7384e9006a730a92edca",
+            "generatedHash": "268cd25e33474294d7ee092605412dd0b70ac127cbcb3be99d2d0f9fc8dcd0b6",
+            "latencyMs": 140.03579999999783
+          }
+        },
+        "semanticHarvestReceipt": {
+          "schemaVersion": "ucr.semantic-harvest-receipt/2",
+          "modelAuthored": true,
+          "authoredDuringWorkTurn": true,
+          "evidenceAuthenticatedBeforeActivation": true,
+          "additionalModelCalls": 0,
+          "kind": "failure",
+          "taskId": "multimodel-codex-claude-code-fbe7042afe1bda85",
+          "deltaTokens": 274,
+          "hostLatencyMs": 271.3564000000042,
+          "modelOutputHash": "a4c066b3ab2dbef7f4e8dd4a47339748e9f16b2bc1a70d0cd27a598624afeb47",
+          "semanticObjectHash": "b2192cebd34d2a418f85313106402208925b29bff95fb082dc72e4d8b396e8d8",
+          "activatedObjectId": "failure:5f81323c28aea4ba7a3e2eca",
+          "eventIds": [
+            "019fe9eb-f8bb-75ce-92e3-a704c0f6ce68",
+            "019fe9eb-f8bc-7e39-9e3a-c9b2a0bc7731",
+            "019fe9eb-f8bd-71c0-8529-5c19858d5b73",
+            "019fe9eb-f8bd-7e4a-9b61-84f4750a2bf0"
+          ],
+          "receiptHash": "3f8ce4fde68a7ae303711b97c67572a907ad89292a5909d64c9d3d0d6c4890a6"
+        },
+        "workUsage": {
+          "inputTokens": 85268,
+          "cachedInputTokens": 70144,
+          "outputTokens": 1313,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "harvestUsage": {
+          "inputTokens": 0,
+          "outputTokens": 274,
+          "totalTokens": 274,
+          "modelCalls": 0,
+          "tokenAccounting": "model-output-delta:tiktoken-compatible-estimate"
+        },
+        "usage": {
+          "inputTokens": 85268,
+          "cachedInputTokens": 70144,
+          "outputTokens": 1313,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native"
+        },
+        "latencyMs": 45478,
+        "harvestHostLatencyMs": 271.3564000000042
+      },
+      "runtime": {
+        "exitCode": 0,
+        "correct": true,
+        "delivered": true,
+        "selected": true,
+        "retrievalAttempted": true,
+        "attested": false,
+        "attestationFailed": false,
+        "deliveryPhase": "adapter-pre-action",
+        "nativeGuardWired": true,
+        "nativeGuardEnforced": false,
+        "nativeGuardAuditEvents": 0,
+        "mistakeExecuted": false,
+        "outcomeGrade": {
+          "passed": true,
+          "protectedFilesUnchanged": true,
+          "canonicalSourceChanged": true,
+          "generatedSynchronized": true,
+          "verifierExitCode": 0,
+          "verifierOutput": "verification passed",
+          "sourceHash": "ade16e63dac5269eb9edb98eca42051d9bdcb45baf5f7384e9006a730a92edca",
+          "generatedHash": "268cd25e33474294d7ee092605412dd0b70ac127cbcb3be99d2d0f9fc8dcd0b6",
+          "latencyMs": 136.68390000000363
+        },
+        "usage": {
+          "inputTokens": 197310,
+          "cachedInputTokens": 185593,
+          "outputTokens": 1303,
+          "totalTokens": 198613,
+          "costUsd": 0.1462389,
+          "tokenAccounting": "provider-cli-native-logical-input",
+          "staticSchemaTokens": 0,
+          "capsuleTokens": 64,
+          "instructionTokens": 85
+        },
+        "latencyMs": 20672,
+        "preflightLatencyMs": 134,
+        "firstSuccessorCost": {
+          "captureTokens": 274,
+          "additionalModelCalls": 0,
+          "hostCaptureLatencyMs": 271.3564000000042
+        },
+        "costLedger": {
+          "schemaVersion": "ucr.cognitive-cost-ledger/1",
+          "runId": "multimodel-codex-claude-code-fbe7042afe1bda85:runtime",
+          "entries": [
+            {
+              "phase": "schema",
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "latencyMs": 0,
+              "toolCalls": 0,
+              "modelCalls": 0,
+              "accountingMethod": "consumer-tools-list:tiktoken",
+              "includedInTotal": true,
+              "detail": {
+                "exposedTools": 0
+              }
+            },
+            {
+              "phase": "capture",
+              "inputTokens": 85268,
+              "outputTokens": 1313,
+              "latencyMs": 45749.356400000004,
+              "toolCalls": 0,
+              "modelCalls": 1,
+              "accountingMethod": "provider-cli-native",
+              "includedInTotal": true,
+              "detail": {
+                "semanticDeltaTokens": 274,
+                "additionalModelCalls": 0
+              }
+            },
+            {
+              "phase": "retrieval",
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "latencyMs": 134,
+              "toolCalls": 1,
+              "modelCalls": 0,
+              "accountingMethod": "host-preaction-timer",
+              "includedInTotal": true,
+              "detail": null
+            },
+            {
+              "phase": "injection",
+              "inputTokens": 85,
+              "outputTokens": 0,
+              "latencyMs": 0,
+              "toolCalls": 0,
+              "modelCalls": 0,
+              "accountingMethod": "trusted-context:utf8-length-div-4",
+              "includedInTotal": false,
+              "detail": {
+                "alreadyIncludedInConsumerInput": true,
+                "capsuleTokens": 64
+              }
+            },
+            {
+              "phase": "consumer",
+              "inputTokens": 197310,
+              "outputTokens": 1303,
+              "latencyMs": 20672,
+              "toolCalls": 0,
+              "modelCalls": 1,
+              "accountingMethod": "provider-cli-native-logical-input",
+              "includedInTotal": true,
+              "detail": null
+            },
+            {
+              "phase": "validation",
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "latencyMs": 276.71970000000147,
+              "toolCalls": 2,
+              "modelCalls": 0,
+              "accountingMethod": "independent-grader-timer",
+              "includedInTotal": true,
+              "detail": null
+            }
+          ],
+          "totals": {
+            "inputTokens": 282578,
+            "outputTokens": 2616,
+            "totalTokens": 285194,
+            "latencyMs": 66832.0761,
+            "toolCalls": 3,
+            "modelCalls": 2
+          },
+          "missingPhases": [],
+          "attributionComplete": true,
+          "ledgerHash": "ce8a32f53924ba6482c98c584fbf444c5eff675c01db072e38a35c5995b3eb6a"
+        },
+        "pipelineUsage": {
+          "inputTokens": 282578,
+          "outputTokens": 2616,
+          "totalTokens": 285194,
+          "latencyMs": 66832.0761,
+          "toolCalls": 3,
+          "modelCalls": 2,
+          "tokenAccounting": "phase-ledger:provider-native"
+        },
+        "consumerMcpExposed": false,
+        "preActionReceipt": {
+          "schemaVersion": "ucr.pre-action-receipt/1",
+          "retrievalAttempted": true,
+          "action": "deliver",
+          "delivered": true,
+          "taskId": "multimodel-codex-claude-code-fbe7042afe1bda85",
+          "sessionId": "consumer-session",
+          "trigger": "task",
+          "budget": 160,
+          "capsuleIds": [
+            "capsule:f8d1baf4ab92ad0ba79babf9"
+          ],
+          "objectIds": [
+            "failure:5f81323c28aea4ba7a3e2eca"
+          ],
+          "capsuleTokens": 64,
+          "injectionTokens": 85,
+          "staticSchemaTokens": 0,
+          "consumerMcpExposed": false,
+          "exposedTools": [],
+          "injectionChannel": "claude-host-appended-system-prompt",
+          "deliveryEventId": "019fe9eb-f94d-7015-bacf-e76eb98fdcbe",
+          "latencyMs": 134,
+          "receiptHash": "c9f9e7dd00d9657ad57ce1def83c642177f49a6d2ef9ddef9897d69835a350cf"
+        }
+      },
+      "eventStreamHash": "8c982091cae716f208b2cd5367d8bb5e86be2d14dc745e07312e4236ad71b8a4",
+      "canonicalEvents": 5,
+      "passed": true,
+      "transcriptPublished": false
+    }
+  ],
+  "clients": {
+    "codex": {
+      "family": "openai",
+      "model": "gpt-5.6-sol",
+      "version": "codex-cli 0.147.0"
+    },
+    "claude-code": {
+      "family": "anthropic",
+      "model": "sonnet",
+      "version": "2.1.225 (Claude Code)"
+    },
+    "copilot": {
+      "family": "anthropic",
+      "model": "claude-sonnet-4.5",
+      "version": "GitHub Copilot CLI 0.0.396.\nRun 'copilot update' to check for updates."
+    }
+  },
+  "modelFamilies": 2,
+  "attestationSurface": {
+    "profile": "attestation",
+    "toolNames": [
+      "context_receipt_verify"
+    ],
+    "schemaTokens": 71,
+    "tokenAccounting": "tiktoken:cl100k_base"
+  },
+  "controlsAbstained": 0,
+  "repeatedVerifiedFailures": 0,
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "live-multimodel-fe0b84c84a5d6f20",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "4b2148b8a73d20f9d94a3008e1756f9fb38144818bb527b752ec5ff6ffa06f0e",
+      "sourceTreeHash": "3eba9476a6ad29ff4ddaa3a91b15846a1e7c95779157bee7927e4ff1a4372828",
+      "runner": {
+        "name": "live-multimodel-handoff",
+        "versions": {
+          "codex": "codex-cli 0.147.0",
+          "claude-code": "2.1.225 (Claude Code)",
+          "copilot": "GitHub Copilot CLI 0.0.396.\nRun 'copilot update' to check for updates."
+        }
+      },
+      "startedAt": "2026-08-10T04:26:46.366Z",
+      "runHash": "70efd161e881fe5f0cea3f2c9ecaf4222ae40576c0011b5570e58c2981e9f3da"
+    },
+    "rows": [
+      {
+        "study": "cross-client-handoff",
+        "direction": "codex->claude-code",
+        "producerClient": "codex",
+        "consumerClient": "claude-code",
+        "producerFamily": "openai",
+        "consumerFamily": "anthropic",
+        "producerModel": "gpt-5.6-sol",
+        "consumerModel": "sonnet",
+        "taskHash": "f385bfc14873249bb0d00a1061fabb7a4669bd3e40520041a367490cc813193c",
+        "control": {
+          "exitCode": 0,
+          "correct": true,
+          "abstained": false,
+          "mistakeExecuted": false,
+          "outcomeGrade": {
+            "passed": true,
+            "protectedFilesUnchanged": true,
+            "canonicalSourceChanged": true,
+            "generatedSynchronized": true,
+            "verifierExitCode": 0,
+            "verifierOutput": "verification passed",
+            "sourceHash": "ade16e63dac5269eb9edb98eca42051d9bdcb45baf5f7384e9006a730a92edca",
+            "generatedHash": "268cd25e33474294d7ee092605412dd0b70ac127cbcb3be99d2d0f9fc8dcd0b6",
+            "latencyMs": 140.94940000001225
+          },
+          "usage": {
+            "inputTokens": 356243,
+            "cachedInputTokens": 343975,
+            "outputTokens": 1715,
+            "totalTokens": 357958,
+            "costUsd": 0.20320549999999998,
+            "tokenAccounting": "provider-cli-native-logical-input"
+          },
+          "latencyMs": 25987,
+          "predecessorUsage": {
+            "inputTokens": 117227,
+            "cachedInputTokens": 102400,
+            "outputTokens": 1116,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "predecessorLatencyMs": 47234,
+          "costLedger": {
+            "schemaVersion": "ucr.cognitive-cost-ledger/1",
+            "runId": "multimodel-codex-claude-code-fbe7042afe1bda85:control",
+            "entries": [
+              {
+                "phase": "schema",
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "latencyMs": 0,
+                "toolCalls": 0,
+                "modelCalls": 0,
+                "accountingMethod": "consumer-tools-list:tiktoken",
+                "includedInTotal": true,
+                "detail": {
+                  "exposedTools": 0
+                }
+              },
+              {
+                "phase": "capture",
+                "inputTokens": 117227,
+                "outputTokens": 1116,
+                "latencyMs": 47234,
+                "toolCalls": 0,
+                "modelCalls": 1,
+                "accountingMethod": "provider-cli-native",
+                "includedInTotal": true,
+                "detail": {
+                  "semanticDeltaTokens": 0,
+                  "additionalModelCalls": 0
+                }
+              },
+              {
+                "phase": "retrieval",
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "latencyMs": 0,
+                "toolCalls": 0,
+                "modelCalls": 0,
+                "accountingMethod": "host-preaction-timer",
+                "includedInTotal": true,
+                "detail": null
+              },
+              {
+                "phase": "injection",
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "latencyMs": 0,
+                "toolCalls": 0,
+                "modelCalls": 0,
+                "accountingMethod": "trusted-context:utf8-length-div-4",
+                "includedInTotal": false,
+                "detail": {
+                  "alreadyIncludedInConsumerInput": true,
+                  "capsuleTokens": 0
+                }
+              },
+              {
+                "phase": "consumer",
+                "inputTokens": 356243,
+                "outputTokens": 1715,
+                "latencyMs": 25987,
+                "toolCalls": 0,
+                "modelCalls": 1,
+                "accountingMethod": "provider-cli-native-logical-input",
+                "includedInTotal": true,
+                "detail": null
+              },
+              {
+                "phase": "validation",
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "latencyMs": 282.72200000000885,
+                "toolCalls": 2,
+                "modelCalls": 0,
+                "accountingMethod": "independent-grader-timer",
+                "includedInTotal": true,
+                "detail": null
+              }
+            ],
+            "totals": {
+              "inputTokens": 473470,
+              "outputTokens": 2831,
+              "totalTokens": 476301,
+              "latencyMs": 73503.72200000001,
+              "toolCalls": 2,
+              "modelCalls": 2
+            },
+            "missingPhases": [],
+            "attributionComplete": true,
+            "ledgerHash": "5614e71ed7849476dabff9e6c094352812cfee575d042d501ff9154f9d806b84"
+          },
+          "pipelineUsage": {
+            "inputTokens": 473470,
+            "outputTokens": 2831,
+            "totalTokens": 476301,
+            "latencyMs": 73503.72200000001,
+            "toolCalls": 2,
+            "modelCalls": 2,
+            "tokenAccounting": "phase-ledger:provider-native"
+          }
+        },
+        "producer": {
+          "exitCode": 0,
+          "recorded": true,
+          "modelAuthored": true,
+          "authoredDuringWorkTurn": true,
+          "evidenceAuthenticatedBeforeActivation": true,
+          "additionalModelCalls": 0,
+          "guardMaterialized": true,
+          "predecessorMistakeObserved": true,
+          "predecessorCorrectionVerified": true,
+          "predecessorEvidence": {
+            "trigger": "continuing implementation task multimodel-codex-claude-code-fbe7042afe1bda85",
+            "attemptedAction": "apply implementation choice EDIT-GENERATED-CLIENT-HOOK",
+            "observedFailure": "regeneration verifier rejected EDIT-GENERATED-CLIENT-HOOK after overwriting the direct generated-hook edit",
+            "rootCause": "client hook copies are generated from hooks-core and direct edits do not survive synchronization",
+            "correction": "apply verified implementation choice EDIT-HOOKS-CORE-THEN-SYNC",
+            "verificationEvidence": "external audit observed failed regeneration followed by a passing end-state grade for EDIT-HOOKS-CORE-THEN-SYNC",
+            "expectedOutcome": "task multimodel-codex-claude-code-fbe7042afe1bda85 updates hooks-core, regenerates clients, and does not repeat EDIT-GENERATED-CLIENT-HOOK",
+            "staleAttemptObserved": true,
+            "correctionObserved": true,
+            "correctedAttemptAccepted": true,
+            "auditHash": "f5dce5e6d60e3c280823d0e601d8764150fb6f793cf30dc644b88d74146f8559",
+            "finalGrade": {
+              "passed": true,
+              "protectedFilesUnchanged": true,
+              "canonicalSourceChanged": true,
+              "generatedSynchronized": true,
+              "verifierExitCode": 0,
+              "verifierOutput": "verification passed",
+              "sourceHash": "ade16e63dac5269eb9edb98eca42051d9bdcb45baf5f7384e9006a730a92edca",
+              "generatedHash": "268cd25e33474294d7ee092605412dd0b70ac127cbcb3be99d2d0f9fc8dcd0b6",
+              "latencyMs": 140.03579999999783
+            }
+          },
+          "semanticHarvestReceipt": {
+            "schemaVersion": "ucr.semantic-harvest-receipt/2",
+            "modelAuthored": true,
+            "authoredDuringWorkTurn": true,
+            "evidenceAuthenticatedBeforeActivation": true,
+            "additionalModelCalls": 0,
+            "kind": "failure",
+            "taskId": "multimodel-codex-claude-code-fbe7042afe1bda85",
+            "deltaTokens": 274,
+            "hostLatencyMs": 271.3564000000042,
+            "modelOutputHash": "a4c066b3ab2dbef7f4e8dd4a47339748e9f16b2bc1a70d0cd27a598624afeb47",
+            "semanticObjectHash": "b2192cebd34d2a418f85313106402208925b29bff95fb082dc72e4d8b396e8d8",
+            "activatedObjectId": "failure:5f81323c28aea4ba7a3e2eca",
+            "eventIds": [
+              "019fe9eb-f8bb-75ce-92e3-a704c0f6ce68",
+              "019fe9eb-f8bc-7e39-9e3a-c9b2a0bc7731",
+              "019fe9eb-f8bd-71c0-8529-5c19858d5b73",
+              "019fe9eb-f8bd-7e4a-9b61-84f4750a2bf0"
+            ],
+            "receiptHash": "3f8ce4fde68a7ae303711b97c67572a907ad89292a5909d64c9d3d0d6c4890a6"
+          },
+          "workUsage": {
+            "inputTokens": 85268,
+            "cachedInputTokens": 70144,
+            "outputTokens": 1313,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "harvestUsage": {
+            "inputTokens": 0,
+            "outputTokens": 274,
+            "totalTokens": 274,
+            "modelCalls": 0,
+            "tokenAccounting": "model-output-delta:tiktoken-compatible-estimate"
+          },
+          "usage": {
+            "inputTokens": 85268,
+            "cachedInputTokens": 70144,
+            "outputTokens": 1313,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native"
+          },
+          "latencyMs": 45478,
+          "harvestHostLatencyMs": 271.3564000000042
+        },
+        "runtime": {
+          "exitCode": 0,
+          "correct": true,
+          "delivered": true,
+          "selected": true,
+          "retrievalAttempted": true,
+          "attested": false,
+          "attestationFailed": false,
+          "deliveryPhase": "adapter-pre-action",
+          "nativeGuardWired": true,
+          "nativeGuardEnforced": false,
+          "nativeGuardAuditEvents": 0,
+          "mistakeExecuted": false,
+          "outcomeGrade": {
+            "passed": true,
+            "protectedFilesUnchanged": true,
+            "canonicalSourceChanged": true,
+            "generatedSynchronized": true,
+            "verifierExitCode": 0,
+            "verifierOutput": "verification passed",
+            "sourceHash": "ade16e63dac5269eb9edb98eca42051d9bdcb45baf5f7384e9006a730a92edca",
+            "generatedHash": "268cd25e33474294d7ee092605412dd0b70ac127cbcb3be99d2d0f9fc8dcd0b6",
+            "latencyMs": 136.68390000000363
+          },
+          "usage": {
+            "inputTokens": 197310,
+            "cachedInputTokens": 185593,
+            "outputTokens": 1303,
+            "totalTokens": 198613,
+            "costUsd": 0.1462389,
+            "tokenAccounting": "provider-cli-native-logical-input",
+            "staticSchemaTokens": 0,
+            "capsuleTokens": 64,
+            "instructionTokens": 85
+          },
+          "latencyMs": 20672,
+          "preflightLatencyMs": 134,
+          "firstSuccessorCost": {
+            "captureTokens": 274,
+            "additionalModelCalls": 0,
+            "hostCaptureLatencyMs": 271.3564000000042
+          },
+          "costLedger": {
+            "schemaVersion": "ucr.cognitive-cost-ledger/1",
+            "runId": "multimodel-codex-claude-code-fbe7042afe1bda85:runtime",
+            "entries": [
+              {
+                "phase": "schema",
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "latencyMs": 0,
+                "toolCalls": 0,
+                "modelCalls": 0,
+                "accountingMethod": "consumer-tools-list:tiktoken",
+                "includedInTotal": true,
+                "detail": {
+                  "exposedTools": 0
+                }
+              },
+              {
+                "phase": "capture",
+                "inputTokens": 85268,
+                "outputTokens": 1313,
+                "latencyMs": 45749.356400000004,
+                "toolCalls": 0,
+                "modelCalls": 1,
+                "accountingMethod": "provider-cli-native",
+                "includedInTotal": true,
+                "detail": {
+                  "semanticDeltaTokens": 274,
+                  "additionalModelCalls": 0
+                }
+              },
+              {
+                "phase": "retrieval",
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "latencyMs": 134,
+                "toolCalls": 1,
+                "modelCalls": 0,
+                "accountingMethod": "host-preaction-timer",
+                "includedInTotal": true,
+                "detail": null
+              },
+              {
+                "phase": "injection",
+                "inputTokens": 85,
+                "outputTokens": 0,
+                "latencyMs": 0,
+                "toolCalls": 0,
+                "modelCalls": 0,
+                "accountingMethod": "trusted-context:utf8-length-div-4",
+                "includedInTotal": false,
+                "detail": {
+                  "alreadyIncludedInConsumerInput": true,
+                  "capsuleTokens": 64
+                }
+              },
+              {
+                "phase": "consumer",
+                "inputTokens": 197310,
+                "outputTokens": 1303,
+                "latencyMs": 20672,
+                "toolCalls": 0,
+                "modelCalls": 1,
+                "accountingMethod": "provider-cli-native-logical-input",
+                "includedInTotal": true,
+                "detail": null
+              },
+              {
+                "phase": "validation",
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "latencyMs": 276.71970000000147,
+                "toolCalls": 2,
+                "modelCalls": 0,
+                "accountingMethod": "independent-grader-timer",
+                "includedInTotal": true,
+                "detail": null
+              }
+            ],
+            "totals": {
+              "inputTokens": 282578,
+              "outputTokens": 2616,
+              "totalTokens": 285194,
+              "latencyMs": 66832.0761,
+              "toolCalls": 3,
+              "modelCalls": 2
+            },
+            "missingPhases": [],
+            "attributionComplete": true,
+            "ledgerHash": "ce8a32f53924ba6482c98c584fbf444c5eff675c01db072e38a35c5995b3eb6a"
+          },
+          "pipelineUsage": {
+            "inputTokens": 282578,
+            "outputTokens": 2616,
+            "totalTokens": 285194,
+            "latencyMs": 66832.0761,
+            "toolCalls": 3,
+            "modelCalls": 2,
+            "tokenAccounting": "phase-ledger:provider-native"
+          },
+          "consumerMcpExposed": false,
+          "preActionReceipt": {
+            "schemaVersion": "ucr.pre-action-receipt/1",
+            "retrievalAttempted": true,
+            "action": "deliver",
+            "delivered": true,
+            "taskId": "multimodel-codex-claude-code-fbe7042afe1bda85",
+            "sessionId": "consumer-session",
+            "trigger": "task",
+            "budget": 160,
+            "capsuleIds": [
+              "capsule:f8d1baf4ab92ad0ba79babf9"
+            ],
+            "objectIds": [
+              "failure:5f81323c28aea4ba7a3e2eca"
+            ],
+            "capsuleTokens": 64,
+            "injectionTokens": 85,
+            "staticSchemaTokens": 0,
+            "consumerMcpExposed": false,
+            "exposedTools": [],
+            "injectionChannel": "claude-host-appended-system-prompt",
+            "deliveryEventId": "019fe9eb-f94d-7015-bacf-e76eb98fdcbe",
+            "latencyMs": 134,
+            "receiptHash": "c9f9e7dd00d9657ad57ce1def83c642177f49a6d2ef9ddef9897d69835a350cf"
+          }
+        },
+        "eventStreamHash": "8c982091cae716f208b2cd5367d8bb5e86be2d14dc745e07312e4236ad71b8a4",
+        "canonicalEvents": 5,
+        "passed": true,
+        "transcriptPublished": false,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "live-multimodel-fe0b84c84a5d6f20",
+        "sequence": 0,
+        "previousHash": "70efd161e881fe5f0cea3f2c9ecaf4222ae40576c0011b5570e58c2981e9f3da",
+        "rowHash": "fe0cd0b8127cf205ac12be55cc6c06bcd71828f32e844d677982509f3837e6d4"
+      }
+    ],
+    "rowCount": 1,
+    "chainHead": "fe0cd0b8127cf205ac12be55cc6c06bcd71828f32e844d677982509f3837e6d4",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-10T04:26:46.367Z",
+    "ledgerHash": "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+    "signature": "By0Jflw+nZhyemNOqTDfhJD62vpnuvNFzl5F6tUOqruSGY21JRVzXJ2i0y3C+9rHtsm9gDh69dzZbCM7juW6AQ=="
+  },
+  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAEJtWfHvV/eITORm7XO8N3AjmD7DuMCPQMHStV7hezLQ=\n-----END PUBLIC KEY-----\n",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+    "rowCount": 1
+  },
+  "transcriptPublished": false,
+  "passed": true,
+  "limitations": [
+    "one task per direction is executable coverage, not a powered effectiveness estimate",
+    "mandatory adapter preflight is evaluated here; advisory-only clients require separate evidence and cannot claim guaranteed prevention",
+    "provider aliases require provider response metadata before exact model-version claims",
+    "the installed standalone Gemini CLI and the advertised Copilot Gemini model were unavailable to the authenticated accounts; their failed attempts remain separate negative evidence",
+    "no competitive superiority claim is permitted from this smoke matrix"
+  ],
+  "reportHash": "16f20a57c882fb91cf7eef90bf8a0daa92cfdbcb09f177e9aadd71a31fc9bda7"
+}

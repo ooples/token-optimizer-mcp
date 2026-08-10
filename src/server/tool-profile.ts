@@ -27,9 +27,19 @@ export const COGNITIVE_TOOL_NAMES = [
   'outcome_report',
 ] as const;
 
+export const CONTINUITY_TOOL_NAMES = [
+  'context_page',
+  'cognition_record',
+] as const;
+
 export const ATTESTATION_TOOL_NAMES = ['context_receipt_verify'] as const;
 
-export type ToolProfile = 'attestation' | 'cognitive' | 'core' | 'full';
+export type ToolProfile =
+  | 'attestation'
+  | 'continuity'
+  | 'cognitive'
+  | 'core'
+  | 'full';
 export type ExperimentArm = 'baseline' | 'optimizer' | 'retrieval' | 'full';
 
 export function resolveExperimentArm(
@@ -54,6 +64,7 @@ export function resolveToolProfile(
     .toLowerCase();
   if (
     profile === 'attestation' ||
+    profile === 'continuity' ||
     profile === 'cognitive' ||
     profile === 'core' ||
     profile === 'full'
@@ -62,7 +73,7 @@ export function resolveToolProfile(
 
   throw new Error(
     `Invalid TOKEN_OPTIMIZER_TOOL_PROFILE=${JSON.stringify(value)}. ` +
-      'Expected "attestation", "cognitive", "core" (the default), or "full".'
+      'Expected "attestation", "continuity", "cognitive", "core" (the default), or "full".'
   );
 }
 
@@ -82,6 +93,7 @@ export function selectToolDefinitions<T extends { name: string }>(
 ): T[] {
   const core = new Set<string>(CORE_TOOL_NAMES);
   const cognitive = new Set<string>(COGNITIVE_TOOL_NAMES);
+  const continuity = new Set<string>(CONTINUITY_TOOL_NAMES);
   const attestation = new Set<string>(ATTESTATION_TOOL_NAMES);
   const selected =
     profile === 'full'
@@ -89,19 +101,23 @@ export function selectToolDefinitions<T extends { name: string }>(
       : tools.filter((tool) =>
           profile === 'attestation'
             ? attestation.has(tool.name)
-            : profile === 'cognitive'
-              ? cognitive.has(tool.name)
-              : core.has(tool.name)
+            : profile === 'continuity'
+              ? continuity.has(tool.name)
+              : profile === 'cognitive'
+                ? cognitive.has(tool.name)
+                : core.has(tool.name)
         );
   const selectedNames = new Set(selected.map((tool) => tool.name));
   const missing =
     profile === 'attestation'
       ? ATTESTATION_TOOL_NAMES.filter((name) => !selectedNames.has(name))
-      : profile === 'core'
-        ? CORE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
-        : profile === 'cognitive'
-          ? COGNITIVE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
-          : [];
+      : profile === 'continuity'
+        ? CONTINUITY_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+        : profile === 'core'
+          ? CORE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+          : profile === 'cognitive'
+            ? COGNITIVE_TOOL_NAMES.filter((name) => !selectedNames.has(name))
+            : [];
 
   if (missing.length) {
     throw new Error(
@@ -111,7 +127,7 @@ export function selectToolDefinitions<T extends { name: string }>(
 
   if (arm === 'baseline') return [];
   if (profile === 'attestation') return selected;
-  if (profile === 'cognitive') {
+  if (profile === 'continuity' || profile === 'cognitive') {
     if (arm === 'optimizer') return [];
     if (arm === 'retrieval')
       return selected.filter((tool) => tool.name !== 'cognition_record');

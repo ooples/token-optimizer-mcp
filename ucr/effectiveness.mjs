@@ -48,9 +48,17 @@ export function releaseVerdict(metrics) {
     'recurrenceReduction',
     'recurrenceIntervalLow',
     'naturalCorrectnessDelta',
+    'naturalCorrectnessIntervalLow',
     'severeUnquarantined',
     'emptyP95Overhead',
     'reconstructionTokenReduction',
+    'firstSuccessorTokenReduction',
+    'firstSuccessorTokenIntervalLow',
+    'latencyOverheadP95',
+    'knownMistakeRecurrence',
+    'contradictoryDelivery',
+    'consumerSchemaTokensP95',
+    'captureModelCallsP95',
     'writerIntegrity',
     'crossClientPassed',
     'competitivePassed',
@@ -64,7 +72,7 @@ export function releaseVerdict(metrics) {
       failed: [],
     };
   const harmful =
-    metrics.severeUnquarantined > 0 || metrics.naturalCorrectnessDelta < -0.02;
+    metrics.severeUnquarantined > 0 || metrics.naturalCorrectnessDelta < 0;
   const gates = {
     applicabilityPrecision: metrics.applicabilityPrecision >= 0.95,
     preActionDelivery: metrics.preActionDelivery >= 0.95,
@@ -72,10 +80,20 @@ export function releaseVerdict(metrics) {
     staleDelivery: metrics.staleDelivery < 0.01,
     recurrenceReduction:
       metrics.recurrenceReduction >= 0.8 && metrics.recurrenceIntervalLow > 0,
-    naturalCorrectness: metrics.naturalCorrectnessDelta >= -0.02,
+    naturalCorrectness:
+      metrics.naturalCorrectnessDelta >= 0.1 &&
+      metrics.naturalCorrectnessIntervalLow > 0,
     noSevereHarm: metrics.severeUnquarantined === 0,
     emptyOverhead: metrics.emptyP95Overhead < 0.05,
     reconstruction: metrics.reconstructionTokenReduction >= 0.5,
+    firstSuccessorTokens:
+      metrics.firstSuccessorTokenReduction >= 0.2 &&
+      metrics.firstSuccessorTokenIntervalLow > 0,
+    latency: metrics.latencyOverheadP95 <= 0.05,
+    knownMistakeImmunity: metrics.knownMistakeRecurrence === 0,
+    noContradiction: metrics.contradictoryDelivery === 0,
+    zeroConsumerSchema: metrics.consumerSchemaTokensP95 === 0,
+    zeroCaptureInference: metrics.captureModelCallsP95 === 0,
     writerIntegrity: metrics.writerIntegrity === true,
     crossClient: metrics.crossClientPassed === true,
     competitive: metrics.competitivePassed === true,
