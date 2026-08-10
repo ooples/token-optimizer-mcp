@@ -1,8 +1,9 @@
 # Token optimization (for Codex, OpenCode, and other AGENTS.md-aware agents)
 
-This project provides a `token-optimizer` MCP server whose tools cut context/token
-usage 60–90% via caching, diffing, and compression. When the MCP server is
-configured (see the integration READMEs), prefer these tools:
+This project provides a `token-optimizer` MCP server. Use a named optimizer tool
+only when that exact schema is visible in the current CLI tool inventory; an MCP
+config file alone does not prove registration. If a tool is absent, keep the
+native operation available and bound its output. When registered, prefer:
 
 - **`smart_read`** instead of reading a file directly when the file is **large**
   (>~400 lines / >25 KB) or you have **already read it** this session — on
@@ -18,7 +19,7 @@ configured (see the integration READMEs), prefer these tools:
   ready-to-display `formatted` summary; show that when the user asks about savings.
 - **`optimize_text`** to stash bulky text out-of-context under a key (retrieve
   later). **`compress_text`** is byte-compression for **at-rest storage only** —
-  its base64 output usually costs *more* LLM tokens, so never feed it back into
+  its base64 output usually costs _more_ LLM tokens, so never feed it back into
   context.
 - **`count_tokens`** to measure a chunk before deciding how to handle it.
 

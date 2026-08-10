@@ -55,6 +55,10 @@ import { isArchived } from './lib/transcript.mjs';
 import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
+import {
+  optimizerToolsForHook,
+  rememberOptimizerTools,
+} from './lib/capabilities.mjs';
 
 /**
  * Largest file the hook will read to index. Above this the touch is still
@@ -86,7 +90,11 @@ try {
   // scope, which is right for the main session's own calls.
   const agentScope = payload.transcript_path || null;
   const state = loadState(payload.session_id, agentScope);
-  const verdict = features.routing ? decide(payload, state) : null;
+  const toolEvidence = optimizerToolsForHook(raw, state);
+  rememberOptimizerTools(state, toolEvidence);
+  const verdict = features.routing
+    ? decide(payload, state, toolEvidence.names)
+    : null;
 
   if (!verdict) {
     // Allowed calls are what BUILD the re-read index -- this is the only place
@@ -174,92 +182,93 @@ try {
     // is anchored to a file nobody opens at the moment they run the command,
     // so file-touch injection alone could never deliver it -- and did not.
     let context = null;
-    if (features.retrieval) try {
-      // Once per session, per finding. Repeating advice on every call is how a
-      // real signal becomes wallpaper, and an ignored injection still costs its
-      // tokens every time.
-      state.injected = state.injected || [];
-      const alreadyInjected = new Set(state.injected);
-      const before = alreadyInjected.size;
-      const parts = [];
-      let actsChanged = false;
+    if (features.retrieval)
+      try {
+        // Once per session, per finding. Repeating advice on every call is how a
+        // real signal becomes wallpaper, and an ignored injection still costs its
+        // tokens every time.
+        state.injected = state.injected || [];
+        const alreadyInjected = new Set(state.injected);
+        const before = alreadyInjected.size;
+        const parts = [];
+        let actsChanged = false;
 
-      for (const { path } of touched) {
-        const dir = dirFor(path);
-        const note = forTouch(dir, load(dir), path, {
-          sessionId: payload.session_id,
-          alreadyInjected,
-          episode,
-        });
-        if (note) parts.push(note);
+        for (const { path } of touched) {
+          const dir = dirFor(path);
+          const note = forTouch(dir, load(dir), path, {
+            sessionId: payload.session_id,
+            alreadyInjected,
+            episode,
+          });
+          if (note) parts.push(note);
+        }
+
+        const command = payload.tool_input?.command;
+        if (command) {
+          // The project the COMMAND runs in, not the one the session sits in. A
+          // command that cds into a worktree or a second repository must consult
+          // that project's graph; keying on payload.cwd meant findings recorded
+          // there never fired -- no injection, no metrics row, no error.
+          const root = commandProjectRoot(payload, payload.cwd);
+          const dir = wikiDir(root);
+          const note = forCommand(dir, load(dir), command, {
+            sessionId: payload.session_id,
+            alreadyInjected,
+            episode,
+          });
+          if (note) parts.push(note);
+
+          // AND WHAT OTHER PROJECTS ON THIS MACHINE ALREADY LEARNED.
+          //
+          // Every graph above is per project, which is right for a claim about a
+          // file here and wrong for a claim about the tools. Measured across five
+          // repositories in one session: structural capture worked in all of them,
+          // and all 35 live lessons sat in ONE project's graph -- so "run npm test,
+          // not npx jest" was available to be re-learned from scratch in every
+          // other checkout.
+          //
+          // SECOND, always. The local findings are selected first and keep the full
+          // budget; this adds at most two lessons within a smaller one, because a
+          // lesson from another codebase is a weaker signal than one from this one
+          // and must never crowd it out.
+          const shared = forSharedCommand(dir, command, {
+            sessionId: payload.session_id,
+            alreadyInjected,
+            projectRoot: root,
+            episode,
+          });
+          if (shared) parts.push(shared);
+
+          // AND WHETHER THIS SESSION KEEPS DOING THE SAME KIND OF THING.
+          //
+          // The once-per-session gate is what makes a delivered lesson go quiet
+          // after its first appearance, and that is usually right. It is wrong when
+          // the session develops a pattern: a lesson served at the start of a long
+          // session was suppressed while the same class of mistake was made six more
+          // times. Fires exactly once, when the third act of a class occurs.
+          const crossed = noteActClasses(state, command);
+          if (crossed !== null) actsChanged = true;
+          const repeat = forRepeatedAct(dir, command, crossed, {
+            sessionId: payload.session_id,
+            projectRoot: root,
+            episode,
+          });
+          if (repeat) parts.push(repeat);
+        }
+
+        // PERSIST WHEN THE TALLY MOVED TOO, not only when a finding was served.
+        // Every tool call is its own process, so a counter that is incremented and
+        // not written back is a counter that never passes one -- the reminder was
+        // unreachable for exactly that reason.
+        if (alreadyInjected.size !== before || actsChanged) {
+          state.injected = [...alreadyInjected];
+          saveState(payload.session_id, state, agentScope);
+        }
+        if (parts.length) context = parts.join('\n\n');
+      } catch {
+        // Delivery is an optimization. A defect here must never cost the user
+        // their tool call, so a failure falls through to a plain allow.
       }
-
-      const command = payload.tool_input?.command;
-      if (command) {
-        // The project the COMMAND runs in, not the one the session sits in. A
-        // command that cds into a worktree or a second repository must consult
-        // that project's graph; keying on payload.cwd meant findings recorded
-        // there never fired -- no injection, no metrics row, no error.
-        const root = commandProjectRoot(payload, payload.cwd);
-        const dir = wikiDir(root);
-        const note = forCommand(dir, load(dir), command, {
-          sessionId: payload.session_id,
-          alreadyInjected,
-          episode,
-        });
-        if (note) parts.push(note);
-
-        // AND WHAT OTHER PROJECTS ON THIS MACHINE ALREADY LEARNED.
-        //
-        // Every graph above is per project, which is right for a claim about a
-        // file here and wrong for a claim about the tools. Measured across five
-        // repositories in one session: structural capture worked in all of them,
-        // and all 35 live lessons sat in ONE project's graph -- so "run npm test,
-        // not npx jest" was available to be re-learned from scratch in every
-        // other checkout.
-        //
-        // SECOND, always. The local findings are selected first and keep the full
-        // budget; this adds at most two lessons within a smaller one, because a
-        // lesson from another codebase is a weaker signal than one from this one
-        // and must never crowd it out.
-        const shared = forSharedCommand(dir, command, {
-          sessionId: payload.session_id,
-          alreadyInjected,
-          projectRoot: root,
-          episode,
-        });
-        if (shared) parts.push(shared);
-
-        // AND WHETHER THIS SESSION KEEPS DOING THE SAME KIND OF THING.
-        //
-        // The once-per-session gate is what makes a delivered lesson go quiet
-        // after its first appearance, and that is usually right. It is wrong when
-        // the session develops a pattern: a lesson served at the start of a long
-        // session was suppressed while the same class of mistake was made six more
-        // times. Fires exactly once, when the third act of a class occurs.
-        const crossed = noteActClasses(state, command);
-        if (crossed !== null) actsChanged = true;
-        const repeat = forRepeatedAct(dir, command, crossed, {
-          sessionId: payload.session_id,
-          projectRoot: root,
-          episode,
-        });
-        if (repeat) parts.push(repeat);
-      }
-
-      // PERSIST WHEN THE TALLY MOVED TOO, not only when a finding was served.
-      // Every tool call is its own process, so a counter that is incremented and
-      // not written back is a counter that never passes one -- the reminder was
-      // unreachable for exactly that reason.
-      if (alreadyInjected.size !== before || actsChanged) {
-        state.injected = [...alreadyInjected];
-        saveState(payload.session_id, state, agentScope);
-      }
-      if (parts.length) context = parts.join('\n\n');
-    } catch {
-      // Delivery is an optimization. A defect here must never cost the user
-      // their tool call, so a failure falls through to a plain allow.
-    }
 
     // PRESSURE TO RECORD, once, after real work, on a project that has learned nothing.
     //
@@ -273,19 +282,34 @@ try {
     // Timing and specificity are what is available -- fired after the work exists, naming the
     // files, exactly once.
     try {
-      if (features.harvest && isSubstantive(payload.tool_name)) {
+      if (
+        features.harvest &&
+        toolEvidence.names.has('wiki_write') &&
+        isSubstantive(payload.tool_name)
+      ) {
         state.edits = (state.edits || 0) + 1;
         const edited = payload.tool_input?.file_path;
-        if (edited) state.editedFiles = [edited, ...(state.editedFiles || [])].slice(0, 20);
+        if (edited)
+          state.editedFiles = [edited, ...(state.editedFiles || [])].slice(
+            0,
+            20
+          );
 
-        const nudge = recordingNudge(dirFor(edited || payload.cwd || process.cwd()), {
-          state, edits: state.edits, files: state.editedFiles,
-        });
+        const nudge = recordingNudge(
+          dirFor(edited || payload.cwd || process.cwd()),
+          {
+            state,
+            edits: state.edits,
+            files: state.editedFiles,
+          }
+        );
         if (nudge) {
           state.recordingNudged = true;
-          context = context ? `${context}
+          context = context
+            ? `${context}
 
-${nudge}` : nudge;
+${nudge}`
+            : nudge;
         }
         saveState(payload.session_id, state, agentScope);
       }
@@ -310,7 +334,8 @@ ${nudge}` : nudge;
         state.forecast = surfaced.state;
         saveState(payload.session_id, state, agentScope);
       }
-      if (surfaced.text) context = context ? `${context}\n\n${surfaced.text}` : surfaced.text;
+      if (surfaced.text)
+        context = context ? `${context}\n\n${surfaced.text}` : surfaced.text;
     } catch {
       // Same rule as above: a forecast is a courtesy and must never cost a tool call.
     }
@@ -322,61 +347,62 @@ ${nudge}` : nudge;
     // refusal, consolidation, re-derivation detection) fed by a producer that
     // never ran. Structural only: it records what demonstrably happened and
     // makes no claims.
-    if (features.capture) for (const { path, size } of touched) {
-      try {
-        // NEVER THE TRANSCRIPT ARCHIVE.
-        //
-        // Archived transcripts hold the user's own words verbatim. They are
-        // stored locally, gitignored, and deliberately never harvested -- but
-        // they are ordinary files on disk, so an agent that greps or opens one
-        // would land here and have it hashed, snapshotted and indexed into the
-        // graph, from which injection would later serve it back into context.
-        //
-        // `isArchived` is the test for exactly this, and it was enforcing
-        // nothing: written, tested, and called from nowhere. A privacy
-        // guarantee that no code path consults is not a guarantee.
-        if (isArchived(path)) continue;
+    if (features.capture)
+      for (const { path, size } of touched) {
+        try {
+          // NEVER THE TRANSCRIPT ARCHIVE.
+          //
+          // Archived transcripts hold the user's own words verbatim. They are
+          // stored locally, gitignored, and deliberately never harvested -- but
+          // they are ordinary files on disk, so an agent that greps or opens one
+          // would land here and have it hashed, snapshotted and indexed into the
+          // graph, from which injection would later serve it back into context.
+          //
+          // `isArchived` is the test for exactly this, and it was enforcing
+          // nothing: written, tested, and called from nowhere. A privacy
+          // guarantee that no code path consults is not a guarantee.
+          if (isArchived(path)) continue;
 
-        // CAPPED BEFORE THE READ. indexFile bounds the stored SNAPSHOT, not the
-        // read that produces it, so a single huge operand -- a multi-hundred-
-        // megabyte build log is the ordinary case -- would be slurped
-        // synchronously on the hook path with the user waiting. A file we
-        // cannot afford to hash is simply not indexed; the touch is still
-        // observed above.
-        if (size > HARVEST_MAX_BYTES) continue;
+          // CAPPED BEFORE THE READ. indexFile bounds the stored SNAPSHOT, not the
+          // read that produces it, so a single huge operand -- a multi-hundred-
+          // megabyte build log is the ordinary case -- would be slurped
+          // synchronously on the hook path with the user waiting. A file we
+          // cannot afford to hash is simply not indexed; the touch is still
+          // observed above.
+          if (size > HARVEST_MAX_BYTES) continue;
 
-        const dir = dirFor(path);
-        // THE GUARD MUST BE HERE, not only in the helpers this read feeds.
-        //
-        // A path holding U+10FFFF ABORTS the process inside libuv rather than
-        // throwing, so the surrounding try/catch -- and the whole-hook catch
-        // that promises "a defect here costs the user nothing" -- does not hold
-        // for it. `touchedFiles` filters such paths at intake, but this line is
-        // a bare `readFileSync` and the two consumers below cannot cover it:
-        // `contentHash(path, source)` skips its own check precisely because the
-        // source was supplied, and `indexFile` checks only after this read has
-        // already happened. Defence at the call site, since this is where the
-        // syscall is.
-        if (!isFsSafePath(path)) continue;
+          const dir = dirFor(path);
+          // THE GUARD MUST BE HERE, not only in the helpers this read feeds.
+          //
+          // A path holding U+10FFFF ABORTS the process inside libuv rather than
+          // throwing, so the surrounding try/catch -- and the whole-hook catch
+          // that promises "a defect here costs the user nothing" -- does not hold
+          // for it. `touchedFiles` filters such paths at intake, but this line is
+          // a bare `readFileSync` and the two consumers below cannot cover it:
+          // `contentHash(path, source)` skips its own check precisely because the
+          // source was supplied, and `indexFile` checks only after this read has
+          // already happened. Defence at the call site, since this is where the
+          // syscall is.
+          if (!isFsSafePath(path)) continue;
 
-        // ONE read, not two. harvest() hashed the file and indexFile() then
-        // read it again, so every allowed call paid double the I/O on the
-        // hook's critical path. Reading once here and handing the text to both
-        // keeps the graph identical and halves the cost.
-        const source = readFileSync(path, 'utf8');
-        harvest(dir, {
-          filePath: path,
-          sessionId: payload.session_id,
-          action: payload.tool_name,
-          hash: contentHash(path, source),
-        });
-        // Index on the way past, so the NEXT touch can be answered with
-        // structure instead of the file. Bounded by the snapshot limit.
-        indexFile(dir, path, source);
-      } catch {
-        /* never let bookkeeping break an allowed call */
+          // ONE read, not two. harvest() hashed the file and indexFile() then
+          // read it again, so every allowed call paid double the I/O on the
+          // hook's critical path. Reading once here and handing the text to both
+          // keeps the graph identical and halves the cost.
+          const source = readFileSync(path, 'utf8');
+          harvest(dir, {
+            filePath: path,
+            sessionId: payload.session_id,
+            action: payload.tool_name,
+            hash: contentHash(path, source),
+          });
+          // Index on the way past, so the NEXT touch can be answered with
+          // structure instead of the file. Bounded by the snapshot limit.
+          indexFile(dir, path, source);
+        } catch {
+          /* never let bookkeeping break an allowed call */
+        }
       }
-    }
 
     allowWithContext(context);
   }

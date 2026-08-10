@@ -206,13 +206,14 @@ export function probeVersion({ install }) {
 }
 
 /** Runs a hook binary with a payload and returns its stdout, or null. */
-function probe(binary, payload, { timeoutMs = 8000, cwd } = {}) {
+function probe(binary, payload, { timeoutMs = 8000, cwd, env } = {}) {
   try {
     return execFileSync(process.execPath, [binary], {
       input: JSON.stringify(payload),
       encoding: 'utf8',
       timeout: timeoutMs,
       cwd,
+      env: { ...process.env, ...(env || {}) },
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'ignore'],
     });
@@ -329,18 +330,38 @@ export function probeEnforcement({ root, workspace, hooksDir, install }) {
   writeFileSync(small, 'export const y = 2;\n');
 
   try {
-    const denied = probe(binary, {
-      tool_name: 'Read', tool_input: { file_path: big }, cwd: workspace, session_id: probeId,
-    });
+    // The router is deliberately fail-open without positive runtime MCP
+    // inventory evidence. This probe tests the enforcement path, so it must
+    // attest the exact replacement whose routing it is trying to verify.
+    const probeOptions = {
+      env: { TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read' },
+    };
+    const denied = probe(
+      binary,
+      {
+        tool_name: 'Read',
+        tool_input: { file_path: big },
+        cwd: workspace,
+        session_id: probeId,
+      },
+      probeOptions
+    );
     const deniedOk = typeof denied === 'string' && denied.includes('deny');
     checks.push(deniedOk
       ? ok('enforcement refuses a large read', 'the refusal came back from the real hook')
       : bad('enforcement refuses a large read', `hook returned: ${String(denied).slice(0, 200) || '(nothing)'}`,
         'check TOKEN_OPTIMIZER_MODE is not "off" or "advise", then reinstall the hooks'));
 
-    const allowed = probe(binary, {
-      tool_name: 'Read', tool_input: { file_path: small }, cwd: workspace, session_id: probeId,
-    });
+    const allowed = probe(
+      binary,
+      {
+        tool_name: 'Read',
+        tool_input: { file_path: small },
+        cwd: workspace,
+        session_id: probeId,
+      },
+      probeOptions
+    );
     // `allowed === null` is "the probe never ran", NOT "the hook allowed it".
     // allow() writes nothing and exits 0, so '' is a legitimate allow -- but null
     // is a spawn failure, an EPERM, or a timeout, and reporting a pass there is a

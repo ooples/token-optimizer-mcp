@@ -26,6 +26,7 @@ import { linkCoOccurrence } from './lib/inject.mjs';
 import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 import { closeForecast } from './lib/surface.mjs';
 import { compactionNudge } from './lib/recording.mjs';
+import { optimizerToolsForHook } from './lib/capabilities.mjs';
 
 /** Longest compaction may be delayed. Past this the work is abandoned. */
 const TIMEOUT_MS =
@@ -131,9 +132,17 @@ async function main() {
   // exists for: an unrecorded conclusion does not survive it, it is destroyed rather than merely
   // forgotten. Deliberately not gated on the once-per-session flag the router uses.
   try {
-    const graphDir = wikiDir(projectRootFor(join(payload.cwd || process.cwd(), 'x'), payload.cwd));
-    const state = loadState(payload.session_id, payload.transcript_path || null);
-    const nudge = compactionNudge(graphDir, { edits: state.edits || 0 });
+    const graphDir = wikiDir(
+      projectRootFor(join(payload.cwd || process.cwd(), 'x'), payload.cwd)
+    );
+    const state = loadState(
+      payload.session_id,
+      payload.transcript_path || null
+    );
+    const tools = optimizerToolsForHook(payload, state);
+    const nudge = tools.names.has('wiki_write')
+      ? compactionNudge(graphDir, { edits: state.edits || 0 })
+      : null;
     if (nudge) {
       process.stdout.write(JSON.stringify({ systemMessage: nudge }));
     }
@@ -158,10 +167,15 @@ async function main() {
     // above that directory -- and closeForecast would read a different graph than maybeSurface
     // wrote to, silently scoring nothing. The router passes a file path and resolves per file;
     // here the equivalent is to anchor inside the cwd rather than at it.
-    closeForecast(wikiDir(projectRootFor(join(payload.cwd || process.cwd(), 'x'), payload.cwd)), {
-      transcriptPath: payload.transcript_path,
-      sessionId: payload.session_id,
-    });
+    closeForecast(
+      wikiDir(
+        projectRootFor(join(payload.cwd || process.cwd(), 'x'), payload.cwd)
+      ),
+      {
+        transcriptPath: payload.transcript_path,
+        sessionId: payload.session_id,
+      }
+    );
   } catch {
     // Scoring a forecast must never delay compaction.
   }

@@ -1,7 +1,13 @@
 # Token optimization
 
-Prefer the token-optimizer MCP tools over built-in file and search tools.
-They cut context usage by caching, diffing, and bounding output. Zed has no packaged pre-execution bridge, so following these always-on rules is what produces the saving.
+Use a token-optimizer MCP tool only when that exact tool is visible in
+the current CLI's registered tool inventory. A config file or installed plugin
+is not proof that the server started successfully. If a named optimizer tool is
+absent, keep the native tool available and use a bounded native operation; never
+retry or redirect to an unregistered schema.
+
+When registered, prefer the token-optimizer MCP tools over built-in file and
+search tools. They cache, diff, and bound output. Zed has no packaged pre-execution bridge, so following these always-on rules is what produces the saving.
 
 ALWAYS:
 - Reading a file over ~25 KB, or ANY file already read this session
@@ -20,7 +26,8 @@ Do NOT use compress_text for that -- its base64 output has MORE tokens than the
 input; it is for at-rest storage only.
 
 LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
-- Call wiki_write as soon as you establish a durable, non-obvious conclusion:
+- When wiki_write is visible in the current tool inventory, call it as soon as
+  you establish a durable, non-obvious conclusion:
   a failed approach and why, a decision and its rejected alternative, or the
   command that finally worked.
 - Anchor every claim to a real file path or path#symbol. Never invent a claim
@@ -32,6 +39,8 @@ LIVE GRAPH — THE ACTIVE MODEL DOES THE SEMANTIC HARVEST:
 - Before finishing substantive work, reflect once and write any still-unrecorded
   conclusion while you hold the reasoning. This is what makes the lesson
   available across sessions and projects instead of losing it to compaction.
+- If wiki_write is absent, do not claim the conclusion was harvested. Continue
+  the work with native tools; lifecycle hooks may still capture structural facts.
 
 NOT WORTH IT: small one-off reads, tiny edits. The built-ins are fine there --
 the overhead would exceed the saving.

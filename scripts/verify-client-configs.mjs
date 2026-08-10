@@ -27,7 +27,10 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { capabilityFor, CAPABILITY_TIERS } from '../hooks-core/capabilities.mjs';
+import {
+  capabilityFor,
+  CAPABILITY_TIERS,
+} from '../hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const INTEGRATIONS = join(ROOT, 'integrations');
@@ -35,7 +38,9 @@ const INTEGRATIONS = join(ROOT, 'integrations');
 const results = [];
 const check = (name, pass, detail = '') => {
   results.push({ name, pass });
-  console.log(`${pass ? '  PASS' : '  FAIL'}  ${name}${detail ? ` -- ${detail}` : ''}`);
+  console.log(
+    `${pass ? '  PASS' : '  FAIL'}  ${name}${detail ? ` -- ${detail}` : ''}`
+  );
 };
 
 /**
@@ -46,18 +51,45 @@ const check = (name, pass, detail = '') => {
  * file can be perfect and the server still never starts.
  */
 const EXPECTED = {
-  cursor:   { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.mdc', frontmatter: true, nativeHooks: true },
-  windsurf: { file: 'mcp_config.json', topKey: 'mcpServers',      rules: 'token-optimizer.md', nativeHooks: true },
-  cline:    { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.md', nativeHooks: true },
-  roo:      { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'token-optimizer.md' },
+  cursor: {
+    file: 'mcp.json',
+    topKey: 'mcpServers',
+    rules: 'token-optimizer.mdc',
+    frontmatter: true,
+    nativeHooks: true,
+  },
+  windsurf: {
+    file: 'mcp_config.json',
+    topKey: 'mcpServers',
+    rules: 'token-optimizer.md',
+    nativeHooks: true,
+  },
+  cline: {
+    file: 'mcp.json',
+    topKey: 'mcpServers',
+    rules: 'token-optimizer.md',
+    nativeHooks: true,
+  },
+  roo: { file: 'mcp.json', topKey: 'mcpServers', rules: 'token-optimizer.md' },
   // Kilo's schema is genuinely different: an `mcp` key, type "local", command
   // as an ARRAY, and `environment` rather than `env`.
-  kilo:     { file: 'kilo.jsonc',      topKey: 'mcp',             rules: 'token-optimizer.md', kiloShape: true, nativeHooks: true },
-  zed:      { file: 'settings.json',   topKey: 'context_servers', rules: 'AGENTS.md' },
-  amp:      { file: 'settings.json',   topKey: 'amp.mcpServers',  rules: 'AGENTS.md' },
-  continue: { file: 'config.yaml',     yaml: true,                rules: 'token-optimizer.md' },
-  crush:    { file: 'crush.json',      topKey: 'mcp',             rules: 'AGENTS.md', stdioType: true },
-  droid:    { file: 'mcp.json',        topKey: 'mcpServers',      rules: 'AGENTS.md' },
+  kilo: {
+    file: 'kilo.jsonc',
+    topKey: 'mcp',
+    rules: 'token-optimizer.md',
+    kiloShape: true,
+    nativeHooks: true,
+  },
+  zed: { file: 'settings.json', topKey: 'context_servers', rules: 'AGENTS.md' },
+  amp: { file: 'settings.json', topKey: 'amp.mcpServers', rules: 'AGENTS.md' },
+  continue: { file: 'config.yaml', yaml: true, rules: 'token-optimizer.md' },
+  crush: {
+    file: 'crush.json',
+    topKey: 'mcp',
+    rules: 'AGENTS.md',
+    stdioType: true,
+  },
+  droid: { file: 'mcp.json', topKey: 'mcpServers', rules: 'AGENTS.md' },
 };
 
 /** Files that must NOT exist -- superseded paths that would confuse a user. */
@@ -65,11 +97,21 @@ const RETIRED = [
   ['windsurf', '.windsurfrules', 'legacy single-file form'],
   ['crush', 'CRUSH.md', 'per-user file, not the project one'],
   ['cline', 'cline_mcp_settings.json', 'VS Code extension filename'],
-  ['kilo', 'mcp_settings.json', 'wrong schema entirely -- Kilo reads kilo.jsonc'],
-  ['roo', 'mcp_settings.json', 'global path; project-level .roo/mcp.json takes precedence'],
+  [
+    'kilo',
+    'mcp_settings.json',
+    'wrong schema entirely -- Kilo reads kilo.jsonc',
+  ],
+  [
+    'roo',
+    'mcp_settings.json',
+    'global path; project-level .roo/mcp.json takes precedence',
+  ],
 ];
 
-const PACKAGE_VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+const PACKAGE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, 'package.json'), 'utf8')
+).version;
 // `@latest`, not the package version. #256 removed the numeric pin because it
 // is a DERIVED value release-please never bumps: it went stale for four
 // consecutive releases and shipped a plugin that launched a server three
@@ -92,7 +134,7 @@ function parseJsonc(raw) {
   // or `/*` inside a value (a URL, a glob) is not mistaken for a comment.
   const withoutComments = raw.replace(
     /"(?:[^"\\]|\\.)*"|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
-    (match) => (match.startsWith('"') ? match : ' '),
+    (match) => (match.startsWith('"') ? match : ' ')
   );
   const withoutTrailingCommas = withoutComments.replace(/,(\s*[}\]])/g, '$1');
   return JSON.parse(withoutTrailingCommas);
@@ -102,10 +144,13 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
   const dir = join(INTEGRATIONS, key);
   const capability = capabilityFor(key);
   check(`${key}: capability registry entry exists`, Boolean(capability));
-  check(`${key}: registry tier matches packaged surface`, Boolean(capability)
-    && (expected.nativeHooks
-      ? capability.tier !== CAPABILITY_TIERS.RULES
-      : capability.tier === CAPABILITY_TIERS.RULES));
+  check(
+    `${key}: registry tier matches packaged surface`,
+    Boolean(capability) &&
+      (expected.nativeHooks
+        ? capability.tier !== CAPABILITY_TIERS.RULES
+        : capability.tier === CAPABILITY_TIERS.RULES)
+  );
 
   if (!existsSync(dir)) {
     check(`${key}: integration exists`, false);
@@ -123,8 +168,10 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
   if (expected.yaml) {
     // Continue's mcpServers is a LIST of name/command/args, not a map. A map
     // parses fine and is ignored, which is exactly the silent failure mode.
-    check(`${key}: yaml declares mcpServers as a list`,
-      /^mcpServers:\s*$/m.test(raw) && /^\s+- name:/m.test(raw));
+    check(
+      `${key}: yaml declares mcpServers as a list`,
+      /^mcpServers:\s*$/m.test(raw) && /^\s+- name:/m.test(raw)
+    );
     check(`${key}: yaml names the package`, raw.includes(PACKAGE));
   } else {
     let parsed;
@@ -142,8 +189,11 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
     check(`${key}: launches ${PACKAGE}`, raw.includes(PACKAGE));
 
     const servers = parsed[expected.topKey];
-    check(`${key}: top-level key is "${expected.topKey}"`, Boolean(servers),
-      Object.keys(parsed).join(','));
+    check(
+      `${key}: top-level key is "${expected.topKey}"`,
+      Boolean(servers),
+      Object.keys(parsed).join(',')
+    );
     if (!servers) continue;
 
     const entry = servers['token-optimizer'];
@@ -151,23 +201,43 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
     if (!entry) continue;
 
     if (expected.kiloShape) {
-      check(`${key}: type is "local"`, entry.type === 'local', String(entry.type));
-      check(`${key}: command is an ARRAY containing the package`,
-        Array.isArray(entry.command) && entry.command.includes(PACKAGE));
+      check(
+        `${key}: type is "local"`,
+        entry.type === 'local',
+        String(entry.type)
+      );
+      check(
+        `${key}: command is an ARRAY containing the package`,
+        Array.isArray(entry.command) && entry.command.includes(PACKAGE)
+      );
       // `env` here would be silently ignored -- Kilo reads `environment`.
-      check(`${key}: uses "environment", not "env"`,
-        entry.environment !== undefined && entry.env === undefined);
+      check(
+        `${key}: uses "environment", not "env"`,
+        entry.environment !== undefined && entry.env === undefined
+      );
     } else {
-      check(`${key}: command is a string`, typeof entry.command === 'string', String(entry.command));
-      check(`${key}: args include the package`, Array.isArray(entry.args) && entry.args.includes(PACKAGE));
+      check(
+        `${key}: command is a string`,
+        typeof entry.command === 'string',
+        String(entry.command)
+      );
+      check(
+        `${key}: args include the package`,
+        Array.isArray(entry.args) && entry.args.includes(PACKAGE)
+      );
     }
 
     if (expected.stdioType) {
-      check(`${key}: declares type stdio`, entry.type === 'stdio', String(entry.type));
+      check(
+        `${key}: declares type stdio`,
+        entry.type === 'stdio',
+        String(entry.type)
+      );
     }
     // Zed's schema has no `source`; an unrecognised key is how a config loads
     // while the server never appears.
-    if (key === 'zed') check('zed: no unrecognised source key', entry.source === undefined);
+    if (key === 'zed')
+      check('zed: no unrecognised source key', entry.source === undefined);
   }
 
   const rulesPath = join(dir, expected.rules);
@@ -175,25 +245,45 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
 
   if (existsSync(rulesPath)) {
     const rules = readFileSync(rulesPath, 'utf8');
-    check(`${key}: rules name the optimized tools`,
-      rules.includes('smart_read') && rules.includes('smart_grep'));
-    check(`${key}: rules require active-model semantic harvesting`,
-      rules.includes('wiki_write') && /active model/i.test(rules) && /do not delegate/i.test(rules));
+    check(
+      `${key}: rules name the optimized tools`,
+      rules.includes('smart_read') && rules.includes('smart_grep')
+    );
+    check(
+      `${key}: rules fail open when an MCP schema is not registered`,
+      /only when[\s\S]{0,120}(?:visible|registered)/i.test(rules) &&
+        /bounded native operation/i.test(rules)
+    );
+    check(
+      `${key}: rules require active-model semantic harvesting`,
+      rules.includes('wiki_write') &&
+        /active model/i.test(rules) &&
+        /do not delegate/i.test(rules)
+    );
     // Rules-only clients must not claim a native veto they do not have.
-    check(`${key}: capability claim matches package`, expected.nativeHooks
-      ? /native hook/i.test(rules)
-      : !/native hook/i.test(rules));
+    check(
+      `${key}: capability claim matches package`,
+      expected.nativeHooks
+        ? /native hook/i.test(rules)
+        : !/native hook/i.test(rules)
+    );
 
     if (expected.frontmatter) {
       // Without alwaysApply the rule is retrieved only when Cursor judges it
       // relevant -- which reproduces the skill problem this design exists to fix.
-      check('cursor: frontmatter sets alwaysApply: true', /^---[\s\S]*alwaysApply:\s*true[\s\S]*?---/m.test(rules));
+      check(
+        'cursor: frontmatter sets alwaysApply: true',
+        /^---[\s\S]*alwaysApply:\s*true[\s\S]*?---/m.test(rules)
+      );
     }
   }
 
   const readme = join(dir, 'README.md');
-  check(`${key}: README records provenance`,
-    existsSync(readme) && /Verified against http/.test(readFileSync(readme, 'utf8')));
+  check(
+    `${key}: README records provenance`,
+    existsSync(readme) &&
+      /Verified against http/.test(readFileSync(readme, 'utf8'))
+  );
 }
 
 /**
@@ -230,12 +320,20 @@ if (!existsSync(codexPluginMcp)) {
     const parsed = JSON.parse(raw);
     const entry = parsed.mcpServers?.['token-optimizer'];
     check('codex plugin: .mcp.json is valid JSON', true);
-    check('codex plugin: top-level key is "mcpServers"', Boolean(parsed.mcpServers),
-      Object.keys(parsed).join(','));
-    check('codex plugin: rejects legacy "mcp_servers"', parsed.mcp_servers === undefined);
+    check(
+      'codex plugin: top-level key is "mcpServers"',
+      Boolean(parsed.mcpServers),
+      Object.keys(parsed).join(',')
+    );
+    check(
+      'codex plugin: rejects legacy "mcp_servers"',
+      parsed.mcp_servers === undefined
+    );
     check('codex plugin: declares token-optimizer', Boolean(entry));
-    check(`codex plugin: launches ${PACKAGE}`,
-      Array.isArray(entry?.args) && entry.args.includes(PACKAGE));
+    check(
+      `codex plugin: launches ${PACKAGE}`,
+      Array.isArray(entry?.args) && entry.args.includes(PACKAGE)
+    );
   } catch (error) {
     check('codex plugin: .mcp.json is valid JSON', false, error.message);
   }
@@ -248,36 +346,55 @@ if (!existsSync(codexPluginHooks)) {
   const raw = readFileSync(codexPluginHooks, 'utf8');
   try {
     const parsed = JSON.parse(raw);
-    const requiredEvents = ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'];
-    const validGroups = requiredEvents.every((event) =>
-      Array.isArray(parsed.hooks?.[event])
-      && parsed.hooks[event].length > 0
-      && parsed.hooks[event].every((group) =>
-        Array.isArray(group?.hooks) && group.hooks.length > 0
-      )
+    const requiredEvents = [
+      'SessionStart',
+      'PreToolUse',
+      'PostToolUse',
+      'Stop',
+    ];
+    const validGroups = requiredEvents.every(
+      (event) =>
+        Array.isArray(parsed.hooks?.[event]) &&
+        parsed.hooks[event].length > 0 &&
+        parsed.hooks[event].every(
+          (group) => Array.isArray(group?.hooks) && group.hooks.length > 0
+        )
     );
-    const commands = validGroups ? Object.values(parsed.hooks || {})
-      .flatMap((groups) => groups)
-      .flatMap((group) => group.hooks || [])
-      .map((hook) => hook.command || '') : [];
+    const commands = validGroups
+      ? Object.values(parsed.hooks || {})
+          .flatMap((groups) => groups)
+          .flatMap((group) => group.hooks || [])
+          .map((hook) => hook.command || '')
+      : [];
     const referenced = commands
       .map((command) => command.match(/\$\{PLUGIN_ROOT\}\/([^\"]+\.mjs)/)?.[1])
       .filter(Boolean);
-    const missing = referenced.filter((path) => !existsSync(join(codexPlugin, path)));
+    const missing = referenced.filter(
+      (path) => !existsSync(join(codexPlugin, path))
+    );
     check('codex plugin: hooks.json is valid JSON', true);
     check('codex plugin: declares valid lifecycle hook groups', validGroups);
-    check('codex plugin: every hook command names a plugin-relative script',
-      validGroups && commands.length > 0 && referenced.length === commands.length);
-    check('codex plugin: every referenced hook script exists',
+    check(
+      'codex plugin: every hook command names a plugin-relative script',
+      validGroups &&
+        commands.length > 0 &&
+        referenced.length === commands.length
+    );
+    check(
+      'codex plugin: every referenced hook script exists',
       validGroups && referenced.length > 0 && missing.length === 0,
-      missing.join(','));
+      missing.join(',')
+    );
   } catch (error) {
     check('codex plugin: hooks.json is valid JSON', false, error.message);
   }
 }
 
 for (const [key, file, why] of RETIRED) {
-  check(`${key}: superseded ${file} removed (${why})`, !existsSync(join(INTEGRATIONS, key, file)));
+  check(
+    `${key}: superseded ${file} removed (${why})`,
+    !existsSync(join(INTEGRATIONS, key, file))
+  );
 }
 
 /* ---- Native tier: hook bundles must actually ship ---------------------- */
@@ -299,8 +416,14 @@ for (const [key, relative] of [
     continue;
   }
   const files = readdirSync(hooks);
-  check(`${key}: ships a tool entry`, files.includes('pre-tool.mjs') || files.includes('post-tool.mjs'));
-  check(`${key}: vendored core is present`, existsSync(join(hooks, 'lib', 'decide.mjs')));
+  check(
+    `${key}: ships a tool entry`,
+    files.includes('pre-tool.mjs') || files.includes('post-tool.mjs')
+  );
+  check(
+    `${key}: vendored core is present`,
+    existsSync(join(hooks, 'lib', 'decide.mjs'))
+  );
 }
 
 for (const key of ['codex', 'gemini', 'qwen']) {
@@ -320,11 +443,21 @@ for (const key of ['codex', 'gemini', 'qwen']) {
   check(`${key}: hooks.json is valid JSON`, true);
   // A manifest pointing at a script that no longer exists is the other silent
   // failure -- the client loads the hook config and every invocation fails.
-  const referenced = [...raw.matchAll(/hooks[\\/\\\\$}{]*([a-z-]+\.mjs)/g)].map((m) => m[1]);
-  const missing = [...new Set(referenced)]
-    .filter((name) => !existsSync(join(INTEGRATIONS, key, 'hooks', name)));
-  check(`${key}: every referenced hook script exists`, missing.length === 0, missing.join(','));
-  check(`${key}: declares a session-start hook`, Boolean(parsed.hooks?.SessionStart));
+  const referenced = [...raw.matchAll(/hooks[\\/\\\\$}{]*([a-z-]+\.mjs)/g)].map(
+    (m) => m[1]
+  );
+  const missing = [...new Set(referenced)].filter(
+    (name) => !existsSync(join(INTEGRATIONS, key, 'hooks', name))
+  );
+  check(
+    `${key}: every referenced hook script exists`,
+    missing.length === 0,
+    missing.join(',')
+  );
+  check(
+    `${key}: declares a session-start hook`,
+    Boolean(parsed.hooks?.SessionStart)
+  );
 }
 
 /* ---- Native host wiring: validate the files each CLI actually discovers -- */
@@ -347,74 +480,116 @@ function readJsonHookManifest(label, relative, expectedEvents, scriptRoot) {
   }
 
   for (const event of expectedEvents) {
-    check(`${label}: native manifest declares ${event}`,
-      Array.isArray(parsed.hooks?.[event]) && parsed.hooks[event].length > 0);
+    check(
+      `${label}: native manifest declares ${event}`,
+      Array.isArray(parsed.hooks?.[event]) && parsed.hooks[event].length > 0
+    );
   }
 
-  const referenced = [...raw.matchAll(/([a-z-]+\.mjs)/g)].map((match) => match[1]);
-  const missing = [...new Set(referenced)]
-    .filter((name) => !existsSync(join(ROOT, scriptRoot, name)));
-  check(`${label}: every native manifest script exists`,
-    referenced.length > 0 && missing.length === 0, missing.join(','));
+  const referenced = [...raw.matchAll(/([a-z-]+\.mjs)/g)].map(
+    (match) => match[1]
+  );
+  const missing = [...new Set(referenced)].filter(
+    (name) => !existsSync(join(ROOT, scriptRoot, name))
+  );
+  check(
+    `${label}: every native manifest script exists`,
+    referenced.length > 0 && missing.length === 0,
+    missing.join(',')
+  );
 }
 
 readJsonHookManifest(
   'copilot',
   'integrations/copilot/.github/hooks/token-optimizer.json',
   ['sessionStart', 'preToolUse', 'postToolUse', 'agentStop'],
-  'integrations/copilot/.github/hooks',
+  'integrations/copilot/.github/hooks'
 );
 readJsonHookManifest(
   'cursor',
   'integrations/cursor/hooks.json',
   ['sessionStart', 'preToolUse', 'postToolUse', 'stop'],
-  'integrations/cursor/hooks',
+  'integrations/cursor/hooks'
 );
 readJsonHookManifest(
   'windsurf',
   'integrations/windsurf/hooks.json',
   ['pre_read_code', 'pre_write_code', 'pre_run_command', 'post_write_code'],
-  'integrations/windsurf/hooks',
+  'integrations/windsurf/hooks'
 );
 readJsonHookManifest(
   'claude-code',
   'plugin/hooks/hooks.json',
   ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
-  'plugin/hooks',
+  'plugin/hooks'
 );
 
 for (const event of ['TaskStart', 'TaskResume', 'PreToolUse', 'PostToolUse']) {
   for (const suffix of ['', '.ps1']) {
     const path = join(INTEGRATIONS, 'cline', 'hooks', `${event}${suffix}`);
-    check(`cline: ships ${event}${suffix || ' POSIX'} wrapper`, existsSync(path));
+    check(
+      `cline: ships ${event}${suffix || ' POSIX'} wrapper`,
+      existsSync(path)
+    );
     if (existsSync(path)) {
       const raw = readFileSync(path, 'utf8');
-      const entry = /^(?:TaskStart|TaskResume)$/.test(event) ? 'session-start.mjs'
-        : event === 'PreToolUse' ? 'pre-tool.mjs' : 'post-tool.mjs';
-      check(`cline: ${event}${suffix || ' POSIX'} reaches ${entry}`, raw.includes(entry));
+      const entry = /^(?:TaskStart|TaskResume)$/.test(event)
+        ? 'session-start.mjs'
+        : event === 'PreToolUse'
+          ? 'pre-tool.mjs'
+          : 'post-tool.mjs';
+      check(
+        `cline: ${event}${suffix || ' POSIX'} reaches ${entry}`,
+        raw.includes(entry)
+      );
     }
   }
 }
 
 for (const [client, relative, required] of [
-  ['opencode', 'integrations/opencode/.opencode/plugins/token-optimizer.js',
-    ['experimental.chat.system.transform', 'tool.execute.before', 'tool.execute.after']],
-  ['kilo', 'integrations/kilo/.kilo/plugin/token-optimizer.js',
-    ['experimental.chat.system.transform', 'tool.execute.before', 'tool.execute.after']],
+  [
+    'opencode',
+    'integrations/opencode/.opencode/plugins/token-optimizer.js',
+    [
+      'experimental.chat.system.transform',
+      'tool.execute.before',
+      'tool.execute.after',
+    ],
+  ],
+  [
+    'kilo',
+    'integrations/kilo/.kilo/plugin/token-optimizer.js',
+    [
+      'experimental.chat.system.transform',
+      'tool.execute.before',
+      'tool.execute.after',
+    ],
+  ],
 ]) {
   const path = join(ROOT, relative);
   check(`${client}: native plugin exists`, existsSync(path));
   if (!existsSync(path)) continue;
   const raw = readFileSync(path, 'utf8');
   for (const hook of required) {
-    check(`${client}: native plugin implements ${hook}`, raw.includes(`'${hook}'`));
+    check(
+      `${client}: native plugin implements ${hook}`,
+      raw.includes(`'${hook}'`)
+    );
   }
-  check(`${client}: native plugin invokes generated shared entries`,
-    raw.includes("invoke('session-start'") && raw.includes("invoke('pre-tool'") && raw.includes("invoke('post-tool'"));
+  check(
+    `${client}: native plugin invokes generated shared entries`,
+    raw.includes("invoke('session-start'") &&
+      raw.includes("invoke('pre-tool'") &&
+      raw.includes("invoke('post-tool'")
+  );
 }
 
 const failed = results.filter((r) => !r.pass);
-console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
-console.log('NOTE: all ten generated config shapes are confirmed against published docs;');
+console.log(
+  `\n${results.length - failed.length}/${results.length} checks passed`
+);
+console.log(
+  'NOTE: all ten generated config shapes are confirmed against published docs;'
+);
 console.log('      the source URL is recorded in each integration README.');
 process.exit(failed.length ? 1 : 0);

@@ -29,7 +29,14 @@ function runHook(
     cwd: repoRoot,
     input: JSON.stringify(payload),
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    env: {
+      ...process.env,
+      // This suite exercises the registered-tool path. Unknown or empty
+      // inventories are covered separately by mcp-capability-negotiation.
+      TOKEN_OPTIMIZER_MCP_CAPABILITIES:
+        'smart_read,smart_write,smart_edit,smart_glob,smart_grep,wiki_write',
+      ...env,
+    },
   });
 
   expect(result.status).toBe(0);

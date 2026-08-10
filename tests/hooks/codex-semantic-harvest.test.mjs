@@ -23,6 +23,7 @@ beforeEach(() => {
   workspace = mkdtempSync(join(tmpdir(), 'codex-semantic-harvest-'));
   env = {
     ...process.env,
+    TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'wiki_write',
     TOKEN_OPTIMIZER_NUDGE_AFTER: '2',
     TOKEN_OPTIMIZER_STATE_DIR: join(workspace, '.state'),
     TOKEN_OPTIMIZER_WIKI_DIR: join(workspace, '.wiki'),

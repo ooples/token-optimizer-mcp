@@ -69,13 +69,16 @@ export function isContentDump(command) {
   // the transcript. Segments are checked individually, so `cat big.ts | head`, where the output
   // DOES reach context, is still caught.
   return segmentsOf(runnable).some(
-    (segment) => DUMP_COMMANDS.test(segment) && !redirectsStdoutToFile(segment),
+    (segment) => DUMP_COMMANDS.test(segment) && !redirectsStdoutToFile(segment)
   );
 }
 
 /** Command segments, split on the operators that end one command's stdout. */
 function segmentsOf(command) {
-  return String(command).split(/\|\||&&|[|;&\n]/).map((s) => s.trim()).filter(Boolean);
+  return String(command)
+    .split(/\|\||&&|[|;&\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -582,7 +585,8 @@ export function normalizePayload(raw) {
   const cwd = raw.cwd ?? raw.workspace_root ?? process.cwd();
 
   return {
-    session_id: raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default',
+    session_id:
+      raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default',
     // WHICH AGENT, not just which session. Subagents inherit the parent's session
     // id, so state keyed on the session alone is shared by every agent under it
     // -- which made one agent's reads silence another's. The transcript path is
@@ -636,7 +640,22 @@ function matchingRule(cwd, path) {
   return null;
 }
 
-export function decide(payload, state) {
+/**
+ * Whether a replacement schema is positively available to this hook session.
+ *
+ * `undefined` preserves the pure decision API used by callers that deliberately
+ * evaluate policy in isolation. Runtime hook entry points always pass a Set --
+ * including an empty Set when registration is unknown -- so production never
+ * converts install intent into a claim that an MCP tool exists.
+ */
+function replacementAvailable(availableTools, name) {
+  if (availableTools === undefined) return true;
+  return availableTools instanceof Set
+    ? availableTools.has(name)
+    : Array.isArray(availableTools) && availableTools.includes(name);
+}
+
+export function decide(payload, state, availableTools = undefined) {
   const tool = payload.tool_name;
   const input = payload.tool_input || {};
   const threshold = largeFileBytes();
@@ -668,7 +687,7 @@ export function decide(payload, state) {
     // file read across many sessions that has never once been the source of a
     // finding -- so the refusal states the measurement rather than a policy.
     const rule = matchingRule(payload.cwd, path);
-    if (rule) {
+    if (rule && replacementAvailable(availableTools, 'smart_read')) {
       return {
         key: `read:${path}`,
         reason:
@@ -682,7 +701,10 @@ export function decide(payload, state) {
     // smart_read returns only what CHANGED, so the saving is proportional to
     // the whole file rather than to how much of it is new -- but only above the
     // floor, because below it the refusal costs more than the file it replaces.
-    if (state.seen[path]) {
+    if (
+      state.seen[path] &&
+      replacementAvailable(availableTools, 'smart_read')
+    ) {
       return {
         key: `read:${path}`,
         reason:
@@ -693,7 +715,10 @@ export function decide(payload, state) {
       };
     }
 
-    if (size >= threshold) {
+    if (
+      size >= threshold &&
+      replacementAvailable(availableTools, 'smart_read')
+    ) {
       return {
         key: `read:${path}`,
         reason:
@@ -710,6 +735,7 @@ export function decide(payload, state) {
     // Content searches are the expensive mode; a paths-only search is already
     // cheap and rewriting it would gain nothing.
     if (input.output_mode && input.output_mode !== 'content') return null;
+    if (!replacementAvailable(availableTools, 'smart_grep')) return null;
     const pattern = input.pattern || '';
     return {
       key: `grep:${pattern}:${input.path || ''}`,
@@ -721,6 +747,7 @@ export function decide(payload, state) {
   }
 
   if (tool === 'Glob') {
+    if (!replacementAvailable(availableTools, 'smart_glob')) return null;
     const pattern = input.pattern || '';
     return {
       key: `glob:${pattern}`,
@@ -732,6 +759,7 @@ export function decide(payload, state) {
   }
 
   if (tool === 'Edit' || tool === 'MultiEdit') {
+    if (!replacementAvailable(availableTools, 'smart_edit')) return null;
     const path = input.file_path;
     if (!path) return null;
     const size = fileSize(path);
@@ -748,6 +776,7 @@ export function decide(payload, state) {
   }
 
   if (tool === 'Write') {
+    if (!replacementAvailable(availableTools, 'smart_write')) return null;
     const path = input.file_path;
     const content = input.content || '';
     if (!path || content.length < threshold) return null;
@@ -765,7 +794,7 @@ export function decide(payload, state) {
 
     {
       const hit = largeDumpedOperand(command, payload.cwd);
-      if (hit) {
+      if (hit && replacementAvailable(availableTools, 'smart_read')) {
         return {
           key: `bash:${hit.path}`,
           reason:
@@ -778,7 +807,10 @@ export function decide(payload, state) {
 
     // A recursive search has no bound on its output. One with an explicit file
     // operand does, so it is left alone.
-    if (isRecursiveSearch(command)) {
+    if (
+      isRecursiveSearch(command) &&
+      replacementAvailable(availableTools, 'smart_grep')
+    ) {
       if (!largeOperand(command, payload.cwd)) {
         return {
           key: `bash:search:${command.slice(0, 80)}`,

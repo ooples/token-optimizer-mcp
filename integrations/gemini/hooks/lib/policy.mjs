@@ -273,8 +273,17 @@ function statePath(sessionId, agent) {
 /** A usable state object, whatever was on disk. */
 function emptyState() {
   return {
-    seen: {}, denied: {}, injected: [], actCounts: {}, forecast: null,
-    edits: 0, editedFiles: [], harvestedEdits: 0, recordingNudged: false,
+    seen: {},
+    denied: {},
+    injected: [],
+    actCounts: {},
+    forecast: null,
+    edits: 0,
+    editedFiles: [],
+    harvestedEdits: 0,
+    recordingNudged: false,
+    optimizerTools: [],
+    optimizerToolsObservedAt: 0,
   };
 }
 
@@ -312,7 +321,9 @@ export function loadState(sessionId, agent) {
       // counted to one forever -- invisible rather than broken, which is the
       // harder failure to notice.
       actCounts:
-        parsed.actCounts && typeof parsed.actCounts === 'object' && !Array.isArray(parsed.actCounts)
+        parsed.actCounts &&
+        typeof parsed.actCounts === 'object' &&
+        !Array.isArray(parsed.actCounts)
           ? parsed.actCounts
           : {},
       // THE SAME REASON A THIRD TIME. The forecast throttle records when the panel was last
@@ -327,8 +338,10 @@ export function loadState(sessionId, agent) {
       // the throttle open or shut. Same class as every other field validated here: a value that
       // parsed is not a value that means anything.
       forecast:
-        parsed.forecast && typeof parsed.forecast === 'object' && !Array.isArray(parsed.forecast)
-          && Number.isFinite(parsed.forecast.checkedAt)
+        parsed.forecast &&
+        typeof parsed.forecast === 'object' &&
+        !Array.isArray(parsed.forecast) &&
+        Number.isFinite(parsed.forecast.checkedAt)
           ? parsed.forecast
           : null,
       // THE SAME REASON AS EVERY FIELD ABOVE. Every tool call is a separate hook process, so a
@@ -343,6 +356,15 @@ export function loadState(sessionId, agent) {
         ? parsed.harvestedEdits
         : 0,
       recordingNudged: parsed.recordingNudged === true,
+      // Runtime MCP registration is session evidence, not an install-time
+      // assumption. Keep the exact inventory from SessionStart so later hook
+      // processes can avoid redirecting to schemas the host did not expose.
+      optimizerTools: Array.isArray(parsed.optimizerTools)
+        ? parsed.optimizerTools.filter((name) => typeof name === 'string')
+        : [],
+      optimizerToolsObservedAt: Number.isFinite(parsed.optimizerToolsObservedAt)
+        ? parsed.optimizerToolsObservedAt
+        : 0,
     };
   } catch {
     return emptyState();
@@ -423,19 +445,42 @@ export function saveState(sessionId, state, agent) {
       // processes each read, each increment, and last-writer would lose one. Monotonic beats
       // exact here -- undercounting delays a nudge, overcounting invents one.
       edits: Math.max(Number(current.edits) || 0, Number(state.edits) || 0),
-      editedFiles: [...new Set([...(state.editedFiles || []), ...(current.editedFiles || [])])].slice(0, 20),
+      editedFiles: [
+        ...new Set([
+          ...(state.editedFiles || []),
+          ...(current.editedFiles || []),
+        ]),
+      ].slice(0, 20),
       // A later confirmed mutation increments edits beyond this watermark and
       // legitimately arms one new harvest. A boolean could never do that.
       harvestedEdits: Math.max(
         Number(current.harvestedEdits) || 0,
-        Number(state.harvestedEdits) || 0,
+        Number(state.harvestedEdits) || 0
       ),
       // ONCE SET, STAYS SET. A nudge that can un-fire is a nudge that repeats.
-      recordingNudged: Boolean(current.recordingNudged || state.recordingNudged),
+      recordingNudged: Boolean(
+        current.recordingNudged || state.recordingNudged
+      ),
+      // An inventory is a point-in-time observation, not an append-only set.
+      // Union would resurrect a tool after a newer host payload explicitly
+      // reported an empty or reduced catalog. Latest evidence wins, including
+      // a proven empty list.
+      ...(() => {
+        const mineAt = Number(state.optimizerToolsObservedAt) || 0;
+        const theirsAt = Number(current.optimizerToolsObservedAt) || 0;
+        const mineWins = mineAt >= theirsAt && mineAt > 0;
+        return {
+          optimizerTools: mineWins
+            ? [...(state.optimizerTools || [])]
+            : [...(current.optimizerTools || [])],
+          optimizerToolsObservedAt: mineWins ? mineAt : theirsAt,
+        };
+      })(),
       forecast: (() => {
         const mine = state.forecast || null;
         const theirs = current.forecast || null;
-        const stamp = (f) => (Number.isFinite(f?.checkedAt) ? f.checkedAt : null);
+        const stamp = (f) =>
+          Number.isFinite(f?.checkedAt) ? f.checkedAt : null;
         if (stamp(mine) === null) return theirs;
         if (stamp(theirs) === null) return mine;
         return stamp(mine) >= stamp(theirs) ? mine : theirs;
