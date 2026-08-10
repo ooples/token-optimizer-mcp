@@ -1,0 +1,2 @@
+{"arm":"empty","causalEvents":0,"driverValidation":[],"providerFailures":[],"rowHash":"c8c3c8e92f4890c56d8f28941c336795b0aa0fae7753af76d66ce7a31e4b0964","runnerExitCode":0,"trialId":"codex->claude-code:adversarial-001:0:empty","valid":true,"validation":[]}
+{"arm":"runtime","causalEvents":6,"driverValidation":[],"providerFailures":[],"rowHash":"35b60cfbb8452c118c2a024a1030f00ba8682edec69fe8ec46339edd49ebfa12","runnerExitCode":0,"trialId":"codex->claude-code:adversarial-001:0:runtime","valid":true,"validation":[]}

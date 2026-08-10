@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "ucr.study-clients/1",
+  "clients": [
+    {
+      "id": "codex",
+      "model": "gpt-5.6-sol",
+      "modelVersion": "gpt-5.6-sol",
+      "modelFamily": "openai",
+      "version": "codex-cli 0.147.0",
+      "transport": "codex-app-server",
+      "lifecycleFamily": "process-hook",
+      "commandEnvironment": "UCR_CODEX_COMMAND"
+    },
+    {
+      "id": "claude-code",
+      "model": "claude-sonnet-5",
+      "modelVersion": "claude-sonnet-5",
+      "modelFamily": "anthropic",
+      "version": "2.1.225 (Claude Code)",
+      "transport": "claude-code",
+      "lifecycleFamily": "process-hook",
+      "commandEnvironment": "UCR_CLAUDE_COMMAND"
+    },
+    {
+      "id": "gemini",
+      "model": "gemini-2.5-pro",
+      "modelVersion": "gemini-2.5-pro",
+      "modelFamily": "google",
+      "version": "1.1.11",
+      "transport": "antigravity",
+      "lifecycleFamily": "process-hook",
+      "commandEnvironment": "UCR_GEMINI_COMMAND"
+    }
+  ]
+}

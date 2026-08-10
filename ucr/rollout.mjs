@@ -10,6 +10,34 @@ export const ROLLOUT_STAGES = Object.freeze([
   'stable',
 ]);
 
+export const PRODUCTION_TIMESTAMP_BUCKET_MS = 60_000;
+
+/** Remove stable production identifiers before any durable evidence is sealed. */
+export function pseudonymizeProductionSamples(
+  samples,
+  { secret, keyId, timestampBucketMs = null } = {}
+) {
+  if (!secret || !keyId)
+    throw new Error('production pseudonymization requires secret and keyId');
+  if (
+    timestampBucketMs != null &&
+    (!Number.isInteger(timestampBucketMs) || timestampBucketMs <= 0)
+  )
+    throw new Error('timestampBucketMs must be a positive integer');
+  return (samples || []).map((sample) => ({
+    ...sample,
+    ...(timestampBucketMs != null
+      ? {
+          timestamp:
+            Math.floor(sample.timestamp / timestampBucketMs) *
+            timestampBucketMs,
+        }
+      : {}),
+    client: sha256([secret, keyId, 'client', sample.client]),
+    projectId: sha256([secret, keyId, 'project', sample.projectId]),
+  }));
+}
+
 export class RolloutController {
   constructor({ stage = 'offline-replay', thresholds = {} } = {}) {
     if (!ROLLOUT_STAGES.includes(stage))
@@ -231,6 +259,119 @@ export const REQUIRED_FAULTS = Object.freeze([
   'network-partition',
 ]);
 
+export const REQUIRED_TRAFFIC_STAGES = Object.freeze([
+  'shadow-selection',
+  'observe-only',
+  'advisory-canary',
+  'verification-canary',
+  'scoped-enforcement',
+]);
+
+function rawContentPath(value, path = '') {
+  if (!value || typeof value !== 'object') return null;
+  for (const [key, item] of Object.entries(value)) {
+    const next = path ? `${path}.${key}` : key;
+    if (['prompt', 'transcript', 'rawOutput'].includes(key)) return next;
+    const nested = rawContentPath(item, next);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+/** Validate one privacy-safe production observation before it can be signed. */
+export function validateProductionSample(sample) {
+  const diagnostics = [];
+  if (sample?.realTraffic !== true) diagnostics.push('not real traffic');
+  if (sample?.optIn !== true) diagnostics.push('missing explicit opt-in');
+  if (!Number.isFinite(sample?.timestamp))
+    diagnostics.push('invalid timestamp');
+  if (!REQUIRED_TRAFFIC_STAGES.includes(sample?.rolloutStage))
+    diagnostics.push('invalid rollout stage');
+  if (!sample?.client) diagnostics.push('missing client');
+  if (!sample?.projectId) diagnostics.push('missing project');
+  if (typeof sample?.available !== 'boolean')
+    diagnostics.push('missing availability observation');
+  for (const key of [
+    'latencyMs',
+    'contextOverhead',
+    'correctnessDelta',
+    'severeHarm',
+    'unauthorizedAccess',
+    'privacyViolation',
+  ]) {
+    if (!Number.isFinite(sample?.[key])) diagnostics.push(`invalid ${key}`);
+  }
+  if (Number(sample?.latencyMs) < 0 || Number(sample?.contextOverhead) < 0)
+    diagnostics.push('negative latency or context telemetry');
+  const prohibited = rawContentPath(sample);
+  if (prohibited) diagnostics.push(`raw model content at ${prohibited}`);
+  return { valid: diagnostics.length === 0, diagnostics };
+}
+
+/** Grade real, opt-in traffic separately from local fault and SLO exercises. */
+export function productionTrafficReport(
+  samples,
+  {
+    minimumSamples = 1000,
+    minimumDurationMs = 7 * 24 * 60 * 60 * 1000,
+    minimumClients = 3,
+    minimumProjects = 3,
+  } = {}
+) {
+  const validations = (samples || []).map(validateProductionSample);
+  const safe = (samples || []).filter((_, index) => validations[index].valid);
+  const stages = new Set(safe.map((sample) => sample.rolloutStage));
+  const clients = new Set(safe.map((sample) => sample.client).filter(Boolean));
+  const projects = new Set(
+    safe.map((sample) => sample.projectId).filter(Boolean)
+  );
+  const timestamps = safe.map((sample) => sample.timestamp);
+  const durationMs = timestamps.length
+    ? Math.max(...timestamps) - Math.min(...timestamps)
+    : 0;
+  const privacyViolations = safe.reduce(
+    (sum, sample) => sum + Number(sample.privacyViolation || 0),
+    0
+  );
+  const severeHarm = safe.reduce(
+    (sum, sample) => sum + Number(sample.severeHarm || 0),
+    0
+  );
+  const checks = {
+    samples: safe.length >= minimumSamples,
+    duration: durationMs >= minimumDurationMs,
+    stages: REQUIRED_TRAFFIC_STAGES.every((stage) => stages.has(stage)),
+    clients: clients.size >= minimumClients,
+    projects: projects.size >= minimumProjects,
+    privacy: privacyViolations === 0,
+    severeHarm: severeHarm === 0,
+    completeTelemetry: safe.length === (samples || []).length,
+    noRawContent: (samples || []).every((sample) => !rawContentPath(sample)),
+  };
+  return {
+    passed: Object.values(checks).every(Boolean),
+    checks,
+    metrics: {
+      samples: safe.length,
+      durationMs,
+      stages: stages.size,
+      clients: clients.size,
+      projects: projects.size,
+      privacyViolations,
+      severeHarm,
+      rejectedSamples: (samples || []).length - safe.length,
+    },
+    thresholds: {
+      minimumSamples,
+      minimumDurationMs,
+      minimumClients,
+      minimumProjects,
+      requiredStages: REQUIRED_TRAFFIC_STAGES,
+    },
+    sampleHash: sha256(safe),
+  };
+}
+
 /** Grade executable fault receipts without confusing them with production traffic. */
 export function faultInjectionStudy(
   receipts,
@@ -265,6 +406,7 @@ export function productionReadiness({
   slos,
   faults,
   recovery,
+  traffic,
   rolloutStage,
 }) {
   const missing = [];
@@ -273,6 +415,7 @@ export function productionReadiness({
     missing.push('effectiveness evidence');
   if (!evidenceClasses.includes('production'))
     missing.push('production traffic evidence');
+  if (!traffic?.passed) missing.push('qualified staged traffic window');
   if (!slos?.passed) missing.push('production SLO window');
   if (!faults?.passed) missing.push('complete fault-injection study');
   if (!recovery?.passed || recovery?.recoveryPointEvents !== 0)

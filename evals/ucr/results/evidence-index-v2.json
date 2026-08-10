@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ucr.evidence-index/2",
-  "generatedAt": "2026-08-10T04:54:55.796Z",
+  "generatedAt": "2026-08-10T19:16:42.192Z",
   "evidenceContract": {
     "claimPolicy": "metrics are derived only from ledgers at or above each metric evidence requirement",
     "tiers": {
@@ -13,23 +13,26 @@
       "conformance": {
         "status": "present",
         "ledgers": 2,
-        "rows": 706,
+        "rows": 707,
         "hashes": [
-          "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+          "83fad7c4304136839c9d40a6cd978a3098b5e580dd3ac4bec7d71b38f00e8c56",
           "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
         ]
       },
       "executable-smoke": {
         "status": "present",
-        "ledgers": 6,
-        "rows": 14,
+        "ledgers": 9,
+        "rows": 19,
         "hashes": [
           "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
-          "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
-          "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+          "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
+          "b8c8371750b77e12f60507be373aedbca433ecabf7c9a29ba3ecf842ad07822d",
           "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
           "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
-          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+          "e1b9795d36ae9a41c50f6ebc43910e72f0113c798bf69e6aa489bf57eb1591a6",
+          "34351afe3c4d9763cac84ebeb2d9ecd8a2dcf2142064c97c8ae9d69036fe0169",
+          "42dbeba5e30bb4f1f138edc0d344560b8494217dd20a36a411d5d871b76d79c7"
         ]
       },
       "effectiveness": {
@@ -54,6 +57,23 @@
   },
   "artifacts": [
     {
+      "name": "study-readiness",
+      "filename": "study-readiness-v1.json",
+      "evidenceClass": "conformance",
+      "requiredPass": true,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "02488e8c1f6d1b4495bdc14027778946ff69894e7709808b25d89f3e4235ace1",
+      "schemaVersion": "ucr.study-readiness/1",
+      "passed": true,
+      "executedAt": null,
+      "sourceTreeHash": null,
+      "ledgerHash": null,
+      "ledgerVerification": null,
+      "keyResolutionError": null
+    },
+    {
       "name": "graph-scale",
       "filename": "graph-scale-v1.json",
       "evidenceClass": "conformance",
@@ -67,7 +87,8 @@
       "executedAt": "2026-08-09T22:14:45.579Z",
       "sourceTreeHash": "5f0a584fed1e8c233b262296a089ca4236edd4b6f616b13418714989ae32a8d6",
       "ledgerHash": null,
-      "ledgerVerification": null
+      "ledgerVerification": null,
+      "keyResolutionError": null
     },
     {
       "name": "coordination-scale",
@@ -83,7 +104,8 @@
       "executedAt": "2026-08-09T22:23:49.552Z",
       "sourceTreeHash": "ea29500316b80d8806095cff65bd3ece6e4682a9d574c6bf3c6d02f6c0e18e58",
       "ledgerHash": null,
-      "ledgerVerification": null
+      "ledgerVerification": null,
+      "keyResolutionError": null
     },
     {
       "name": "consolidation",
@@ -99,7 +121,8 @@
       "executedAt": "2026-08-09T22:24:48.511Z",
       "sourceTreeHash": "a34a5ebd8aa6604f8291e4f39a3e6a50636579635cab2d4ec262cb78cfd266b2",
       "ledgerHash": null,
-      "ledgerVerification": null
+      "ledgerVerification": null,
+      "keyResolutionError": null
     },
     {
       "name": "adapter-processes",
@@ -115,7 +138,8 @@
       "executedAt": "2026-08-10T04:42:26.916Z",
       "sourceTreeHash": "8a36da74f0111c1d4a252dc257fc1fe24d7f3b7a8057ce5488cec6b4a83e61d5",
       "ledgerHash": null,
-      "ledgerVerification": null
+      "ledgerVerification": null,
+      "keyResolutionError": null
     },
     {
       "name": "mcp-context",
@@ -131,7 +155,8 @@
       "executedAt": "2026-08-10T04:42:33.220Z",
       "sourceTreeHash": null,
       "ledgerHash": null,
-      "ledgerVerification": null
+      "ledgerVerification": null,
+      "keyResolutionError": null
     },
     {
       "name": "compounding",
@@ -153,7 +178,8 @@
         "validSignature": true,
         "ledgerHash": "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
         "rowCount": 700
-      }
+      },
+      "keyResolutionError": null
     },
     {
       "name": "production-exercise",
@@ -175,51 +201,54 @@
         "validSignature": true,
         "ledgerHash": "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
         "rowCount": 6
-      }
+      },
+      "keyResolutionError": null
     },
     {
       "name": "stateful-codex-to-claude",
-      "filename": "stateful-preflight-codex-to-claude-v4.json",
+      "filename": "stateful-matched-codex-to-claude-v1.json",
       "evidenceClass": "executable-smoke",
       "requiredPass": true,
       "present": true,
       "valid": true,
       "reportHashValid": true,
-      "reportHash": "16f20a57c882fb91cf7eef90bf8a0daa92cfdbcb09f177e9aadd71a31fc9bda7",
+      "reportHash": "7b2b74545eed9ef9eb78dbc9dab6ba23f7e56a1cf121473830e4a3a28ad9695e",
       "schemaVersion": "ucr.live-multimodel-handoff/1",
       "passed": true,
-      "executedAt": "2026-08-10T04:26:46.370Z",
-      "sourceTreeHash": "3eba9476a6ad29ff4ddaa3a91b15846a1e7c95779157bee7927e4ff1a4372828",
-      "ledgerHash": "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+      "executedAt": "2026-08-10T12:39:01.830Z",
+      "sourceTreeHash": "96fcf325cd1945645579e83c48f0164c569017fdf952546ebe174f225c24df6d",
+      "ledgerHash": "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
       "ledgerVerification": {
         "valid": true,
         "diagnostics": [],
         "validSignature": true,
-        "ledgerHash": "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
+        "ledgerHash": "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
         "rowCount": 1
-      }
+      },
+      "keyResolutionError": null
     },
     {
       "name": "stateful-claude-to-codex",
-      "filename": "stateful-preflight-claude-to-codex-v3.json",
+      "filename": "stateful-matched-claude-to-codex-v1.json",
       "evidenceClass": "executable-smoke",
       "requiredPass": true,
       "present": true,
       "valid": true,
       "reportHashValid": true,
-      "reportHash": "0d01eb4eb9f21ddb5c590095c270ef4564267e856afe01fcd49d16cb0f3603aa",
+      "reportHash": "0fe914b29aece48d91c10f6a23c7b09e02b79f298e01829cafe0c9ab729d241e",
       "schemaVersion": "ucr.live-multimodel-handoff/1",
       "passed": true,
-      "executedAt": "2026-08-10T04:32:49.612Z",
-      "sourceTreeHash": "620eeab06b88a32a04b9a069f1b27c2451ff32bf5d3128790a3416b4a64dcdc6",
-      "ledgerHash": "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+      "executedAt": "2026-08-10T12:44:14.819Z",
+      "sourceTreeHash": "96fcf325cd1945645579e83c48f0164c569017fdf952546ebe174f225c24df6d",
+      "ledgerHash": "b8c8371750b77e12f60507be373aedbca433ecabf7c9a29ba3ecf842ad07822d",
       "ledgerVerification": {
         "valid": true,
         "diagnostics": [],
         "validSignature": true,
-        "ledgerHash": "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+        "ledgerHash": "b8c8371750b77e12f60507be373aedbca433ecabf7c9a29ba3ecf842ad07822d",
         "rowCount": 1
-      }
+      },
+      "keyResolutionError": null
     },
     {
       "name": "transport-negative-claude-plugin",
@@ -241,7 +270,8 @@
         "validSignature": true,
         "ledgerHash": "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
         "rowCount": 1
-      }
+      },
+      "keyResolutionError": null
     },
     {
       "name": "stateful-claude-to-copilot-quota",
@@ -263,7 +293,8 @@
         "validSignature": true,
         "ledgerHash": "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
         "rowCount": 1
-      }
+      },
+      "keyResolutionError": null
     },
     {
       "name": "effectiveness-pilot-negative",
@@ -285,12 +316,82 @@
         "validSignature": true,
         "ledgerHash": "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
         "rowCount": 4
-      }
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-blocked-codex-to-gemini-v4",
+      "filename": "full-study-blocked-codex-to-gemini-v4.json",
+      "evidenceClass": "blocked-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "a4c828e1fd8995a06ab953b3abe3da8ece2db279f6efb7800f0daa2ae55cb323",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T19:02:57.070Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "e1b9795d36ae9a41c50f6ebc43910e72f0113c798bf69e6aa489bf57eb1591a6",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "e1b9795d36ae9a41c50f6ebc43910e72f0113c798bf69e6aa489bf57eb1591a6",
+        "rowCount": 1
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-claude-to-codex-v10",
+      "filename": "full-study-qualification-claude-to-codex-v10.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "6138feb2a4b82d9ff3c2fa66760aef597cd1c7c88f5d785c3fb133e4e9fba4ec",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T19:00:07.732Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "34351afe3c4d9763cac84ebeb2d9ecd8a2dcf2142064c97c8ae9d69036fe0169",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "34351afe3c4d9763cac84ebeb2d9ecd8a2dcf2142064c97c8ae9d69036fe0169",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-codex-to-claude-v10",
+      "filename": "full-study-qualification-codex-to-claude-v10.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "ebf74f85edc65b9f52d6b86f2ac24048ba6c0a8e9ef4ab5f00fbc76ea32e1f54",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T18:54:33.874Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "42dbeba5e30bb4f1f138edc0d344560b8494217dd20a36a411d5d871b76d79c7",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "42dbeba5e30bb4f1f138edc0d344560b8494217dd20a36a411d5d871b76d79c7",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
     }
   ],
   "summary": {
-    "artifactsValid": 12,
-    "artifactsTotal": 12,
+    "artifactsValid": 16,
+    "artifactsTotal": 16,
     "liveDirectionsPassed": 2,
     "liveDirectionsAttempted": 3,
     "liveDirectionMetrics": [
@@ -309,13 +410,13 @@
         "nativeGuardEnforced": false,
         "captureModelCalls": 0,
         "consumerStaticSchemaTokens": 0,
-        "capsuleTokens": 64,
-        "controlTokenTraffic": 476301,
-        "runtimeTokenTraffic": 285194,
-        "tokenTrafficDelta": -0.4012315741516394,
-        "controlLatencyMs": 73503.72200000001,
-        "runtimeLatencyMs": 66832.0761,
-        "latencyDelta": -0.09076609617129323
+        "capsuleTokens": 57,
+        "controlTokenTraffic": 324886,
+        "runtimeTokenTraffic": 287344,
+        "tokenTrafficDelta": -0.11555437907450614,
+        "controlLatencyMs": 67516.1478,
+        "runtimeLatencyMs": 74853.2538,
+        "latencyDelta": 0.10867186945757588
       },
       {
         "direction": "claude-code->codex",
@@ -326,19 +427,19 @@
         "predecessorMistakeObserved": true,
         "predecessorCorrectionVerified": true,
         "repeatedFailure": false,
-        "controlMistake": true,
+        "controlMistake": false,
         "delivered": true,
         "nativeGuardWired": true,
-        "nativeGuardEnforced": true,
+        "nativeGuardEnforced": false,
         "captureModelCalls": 0,
         "consumerStaticSchemaTokens": 0,
-        "capsuleTokens": 91,
-        "controlTokenTraffic": 402956,
-        "runtimeTokenTraffic": 408931,
-        "tokenTrafficDelta": 0.01482792165894043,
-        "controlLatencyMs": 115158.38889999998,
-        "runtimeLatencyMs": 87188.1611,
-        "latencyDelta": -0.24288484813979527
+        "capsuleTokens": 98,
+        "controlTokenTraffic": 377357,
+        "runtimeTokenTraffic": 375166,
+        "tokenTrafficDelta": -0.005806172934383091,
+        "controlLatencyMs": 78773.0749,
+        "runtimeLatencyMs": 78356.7587,
+        "latencyDelta": -0.00528500633660044
       },
       {
         "direction": "claude-code->copilot",
@@ -364,13 +465,13 @@
         "latencyDelta": -0.15731011708195736
       }
     ],
-    "liveDirectionsWithLowerTokenTraffic": 1,
-    "liveDirectionsWithLowerLatency": 2,
-    "combinedLiveTokenReduction": 0.210555048182727,
-    "combinedLiveLatencyReduction": 0.183618605425028,
-    "blindedControlMistakes": 1,
+    "liveDirectionsWithLowerTokenTraffic": 2,
+    "liveDirectionsWithLowerLatency": 1,
+    "combinedLiveTokenReduction": 0.05658012967021387,
+    "combinedLiveLatencyReduction": -0.047308951898614456,
+    "blindedControlMistakes": 0,
     "runtimeKnownMistakeRecurrences": 0,
-    "nativeGuardEnforcements": 1,
+    "nativeGuardEnforcements": 0,
     "maximumCaptureModelCalls": 0,
     "maximumConsumerStaticSchemaTokens": 0,
     "registeredClientProcesses": 16,
@@ -378,25 +479,57 @@
     "coordinationWorkers": 100,
     "productionFaults": 6,
     "cognitiveSchemaTokens": 480,
-    "cognitiveReductionVsFull": 0.9840663900414938
+    "cognitiveReductionVsFull": 0.9840663900414938,
+    "studyDesign": {
+      "passed": true,
+      "trials": 54054,
+      "providerInvocations": 113022,
+      "mappedMetrics": 37,
+      "representativeStudyClients": 3,
+      "universalDriverClients": 16,
+      "coverage": {
+        "families": 1,
+        "arms": 1,
+        "familyCount": 11,
+        "requiredFamilies": 11,
+        "armCount": 7,
+        "requiredArms": 7,
+        "clients": 3,
+        "modelFamilies": 3,
+        "directions": 9,
+        "materialVariants": 1420
+      }
+    }
   },
   "conformanceLedger": {
     "schemaVersion": "ucr.evidence-ledger/2",
     "evidenceClass": "conformance",
     "run": {
       "schemaVersion": "ucr.evidence-run/2",
-      "runId": "evidence-index-e31ecd01c96413f2",
+      "runId": "evidence-index-4b396add183de7ed",
       "evidenceClass": "conformance",
       "benchmarkHash": "4b2148b8a73d20f9d94a3008e1756f9fb38144818bb527b752ec5ff6ffa06f0e",
-      "sourceTreeHash": "c231cfe3c8d74ce5899e1ceab6612a81c4ced6dd83fe37ce77eab65d6b7fd7a4",
+      "sourceTreeHash": "d22b415ce5b24ed947ec94a53b6a9a5f67b68a67f63621824ab7e208888c79df",
       "runner": {
         "name": "assemble-ucr-evidence",
         "node": "v25.6.0"
       },
-      "startedAt": "2026-08-10T04:54:55.752Z",
-      "runHash": "3dd77b1dbeb10e2b6f67e7fb0e825c615e86247653f67cfdfa9bf6e42fd2c3bf"
+      "startedAt": "2026-08-10T19:16:42.141Z",
+      "runHash": "0fb977ac06c211683c3f9d7ba761a572d9223f7eb112bfd620006433a4f59f04"
     },
     "rows": [
+      {
+        "study": "study-readiness",
+        "artifact": "study-readiness-v1.json",
+        "artifactHash": "02488e8c1f6d1b4495bdc14027778946ff69894e7709808b25d89f3e4235ace1",
+        "passed": true,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "evidence-index-4b396add183de7ed",
+        "sequence": 0,
+        "previousHash": "0fb977ac06c211683c3f9d7ba761a572d9223f7eb112bfd620006433a4f59f04",
+        "rowHash": "c2072883bca6f10c8ae159b9395088e90ef9d9e28ca61789aee0c51152b0f3c0"
+      },
       {
         "study": "graph-scale",
         "artifact": "graph-scale-v1.json",
@@ -404,10 +537,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-e31ecd01c96413f2",
-        "sequence": 0,
-        "previousHash": "3dd77b1dbeb10e2b6f67e7fb0e825c615e86247653f67cfdfa9bf6e42fd2c3bf",
-        "rowHash": "ca76e14f13b1b80cd9b5fcf21528fe9b5b010cdde94c405b1e9e73c3166d20f0"
+        "runId": "evidence-index-4b396add183de7ed",
+        "sequence": 1,
+        "previousHash": "c2072883bca6f10c8ae159b9395088e90ef9d9e28ca61789aee0c51152b0f3c0",
+        "rowHash": "afce8ace6426dfca095d8106111447b9bd463801732fa83690494348aedd01a4"
       },
       {
         "study": "writer-integrity",
@@ -418,10 +551,10 @@
         "restoredWrites": 100,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-e31ecd01c96413f2",
-        "sequence": 1,
-        "previousHash": "ca76e14f13b1b80cd9b5fcf21528fe9b5b010cdde94c405b1e9e73c3166d20f0",
-        "rowHash": "a7bfe89de2668017b1642ca7627951286dc4e1b93b12f0f1c78f64a144962482"
+        "runId": "evidence-index-4b396add183de7ed",
+        "sequence": 2,
+        "previousHash": "afce8ace6426dfca095d8106111447b9bd463801732fa83690494348aedd01a4",
+        "rowHash": "33435aaa360455581e4a887f7befb91ff5cad6cafa168b9b0fced6ca43b1cdcc"
       },
       {
         "study": "consolidation",
@@ -430,10 +563,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-e31ecd01c96413f2",
-        "sequence": 2,
-        "previousHash": "a7bfe89de2668017b1642ca7627951286dc4e1b93b12f0f1c78f64a144962482",
-        "rowHash": "03790418e71fa1187d4fad2928c251dda4d17a12e9ea13511c3dfd17479a3601"
+        "runId": "evidence-index-4b396add183de7ed",
+        "sequence": 3,
+        "previousHash": "33435aaa360455581e4a887f7befb91ff5cad6cafa168b9b0fced6ca43b1cdcc",
+        "rowHash": "28cb1ecaad1e3fae80579304bce9706110f01db03b90adb840f418d7cdf27427"
       },
       {
         "study": "adapter-processes",
@@ -442,10 +575,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-e31ecd01c96413f2",
-        "sequence": 3,
-        "previousHash": "03790418e71fa1187d4fad2928c251dda4d17a12e9ea13511c3dfd17479a3601",
-        "rowHash": "c2be5c7c49c462ff5a91a2aafb4484e2f628438657625f4a26043d29942addca"
+        "runId": "evidence-index-4b396add183de7ed",
+        "sequence": 4,
+        "previousHash": "28cb1ecaad1e3fae80579304bce9706110f01db03b90adb840f418d7cdf27427",
+        "rowHash": "56084e6e395634dbe0d6f8dbccc8a2b6ac22b7fbf2d2607c99ad4363904b5ce6"
       },
       {
         "study": "mcp-context",
@@ -454,10 +587,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-e31ecd01c96413f2",
-        "sequence": 4,
-        "previousHash": "c2be5c7c49c462ff5a91a2aafb4484e2f628438657625f4a26043d29942addca",
-        "rowHash": "18c0931d5a535c602af5e4e47fa5deceeab431f80d3c1d4e84b7858717068c58"
+        "runId": "evidence-index-4b396add183de7ed",
+        "sequence": 5,
+        "previousHash": "56084e6e395634dbe0d6f8dbccc8a2b6ac22b7fbf2d2607c99ad4363904b5ce6",
+        "rowHash": "cc440ac3c2eeec8420b40d82be71acb4a9f9041da57cce4177cf21ac5d1df8ff"
       },
       {
         "study": "compounding",
@@ -466,34 +599,38 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-e31ecd01c96413f2",
-        "sequence": 5,
-        "previousHash": "18c0931d5a535c602af5e4e47fa5deceeab431f80d3c1d4e84b7858717068c58",
-        "rowHash": "30a75a808509053c22488bb77bef0ec308fa36abe5264d1ee9f81870116d8468"
+        "runId": "evidence-index-4b396add183de7ed",
+        "sequence": 6,
+        "previousHash": "cc440ac3c2eeec8420b40d82be71acb4a9f9041da57cce4177cf21ac5d1df8ff",
+        "rowHash": "f3d1599b4cb4c04fcaeadf756ef5a07ca1fd918dfa3122ec0b306cb90362456a"
       }
     ],
-    "rowCount": 6,
-    "chainHead": "30a75a808509053c22488bb77bef0ec308fa36abe5264d1ee9f81870116d8468",
+    "rowCount": 7,
+    "chainHead": "f3d1599b4cb4c04fcaeadf756ef5a07ca1fd918dfa3122ec0b306cb90362456a",
     "transcriptsPublished": false,
-    "endedAt": "2026-08-10T04:54:55.753Z",
-    "ledgerHash": "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
-    "signature": "KHRbxr53zHMn3NNc+UAPhzhrO4RUSSn5OvdcRUn+xhBbdgodinxUV5QQUdCW5VSj+nfsc39RbtzG1pa6KSPpCg=="
+    "endedAt": "2026-08-10T19:16:42.142Z",
+    "ledgerHash": "83fad7c4304136839c9d40a6cd978a3098b5e580dd3ac4bec7d71b38f00e8c56",
+    "signature": "xoqR6ofURHwv2hwUMeAm+OmHes8KeFxZPusCgKtXY6qsCq5xPEcGCLVJF6mPRnjU0eNuvLCcVK79Plz9oR2hBw=="
   },
-  "conformancePublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAg/XLxB+5w/dkUMXCv+EyIfqd3umzOhLnxfbkRvBdFf8=\n-----END PUBLIC KEY-----\n",
+  "conformancePublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAnOEQHfEnuzdGtXgPVysNcUOVoRpa2bihyVgzQl6ZCRo=\n-----END PUBLIC KEY-----\n",
   "conformanceLedgerVerification": {
     "valid": true,
     "diagnostics": [],
     "validSignature": true,
-    "ledgerHash": "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
-    "rowCount": 6
+    "ledgerHash": "83fad7c4304136839c9d40a6cd978a3098b5e580dd3ac4bec7d71b38f00e8c56",
+    "rowCount": 7
   },
   "derived": {
     "schemaVersion": "ucr.derived-metrics/2",
     "metrics": {
       "applicabilityPrecision": null,
+      "applicabilityPrecisionIntervalLow": null,
       "preActionDelivery": null,
+      "preActionDeliveryIntervalLow": null,
       "irrelevantDelivery": null,
+      "irrelevantDeliveryIntervalHigh": null,
       "staleDelivery": null,
+      "staleDeliveryIntervalHigh": null,
       "recurrenceReduction": null,
       "recurrenceIntervalLow": null,
       "naturalCorrectnessDelta": null,
@@ -506,11 +643,23 @@
       "latencyOverheadP95": null,
       "knownMistakeRecurrence": null,
       "contradictoryDelivery": null,
+      "contradictoryDeliveryIntervalHigh": null,
+      "negativeDeliveryIntervalHigh": null,
       "consumerSchemaTokensP95": null,
       "captureModelCallsP95": null,
       "writerIntegrity": true,
       "crossClientPassed": false,
-      "competitivePassed": false
+      "benchmarkFamilyCoverage": null,
+      "benchmarkArmCoverage": null,
+      "directionalCorrectnessIntervalLow": null,
+      "familyCorrectnessIntervalLow": null,
+      "directionalTokenOverheadHigh": null,
+      "causalChainIntegrity": false,
+      "trialIntegrity": false,
+      "independentGrading": false,
+      "competitivePassed": false,
+      "competitiveCoverage": null,
+      "competitiveReproducibility": false
     },
     "intervals": {
       "recurrence": {
@@ -543,7 +692,15 @@
         "requiredClass": "effectiveness",
         "eligibleLedgerHashes": []
       },
+      "applicabilityPrecisionIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
       "preActionDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDeliveryIntervalLow": {
         "requiredClass": "effectiveness",
         "eligibleLedgerHashes": []
       },
@@ -551,7 +708,15 @@
         "requiredClass": "effectiveness",
         "eligibleLedgerHashes": []
       },
+      "irrelevantDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
       "staleDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDeliveryIntervalHigh": {
         "requiredClass": "effectiveness",
         "eligibleLedgerHashes": []
       },
@@ -603,6 +768,14 @@
         "requiredClass": "effectiveness",
         "eligibleLedgerHashes": []
       },
+      "contradictoryDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "negativeDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
       "consumerSchemaTokensP95": {
         "requiredClass": "effectiveness",
         "eligibleLedgerHashes": []
@@ -614,46 +787,86 @@
       "writerIntegrity": {
         "requiredClass": "conformance",
         "eligibleLedgerHashes": [
-          "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
-          "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
-          "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
-          "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
-          "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
-          "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
-          "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
-          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+          "83fad7c4304136839c9d40a6cd978a3098b5e580dd3ac4bec7d71b38f00e8c56"
         ]
       },
       "crossClientPassed": {
         "requiredClass": "effectiveness",
         "eligibleLedgerHashes": []
       },
+      "benchmarkFamilyCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "benchmarkArmCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "familyCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalTokenOverheadHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "causalChainIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "trialIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "independentGrading": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
       "competitivePassed": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveCoverage": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveReproducibility": {
         "requiredClass": "superiority",
         "eligibleLedgerHashes": []
       }
     },
     "inputLedgerHashes": [
-      "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
-      "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+      "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
+      "34351afe3c4d9763cac84ebeb2d9ecd8a2dcf2142064c97c8ae9d69036fe0169",
+      "42dbeba5e30bb4f1f138edc0d344560b8494217dd20a36a411d5d871b76d79c7",
       "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
-      "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+      "83fad7c4304136839c9d40a6cd978a3098b5e580dd3ac4bec7d71b38f00e8c56",
       "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
       "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
+      "b8c8371750b77e12f60507be373aedbca433ecabf7c9a29ba3ecf842ad07822d",
       "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+      "e1b9795d36ae9a41c50f6ebc43910e72f0113c798bf69e6aa489bf57eb1591a6",
       "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7"
     ],
     "rejectedLedgers": 0,
-    "derivedHash": "7228efea57ac886898ee2ab1ea6e9410133515b6091c1ab15480283cfbbae15b"
+    "derivedHash": "f14c3f8105267a6f348fc1e3b55d7ea3c0281d3c36950e968d77f2ff343b2f44"
   },
   "verdict": {
     "status": "insufficient",
     "passed": false,
     "missing": [
       "applicabilityPrecision",
+      "applicabilityPrecisionIntervalLow",
       "preActionDelivery",
+      "preActionDeliveryIntervalLow",
       "irrelevantDelivery",
+      "irrelevantDeliveryIntervalHigh",
       "staleDelivery",
+      "staleDeliveryIntervalHigh",
       "recurrenceReduction",
       "recurrenceIntervalLow",
       "naturalCorrectnessDelta",
@@ -665,17 +878,80 @@
       "latencyOverheadP95",
       "knownMistakeRecurrence",
       "contradictoryDelivery",
+      "contradictoryDeliveryIntervalHigh",
+      "negativeDeliveryIntervalHigh",
       "consumerSchemaTokensP95",
-      "captureModelCallsP95"
+      "captureModelCallsP95",
+      "benchmarkFamilyCoverage",
+      "benchmarkArmCoverage",
+      "directionalCorrectnessIntervalLow",
+      "familyCorrectnessIntervalLow",
+      "directionalTokenOverheadHigh",
+      "competitiveCoverage"
     ],
     "failed": []
+  },
+  "tieredVerdict": {
+    "status": "insufficient",
+    "passed": false,
+    "effectiveness": {
+      "status": "insufficient",
+      "passed": false,
+      "missing": [
+        "applicabilityPrecision",
+        "applicabilityPrecisionIntervalLow",
+        "preActionDelivery",
+        "preActionDeliveryIntervalLow",
+        "irrelevantDelivery",
+        "irrelevantDeliveryIntervalHigh",
+        "staleDelivery",
+        "staleDeliveryIntervalHigh",
+        "recurrenceReduction",
+        "recurrenceIntervalLow",
+        "naturalCorrectnessDelta",
+        "naturalCorrectnessIntervalLow",
+        "emptyP95Overhead",
+        "reconstructionTokenReduction",
+        "firstSuccessorTokenReduction",
+        "firstSuccessorTokenIntervalLow",
+        "latencyOverheadP95",
+        "knownMistakeRecurrence",
+        "contradictoryDelivery",
+        "contradictoryDeliveryIntervalHigh",
+        "negativeDeliveryIntervalHigh",
+        "consumerSchemaTokensP95",
+        "captureModelCallsP95",
+        "benchmarkFamilyCoverage",
+        "benchmarkArmCoverage",
+        "directionalCorrectnessIntervalLow",
+        "familyCorrectnessIntervalLow",
+        "directionalTokenOverheadHigh"
+      ],
+      "failed": []
+    },
+    "superiority": {
+      "status": "insufficient",
+      "passed": false,
+      "missing": [
+        "competitiveCoverage"
+      ],
+      "failed": []
+    },
+    "production": {
+      "status": "insufficient",
+      "ready": false,
+      "missing": [
+        "signed staged production traffic evidence"
+      ]
+    }
   },
   "claims": {
     "conformance": true,
     "executableCrossClient": true,
     "effectiveness": false,
     "superiority": false,
-    "production": false
+    "production": false,
+    "replacement": false
   },
-  "reportHash": "fe648170e0a37e83367ad1847221c6969fa66997532e38cbb22758178ce3ad2e"
+  "reportHash": "862391eee20caae26ff445ea3f5ae0fc71eb5dbdd453deebb183c775293ac3e8"
 }

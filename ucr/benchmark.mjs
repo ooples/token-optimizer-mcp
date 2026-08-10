@@ -132,7 +132,12 @@ function seeded(seed) {
 export function bootstrapPaired(
   rows,
   field,
-  { control = 'empty', treatment = 'runtime', samples = 2000 } = {}
+  {
+    control = 'empty',
+    treatment = 'runtime',
+    samples = 2000,
+    alpha = 0.05,
+  } = {}
 ) {
   const pairs = new Map();
   for (const row of rows) {
@@ -160,8 +165,11 @@ export function bootstrapPaired(
   return {
     pairs: deltas.length,
     mean,
-    low: estimates[Math.floor(samples * 0.025)],
-    high: estimates[Math.floor(samples * 0.975)],
+    low: estimates[Math.floor(samples * (alpha / 2))],
+    high:
+      estimates[
+        Math.min(samples - 1, Math.floor(samples * (1 - alpha / 2)))
+      ],
   };
 }
 
@@ -197,13 +205,40 @@ export function hiddenTaskVariant(task, secret, { nonce = '' } = {}) {
   const publicTask = { ...task };
   delete publicTask.hiddenAnswer;
   delete publicTask.privateGrader;
+  const digestBytes = Buffer.from(hiddenVariantId, 'hex');
+  const specification = task.hiddenVariantSpec || {};
+  const scenarioCount = Math.max(
+    2,
+    Number(
+      specification.templates ||
+        specification.variants ||
+        specification.versions ||
+        8
+    )
+  );
+  const publicVariant = {
+    kind: specification.kind || 'nonce-bound',
+    challengeId: hiddenVariantId.slice(0, 24),
+    entitySuffix: hiddenVariantId.slice(24, 32),
+    variantIndex: digestBytes.readUInt32BE(0),
+    fixtureSeed: hiddenVariantId.slice(32, 48),
+    scenarioIndex: digestBytes.readUInt32BE(4) % scenarioCount,
+    scenarioCount,
+    layoutIndex: digestBytes.readUInt16BE(8) % 4,
+    distractorCount: 2 + (digestBytes[10] % 5),
+    chronologyIndex: digestBytes.readUInt16BE(11) % 17,
+  };
   return {
     publicTask: {
       ...publicTask,
       hiddenVariantId: hiddenVariantId.slice(0, 24),
+      publicVariant,
+      prompt: `${publicTask.prompt}\nChallenge instance ${publicVariant.challengeId}; repository layout ${publicVariant.layoutIndex}; scenario ${publicVariant.scenarioIndex}.`,
     },
     graderBinding: createHmac('sha256', secret)
-      .update(`${hiddenVariantId}:${canonicalJson(task.grader || {})}`)
+      .update(
+        `${hiddenVariantId}:${canonicalJson(task.grader || {})}:${canonicalJson(publicVariant)}`
+      )
       .digest('hex'),
   };
 }

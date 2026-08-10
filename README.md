@@ -1413,13 +1413,25 @@ consumers normally receive zero MCP tools: host pre-action delivery adds only
 the selected capsule through the client lifecycle channel. Other enabled MCP
 servers add their own schemas independently.
 
-The current two-direction Codex/Claude executable smoke records 21.06% lower
-combined predecessor-to-successor token traffic, 18.36% lower combined latency,
-one known-mistake recurrence in blinded control versus zero in runtime, and one
-native pre-execution denial. These are signed smoke observations, not powered
-effectiveness or universal-superiority claims; the evidence index deliberately
-keeps the release verdict `insufficient` until its confidence, competitive, and
-production gates pass.
+The current hardened cross-CLI smoke does not qualify. In the final
+Codex-to-Claude adversarial pair, both successors were correct and the runtime
+capsule was delivered with exact provider model attestations and zero consumer
+MCP tools, but runtime used 5.383% more tokens and 41.758% more latency. The
+reciprocal runtime arm was blocked by Claude provider quota, and Antigravity
+1.1.11 required account authentication before a Gemini model could run. These
+signed outcomes keep the release verdict `insufficient`; they are evidence of
+working provenance and fail-closed behavior, not powered effectiveness or
+universal superiority.
+
+The replacement-grade protocol is intentionally larger than that smoke:
+54,054 all-family/all-arm trial envelopes, 113,022 provider
+calls, three independent model families, direction-level non-inferiority, and
+1,056 hard-negative opportunities per direction and arm so the Bonferroni-adjusted
+95% family-wise false-delivery upper bound—not only the point estimate—must
+remain below 1%. Run
+`npm run verify:ucr:study-design` to validate the frozen metric coverage. The
+full protocol and CLI driver contract are in
+[`evals/ucr/FULL_STUDY_CONTRACT.md`](evals/ucr/FULL_STUDY_CONTRACT.md).
 
 #### Performance Controls
 

@@ -16,13 +16,27 @@
 
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, cpSync, mkdtempSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  cpSync,
+  mkdtempSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SHOTS = join(ROOT, 'artifacts', 'wiki-ui');
+const evidenceIndex = JSON.parse(
+  readFileSync(
+    join(ROOT, 'evals', 'ucr', 'results', 'evidence-index-v2.json'),
+    'utf8'
+  )
+);
+const expectedArtifactCount = evidenceIndex.artifacts.length;
 /**
  * An isolated port, chosen at random and asserted free.
  *
@@ -215,14 +229,25 @@ async function seed() {
     for (const arm of ['empty', 'natural', 'oracle', 'irrelevant', 'stale']) {
       const prevented = ['natural', 'oracle'].includes(arm);
       record(GRAPH, {
-        kind: 'handoff-run', pairId: `ui-handoff-${pair}`,
-        scenarioId: 'verification-entry-point', arm,
-        producer: { client: 'codex', model: 'gpt-5.6-sol', captureSuccess: true },
+        kind: 'handoff-run',
+        pairId: `ui-handoff-${pair}`,
+        scenarioId: 'verification-entry-point',
+        arm,
+        producer: {
+          client: 'codex',
+          model: 'gpt-5.6-sol',
+          captureSuccess: true,
+        },
         consumer: {
-          client: 'claude-code', model: 'claude-sonnet-5', correct: true,
-          firstPass: prevented, mistakeAttempted: !prevented,
-          mistakeExecuted: !prevented, totalTokens: prevented ? 800 : 1000,
-          toolCalls: prevented ? 5 : 7, failedToolCalls: prevented ? 0 : 1,
+          client: 'claude-code',
+          model: 'claude-sonnet-5',
+          correct: true,
+          firstPass: prevented,
+          mistakeAttempted: !prevented,
+          mistakeExecuted: !prevented,
+          totalTokens: prevented ? 800 : 1000,
+          toolCalls: prevented ? 5 : 7,
+          failedToolCalls: prevented ? 0 : 1,
         },
         delivery: { beforeFirstExecutedMistake: arm === 'natural' },
       });
@@ -230,13 +255,23 @@ async function seed() {
   }
   for (const arm of ['empty', 'natural']) {
     record(GRAPH, {
-      kind: 'concurrency-run', pairId: 'ui-concurrent-1', arm,
-      writerCount: 3, captureSuccesses: 3,
+      kind: 'concurrency-run',
+      pairId: 'ui-concurrent-1',
+      arm,
+      writerCount: 3,
+      captureSuccesses: 3,
       integrity: { zeroLoss: true, parseable: true, orphanedFindings: 0 },
-      delivery: { expected: arm === 'natural' ? 3 : 0, delivered: arm === 'natural' ? 3 : 0 },
+      delivery: {
+        expected: arm === 'natural' ? 3 : 0,
+        delivered: arm === 'natural' ? 3 : 0,
+      },
       consumer: {
-        client: 'claude-code', model: 'claude-sonnet-5', correct: arm === 'empty',
-        firstPass: false, mistakeAttempted: true, mistakeExecuted: true,
+        client: 'claude-code',
+        model: 'claude-sonnet-5',
+        correct: arm === 'empty',
+        firstPass: false,
+        mistakeAttempted: true,
+        mistakeExecuted: true,
       },
     });
   }
@@ -331,6 +366,18 @@ async function main() {
         overflow.scroll <= overflow.client + 1,
         `${overflow.scroll} vs ${overflow.client}`
       );
+      if (label === 'narrow') {
+        const splitTracks = await page
+          .locator('.wiki-split')
+          .evaluate((split) =>
+            getComputedStyle(split).gridTemplateColumns.trim().split(/\s+/)
+          );
+        check(
+          'narrow: knowledge layout stacks into one column',
+          splitTracks.length === 1,
+          splitTracks.join(' | ')
+        );
+      }
 
       if (label === 'desktop') {
         const stats = await page.textContent('#graph-stats');
@@ -373,8 +420,158 @@ async function main() {
           auditCount
         );
 
-        // Focus mode: clicking a finding must actually draw a graph.
-        await page.click('.wiki-list li');
+        // The default view is a real, navigable 3D projection. A previous test
+        // only counted SVG nodes, so a flat and nearly blank graph passed.
+        await page.waitForFunction(
+          () =>
+            Number(document.querySelector('#wiki-graph-3d')?.dataset.frame) > 0,
+          null,
+          { timeout: 5000 }
+        );
+        const graph3d = await page.evaluate(() => {
+          const host = document.getElementById('wiki-graph-3d');
+          const canvas = host.querySelector('canvas');
+          const context = canvas.getContext('2d');
+          const pixels = context.getImageData(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          ).data;
+          const colours = new Set();
+          for (let index = 0; index < pixels.length; index += 256) {
+            colours.add(
+              `${pixels[index]},${pixels[index + 1]},${pixels[index + 2]}`
+            );
+          }
+          const projected = host.__knowledgeGraph3d.projectedNodes();
+          const xs = projected.map((node) => node.x);
+          const ys = projected.map((node) => node.y);
+          return {
+            renderer: host.dataset.renderer,
+            nodes: Number(host.dataset.nodes),
+            edges: Number(host.dataset.edges),
+            frame: Number(host.dataset.frame),
+            colours: colours.size,
+            spread:
+              projected.length < 2
+                ? 0
+                : Math.max(
+                    Math.max(...xs) - Math.min(...xs),
+                    Math.max(...ys) - Math.min(...ys)
+                  ),
+          };
+        });
+        check(
+          '3D graph uses the perspective renderer',
+          graph3d.renderer === 'perspective-3d',
+          graph3d.renderer
+        );
+        check(
+          '3D graph renders real nodes',
+          graph3d.nodes > 0,
+          `${graph3d.nodes} nodes`
+        );
+        check(
+          '3D graph renders real edges',
+          graph3d.edges > 0,
+          `${graph3d.edges} edges`
+        );
+        check(
+          '3D graph paints a non-blank scene',
+          graph3d.colours > 8,
+          `${graph3d.colours} sampled colours`
+        );
+        check(
+          '3D projection spreads nodes through the scene',
+          graph3d.spread > 60,
+          `${Math.round(graph3d.spread)}px extent`
+        );
+
+        const graphCanvas = page.locator(
+          '#wiki-graph-3d .knowledge-graph-canvas'
+        );
+        check(
+          '3D graph exposes an interactive accessibility role',
+          (await graphCanvas.getAttribute('role')) === 'application'
+        );
+        await graphCanvas.focus();
+        await page.keyboard.press('Alt+ArrowRight');
+        const keyboardSelection = await page
+          .locator('#wiki-graph-3d')
+          .getAttribute('data-selected');
+        check(
+          'keyboard selection moves to a 3D node',
+          Boolean(keyboardSelection),
+          keyboardSelection || ''
+        );
+        await page.keyboard.press('Enter');
+        await page.waitForSelector('#wiki-detail:not([hidden])');
+        check(
+          'keyboard selection opens the node record',
+          await page.isVisible('#wiki-detail')
+        );
+        await page.click('#detail-close');
+
+        const graphHost = page.locator('#wiki-graph-3d');
+        await graphHost.scrollIntoViewIfNeeded();
+        const graphBox = await graphHost.boundingBox();
+        const yawBefore = Number(await graphHost.getAttribute('data-yaw'));
+        const zoomBefore = Number(await graphHost.getAttribute('data-zoom'));
+        await page.mouse.move(
+          graphBox.x + graphBox.width * 0.35,
+          graphBox.y + graphBox.height * 0.52
+        );
+        await page.mouse.down();
+        await page.mouse.move(
+          graphBox.x + graphBox.width * 0.64,
+          graphBox.y + graphBox.height * 0.34,
+          { steps: 10 }
+        );
+        await page.mouse.up();
+        await page.mouse.move(
+          graphBox.x + graphBox.width / 2,
+          graphBox.y + graphBox.height / 2
+        );
+        await page.mouse.wheel(0, -360);
+        await page.waitForTimeout(200);
+        const yawAfter = Number(await graphHost.getAttribute('data-yaw'));
+        const zoomAfter = Number(await graphHost.getAttribute('data-zoom'));
+        check(
+          'dragging orbits the 3D camera',
+          Math.abs(yawAfter - yawBefore) > 0.2,
+          `${yawBefore.toFixed(2)} -> ${yawAfter.toFixed(2)}`
+        );
+        check(
+          'scrolling zooms the 3D camera',
+          zoomAfter > zoomBefore,
+          `${zoomBefore.toFixed(2)} -> ${zoomAfter.toFixed(2)}`
+        );
+
+        await page.click('#wiki-graph-3d .graph-3d-reset');
+        await page.waitForTimeout(100);
+        const target = await page.evaluate(
+          () =>
+            document
+              .getElementById('wiki-graph-3d')
+              .__knowledgeGraph3d.projectedNodes()[0]
+        );
+        await page.mouse.click(graphBox.x + target.x, graphBox.y + target.y);
+        await page.waitForSelector('#wiki-detail:not([hidden])');
+        const selected3d = await graphHost.getAttribute('data-selected');
+        check(
+          'clicking a 3D node selects its record',
+          selected3d === target.id,
+          selected3d
+        );
+        await page.screenshot({
+          path: join(SHOTS, 'constellation.png'),
+          fullPage: true,
+        });
+
+        // Focus mode remains available for a readable one-hop explanation.
+        await page.click('#detail-close');
+        await page.click('#mode-focus');
         await page.waitForSelector('#wiki-graph .wiki-node', { timeout: 5000 });
         const focusNodes = await page.$$eval(
           '#wiki-graph .wiki-node',
@@ -493,81 +690,24 @@ async function main() {
           `${smallest.toFixed(1)}px tall`
         );
 
-        // Constellation.
+        // Returning to 3D must preserve a functional renderer after focus and
+        // drawer reflow, not recreate a blank surface.
+        await page.click('#detail-close');
+        const frameBeforeRoundTrip = Number(
+          await page.getAttribute('#wiki-graph-3d', 'data-frame')
+        );
         await page.click('#mode-constellation');
-        await page.waitForTimeout(1200);
-        const constellationNodes = await page.$$eval(
-          '#wiki-graph .wiki-node',
-          (n) => n.length
+        await page.waitForFunction(
+          (baseline) =>
+            Number(document.querySelector('#wiki-graph-3d')?.dataset.frame) >
+            baseline,
+          frameBeforeRoundTrip,
+          { timeout: 5000 }
         );
         check(
-          'constellation renders nodes',
-          constellationNodes > 0,
-          `${constellationNodes} nodes`
+          '3D graph survives focus-mode round trip',
+          await page.isVisible('#wiki-graph-3d canvas')
         );
-
-        const spread = await page.evaluate(() => {
-          const boxes = [
-            ...document.querySelectorAll('#wiki-graph .wiki-node circle'),
-          ].map((c) => c.getBoundingClientRect());
-          if (boxes.length < 2) return 1;
-          // If the layout failed, every node sits on the same point.
-          const xs = boxes.map((b) => b.x);
-          const ys = boxes.map((b) => b.y);
-          return Math.max(
-            Math.max(...xs) - Math.min(...xs),
-            Math.max(...ys) - Math.min(...ys)
-          );
-        });
-        check(
-          'constellation actually spreads nodes out',
-          spread > 60,
-          `${Math.round(spread)}px extent`
-        );
-
-        const constellationBounds = await page.evaluate(() => {
-          const svg = document
-            .getElementById('wiki-graph')
-            .getBoundingClientRect();
-          const texts = [
-            ...document.querySelectorAll('#wiki-graph .wiki-node text'),
-          ].map((t) => t.getBoundingClientRect());
-          let collisions = 0;
-          for (let i = 0; i < texts.length; i++) {
-            for (let j = i + 1; j < texts.length; j++) {
-              const a = texts[i];
-              const b = texts[j];
-              if (
-                a.left < b.right &&
-                b.left < a.right &&
-                a.top < b.bottom &&
-                b.top < a.bottom
-              )
-                collisions++;
-            }
-          }
-          return {
-            collisions,
-            clipped: texts.filter(
-              (t) => t.right > svg.right + 2 || t.left < svg.left - 2
-            ).length,
-          };
-        });
-        check(
-          'constellation labels stay on the canvas',
-          constellationBounds.clipped === 0,
-          `${constellationBounds.clipped} clipped`
-        );
-        check(
-          'constellation labels do not collide',
-          constellationBounds.collisions === 0,
-          `${constellationBounds.collisions} overlaps`
-        );
-
-        await page.screenshot({
-          path: join(SHOTS, 'constellation.png'),
-          fullPage: true,
-        });
 
         // Audit tab.
         await page.click('.wiki-tab[data-tab="audit"]');
@@ -612,9 +752,7 @@ async function main() {
             /claude-code/i.test(transferText || '') &&
             /gates passed/i.test(transferText || '')
         );
-        const concurrencyText = await page.textContent(
-          '#evidence-concurrency'
-        );
+        const concurrencyText = await page.textContent('#evidence-concurrency');
         check(
           'evidence renders concurrent writer integrity and later delivery',
           /100%/.test(concurrencyText || '') &&
@@ -647,16 +785,29 @@ async function main() {
         );
         check(
           'UCR dashboard renders signed artifacts and live directions',
-          /Evidence artifacts\s*12\/12/i.test(ucrText || '') &&
+          new RegExp(
+            `Evidence artifacts\\s*${expectedArtifactCount}/${expectedArtifactCount}`,
+            'i'
+          ).test(ucrText || '') &&
             /Live directions\s*2\/3/i.test(ucrText || '') &&
             /Consumer MCP schema\s*0 tokens max/i.test(ucrText || '') &&
-            /Combined token reduction\s*21\.06%/i.test(ucrText || '') &&
-            /Combined latency reduction\s*18\.36%/i.test(ucrText || '') &&
-            /Known mistake recurrence\s*1 control → 0 runtime/i.test(
+            /Combined token reduction\s*5\.66%/i.test(ucrText || '') &&
+            /Combined latency reduction\s*-4\.73%/i.test(ucrText || '') &&
+            /Known mistake recurrence\s*0 control → 0 runtime/i.test(
               ucrText || ''
             ) &&
-            /Native guard denials\s*1/i.test(ucrText || '') &&
+            /Native guard denials\s*0/i.test(ucrText || '') &&
             /Capture model calls\s*0 additional max/i.test(ucrText || '')
+        );
+        check(
+          'UCR dashboard separates frozen design from observed evidence',
+          /Frozen study design\s*54,054 trials \/ 113,022 calls/i.test(
+            ucrText || ''
+          ) &&
+            /Release metrics mapped\s*37/i.test(ucrText || '') &&
+            /Universal CLI drivers\s*16 protocol-mapped \/ 3 in powered live matrix/i.test(
+              ucrText || ''
+            )
         );
         const tierCount = await page.locator('#ucr-tiers tbody tr').count();
         const artifactCount = await page
@@ -669,7 +820,7 @@ async function main() {
         );
         check(
           'UCR dashboard exposes every integrity-checked study',
-          artifactCount === 12,
+          artifactCount === expectedArtifactCount,
           String(artifactCount)
         );
         check(
@@ -690,6 +841,108 @@ async function main() {
 
       await page.close();
     }
+
+    // Overview contract: exercise the real browser renderer against the exact
+    // object/event shapes returned by the session API. This catches regressions
+    // where `toolName` became the useless fallback "action" and an object-shaped
+    // toolBreakdown silently rendered as an empty table.
+    const overview = await browser.newPage({
+      viewport: { width: 1440, height: 900 },
+    });
+    overview.on('console', (message) => {
+      if (message.type() === 'error')
+        consoleErrors.push(`overview: ${message.text()}`);
+    });
+    overview.on('pageerror', (error) =>
+      consoleErrors.push(`overview: ${error.message}`)
+    );
+    await overview.route('**/api/session-summary*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          totalTokens: 910,
+          totalTurns: 3,
+          totalTools: 2,
+          duration: '4m',
+          tokensByCategory: {
+            tools: { tokens: 910, percent: '100.00' },
+          },
+          tokensByServer: {},
+          toolBreakdown: {
+            Read: { count: 1, tokens: 610 },
+            Grep: { count: 1, tokens: 300 },
+          },
+        }),
+      })
+    );
+    await overview.route('**/api/session-events*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          events: [
+            {
+              type: 'tool_call',
+              toolName: 'Read',
+              estimatedTokens: 610,
+              timestamp: '2026-08-10T15:00:00Z',
+            },
+            {
+              type: 'tool_call',
+              toolName: 'Grep',
+              estimatedTokens: 300,
+              timestamp: '2026-08-10T15:01:00Z',
+            },
+          ],
+        }),
+      })
+    );
+    await overview.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await overview.waitForSelector('#constellation canvas');
+    const overviewText = await overview.textContent('body');
+    check(
+      'overview is provider and CLI neutral',
+      !/claude(?: code)?/i.test(overviewText || '')
+    );
+    const eventText = await overview.locator('.event').first().textContent();
+    check(
+      'overview names the observed tool and token cost',
+      /Read/.test(eventText || '') &&
+        /610 context tokens/.test(eventText || ''),
+      eventText?.trim()
+    );
+    check(
+      'overview never falls back to generic action rows',
+      !(await overview.locator('.ev-name').allTextContents()).some(
+        (name) => name.trim().toLowerCase() === 'action'
+      )
+    );
+    const breakdownRows = await overview
+      .locator('#tool-breakdown-body tr')
+      .count();
+    check(
+      'overview renders object-shaped tool totals',
+      breakdownRows === 2,
+      `${breakdownRows} rows`
+    );
+    const actionCostRows = await overview.locator('#server-chart .legend li');
+    check(
+      'overview charts object-shaped action costs instead of showing an empty state',
+      (await actionCostRows.count()) === 2 &&
+        /Read/.test((await actionCostRows.first().textContent()) || ''),
+      `${await actionCostRows.count()} chart rows`
+    );
+    check(
+      'overview embeds the same 3D graph renderer',
+      (await overview.getAttribute('#constellation', 'data-renderer')) ===
+        'perspective-3d'
+    );
+    await overview.screenshot({
+      path: join(SHOTS, 'overview.png'),
+      fullPage: true,
+    });
+    await overview.close();
 
     check(
       'no console or page errors',

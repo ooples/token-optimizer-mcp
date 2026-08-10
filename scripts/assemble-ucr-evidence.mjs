@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -10,8 +16,10 @@ import {
   deriveReleaseMetrics,
   evidenceTierReport,
   releaseVerdict,
+  resolveEvidenceVerificationPublicKey,
   sealEvidenceLedger,
   sha256,
+  tieredReleaseVerdict,
   verifyEvidenceLedger,
 } from '../ucr/index.mjs';
 
@@ -19,6 +27,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RESULTS = join(ROOT, 'evals', 'ucr', 'results');
 const OUTPUT = join(RESULTS, 'evidence-index-v2.json');
 const definitions = [
+  ['study-readiness', 'study-readiness-v1.json', 'conformance'],
   ['graph-scale', 'graph-scale-v1.json', 'conformance'],
   ['coordination-scale', 'coordination-scale-v1.json', 'conformance'],
   ['consolidation', 'consolidation-study-v1.json', 'conformance'],
@@ -28,12 +37,12 @@ const definitions = [
   ['production-exercise', 'production-exercise-v1.json', 'executable-smoke'],
   [
     'stateful-codex-to-claude',
-    'stateful-preflight-codex-to-claude-v4.json',
+    'stateful-matched-codex-to-claude-v1.json',
     'executable-smoke',
   ],
   [
     'stateful-claude-to-codex',
-    'stateful-preflight-claude-to-codex-v3.json',
+    'stateful-matched-claude-to-codex-v1.json',
     'executable-smoke',
   ],
   [
@@ -55,6 +64,24 @@ const definitions = [
     false,
   ],
 ];
+for (const definition of [
+  ['full-effectiveness', 'full-study-v1.json', 'effectiveness', true],
+  ['live-competitive', 'competitive-study-v1.json', 'superiority', true],
+  ['production-traffic', 'production-traffic-v1.json', 'production', true],
+]) {
+  if (existsSync(join(RESULTS, definition[1]))) definitions.push(definition);
+}
+for (const filename of readdirSync(RESULTS)
+  .filter((name) =>
+    /^full-study-(?:qualification|blocked)-.*\.json$/i.test(name)
+  )
+  .sort())
+  definitions.push([
+    filename.replace(/\.json$/i, ''),
+    filename,
+    filename.includes('-blocked-') ? 'blocked-smoke' : 'executable-smoke',
+    false,
+  ]);
 
 function readReport([name, filename, evidenceClass, requiredPass = true]) {
   const path = join(RESULTS, filename);
@@ -63,9 +90,35 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
   const report = JSON.parse(readFileSync(path, 'utf8'));
   const { reportHash, ...body } = report;
   const reportHashValid = sha256(body) === reportHash;
+  const promotable = ['effectiveness', 'superiority', 'production'].includes(
+    evidenceClass
+  );
+  let verificationPublicKey = null;
+  let keyResolutionError = null;
+  try {
+    const trustedKeyPath =
+      report.ledgerKeyId && /^[A-Za-z0-9._-]+$/.test(report.ledgerKeyId)
+        ? join(
+            ROOT,
+            'evals',
+            'ucr',
+            'trusted-evidence-keys',
+            `${report.ledgerKeyId}.pem`
+          )
+        : null;
+    verificationPublicKey = resolveEvidenceVerificationPublicKey(report, {
+      promotable,
+      trustedPublicKey:
+        trustedKeyPath && existsSync(trustedKeyPath)
+          ? readFileSync(trustedKeyPath, 'utf8')
+          : null,
+    });
+  } catch (error) {
+    keyResolutionError = error instanceof Error ? error.message : String(error);
+  }
   const ledgerVerification = report.ledger
     ? verifyEvidenceLedger(report.ledger, {
-        publicKey: report.ledgerPublicKey || null,
+        publicKey: verificationPublicKey,
       })
     : null;
   return {
@@ -76,7 +129,9 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
     present: true,
     valid:
       reportHashValid &&
+      keyResolutionError === null &&
       (!requiredPass || report.passed === true) &&
+      (!promotable || ledgerVerification?.valid === true) &&
       (!ledgerVerification || ledgerVerification.valid),
     reportHashValid,
     reportHash,
@@ -86,6 +141,8 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
     sourceTreeHash: report.sourceTreeHash || report.sourceHash || null,
     ledgerHash: ledgerVerification?.ledgerHash || null,
     ledgerVerification,
+    keyResolutionError,
+    verificationPublicKey,
     report,
   };
 }
@@ -144,12 +201,24 @@ const ledgerInputs = [
     .filter((artifact) => artifact.valid && artifact.report?.ledger)
     .map((artifact) => ({
       ledger: artifact.report.ledger,
-      publicKey: artifact.report.ledgerPublicKey || null,
+      publicKey: artifact.verificationPublicKey,
     })),
 ];
 const derived = deriveReleaseMetrics(ledgerInputs);
 const tiers = evidenceTierReport(ledgerInputs);
 const verdict = releaseVerdict(derived.metrics);
+const productionTraffic = artifacts.find(
+  (artifact) => artifact.name === 'production-traffic'
+);
+const studyReadiness = artifacts.find(
+  (artifact) => artifact.name === 'study-readiness'
+);
+const tieredVerdict = tieredReleaseVerdict(derived.metrics, {
+  production:
+    productionTraffic?.valid === true
+      ? productionTraffic.report?.readiness || null
+      : null,
+});
 const validArtifacts = artifacts.filter((artifact) => artifact.valid);
 const liveArtifacts = artifacts.filter(
   (artifact) =>
@@ -159,7 +228,8 @@ const liveArtifacts = artifacts.filter(
 const totalTraffic = (usage) =>
   Number.isFinite(usage?.totalTokens)
     ? usage.totalTokens
-    : Number.isFinite(usage?.inputTokens) && Number.isFinite(usage?.outputTokens)
+    : Number.isFinite(usage?.inputTokens) &&
+        Number.isFinite(usage?.outputTokens)
       ? usage.inputTokens + usage.outputTokens
       : null;
 const percentDelta = (control, runtime) =>
@@ -191,8 +261,7 @@ const liveDirectionMetrics = liveArtifacts.map((artifact) => {
     nativeGuardEnforced: row?.runtime?.nativeGuardEnforced ?? null,
     captureModelCalls:
       row?.runtime?.firstSuccessorCost?.additionalModelCalls ?? null,
-    consumerStaticSchemaTokens:
-      row?.runtime?.usage?.staticSchemaTokens ?? null,
+    consumerStaticSchemaTokens: row?.runtime?.usage?.staticSchemaTokens ?? null,
     capsuleTokens: row?.runtime?.usage?.capsuleTokens ?? null,
     controlTokenTraffic: controlTraffic,
     runtimeTokenTraffic: runtimeTraffic,
@@ -238,7 +307,13 @@ const body = {
       'metrics are derived only from ledgers at or above each metric evidence requirement',
     tiers,
   },
-  artifacts: artifacts.map(({ report: _report, ...artifact }) => artifact),
+  artifacts: artifacts.map(
+    ({
+      report: _report,
+      verificationPublicKey: _verificationPublicKey,
+      ...artifact
+    }) => artifact
+  ),
   summary: {
     artifactsValid: validArtifacts.length,
     artifactsTotal: artifacts.length,
@@ -300,6 +375,18 @@ const body = {
     cognitiveReductionVsFull: artifacts.find(
       (artifact) => artifact.name === 'mcp-context'
     )?.report?.findings?.graphCaptureReductionVsFull,
+    studyDesign: studyReadiness?.report
+      ? {
+          passed: studyReadiness.report.passed,
+          trials: studyReadiness.report.trials,
+          providerInvocations: studyReadiness.report.providerInvocations,
+          mappedMetrics: studyReadiness.report.mappedMetrics,
+          representativeStudyClients:
+            studyReadiness.report.representativeStudyClients,
+          universalDriverClients: studyReadiness.report.universalDriverClients,
+          coverage: studyReadiness.report.coverage,
+        }
+      : null,
   },
   conformanceLedger,
   conformancePublicKey,
@@ -308,13 +395,14 @@ const body = {
   }),
   derived,
   verdict,
+  tieredVerdict,
   claims: {
     conformance: validArtifacts.length === artifacts.length,
-    executableCrossClient:
-      passedLiveDirections.length >= 2,
+    executableCrossClient: passedLiveDirections.length >= 2,
     effectiveness: tiers.effectiveness.status === 'present',
     superiority: tiers.superiority.status === 'present',
     production: tiers.production.status === 'present',
+    replacement: tieredVerdict.passed === true,
   },
 };
 const report = { ...body, reportHash: sha256(body) };

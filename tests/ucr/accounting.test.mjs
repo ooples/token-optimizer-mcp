@@ -2,6 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   CognitiveCostLedger,
   compareCognitiveCosts,
+  stratifiedCostDiagnostics,
 } from '../../ucr/index.mjs';
 
 function complete(runId, consumerTokens) {
@@ -60,8 +61,9 @@ describe('cognitive phase accounting', () => {
   });
 
   test('compares only complete ledgers and rejects invalid measurements', () => {
-    expect(compareCognitiveCosts(complete('control', 100), complete('runtime', 50)))
-      .toMatchObject({ comparable: true, tokenReduction: 0.38461538461538464 });
+    expect(
+      compareCognitiveCosts(complete('control', 100), complete('runtime', 50))
+    ).toMatchObject({ comparable: true, tokenReduction: 0.38461538461538464 });
     const ledger = new CognitiveCostLedger({ runId: 'bad' });
     expect(() =>
       ledger.record({
@@ -70,5 +72,64 @@ describe('cognitive phase accounting', () => {
         accountingMethod: 'provider-native',
       })
     ).toThrow(/non-negative/);
+  });
+
+  test('reports regressions by direction, family, and client', () => {
+    const rows = [
+      {
+        pairId: 'p1',
+        arm: 'empty',
+        trialIntegrityValid: true,
+        direction: 'codex->claude-code',
+        family: 'workflow',
+        consumerClient: 'claude-code',
+        totalTokens: 100,
+        latencyMs: 100,
+      },
+      {
+        pairId: 'p1',
+        arm: 'runtime',
+        trialIntegrityValid: true,
+        direction: 'codex->claude-code',
+        family: 'workflow',
+        consumerClient: 'claude-code',
+        totalTokens: 110,
+        latencyMs: 90,
+      },
+    ];
+    const report = stratifiedCostDiagnostics(rows);
+    expect(report.passed).toBe(false);
+    expect(
+      report.groups.find((group) => group.dimension === 'direction')
+    ).toMatchObject({
+      tokenOverhead: 0.1,
+      regressions: ['tokens'],
+    });
+  });
+
+  test('excludes integrity-invalid pairs from cost diagnostics', () => {
+    const row = (pairId, arm, trialIntegrityValid, totalTokens) => ({
+      pairId,
+      arm,
+      trialIntegrityValid,
+      direction: 'codex->claude-code',
+      family: 'workflow',
+      consumerClient: 'claude-code',
+      totalTokens,
+      latencyMs: totalTokens,
+    });
+    const report = stratifiedCostDiagnostics([
+      row('valid', 'empty', true, 100),
+      row('valid', 'runtime', true, 102),
+      row('rejected', 'empty', true, 100),
+      row('rejected', 'runtime', false, 500),
+    ]);
+
+    expect(report.passed).toBe(true);
+    expect(report.groups).toHaveLength(3);
+    expect(report.groups.every((group) => group.pairs === 1)).toBe(true);
+    expect(report.groups.every((group) => group.tokenOverhead === 0.02)).toBe(
+      true
+    );
   });
 });

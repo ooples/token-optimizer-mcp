@@ -101,20 +101,20 @@
                 <option value="map">Maps of the code</option>
               </select>
             </label>
-            <div class="wiki-modes" role="group" aria-label="Graph view mode">
+            <div
+              class="wiki-modes"
+              role="group"
+              aria-label="Knowledge graph view"
+            >
               <button
                 class="wiki-mode is-active"
-                id="mode-focus"
+                id="mode-constellation"
                 aria-pressed="true"
               >
-                One at a time
+                Explore in 3D
               </button>
-              <button
-                class="wiki-mode"
-                id="mode-constellation"
-                aria-pressed="false"
-              >
-                See it all
+              <button class="wiki-mode" id="mode-focus" aria-pressed="false">
+                Focus selection
               </button>
             </div>
           </div>
@@ -129,14 +129,20 @@
             </div>
 
             <div class="wiki-graph-pane">
-              <svg
-                id="wiki-graph"
-                role="img"
-                aria-labelledby="graph-title"
-              ></svg>
-              <title id="graph-title">Knowledge graph</title>
+              <div class="wiki-graph-stage" id="wiki-graph-stage">
+                <div id="wiki-graph-3d" aria-labelledby="graph-title"></div>
+                <svg
+                  id="wiki-graph"
+                  role="img"
+                  aria-labelledby="graph-title"
+                  hidden
+                >
+                  <title id="graph-title">Navigable knowledge graph</title>
+                </svg>
+              </div>
               <p class="wiki-muted wiki-graph-hint" id="graph-hint">
-                Pick something on the left to see what it was worked out from.
+                Drag to orbit, scroll to zoom, and select a node to inspect its
+                evidence and history.
               </p>
               <!--
                 Identity is never carried by colour alone: every node renders its
@@ -163,7 +169,7 @@
           <p class="wiki-muted panel-intro">
             Code changes; what was learned about it can quietly stop being true.
             These are the ones worth a human glance &mdash; until someone looks,
-            they are still being handed to Claude as fact.
+            they can still be handed to a coding agent as fact.
             <span id="audit-count"></span>
           </p>
           <div id="audit-groups"></div>
@@ -209,10 +215,10 @@
 
           <h2>Universal Cognitive Runtime</h2>
           <p class="wiki-muted">
-            Event integrity, typed projection, cross-client efficiency,
-            mistake recurrence, native guard enforcement, and the
-            correctness-first release verdict. Smoke results remain separate
-            from powered effectiveness claims.
+            Event integrity, typed projection, cross-client efficiency, mistake
+            recurrence, native guard enforcement, and the correctness-first
+            release verdict. Smoke results remain separate from powered
+            effectiveness claims.
           </p>
           <div class="stats-grid" id="ucr-summary"></div>
           <p class="verdict-line" id="ucr-verdict"></p>
@@ -232,18 +238,22 @@
 
           <h2>Cross-client mistake transfer</h2>
           <p class="wiki-muted">
-            Natural producer harvests are kept separate from oracle controls.
-            A claim passes only when the pre-registered capture, prevention,
+            Natural producer harvests are kept separate from oracle controls. A
+            claim passes only when the pre-registered capture, prevention,
             correctness, timing, and negative-control gates all pass.
           </p>
-          <div class="table-scroll"><table class="evidence-table" id="evidence-transfer"></table></div>
+          <div class="table-scroll">
+            <table class="evidence-table" id="evidence-transfer"></table>
+          </div>
 
           <h2>Concurrent writer integrity</h2>
           <p class="wiki-muted">
             Accepted-write loss, JSONL corruption, orphaned findings,
             later-consumer delivery, and behavior remain separate facts.
           </p>
-          <div class="table-scroll"><table class="evidence-table" id="evidence-concurrency"></table></div>
+          <div class="table-scroll">
+            <table class="evidence-table" id="evidence-concurrency"></table>
+          </div>
 
           <h2>Recent injection traces</h2>
           <div class="table-scroll">

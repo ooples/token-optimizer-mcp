@@ -68,6 +68,9 @@ jobs:
       - name: Verify Universal Cognitive Runtime conformance and evidence
         run: npm run verify:ucr
 
+      - name: Verify full UCR study and metric coverage
+        run: npm run verify:ucr:study-design
+
       # BROWSER GATES. These verify the wiki dashboard actually works -- they
       # caught a real defect the moment they were first run: an open detail panel
       # overlaid the toolbar and list, so those controls could not be clicked at

@@ -65,14 +65,17 @@ does not trust the model's final text.
 
 The stateful primary edges Codex→Claude Code and Claude Code→Codex pass with
 mandatory delivery, zero consumer MCP tools, and zero repeated predecessor
-mistakes. In the latest source-complete runs, Codex→Claude increased total token
-traffic 22.0% and latency 109.6%; Claude→Codex increased traffic 56.9% and
-latency 91.9%. An earlier Claude→Codex attempt had improved both metrics, so the
-directional reversal is explicit variance evidence, not a result to average
-away. The efficiency gate is currently 0/2. The Copilot edge is retained as
-negative evidence because its consumer invocation returned HTTP 402 after the
-account quota was exhausted. These are executable smokes, not powered
-effectiveness estimates.
+mistakes. In the stricter matched rerun, Codex→Claude reduced total traffic
+11.56% while latency increased 10.87%; Claude→Codex reduced traffic 0.58% and
+latency 0.53%. Both controls were correct, so these rows establish executable
+handoff and accounting—not a correctness or mistake-prevention effect.
+That direction-level loss is not averaged away. The live harness now gives both
+arms byte-identical predecessor prompts and the same native guard transport so
+semantic-authoring and plugin startup are not treatment-only confounders; new
+live evidence must be collected before the directional result can change. The
+Copilot edge is retained as negative evidence because its consumer invocation
+returned HTTP 402 after the account quota was exhausted. These are executable
+smokes, not powered effectiveness estimates.
 
 A later two-direction pilot deliberately repeated the OpenAI↔Anthropic study:
 Codex→Claude passed and Claude→Codex did not deliver the correction, so the
@@ -80,17 +83,26 @@ pilot passed 1/2. Its signed four-row ledger is included as an integrity-valid
 negative artifact. This variance is why the successful edges are not promoted
 to an effectiveness claim.
 
-The powered handoff executor is preregistered separately:
+The legacy powered handoff executor remains a direction-specific qualification
+tool. It cannot establish all-family effectiveness. The replacement-grade study
+is preregistered separately:
 
 ```sh
-npm run eval:ucr:effectiveness:plan
-npm run eval:ucr:effectiveness
+npm run eval:ucr:full-study:powered-plan
+npm run verify:ucr:study-design
 ```
 
-The frozen power analysis requires 357 pairs per arm in both directions, or
-2,142 model invocations. Incomplete runs and smaller pilots are cryptographically
-sealed as `executable-smoke`; the runner promotes a ledger to `effectiveness`
-only after every preregistered pair completes.
+The full plan covers all 11 families, seven arms, three independent model
+families, and nine same/cross-client directions. It requires 363 paired
+empty/runtime observations and 1,056 hard-negative opportunities per direction
+and arm: 54,054 trial envelopes and 113,022 provider calls. Concurrent-agent
+trials use one producer plus two overlapping successors instead of being labels.
+Hard-negative and subgroup intervals control family-wise error across the
+preregistered direction/arm comparisons.
+The hard-negative count powers the confidence bound, not merely a zero-error
+point estimate. Incomplete or smaller runs are sealed as `executable-smoke`.
+See [`FULL_STUDY_CONTRACT.md`](./FULL_STUDY_CONTRACT.md) for the CLI driver,
+competitive, production, causal, privacy, and promotion contracts.
 
 ## Release boundary
 
@@ -100,3 +112,7 @@ are not present, so the project does not claim statistical efficiency,
 superiority over memory/RAG products, or production readiness. Missing usage is
 published as `null`; deterministic fixture labels are never represented as live
 model runs.
+
+CI now proves that every release metric has an executable study source. That is
+design coverage, not measured effectiveness, and does not change the signed
+`insufficient` verdict.

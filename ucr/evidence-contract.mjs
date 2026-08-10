@@ -1,6 +1,19 @@
 import { createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
-import { bootstrapPaired } from './benchmark.mjs';
+import {
+  BENCHMARK_ARMS,
+  BENCHMARK_FAMILIES,
+  bootstrapPaired,
+} from './benchmark.mjs';
+import {
+  REQUIRED_COMPETITIVE_BASELINES,
+  validateCompetitiveEvidence,
+} from './competitors.mjs';
+import {
+  EFFECTIVENESS_REQUIRED_METRICS,
+  SUPERIORITY_REQUIRED_METRICS,
+} from './effectiveness.mjs';
 import { canonicalJson, sha256 } from './protocol.mjs';
+import { bonferroniNormalZ, validateCausalChain } from './study-design.mjs';
 
 export const EVIDENCE_CLASSES = Object.freeze([
   'transport',
@@ -17,9 +30,13 @@ const evidenceRank = new Map(
 
 export const METRIC_EVIDENCE_REQUIREMENTS = Object.freeze({
   applicabilityPrecision: 'effectiveness',
+  applicabilityPrecisionIntervalLow: 'effectiveness',
   preActionDelivery: 'effectiveness',
+  preActionDeliveryIntervalLow: 'effectiveness',
   irrelevantDelivery: 'effectiveness',
+  irrelevantDeliveryIntervalHigh: 'effectiveness',
   staleDelivery: 'effectiveness',
+  staleDeliveryIntervalHigh: 'effectiveness',
   recurrenceReduction: 'effectiveness',
   recurrenceIntervalLow: 'effectiveness',
   naturalCorrectnessDelta: 'effectiveness',
@@ -32,11 +49,23 @@ export const METRIC_EVIDENCE_REQUIREMENTS = Object.freeze({
   latencyOverheadP95: 'effectiveness',
   knownMistakeRecurrence: 'effectiveness',
   contradictoryDelivery: 'effectiveness',
+  contradictoryDeliveryIntervalHigh: 'effectiveness',
+  negativeDeliveryIntervalHigh: 'effectiveness',
   consumerSchemaTokensP95: 'effectiveness',
   captureModelCallsP95: 'effectiveness',
   writerIntegrity: 'conformance',
   crossClientPassed: 'effectiveness',
+  benchmarkFamilyCoverage: 'effectiveness',
+  benchmarkArmCoverage: 'effectiveness',
+  directionalCorrectnessIntervalLow: 'effectiveness',
+  familyCorrectnessIntervalLow: 'effectiveness',
+  directionalTokenOverheadHigh: 'effectiveness',
+  causalChainIntegrity: 'effectiveness',
+  trialIntegrity: 'effectiveness',
+  independentGrading: 'effectiveness',
   competitivePassed: 'superiority',
+  competitiveCoverage: 'superiority',
+  competitiveReproducibility: 'superiority',
 });
 
 function keyObject(key, expectedType) {
@@ -52,6 +81,17 @@ function withoutHash(value, field) {
   return body;
 }
 
+function disallowedEvidencePath(value, path = '') {
+  if (!value || typeof value !== 'object') return null;
+  for (const [key, item] of Object.entries(value)) {
+    const next = path ? `${path}.${key}` : key;
+    if (['transcript', 'rawOutput', 'prompt'].includes(key)) return next;
+    const nested = disallowedEvidencePath(item, next);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 function percentile(values, quantile) {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
   if (!sorted.length) return null;
@@ -64,6 +104,25 @@ function percentile(values, quantile) {
 
 function rate(rows, predicate) {
   return rows.length ? rows.filter(predicate).length / rows.length : null;
+}
+
+function rateInterval(rows, predicate, z = 1.96) {
+  if (!rows.length) return { count: 0, rate: null, low: null, high: null };
+  const successes = rows.filter(predicate).length;
+  const n = rows.length;
+  const observed = successes / n;
+  const denominator = 1 + z ** 2 / n;
+  const center = (observed + z ** 2 / (2 * n)) / denominator;
+  const margin =
+    (z / denominator) *
+    Math.sqrt((observed * (1 - observed)) / n + z ** 2 / (4 * n ** 2));
+  return {
+    count: n,
+    successes,
+    rate: observed,
+    low: Math.max(0, center - margin),
+    high: Math.min(1, center + margin),
+  };
 }
 
 function rowsAtLeast(ledgers, evidenceClass) {
@@ -182,8 +241,11 @@ export function verifyEvidenceLedger(ledger, { publicKey = null } = {}) {
       diagnostics.push(`row ${index} chain mismatch`);
     if (sha256(withoutHash(row, 'rowHash')) !== row.rowHash)
       diagnostics.push(`row ${index} hash mismatch`);
-    if ('transcript' in row || 'rawOutput' in row)
-      diagnostics.push(`row ${index} publishes disallowed raw model content`);
+    const disallowed = disallowedEvidencePath(row);
+    if (disallowed)
+      diagnostics.push(
+        `row ${index} publishes disallowed raw model content at ${disallowed}`
+      );
     previousHash = row.rowHash;
   }
   if (ledger?.rowCount !== (ledger?.rows || []).length)
@@ -241,16 +303,117 @@ function pairedRatios(rows, field) {
         pair.empty[field] > 0 &&
         Number.isFinite(pair.runtime?.[field])
     )
-    .map((pair) => (pair.runtime[field] - pair.empty[field]) / pair.empty[field]);
+    .map(
+      (pair) => (pair.runtime[field] - pair.empty[field]) / pair.empty[field]
+    );
+}
+
+function coverage(rows, field, expected) {
+  if (!rows.length) return null;
+  const actual = new Set(rows.map((row) => row[field]).filter(Boolean));
+  return expected.filter((value) => actual.has(value)).length / expected.length;
+}
+
+function poweredStrata(rows, field) {
+  const groups = new Map();
+  for (const row of rows) {
+    if (!['empty', 'runtime'].includes(row.arm) || !row[field]) continue;
+    if (!groups.has(row[field])) groups.set(row[field], []);
+    groups.get(row[field]).push(row);
+  }
+  if (!groups.size) return null;
+  const intervals = [...groups.values()].map((group) => {
+    if (!group.every((row) => row.poweredStratum === true)) return null;
+    const interval = bootstrapPaired(group, 'correct', {
+      alpha: 0.05 / groups.size,
+      samples: 10000,
+    });
+    return interval.pairs > 0 ? interval : null;
+  });
+  return intervals.every(Boolean) ? intervals : null;
+}
+
+function worstCorrectnessLow(rows, field) {
+  const intervals = poweredStrata(rows, field);
+  return intervals
+    ? Math.min(...intervals.map((interval) => interval.low))
+    : null;
+}
+
+function worstTokenOverheadHigh(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    if (!['empty', 'runtime'].includes(row.arm) || !row.direction) continue;
+    if (!groups.has(row.direction)) groups.set(row.direction, []);
+    groups.get(row.direction).push(row);
+  }
+  if (!groups.size) return null;
+  const overheads = [];
+  for (const group of groups.values()) {
+    if (!group.every((row) => row.poweredStratum === true)) return null;
+    const interval = bootstrapPaired(group, 'totalTokens', {
+      alpha: 0.05 / groups.size,
+      samples: 10000,
+    });
+    const controls = group.filter(
+      (row) => row.arm === 'empty' && Number.isFinite(row.totalTokens)
+    );
+    const meanControl = controls.length
+      ? controls.reduce((sum, row) => sum + row.totalTokens, 0) /
+        controls.length
+      : null;
+    if (!interval.pairs || !meanControl) return null;
+    overheads.push(interval.high / meanControl);
+  }
+  return Math.max(...overheads);
+}
+
+function worstNegativeDeliveryHigh(rows) {
+  const directions = new Set(rows.map((row) => row.direction).filter(Boolean));
+  if (!directions.size) return null;
+  const arms = ['irrelevant', 'stale', 'contradictory', 'harmful'];
+  const z = bonferroniNormalZ({ comparisons: directions.size * arms.length });
+  const intervals = [];
+  for (const direction of directions) {
+    for (const arm of arms) {
+      const opportunities = rows.filter(
+        (row) => row.direction === direction && row.arm === arm
+      );
+      const interval = rateInterval(
+        opportunities,
+        (row) => row.delivered === true,
+        z
+      );
+      if (interval.high === null) return null;
+      intervals.push(interval.high);
+    }
+  }
+  return Math.max(...intervals);
 }
 
 export function deriveReleaseMetrics(ledgers) {
   const validLedgers = verifiedLedgerInputs(ledgers);
-  const effectiveness = rowsAtLeast(validLedgers, 'effectiveness');
+  const effectiveness = validLedgers.flatMap((ledger) => {
+    if (
+      evidenceRank.get(ledger.evidenceClass) < evidenceRank.get('effectiveness')
+    )
+      return [];
+    const rows = ledger.rows || [];
+    if (
+      ledger.evidenceClass === 'effectiveness' &&
+      rows.length > 0 &&
+      rows.every((row) => !row.study)
+    )
+      return rows;
+    return rows.filter((row) =>
+      ['full-effectiveness', 'cross-client-handoff'].includes(row.study)
+    );
+  });
   const conformance = rowsAtLeast(validLedgers, 'conformance');
   const superiority = rowsAtLeast(validLedgers, 'superiority');
-  const delivered = effectiveness.filter((row) => row.delivered === true);
-  const eligible = effectiveness.filter((row) => row.eligible === true);
+  const eligible = effectiveness.filter(
+    (row) => row.eligible === true && row.applicable === true
+  );
   const applicability = effectiveness.filter(
     (row) => typeof row.applicable === 'boolean' && row.selected === true
   );
@@ -263,7 +426,11 @@ export function deriveReleaseMetrics(ledgers) {
     .filter((row) => row.arm === 'runtime' && row.applicable === false)
     .map((row) => Number(row.contextOverheadRatio));
   const crossClientRows = effectiveness.filter(
-    (row) => row.study === 'cross-client-handoff'
+    (row) =>
+      ['cross-client-handoff', 'full-effectiveness'].includes(row.study) &&
+      row.producerClient &&
+      row.consumerClient &&
+      row.producerClient !== row.consumerClient
   );
   const directions = new Set(
     crossClientRows
@@ -275,20 +442,61 @@ export function deriveReleaseMetrics(ledgers) {
       .flatMap((row) => [row.producerFamily, row.consumerFamily])
       .filter(Boolean)
   );
+  const clients = new Set(
+    crossClientRows
+      .flatMap((row) => [row.producerClient, row.consumerClient])
+      .filter(Boolean)
+  );
   const competitiveRows = superiority.filter(
     (row) => row.study === 'competitive' && row.fair === true
   );
   const writerRows = conformance.filter(
     (row) => row.study === 'writer-integrity'
   );
+  const negativeApplicability = effectiveness.filter(
+    (row) => row.applicable === false
+  );
+  const staleOpportunities = effectiveness.filter((row) => row.stale === true);
+  const contradictoryOpportunities = effectiveness.filter(
+    (row) => row.contradictory === true
+  );
+  const causalRows = effectiveness.filter(
+    (row) => row.arm === 'runtime' && row.causalClaim === true
+  );
+  const causalFamilies = new Set(causalRows.map((row) => row.family));
+  const competitiveValidation = competitiveRows.map(
+    validateCompetitiveEvidence
+  );
+  const competitiveKinds = new Set(
+    competitiveRows.map((row) => row.baselineKind).filter(Boolean)
+  );
   const metrics = {
     applicabilityPrecision: rate(applicability, (row) => row.applicable),
+    applicabilityPrecisionIntervalLow: rateInterval(
+      applicability,
+      (row) => row.applicable
+    ).low,
     preActionDelivery: rate(
       eligible,
       (row) => row.delivered === true && row.deliveryPhase === 'pre-action'
     ),
-    irrelevantDelivery: rate(delivered, (row) => row.applicable === false),
-    staleDelivery: rate(delivered, (row) => row.stale === true),
+    preActionDeliveryIntervalLow: rateInterval(
+      eligible,
+      (row) => row.delivered === true && row.deliveryPhase === 'pre-action'
+    ).low,
+    irrelevantDelivery: rate(
+      negativeApplicability,
+      (row) => row.delivered === true
+    ),
+    irrelevantDeliveryIntervalHigh: rateInterval(
+      negativeApplicability,
+      (row) => row.delivered === true
+    ).high,
+    staleDelivery: rate(staleOpportunities, (row) => row.delivered === true),
+    staleDeliveryIntervalHigh: rateInterval(
+      staleOpportunities,
+      (row) => row.delivered === true
+    ).high,
     recurrenceReduction: recurrence.mean === null ? null : -recurrence.mean,
     recurrenceIntervalLow: recurrence.high === null ? null : -recurrence.high,
     naturalCorrectnessDelta: correctness.mean,
@@ -324,7 +532,9 @@ export function deriveReleaseMetrics(ledgers) {
               ? controls.reduce((sum, row) => sum + row.totalTokens, 0) /
                 controls.length
               : null;
-            return meanControl ? -firstSuccessorTokens.mean / meanControl : null;
+            return meanControl
+              ? -firstSuccessorTokens.mean / meanControl
+              : null;
           })(),
     firstSuccessorTokenIntervalLow:
       firstSuccessorTokens.high === null
@@ -337,19 +547,29 @@ export function deriveReleaseMetrics(ledgers) {
               ? controls.reduce((sum, row) => sum + row.totalTokens, 0) /
                 controls.length
               : null;
-            return meanControl ? -firstSuccessorTokens.high / meanControl : null;
+            return meanControl
+              ? -firstSuccessorTokens.high / meanControl
+              : null;
           })(),
     latencyOverheadP95: percentile(latencyRatios, 0.95),
     knownMistakeRecurrence: rate(
       effectiveness.filter(
-        (row) => row.arm === 'runtime' && row.applicable === true
+        (row) =>
+          row.arm === 'runtime' &&
+          row.applicable === true &&
+          row.knownMistake === true
       ),
       (row) => row.mistakeExecuted === true
     ),
     contradictoryDelivery: rate(
-      delivered,
-      (row) => row.contradictory === true
+      contradictoryOpportunities,
+      (row) => row.delivered === true
     ),
+    contradictoryDeliveryIntervalHigh: rateInterval(
+      contradictoryOpportunities,
+      (row) => row.delivered === true
+    ).high,
+    negativeDeliveryIntervalHigh: worstNegativeDeliveryHigh(effectiveness),
     consumerSchemaTokensP95: percentile(
       effectiveness
         .filter((row) => row.arm === 'runtime')
@@ -371,14 +591,72 @@ export function deriveReleaseMetrics(ledgers) {
           row.acceptedWrites === row.restoredWrites
       ),
     crossClientPassed:
-      directions.size >= 2 &&
-      modelFamilies.size >= 2 &&
-      crossClientRows.length >= 3,
+      clients.size >= 3 &&
+      modelFamilies.size >= 3 &&
+      [...clients].every((producer) =>
+        [...clients].every(
+          (consumer) =>
+            producer === consumer || directions.has(`${producer}->${consumer}`)
+        )
+      ),
+    benchmarkFamilyCoverage: coverage(
+      effectiveness,
+      'family',
+      BENCHMARK_FAMILIES
+    ),
+    benchmarkArmCoverage: coverage(effectiveness, 'arm', BENCHMARK_ARMS),
+    directionalCorrectnessIntervalLow: worstCorrectnessLow(
+      effectiveness,
+      'direction'
+    ),
+    familyCorrectnessIntervalLow: worstCorrectnessLow(effectiveness, 'family'),
+    directionalTokenOverheadHigh: worstTokenOverheadHigh(effectiveness),
+    causalChainIntegrity:
+      causalRows.length > 0 &&
+      BENCHMARK_FAMILIES.every((family) => causalFamilies.has(family)) &&
+      causalRows.every((row) => validateCausalChain(row.causalChain).valid),
+    trialIntegrity:
+      effectiveness.length > 0 &&
+      effectiveness.every((row) => row.trialIntegrityValid === true),
+    independentGrading:
+      effectiveness.length > 0 &&
+      effectiveness.every((row) => row.graderVerified === true),
     competitivePassed:
       competitiveRows.length > 0 &&
-      competitiveRows.every(
-        (row) => row.ucrOnParetoFrontier === true && row.effectIntervalLow > 0
-      ),
+      competitiveValidation.every((validation) => validation.valid),
+    competitiveCoverage:
+      competitiveRows.length > 0
+        ? REQUIRED_COMPETITIVE_BASELINES.filter((kind) =>
+            competitiveKinds.has(kind)
+          ).length / REQUIRED_COMPETITIVE_BASELINES.length
+        : null,
+    competitiveReproducibility:
+      competitiveRows.length > 0 &&
+      competitiveValidation.every((validation) => validation.valid),
+  };
+  const ledgerSupportsMetric = (ledger, metric, requiredClass) => {
+    if (
+      evidenceRank.get(ledger.evidenceClass) < evidenceRank.get(requiredClass)
+    )
+      return false;
+    const rows = ledger.rows || [];
+    if (EFFECTIVENESS_REQUIRED_METRICS.includes(metric)) {
+      if (metric === 'writerIntegrity')
+        return rows.some((row) => row.study === 'writer-integrity');
+      return (
+        (ledger.evidenceClass === 'effectiveness' &&
+          rows.length > 0 &&
+          rows.every((row) => !row.study)) ||
+        rows.some((row) =>
+          ['full-effectiveness', 'cross-client-handoff'].includes(row.study)
+        )
+      );
+    }
+    if (SUPERIORITY_REQUIRED_METRICS.includes(metric))
+      return rows.some(
+        (row) => row.study === 'competitive' && row.fair === true
+      );
+    return true;
   };
   const sources = Object.fromEntries(
     Object.entries(METRIC_EVIDENCE_REQUIREMENTS).map(
@@ -387,17 +665,15 @@ export function deriveReleaseMetrics(ledgers) {
         {
           requiredClass,
           eligibleLedgerHashes: validLedgers
-            .filter(
-              (ledger) =>
-                evidenceRank.get(ledger.evidenceClass) >=
-                evidenceRank.get(requiredClass)
+            .filter((ledger) =>
+              ledgerSupportsMetric(ledger, metric, requiredClass)
             )
             .map((ledger) => ledger.ledgerHash),
         },
       ]
     )
   );
-  return {
+  const derived = {
     schemaVersion: 'ucr.derived-metrics/2',
     metrics,
     intervals: {
@@ -409,8 +685,8 @@ export function deriveReleaseMetrics(ledgers) {
     sources,
     inputLedgerHashes: validLedgers.map((ledger) => ledger.ledgerHash).sort(),
     rejectedLedgers: ledgers.length - validLedgers.length,
-    derivedHash: sha256({ metrics, sources }),
   };
+  return { ...derived, derivedHash: sha256(derived) };
 }
 
 export function evidenceTierReport(ledgers) {

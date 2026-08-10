@@ -101,3 +101,85 @@ export function compareCognitiveCosts(control, runtime) {
       runtime?.attributionComplete === true,
   };
 }
+
+function percentile(values, quantile) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  return sorted[
+    Math.min(sorted.length - 1, Math.ceil(sorted.length * quantile) - 1)
+  ];
+}
+
+/** Explain aggregate and directional regressions without allowing cancellation. */
+export function stratifiedCostDiagnostics(
+  rows,
+  { maximumTokenOverhead = 0.05, maximumLatencyOverhead = 0.05 } = {}
+) {
+  const pairs = new Map();
+  for (const row of rows || []) {
+    if (!row.pairId || !['empty', 'runtime'].includes(row.arm)) continue;
+    if (!pairs.has(row.pairId)) pairs.set(row.pairId, {});
+    pairs.get(row.pairId)[row.arm] = row;
+  }
+  // A rejected arm is not a measurement. In particular, do not turn latency
+  // or token values emitted by an integrity-invalid runtime into a reported
+  // regression: both halves of a pair must have passed the trial gate.
+  const complete = [...pairs.values()].filter(
+    (pair) =>
+      pair.empty?.trialIntegrityValid === true &&
+      pair.runtime?.trialIntegrityValid === true
+  );
+  const keys = new Set(
+    complete.flatMap((pair) => [
+      `direction:${pair.runtime.direction}`,
+      `family:${pair.runtime.family}`,
+      `client:${pair.runtime.consumerClient}`,
+    ])
+  );
+  const groups = [...keys].map((key) => {
+    const [dimension, value] = key.split(':');
+    const selected = complete.filter(
+      (pair) =>
+        pair.runtime[dimension === 'client' ? 'consumerClient' : dimension] ===
+        value
+    );
+    const ratios = (field) =>
+      selected
+        .map((pair) =>
+          pair.empty[field] > 0 && Number.isFinite(pair.runtime[field])
+            ? (pair.runtime[field] - pair.empty[field]) / pair.empty[field]
+            : null
+        )
+        .filter(Number.isFinite);
+    const tokenRatios = ratios('totalTokens');
+    const latencyRatios = ratios('latencyMs');
+    const average = (values) =>
+      values.length
+        ? values.reduce((sum, item) => sum + item, 0) / values.length
+        : null;
+    const tokenOverhead = average(tokenRatios);
+    const latencyOverheadP95 = percentile(latencyRatios, 0.95);
+    const regressions = [];
+    if (tokenOverhead === null || tokenOverhead > maximumTokenOverhead)
+      regressions.push('tokens');
+    if (
+      latencyOverheadP95 === null ||
+      latencyOverheadP95 > maximumLatencyOverhead
+    )
+      regressions.push('latency');
+    return {
+      dimension,
+      value,
+      pairs: selected.length,
+      tokenOverhead,
+      latencyOverheadP95,
+      regressions,
+      passed: regressions.length === 0,
+    };
+  });
+  return {
+    passed: groups.length > 0 && groups.every((group) => group.passed),
+    thresholds: { maximumTokenOverhead, maximumLatencyOverhead },
+    groups,
+  };
+}

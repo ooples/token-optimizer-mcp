@@ -1,3 +1,5 @@
+import { createKnowledgeGraph3D } from './graph3d.js';
+
 /**
  * Wiki graph browser.
  *
@@ -6,16 +8,16 @@
  * the page fail in exactly the air-gapped and locked-down environments where a
  * local-first knowledge graph is most wanted.
  *
- * TWO MODES ON ONE CANVAS, because they answer different questions:
+ * TWO LOCAL-FIRST MODES, because they answer different questions:
  *
  *   FOCUS -- one node centred with its direct edges radiating out. Readable at
  *   any graph size, because what it renders is bounded by the node's degree
  *   rather than by the size of the graph.
  *
- *   CONSTELLATION -- force-directed over a BOUNDED subgraph. The hairball that
- *   makes force layouts useless comes from running physics over everything; the
- *   server caps the subgraph, so this stays a navigation map you click into.
- *   Physics stops as soon as it settles rather than spinning forever.
+ *   EXPLORE IN 3D -- a perspective canvas over a BOUNDED subgraph. Dragging,
+ *   wheel zoom, keyboard orbit, and direct node picking make the learned graph
+ *   navigable without a CDN or a WebGL dependency. The server cap prevents the
+ *   scene from turning into an unbounded hairball.
  */
 
 const KINDS = ['file', 'symbol', 'finding', 'task'];
@@ -41,11 +43,12 @@ const el = (id) => document.getElementById(id);
 const svgNS = 'http://www.w3.org/2000/svg';
 
 const state = {
-  mode: 'focus',
+  mode: 'constellation',
   offset: 0,
   selected: null,
   items: [],
 };
+let knowledgeGraph3d = null;
 
 /** Kind colour, read from CSS so the validated palette has one home. */
 function colourFor(kind) {
@@ -282,6 +285,64 @@ async function loadUcr() {
     ['Typed objects', nf.format(status.graph?.objects || 0)],
     ['Certified clients', nf.format(status.certifiedClients)],
     [
+      'Effectiveness verdict',
+      status.tieredVerdict?.effectiveness?.status || 'insufficient',
+    ],
+    [
+      'Superiority verdict',
+      status.tieredVerdict?.superiority?.status || 'insufficient',
+    ],
+    [
+      'Production verdict',
+      status.tieredVerdict?.production?.status || 'insufficient',
+    ],
+    [
+      'Missing effectiveness metrics',
+      nf.format(status.tieredVerdict?.effectiveness?.missing?.length || 0),
+    ],
+    [
+      'Frozen study design',
+      status.evidenceIndex?.summary.studyDesign?.passed
+        ? `${nf.format(status.evidenceIndex.summary.studyDesign.trials)} trials / ${nf.format(status.evidenceIndex.summary.studyDesign.providerInvocations)} calls`
+        : 'not ready',
+    ],
+    [
+      'Release metrics mapped',
+      status.evidenceIndex?.summary.studyDesign?.mappedMetrics != null
+        ? nf.format(status.evidenceIndex.summary.studyDesign.mappedMetrics)
+        : 'not measured',
+    ],
+    [
+      'Universal CLI drivers',
+      status.evidenceIndex?.summary.studyDesign?.universalDriverClients != null
+        ? `${nf.format(status.evidenceIndex.summary.studyDesign.universalDriverClients)} protocol-mapped / ${nf.format(status.evidenceIndex.summary.studyDesign.representativeStudyClients || 0)} in powered live matrix`
+        : 'not measured',
+    ],
+    [
+      'Benchmark family coverage',
+      status.metrics?.benchmarkFamilyCoverage != null
+        ? `${(status.metrics.benchmarkFamilyCoverage * 100).toFixed(1)}%`
+        : 'not measured',
+    ],
+    [
+      'Benchmark arm coverage',
+      status.metrics?.benchmarkArmCoverage != null
+        ? `${(status.metrics.benchmarkArmCoverage * 100).toFixed(1)}%`
+        : 'not measured',
+    ],
+    [
+      'Worst negative-delivery 95% upper',
+      status.metrics?.negativeDeliveryIntervalHigh != null
+        ? `${(status.metrics.negativeDeliveryIntervalHigh * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
+      'Worst directional token upper',
+      status.metrics?.directionalTokenOverheadHigh != null
+        ? `${(status.metrics.directionalTokenOverheadHigh * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
       'Evidence artifacts',
       status.evidenceIndex
         ? `${status.evidenceIndex.summary.artifactsValid}/${status.evidenceIndex.summary.artifactsTotal}`
@@ -371,7 +432,7 @@ async function loadUcr() {
     </div></div>`
     )
     .join('');
-  const verdict = status.verdict?.status || 'insufficient';
+  const verdict = status.tieredVerdict?.status || 'insufficient';
   const deterministic = status.deterministicEvidence
     ? `${status.deterministicEvidence.checksPassed}/${status.deterministicEvidence.checksTotal} deterministic gates`
     : 'no deterministic ledger';
@@ -568,6 +629,8 @@ function drawEdge(svg, x1, y1, x2, y2, kind) {
 async function renderFocus(nodeId) {
   const data = await api(`/api/wiki/node/${encodeURIComponent(nodeId)}`);
   const svg = el('wiki-graph');
+  el('wiki-graph-3d').hidden = true;
+  svg.removeAttribute('hidden');
   clearGraph();
   el('graph-hint').hidden = true;
 
@@ -607,94 +670,25 @@ async function renderFocus(nodeId) {
 async function renderConstellation() {
   const data = await api('/api/wiki/constellation?cap=150');
   const svg = el('wiki-graph');
+  const host = el('wiki-graph-3d');
+  svg.setAttribute('hidden', '');
+  host.hidden = false;
   clearGraph();
-  el('graph-hint').hidden = data.nodes.length > 0;
+  const hint = el('graph-hint');
+  hint.hidden = false;
+  hint.textContent = data.nodes.length
+    ? 'Drag to orbit, scroll to zoom, and select a node to inspect its evidence and history.'
+    : 'The 3D knowledge map will appear as supported coding agents capture project findings.';
 
-  const { width, height } = paneSize();
-
-  const positions = new Map();
-  data.nodes.forEach((node, index) => {
-    // Seeded from the index rather than randomly, so a refresh does not
-    // reshuffle a layout the user has just learned to read.
-    const angle = index * 2.39996;
-    const radius =
-      20 +
-      (index / data.nodes.length) *
-        Math.min(width - LABEL_GUTTER * 2, height) *
-        0.42;
-    positions.set(node.id, {
-      x: width / 2 + Math.cos(angle) * radius,
-      y: height / 2 + Math.sin(angle) * radius,
+  if (knowledgeGraph3d) {
+    knowledgeGraph3d.update(data);
+    knowledgeGraph3d.select(state.selected);
+  } else {
+    knowledgeGraph3d = createKnowledgeGraph3D(host, data, {
+      selected: state.selected,
+      onSelect: (node) => selectNode(node.id),
     });
-  });
-
-  const REPULSION = 2600;
-  const SPRING = 0.012;
-  const IDEAL = 70;
-
-  for (let tick = 0; tick < 160; tick++) {
-    const cooling = 1 - tick / 160;
-
-    for (const [idA, a] of positions) {
-      for (const [idB, b] of positions) {
-        if (idA === idB) continue;
-        const dx = a.x - b.x;
-        const dy = a.y - b.y;
-        const distance = Math.hypot(dx, dy) || 0.01;
-        const force = (REPULSION / (distance * distance)) * cooling;
-        a.x += (dx / distance) * force;
-        a.y += (dy / distance) * force;
-      }
-    }
-
-    for (const edge of data.edges) {
-      const a = positions.get(edge.from);
-      const b = positions.get(edge.to);
-      if (!a || !b) continue;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const distance = Math.hypot(dx, dy) || 0.01;
-      const pull = (distance - IDEAL) * SPRING * cooling;
-      a.x += (dx / distance) * pull;
-      a.y += (dy / distance) * pull;
-      b.x -= (dx / distance) * pull;
-      b.y -= (dy / distance) * pull;
-    }
-
-    for (const point of positions.values()) {
-      // Clamped inside the label gutter, not the raw canvas, so a node at the
-      // boundary still has room for its caption.
-      point.x = Math.max(LABEL_GUTTER, Math.min(width - LABEL_GUTTER, point.x));
-      point.y = Math.max(24, Math.min(height - 24, point.y));
-    }
   }
-
-  // Labels sit on a single baseline per node, so two nodes at a similar height
-  // overlap even when the MARKS are comfortably apart. The physics has no
-  // notion of text, so a separate pass nudges colliding captions apart. Without
-  // it, dense regions produce overlapping unreadable text -- visible only by
-  // looking at the rendered page, never from the node coordinates alone.
-  const LABEL_HEIGHT = 14;
-  const ordered = [...positions.entries()].sort((a, b) => a[1].y - b[1].y);
-  for (let i = 1; i < ordered.length; i++) {
-    const [, previous] = ordered[i - 1];
-    const [, current] = ordered[i];
-    const sameSide = previous.x > width * 0.55 === current.x > width * 0.55;
-    if (sameSide && current.y - previous.y < LABEL_HEIGHT) {
-      current.y = Math.min(height - 24, previous.y + LABEL_HEIGHT);
-    }
-  }
-
-  for (const edge of data.edges) {
-    const a = positions.get(edge.from);
-    const b = positions.get(edge.to);
-    if (a && b) drawEdge(svg, a.x, a.y, b.x, b.y, null);
-  }
-  for (const node of data.nodes) {
-    const point = positions.get(node.id);
-    if (point) drawNode(svg, node, point.x, point.y, false);
-  }
-  fitLabels(svg);
 }
 
 /**
@@ -886,18 +880,24 @@ function setMode(mode) {
   el('mode-constellation').classList.toggle('is-active', !focus);
   el('mode-focus').setAttribute('aria-pressed', String(focus));
   el('mode-constellation').setAttribute('aria-pressed', String(!focus));
+  el('wiki-graph').toggleAttribute('hidden', !focus);
+  el('wiki-graph-3d').hidden = focus;
 }
 
 async function selectNode(nodeId) {
-  // Selecting a node IS a focus action, whatever mode was active before.
-  setMode('focus');
   state.selected = nodeId;
   document
     .querySelectorAll('.wiki-list li')
     .forEach((li) =>
       li.setAttribute('aria-current', String(li.dataset.id === nodeId))
     );
-  await renderFocus(nodeId);
+  if (state.mode === 'focus') {
+    await renderFocus(nodeId);
+    return;
+  }
+  knowledgeGraph3d?.select(nodeId);
+  const data = await api(`/api/wiki/node/${encodeURIComponent(nodeId)}`);
+  showDetail(data.node);
 }
 
 /* ---- Audit ----------------------------------------------------------- */
@@ -1048,7 +1048,7 @@ if (typeof ResizeObserver !== 'undefined') {
       lastWidth = width;
       reRender();
     }
-  }).observe(el('wiki-graph'));
+  }).observe(el('wiki-graph-stage'));
 }
 
 (async function init() {
@@ -1065,6 +1065,7 @@ if (typeof ResizeObserver !== 'undefined') {
   await Promise.all([
     loadBalance(),
     search(),
+    renderConstellation(),
     loadAudit(),
     loadEvidence(),
     loadUcr(),

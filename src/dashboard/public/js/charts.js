@@ -134,7 +134,7 @@ function emptyRing() {
   const wrap = document.createElement('div');
   wrap.className = 'chart-blank';
   wrap.innerHTML =
-    '<div class="ring"></div><p>Nothing measured yet. This fills in as Claude works.</p>';
+    '<div class="ring"></div><p>Nothing measured yet. This fills in as your coding agents work.</p>';
   return wrap;
 }
 
