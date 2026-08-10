@@ -282,6 +282,64 @@ async function loadUcr() {
     ['Typed objects', nf.format(status.graph?.objects || 0)],
     ['Certified clients', nf.format(status.certifiedClients)],
     [
+      'Effectiveness verdict',
+      status.tieredVerdict?.effectiveness?.status || 'insufficient',
+    ],
+    [
+      'Superiority verdict',
+      status.tieredVerdict?.superiority?.status || 'insufficient',
+    ],
+    [
+      'Production verdict',
+      status.tieredVerdict?.production?.status || 'insufficient',
+    ],
+    [
+      'Missing effectiveness metrics',
+      nf.format(status.tieredVerdict?.effectiveness?.missing?.length || 0),
+    ],
+    [
+      'Frozen study design',
+      status.evidenceIndex?.summary.studyDesign?.passed
+        ? `${nf.format(status.evidenceIndex.summary.studyDesign.trials)} trials / ${nf.format(status.evidenceIndex.summary.studyDesign.providerInvocations)} calls`
+        : 'not ready',
+    ],
+    [
+      'Release metrics mapped',
+      status.evidenceIndex?.summary.studyDesign?.mappedMetrics != null
+        ? nf.format(status.evidenceIndex.summary.studyDesign.mappedMetrics)
+        : 'not measured',
+    ],
+    [
+      'Universal CLI drivers',
+      status.evidenceIndex?.summary.studyDesign?.universalDriverClients != null
+        ? `${nf.format(status.evidenceIndex.summary.studyDesign.universalDriverClients)} protocol-mapped / ${nf.format(status.evidenceIndex.summary.studyDesign.representativeStudyClients || 0)} in powered live matrix`
+        : 'not measured',
+    ],
+    [
+      'Benchmark family coverage',
+      status.metrics?.benchmarkFamilyCoverage != null
+        ? `${(status.metrics.benchmarkFamilyCoverage * 100).toFixed(1)}%`
+        : 'not measured',
+    ],
+    [
+      'Benchmark arm coverage',
+      status.metrics?.benchmarkArmCoverage != null
+        ? `${(status.metrics.benchmarkArmCoverage * 100).toFixed(1)}%`
+        : 'not measured',
+    ],
+    [
+      'Worst negative-delivery 95% upper',
+      status.metrics?.negativeDeliveryIntervalHigh != null
+        ? `${(status.metrics.negativeDeliveryIntervalHigh * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
+      'Worst directional token upper',
+      status.metrics?.directionalTokenOverheadHigh != null
+        ? `${(status.metrics.directionalTokenOverheadHigh * 100).toFixed(2)}%`
+        : 'not measured',
+    ],
+    [
       'Evidence artifacts',
       status.evidenceIndex
         ? `${status.evidenceIndex.summary.artifactsValid}/${status.evidenceIndex.summary.artifactsTotal}`
@@ -371,7 +429,7 @@ async function loadUcr() {
     </div></div>`
     )
     .join('');
-  const verdict = status.verdict?.status || 'insufficient';
+  const verdict = status.tieredVerdict?.status || 'insufficient';
   const deterministic = status.deterministicEvidence
     ? `${status.deterministicEvidence.checksPassed}/${status.deterministicEvidence.checksTotal} deterministic gates`
     : 'no deterministic ledger';

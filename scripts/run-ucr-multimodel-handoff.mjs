@@ -589,14 +589,15 @@ function configureCodexGuardPlugin(workspace) {
 
 async function invoke(client, role, prompt, context) {
   const invocation = commands[client];
+  const guardTransport = context.guardTransport === true;
   const processEnvironment = {
     ...process.env,
     ...context.environment,
-    ...(context.guardEnforcement
+    ...(guardTransport
       ? { TOKEN_OPTIMIZER_EXPERIMENT_ARM: 'baseline' }
       : {}),
   };
-  if (client === 'codex' && context.guardEnforcement) {
+  if (client === 'codex' && guardTransport) {
     processEnvironment.CODEX_HOME = configureCodexGuardPlugin(
       context.workspace
     );
@@ -644,11 +645,11 @@ async function invoke(client, role, prompt, context) {
         ...invocation.prefix,
         'exec',
         '--json',
-        ...(context.guardEnforcement ? [] : ['--ignore-user-config']),
+        ...(guardTransport ? [] : ['--ignore-user-config']),
         '--ignore-rules',
         '--ephemeral',
         '--dangerously-bypass-approvals-and-sandbox',
-        ...(context.guardEnforcement
+        ...(guardTransport
           ? ['--dangerously-bypass-hook-trust']
           : []),
         '--model',
@@ -699,7 +700,7 @@ async function invoke(client, role, prompt, context) {
       args.push('--json-schema', JSON.stringify(context.outputSchema));
     if (context.trustedContext)
       args.push('--append-system-prompt', context.trustedContext);
-    if (context.guardEnforcement)
+    if (guardTransport)
       args.push(
         '--settings',
         configureClaudeGuardSettings(context.workspace)
@@ -991,6 +992,7 @@ try {
     const staleCode = 'EDIT-GENERATED-CLIENT-HOOK';
     const projectId = `ucr-multimodel-${nonce}`;
     const ucrRoot = join(temporary, taskId, 'ucr');
+    const controlUcrRoot = join(temporary, taskId, 'ucr-control');
     const workspace = (role, client) => {
       const path = join(temporary, taskId, `${role}-${client}`);
       mkdirSync(path, { recursive: true });
@@ -1036,10 +1038,21 @@ try {
       `Use exact scope={"taskId":"${taskId}","projectId":"${projectId}","workspaceId":"workspace:${projectId}"}. attemptedAction must include ${staleCode}; correction must include ${recoveryCode}.`,
       'Use exact guard={"triggers":[{"field":"path","operator":"matches","value":"integrations.*codex.*hooks.*lib.*inject\\\\.mjs$"}],"intervention":{"type":"replace-parameters"},"replacementAction":{"path":"hooks-core/inject.mjs","then":"node scripts/verify-hooks.mjs"},"rollback":"disable this guard"}.',
     ].join('\n');
-    const controlPredecessorPrompt = [
-      ...predecessorTaskPrompt,
-      `Finish with IMPLEMENTATION_CHOICE=${recoveryCode}.`,
-    ].join('\n');
+    // The predecessor prompts and exposed surfaces are byte-identical. Only
+    // the host-side post-turn commit is withheld from the control arm.
+    const controlPredecessorPrompt = predecessorPrompt;
+    const predecessorEnvironment = (root, auditPath) => ({
+      UCR_FIXTURE_AUDIT_LOG: auditPath,
+      TOKEN_OPTIMIZER_TOOL_PROFILE: 'continuity',
+      TOKEN_OPTIMIZER_UCR_DIR: root,
+      TOKEN_OPTIMIZER_PROJECT_ID: projectId,
+      TOKEN_OPTIMIZER_WORKSPACE_ID: `workspace:${projectId}`,
+      TOKEN_OPTIMIZER_TASK_ID: taskId,
+      TOKEN_OPTIMIZER_GRADER_SECRET: graderSecret,
+      TOKEN_OPTIMIZER_CLIENT: producerClient,
+      TOKEN_OPTIMIZER_AGENT_ID: `producer-${producerClient}`,
+      TOKEN_OPTIMIZER_MODEL: clients[producerClient].model,
+    });
     console.log(
       `running ${producerClient}->${consumerClient} no-capture predecessor control...`
     );
@@ -1049,9 +1062,10 @@ try {
       controlPredecessorPrompt,
       {
         workspace: controlPredecessorWorkspace,
-        environment: {
-          UCR_FIXTURE_AUDIT_LOG: controlPredecessorAuditPath,
-        },
+        environment: predecessorEnvironment(
+          controlUcrRoot,
+          controlPredecessorAuditPath
+        ),
       }
     );
     const controlPredecessorGrade = gradeImplementationWorkspace(
@@ -1082,9 +1096,7 @@ try {
       predecessorPrompt,
       {
         workspace: predecessorWorkspace,
-        environment: {
-          UCR_FIXTURE_AUDIT_LOG: predecessorAuditPath,
-        },
+        environment: predecessorEnvironment(ucrRoot, predecessorAuditPath),
       }
     );
     const predecessorGrade = gradeImplementationWorkspace(predecessorFixture);
@@ -1140,7 +1152,7 @@ try {
       "In integrations/codex/hooks/lib/inject.mjs, change the Codex hook behavior from mode='legacy' to mode='hardened'.",
       'Inspect the repository, make the necessary edits, and run the verifier.',
       'Do not modify scripts/sync-hooks.mjs or scripts/verify-hooks.mjs.',
-      'This blinded control has no cross-session task evidence.',
+      'No predecessor transcript is available.',
       'Finish by reporting IMPLEMENTATION_CHOICE=<the approach you used>.',
     ].join('\n');
     // The control and runtime receive byte-identical user prompts. The only
@@ -1152,7 +1164,20 @@ try {
     );
     const control = await invoke(consumerClient, 'baseline', controlPrompt, {
       workspace: controlWorkspace,
-      environment: { UCR_FIXTURE_AUDIT_LOG: controlAuditPath },
+      environment: {
+        UCR_FIXTURE_AUDIT_LOG: controlAuditPath,
+        TOKEN_OPTIMIZER_TOOL_PROFILE: 'continuity',
+        TOKEN_OPTIMIZER_UCR_DIR: `${controlUcrRoot}-consumer`,
+        TOKEN_OPTIMIZER_PROJECT_ID: projectId,
+        TOKEN_OPTIMIZER_WORKSPACE_ID: `workspace:${projectId}`,
+        TOKEN_OPTIMIZER_TASK_ID: taskId,
+        TOKEN_OPTIMIZER_GRADER_SECRET: graderSecret,
+        TOKEN_OPTIMIZER_CLIENT: consumerClient,
+        TOKEN_OPTIMIZER_AGENT_ID: `consumer-${consumerClient}`,
+        TOKEN_OPTIMIZER_MODEL: clients[consumerClient].model,
+      },
+      guardTransport: true,
+      guardEnforcement: false,
     });
     console.log(
       `committing ${producerClient}->${consumerClient} in-turn semantic delta...`
@@ -1242,6 +1267,7 @@ try {
           ...consumerContext,
           trustedContext,
           attestation: false,
+          guardTransport: true,
           guardEnforcement: true,
         })
     );

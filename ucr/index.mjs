@@ -24,3 +24,6 @@ export * from './evidence-contract.mjs';
 export * from './scale.mjs';
 export * from './coordination-sqlite.mjs';
 export * from './accounting.mjs';
+export * from './study-design.mjs';
+export * from './study-fixtures.mjs';
+export * from './study-driver.mjs';

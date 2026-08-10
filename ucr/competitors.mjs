@@ -13,6 +13,23 @@ export const BASELINE_KINDS = Object.freeze([
   'oracle-context',
 ]);
 
+export const REQUIRED_COMPETITIVE_BASELINES = Object.freeze([
+  'no-memory',
+  'full-history',
+  'static-instructions',
+  'vector-rag',
+  'graph-rag',
+  'memory-os',
+  'vendor-memory',
+]);
+
+export const PRODUCT_BASELINE_KINDS = Object.freeze([
+  'vector-rag',
+  'graph-rag',
+  'memory-os',
+  'vendor-memory',
+]);
+
 export function validateFairRun(run, reference) {
   const fields = [
     'model',
@@ -25,6 +42,36 @@ export function validateFairRun(run, reference) {
   ];
   const mismatches = fields.filter((field) => run[field] !== reference[field]);
   return { fair: mismatches.length === 0, mismatches };
+}
+
+/** Validate that a comparison is reproducible and represents a live product run. */
+export function validateCompetitiveEvidence(row) {
+  const diagnostics = [];
+  if (!REQUIRED_COMPETITIVE_BASELINES.includes(row?.baselineKind))
+    diagnostics.push('baseline kind is outside the preregistered comparison set');
+  if (row?.fair !== true) diagnostics.push('budgets or task conditions differ');
+  if (row?.reproduced !== true) diagnostics.push('run was not reproduced');
+  if (row?.liveExecution !== true)
+    diagnostics.push('reference-only execution cannot support superiority');
+  if (row?.versionPinned !== true)
+    diagnostics.push('baseline version or image digest is not pinned');
+  if (row?.configurationPublished !== true)
+    diagnostics.push('baseline configuration is not published');
+  if (
+    PRODUCT_BASELINE_KINDS.includes(row?.baselineKind) &&
+    row?.namedProduct !== true
+  )
+    diagnostics.push('product baseline is not a named reproduced product');
+  if (row?.ucrOnParetoFrontier !== true)
+    diagnostics.push('UCR is not on the Pareto frontier');
+  if (!(row?.effectIntervalLow > 0))
+    diagnostics.push('correctness effect interval includes zero');
+  if (!(row?.correctnessImprovement > 0.1))
+    diagnostics.push('correctness improvement is not greater than ten points');
+  return {
+    valid: diagnostics.length === 0,
+    diagnostics,
+  };
 }
 
 export function competitorManifest(input) {

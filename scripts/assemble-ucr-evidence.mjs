@@ -12,6 +12,7 @@ import {
   releaseVerdict,
   sealEvidenceLedger,
   sha256,
+  tieredReleaseVerdict,
   verifyEvidenceLedger,
 } from '../ucr/index.mjs';
 
@@ -19,6 +20,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RESULTS = join(ROOT, 'evals', 'ucr', 'results');
 const OUTPUT = join(RESULTS, 'evidence-index-v2.json');
 const definitions = [
+  ['study-readiness', 'study-readiness-v1.json', 'conformance'],
   ['graph-scale', 'graph-scale-v1.json', 'conformance'],
   ['coordination-scale', 'coordination-scale-v1.json', 'conformance'],
   ['consolidation', 'consolidation-study-v1.json', 'conformance'],
@@ -28,12 +30,12 @@ const definitions = [
   ['production-exercise', 'production-exercise-v1.json', 'executable-smoke'],
   [
     'stateful-codex-to-claude',
-    'stateful-preflight-codex-to-claude-v4.json',
+    'stateful-matched-codex-to-claude-v1.json',
     'executable-smoke',
   ],
   [
     'stateful-claude-to-codex',
-    'stateful-preflight-claude-to-codex-v3.json',
+    'stateful-matched-claude-to-codex-v1.json',
     'executable-smoke',
   ],
   [
@@ -55,6 +57,13 @@ const definitions = [
     false,
   ],
 ];
+for (const definition of [
+  ['full-effectiveness', 'full-study-v1.json', 'effectiveness', true],
+  ['live-competitive', 'competitive-study-v1.json', 'superiority', true],
+  ['production-traffic', 'production-traffic-v1.json', 'production', true],
+]) {
+  if (existsSync(join(RESULTS, definition[1]))) definitions.push(definition);
+}
 
 function readReport([name, filename, evidenceClass, requiredPass = true]) {
   const path = join(RESULTS, filename);
@@ -150,6 +159,12 @@ const ledgerInputs = [
 const derived = deriveReleaseMetrics(ledgerInputs);
 const tiers = evidenceTierReport(ledgerInputs);
 const verdict = releaseVerdict(derived.metrics);
+const productionTraffic = artifacts.find(
+  (artifact) => artifact.name === 'production-traffic'
+);
+const tieredVerdict = tieredReleaseVerdict(derived.metrics, {
+  production: productionTraffic?.report?.readiness || null,
+});
 const validArtifacts = artifacts.filter((artifact) => artifact.valid);
 const liveArtifacts = artifacts.filter(
   (artifact) =>
@@ -300,6 +315,33 @@ const body = {
     cognitiveReductionVsFull: artifacts.find(
       (artifact) => artifact.name === 'mcp-context'
     )?.report?.findings?.graphCaptureReductionVsFull,
+    studyDesign: artifacts.find(
+      (artifact) => artifact.name === 'study-readiness'
+    )?.report
+      ? {
+          passed: artifacts.find(
+            (artifact) => artifact.name === 'study-readiness'
+          ).report.passed,
+          trials: artifacts.find(
+            (artifact) => artifact.name === 'study-readiness'
+          ).report.trials,
+          providerInvocations: artifacts.find(
+            (artifact) => artifact.name === 'study-readiness'
+          ).report.providerInvocations,
+          mappedMetrics: artifacts.find(
+            (artifact) => artifact.name === 'study-readiness'
+          ).report.mappedMetrics,
+          representativeStudyClients: artifacts.find(
+            (artifact) => artifact.name === 'study-readiness'
+          ).report.representativeStudyClients,
+          universalDriverClients: artifacts.find(
+            (artifact) => artifact.name === 'study-readiness'
+          ).report.universalDriverClients,
+          coverage: artifacts.find(
+            (artifact) => artifact.name === 'study-readiness'
+          ).report.coverage,
+        }
+      : null,
   },
   conformanceLedger,
   conformancePublicKey,
@@ -308,6 +350,7 @@ const body = {
   }),
   derived,
   verdict,
+  tieredVerdict,
   claims: {
     conformance: validArtifacts.length === artifacts.length,
     executableCrossClient:
@@ -315,6 +358,10 @@ const body = {
     effectiveness: tiers.effectiveness.status === 'present',
     superiority: tiers.superiority.status === 'present',
     production: tiers.production.status === 'present',
+    replacement:
+      tieredVerdict.effectiveness.passed &&
+      tieredVerdict.superiority.passed &&
+      tieredVerdict.production.ready === true,
   },
 };
 const report = { ...body, reportHash: sha256(body) };

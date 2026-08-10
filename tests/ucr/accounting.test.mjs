@@ -2,6 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   CognitiveCostLedger,
   compareCognitiveCosts,
+  stratifiedCostDiagnostics,
 } from '../../ucr/index.mjs';
 
 function complete(runId, consumerTokens) {
@@ -70,5 +71,34 @@ describe('cognitive phase accounting', () => {
         accountingMethod: 'provider-native',
       })
     ).toThrow(/non-negative/);
+  });
+
+  test('reports regressions by direction, family, and client', () => {
+    const rows = [
+      {
+        pairId: 'p1',
+        arm: 'empty',
+        direction: 'codex->claude-code',
+        family: 'workflow',
+        consumerClient: 'claude-code',
+        totalTokens: 100,
+        latencyMs: 100,
+      },
+      {
+        pairId: 'p1',
+        arm: 'runtime',
+        direction: 'codex->claude-code',
+        family: 'workflow',
+        consumerClient: 'claude-code',
+        totalTokens: 110,
+        latencyMs: 90,
+      },
+    ];
+    const report = stratifiedCostDiagnostics(rows);
+    expect(report.passed).toBe(false);
+    expect(report.groups.find((group) => group.dimension === 'direction')).toMatchObject({
+      tokenOverhead: 0.1,
+      regressions: ['tokens'],
+    });
   });
 });

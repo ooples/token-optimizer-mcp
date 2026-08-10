@@ -21,12 +21,14 @@ import {
   signedEvidenceManifest,
   superiorityClaim,
   validateFairRun,
+  validateCompetitiveEvidence,
   verifyGraderReceipt,
   executeReferenceCompetition,
   hiddenTaskVariant,
   faultInjectionStudy,
   preRegisterBenchmark,
   productionReadiness,
+  productionTrafficReport,
   REQUIRED_FAULTS,
   sloReport,
 } from '../../ucr/index.mjs';
@@ -275,14 +277,43 @@ describe('competitive baselines and compounding', () => {
       true
     );
   });
+
+  test('requires live pinned named products for superiority evidence', () => {
+    expect(
+      validateCompetitiveEvidence({
+        baselineKind: 'vector-rag',
+        fair: true,
+        reproduced: true,
+        liveExecution: true,
+        versionPinned: true,
+        configurationPublished: true,
+        namedProduct: true,
+        ucrOnParetoFrontier: true,
+        correctnessImprovement: 0.15,
+        effectIntervalLow: 0.03,
+      })
+    ).toMatchObject({ valid: true });
+    expect(
+      validateCompetitiveEvidence({
+        baselineKind: 'vector-rag',
+        fair: true,
+        reproduced: true,
+        liveExecution: false,
+      }).valid
+    ).toBe(false);
+  });
 });
 
 describe('effectiveness gates and production rollout', () => {
   const passingMetrics = {
     applicabilityPrecision: 0.97,
+    applicabilityPrecisionIntervalLow: 0.96,
     preActionDelivery: 0.96,
+    preActionDeliveryIntervalLow: 0.951,
     irrelevantDelivery: 0,
+    irrelevantDeliveryIntervalHigh: 0.009,
     staleDelivery: 0,
+    staleDeliveryIntervalHigh: 0.009,
     recurrenceReduction: 0.85,
     recurrenceIntervalLow: 0.1,
     naturalCorrectnessDelta: 0.2,
@@ -295,11 +326,23 @@ describe('effectiveness gates and production rollout', () => {
     latencyOverheadP95: 0.04,
     knownMistakeRecurrence: 0,
     contradictoryDelivery: 0,
+    contradictoryDeliveryIntervalHigh: 0.009,
+    negativeDeliveryIntervalHigh: 0.009,
     consumerSchemaTokensP95: 0,
     captureModelCallsP95: 0,
     writerIntegrity: true,
     crossClientPassed: true,
+    benchmarkFamilyCoverage: 1,
+    benchmarkArmCoverage: 1,
+    directionalCorrectnessIntervalLow: 0,
+    familyCorrectnessIntervalLow: 0,
+    directionalTokenOverheadHigh: 0.02,
+    causalChainIntegrity: true,
+    trialIntegrity: true,
+    independentGrading: true,
     competitivePassed: true,
+    competitiveCoverage: 1,
+    competitiveReproducibility: true,
   };
 
   test('renders the complete cognition-to-correctness funnel', () => {
@@ -419,6 +462,7 @@ describe('effectiveness gates and production rollout', () => {
         slos,
         faults,
         recovery,
+        traffic: { passed: true },
         rolloutStage: 'stable',
       })
     ).toMatchObject({
@@ -432,8 +476,53 @@ describe('effectiveness gates and production rollout', () => {
         slos,
         faults,
         recovery,
+        traffic: { passed: true },
         rolloutStage: 'stable',
       })
     ).toMatchObject({ ready: true, status: 'passed' });
+  });
+
+  test('requires staged opt-in traffic and rejects raw prompts', () => {
+    const stages = [
+      'shadow-selection',
+      'observe-only',
+      'advisory-canary',
+      'verification-canary',
+      'scoped-enforcement',
+    ];
+    const samples = stages.map((rolloutStage, index) => ({
+      realTraffic: true,
+      optIn: true,
+      timestamp: index * 100,
+      rolloutStage,
+      client: ['codex', 'claude-code', 'gemini'][index % 3],
+      projectId: `project-${index % 3}`,
+      available: true,
+      latencyMs: 25,
+      contextOverhead: 0.01,
+      correctnessDelta: 0,
+      severeHarm: 0,
+      unauthorizedAccess: 0,
+      privacyViolation: 0,
+    }));
+    expect(
+      productionTrafficReport(samples, {
+        minimumSamples: 5,
+        minimumDurationMs: 400,
+        minimumClients: 3,
+        minimumProjects: 3,
+      })
+    ).toMatchObject({ passed: true });
+    expect(
+      productionTrafficReport(
+        [{ ...samples[0], detail: { transcript: 'private' } }],
+        {
+        minimumSamples: 1,
+        minimumDurationMs: 0,
+        minimumClients: 1,
+        minimumProjects: 1,
+        }
+      ).checks.noRawContent
+    ).toBe(false);
   });
 });

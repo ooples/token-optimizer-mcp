@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "ucr.study-clients/1",
+  "clients": [
+    {
+      "id": "codex",
+      "model": "gpt-5.6-sol",
+      "modelFamily": "openai",
+      "lifecycleFamily": "process-hook",
+      "commandEnvironment": "UCR_CODEX_COMMAND"
+    },
+    {
+      "id": "claude-code",
+      "model": "sonnet",
+      "modelFamily": "anthropic",
+      "lifecycleFamily": "process-hook",
+      "commandEnvironment": "UCR_CLAUDE_COMMAND"
+    },
+    {
+      "id": "gemini",
+      "model": "configured-live-model",
+      "modelFamily": "google",
+      "lifecycleFamily": "process-hook",
+      "commandEnvironment": "UCR_GEMINI_COMMAND"
+    }
+  ]
+}

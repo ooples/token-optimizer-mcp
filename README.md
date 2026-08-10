@@ -1413,13 +1413,24 @@ consumers normally receive zero MCP tools: host pre-action delivery adds only
 the selected capsule through the client lifecycle channel. Other enabled MCP
 servers add their own schemas independently.
 
-The current two-direction Codex/Claude executable smoke records 21.06% lower
-combined predecessor-to-successor token traffic, 18.36% lower combined latency,
-one known-mistake recurrence in blinded control versus zero in runtime, and one
-native pre-execution denial. These are signed smoke observations, not powered
+The current confounder-matched two-direction Codex/Claude executable smoke
+records 5.66% lower combined predecessor-to-successor token traffic and 4.73%
+higher combined latency. Both control and runtime successors were correct, so
+the rerun contained no mistake-prevention or native-denial opportunity. These
+are signed smoke observations, not powered
 effectiveness or universal-superiority claims; the evidence index deliberately
 keeps the release verdict `insufficient` until its confidence, competitive, and
 production gates pass.
+
+The replacement-grade protocol is intentionally larger than that smoke:
+52,074 all-family/all-arm trial envelopes, 108,882 provider
+calls, three independent model families, direction-level non-inferiority, and
+1,012 hard-negative opportunities per direction and arm so the Bonferroni-adjusted
+95% family-wise false-delivery upper bound—not only the point estimate—must
+remain below 1%. Run
+`npm run verify:ucr:study-design` to validate the frozen metric coverage. The
+full protocol and CLI driver contract are in
+[`evals/ucr/FULL_STUDY_CONTRACT.md`](evals/ucr/FULL_STUDY_CONTRACT.md).
 
 #### Performance Controls
 

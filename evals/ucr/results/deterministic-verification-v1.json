@@ -46,7 +46,7 @@
     "modelRuns": 9,
     "executableClientSmokes": 3,
     "competitiveReproductions": 0,
-    "reportHash": "fe648170e0a37e83367ad1847221c6969fa66997532e38cbb22758178ce3ad2e",
+    "reportHash": "ccb15e6663d5b252d2bd18adca952212cf13c5701d261096107658854ce1680d",
     "evidenceTiers": {
       "transport": {
         "status": "missing",
@@ -57,9 +57,9 @@
       "conformance": {
         "status": "present",
         "ledgers": 2,
-        "rows": 706,
+        "rows": 707,
         "hashes": [
-          "7ada2695725642896ae1f90cc30bc6c3b8b2232787ddc6c7cd16ef8eb268e217",
+          "fd8acf44434538a3eb638389dfccdde5c89c8f3d89da6886044750c64426f6a1",
           "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
         ]
       },
@@ -69,8 +69,8 @@
         "rows": 14,
         "hashes": [
           "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
-          "1d0533340a4a4a1387ebde702bfb8c9b0903ea9ce38b7eea1ac18b79069dd7f7",
-          "88acebf93343ce71b5adc79bcbc160e0f36b081d3c3fce9d29b1324c53864a4c",
+          "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
+          "b8c8371750b77e12f60507be373aedbca433ecabf7c9a29ba3ecf842ad07822d",
           "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
           "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
           "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
@@ -102,8 +102,12 @@
     "passed": false,
     "missing": [
       "applicabilityPrecision",
+      "applicabilityPrecisionIntervalLow",
       "preActionDelivery",
+      "preActionDeliveryIntervalLow",
+      "irrelevantDeliveryIntervalHigh",
       "staleDelivery",
+      "staleDeliveryIntervalHigh",
       "recurrenceReduction",
       "recurrenceIntervalLow",
       "naturalCorrectnessDelta",
@@ -116,10 +120,22 @@
       "latencyOverheadP95",
       "knownMistakeRecurrence",
       "contradictoryDelivery",
+      "contradictoryDeliveryIntervalHigh",
+      "negativeDeliveryIntervalHigh",
       "consumerSchemaTokensP95",
       "captureModelCallsP95",
       "crossClientPassed",
-      "competitivePassed"
+      "benchmarkFamilyCoverage",
+      "benchmarkArmCoverage",
+      "directionalCorrectnessIntervalLow",
+      "familyCorrectnessIntervalLow",
+      "directionalTokenOverheadHigh",
+      "causalChainIntegrity",
+      "trialIntegrity",
+      "independentGrading",
+      "competitivePassed",
+      "competitiveCoverage",
+      "competitiveReproducibility"
     ],
     "failed": []
   },
@@ -152,14 +168,14 @@
     {
       "name": "unified signed evidence index is integrity-valid",
       "passed": true,
-      "detail": "12/12 artifacts"
+      "detail": "13/13 artifacts"
     },
     {
       "name": "stateful cross-model smoke passes both primary directions and retains the blocked edge",
       "passed": true,
       "detail": {
-        "artifactsValid": 12,
-        "artifactsTotal": 12,
+        "artifactsValid": 13,
+        "artifactsTotal": 13,
         "liveDirectionsPassed": 2,
         "liveDirectionsAttempted": 3,
         "liveDirectionMetrics": [
@@ -178,13 +194,13 @@
             "nativeGuardEnforced": false,
             "captureModelCalls": 0,
             "consumerStaticSchemaTokens": 0,
-            "capsuleTokens": 64,
-            "controlTokenTraffic": 476301,
-            "runtimeTokenTraffic": 285194,
-            "tokenTrafficDelta": -0.4012315741516394,
-            "controlLatencyMs": 73503.72200000001,
-            "runtimeLatencyMs": 66832.0761,
-            "latencyDelta": -0.09076609617129323
+            "capsuleTokens": 57,
+            "controlTokenTraffic": 324886,
+            "runtimeTokenTraffic": 287344,
+            "tokenTrafficDelta": -0.11555437907450614,
+            "controlLatencyMs": 67516.1478,
+            "runtimeLatencyMs": 74853.2538,
+            "latencyDelta": 0.10867186945757588
           },
           {
             "direction": "claude-code->codex",
@@ -195,19 +211,19 @@
             "predecessorMistakeObserved": true,
             "predecessorCorrectionVerified": true,
             "repeatedFailure": false,
-            "controlMistake": true,
+            "controlMistake": false,
             "delivered": true,
             "nativeGuardWired": true,
-            "nativeGuardEnforced": true,
+            "nativeGuardEnforced": false,
             "captureModelCalls": 0,
             "consumerStaticSchemaTokens": 0,
-            "capsuleTokens": 91,
-            "controlTokenTraffic": 402956,
-            "runtimeTokenTraffic": 408931,
-            "tokenTrafficDelta": 0.01482792165894043,
-            "controlLatencyMs": 115158.38889999998,
-            "runtimeLatencyMs": 87188.1611,
-            "latencyDelta": -0.24288484813979527
+            "capsuleTokens": 98,
+            "controlTokenTraffic": 377357,
+            "runtimeTokenTraffic": 375166,
+            "tokenTrafficDelta": -0.005806172934383091,
+            "controlLatencyMs": 78773.0749,
+            "runtimeLatencyMs": 78356.7587,
+            "latencyDelta": -0.00528500633660044
           },
           {
             "direction": "claude-code->copilot",
@@ -233,13 +249,13 @@
             "latencyDelta": -0.15731011708195736
           }
         ],
-        "liveDirectionsWithLowerTokenTraffic": 1,
-        "liveDirectionsWithLowerLatency": 2,
-        "combinedLiveTokenReduction": 0.210555048182727,
-        "combinedLiveLatencyReduction": 0.183618605425028,
-        "blindedControlMistakes": 1,
+        "liveDirectionsWithLowerTokenTraffic": 2,
+        "liveDirectionsWithLowerLatency": 1,
+        "combinedLiveTokenReduction": 0.05658012967021387,
+        "combinedLiveLatencyReduction": -0.047308951898614456,
+        "blindedControlMistakes": 0,
         "runtimeKnownMistakeRecurrences": 0,
-        "nativeGuardEnforcements": 1,
+        "nativeGuardEnforcements": 0,
         "maximumCaptureModelCalls": 0,
         "maximumConsumerStaticSchemaTokens": 0,
         "registeredClientProcesses": 16,
@@ -247,15 +263,31 @@
         "coordinationWorkers": 100,
         "productionFaults": 6,
         "cognitiveSchemaTokens": 480,
-        "cognitiveReductionVsFull": 0.9840663900414938
+        "cognitiveReductionVsFull": 0.9840663900414938,
+        "studyDesign": {
+          "passed": true,
+          "trials": 52074,
+          "providerInvocations": 108882,
+          "mappedMetrics": 37,
+          "representativeStudyClients": 3,
+          "universalDriverClients": 16,
+          "coverage": {
+            "families": 1,
+            "arms": 1,
+            "clients": 3,
+            "modelFamilies": 3,
+            "directions": 9,
+            "materialVariants": 1420
+          }
+        }
       }
     },
     {
       "name": "scale, coordination, adapter, and fault artifacts meet frozen targets",
       "passed": true,
       "detail": {
-        "artifactsValid": 12,
-        "artifactsTotal": 12,
+        "artifactsValid": 13,
+        "artifactsTotal": 13,
         "liveDirectionsPassed": 2,
         "liveDirectionsAttempted": 3,
         "liveDirectionMetrics": [
@@ -274,13 +306,13 @@
             "nativeGuardEnforced": false,
             "captureModelCalls": 0,
             "consumerStaticSchemaTokens": 0,
-            "capsuleTokens": 64,
-            "controlTokenTraffic": 476301,
-            "runtimeTokenTraffic": 285194,
-            "tokenTrafficDelta": -0.4012315741516394,
-            "controlLatencyMs": 73503.72200000001,
-            "runtimeLatencyMs": 66832.0761,
-            "latencyDelta": -0.09076609617129323
+            "capsuleTokens": 57,
+            "controlTokenTraffic": 324886,
+            "runtimeTokenTraffic": 287344,
+            "tokenTrafficDelta": -0.11555437907450614,
+            "controlLatencyMs": 67516.1478,
+            "runtimeLatencyMs": 74853.2538,
+            "latencyDelta": 0.10867186945757588
           },
           {
             "direction": "claude-code->codex",
@@ -291,19 +323,19 @@
             "predecessorMistakeObserved": true,
             "predecessorCorrectionVerified": true,
             "repeatedFailure": false,
-            "controlMistake": true,
+            "controlMistake": false,
             "delivered": true,
             "nativeGuardWired": true,
-            "nativeGuardEnforced": true,
+            "nativeGuardEnforced": false,
             "captureModelCalls": 0,
             "consumerStaticSchemaTokens": 0,
-            "capsuleTokens": 91,
-            "controlTokenTraffic": 402956,
-            "runtimeTokenTraffic": 408931,
-            "tokenTrafficDelta": 0.01482792165894043,
-            "controlLatencyMs": 115158.38889999998,
-            "runtimeLatencyMs": 87188.1611,
-            "latencyDelta": -0.24288484813979527
+            "capsuleTokens": 98,
+            "controlTokenTraffic": 377357,
+            "runtimeTokenTraffic": 375166,
+            "tokenTrafficDelta": -0.005806172934383091,
+            "controlLatencyMs": 78773.0749,
+            "runtimeLatencyMs": 78356.7587,
+            "latencyDelta": -0.00528500633660044
           },
           {
             "direction": "claude-code->copilot",
@@ -329,13 +361,13 @@
             "latencyDelta": -0.15731011708195736
           }
         ],
-        "liveDirectionsWithLowerTokenTraffic": 1,
-        "liveDirectionsWithLowerLatency": 2,
-        "combinedLiveTokenReduction": 0.210555048182727,
-        "combinedLiveLatencyReduction": 0.183618605425028,
-        "blindedControlMistakes": 1,
+        "liveDirectionsWithLowerTokenTraffic": 2,
+        "liveDirectionsWithLowerLatency": 1,
+        "combinedLiveTokenReduction": 0.05658012967021387,
+        "combinedLiveLatencyReduction": -0.047308951898614456,
+        "blindedControlMistakes": 0,
         "runtimeKnownMistakeRecurrences": 0,
-        "nativeGuardEnforcements": 1,
+        "nativeGuardEnforcements": 0,
         "maximumCaptureModelCalls": 0,
         "maximumConsumerStaticSchemaTokens": 0,
         "registeredClientProcesses": 16,
@@ -343,7 +375,23 @@
         "coordinationWorkers": 100,
         "productionFaults": 6,
         "cognitiveSchemaTokens": 480,
-        "cognitiveReductionVsFull": 0.9840663900414938
+        "cognitiveReductionVsFull": 0.9840663900414938,
+        "studyDesign": {
+          "passed": true,
+          "trials": 52074,
+          "providerInvocations": 108882,
+          "mappedMetrics": 37,
+          "representativeStudyClients": 3,
+          "universalDriverClients": 16,
+          "coverage": {
+            "families": 1,
+            "arms": 1,
+            "clients": 3,
+            "modelFamilies": 3,
+            "directions": 9,
+            "materialVariants": 1420
+          }
+        }
       }
     },
     {
@@ -507,7 +555,7 @@
     {
       "name": "release gate refuses to infer effectiveness from deterministic conformance",
       "passed": true,
-      "detail": "19 live fields missing"
+      "detail": "35 live fields missing"
     },
     {
       "name": "canary regression automatically rolls back and scopes a kill switch",
@@ -525,5 +573,5 @@
       }
     }
   ],
-  "reportHash": "6068ad7ff40be7be4c14a16bd80e3d04cc0f5f4f7cafc8232bc8ba8ab92175b7"
+  "reportHash": "523c2c0797944c2e3b09aeefbddfd2d751f9f3dda3d39ace79eff756058de085"
 }

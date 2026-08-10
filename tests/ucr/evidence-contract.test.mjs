@@ -61,6 +61,14 @@ describe('evidence contract v2', () => {
     ).toMatchObject({ status: 'present', ledgers: 1, rows: 2 });
   });
 
+  test('rejects raw model content nested inside evidence objects', () => {
+    const ledger = sealEvidenceLedger(run('effectiveness', 'nested-raw'), [
+      { study: 'bad', detail: { transcript: 'private' } },
+    ]);
+    expect(verifyEvidenceLedger(ledger).valid).toBe(false);
+    expect(verifyEvidenceLedger(ledger).diagnostics[0]).toMatch(/detail\.transcript/);
+  });
+
   test('does not derive effectiveness from transport or conformance evidence', () => {
     const ledger = sealEvidenceLedger(run('conformance'), [
       {
@@ -138,15 +146,39 @@ describe('evidence contract v2', () => {
         deliveryPhase: 'pre-action',
         contextOverheadRatio: 0.01,
         contradictory: false,
+        knownMistake: true,
         phaseAccounting: {
           staticSchemaTokens: 0,
           captureModelCalls: 0,
         },
       },
+      {
+        arm: 'irrelevant',
+        applicable: false,
+        delivered: false,
+      },
+      {
+        arm: 'stale',
+        applicable: false,
+        stale: true,
+        delivered: false,
+      },
+      {
+        arm: 'contradictory',
+        applicable: false,
+        contradictory: true,
+        delivered: false,
+      },
     ]);
     expect(deriveReleaseMetrics([ledger]).metrics).toMatchObject({
       applicabilityPrecision: 1,
+      applicabilityPrecisionIntervalLow: expect.any(Number),
       preActionDelivery: 1,
+      preActionDeliveryIntervalLow: expect.any(Number),
+      irrelevantDelivery: 0,
+      irrelevantDeliveryIntervalHigh: expect.any(Number),
+      staleDelivery: 0,
+      staleDeliveryIntervalHigh: expect.any(Number),
       recurrenceReduction: 1,
       naturalCorrectnessDelta: 1,
       reconstructionTokenReduction: 0.6,
@@ -154,6 +186,7 @@ describe('evidence contract v2', () => {
       latencyOverheadP95: 0.02,
       knownMistakeRecurrence: 0,
       contradictoryDelivery: 0,
+      contradictoryDeliveryIntervalHigh: expect.any(Number),
       consumerSchemaTokensP95: 0,
       captureModelCallsP95: 0,
     });

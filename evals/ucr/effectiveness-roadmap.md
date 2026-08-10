@@ -18,12 +18,14 @@ exit gate all pass. Signed negative runs remain in the evidence index.
   in-turn model-authored capture predecessor, a blinded control successor, and
   a runtime successor. Both fresh successors produced correct repository state
   and neither runtime successor repeated the generated-only edit.
-- Across those two executable-smoke pairs, full predecessor-to-successor token
-  traffic fell from 879,257 to 694,125 (21.06%) and latency fell 18.36%. The
-  blinded controls repeated one known mistake while runtime repeated zero. In
-  Claude-to-Codex, a signed native Codex pre-tool guard denied the bad edit
-  before execution. Directionally, Claude-to-Codex still used 1.48% more token
-  traffic, so the aggregate point estimate is not a powered efficiency claim.
+- The stricter matched rerun gives control and treatment producers byte-identical
+  prompts and equivalent client surfaces, and loads identical native guard
+  transport in both consumer arms. Full pipeline traffic fell from 702,243 to
+  662,510 (5.66%), while latency rose from 146,289 ms to 153,210 ms (4.73%).
+  Codex-to-Claude used 11.56% fewer tokens but 10.87% more latency;
+  Claude-to-Codex used 0.58% fewer tokens and 0.53% less latency. Both controls
+  completed correctly without the target mistake, so the rerun is not evidence
+  of a correctness lift or mistake prevention.
 - A minimal Claude plugin transport attempt increased traffic 25.0% and latency
   25.3% without exercising the guard. It remains negative evidence and caused
   the harness to use a one-hook native settings file instead of loading the
@@ -71,6 +73,11 @@ responsible for remembering to retrieve prerequisite context.
 
 ## Execution sequence
 
+The authoritative executable design is now
+[`FULL_STUDY_CONTRACT.md`](./FULL_STUDY_CONTRACT.md). It supersedes the earlier
+single-fixture powered estimate below: repeating one handoff task cannot establish
+all-family generalization or confidence-bounded hard-negative safety.
+
 1. Ship the mandatory `PreActionController`, exact-scope retrieval, model-authored
    harvest receipts, zero-tool consumer path, capability guarantees, and the
    stateful bidirectional evidence now implemented on this branch.
@@ -79,14 +86,15 @@ responsible for remembering to retrieve prerequisite context.
    on every interceptable lifecycle family.
 3. Keep the adversarial retrieval/poisoning/scope suites and phase-scoped
    accounting as release gates for maximum active context, total traffic, cache
-   traffic, model turns, latency, and cost. Investigate the remaining
-   Claude-to-Codex directional token regression before promotion.
+   traffic, model turns, latency, and cost. Investigate the Codex-to-Claude
+   latency regression before promotion.
 4. Run ten consecutive stateful pairs in every available direction. Acquire or
    replenish provider quota before calling Copilot or unavailable clients live;
    never substitute a deterministic adapter test for a paid live edge.
-5. Freeze graders and hidden variants, then execute the preregistered powered
-   paired study (357 pairs per direction, 2,856 calls for two directions under
-   the four-call protocol). Require at
+5. Freeze graders and hidden variants, then execute the full preregistered matrix
+   (363 pairs per direction and 1,012 hard-negative opportunities per direction
+   and arm; 52,074 trials / 108,882 provider calls for three clients and
+   nine same/cross-client directions). Require at
    least a 10-point correctness lift with confidence-interval lower bound above
    zero, zero severe unquarantined harm, and the efficiency SLO.
 6. Run fair competitive baselines, then shadow/canary production. Only those

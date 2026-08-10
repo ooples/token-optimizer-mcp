@@ -115,6 +115,10 @@ export function registerUcrRoutes(app: Express): void {
         ),
         certifiedClients: Object.keys(ucr.UCR_CLIENT_REGISTRY).length,
         verdict: evidence.verdict,
+        tieredVerdict:
+          evidence.tieredVerdict ||
+          evidence.evidenceIndex?.tieredVerdict ||
+          ucr.tieredReleaseVerdict(evidence.metrics || {}),
         metrics: evidence.metrics,
         deterministicEvidence: evidence.deterministic
           ? {
@@ -140,6 +144,8 @@ export function registerUcrRoutes(app: Express): void {
               summary: evidence.evidenceIndex.summary,
               tiers: evidence.evidenceIndex.evidenceContract?.tiers,
               claims: evidence.evidenceIndex.claims,
+              tieredVerdict: evidence.evidenceIndex.tieredVerdict,
+              derived: evidence.evidenceIndex.derived,
               artifacts: evidence.evidenceIndex.artifacts?.map(
                 (artifact: any) => ({
                   name: artifact.name,

@@ -215,14 +215,25 @@ async function seed() {
     for (const arm of ['empty', 'natural', 'oracle', 'irrelevant', 'stale']) {
       const prevented = ['natural', 'oracle'].includes(arm);
       record(GRAPH, {
-        kind: 'handoff-run', pairId: `ui-handoff-${pair}`,
-        scenarioId: 'verification-entry-point', arm,
-        producer: { client: 'codex', model: 'gpt-5.6-sol', captureSuccess: true },
+        kind: 'handoff-run',
+        pairId: `ui-handoff-${pair}`,
+        scenarioId: 'verification-entry-point',
+        arm,
+        producer: {
+          client: 'codex',
+          model: 'gpt-5.6-sol',
+          captureSuccess: true,
+        },
         consumer: {
-          client: 'claude-code', model: 'claude-sonnet-5', correct: true,
-          firstPass: prevented, mistakeAttempted: !prevented,
-          mistakeExecuted: !prevented, totalTokens: prevented ? 800 : 1000,
-          toolCalls: prevented ? 5 : 7, failedToolCalls: prevented ? 0 : 1,
+          client: 'claude-code',
+          model: 'claude-sonnet-5',
+          correct: true,
+          firstPass: prevented,
+          mistakeAttempted: !prevented,
+          mistakeExecuted: !prevented,
+          totalTokens: prevented ? 800 : 1000,
+          toolCalls: prevented ? 5 : 7,
+          failedToolCalls: prevented ? 0 : 1,
         },
         delivery: { beforeFirstExecutedMistake: arm === 'natural' },
       });
@@ -230,13 +241,23 @@ async function seed() {
   }
   for (const arm of ['empty', 'natural']) {
     record(GRAPH, {
-      kind: 'concurrency-run', pairId: 'ui-concurrent-1', arm,
-      writerCount: 3, captureSuccesses: 3,
+      kind: 'concurrency-run',
+      pairId: 'ui-concurrent-1',
+      arm,
+      writerCount: 3,
+      captureSuccesses: 3,
       integrity: { zeroLoss: true, parseable: true, orphanedFindings: 0 },
-      delivery: { expected: arm === 'natural' ? 3 : 0, delivered: arm === 'natural' ? 3 : 0 },
+      delivery: {
+        expected: arm === 'natural' ? 3 : 0,
+        delivered: arm === 'natural' ? 3 : 0,
+      },
       consumer: {
-        client: 'claude-code', model: 'claude-sonnet-5', correct: arm === 'empty',
-        firstPass: false, mistakeAttempted: true, mistakeExecuted: true,
+        client: 'claude-code',
+        model: 'claude-sonnet-5',
+        correct: arm === 'empty',
+        firstPass: false,
+        mistakeAttempted: true,
+        mistakeExecuted: true,
       },
     });
   }
@@ -612,9 +633,7 @@ async function main() {
             /claude-code/i.test(transferText || '') &&
             /gates passed/i.test(transferText || '')
         );
-        const concurrencyText = await page.textContent(
-          '#evidence-concurrency'
-        );
+        const concurrencyText = await page.textContent('#evidence-concurrency');
         check(
           'evidence renders concurrent writer integrity and later delivery',
           /100%/.test(concurrencyText || '') &&
@@ -647,16 +666,26 @@ async function main() {
         );
         check(
           'UCR dashboard renders signed artifacts and live directions',
-          /Evidence artifacts\s*12\/12/i.test(ucrText || '') &&
+          /Evidence artifacts\s*13\/13/i.test(ucrText || '') &&
             /Live directions\s*2\/3/i.test(ucrText || '') &&
             /Consumer MCP schema\s*0 tokens max/i.test(ucrText || '') &&
-            /Combined token reduction\s*21\.06%/i.test(ucrText || '') &&
-            /Combined latency reduction\s*18\.36%/i.test(ucrText || '') &&
-            /Known mistake recurrence\s*1 control → 0 runtime/i.test(
+            /Combined token reduction\s*5\.66%/i.test(ucrText || '') &&
+            /Combined latency reduction\s*-4\.73%/i.test(ucrText || '') &&
+            /Known mistake recurrence\s*0 control → 0 runtime/i.test(
               ucrText || ''
             ) &&
-            /Native guard denials\s*1/i.test(ucrText || '') &&
+            /Native guard denials\s*0/i.test(ucrText || '') &&
             /Capture model calls\s*0 additional max/i.test(ucrText || '')
+        );
+        check(
+          'UCR dashboard separates frozen design from observed evidence',
+          /Frozen study design\s*52,074 trials \/ 108,882 calls/i.test(
+            ucrText || ''
+          ) &&
+            /Release metrics mapped\s*37/i.test(ucrText || '') &&
+            /Universal CLI drivers\s*16 protocol-mapped \/ 3 in powered live matrix/i.test(
+              ucrText || ''
+            )
         );
         const tierCount = await page.locator('#ucr-tiers tbody tr').count();
         const artifactCount = await page
@@ -669,7 +698,7 @@ async function main() {
         );
         check(
           'UCR dashboard exposes every integrity-checked study',
-          artifactCount === 12,
+          artifactCount === 13,
           String(artifactCount)
         );
         check(
