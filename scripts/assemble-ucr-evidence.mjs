@@ -72,12 +72,14 @@ for (const definition of [
   if (existsSync(join(RESULTS, definition[1]))) definitions.push(definition);
 }
 for (const filename of readdirSync(RESULTS)
-  .filter((name) => /^full-study-qualification-.*\.json$/i.test(name))
+  .filter((name) =>
+    /^full-study-(?:qualification|blocked)-.*\.json$/i.test(name)
+  )
   .sort())
   definitions.push([
     filename.replace(/\.json$/i, ''),
     filename,
-    'executable-smoke',
+    filename.includes('-blocked-') ? 'blocked-smoke' : 'executable-smoke',
     false,
   ]);
 

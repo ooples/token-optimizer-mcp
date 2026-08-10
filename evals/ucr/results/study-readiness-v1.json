@@ -26,6 +26,10 @@
   "coverage": {
     "families": 1,
     "arms": 1,
+    "familyCount": 11,
+    "requiredFamilies": 11,
+    "armCount": 7,
+    "requiredArms": 7,
     "clients": 3,
     "modelFamilies": 3,
     "directions": 9,
@@ -48,5 +52,5 @@
     "materialVariants": true,
     "executionTopology": true
   },
-  "reportHash": "1abdef1213b290c181ef9ccc828514f49997fa1240db7c405915afdeae9e664e"
+  "reportHash": "252efa837f89da6ff0cab4e021126a46bf464c4d8dce201345a6711ce94159c5"
 }

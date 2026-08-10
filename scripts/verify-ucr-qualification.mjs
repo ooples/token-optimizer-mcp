@@ -15,7 +15,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RESULTS = join(ROOT, 'evals', 'ucr', 'results');
 const TRUST = join(ROOT, 'evals', 'ucr', 'trusted-evidence-keys');
 const configured = process.argv.slice(2);
-const explicitFiles = configured.length > 0;
 const files = configured.length
   ? configured.map((value) => (isAbsolute(value) ? value : resolve(value)))
   : readdirSync(RESULTS)
@@ -25,7 +24,6 @@ const results = [];
 
 for (const path of files.sort()) {
   const report = JSON.parse(readFileSync(path, 'utf8'));
-  if (!report?.selection && !explicitFiles) continue;
   const { reportHash, ...body } = report;
   const rows = report?.ledger?.rows || [];
   const keyId = String(report?.ledgerKeyId || '');
@@ -33,23 +31,41 @@ for (const path of files.sort()) {
     ? join(TRUST, `${keyId}.pem`)
     : null;
   const reportHashValid = sha256(body) === reportHash;
+  let trustedPublicKey = null;
+  if (trustedKeyPath && existsSync(trustedKeyPath)) {
+    try {
+      trustedPublicKey = readFileSync(trustedKeyPath, 'utf8');
+    } catch {
+      trustedPublicKey = null;
+    }
+  }
   const ledgerVerification = verifyEvidenceLedger(report.ledger, {
-    publicKey:
-      trustedKeyPath && existsSync(trustedKeyPath)
-        ? readFileSync(trustedKeyPath, 'utf8')
-        : null,
+    publicKey: trustedPublicKey,
   });
+  const signatureTrusted =
+    Boolean(trustedPublicKey) && ledgerVerification.validSignature === true;
   const selectedTrialIdsHashValid =
     report?.selection?.selectedTrialIdsHash ===
     sha256(rows.map((row) => row.trialId));
+  const observedArms = [
+    ...new Set(rows.map((row) => String(row?.arm || '')).filter(Boolean)),
+  ].sort();
+  const declaredArms = String(report?.selection?.arms || '')
+    .split(',')
+    .map((arm) => arm.trim())
+    .filter(Boolean)
+    .sort();
+  const armsMatchRows =
+    observedArms.length > 0 &&
+    canonicalJson(declaredArms) === canonicalJson(observedArms);
+  const selectedTrialsMatchRows =
+    Number.isInteger(report?.selection?.selectedTrials) &&
+    report.selection.selectedTrials === rows.length;
   const qualification = report?.selection
     ? studyQualificationVerdict({
         rows,
-        selectedTrialCount: report.selection.selectedTrials,
-        plannedArms: String(report.selection.arms || '')
-          .split(',')
-          .map((arm) => arm.trim())
-          .filter(Boolean),
+        selectedTrialCount: rows.length,
+        plannedArms: observedArms,
         failures: report.failures,
       })
     : {
@@ -57,20 +73,29 @@ for (const path of files.sort()) {
         passed: false,
         failed: ['selectionMetadataMissing'],
       };
+  const embeddedQualificationMatches =
+    canonicalJson(report?.qualification ?? null) ===
+    canonicalJson(qualification);
   const passed =
     reportHashValid &&
     ledgerVerification.valid &&
+    signatureTrusted &&
     selectedTrialIdsHashValid &&
+    armsMatchRows &&
+    selectedTrialsMatchRows &&
+    embeddedQualificationMatches &&
     qualification.passed;
   results.push({
     file: basename(path),
     passed,
     reportHashValid,
     ledgerValid: ledgerVerification.valid,
+    signatureTrusted,
     selectedTrialIdsHashValid,
+    armsMatchRows,
+    selectedTrialsMatchRows,
     qualification,
-    embeddedQualificationMatches:
-      report?.qualification?.passed === qualification.passed,
+    embeddedQualificationMatches,
   });
 }
 

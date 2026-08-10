@@ -3,6 +3,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   STUDY_DRIVER_PROTOCOL,
   studyDriverChildEnvironment,
@@ -23,7 +24,11 @@ const key = studyDirectionEnvironmentKey(
   trial?.producerClient,
   trial?.consumerClient
 );
-const command = process.env[key] || process.env.UCR_STUDY_DIRECTION_DRIVER;
+const bundledDriver = fileURLToPath(
+  new URL('./ucr-live-study-driver.mjs', import.meta.url)
+);
+const command =
+  process.env[key] || process.env.UCR_STUDY_DIRECTION_DRIVER || bundledDriver;
 if (!command || !existsSync(command)) {
   process.stderr.write(
     `${key} or UCR_STUDY_DIRECTION_DRIVER must identify an executable ${STUDY_DRIVER_PROTOCOL} driver\n`

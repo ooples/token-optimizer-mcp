@@ -46,7 +46,7 @@
     "modelRuns": 9,
     "executableClientSmokes": 3,
     "competitiveReproductions": 0,
-    "reportHash": "33bd15a5f1921daad5c7dd059549b4510ceea860deb3c78807785781412f0e86",
+    "reportHash": "a0628cbe300b5b549bd8f2993b98ec22c85aae4722ffe91e492ebccf5b32b4fd",
     "evidenceTiers": {
       "transport": {
         "status": "missing",
@@ -59,14 +59,14 @@
         "ledgers": 2,
         "rows": 707,
         "hashes": [
-          "860eea6f1db1e062254cafe4b062b887a1552a3f8ba52bbe680e26ffe583a136",
+          "5fe6439e64f03915ae1a33ed798a00fa2dfd5f6b27afd005ff55ac9cda3eb5cb",
           "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
         ]
       },
       "executable-smoke": {
         "status": "present",
-        "ledgers": 13,
-        "rows": 28,
+        "ledgers": 9,
+        "rows": 19,
         "hashes": [
           "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
           "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
@@ -74,13 +74,9 @@
           "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
           "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
           "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
-          "051176a28ed01f4cf41f4cc7bc023d2bea853f2817be40c39fa29f53a3aa335d",
-          "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7",
-          "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc",
-          "78c7e808213199debba047880be32b6ac1c7647bf72a23057b9ba8d2fd3304b1",
-          "235d0b546f92f312450a24531b37cb0be5a0f512855858d083efd870ca12f1ad",
-          "2470c21e2b53081f6afab645025864b50b015336d816c8c38517ee024ba1cdbb",
-          "52159aeaf25ac2da45ad79ba150beb90f117a9d589e31f960f4379d8b7b37cdf"
+          "e12971d09465588891f93f8c859eaf08ef41f4515aa531be50e2888a55ca8eaa",
+          "1b259bd70702aa27b41861c2f721debeaeedd874f1435351f3b1af4ad4b59188",
+          "96f3c664cf2cfded2dc97c6bfcdf0746ceb1fc69cd66f54f46bcde0a1dea2264"
         ]
       },
       "effectiveness": {
@@ -175,14 +171,14 @@
     {
       "name": "unified signed evidence index is integrity-valid",
       "passed": true,
-      "detail": "20/20 artifacts"
+      "detail": "16/16 artifacts"
     },
     {
       "name": "stateful cross-model smoke passes both primary directions and retains the blocked edge",
       "passed": true,
       "detail": {
-        "artifactsValid": 20,
-        "artifactsTotal": 20,
+        "artifactsValid": 16,
+        "artifactsTotal": 16,
         "liveDirectionsPassed": 2,
         "liveDirectionsAttempted": 3,
         "liveDirectionMetrics": [
@@ -281,6 +277,10 @@
           "coverage": {
             "families": 1,
             "arms": 1,
+            "familyCount": 11,
+            "requiredFamilies": 11,
+            "armCount": 7,
+            "requiredArms": 7,
             "clients": 3,
             "modelFamilies": 3,
             "directions": 9,
@@ -293,8 +293,8 @@
       "name": "scale, coordination, adapter, and fault artifacts meet frozen targets",
       "passed": true,
       "detail": {
-        "artifactsValid": 20,
-        "artifactsTotal": 20,
+        "artifactsValid": 16,
+        "artifactsTotal": 16,
         "liveDirectionsPassed": 2,
         "liveDirectionsAttempted": 3,
         "liveDirectionMetrics": [
@@ -393,6 +393,10 @@
           "coverage": {
             "families": 1,
             "arms": 1,
+            "familyCount": 11,
+            "requiredFamilies": 11,
+            "armCount": 7,
+            "requiredArms": 7,
             "clients": 3,
             "modelFamilies": 3,
             "directions": 9,
@@ -580,5 +584,5 @@
       }
     }
   ],
-  "reportHash": "6d931ffc1b990f1a7d8460e5eb5cf91bb6eef124da44c0c07f0c56d41209414a"
+  "reportHash": "0fd9e3b7914d38a62c355c4e8f1c496691a200967098fad401b2bfdf1a7ae245"
 }

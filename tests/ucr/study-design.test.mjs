@@ -66,7 +66,16 @@ describe('full effectiveness study design', () => {
     const coverage = studyDesignCoverage(plan);
     expect(coverage).toMatchObject({
       passed: true,
-      coverage: { families: 1, arms: 1, clients: 3, modelFamilies: 3 },
+      coverage: {
+        families: 1,
+        arms: 1,
+        familyCount: 11,
+        requiredFamilies: 11,
+        armCount: 7,
+        requiredArms: 7,
+        clients: 3,
+        modelFamilies: 3,
+      },
     });
     expect(
       new Set(plan.trials.map((trial) => trial.workspaceIsolationId)).size

@@ -6,6 +6,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildFullStudyPlan,
+  BENCHMARK_ARMS,
+  BENCHMARK_FAMILIES,
   canonicalJson,
   freezeBenchmark,
   preRegisterBenchmark,
@@ -71,10 +73,18 @@ const powered =
   plan.primaryPairsPerDirection >= registration.powerAnalysis.perArm &&
   plan.negativeSamplesPerDirectionPerArm >=
     plan.minimumNegativeSamplesPerDirection;
+const familyCount = new Set(plan.trials.map((trial) => trial.family)).size;
+const armCount = new Set(plan.trials.map((trial) => trial.arm)).size;
+const readinessChecks = {
+  ...coverage.design.checks,
+  benchmarkFamilies: familyCount >= BENCHMARK_FAMILIES.length,
+  benchmarkArms: armCount >= BENCHMARK_ARMS.length,
+};
 const designPassed =
   coverage.passed &&
   powered &&
   driverContractPassed &&
+  Object.values(readinessChecks).every(Boolean) &&
   coverage.missingMetrics.length === 0;
 const body = {
   schemaVersion: 'ucr.study-readiness/1',
@@ -103,8 +113,14 @@ const body = {
   universalDriverClients: Object.keys(driverRegistry).length,
   driverContractPassed,
   missingMetrics: coverage.missingMetrics,
-  coverage: coverage.design.coverage,
-  checks: coverage.design.checks,
+  coverage: {
+    ...coverage.design.coverage,
+    familyCount,
+    requiredFamilies: BENCHMARK_FAMILIES.length,
+    armCount,
+    requiredArms: BENCHMARK_ARMS.length,
+  },
+  checks: readinessChecks,
 };
 const report = { ...body, reportHash: sha256(body) };
 if (write)
@@ -136,7 +152,7 @@ console.log(
     representativeStudyClients: clients.length,
     universalDriverClients: Object.keys(driverRegistry).length,
     missingMetrics: coverage.missingMetrics,
-    coverage: coverage.design.coverage,
+    coverage: body.coverage,
   })
 );
 if (!passed) process.exitCode = 1;

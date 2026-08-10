@@ -14,10 +14,11 @@
  */
 
 import { donut, comparison, compact, fmt, escapeHtml } from './charts.js';
+import { createKnowledgeGraph3D } from './graph3d.js';
 
 const API = '/api';
 
-/** Published Claude input rate. Shown as a scale, never as an invoice. */
+/** Reference rate for scale only. Provider and model prices vary. */
 const USD_PER_MILLION_TOKENS = 3;
 
 const CATEGORY_COLORS = {
@@ -28,10 +29,10 @@ const CATEGORY_COLORS = {
 };
 
 const CATEGORY_LABELS = {
-  tools: 'Tools Claude ran',
+  tools: 'Agent tool calls',
   hooks: 'Automatic checks',
   system_reminders: 'Background notes',
-  responses: 'Claude’s replies',
+  responses: 'Agent responses',
 };
 
 const SERVER_COLORS = [
@@ -46,6 +47,7 @@ const SERVER_COLORS = [
 ];
 
 const $ = (id) => document.getElementById(id);
+let overviewGraph = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   $('refresh-btn').addEventListener('click', load);
@@ -107,7 +109,7 @@ function renderSavings(balance, status) {
     foot.innerHTML = learned
       ? `Still measuring. ${fmt(learned)} things learned so far — the savings ` +
         `figure appears once there is enough of a comparison to be honest about.`
-      : `Nothing measured yet. Work normally in Claude Code for a few minutes ` +
+      : `Nothing measured yet. Work normally in a supported coding agent for a few minutes ` +
         `and this fills itself in.`;
     return;
   }
@@ -195,6 +197,8 @@ function renderGraph(constellation, status) {
   const remembered = Number(status?.nodes) || 0;
 
   if (!nodes.length) {
+    overviewGraph?.destroy();
+    overviewGraph = null;
     // TWO DIFFERENT EMPTIES, and conflating them produced a page that
     // contradicted itself: the verdict said "across 475 things it has learned"
     // while this panel said "Nothing learned yet". The constellation surfaces
@@ -204,20 +208,26 @@ function renderGraph(constellation, status) {
       ? '<div class="empty is-compact"><div class="mark">◍</div>' +
         `<h3>${fmt(remembered)} files remembered</h3>` +
         '<p>Nothing has been concluded about them yet. Findings appear here as ' +
-        'Claude works out how the pieces fit together.</p></div>'
+        'your coding agents work out how the pieces fit together.</p></div>'
       : '<div class="empty is-compact"><div class="mark">◌</div>' +
         '<h3>Nothing learned yet</h3>' +
-        '<p>As Claude reads your code, each file is remembered here so it never ' +
-        'has to be read twice.</p>' +
-        '<p class="next">Open a file in Claude Code, then refresh.</p></div>';
+        '<p>As a supported agent reads your code, each file is remembered here so it does not ' +
+        'have to be read twice.</p>' +
+        '<p class="next">Open a file with your coding agent, then refresh.</p></div>';
 
     // The counts are still true and still worth showing.
     stats.innerHTML = remembered ? statRows(status) : '';
     return;
   }
 
-  host.innerHTML = '';
-  host.appendChild(nodeField(nodes));
+  if (!overviewGraph) {
+    overviewGraph = createKnowledgeGraph3D(host, constellation, {
+      compact: true,
+      cap: 60,
+    });
+  } else {
+    overviewGraph.update(constellation);
+  }
   stats.innerHTML = statRows(status);
 }
 
@@ -317,7 +327,7 @@ function renderKpis(s) {
     host.innerHTML =
       '<div class="card empty-span"><div class="empty is-compact"><div class="mark">◔</div>' +
       '<h3>No active session</h3>' +
-      '<p>These fill in while you are working in Claude Code. The savings above ' +
+      '<p>These fill in while you are working in a supported coding agent. The savings above ' +
       'are kept per project, so they stay accurate between sessions.</p>' +
       '<p class="next">Start a session, then refresh.</p></div></div>';
     return;
@@ -328,7 +338,7 @@ function renderKpis(s) {
       label: 'Context used',
       value: compact(s.totalTokens),
       tip:
-        'How much of Claude’s limited workspace this session has taken up. ' +
+        'How much of the active agent’s limited workspace this session has taken up. ' +
         'The smaller this is for the same work, the better.',
     },
     {
@@ -340,7 +350,7 @@ function renderKpis(s) {
       label: 'Actions taken',
       value: fmt(s.totalTools),
       tip:
-        'Reads, edits, searches and commands Claude ran on your behalf. ' +
+        'Reads, edits, searches and commands the active agent ran on your behalf. ' +
         'Each one is a chance to save context.',
     },
     {
@@ -370,7 +380,7 @@ function renderCategories(s) {
   if (!s?.tokensByCategory) {
     host.innerHTML = teach(
       'Nothing to break down yet',
-      'Once Claude runs a few actions, this shows which kinds of thing filled the workspace.'
+      'Once a coding agent runs a few actions, this shows which kinds of thing filled the workspace.'
     );
     return;
   }
@@ -387,13 +397,17 @@ function renderCategories(s) {
 
 function renderServers(s) {
   const host = $('server-chart');
-  const entries = Object.entries(s?.tokensByServer || {}).filter(
+  let entries = Object.entries(s?.tokensByServer || {}).filter(
     ([, v]) => (v?.tokens || v) > 0
   );
+  if (!entries.length)
+    entries = toolRows(s)
+      .map((row) => [row.name || row.tool, row.tokens])
+      .filter(([name, tokens]) => name && Number(tokens) > 0);
   if (!entries.length) {
     host.innerHTML = teach(
-      'No tool servers yet',
-      'When Claude uses a connected tool, its share of the workspace shows up here.'
+      'No measured actions yet',
+      'When a coding agent reads, edits, searches, or runs a command, its share of the workspace shows up here.'
     );
     return;
   }
@@ -415,33 +429,64 @@ function renderTimeline(events) {
   if (!events?.length) {
     host.innerHTML = teach(
       'Nothing has happened yet',
-      'Every read, edit and command Claude runs will appear here in order, newest first.'
+      'Every observed read, edit, search, and command will appear here in order, newest first.'
     );
     return;
   }
   host.innerHTML = events
     .slice(0, 40)
-    .map(
-      (e) => `
+    .map((e) => {
+      const action = describeEvent(e);
+      return `
       <div class="event">
         <span class="ev-dot"></span>
-        <span class="ev-name">${escapeHtml(e.name || e.tool || 'action')}</span>
-        <span class="ev-meta num">${e.tokens ? `${compact(e.tokens)} tokens` : ''}</span>
+        <span class="ev-copy">
+          <span class="ev-name">${escapeHtml(action.tool)}</span>
+          <span class="ev-detail">${escapeHtml(action.detail)}</span>
+        </span>
+        <span class="ev-meta num">${action.tokens ? `${compact(action.tokens)} context tokens` : 'no context recorded'}</span>
         <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
-      </div>`
-    )
+      </div>`;
+    })
     .join('');
+}
+
+function describeEvent(event) {
+  const tool = String(
+    event.toolName || event.name || event.tool || event.type || 'agent event'
+  );
+  const details = {
+    Edit: 'Edited project content',
+    Write: 'Wrote project content',
+    Read: 'Read project context',
+    Bash: 'Ran a terminal command',
+    Shell: 'Ran a terminal command',
+    Grep: 'Searched project text',
+    Glob: 'Matched project files',
+    TodoWrite: 'Updated the task plan',
+    WebSearch: 'Searched the web',
+    BashOutput: 'Inspected terminal output',
+    KillShell: 'Stopped a background command',
+  };
+  const eventType = String(event.type || 'agent event').replaceAll('_', ' ');
+  return {
+    tool,
+    detail:
+      details[tool] ||
+      `${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`,
+    tokens: Number(event.estimatedTokens ?? event.tokens ?? 0),
+  };
 }
 
 function renderBreakdown(s) {
   const body = $('tool-breakdown-body');
-  const rows = s?.toolBreakdown || s?.tools || [];
+  const rows = toolRows(s);
   if (!rows.length) {
     body.innerHTML =
       '<tr><td colspan="3">' +
       teach(
         'No actions counted yet',
-        'Each kind of action Claude takes gets a row here, so repeat costs are easy to spot.'
+        'Each kind of observed agent action gets a row here, so repeat costs are easy to spot.'
       ) +
       '</td></tr>';
     return;
@@ -456,6 +501,13 @@ function renderBreakdown(s) {
       </tr>`
     )
     .join('');
+}
+
+function toolRows(summary) {
+  const source = summary?.toolBreakdown || summary?.tools || [];
+  return Array.isArray(source)
+    ? source
+    : Object.entries(source).map(([name, values]) => ({ name, ...values }));
 }
 
 /** An empty state that teaches. Never "No data available". */

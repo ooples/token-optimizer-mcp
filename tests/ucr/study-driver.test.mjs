@@ -43,6 +43,24 @@ describe('universal live-study driver contract', () => {
     });
   });
 
+  test('passes supported provider credentials by default and never evidence secrets', () => {
+    expect(
+      studyDriverChildEnvironment({
+        OPENAI_API_KEY: 'openai',
+        ANTHROPIC_API_KEY: 'anthropic',
+        GEMINI_API_KEY: 'gemini',
+        GOOGLE_CLOUD_PROJECT: 'project',
+        UCR_STUDY_SECRET: 'study',
+        UCR_TRAFFIC_PSEUDONYM_SECRET: 'traffic',
+      })
+    ).toEqual({
+      ANTHROPIC_API_KEY: 'anthropic',
+      GEMINI_API_KEY: 'gemini',
+      GOOGLE_CLOUD_PROJECT: 'project',
+      OPENAI_API_KEY: 'openai',
+    });
+  });
+
   test('requires the planned calls, zero capture calls, and complete telemetry', () => {
     const trial = {
       producerClient: 'codex',

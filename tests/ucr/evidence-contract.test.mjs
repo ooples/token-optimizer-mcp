@@ -66,7 +66,9 @@ describe('evidence contract v2', () => {
       { study: 'bad', detail: { transcript: 'private' } },
     ]);
     expect(verifyEvidenceLedger(ledger).valid).toBe(false);
-    expect(verifyEvidenceLedger(ledger).diagnostics[0]).toMatch(/detail\.transcript/);
+    expect(verifyEvidenceLedger(ledger).diagnostics[0]).toMatch(
+      /detail\.transcript/
+    );
   });
 
   test('does not derive effectiveness from transport or conformance evidence', () => {
@@ -89,6 +91,20 @@ describe('evidence contract v2', () => {
     expect(derived.metrics.preActionDelivery).toBeNull();
     expect(evidenceTierReport([ledger]).conformance.status).toBe('present');
     expect(evidenceTierReport([ledger]).effectiveness.status).toBe('missing');
+  });
+
+  test('binds the derived hash to rejected inputs as well as accepted metrics', () => {
+    const ledger = sealEvidenceLedger(run('conformance', 'hash-input'), [
+      { study: 'writer-integrity', acceptedWrites: 2, restoredWrites: 2 },
+    ]);
+    const accepted = deriveReleaseMetrics([ledger]);
+    const withRejectedInput = deriveReleaseMetrics([ledger, { invalid: true }]);
+    expect(withRejectedInput.metrics).toEqual(accepted.metrics);
+    expect(withRejectedInput.inputLedgerHashes).toEqual(
+      accepted.inputLedgerHashes
+    );
+    expect(withRejectedInput.rejectedLedgers).toBe(1);
+    expect(withRejectedInput.derivedHash).not.toBe(accepted.derivedHash);
   });
 
   test('fails writer integrity closed when coordination counts are absent or nonnumeric', () => {

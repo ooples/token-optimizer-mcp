@@ -2,7 +2,7 @@
   "name": "@ooples/token-optimizer-mcp",
   "version": "5.6.1",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
-  "description": "Intelligent context window optimization for Claude Code - store content externally via caching and compression, freeing up your context window for what matters",
+  "description": "Cross-client context optimization and durable live knowledge capture for AI coding agents and CLI tools",
   "main": "dist/server/index.js",
   "types": "dist/server/index.d.ts",
   "bin": {
@@ -96,7 +96,7 @@
     "eval:handoff": "node scripts/run-handoff-eval.mjs",
     "eval:handoff:plan": "node scripts/run-handoff-eval.mjs --dry-run",
     "eval:handoff:concurrent": "node scripts/run-concurrent-handoff-eval.mjs",
-    "verify:all": "npm run sync:hooks:check && npm run verify:clients && npm run verify:certification && npm run verify:harvest && npm run verify:ucr && npm run verify:ucr:study-design && npm run verify:live-graph && npm run verify:ui && npm run verify:interactions",
+    "verify:all": "npm run sync:hooks:check && npm run eval:ucr:qualification:verify && npm run verify:clients && npm run verify:certification && npm run verify:harvest && npm run verify:ucr && npm run verify:ucr:study-design && npm run verify:live-graph && npm run verify:ui && npm run verify:interactions",
     "verify:interactions": "node scripts/verify-wiki-interactions.mjs",
     "explore:wiki": "node scripts/explore-wiki.mjs"
   },

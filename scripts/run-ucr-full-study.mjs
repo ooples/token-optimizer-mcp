@@ -36,6 +36,7 @@ import {
   signGraderReceipt,
   STUDY_NEGATIVE_ARMS,
   studyQualificationVerdict,
+  studyDesignCoverage,
   stratifiedCostDiagnostics,
   validateTrialResult,
   validateStudyDriverResult,
@@ -84,7 +85,11 @@ for (const key of [
   'timeoutMs',
 ])
   options[key] = Number(options[key]);
-if (options.maxTrials != null) options.maxTrials = Number(options.maxTrials);
+if (options.maxTrials != null) {
+  options.maxTrials = Number(options.maxTrials);
+  if (!Number.isInteger(options.maxTrials) || options.maxTrials <= 0)
+    throw new Error('--max-trials must be a positive integer');
+}
 if (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0)
   throw new Error('--timeout-ms must be a positive integer');
 for (const key of [
@@ -232,10 +237,60 @@ const filteredTrials = plan.trials.filter(
 );
 if (!filteredTrials.length)
   throw new Error('study selection did not match any frozen trial');
-const plannedTrials =
-  options.maxTrials == null
-    ? filteredTrials
-    : filteredTrials.slice(0, options.maxTrials);
+function boundedTrialSelection(trials, maxTrials, requestedArms) {
+  if (maxTrials == null || trials.length <= maxTrials) return trials;
+  const arms = new Set(
+    String(requestedArms || '')
+      .split(',')
+      .map((arm) => arm.trim())
+      .filter(Boolean)
+  );
+  if (!arms.has('empty') || !arms.has('runtime') || maxTrials < 2)
+    return trials.slice(0, maxTrials);
+
+  const groups = new Map();
+  for (const trial of trials) {
+    const key = trial.pairId || `unpaired:${trial.trialId}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(trial);
+  }
+  const chosen = [];
+  const selectedIds = new Set();
+  for (const group of groups.values()) {
+    const byArm = new Map(group.map((trial) => [trial.arm, trial]));
+    const pair = ['empty', 'runtime'].map((arm) => byArm.get(arm));
+    if (pair.some((trial) => !trial) || chosen.length + pair.length > maxTrials)
+      continue;
+    for (const trial of pair) {
+      chosen.push(trial);
+      selectedIds.add(trial.trialId);
+    }
+  }
+  for (const trial of trials) {
+    if (chosen.length >= maxTrials) break;
+    if (!selectedIds.has(trial.trialId)) chosen.push(trial);
+  }
+  return chosen;
+}
+
+const plannedTrials = boundedTrialSelection(
+  filteredTrials,
+  options.maxTrials,
+  options.arms
+);
+const selectedDesign = studyDesignCoverage({ trials: plannedTrials });
+const selectedCoverageChecks = {
+  ...coverage.checks,
+  effectivenessDesign: selectedDesign.passed,
+};
+const selectedCoverage = {
+  ...coverage,
+  basis: 'selected-executed-trials',
+  preflightDesign: coverage.design,
+  design: selectedDesign,
+  checks: selectedCoverageChecks,
+  passed: Object.values(selectedCoverageChecks).every(Boolean),
+};
 const taskById = new Map(benchmark.tasks.map((task) => [task.id, task]));
 const trialByPair = new Map();
 for (const trial of plan.trials) {
@@ -244,6 +299,10 @@ for (const trial of plan.trials) {
   trialByPair.get(trial.pairId).push(trial);
 }
 const attemptsPath = options.output.replace(/\.json$/i, '-attempts.jsonl');
+if (resolve(attemptsPath) === resolve(options.output))
+  throw new Error(
+    '--output must end in .json so the append-only attempts ledger has a distinct path'
+  );
 mkdirSync(dirname(options.output), { recursive: true });
 writeFileSync(attemptsPath, '', 'utf8');
 const graderSecret = randomBytes(32).toString('hex');
@@ -374,6 +433,9 @@ try {
       latencyMs: result?.latencyMs ?? null,
       phaseAccounting: result?.phaseAccounting || null,
       costLedger: result?.costLedger || null,
+      providerFailures: Array.isArray(result?.providerFailures)
+        ? result.providerFailures
+        : [],
       causalClaim: false,
       causalChain: null,
       causalChainValid: false,
@@ -406,6 +468,7 @@ try {
       validation: validation.diagnostics,
       driverValidation: driverValidation.diagnostics,
       causalEvents: row.causalEvents.length,
+      providerFailures: row.providerFailures,
       rowHash: sha256(row),
     };
     appendFileSync(attemptsPath, `${canonicalJson(attempt)}\n`, 'utf8');
@@ -552,7 +615,7 @@ try {
       trials: undefined,
       trialCount: plan.trials.length,
     },
-    coverage,
+    coverage: selectedCoverage,
     poweredDesign,
     complete,
     trialsPlanned: plan.trials.length,
@@ -560,7 +623,10 @@ try {
     selection: {
       directions: options.directions,
       families: options.families,
-      arms: options.arms,
+      arms: [...new Set(plannedTrials.map((trial) => trial.arm))]
+        .sort()
+        .join(','),
+      requestedArms: options.arms,
       maxTrials: options.maxTrials,
       selectedTrials: plannedTrials.length,
       selectedTrialIdsHash: sha256(plannedTrials.map((trial) => trial.trialId)),

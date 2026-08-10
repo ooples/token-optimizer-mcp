@@ -476,6 +476,10 @@ export function studyDesignCoverage(plan) {
         trials.map((trial) => trial.arm),
         BENCHMARK_ARMS
       ),
+      familyCount: new Set(trials.map((trial) => trial.family)).size,
+      requiredFamilies: BENCHMARK_FAMILIES.length,
+      armCount: new Set(trials.map((trial) => trial.arm)).size,
+      requiredArms: BENCHMARK_ARMS.length,
       clients: clients.size,
       modelFamilies: modelFamilies.size,
       directions: directions.size,

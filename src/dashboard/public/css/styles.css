@@ -24,7 +24,11 @@
 
 .hero-saved {
   background:
-    radial-gradient(120% 100% at 0% 0%, rgba(46, 230, 168, 0.09), transparent 62%),
+    radial-gradient(
+      120% 100% at 0% 0%,
+      rgba(46, 230, 168, 0.09),
+      transparent 62%
+    ),
     var(--surface);
   display: flex;
   flex-direction: column;
@@ -143,9 +147,16 @@
 .constellation {
   flex: 1;
   min-height: 190px;
-  display: flex;
-  align-items: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 11px;
   margin: 4px 0 10px;
+}
+
+.constellation .graph-3d-help,
+.constellation .graph-3d-reset {
+  display: none;
 }
 
 .node-dot {
@@ -327,7 +338,7 @@ section.card {
 
 .event {
   display: grid;
-  grid-template-columns: 8px 1fr auto auto;
+  grid-template-columns: 8px minmax(180px, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 8px 10px;
@@ -347,11 +358,33 @@ section.card {
 }
 
 .ev-name {
+  display: block;
   font-family: var(--mono);
   font-size: 12.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ev-copy {
+  min-width: 0;
+}
+
+.ev-detail {
+  display: block;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  margin-top: 1px;
+}
+
+@media (max-width: 700px) {
+  .event {
+    grid-template-columns: 8px 1fr auto;
+  }
+
+  .ev-meta {
+    display: none;
+  }
 }
 
 .ev-meta {

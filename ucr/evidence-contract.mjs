@@ -13,10 +13,7 @@ import {
   SUPERIORITY_REQUIRED_METRICS,
 } from './effectiveness.mjs';
 import { canonicalJson, sha256 } from './protocol.mjs';
-import {
-  bonferroniNormalZ,
-  validateCausalChain,
-} from './study-design.mjs';
+import { bonferroniNormalZ, validateCausalChain } from './study-design.mjs';
 
 export const EVIDENCE_CLASSES = Object.freeze([
   'transport',
@@ -306,7 +303,9 @@ function pairedRatios(rows, field) {
         pair.empty[field] > 0 &&
         Number.isFinite(pair.runtime?.[field])
     )
-    .map((pair) => (pair.runtime[field] - pair.empty[field]) / pair.empty[field]);
+    .map(
+      (pair) => (pair.runtime[field] - pair.empty[field]) / pair.empty[field]
+    );
 }
 
 function coverage(rows, field, expected) {
@@ -336,7 +335,9 @@ function poweredStrata(rows, field) {
 
 function worstCorrectnessLow(rows, field) {
   const intervals = poweredStrata(rows, field);
-  return intervals ? Math.min(...intervals.map((interval) => interval.low)) : null;
+  return intervals
+    ? Math.min(...intervals.map((interval) => interval.low))
+    : null;
 }
 
 function worstTokenOverheadHigh(rows) {
@@ -393,7 +394,9 @@ function worstNegativeDeliveryHigh(rows) {
 export function deriveReleaseMetrics(ledgers) {
   const validLedgers = verifiedLedgerInputs(ledgers);
   const effectiveness = validLedgers.flatMap((ledger) => {
-    if (evidenceRank.get(ledger.evidenceClass) < evidenceRank.get('effectiveness'))
+    if (
+      evidenceRank.get(ledger.evidenceClass) < evidenceRank.get('effectiveness')
+    )
       return [];
     const rows = ledger.rows || [];
     if (
@@ -461,7 +464,9 @@ export function deriveReleaseMetrics(ledgers) {
     (row) => row.arm === 'runtime' && row.causalClaim === true
   );
   const causalFamilies = new Set(causalRows.map((row) => row.family));
-  const competitiveValidation = competitiveRows.map(validateCompetitiveEvidence);
+  const competitiveValidation = competitiveRows.map(
+    validateCompetitiveEvidence
+  );
   const competitiveKinds = new Set(
     competitiveRows.map((row) => row.baselineKind).filter(Boolean)
   );
@@ -487,10 +492,7 @@ export function deriveReleaseMetrics(ledgers) {
       negativeApplicability,
       (row) => row.delivered === true
     ).high,
-    staleDelivery: rate(
-      staleOpportunities,
-      (row) => row.delivered === true
-    ),
+    staleDelivery: rate(staleOpportunities, (row) => row.delivered === true),
     staleDeliveryIntervalHigh: rateInterval(
       staleOpportunities,
       (row) => row.delivered === true
@@ -530,7 +532,9 @@ export function deriveReleaseMetrics(ledgers) {
               ? controls.reduce((sum, row) => sum + row.totalTokens, 0) /
                 controls.length
               : null;
-            return meanControl ? -firstSuccessorTokens.mean / meanControl : null;
+            return meanControl
+              ? -firstSuccessorTokens.mean / meanControl
+              : null;
           })(),
     firstSuccessorTokenIntervalLow:
       firstSuccessorTokens.high === null
@@ -543,7 +547,9 @@ export function deriveReleaseMetrics(ledgers) {
               ? controls.reduce((sum, row) => sum + row.totalTokens, 0) /
                 controls.length
               : null;
-            return meanControl ? -firstSuccessorTokens.high / meanControl : null;
+            return meanControl
+              ? -firstSuccessorTokens.high / meanControl
+              : null;
           })(),
     latencyOverheadP95: percentile(latencyRatios, 0.95),
     knownMistakeRecurrence: rate(
@@ -603,10 +609,7 @@ export function deriveReleaseMetrics(ledgers) {
       effectiveness,
       'direction'
     ),
-    familyCorrectnessIntervalLow: worstCorrectnessLow(
-      effectiveness,
-      'family'
-    ),
+    familyCorrectnessIntervalLow: worstCorrectnessLow(effectiveness, 'family'),
     directionalTokenOverheadHigh: worstTokenOverheadHigh(effectiveness),
     causalChainIntegrity:
       causalRows.length > 0 &&
@@ -632,7 +635,9 @@ export function deriveReleaseMetrics(ledgers) {
       competitiveValidation.every((validation) => validation.valid),
   };
   const ledgerSupportsMetric = (ledger, metric, requiredClass) => {
-    if (evidenceRank.get(ledger.evidenceClass) < evidenceRank.get(requiredClass))
+    if (
+      evidenceRank.get(ledger.evidenceClass) < evidenceRank.get(requiredClass)
+    )
       return false;
     const rows = ledger.rows || [];
     if (EFFECTIVENESS_REQUIRED_METRICS.includes(metric)) {
@@ -648,7 +653,9 @@ export function deriveReleaseMetrics(ledgers) {
       );
     }
     if (SUPERIORITY_REQUIRED_METRICS.includes(metric))
-      return rows.some((row) => row.study === 'competitive' && row.fair === true);
+      return rows.some(
+        (row) => row.study === 'competitive' && row.fair === true
+      );
     return true;
   };
   const sources = Object.fromEntries(
@@ -666,7 +673,7 @@ export function deriveReleaseMetrics(ledgers) {
       ]
     )
   );
-  return {
+  const derived = {
     schemaVersion: 'ucr.derived-metrics/2',
     metrics,
     intervals: {
@@ -678,8 +685,8 @@ export function deriveReleaseMetrics(ledgers) {
     sources,
     inputLedgerHashes: validLedgers.map((ledger) => ledger.ledgerHash).sort(),
     rejectedLedgers: ledgers.length - validLedgers.length,
-    derivedHash: sha256({ metrics, sources }),
   };
+  return { ...derived, derivedHash: sha256(derived) };
 }
 
 export function evidenceTierReport(ledgers) {

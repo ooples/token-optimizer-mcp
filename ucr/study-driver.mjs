@@ -4,9 +4,15 @@ import { sha256 } from './protocol.mjs';
 export const STUDY_DRIVER_PROTOCOL = 'ucr.study-driver/1';
 
 const DEFAULT_DRIVER_ENVIRONMENT = Object.freeze([
+  'ANTHROPIC_API_KEY',
   'APPDATA',
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GOOGLE_CLOUD_PROJECT',
+  'GOOGLE_GENAI_USE_VERTEXAI',
   'HOME',
   'LOCALAPPDATA',
+  'OPENAI_API_KEY',
   'PATH',
   'PATHEXT',
   'SHELL',

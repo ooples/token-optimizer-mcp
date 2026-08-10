@@ -80,11 +80,10 @@ function visit(value, callback) {
   for (const item of Object.values(value)) visit(item, callback);
 }
 
-function firstFinite(objects, names) {
+function lastFinite(objects, names) {
   let match = null;
   for (const object of objects)
     visit(object, (value) => {
-      if (match !== null) return;
       for (const name of names)
         if (Number.isFinite(value?.[name])) {
           match = Number(value[name]);
@@ -112,9 +111,12 @@ function candidateText(objects) {
   const candidates = [];
   for (const object of objects)
     visit(object, (value) => {
-      if (typeof value?.structured_output === 'object')
+      if (
+        value?.structured_output &&
+        typeof value.structured_output === 'object'
+      )
         candidates.push(JSON.stringify(value.structured_output));
-      if (typeof value?.structuredOutput === 'object')
+      if (value?.structuredOutput && typeof value.structuredOutput === 'object')
         candidates.push(JSON.stringify(value.structuredOutput));
       if (typeof value?.response === 'string') candidates.push(value.response);
       if (typeof value?.result === 'string') candidates.push(value.result);
@@ -123,8 +125,6 @@ function candidateText(objects) {
         value?.item?.type === 'agent_message'
       )
         candidates.push(value.item.text);
-      if (value?.type === 'result' && typeof value?.result === 'string')
-        candidates.push(value.result);
     });
   return candidates.filter(Boolean).at(-1) || null;
 }
@@ -152,23 +152,27 @@ export function parseStructuredModelJson(text) {
 /** Normalize provider-native CLI JSON/JSONL without retaining raw content. */
 export function parseLiveCliTelemetry(client, stdout) {
   const objects = jsonValues(stdout);
-  const inputTokens = firstFinite(objects, [
+  const inputTokens = lastFinite(objects, [
     'input_tokens',
     'inputTokens',
     'promptTokenCount',
   ]);
-  const cachedInputTokens = firstFinite(objects, [
+  const cachedInputTokens = lastFinite(objects, [
     'cache_read_input_tokens',
     'cached_input_tokens',
     'cachedInputTokens',
     'cachedContentTokenCount',
   ]);
-  const outputTokens = firstFinite(objects, [
+  const cacheCreationInputTokens = lastFinite(objects, [
+    'cache_creation_input_tokens',
+    'cacheCreationInputTokens',
+  ]);
+  const outputTokens = lastFinite(objects, [
     'output_tokens',
     'outputTokens',
     'candidatesTokenCount',
   ]);
-  const reportedTotal = firstFinite(objects, [
+  const reportedTotal = lastFinite(objects, [
     'total_tokens',
     'totalTokens',
     'totalTokenCount',
@@ -178,6 +182,13 @@ export function parseLiveCliTelemetry(client, stdout) {
     (inputTokens !== null && outputTokens !== null
       ? inputTokens + outputTokens
       : null);
+  // Claude reports newly read and newly created cache tokens outside
+  // input_tokens. Codex and Gemini include their cached subset in the prompt
+  // total, so adding it there would double-count reconstruction context.
+  const effectiveInputTokens =
+    client === 'claude-code' && inputTokens !== null
+      ? inputTokens + (cachedInputTokens || 0) + (cacheCreationInputTokens || 0)
+      : inputTokens;
   const toolEvents = [];
   for (const object of objects)
     visit(object, (value) => {
@@ -205,9 +216,11 @@ export function parseLiveCliTelemetry(client, stdout) {
     usage: {
       inputTokens,
       cachedInputTokens,
+      cacheCreationInputTokens,
+      effectiveInputTokens,
       outputTokens,
       totalTokens,
-      costUsd: firstFinite(objects, ['total_cost_usd', 'cost_usd', 'costUsd']),
+      costUsd: lastFinite(objects, ['total_cost_usd', 'cost_usd', 'costUsd']),
     },
     actionAudit: [
       ...new Map(toolEvents.map((item) => [item.eventHash, item])).values(),

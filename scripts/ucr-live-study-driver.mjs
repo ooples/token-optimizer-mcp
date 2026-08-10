@@ -14,6 +14,7 @@ import {
   sha256,
   studyArmDecision,
   studyConsumerPrompt,
+  studyDriverChildEnvironment,
 } from '../ucr/index.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,7 +77,7 @@ function run(command, args, { cwd, timeoutMs, input }) {
     const startedAtMs = Date.now();
     const child = spawn(command, args, {
       cwd,
-      env: process.env,
+      env: studyDriverChildEnvironment(process.env),
       shell: false,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -240,6 +241,30 @@ function hostActionAudit(invocation, role, agentId) {
   ];
 }
 
+function providerFailureClass(invocation) {
+  if (invocation.exitCode === 0 && !invocation.timedOut && !invocation.overflow)
+    return null;
+  const message = `${invocation.stderr || ''}\n${invocation.stdout || ''}`;
+  if (
+    /UNSUPPORTED_CLIENT|IneligibleTierError|migrate to the Antigravity/i.test(
+      message
+    )
+  )
+    return 'provider-client-migration-required';
+  if (/quota|rate.?limit|resource.?exhausted|429/i.test(message))
+    return 'provider-quota-exhausted';
+  if (
+    /unauthorized|unauthenticated|invalid.*(?:key|credential)|\b401\b/i.test(
+      message
+    )
+  )
+    return 'provider-authentication-failed';
+  if (invocation.timedOut) return 'provider-timeout';
+  if (invocation.overflow) return 'provider-output-overflow';
+  if (invocation.exitCode !== 0) return 'provider-cli-failed';
+  return null;
+}
+
 const chunks = [];
 let inputBytes = 0;
 for await (const chunk of process.stdin) {
@@ -299,6 +324,9 @@ try {
       promptHash: sha256(producerPrompt(request)),
       usageSource: 'provider-native',
       inputTokens: producer.usage.inputTokens,
+      cachedInputTokens: producer.usage.cachedInputTokens,
+      cacheCreationInputTokens: producer.usage.cacheCreationInputTokens,
+      effectiveInputTokens: producer.usage.effectiveInputTokens,
       outputTokens: producer.usage.outputTokens,
       latencyMs: producer.endedAtMs - producer.startedAtMs,
       startedAtMs: producer.startedAtMs,
@@ -316,6 +344,9 @@ try {
       promptHash: sha256(consumerPrompt),
       usageSource: 'provider-native',
       inputTokens: consumer.usage.inputTokens,
+      cachedInputTokens: consumer.usage.cachedInputTokens,
+      cacheCreationInputTokens: consumer.usage.cacheCreationInputTokens,
+      effectiveInputTokens: consumer.usage.effectiveInputTokens,
       outputTokens: consumer.usage.outputTokens,
       latencyMs: consumer.endedAtMs - consumer.startedAtMs,
       startedAtMs: consumer.startedAtMs,
@@ -327,6 +358,12 @@ try {
     })),
   ];
   const allInvocations = [producer, ...consumers];
+  const providerFailures = allInvocations
+    .map((invocation, index) => ({
+      role: index === 0 ? 'producer' : `consumer-${index}`,
+      classification: providerFailureClass(invocation),
+    }))
+    .filter((failure) => failure.classification);
   const sum = (field) => {
     const values = allInvocations
       .map((item) => item.usage[field])
@@ -386,7 +423,7 @@ try {
     consumerClient: trial.consumerClient,
     producerVersion: producer.cliVersion,
     consumerVersion: consumers[0]?.cliVersion || null,
-    modelVersion: consumers[0]?.model || trial.consumerModelVersion,
+    modelVersion: consumers[0]?.model,
     providerInvocations: invocationRows.length,
     invocations: invocationRows,
     semanticHarvest: {
@@ -416,12 +453,21 @@ try {
       source: 'provider-cli-native',
       costUsd: sum('costUsd'),
     },
-    reconstructionTokens: consumers[0]?.usage.inputTokens ?? null,
+    providerFailures,
+    reconstructionTokens:
+      Number.isFinite(consumers[0]?.usage.effectiveInputTokens) &&
+      consumers[0].usage.effectiveInputTokens >= 32
+        ? consumers[0].usage.effectiveInputTokens
+        : null,
     contextOverheadRatio:
-      decision.payload && Number.isFinite(consumers[0]?.usage.inputTokens)
+      decision.payload &&
+      Number.isFinite(consumers[0]?.usage.effectiveInputTokens) &&
+      consumers[0].usage.effectiveInputTokens >= 32
         ? Math.ceil(decision.payload.length / 4) /
-          Math.max(1, consumers[0].usage.inputTokens)
-        : 0,
+          consumers[0].usage.effectiveInputTokens
+        : decision.payload
+          ? null
+          : 0,
     applicable: decision.applicable,
     eligible: decision.eligible,
     selected: decision.selected,

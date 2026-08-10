@@ -37,14 +37,18 @@
         <div class="card hero-saved">
           <p class="card-title">
             Saved so far
-            <button class="explain" type="button" aria-label="What does saved mean?">
+            <button
+              class="explain"
+              type="button"
+              aria-label="What does saved mean?"
+            >
               ?
               <span class="tip tip-right" role="tooltip">
-                Claude reads your code into a limited workspace called the
-                context window. Fill it up and it starts forgetting earlier work.
-                This is how much of that workspace you got back &mdash; measured
-                against a holdout group of reads deliberately left alone, so it
-                is a comparison, not an estimate.
+                Your coding agent reads project data into a limited workspace
+                called the context window. Fill it up and earlier work can fall
+                out. This is how much of that workspace you got back &mdash;
+                measured against a holdout group of reads deliberately left
+                alone, so it is a comparison, not an estimate.
               </span>
             </button>
           </p>
@@ -57,12 +61,16 @@
               <span class="ss-value num" id="saved-money">&mdash;</span>
               <span class="ss-label">
                 estimated
-                <button class="explain" type="button" aria-label="How is the cost estimated?">
+                <button
+                  class="explain"
+                  type="button"
+                  aria-label="How is the cost estimated?"
+                >
                   ?
                   <span class="tip" role="tooltip">
-                    Tokens priced at $3 per million, the published rate for
-                    Claude input tokens. Your real bill depends on your plan and
-                    model, so treat this as a scale, not an invoice.
+                    Tokens shown at a $3 per million reference rate. Provider,
+                    plan, cache, and model pricing differ, so this is a scale,
+                    not an invoice.
                   </span>
                 </button>
               </span>
@@ -81,13 +89,16 @@
         <div class="card hero-graph">
           <p class="card-title">
             What it has learned
-            <button class="explain" type="button" aria-label="What is this graph?">
+            <button
+              class="explain"
+              type="button"
+              aria-label="What is this graph?"
+            >
               ?
               <span class="tip tip-below tip-left" role="tooltip">
-                Every file Claude reads is remembered here &mdash; its structure,
-                and anything discovered about it. Next time, that memory is
-                offered instead of the file, which is where most of the saving
-                comes from.
+                Files observed by supported coding agents are remembered here
+                with their structure, discoveries, and provenance. Any supported
+                client can reuse that knowledge in a later session or project.
               </span>
             </button>
           </p>
@@ -105,7 +116,11 @@
         <div class="card">
           <p class="card-title">
             Where the context went
-            <button class="explain" type="button" aria-label="What is this breakdown?">
+            <button
+              class="explain"
+              type="button"
+              aria-label="What is this breakdown?"
+            >
               ?
               <span class="tip" role="tooltip">
                 Which kinds of thing filled the workspace. Big slices are where
@@ -113,29 +128,40 @@
               </span>
             </button>
           </p>
-          <p class="card-sub">Bigger slices are the best places to save more.</p>
+          <p class="card-sub">
+            Bigger slices are the best places to save more.
+          </p>
           <div class="chart" id="category-chart"></div>
         </div>
 
         <div class="card">
           <p class="card-title">
-            Which tools cost the most
-            <button class="explain" type="button" aria-label="What is this breakdown?">
+            Which actions cost the most
+            <button
+              class="explain"
+              type="button"
+              aria-label="What is this breakdown?"
+            >
               ?
               <span class="tip" role="tooltip">
-                Context used by each connected tool server. A tool near the top
-                every session is worth a closer look.
+                Context used by each observed read, edit, search, command, or
+                connected tool. An action near the top every session is worth a
+                closer look.
               </span>
             </button>
           </p>
-          <p class="card-sub">Ranked by how much of the workspace each one used.</p>
+          <p class="card-sub">
+            Ranked by how much of the workspace each one used.
+          </p>
           <div class="chart" id="server-chart"></div>
         </div>
       </section>
 
       <section class="card">
-        <p class="card-title">What Claude did</p>
-        <p class="card-sub">Most recent actions first.</p>
+        <p class="card-title">Recent agent activity</p>
+        <p class="card-sub">
+          What the active CLI actually did, most recent first.
+        </p>
         <div id="timeline-container" class="timeline"></div>
       </section>
 
@@ -156,8 +182,8 @@
       </section>
 
       <p class="footer-note">
-        Updated <span id="last-updated">never</span>. Everything here is measured
-        on this machine and never leaves it.
+        Updated <span id="last-updated">never</span>. Everything here is
+        measured on this machine and never leaves it.
       </p>
     </div>
 
