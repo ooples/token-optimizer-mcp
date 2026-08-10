@@ -33,6 +33,12 @@ exit gate all pass. Signed negative runs remain in the evidence index.
 - Claude-to-Copilot reached the consumer step but the installed account returned
   HTTP 402 for exhausted quota. The failed signed row is retained; Copilot is
   not live-certified by this run.
+- The final model-transparent adversarial pair exactly attested Codex
+  `gpt-5.6-sol` and Claude Sonnet 5 with zero reroutes and zero consumer MCP
+  exposure. Both arms were correct, but runtime increased tokens 5.383% and
+  latency 41.758%, so the direction failed qualification. The reciprocal
+  runtime producer hit Claude quota; Antigravity required authentication. The
+  powered matrix remains blocked and no earlier favorable rerun is promoted.
 
 ## Non-negotiable runtime contract
 

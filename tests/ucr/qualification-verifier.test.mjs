@@ -12,7 +12,7 @@ const SOURCE = join(
   'evals',
   'ucr',
   'results',
-  'full-study-qualification-codex-to-claude-v5.json'
+  'full-study-qualification-codex-to-claude-v10.json'
 );
 const VERIFY = join(ROOT, 'scripts', 'verify-ucr-qualification.mjs');
 const TEMP = mkdtempSync(join(tmpdir(), 'ucr-qualification-verifier-'));
@@ -29,8 +29,8 @@ function tamperedReport(name, mutate) {
   return path;
 }
 
-function verify(path) {
-  const child = spawnSync(process.execPath, [VERIFY, path], {
+function verify(path, options = []) {
+  const child = spawnSync(process.execPath, [VERIFY, ...options, path], {
     cwd: ROOT,
     encoding: 'utf8',
     windowsHide: true,
@@ -42,6 +42,23 @@ function verify(path) {
 }
 
 describe('qualification verifier fails closed', () => {
+  test('separates authentic negative evidence from the release qualification gate', () => {
+    const verification = verify(SOURCE);
+    expect(verification.status).toBe(0);
+    expect(verification.output.results[0]).toMatchObject({
+      artifactValid: true,
+      qualified: false,
+      passed: true,
+    });
+    const gate = verify(SOURCE, ['--require-qualified']);
+    expect(gate.status).toBe(1);
+    expect(gate.output.results[0]).toMatchObject({
+      artifactValid: true,
+      qualified: false,
+      passed: false,
+    });
+  });
+
   test('rejects an unsigned but otherwise hash-consistent ledger', () => {
     const path = tamperedReport('unsigned', (report) => {
       delete report.ledger.signature;

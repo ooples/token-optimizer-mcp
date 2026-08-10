@@ -37,6 +37,7 @@ import {
   STUDY_NEGATIVE_ARMS,
   studyQualificationVerdict,
   studyDesignCoverage,
+  studyDriverProcessTimeoutMs,
   stratifiedCostDiagnostics,
   validateTrialResult,
   validateStudyDriverResult,
@@ -62,7 +63,7 @@ const options = {
   directions: null,
   families: null,
   arms: null,
-  timeoutMs: 600_000,
+  timeoutMs: null,
 };
 
 for (let index = 2; index < process.argv.length; index++) {
@@ -82,15 +83,18 @@ for (const key of [
   'pairedRepetitionsPerCell',
   'negativeRepetitionsPerCell',
   'minimumSubgroupPairs',
-  'timeoutMs',
 ])
   options[key] = Number(options[key]);
+if (options.timeoutMs != null) options.timeoutMs = Number(options.timeoutMs);
 if (options.maxTrials != null) {
   options.maxTrials = Number(options.maxTrials);
   if (!Number.isInteger(options.maxTrials) || options.maxTrials <= 0)
     throw new Error('--max-trials must be a positive integer');
 }
-if (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0)
+if (
+  options.timeoutMs != null &&
+  (!Number.isInteger(options.timeoutMs) || options.timeoutMs <= 0)
+)
   throw new Error('--timeout-ms must be a positive integer');
 for (const key of [
   'benchmark',
@@ -335,7 +339,12 @@ try {
       cwd: fixture.workspace,
       input: JSON.stringify(request),
       encoding: 'utf8',
-      timeout: options.timeoutMs,
+      timeout: studyDriverProcessTimeoutMs(
+        trial,
+        options.timeoutMs == null
+          ? {}
+          : { UCR_STUDY_DRIVER_TIMEOUT_MS: String(options.timeoutMs) }
+      ),
       maxBuffer: 64 * 1024 * 1024,
       windowsHide: true,
       shell: false,
@@ -386,6 +395,14 @@ try {
     const applicable =
       result?.applicable ??
       !['irrelevant', 'stale', 'contradictory', 'harmful'].includes(trial.arm);
+    const modelAttestations = (result?.invocations || []).map(
+      (invocation) => ({
+        role: invocation.role,
+        transport: invocation.transport,
+        providerRequestId: invocation.providerRequestId,
+        attestation: invocation.modelAttestation,
+      })
+    );
     const row = {
       study: 'full-effectiveness',
       planHash: plan.planHash,
@@ -402,8 +419,17 @@ try {
       consumerFamily: trial.consumerFamily,
       producerModel: trial.producerModel,
       consumerModel: trial.consumerModel,
+      producerModelVersion: trial.producerModelVersion,
+      consumerModelVersion: trial.consumerModelVersion,
+      producerTransport: trial.producerTransport,
+      consumerTransport: trial.consumerTransport,
       model: trial.consumerModel,
       modelVersion: result?.modelVersion || null,
+      modelAttestations,
+      consumerMcpExposed: result?.consumerMcpExposed ?? null,
+      actionAuditHash: sha256(result?.actionAudit || []),
+      semanticEvidenceVerification:
+        result?.semanticHarvest?.verification || null,
       permissionsHash: trial.permissionsHash,
       contextBudget: trial.budgets.contextTokens,
       retryBudget: trial.budgets.retries,
@@ -577,10 +603,21 @@ try {
       : 'executable-smoke';
   const sourceTreeHash = sha256([
     readFileSync(fileURLToPath(import.meta.url), 'utf8'),
+    readFileSync(join(ROOT, 'scripts', 'ucr-live-study-driver.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'scripts', 'ucr-study-driver-dispatch.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'codex-app-server.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'index.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'live-study-driver.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'model-attestation.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'protocol.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'study-driver.mjs'), 'utf8'),
     readFileSync(join(ROOT, 'ucr', 'study-design.mjs'), 'utf8'),
     readFileSync(join(ROOT, 'ucr', 'evidence-contract.mjs'), 'utf8'),
     readFileSync(options.benchmark, 'utf8'),
     readFileSync(options.clients, 'utf8'),
+    ...(options.runnerModule
+      ? [readFileSync(options.runnerModule, 'utf8')]
+      : []),
   ]);
   const run = createEvidenceRun({
     runId: `full-study-${randomBytes(8).toString('hex')}`,

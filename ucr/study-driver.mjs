@@ -1,4 +1,5 @@
 import { UCR_CLIENT_REGISTRY } from './adapter-sdk.mjs';
+import { validateModelAttestation } from './model-attestation.mjs';
 import { sha256 } from './protocol.mjs';
 
 export const STUDY_DRIVER_PROTOCOL = 'ucr.study-driver/1';
@@ -41,6 +42,34 @@ export function studyDriverChildEnvironment(environment = process.env) {
     [...allowed]
       .filter((name) => environment?.[name] != null)
       .map((name) => [name, environment[name]])
+  );
+}
+
+/**
+ * Bound the whole driver independently from each provider invocation. A trial
+ * can contain a producer plus multiple successors, so reusing one invocation's
+ * timeout here terminates valid driver cleanup and telemetry.
+ */
+export function studyDriverProcessTimeoutMs(
+  trial,
+  environment = process.env
+) {
+  const explicit = Number(environment?.UCR_STUDY_DRIVER_TIMEOUT_MS);
+  if (Number.isFinite(explicit) && explicit > 0)
+    return Math.min(Math.trunc(explicit), 24 * 60 * 60 * 1000);
+  const invocationTimeout = Number(trial?.budgets?.timeoutMs);
+  const invocations = Number(trial?.expectedProviderInvocations);
+  const boundedInvocationTimeout =
+    Number.isFinite(invocationTimeout) && invocationTimeout > 0
+      ? Math.trunc(invocationTimeout)
+      : 600_000;
+  const boundedInvocations =
+    Number.isInteger(invocations) && invocations >= 2
+      ? Math.min(invocations, 100)
+      : 2;
+  return Math.min(
+    boundedInvocationTimeout * boundedInvocations + 30_000,
+    24 * 60 * 60 * 1000
   );
 }
 
@@ -130,6 +159,12 @@ export function validateStudyDriverResult(result, trial) {
     diagnostics.push('semantic delta is not bound to the producer invocation');
   if (result?.semanticHarvest?.additionalModelCalls !== 0)
     diagnostics.push('semantic capture added a model call');
+  if (
+    result?.semanticHarvest?.verification?.verified !== true ||
+    !Array.isArray(result?.semanticHarvest?.verification?.anchors) ||
+    result.semanticHarvest.verification.anchors.length === 0
+  )
+    diagnostics.push('semantic capture lacks verified repository evidence');
   if (result?.consumerMcpExposed !== false)
     diagnostics.push('consumer was exposed to the MCP server');
   if (result?.phaseAccounting?.staticSchemaTokens !== 0)
@@ -149,6 +184,32 @@ export function validateStudyDriverResult(result, trial) {
     diagnostics.push('executed CLI versions differ from the frozen plan');
   if (result?.modelVersion !== trial?.consumerModelVersion)
     diagnostics.push('executed model version differs from the frozen plan');
+  for (const invocation of telemetry) {
+    const producer = invocation?.role === 'producer';
+    const expectedClient = producer
+      ? trial?.producerClient
+      : trial?.consumerClient;
+    const expectedModel = producer
+      ? trial?.producerModelVersion
+      : trial?.consumerModelVersion;
+    const expectedTransport = producer
+      ? trial?.producerTransport
+      : trial?.consumerTransport;
+    if (invocation?.transport !== expectedTransport)
+      diagnostics.push(`${invocation?.role || 'unknown'} transport mismatch`);
+    const attestation = validateModelAttestation(
+      invocation?.modelAttestation,
+      {
+        client: expectedClient,
+        requestedModel: expectedModel,
+        providerRequestId: invocation?.providerRequestId,
+      }
+    );
+    if (!attestation.valid)
+      diagnostics.push(
+        `${invocation?.role || 'unknown'} model attestation failed: ${attestation.diagnostics.join(', ')}`
+      );
+  }
   if (
     telemetry.length !== expectedInvocations ||
     producerInvocations.length !== 1 ||

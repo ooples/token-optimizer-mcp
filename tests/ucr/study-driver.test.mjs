@@ -2,8 +2,10 @@ import { describe, expect, test } from '@jest/globals';
 import {
   STUDY_DRIVER_PROTOCOL,
   UCR_CLIENT_REGISTRY,
+  createModelAttestation,
   sha256,
   studyDriverChildEnvironment,
+  studyDriverProcessTimeoutMs,
   studyDriverRegistry,
   studyDirectionEnvironmentKey,
   validateStudyDriverResult,
@@ -61,13 +63,31 @@ describe('universal live-study driver contract', () => {
     });
   });
 
+  test('budgets the whole multi-invocation driver plus cleanup', () => {
+    expect(
+      studyDriverProcessTimeoutMs({
+        budgets: { timeoutMs: 600_000 },
+        expectedProviderInvocations: 3,
+      })
+    ).toBe(1_830_000);
+    expect(
+      studyDriverProcessTimeoutMs(
+        { budgets: { timeoutMs: 600_000 }, expectedProviderInvocations: 3 },
+        { UCR_STUDY_DRIVER_TIMEOUT_MS: '45000' }
+      )
+    ).toBe(45_000);
+  });
+
   test('requires the planned calls, zero capture calls, and complete telemetry', () => {
     const trial = {
       producerClient: 'codex',
       consumerClient: 'claude-code',
       producerVersion: 'codex-v1',
       consumerVersion: 'claude-v1',
+      producerModelVersion: 'gpt-model-v1',
       consumerModelVersion: 'claude-model-v1',
+      producerTransport: 'codex-app-server',
+      consumerTransport: 'claude-code',
       expectedProviderInvocations: 2,
       producerContinuitySessionId: 's1',
       consumerContinuitySessionId: 's2',
@@ -102,6 +122,12 @@ describe('universal live-study driver contract', () => {
         authorInvocationId: 'producer-1',
         delta,
         deltaHash: expect.anything(),
+        verification: {
+          verified: true,
+          anchors: [
+            { path: 'evidence/current.json', sha256: 'a'.repeat(64) },
+          ],
+        },
       },
       consumerMcpExposed: false,
       phaseAccounting: { staticSchemaTokens: 0 },
@@ -129,6 +155,7 @@ describe('universal live-study driver contract', () => {
           usageSource: 'provider-native',
           inputTokens: 40,
           outputTokens: 10,
+          transport: 'codex-app-server',
           latencyMs: 10,
           startedAtMs: 0,
           endedAtMs: 10,
@@ -142,12 +169,37 @@ describe('universal live-study driver contract', () => {
           usageSource: 'provider-native',
           inputTokens: 40,
           outputTokens: 10,
+          transport: 'claude-code',
           latencyMs: 10,
           startedAtMs: 11,
           endedAtMs: 21,
         },
       ],
     };
+    const attest = ({ client, provider, model, request, source }) =>
+      createModelAttestation({
+        client,
+        provider,
+        requestedModel: model,
+        effectiveModel: model,
+        source,
+        providerRequestId: request,
+        evidence: { request, model },
+      });
+    result.invocations[0].modelAttestation = attest({
+      client: 'codex',
+      provider: 'openai',
+      model: 'gpt-model-v1',
+      request: 'request-1',
+      source: 'codex-app-server/thread-start',
+    });
+    result.invocations[1].modelAttestation = attest({
+      client: 'claude-code',
+      provider: 'anthropic',
+      model: 'claude-model-v1',
+      request: 'request-2',
+      source: 'claude-code/stream-json',
+    });
     result.semanticHarvest.deltaHash = sha256(delta);
     expect(validateStudyDriverResult(result, trial)).toMatchObject({
       valid: true,
@@ -155,6 +207,24 @@ describe('universal live-study driver contract', () => {
     expect(
       validateStudyDriverResult({ ...result, providerInvocations: 1 }, trial)
         .valid
+    ).toBe(false);
+    expect(
+      validateStudyDriverResult(
+        {
+          ...result,
+          invocations: [
+            {
+              ...result.invocations[0],
+              modelAttestation: {
+                ...result.invocations[0].modelAttestation,
+                effectiveModel: 'gpt-model-v0',
+              },
+            },
+            result.invocations[1],
+          ],
+        },
+        trial
+      ).valid
     ).toBe(false);
     expect(
       validateStudyDriverResult(result, {
@@ -187,6 +257,13 @@ describe('universal live-study driver contract', () => {
           providerRequestId: 'request-3',
           startedAtMs: 12,
           endedAtMs: 22,
+          modelAttestation: attest({
+            client: 'claude-code',
+            provider: 'anthropic',
+            model: 'claude-model-v1',
+            request: 'request-3',
+            source: 'claude-code/stream-json',
+          }),
         },
       ],
     };

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   STUDY_DRIVER_PROTOCOL,
   studyDriverChildEnvironment,
+  studyDriverProcessTimeoutMs,
   studyDirectionEnvironmentKey,
 } from '../ucr/index.mjs';
 
@@ -44,7 +45,7 @@ if (!command || !existsSync(command)) {
       env: studyDriverChildEnvironment(process.env),
       input: raw,
       encoding: 'utf8',
-      timeout: Number(process.env.UCR_STUDY_DRIVER_TIMEOUT_MS) || 600_000,
+      timeout: studyDriverProcessTimeoutMs(trial, process.env),
       maxBuffer: 64 * 1024 * 1024,
       windowsHide: true,
       shell: false,

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { sha256 } from './protocol.mjs';
 
 export const LIVE_STUDY_SEMANTIC_SCHEMA = Object.freeze({
@@ -46,7 +48,10 @@ export const LIVE_STUDY_SEMANTIC_SCHEMA = Object.freeze({
     evidenceRefs: {
       type: 'array',
       minItems: 1,
-      items: { type: 'string', minLength: 1 },
+      items: {
+        type: 'string',
+        pattern: '^[A-Za-z0-9_.-]+(?:[\\\\/][A-Za-z0-9_.-]+)*$',
+      },
     },
   },
 });
@@ -130,18 +135,18 @@ function candidateText(objects) {
 }
 
 export function parseStructuredModelJson(text) {
-  if (text && typeof text === 'object') return text;
+  if (text && typeof text === 'object')
+    return Array.isArray(text) ? null : text;
   const source = String(text || '').trim();
   const candidates = [
     source,
     source.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, ''),
   ];
-  const start = source.indexOf('{');
-  const end = source.lastIndexOf('}');
-  if (start >= 0 && end > start) candidates.push(source.slice(start, end + 1));
   for (const candidate of candidates) {
     try {
-      return JSON.parse(candidate);
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        return parsed;
     } catch {
       // Try the next bounded representation.
     }
@@ -229,21 +234,125 @@ export function parseLiveCliTelemetry(client, stdout) {
   };
 }
 
-export function studyArmDecision(arm, armContext, semanticDelta) {
+function evidencePathCandidates(value) {
+  return (
+    String(value || '').match(
+      /[A-Za-z0-9_.-]+(?:[\\/][A-Za-z0-9_.-]+)+/g
+    ) || []
+  );
+}
+
+/** Ground model-authored capture in path-confined immutable fixture bytes. */
+export function verifyStudySemanticEvidence(semanticDelta, workspace) {
+  const diagnostics = [];
+  const anchors = [];
+  const root = realpathSync(workspace);
+  const declared = Array.isArray(semanticDelta?.evidenceRefs)
+    ? [...new Set(semanticDelta.evidenceRefs.map(String))]
+    : [];
+  const verifiedDeclared = new Set();
+  const candidates = [
+    ...declared,
+    ...evidencePathCandidates(semanticDelta?.verificationEvidence),
+  ];
+  for (const candidate of [...new Set(candidates)]) {
+    const path = String(candidate).replace(/[.,;:)\]}]+$/g, '');
+    if (!path || isAbsolute(path)) {
+      diagnostics.push(`rejected non-relative evidence path: ${path}`);
+      continue;
+    }
+    const target = resolve(root, path);
+    const relation = relative(root, target);
+    if (
+      relation === '..' ||
+      relation.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`)
+    ) {
+      diagnostics.push(`rejected escaping evidence path: ${path}`);
+      continue;
+    }
+    if (!existsSync(target) || !statSync(target).isFile()) {
+      diagnostics.push(`evidence path does not exist: ${path}`);
+      continue;
+    }
+    const realTarget = realpathSync(target);
+    const realRelation = relative(root, realTarget);
+    if (
+      realRelation === '..' ||
+      realRelation.startsWith(
+        `..${process.platform === 'win32' ? '\\' : '/'}`
+      )
+    ) {
+      diagnostics.push(`evidence symlink escapes workspace: ${path}`);
+      continue;
+    }
+    const bytes = statSync(realTarget).size;
+    if (bytes > 1024 * 1024) {
+      diagnostics.push(`evidence file exceeds 1 MiB: ${path}`);
+      continue;
+    }
+    anchors.push({
+      path: relative(root, realTarget).replaceAll('\\', '/'),
+      bytes,
+      sha256: sha256(readFileSync(realTarget)),
+    });
+    if (declared.includes(candidate)) verifiedDeclared.add(candidate);
+  }
+  const uniqueAnchors = [
+    ...new Map(anchors.map((anchor) => [anchor.path, anchor])).values(),
+  ];
+  if (!uniqueAnchors.length)
+    diagnostics.push('capture has no verifiable repository evidence anchor');
+  if (!declared.length)
+    diagnostics.push('capture declares no repository evidence refs');
+  for (const path of declared)
+    if (!verifiedDeclared.has(path))
+      diagnostics.push(`declared evidence ref was not verified: ${path}`);
+  const verified =
+    uniqueAnchors.length > 0 &&
+    declared.length > 0 &&
+    verifiedDeclared.size === declared.length;
+  return {
+    schemaVersion: 'ucr.semantic-evidence-verification/1',
+    verified,
+    anchors: uniqueAnchors,
+    diagnostics,
+    verificationHash: sha256({ anchors: uniqueAnchors, diagnostics }),
+  };
+}
+
+export function studyArmDecision(
+  arm,
+  armContext,
+  semanticDelta,
+  verification = null
+) {
   const applicable = ['runtime', 'oracle'].includes(arm);
-  const selected = applicable;
-  const delivered = applicable;
+  const eligible =
+    arm === 'oracle' || (arm === 'runtime' && verification?.verified === true);
+  const selected = applicable && eligible;
+  const delivered = selected;
   const payload =
     arm === 'runtime'
-      ? semanticDelta
-        ? `Verified active-model cognition: ${semanticDelta.correction}. Evidence: ${semanticDelta.verificationEvidence}.`
+      ? verification?.verified
+        ? [
+            `Verified predecessor evidence: ${verification.anchors
+              .slice(0, 2)
+              .map((anchor) => `${anchor.path}#${anchor.sha256.slice(0, 16)}`)
+              .join(', ')}.`,
+            'Inspect those exact files before acting; predecessor conclusions are not authoritative.',
+            semanticDelta?.applicability?.[0]
+              ? `Applicability hint: ${semanticDelta.applicability[0]}.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ')
         : null
       : arm === 'oracle'
         ? armContext || null
         : null;
   return {
     applicable,
-    eligible: applicable,
+    eligible,
     selected,
     delivered: delivered && Boolean(payload),
     payload,

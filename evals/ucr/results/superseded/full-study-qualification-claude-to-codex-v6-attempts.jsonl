@@ -1,0 +1,2 @@
+{"arm":"empty","causalEvents":0,"driverValidation":[],"providerFailures":[],"rowHash":"83adadb130b15432706cef1fea6f5163a3f0c3b69eb7b0d07d30c8ac5cd1a239","runnerExitCode":0,"trialId":"claude-code->codex:federation-001:0:empty","valid":true,"validation":[]}
+{"arm":"runtime","causalEvents":6,"driverValidation":[],"providerFailures":[],"rowHash":"8b917775a1f81046477391a8076e43c8bf47d5ee2477a2f8cfc5c1c7c6312a15","runnerExitCode":0,"trialId":"claude-code->codex:federation-001:0:runtime","valid":true,"validation":[]}

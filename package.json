@@ -66,6 +66,7 @@
     "verify:ucr": "node scripts/verify-ucr-runtime.mjs",
     "verify:ucr:study-design": "node scripts/verify-ucr-study-readiness.mjs",
     "eval:ucr:qualification:verify": "node scripts/verify-ucr-qualification.mjs",
+    "eval:ucr:qualification:gate": "node scripts/verify-ucr-qualification.mjs --require-qualified",
     "evidence:ucr:study-design:update": "node scripts/verify-ucr-study-readiness.mjs --write",
     "evidence:ucr:update": "node scripts/verify-ucr-runtime.mjs --write",
     "eval:ucr:handoff:plan": "node scripts/run-ucr-handoff-smoke.mjs",
@@ -98,6 +99,7 @@
     "eval:handoff:concurrent": "node scripts/run-concurrent-handoff-eval.mjs",
     "verify:all": "npm run sync:hooks:check && npm run eval:ucr:qualification:verify && npm run verify:clients && npm run verify:certification && npm run verify:harvest && npm run verify:ucr && npm run verify:ucr:study-design && npm run verify:live-graph && npm run verify:ui && npm run verify:interactions",
     "verify:interactions": "node scripts/verify-wiki-interactions.mjs",
+    "dashboard:verify-live": "node scripts/verify-live-dashboard.mjs",
     "explore:wiki": "node scripts/explore-wiki.mjs"
   },
   "repository": {

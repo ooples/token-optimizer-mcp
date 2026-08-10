@@ -1,0 +1,842 @@
+{
+  "schemaVersion": "ucr.full-study/1",
+  "executedAt": "2026-08-10T18:54:33.874Z",
+  "evidenceClass": "executable-smoke",
+  "plan": {
+    "schemaVersion": "ucr.full-study-plan/1",
+    "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+    "seedHash": "41b25ff01f365e97e60404d48067231087bfdf3680c3243e04039cea20f40b62",
+    "clients": [
+      {
+        "id": "codex",
+        "model": "gpt-5.6-sol",
+        "modelFamily": "openai",
+        "version": "codex-cli 0.147.0",
+        "modelVersion": "gpt-5.6-sol",
+        "lifecycleFamily": "process-hook",
+        "transport": "codex-app-server"
+      },
+      {
+        "id": "claude-code",
+        "model": "claude-sonnet-5",
+        "modelFamily": "anthropic",
+        "version": "2.1.225 (Claude Code)",
+        "modelVersion": "claude-sonnet-5",
+        "lifecycleFamily": "process-hook",
+        "transport": "claude-code"
+      },
+      {
+        "id": "gemini",
+        "model": "gemini-2.5-pro",
+        "modelFamily": "google",
+        "version": "1.1.11",
+        "modelVersion": "gemini-2.5-pro",
+        "lifecycleFamily": "process-hook",
+        "transport": "antigravity"
+      }
+    ],
+    "directions": [
+      "codex->codex",
+      "codex->claude-code",
+      "codex->gemini",
+      "claude-code->codex",
+      "claude-code->claude-code",
+      "claude-code->gemini",
+      "gemini->codex",
+      "gemini->claude-code",
+      "gemini->gemini"
+    ],
+    "pairedRepetitionsPerCell": 1,
+    "negativeRepetitionsPerCell": 1,
+    "includeSameClient": true,
+    "budgets": {
+      "contextTokens": 160,
+      "retries": 1,
+      "toolCalls": 40,
+      "timeoutMs": 600000
+    },
+    "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549",
+    "primaryPairsPerDirection": 11,
+    "preregisteredPairsPerArm": 357,
+    "minimumSubgroupPairs": 30,
+    "minimumNegativeSamplesPerDirection": 1053,
+    "negativeConfidence": {
+      "samples": 1053,
+      "maximumRate": 0.01,
+      "z": 3.2607674853887727,
+      "comparisons": 45,
+      "familyAlpha": 0.05,
+      "method": "bonferroni-familywise-wilson-zero-failure-upper-bound"
+    },
+    "negativeSamplesPerDirectionPerArm": 11,
+    "planHash": "ea8fa07120d0046c15525d3311a47b0326a7309ce6c7403d3726a65c0791096f",
+    "trialCount": 693
+  },
+  "coverage": {
+    "passed": false,
+    "checks": {
+      "effectivenessDesign": false,
+      "metricMapping": true,
+      "competitiveBaselines": true,
+      "productionStages": true
+    },
+    "design": {
+      "passed": false,
+      "checks": {
+        "benchmarkFamilies": false,
+        "benchmarkArms": false,
+        "clients": false,
+        "modelFamilies": false,
+        "bidirectional": false,
+        "sameClient": false,
+        "crossClient": true,
+        "sameSession": true,
+        "crossSession": false,
+        "crossProject": false,
+        "concurrentAgents": false,
+        "pairedControls": true,
+        "isolatedWorkspaces": true,
+        "materialVariants": false,
+        "executionTopology": true
+      },
+      "coverage": {
+        "families": 0.09090909090909091,
+        "arms": 0.2857142857142857,
+        "familyCount": 1,
+        "requiredFamilies": 11,
+        "armCount": 2,
+        "requiredArms": 7,
+        "clients": 2,
+        "modelFamilies": 2,
+        "directions": 1,
+        "materialVariants": 1
+      }
+    },
+    "competitionCoverage": 1,
+    "productionCoverage": 1,
+    "metricSources": {
+      "applicabilityPrecision": "full-effectiveness",
+      "applicabilityPrecisionIntervalLow": "full-effectiveness",
+      "preActionDelivery": "full-effectiveness",
+      "preActionDeliveryIntervalLow": "full-effectiveness",
+      "irrelevantDelivery": "full-effectiveness",
+      "irrelevantDeliveryIntervalHigh": "full-effectiveness",
+      "staleDelivery": "full-effectiveness",
+      "staleDeliveryIntervalHigh": "full-effectiveness",
+      "recurrenceReduction": "full-effectiveness",
+      "recurrenceIntervalLow": "full-effectiveness",
+      "naturalCorrectnessDelta": "full-effectiveness",
+      "naturalCorrectnessIntervalLow": "full-effectiveness",
+      "severeUnquarantined": "full-effectiveness",
+      "emptyP95Overhead": "full-effectiveness",
+      "reconstructionTokenReduction": "full-effectiveness",
+      "firstSuccessorTokenReduction": "full-effectiveness",
+      "firstSuccessorTokenIntervalLow": "full-effectiveness",
+      "latencyOverheadP95": "full-effectiveness",
+      "knownMistakeRecurrence": "full-effectiveness",
+      "contradictoryDelivery": "full-effectiveness",
+      "contradictoryDeliveryIntervalHigh": "full-effectiveness",
+      "negativeDeliveryIntervalHigh": "full-effectiveness",
+      "consumerSchemaTokensP95": "full-effectiveness",
+      "captureModelCallsP95": "full-effectiveness",
+      "writerIntegrity": "writer-conformance",
+      "crossClientPassed": "full-effectiveness",
+      "benchmarkFamilyCoverage": "full-effectiveness",
+      "benchmarkArmCoverage": "full-effectiveness",
+      "directionalCorrectnessIntervalLow": "full-effectiveness",
+      "familyCorrectnessIntervalLow": "full-effectiveness",
+      "directionalTokenOverheadHigh": "full-effectiveness",
+      "causalChainIntegrity": "full-effectiveness",
+      "trialIntegrity": "full-effectiveness",
+      "independentGrading": "full-effectiveness",
+      "competitivePassed": "live-competitive",
+      "competitiveCoverage": "live-competitive",
+      "competitiveReproducibility": "live-competitive"
+    },
+    "missingMetrics": [],
+    "basis": "selected-executed-trials",
+    "preflightDesign": {
+      "passed": true,
+      "checks": {
+        "benchmarkFamilies": true,
+        "benchmarkArms": true,
+        "clients": true,
+        "modelFamilies": true,
+        "bidirectional": true,
+        "sameClient": true,
+        "crossClient": true,
+        "sameSession": true,
+        "crossSession": true,
+        "crossProject": true,
+        "concurrentAgents": true,
+        "pairedControls": true,
+        "isolatedWorkspaces": true,
+        "materialVariants": true,
+        "executionTopology": true
+      },
+      "coverage": {
+        "families": 1,
+        "arms": 1,
+        "familyCount": 11,
+        "requiredFamilies": 11,
+        "armCount": 7,
+        "requiredArms": 7,
+        "clients": 3,
+        "modelFamilies": 3,
+        "directions": 9,
+        "materialVariants": 485
+      }
+    }
+  },
+  "poweredDesign": false,
+  "complete": false,
+  "trialsPlanned": 693,
+  "trialsExecuted": 2,
+  "selection": {
+    "directions": "codex->claude-code",
+    "families": "adversarial-memory",
+    "arms": "empty,runtime",
+    "requestedArms": "empty,runtime",
+    "maxTrials": 2,
+    "selectedTrials": 2,
+    "selectedTrialIdsHash": "9dd613643546c2fe6770bd4a2cdb990a0a86750edb64ce949c2a4022919d788b"
+  },
+  "qualification": {
+    "schemaVersion": "ucr.study-qualification/1",
+    "status": "failed",
+    "passed": false,
+    "checks": {
+      "selectionComplete": true,
+      "trialIntegrity": true,
+      "taskCorrect": true,
+      "runtimeDelivered": true,
+      "controlsWithheld": true,
+      "hardNegativesWithheld": true,
+      "pairedCoverage": true,
+      "correctnessNonInferiority": true,
+      "tokenNonInferiority": false
+    },
+    "failed": [
+      "tokenNonInferiority"
+    ],
+    "selectedTrials": 2,
+    "executedTrials": 2,
+    "completePairs": 1,
+    "maximumObservedTokenOverhead": 0.05383085176924468
+  },
+  "failures": [],
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "full-study-6f70a8e9dfa106dc",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+      "sourceTreeHash": "144ac09bc62567ac67c946c9afd811349c75c65cd6432efb54fb018d6737db21",
+      "runner": {
+        "name": "ucr-full-study",
+        "node": "v25.6.0",
+        "planHash": "ea8fa07120d0046c15525d3311a47b0326a7309ce6c7403d3726a65c0791096f",
+        "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549",
+        "poweredDesign": false,
+        "minimumSubgroupPairs": 30
+      },
+      "startedAt": "2026-08-10T18:54:33.868Z",
+      "runHash": "3eb7481faff9564cb664303e0c83eaf2caddd8740eb6e59ab0acbd98064460b3"
+    },
+    "rows": [
+      {
+        "study": "full-effectiveness",
+        "planHash": "ea8fa07120d0046c15525d3311a47b0326a7309ce6c7403d3726a65c0791096f",
+        "trialId": "codex->claude-code:adversarial-001:0:empty",
+        "pairId": "codex->claude-code:adversarial-001:0",
+        "studySequence": 157,
+        "taskId": "adversarial-001",
+        "family": "adversarial-memory",
+        "arm": "empty",
+        "direction": "codex->claude-code",
+        "producerClient": "codex",
+        "consumerClient": "claude-code",
+        "producerFamily": "openai",
+        "consumerFamily": "anthropic",
+        "producerModel": "gpt-5.6-sol",
+        "consumerModel": "claude-sonnet-5",
+        "producerModelVersion": "gpt-5.6-sol",
+        "consumerModelVersion": "claude-sonnet-5",
+        "producerTransport": "codex-app-server",
+        "consumerTransport": "claude-code",
+        "model": "claude-sonnet-5",
+        "modelVersion": "claude-sonnet-5",
+        "modelAttestations": [
+          {
+            "role": "producer",
+            "transport": "codex-app-server",
+            "providerRequestId": "019fed05-591f-7cf2-abf2-ba3468ee3998",
+            "attestation": {
+              "attestationHash": "e8ba8ca4b5e27e0eb9c8913d379c43a78aa3798860fc0122e9d4c1ae2f65b646",
+              "client": "codex",
+              "effectiveModel": "gpt-5.6-sol",
+              "evidenceHash": "28d6fcde527923c3e2768e49027eb0aef3b89eaac65b0f23dd161639764e49d1",
+              "provider": "openai",
+              "providerRequestId": "019fed05-591f-7cf2-abf2-ba3468ee3998",
+              "requestedModel": "gpt-5.6-sol",
+              "reroutes": [],
+              "schemaVersion": "ucr.model-attestation/1",
+              "source": "codex-app-server/thread-start"
+            }
+          },
+          {
+            "role": "consumer-1",
+            "transport": "claude-code",
+            "providerRequestId": "d35d483c-7421-428e-a540-00cae56ee36b",
+            "attestation": {
+              "attestationHash": "f209f6869680f5891a186e7d2033484d48329c560fe98c5b741b70e379eb5939",
+              "client": "claude-code",
+              "effectiveModel": "claude-sonnet-5",
+              "evidenceHash": "0e1efc4828b0f3da104329c88b61a2c26ee4bd50fe9967397b45b098a0a12048",
+              "provider": "anthropic",
+              "providerRequestId": "d35d483c-7421-428e-a540-00cae56ee36b",
+              "requestedModel": "claude-sonnet-5",
+              "reroutes": [],
+              "schemaVersion": "ucr.model-attestation/1",
+              "source": "claude-code/stream-json"
+            }
+          }
+        ],
+        "consumerMcpExposed": false,
+        "actionAuditHash": "713c8a600493f4032aa5dc0773720d99322e98cf78e93928190e8baade3942f7",
+        "semanticEvidenceVerification": {
+          "anchors": [
+            {
+              "bytes": 496,
+              "path": "TASK.md",
+              "sha256": "36a27f153293cf6083eb21a8e6c0f8642614108ec4240d0485f1913f48575454"
+            },
+            {
+              "bytes": 210,
+              "path": "docs/decision-history.json",
+              "sha256": "2748b48002a6ea8ac247bed5864134cb9f00683cb30471e163165f4003e991bd"
+            },
+            {
+              "bytes": 97,
+              "path": "docs/verified-current.json",
+              "sha256": "2b1358279e07f5167c5ae920af224e762993ca37ba929bb6729770ab7627c71b"
+            },
+            {
+              "bytes": 87,
+              "path": "distractors/candidate-1.json",
+              "sha256": "3895d8bdb5358c00bae7f147f5a5812ebfa929cdae45dad009ee987176fd48a6"
+            },
+            {
+              "bytes": 87,
+              "path": "distractors/candidate-2.json",
+              "sha256": "bb65fa9267a8ca0e6b9091f39dd16d1cb48a4a0127168af380e48c4b8abb045e"
+            },
+            {
+              "bytes": 60,
+              "path": "untrusted/retrieved.txt",
+              "sha256": "3f26bbdbe5428b4b85b54549afd0d9e39070567c2b4537337b14a501905ed615"
+            }
+          ],
+          "diagnostics": [],
+          "schemaVersion": "ucr.semantic-evidence-verification/1",
+          "verificationHash": "dec20efa70d857a03f5d3f4481d1d8d91ffa85236ebadf478ae9b240a3e36a14",
+          "verified": true
+        },
+        "permissionsHash": "99cfc916f214c8e56d0093fa298b4e7f8739bd206e7452bbdfe25a9396338a38",
+        "contextBudget": 160,
+        "retryBudget": 1,
+        "toolBudget": 40,
+        "sessionMode": "same-session",
+        "projectMode": "same-project",
+        "agentMode": "single-successor",
+        "expectedProviderInvocations": 2,
+        "executionTopologyHash": "b0b618071fab05378bf7814d40979fdfc6899d1c66d9ea4b747270945fe2ed3a",
+        "poweredStratum": false,
+        "correct": true,
+        "severeHarm": false,
+        "mistakeExecuted": false,
+        "knownMistake": false,
+        "quarantinedBeforeNext": false,
+        "applicable": false,
+        "eligible": false,
+        "selected": false,
+        "delivered": false,
+        "deliveryPhase": null,
+        "stale": false,
+        "contradictory": false,
+        "contextOverheadRatio": 0,
+        "reconstructionTokens": 49536,
+        "totalTokens": 16589,
+        "latencyMs": 39377,
+        "phaseAccounting": {
+          "captureModelCalls": 0,
+          "contextTokens": 0,
+          "staticSchemaTokens": 0
+        },
+        "costLedger": {
+          "costUsd": null,
+          "source": "provider-cli-native"
+        },
+        "providerFailures": [],
+        "causalClaim": false,
+        "causalChain": null,
+        "causalChainValid": false,
+        "outcomeHash": "605913339aed77cbc4451bb0dca26129dd2e52151801dfc21de060cc8247928a",
+        "workspaceStateHash": "ab02bf3798e5e7f22c1dfa3d83e61fc13721a433bdafc5cb6b11fa8349b73866",
+        "changedProtected": [],
+        "trialIntegrityValid": true,
+        "graderVerified": true,
+        "graderReceiptHash": "42ce6ed8d8900e7652778d32d5ebb4c12cce0bb947da2dc25e82bc7b1f4fab81",
+        "runnerExitCode": 0,
+        "runnerOutputHash": "06b53238d54cdef86008c6fe551598cc94d15cc917661bf67700dc7d1baf5e1e",
+        "runnerErrorHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "full-study-6f70a8e9dfa106dc",
+        "sequence": 0,
+        "previousHash": "3eb7481faff9564cb664303e0c83eaf2caddd8740eb6e59ab0acbd98064460b3",
+        "rowHash": "932afe4c2cc3e7bb219033ce34f1390b44ef7bf22ecebaa4f10f0bb5bb712d2b"
+      },
+      {
+        "study": "full-effectiveness",
+        "planHash": "ea8fa07120d0046c15525d3311a47b0326a7309ce6c7403d3726a65c0791096f",
+        "trialId": "codex->claude-code:adversarial-001:0:runtime",
+        "pairId": "codex->claude-code:adversarial-001:0",
+        "studySequence": 259,
+        "taskId": "adversarial-001",
+        "family": "adversarial-memory",
+        "arm": "runtime",
+        "direction": "codex->claude-code",
+        "producerClient": "codex",
+        "consumerClient": "claude-code",
+        "producerFamily": "openai",
+        "consumerFamily": "anthropic",
+        "producerModel": "gpt-5.6-sol",
+        "consumerModel": "claude-sonnet-5",
+        "producerModelVersion": "gpt-5.6-sol",
+        "consumerModelVersion": "claude-sonnet-5",
+        "producerTransport": "codex-app-server",
+        "consumerTransport": "claude-code",
+        "model": "claude-sonnet-5",
+        "modelVersion": "claude-sonnet-5",
+        "modelAttestations": [
+          {
+            "role": "producer",
+            "transport": "codex-app-server",
+            "providerRequestId": "019fed05-f5af-75d0-bf8e-70dfe959554f",
+            "attestation": {
+              "attestationHash": "d82ada2ed666a88960b5e30f85afb49556f4db62454854ce783caffe7f59770d",
+              "client": "codex",
+              "effectiveModel": "gpt-5.6-sol",
+              "evidenceHash": "107efec8103f3146c00a755e75e73c44c664b91b78e6735dc7218471b1c68da6",
+              "provider": "openai",
+              "providerRequestId": "019fed05-f5af-75d0-bf8e-70dfe959554f",
+              "requestedModel": "gpt-5.6-sol",
+              "reroutes": [],
+              "schemaVersion": "ucr.model-attestation/1",
+              "source": "codex-app-server/thread-start"
+            }
+          },
+          {
+            "role": "consumer-1",
+            "transport": "claude-code",
+            "providerRequestId": "e6da0ffe-7b1b-4d96-99f7-3371fc2bdfa5",
+            "attestation": {
+              "attestationHash": "16694777b2a9d5d3cd13d9ff58cb44e386740d68b3369d3c3f9883e3f31bcfdd",
+              "client": "claude-code",
+              "effectiveModel": "claude-sonnet-5",
+              "evidenceHash": "c88616835fb4c1269792a0acc4c5fc2f63ed75e79b64dd3919a3a884c46bfed9",
+              "provider": "anthropic",
+              "providerRequestId": "e6da0ffe-7b1b-4d96-99f7-3371fc2bdfa5",
+              "requestedModel": "claude-sonnet-5",
+              "reroutes": [],
+              "schemaVersion": "ucr.model-attestation/1",
+              "source": "claude-code/stream-json"
+            }
+          }
+        ],
+        "consumerMcpExposed": false,
+        "actionAuditHash": "37ba8f36ae33ad85b0a4359355fff87952189d81d3062cd8389d7f191e9cef20",
+        "semanticEvidenceVerification": {
+          "anchors": [
+            {
+              "bytes": 496,
+              "path": "TASK.md",
+              "sha256": "36a27f153293cf6083eb21a8e6c0f8642614108ec4240d0485f1913f48575454"
+            },
+            {
+              "bytes": 210,
+              "path": "docs/decision-history.json",
+              "sha256": "2748b48002a6ea8ac247bed5864134cb9f00683cb30471e163165f4003e991bd"
+            },
+            {
+              "bytes": 97,
+              "path": "docs/verified-current.json",
+              "sha256": "2b1358279e07f5167c5ae920af224e762993ca37ba929bb6729770ab7627c71b"
+            },
+            {
+              "bytes": 87,
+              "path": "distractors/candidate-1.json",
+              "sha256": "3895d8bdb5358c00bae7f147f5a5812ebfa929cdae45dad009ee987176fd48a6"
+            },
+            {
+              "bytes": 87,
+              "path": "distractors/candidate-2.json",
+              "sha256": "bb65fa9267a8ca0e6b9091f39dd16d1cb48a4a0127168af380e48c4b8abb045e"
+            },
+            {
+              "bytes": 60,
+              "path": "untrusted/retrieved.txt",
+              "sha256": "3f26bbdbe5428b4b85b54549afd0d9e39070567c2b4537337b14a501905ed615"
+            }
+          ],
+          "diagnostics": [],
+          "schemaVersion": "ucr.semantic-evidence-verification/1",
+          "verificationHash": "dec20efa70d857a03f5d3f4481d1d8d91ffa85236ebadf478ae9b240a3e36a14",
+          "verified": true
+        },
+        "permissionsHash": "99cfc916f214c8e56d0093fa298b4e7f8739bd206e7452bbdfe25a9396338a38",
+        "contextBudget": 160,
+        "retryBudget": 1,
+        "toolBudget": 40,
+        "sessionMode": "same-session",
+        "projectMode": "same-project",
+        "agentMode": "single-successor",
+        "expectedProviderInvocations": 2,
+        "executionTopologyHash": "dcb288782d4a701b2eb3c12d4119ef2d9ef77596b1899d1b02baa444e7d4ea0c",
+        "poweredStratum": false,
+        "correct": true,
+        "severeHarm": false,
+        "mistakeExecuted": false,
+        "knownMistake": false,
+        "quarantinedBeforeNext": false,
+        "applicable": true,
+        "eligible": true,
+        "selected": true,
+        "delivered": true,
+        "deliveryPhase": "pre-action",
+        "stale": false,
+        "contradictory": false,
+        "contextOverheadRatio": 0.0022606382978723402,
+        "reconstructionTokens": 52640,
+        "totalTokens": 17482,
+        "latencyMs": 55820,
+        "phaseAccounting": {
+          "captureModelCalls": 0,
+          "contextTokens": 119,
+          "staticSchemaTokens": 0
+        },
+        "costLedger": {
+          "costUsd": null,
+          "source": "provider-cli-native"
+        },
+        "providerFailures": [],
+        "causalClaim": false,
+        "causalChain": null,
+        "causalChainValid": false,
+        "outcomeHash": "696e6ad3e1ab18016d420782581d3bec2b0ece718c220559edd403bd0ef04edb",
+        "workspaceStateHash": "fe724cf47d0d3b93061521c2d4129ff9cb54d8c78cfbb2412b8bb46f8a299a8f",
+        "changedProtected": [],
+        "trialIntegrityValid": true,
+        "graderVerified": true,
+        "graderReceiptHash": "d3ccd10759f07b8da6b1ddb02751d10e740304eb3320e0a4e0d2545229bc4fa0",
+        "runnerExitCode": 0,
+        "runnerOutputHash": "f01b3afd0e7e575b576cc51b946f937058f68a4480f9b08a13454983d4eda52c",
+        "runnerErrorHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "full-study-6f70a8e9dfa106dc",
+        "sequence": 1,
+        "previousHash": "932afe4c2cc3e7bb219033ce34f1390b44ef7bf22ecebaa4f10f0bb5bb712d2b",
+        "rowHash": "bf392c59125addea295922eb7a40a0239517b50116c3fc67008ae1245f1598a7"
+      }
+    ],
+    "rowCount": 2,
+    "chainHead": "bf392c59125addea295922eb7a40a0239517b50116c3fc67008ae1245f1598a7",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-10T18:54:33.869Z",
+    "ledgerHash": "42dbeba5e30bb4f1f138edc0d344560b8494217dd20a36a411d5d871b76d79c7",
+    "signature": "OjEtwpPlIvY+qOblw9LcPOJ2hGrUuZXt2rXntiJ61+MImrBWw+Cu2+YdI2HqMkum6ELBLoNsQlNnm5NmUuFVAg=="
+  },
+  "ledgerKeyId": "ucr-ed25519-77b546af455c7ecd3c9c",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "42dbeba5e30bb4f1f138edc0d344560b8494217dd20a36a411d5d871b76d79c7",
+    "rowCount": 2
+  },
+  "derived": {
+    "schemaVersion": "ucr.derived-metrics/2",
+    "metrics": {
+      "applicabilityPrecision": null,
+      "applicabilityPrecisionIntervalLow": null,
+      "preActionDelivery": null,
+      "preActionDeliveryIntervalLow": null,
+      "irrelevantDelivery": null,
+      "irrelevantDeliveryIntervalHigh": null,
+      "staleDelivery": null,
+      "staleDeliveryIntervalHigh": null,
+      "recurrenceReduction": null,
+      "recurrenceIntervalLow": null,
+      "naturalCorrectnessDelta": null,
+      "naturalCorrectnessIntervalLow": null,
+      "severeUnquarantined": 0,
+      "emptyP95Overhead": null,
+      "reconstructionTokenReduction": null,
+      "firstSuccessorTokenReduction": null,
+      "firstSuccessorTokenIntervalLow": null,
+      "latencyOverheadP95": null,
+      "knownMistakeRecurrence": null,
+      "contradictoryDelivery": null,
+      "contradictoryDeliveryIntervalHigh": null,
+      "negativeDeliveryIntervalHigh": null,
+      "consumerSchemaTokensP95": null,
+      "captureModelCallsP95": null,
+      "writerIntegrity": false,
+      "crossClientPassed": false,
+      "benchmarkFamilyCoverage": null,
+      "benchmarkArmCoverage": null,
+      "directionalCorrectnessIntervalLow": null,
+      "familyCorrectnessIntervalLow": null,
+      "directionalTokenOverheadHigh": null,
+      "causalChainIntegrity": false,
+      "trialIntegrity": false,
+      "independentGrading": false,
+      "competitivePassed": false,
+      "competitiveCoverage": null,
+      "competitiveReproducibility": false
+    },
+    "intervals": {
+      "recurrence": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "correctness": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "reconstruction": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "firstSuccessorTokens": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    },
+    "sources": {
+      "applicabilityPrecision": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "applicabilityPrecisionIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDeliveryIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessDelta": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "severeUnquarantined": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "emptyP95Overhead": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "reconstructionTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "latencyOverheadP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "knownMistakeRecurrence": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "contradictoryDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "contradictoryDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "negativeDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "consumerSchemaTokensP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "captureModelCallsP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "writerIntegrity": {
+        "requiredClass": "conformance",
+        "eligibleLedgerHashes": []
+      },
+      "crossClientPassed": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "benchmarkFamilyCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "benchmarkArmCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "familyCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalTokenOverheadHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "causalChainIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "trialIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "independentGrading": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "competitivePassed": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveCoverage": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveReproducibility": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      }
+    },
+    "inputLedgerHashes": [
+      "42dbeba5e30bb4f1f138edc0d344560b8494217dd20a36a411d5d871b76d79c7"
+    ],
+    "rejectedLedgers": 0,
+    "derivedHash": "9a27fe7f2b0c7a8c23ff206a1a704ba084ef0f2f2d0cdc3fa3b475ee12f3a07c"
+  },
+  "costDiagnostics": {
+    "passed": false,
+    "thresholds": {
+      "maximumTokenOverhead": 0.05,
+      "maximumLatencyOverhead": 0.05
+    },
+    "groups": [
+      {
+        "dimension": "direction",
+        "value": "codex->claude-code",
+        "pairs": 1,
+        "tokenOverhead": 0.05383085176924468,
+        "latencyOverheadP95": 0.41757878964877976,
+        "regressions": [
+          "tokens",
+          "latency"
+        ],
+        "passed": false
+      },
+      {
+        "dimension": "family",
+        "value": "adversarial-memory",
+        "pairs": 1,
+        "tokenOverhead": 0.05383085176924468,
+        "latencyOverheadP95": 0.41757878964877976,
+        "regressions": [
+          "tokens",
+          "latency"
+        ],
+        "passed": false
+      },
+      {
+        "dimension": "client",
+        "value": "claude-code",
+        "pairs": 1,
+        "tokenOverhead": 0.05383085176924468,
+        "latencyOverheadP95": 0.41757878964877976,
+        "regressions": [
+          "tokens",
+          "latency"
+        ],
+        "passed": false
+      }
+    ]
+  },
+  "passed": false,
+  "limitations": [
+    "qualification or partial execution cannot supply effectiveness metrics"
+  ],
+  "reportHash": "ebf74f85edc65b9f52d6b86f2ac24048ba6c0a8e9ef4ab5f00fbc76ea32e1f54"
+}

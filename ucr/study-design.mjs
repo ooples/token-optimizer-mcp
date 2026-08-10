@@ -151,6 +151,7 @@ function normalizeClients(clients) {
       version: client.version,
       modelVersion: client.modelVersion,
       lifecycleFamily: client.lifecycleFamily || null,
+      transport: client.transport || client.id,
     };
   });
 }
@@ -281,6 +282,8 @@ export function buildFullStudyPlan({
             consumerVersion: direction.consumer.version,
             producerModelVersion: direction.producer.modelVersion,
             consumerModelVersion: direction.consumer.modelVersion,
+            producerTransport: direction.producer.transport,
+            consumerTransport: direction.consumer.transport,
             hiddenVariantId: variant.publicTask.hiddenVariantId,
             publicVariant: variant.publicTask.publicVariant,
             variantPrompt: variant.publicTask.prompt,
@@ -322,6 +325,8 @@ export function buildFullStudyPlan({
             consumerVersion: direction.consumer.version,
             producerModelVersion: direction.producer.modelVersion,
             consumerModelVersion: direction.consumer.modelVersion,
+            producerTransport: direction.producer.transport,
+            consumerTransport: direction.consumer.transport,
             hiddenVariantId: variant.publicTask.hiddenVariantId,
             publicVariant: variant.publicTask.publicVariant,
             variantPrompt: variant.publicTask.prompt,

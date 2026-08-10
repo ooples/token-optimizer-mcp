@@ -46,7 +46,18 @@ stdin and returns one `ucr.study-driver/1` object on stdout. The driver must:
 6. retain complete pre-tool action telemetry; and
 7. return provider-native token, cache, latency, cost, CLI/model version, and
    observed session/project/agent topology telemetry for every call, plus the
-   executed top-level `promptHash`, `permissionsHash`, and `budgets` bindings.
+   executed top-level `promptHash`, `permissionsHash`, and `budgets` bindings;
+   and
+8. bind every invocation to a hashed `ucr.model-attestation/1` record from its
+   provider-native stream. The requested and effective models, request/session
+   id, transport, and reroute history must match the frozen trial exactly.
+
+The frozen transports are Codex app-server, Claude Code stream JSON, and Google
+Antigravity stream JSON. A separate Gemini CLI API-key registry is available for
+operators who intentionally preregister that transport. Codex app-server runs
+with a disposable `CODEX_HOME`, no MCP servers or inherited plugins, exact-model
+fallback disabled, and only path-confined evaluation tools. A missing provider
+model id, request binding, token record, or model reroute fails the trial closed.
 
 Drivers may attest only the capture-through-use portion of the causal chain.
 The parent grader alone appends behavior change, mistake prevention, and task
@@ -80,18 +91,26 @@ and `--arms` selectors for bounded qualification. Filtered runs remain
 Every negative, invalid, or interrupted attempt remains in its append-only
 attempt ledger.
 
-The August 10 live qualification preserves every attempt rather than selecting
-only favorable reruns. The initial Codex-to-Claude pair was valid but runtime
-increased tokens and latency. The first Claude-to-Codex pair made runtime
-incorrect while the empty control was correct. A hash-bound task-completion
-instruction corrected the missing consumer result on the first retry, which
-then exposed incomplete producer capture telemetry. The repaired driver moved
-hidden context to stdin, normalized nested provider structured output, raised
-the bounded producer budget, and recorded process completion telemetry. Its
-next Claude-to-Codex pair was valid and correct in both arms while runtime used
-34.9% fewer tokens and 38.2% less latency. A later Codex-to-Claude pair observed
-the empty control repeat the predecessor mistake while runtime prevented it and
-used 26.2% fewer tokens. These are signed qualification outcomes, not powered
+`npm run eval:ucr:qualification:verify` verifies hashes, signatures, selected
+rows, and recomputed verdicts even when the recorded scientific outcome is a
+failure. Release automation that intentionally requires at least one passing
+active qualification uses `npm run eval:ucr:qualification:gate`. Keeping those
+conditions separate prevents CI from incentivizing favorable-only reruns.
+
+The August 10 live program preserves every attempt rather than selecting only
+favorable reruns. Earlier results are retained under `results/superseded/` after
+each harness contract change. The final active artifacts share source-tree hash
+`144ac09bc62567ac67c946c9afd811349c75c65cd6432efb54fb018d6737db21`.
+In the integrity-valid adversarial Codex-to-Claude pair, both arms were correct,
+runtime delivery occurred before the consumer, all six declared repository
+anchors were verified, both provider models were exactly attested with zero
+reroutes, and the consumer saw zero MCP tools. Runtime nevertheless used 17,482
+tokens versus 16,589 (+5.383%) and 55.820 seconds versus 39.377 (+41.758%), so
+it failed the preregistered 5% token gate. The reciprocal control was valid and
+correct, but the runtime Claude producer exhausted provider quota, so capture
+was withheld and the pair failed closed. Antigravity 1.1.11 launched through
+its registered transport but required account authentication; no Gemini model
+or usage was claimed. These are signed bounded outcomes, not powered
 effectiveness evidence.
 
 Every bounded execution emits a separate `ucr.study-qualification/1` verdict.
@@ -103,12 +122,9 @@ An empty control may fail because prevention of that failure is a primary study
 outcome; changing prompts, graders, powered thresholds, or source after the
 gate passes invalidates scale-up.
 
-The immediate machine-gated Codex-to-Claude repetition kept integrity and
-correctness but failed token non-inferiority: runtime used 76,748 tokens versus
-58,983 for the empty control (+30.1%). This conflicts with the prior repetition
-where runtime prevented the control mistake with 26.2% fewer tokens. Both are
-retained. The direction is therefore unstable, and the powered run remains
-blocked rather than selecting the favorable sample.
+No direction passes the final hardened qualification contract. The full
+54,054-trial / 113,022-call powered study therefore remains blocked rather than
+spending the matrix budget on a design whose prerequisite directions fail.
 
 After every configured direction passes qualification without changing prompts,
 graders, thresholds, or source, run the frozen powered study:
