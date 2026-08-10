@@ -49,6 +49,16 @@ describe('provisioned evidence identity', () => {
         { environment, promotable: true }
       )
     ).toBeDefined();
+    expect(
+      resolveEvidenceVerificationPublicKey(
+        { ledgerKeyId: 'published-key-v1' },
+        {
+          environment: {},
+          promotable: true,
+          trustedPublicKey: publicKey.export({ type: 'spki', format: 'pem' }),
+        }
+      )
+    ).toBeDefined();
     expect(() =>
       resolveEvidenceVerificationPublicKey(
         {

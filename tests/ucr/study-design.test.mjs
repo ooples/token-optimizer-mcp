@@ -9,6 +9,7 @@ import {
   preRegisterBenchmark,
   releaseMetricCoveragePreflight,
   sha256,
+  studyConsumerPrompt,
   studyDesignCoverage,
   validateCausalChain,
   validateTrialResult,
@@ -72,6 +73,12 @@ describe('full effectiveness study design', () => {
     ).toBe(plan.trials.length);
     expect(
       plan.trials.every((trial) => trial.hiddenVariantId.length === 24)
+    ).toBe(true);
+    expect(
+      plan.trials.every(
+        (trial) =>
+          trial.promptHash === sha256(studyConsumerPrompt(trial.variantPrompt))
+      )
     ).toBe(true);
     expect(new Set(plan.trials.map((trial) => trial.sessionMode))).toEqual(
       new Set(['same-session', 'cross-session'])

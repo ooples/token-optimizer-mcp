@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -65,6 +71,15 @@ for (const definition of [
 ]) {
   if (existsSync(join(RESULTS, definition[1]))) definitions.push(definition);
 }
+for (const filename of readdirSync(RESULTS)
+  .filter((name) => /^full-study-qualification-.*\.json$/i.test(name))
+  .sort())
+  definitions.push([
+    filename.replace(/\.json$/i, ''),
+    filename,
+    'executable-smoke',
+    false,
+  ]);
 
 function readReport([name, filename, evidenceClass, requiredPass = true]) {
   const path = join(RESULTS, filename);
@@ -79,8 +94,22 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
   let verificationPublicKey = null;
   let keyResolutionError = null;
   try {
+    const trustedKeyPath =
+      report.ledgerKeyId && /^[A-Za-z0-9._-]+$/.test(report.ledgerKeyId)
+        ? join(
+            ROOT,
+            'evals',
+            'ucr',
+            'trusted-evidence-keys',
+            `${report.ledgerKeyId}.pem`
+          )
+        : null;
     verificationPublicKey = resolveEvidenceVerificationPublicKey(report, {
       promotable,
+      trustedPublicKey:
+        trustedKeyPath && existsSync(trustedKeyPath)
+          ? readFileSync(trustedKeyPath, 'utf8')
+          : null,
     });
   } catch (error) {
     keyResolutionError = error instanceof Error ? error.message : String(error);

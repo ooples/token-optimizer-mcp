@@ -14,6 +14,7 @@ const DEFAULT_DRIVER_ENVIRONMENT = Object.freeze([
   'SystemRoot',
   'TEMP',
   'TMP',
+  'UCR_LIVE_STUDY_MAX_BUDGET_USD',
   'USERPROFILE',
 ]);
 const FORBIDDEN_DRIVER_ENVIRONMENT = new Set([

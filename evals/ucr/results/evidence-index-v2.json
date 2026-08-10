@@ -1,6 +1,6 @@
 {
   "schemaVersion": "ucr.evidence-index/2",
-  "generatedAt": "2026-08-10T14:08:23.898Z",
+  "generatedAt": "2026-08-10T15:07:16.612Z",
   "evidenceContract": {
     "claimPolicy": "metrics are derived only from ledgers at or above each metric evidence requirement",
     "tiers": {
@@ -15,21 +15,28 @@
         "ledgers": 2,
         "rows": 707,
         "hashes": [
-          "ef138fcb92b226627cbc379d2540e6acd850c5c2c6e35d7b3f6ffd8951e35fe5",
+          "860eea6f1db1e062254cafe4b062b887a1552a3f8ba52bbe680e26ffe583a136",
           "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
         ]
       },
       "executable-smoke": {
         "status": "present",
-        "ledgers": 6,
-        "rows": 14,
+        "ledgers": 13,
+        "rows": 28,
         "hashes": [
           "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
           "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
           "b8c8371750b77e12f60507be373aedbca433ecabf7c9a29ba3ecf842ad07822d",
           "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
           "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
-          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
+          "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
+          "051176a28ed01f4cf41f4cc7bc023d2bea853f2817be40c39fa29f53a3aa335d",
+          "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7",
+          "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc",
+          "78c7e808213199debba047880be32b6ac1c7647bf72a23057b9ba8d2fd3304b1",
+          "235d0b546f92f312450a24531b37cb0be5a0f512855858d083efd870ca12f1ad",
+          "2470c21e2b53081f6afab645025864b50b015336d816c8c38517ee024ba1cdbb",
+          "52159aeaf25ac2da45ad79ba150beb90f117a9d589e31f960f4379d8b7b37cdf"
         ]
       },
       "effectiveness": {
@@ -61,7 +68,7 @@
       "present": true,
       "valid": true,
       "reportHashValid": true,
-      "reportHash": "3c4f906f03220122dcecb9d8860af2107c2b4ae92c8b4ecb6fa8db5f2782fe86",
+      "reportHash": "1abdef1213b290c181ef9ccc828514f49997fa1240db7c405915afdeae9e664e",
       "schemaVersion": "ucr.study-readiness/1",
       "passed": true,
       "executedAt": null,
@@ -315,11 +322,172 @@
         "rowCount": 4
       },
       "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-claude-to-codex-v1",
+      "filename": "full-study-qualification-claude-to-codex-v1.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "018397a86e3dd58a3ea39dac683628bc229cc3f95b1f29bd01d4182c639daf08",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T14:29:21.226Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "051176a28ed01f4cf41f4cc7bc023d2bea853f2817be40c39fa29f53a3aa335d",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "051176a28ed01f4cf41f4cc7bc023d2bea853f2817be40c39fa29f53a3aa335d",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-claude-to-codex-v2",
+      "filename": "full-study-qualification-claude-to-codex-v2.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "62fc71948fb8a8cfa826de18f914a9decf8ad11a46fc276f9965a7b149cb579b",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T14:38:51.770Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-claude-to-codex-v3",
+      "filename": "full-study-qualification-claude-to-codex-v3.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "bf3b8cb154bed68e53ae70cefb03779bf2a4c82e016fdbf96890f362ece01828",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T14:51:54.591Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-codex-to-claude-v1",
+      "filename": "full-study-qualification-codex-to-claude-v1.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "a1019257d1236130312e568d45b8e382fe29d060663c8ec2d5946339de87880f",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T14:23:46.586Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "78c7e808213199debba047880be32b6ac1c7647bf72a23057b9ba8d2fd3304b1",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "78c7e808213199debba047880be32b6ac1c7647bf72a23057b9ba8d2fd3304b1",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-codex-to-claude-v2",
+      "filename": "full-study-qualification-codex-to-claude-v2.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "91ec6ef245f2a5d583589ab65e9990047e8e7774a97dcf97e50eb993b20cf8c1",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T14:54:24.099Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "235d0b546f92f312450a24531b37cb0be5a0f512855858d083efd870ca12f1ad",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "235d0b546f92f312450a24531b37cb0be5a0f512855858d083efd870ca12f1ad",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-codex-to-claude-v3",
+      "filename": "full-study-qualification-codex-to-claude-v3.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "200ea919017a1e7a10eea3d40a09860f2f871c47a4e83030d250088769686fc7",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T14:59:33.763Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "2470c21e2b53081f6afab645025864b50b015336d816c8c38517ee024ba1cdbb",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "2470c21e2b53081f6afab645025864b50b015336d816c8c38517ee024ba1cdbb",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
+    },
+    {
+      "name": "full-study-qualification-codex-to-claude-v4",
+      "filename": "full-study-qualification-codex-to-claude-v4.json",
+      "evidenceClass": "executable-smoke",
+      "requiredPass": false,
+      "present": true,
+      "valid": true,
+      "reportHashValid": true,
+      "reportHash": "9310db9a6c22dd9e66f60f91a092db51afdc3b38fb0c0d18e1c43870fc8de208",
+      "schemaVersion": "ucr.full-study/1",
+      "passed": false,
+      "executedAt": "2026-08-10T15:04:31.638Z",
+      "sourceTreeHash": null,
+      "ledgerHash": "52159aeaf25ac2da45ad79ba150beb90f117a9d589e31f960f4379d8b7b37cdf",
+      "ledgerVerification": {
+        "valid": true,
+        "diagnostics": [],
+        "validSignature": true,
+        "ledgerHash": "52159aeaf25ac2da45ad79ba150beb90f117a9d589e31f960f4379d8b7b37cdf",
+        "rowCount": 2
+      },
+      "keyResolutionError": null
     }
   ],
   "summary": {
-    "artifactsValid": 13,
-    "artifactsTotal": 13,
+    "artifactsValid": 20,
+    "artifactsTotal": 20,
     "liveDirectionsPassed": 2,
     "liveDirectionsAttempted": 3,
     "liveDirectionMetrics": [
@@ -430,29 +598,29 @@
     "evidenceClass": "conformance",
     "run": {
       "schemaVersion": "ucr.evidence-run/2",
-      "runId": "evidence-index-07d92f781f120414",
+      "runId": "evidence-index-d0cf2a1470c93eda",
       "evidenceClass": "conformance",
       "benchmarkHash": "4b2148b8a73d20f9d94a3008e1756f9fb38144818bb527b752ec5ff6ffa06f0e",
-      "sourceTreeHash": "1dbab6c3c37c8791c2cc77a4f783291123b635a78d3691c2b19cc27a3f6ba744",
+      "sourceTreeHash": "2c782cdde5b47efd8601917af9260855b9ac3d5d6e84c616545da6ca15d622a4",
       "runner": {
         "name": "assemble-ucr-evidence",
         "node": "v25.6.0"
       },
-      "startedAt": "2026-08-10T14:08:23.848Z",
-      "runHash": "96b3483056a3acb77453eb42c67abd9354070d045c359d87a8334a13c566f40e"
+      "startedAt": "2026-08-10T15:07:16.556Z",
+      "runHash": "1965950982bea3b36246528713ebdfa1592305e6c9c9f2a43f564940180d6da1"
     },
     "rows": [
       {
         "study": "study-readiness",
         "artifact": "study-readiness-v1.json",
-        "artifactHash": "3c4f906f03220122dcecb9d8860af2107c2b4ae92c8b4ecb6fa8db5f2782fe86",
+        "artifactHash": "1abdef1213b290c181ef9ccc828514f49997fa1240db7c405915afdeae9e664e",
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-07d92f781f120414",
+        "runId": "evidence-index-d0cf2a1470c93eda",
         "sequence": 0,
-        "previousHash": "96b3483056a3acb77453eb42c67abd9354070d045c359d87a8334a13c566f40e",
-        "rowHash": "7613399e4dbcc11ac140bea8ed908082d1d5a5bf8b7b32ac0a59c3aeff797e33"
+        "previousHash": "1965950982bea3b36246528713ebdfa1592305e6c9c9f2a43f564940180d6da1",
+        "rowHash": "4ec94337c4c7d6f995fd1c32f6ea76fb9fd2fcca46a374bc508b8e051ccd8186"
       },
       {
         "study": "graph-scale",
@@ -461,10 +629,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-07d92f781f120414",
+        "runId": "evidence-index-d0cf2a1470c93eda",
         "sequence": 1,
-        "previousHash": "7613399e4dbcc11ac140bea8ed908082d1d5a5bf8b7b32ac0a59c3aeff797e33",
-        "rowHash": "f60fcb6d2aff5df70f67240f7b7fb778f63c13eadcecdcaad084cbe8752a8df7"
+        "previousHash": "4ec94337c4c7d6f995fd1c32f6ea76fb9fd2fcca46a374bc508b8e051ccd8186",
+        "rowHash": "678b258f167b59ddce3f23ad993d27993e7a19ac0a8e892ae3ed69f056100826"
       },
       {
         "study": "writer-integrity",
@@ -475,10 +643,10 @@
         "restoredWrites": 100,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-07d92f781f120414",
+        "runId": "evidence-index-d0cf2a1470c93eda",
         "sequence": 2,
-        "previousHash": "f60fcb6d2aff5df70f67240f7b7fb778f63c13eadcecdcaad084cbe8752a8df7",
-        "rowHash": "08babbdb580d17dc800c352b2b6b96c6a884d45dbc2522f246aa12a1b5aba9ce"
+        "previousHash": "678b258f167b59ddce3f23ad993d27993e7a19ac0a8e892ae3ed69f056100826",
+        "rowHash": "6a592dfe907cc5c9a6de77a5e70196671f3121d977b58c0f5d49fcc6f4e67f8b"
       },
       {
         "study": "consolidation",
@@ -487,10 +655,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-07d92f781f120414",
+        "runId": "evidence-index-d0cf2a1470c93eda",
         "sequence": 3,
-        "previousHash": "08babbdb580d17dc800c352b2b6b96c6a884d45dbc2522f246aa12a1b5aba9ce",
-        "rowHash": "7da4e42d12daf44e313723eb91d86fb244fb3857414962d40e589821c2799eba"
+        "previousHash": "6a592dfe907cc5c9a6de77a5e70196671f3121d977b58c0f5d49fcc6f4e67f8b",
+        "rowHash": "56200e8937dc2c983fe21951cd3b6317093c855b0624cc6a3eb8959014deb36c"
       },
       {
         "study": "adapter-processes",
@@ -499,10 +667,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-07d92f781f120414",
+        "runId": "evidence-index-d0cf2a1470c93eda",
         "sequence": 4,
-        "previousHash": "7da4e42d12daf44e313723eb91d86fb244fb3857414962d40e589821c2799eba",
-        "rowHash": "adf977494aea7421880c861f68ae3d9614540a8e39bf9b97988373589a832b6f"
+        "previousHash": "56200e8937dc2c983fe21951cd3b6317093c855b0624cc6a3eb8959014deb36c",
+        "rowHash": "ea0447b709b29dbf8b008be319a34290405cc96eabfcf96e63e24f0d4b18de7a"
       },
       {
         "study": "mcp-context",
@@ -511,10 +679,10 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-07d92f781f120414",
+        "runId": "evidence-index-d0cf2a1470c93eda",
         "sequence": 5,
-        "previousHash": "adf977494aea7421880c861f68ae3d9614540a8e39bf9b97988373589a832b6f",
-        "rowHash": "0afe564bcb73103f16e379cc89e8d8e6ac037be230eb2449dc46156d7437be58"
+        "previousHash": "ea0447b709b29dbf8b008be319a34290405cc96eabfcf96e63e24f0d4b18de7a",
+        "rowHash": "23c6a6059c05e1b77e9544f149b16bee163c82790ce09352e73d3344a9802b42"
       },
       {
         "study": "compounding",
@@ -523,25 +691,25 @@
         "passed": true,
         "studySequence": null,
         "schemaVersion": "ucr.evidence-row/2",
-        "runId": "evidence-index-07d92f781f120414",
+        "runId": "evidence-index-d0cf2a1470c93eda",
         "sequence": 6,
-        "previousHash": "0afe564bcb73103f16e379cc89e8d8e6ac037be230eb2449dc46156d7437be58",
-        "rowHash": "a597d6722b6ab5d8c765391e48d7a536b12216b72650ebe2c1d52f9cb866cafc"
+        "previousHash": "23c6a6059c05e1b77e9544f149b16bee163c82790ce09352e73d3344a9802b42",
+        "rowHash": "b9cc23b3f4858ad6656a1537cba38b59e946b104ac5e99aae225696b28328fbc"
       }
     ],
     "rowCount": 7,
-    "chainHead": "a597d6722b6ab5d8c765391e48d7a536b12216b72650ebe2c1d52f9cb866cafc",
+    "chainHead": "b9cc23b3f4858ad6656a1537cba38b59e946b104ac5e99aae225696b28328fbc",
     "transcriptsPublished": false,
-    "endedAt": "2026-08-10T14:08:23.849Z",
-    "ledgerHash": "ef138fcb92b226627cbc379d2540e6acd850c5c2c6e35d7b3f6ffd8951e35fe5",
-    "signature": "SLoPnl+BFFlkmysRur0KOODlKOiwVIrqH85PFILp2NSOO8jvbuGosF0BCz/Pk+MA6fq+aiKn69IDkYvAB5GEDw=="
+    "endedAt": "2026-08-10T15:07:16.557Z",
+    "ledgerHash": "860eea6f1db1e062254cafe4b062b887a1552a3f8ba52bbe680e26ffe583a136",
+    "signature": "m28r2mRs5xtSk9tzgr8dlWt+PQ13uOnU1KiGClQMFr4P0q4W/QN/f3hXfpslc8hB9vcNzI4haUvHYNxUII+KAA=="
   },
-  "conformancePublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAHX6GijWfZsYBsCU9rYnAZKYYbELJfl1wRfugZk78+dU=\n-----END PUBLIC KEY-----\n",
+  "conformancePublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAiNrZpFXmq0gW5eqva2TTsJ3nwgkHHXLSOhlKArWv+SQ=\n-----END PUBLIC KEY-----\n",
   "conformanceLedgerVerification": {
     "valid": true,
     "diagnostics": [],
     "validSignature": true,
-    "ledgerHash": "ef138fcb92b226627cbc379d2540e6acd850c5c2c6e35d7b3f6ffd8951e35fe5",
+    "ledgerHash": "860eea6f1db1e062254cafe4b062b887a1552a3f8ba52bbe680e26ffe583a136",
     "rowCount": 7
   },
   "derived": {
@@ -711,7 +879,7 @@
       "writerIntegrity": {
         "requiredClass": "conformance",
         "eligibleLedgerHashes": [
-          "ef138fcb92b226627cbc379d2540e6acd850c5c2c6e35d7b3f6ffd8951e35fe5"
+          "860eea6f1db1e062254cafe4b062b887a1552a3f8ba52bbe680e26ffe583a136"
         ]
       },
       "crossClientPassed": {
@@ -764,17 +932,24 @@
       }
     },
     "inputLedgerHashes": [
+      "051176a28ed01f4cf41f4cc7bc023d2bea853f2817be40c39fa29f53a3aa335d",
       "0efd8b4dcaa975017b0509c47906b34d7b836d45f3d3e976be787fd4ea2a2c41",
+      "235d0b546f92f312450a24531b37cb0be5a0f512855858d083efd870ca12f1ad",
+      "2470c21e2b53081f6afab645025864b50b015336d816c8c38517ee024ba1cdbb",
+      "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7",
+      "52159aeaf25ac2da45ad79ba150beb90f117a9d589e31f960f4379d8b7b37cdf",
+      "78c7e808213199debba047880be32b6ac1c7647bf72a23057b9ba8d2fd3304b1",
       "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a",
+      "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc",
+      "860eea6f1db1e062254cafe4b062b887a1552a3f8ba52bbe680e26ffe583a136",
       "96000a35253e6c02ec6d0937cca0fde20fc2e080c19e901e3b13d2ffeb9fa8b9",
       "96fb850199d15ac70aebd837075b1fdae61214b3c88b293681679be8c558e999",
       "b8c8371750b77e12f60507be373aedbca433ecabf7c9a29ba3ecf842ad07822d",
       "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711",
-      "ef138fcb92b226627cbc379d2540e6acd850c5c2c6e35d7b3f6ffd8951e35fe5",
       "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7"
     ],
     "rejectedLedgers": 0,
-    "derivedHash": "03c616c405d6ecdd9363096d81121ad0db94df723faf43592dc3ec59c4e30b8b"
+    "derivedHash": "0b221b534f5525df6bfe6666f3ea50687a6a189e6e8b4e791596e3be35d6a9f8"
   },
   "verdict": {
     "status": "insufficient",
@@ -874,5 +1049,5 @@
     "production": false,
     "replacement": false
   },
-  "reportHash": "dc57ffdbb76575c0bdd06b7ca7eba7cb58e2b40cbfc98cbf31636701d0c1419e"
+  "reportHash": "33bd15a5f1921daad5c7dd059549b4510ceea860deb3c78807785781412f0e86"
 }

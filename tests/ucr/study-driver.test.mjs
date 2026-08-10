@@ -32,10 +32,15 @@ describe('universal live-study driver contract', () => {
         OPENAI_API_KEY: 'provider-key',
         UCR_STUDY_SECRET: 'hidden-variant-secret',
         UCR_EVIDENCE_PRIVATE_KEY_FILE: 'private.pem',
+        UCR_LIVE_STUDY_MAX_BUDGET_USD: '5',
         UCR_STUDY_DRIVER_ENV_ALLOWLIST:
           'OPENAI_API_KEY,UCR_STUDY_SECRET,UCR_EVIDENCE_PRIVATE_KEY_FILE',
       })
-    ).toEqual({ PATH: 'bin', OPENAI_API_KEY: 'provider-key' });
+    ).toEqual({
+      PATH: 'bin',
+      UCR_LIVE_STUDY_MAX_BUDGET_USD: '5',
+      OPENAI_API_KEY: 'provider-key',
+    });
   });
 
   test('requires the planned calls, zero capture calls, and complete telemetry', () => {

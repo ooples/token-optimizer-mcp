@@ -1,0 +1,623 @@
+{
+  "schemaVersion": "ucr.full-study/1",
+  "executedAt": "2026-08-10T14:38:51.770Z",
+  "evidenceClass": "executable-smoke",
+  "plan": {
+    "schemaVersion": "ucr.full-study-plan/1",
+    "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+    "seedHash": "41b25ff01f365e97e60404d48067231087bfdf3680c3243e04039cea20f40b62",
+    "clients": [
+      {
+        "id": "codex",
+        "model": "gpt-5.6-sol",
+        "modelFamily": "openai",
+        "version": "codex-cli 0.147.0",
+        "modelVersion": "gpt-5.6-sol",
+        "lifecycleFamily": "process-hook"
+      },
+      {
+        "id": "claude-code",
+        "model": "claude-sonnet-5",
+        "modelFamily": "anthropic",
+        "version": "2.1.225 (Claude Code)",
+        "modelVersion": "claude-sonnet-5",
+        "lifecycleFamily": "process-hook"
+      },
+      {
+        "id": "gemini",
+        "model": "gemini-2.5-pro",
+        "modelFamily": "google",
+        "version": "gemini-cli 0.28.1",
+        "modelVersion": "gemini-2.5-pro",
+        "lifecycleFamily": "process-hook"
+      }
+    ],
+    "directions": [
+      "codex->codex",
+      "codex->claude-code",
+      "codex->gemini",
+      "claude-code->codex",
+      "claude-code->claude-code",
+      "claude-code->gemini",
+      "gemini->codex",
+      "gemini->claude-code",
+      "gemini->gemini"
+    ],
+    "pairedRepetitionsPerCell": 1,
+    "negativeRepetitionsPerCell": 1,
+    "includeSameClient": true,
+    "budgets": {
+      "contextTokens": 160,
+      "retries": 1,
+      "toolCalls": 40,
+      "timeoutMs": 600000
+    },
+    "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549",
+    "primaryPairsPerDirection": 11,
+    "preregisteredPairsPerArm": 357,
+    "minimumSubgroupPairs": 30,
+    "minimumNegativeSamplesPerDirection": 1053,
+    "negativeConfidence": {
+      "samples": 1053,
+      "maximumRate": 0.01,
+      "z": 3.2607674853887727,
+      "comparisons": 45,
+      "familyAlpha": 0.05,
+      "method": "bonferroni-familywise-wilson-zero-failure-upper-bound"
+    },
+    "negativeSamplesPerDirectionPerArm": 11,
+    "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+    "trialCount": 693
+  },
+  "coverage": {
+    "passed": true,
+    "checks": {
+      "effectivenessDesign": true,
+      "metricMapping": true,
+      "competitiveBaselines": true,
+      "productionStages": true
+    },
+    "design": {
+      "passed": true,
+      "checks": {
+        "benchmarkFamilies": true,
+        "benchmarkArms": true,
+        "clients": true,
+        "modelFamilies": true,
+        "bidirectional": true,
+        "sameClient": true,
+        "crossClient": true,
+        "sameSession": true,
+        "crossSession": true,
+        "crossProject": true,
+        "concurrentAgents": true,
+        "pairedControls": true,
+        "isolatedWorkspaces": true,
+        "materialVariants": true,
+        "executionTopology": true
+      },
+      "coverage": {
+        "families": 1,
+        "arms": 1,
+        "clients": 3,
+        "modelFamilies": 3,
+        "directions": 9,
+        "materialVariants": 485
+      }
+    },
+    "competitionCoverage": 1,
+    "productionCoverage": 1,
+    "metricSources": {
+      "applicabilityPrecision": "full-effectiveness",
+      "applicabilityPrecisionIntervalLow": "full-effectiveness",
+      "preActionDelivery": "full-effectiveness",
+      "preActionDeliveryIntervalLow": "full-effectiveness",
+      "irrelevantDelivery": "full-effectiveness",
+      "irrelevantDeliveryIntervalHigh": "full-effectiveness",
+      "staleDelivery": "full-effectiveness",
+      "staleDeliveryIntervalHigh": "full-effectiveness",
+      "recurrenceReduction": "full-effectiveness",
+      "recurrenceIntervalLow": "full-effectiveness",
+      "naturalCorrectnessDelta": "full-effectiveness",
+      "naturalCorrectnessIntervalLow": "full-effectiveness",
+      "severeUnquarantined": "full-effectiveness",
+      "emptyP95Overhead": "full-effectiveness",
+      "reconstructionTokenReduction": "full-effectiveness",
+      "firstSuccessorTokenReduction": "full-effectiveness",
+      "firstSuccessorTokenIntervalLow": "full-effectiveness",
+      "latencyOverheadP95": "full-effectiveness",
+      "knownMistakeRecurrence": "full-effectiveness",
+      "contradictoryDelivery": "full-effectiveness",
+      "contradictoryDeliveryIntervalHigh": "full-effectiveness",
+      "negativeDeliveryIntervalHigh": "full-effectiveness",
+      "consumerSchemaTokensP95": "full-effectiveness",
+      "captureModelCallsP95": "full-effectiveness",
+      "writerIntegrity": "writer-conformance",
+      "crossClientPassed": "full-effectiveness",
+      "benchmarkFamilyCoverage": "full-effectiveness",
+      "benchmarkArmCoverage": "full-effectiveness",
+      "directionalCorrectnessIntervalLow": "full-effectiveness",
+      "familyCorrectnessIntervalLow": "full-effectiveness",
+      "directionalTokenOverheadHigh": "full-effectiveness",
+      "causalChainIntegrity": "full-effectiveness",
+      "trialIntegrity": "full-effectiveness",
+      "independentGrading": "full-effectiveness",
+      "competitivePassed": "live-competitive",
+      "competitiveCoverage": "live-competitive",
+      "competitiveReproducibility": "live-competitive"
+    },
+    "missingMetrics": []
+  },
+  "poweredDesign": false,
+  "complete": false,
+  "trialsPlanned": 693,
+  "trialsExecuted": 2,
+  "failures": [
+    {
+      "trialId": "claude-code->codex:cross-model-001:0:runtime",
+      "arm": "runtime",
+      "runnerExitCode": 0,
+      "valid": false,
+      "validation": [],
+      "driverValidation": [
+        "active model did not author semantic capture",
+        "model-authored semantic delta is incomplete",
+        "host action audit is incomplete"
+      ],
+      "causalEvents": 0,
+      "rowHash": "25f96edea22a26daeed287b473b66a57e477e9cf75860b225f1bff1572379eb4"
+    }
+  ],
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "full-study-3c180120898b1bc4",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+      "sourceTreeHash": "73f83b7752a494dc71d2c2d626b12e9922c7dbdc2f6f879f16ebb29b23bca5ab",
+      "runner": {
+        "name": "ucr-full-study",
+        "node": "v25.6.0",
+        "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+        "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549",
+        "poweredDesign": false,
+        "minimumSubgroupPairs": 30
+      },
+      "startedAt": "2026-08-10T14:38:51.763Z",
+      "runHash": "26291dd06dc23d726112ab4608eaa9bb42f0c0e2bbabb8ed9493b5dfabf29d46"
+    },
+    "rows": [
+      {
+        "study": "full-effectiveness",
+        "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+        "trialId": "claude-code->codex:cross-model-001:0:runtime",
+        "pairId": "claude-code->codex:cross-model-001:0",
+        "studySequence": 211,
+        "taskId": "cross-model-001",
+        "family": "cross-model-handoff",
+        "arm": "runtime",
+        "direction": "claude-code->codex",
+        "producerClient": "claude-code",
+        "consumerClient": "codex",
+        "producerFamily": "anthropic",
+        "consumerFamily": "openai",
+        "producerModel": "claude-sonnet-5",
+        "consumerModel": "gpt-5.6-sol",
+        "model": "gpt-5.6-sol",
+        "modelVersion": "gpt-5.6-sol",
+        "permissionsHash": "99cfc916f214c8e56d0093fa298b4e7f8739bd206e7452bbdfe25a9396338a38",
+        "contextBudget": 160,
+        "retryBudget": 1,
+        "toolBudget": 40,
+        "sessionMode": "cross-session",
+        "projectMode": "same-project",
+        "agentMode": "single-successor",
+        "expectedProviderInvocations": 2,
+        "executionTopologyHash": "aaf8b828e56e6b316c31fef4d935cb0d9afa0cffc6a0980864ce8acf6fac4675",
+        "poweredStratum": false,
+        "correct": true,
+        "severeHarm": false,
+        "mistakeExecuted": false,
+        "knownMistake": false,
+        "quarantinedBeforeNext": false,
+        "applicable": true,
+        "eligible": true,
+        "selected": true,
+        "delivered": false,
+        "deliveryPhase": null,
+        "stale": false,
+        "contradictory": false,
+        "contextOverheadRatio": 0,
+        "reconstructionTokens": 87763,
+        "totalTokens": 88680,
+        "latencyMs": 222517,
+        "phaseAccounting": {
+          "captureModelCalls": 0,
+          "contextTokens": 0,
+          "staticSchemaTokens": 0
+        },
+        "costLedger": {
+          "costUsd": null,
+          "source": "provider-cli-native"
+        },
+        "causalClaim": false,
+        "causalChain": null,
+        "causalChainValid": false,
+        "outcomeHash": "794b76e451836100e36642b12f0e376c63d534c333ed8ded61f60322dbc0962e",
+        "workspaceStateHash": "929efd1d95a094461740c5a11abdc8599c020a2bc48401fb000e3162887d4045",
+        "changedProtected": [],
+        "trialIntegrityValid": false,
+        "graderVerified": true,
+        "graderReceiptHash": "67caa7d9c7fc5bb9fe15b752312c34708462750e863e298c810f57c7ceacd4e4",
+        "runnerExitCode": 0,
+        "runnerOutputHash": "73293b277c6b0436d9182df6a879c717746c75b6676e19a66868bcfbd64b2c27",
+        "runnerErrorHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "full-study-3c180120898b1bc4",
+        "sequence": 0,
+        "previousHash": "26291dd06dc23d726112ab4608eaa9bb42f0c0e2bbabb8ed9493b5dfabf29d46",
+        "rowHash": "c123af92bf59a3e413960b014a906811c8a89d6dd0835041d69deee0ebf33c9e"
+      },
+      {
+        "study": "full-effectiveness",
+        "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+        "trialId": "claude-code->codex:cross-model-001:0:empty",
+        "pairId": "claude-code->codex:cross-model-001:0",
+        "studySequence": 317,
+        "taskId": "cross-model-001",
+        "family": "cross-model-handoff",
+        "arm": "empty",
+        "direction": "claude-code->codex",
+        "producerClient": "claude-code",
+        "consumerClient": "codex",
+        "producerFamily": "anthropic",
+        "consumerFamily": "openai",
+        "producerModel": "claude-sonnet-5",
+        "consumerModel": "gpt-5.6-sol",
+        "model": "gpt-5.6-sol",
+        "modelVersion": "gpt-5.6-sol",
+        "permissionsHash": "99cfc916f214c8e56d0093fa298b4e7f8739bd206e7452bbdfe25a9396338a38",
+        "contextBudget": 160,
+        "retryBudget": 1,
+        "toolBudget": 40,
+        "sessionMode": "cross-session",
+        "projectMode": "same-project",
+        "agentMode": "single-successor",
+        "expectedProviderInvocations": 2,
+        "executionTopologyHash": "90e650a1c12171a71137a082d397eb3e9647503c1fce1b10e4bbfd10f2d8105f",
+        "poweredStratum": false,
+        "correct": true,
+        "severeHarm": false,
+        "mistakeExecuted": false,
+        "knownMistake": false,
+        "quarantinedBeforeNext": false,
+        "applicable": false,
+        "eligible": false,
+        "selected": false,
+        "delivered": false,
+        "deliveryPhase": null,
+        "stale": false,
+        "contradictory": false,
+        "contextOverheadRatio": 0,
+        "reconstructionTokens": 72643,
+        "totalTokens": 73579,
+        "latencyMs": 100167,
+        "phaseAccounting": {
+          "captureModelCalls": 0,
+          "contextTokens": 0,
+          "staticSchemaTokens": 0
+        },
+        "costLedger": {
+          "costUsd": null,
+          "source": "provider-cli-native"
+        },
+        "causalClaim": false,
+        "causalChain": null,
+        "causalChainValid": false,
+        "outcomeHash": "7e57c44be45b78b275ca3193ce5709d6f8a6c46d5808176990712d15e4ce5a20",
+        "workspaceStateHash": "55a0df16773b4fa5ca3e2ec45697d099325a124c81facbcedcb54e74d0d4c1bb",
+        "changedProtected": [],
+        "trialIntegrityValid": true,
+        "graderVerified": true,
+        "graderReceiptHash": "ae5dace407cb8cce0a6884225e99e1f72b1094f1bcd22d79acbd5c214c063f64",
+        "runnerExitCode": 0,
+        "runnerOutputHash": "7cbf8ff1227a80d3c830d23ff4186d39817df0af4b46374f97120de69ccdaa09",
+        "runnerErrorHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "full-study-3c180120898b1bc4",
+        "sequence": 1,
+        "previousHash": "c123af92bf59a3e413960b014a906811c8a89d6dd0835041d69deee0ebf33c9e",
+        "rowHash": "5ebe0f6a553949ba997e08041f334030ae6f171bf6554283854f49eedcfd30a0"
+      }
+    ],
+    "rowCount": 2,
+    "chainHead": "5ebe0f6a553949ba997e08041f334030ae6f171bf6554283854f49eedcfd30a0",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-10T14:38:51.764Z",
+    "ledgerHash": "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7",
+    "signature": "w6xk1fZmVn+F6NX3A/TstYGbkCUtEcZbyhPjtjedfwVy9D3F/fPLDokBXcqQXPMfuw2mhie99xOG/xpjqvjCCQ=="
+  },
+  "ledgerKeyId": "ucr-ed25519-77b546af455c7ecd3c9c",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7",
+    "rowCount": 2
+  },
+  "derived": {
+    "schemaVersion": "ucr.derived-metrics/2",
+    "metrics": {
+      "applicabilityPrecision": null,
+      "applicabilityPrecisionIntervalLow": null,
+      "preActionDelivery": null,
+      "preActionDeliveryIntervalLow": null,
+      "irrelevantDelivery": null,
+      "irrelevantDeliveryIntervalHigh": null,
+      "staleDelivery": null,
+      "staleDeliveryIntervalHigh": null,
+      "recurrenceReduction": null,
+      "recurrenceIntervalLow": null,
+      "naturalCorrectnessDelta": null,
+      "naturalCorrectnessIntervalLow": null,
+      "severeUnquarantined": 0,
+      "emptyP95Overhead": null,
+      "reconstructionTokenReduction": null,
+      "firstSuccessorTokenReduction": null,
+      "firstSuccessorTokenIntervalLow": null,
+      "latencyOverheadP95": null,
+      "knownMistakeRecurrence": null,
+      "contradictoryDelivery": null,
+      "contradictoryDeliveryIntervalHigh": null,
+      "negativeDeliveryIntervalHigh": null,
+      "consumerSchemaTokensP95": null,
+      "captureModelCallsP95": null,
+      "writerIntegrity": false,
+      "crossClientPassed": false,
+      "benchmarkFamilyCoverage": null,
+      "benchmarkArmCoverage": null,
+      "directionalCorrectnessIntervalLow": null,
+      "familyCorrectnessIntervalLow": null,
+      "directionalTokenOverheadHigh": null,
+      "causalChainIntegrity": false,
+      "trialIntegrity": false,
+      "independentGrading": false,
+      "competitivePassed": false,
+      "competitiveCoverage": null,
+      "competitiveReproducibility": false
+    },
+    "intervals": {
+      "recurrence": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "correctness": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "reconstruction": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "firstSuccessorTokens": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    },
+    "sources": {
+      "applicabilityPrecision": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "applicabilityPrecisionIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDeliveryIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessDelta": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "severeUnquarantined": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "emptyP95Overhead": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "reconstructionTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "latencyOverheadP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "knownMistakeRecurrence": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "contradictoryDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "contradictoryDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "negativeDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "consumerSchemaTokensP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "captureModelCallsP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "writerIntegrity": {
+        "requiredClass": "conformance",
+        "eligibleLedgerHashes": []
+      },
+      "crossClientPassed": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "benchmarkFamilyCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "benchmarkArmCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "familyCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalTokenOverheadHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "causalChainIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "trialIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "independentGrading": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "competitivePassed": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveCoverage": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveReproducibility": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      }
+    },
+    "inputLedgerHashes": [
+      "4e35e436cc1ef2a0e52ac276ba185d86f253c55f7c9932094f02752e15123db7"
+    ],
+    "rejectedLedgers": 0,
+    "derivedHash": "a2aaea46ba70a41862db4c3097c48606e5519f91fc2b2b809e4101c0491beba7"
+  },
+  "costDiagnostics": {
+    "passed": false,
+    "thresholds": {
+      "maximumTokenOverhead": 0.05,
+      "maximumLatencyOverhead": 0.05
+    },
+    "groups": [
+      {
+        "dimension": "direction",
+        "value": "claude-code->codex",
+        "pairs": 1,
+        "tokenOverhead": 0.20523518938827653,
+        "latencyOverheadP95": 1.2214601615302445,
+        "regressions": [
+          "tokens",
+          "latency"
+        ],
+        "passed": false
+      },
+      {
+        "dimension": "family",
+        "value": "cross-model-handoff",
+        "pairs": 1,
+        "tokenOverhead": 0.20523518938827653,
+        "latencyOverheadP95": 1.2214601615302445,
+        "regressions": [
+          "tokens",
+          "latency"
+        ],
+        "passed": false
+      },
+      {
+        "dimension": "client",
+        "value": "codex",
+        "pairs": 1,
+        "tokenOverhead": 0.20523518938827653,
+        "latencyOverheadP95": 1.2214601615302445,
+        "regressions": [
+          "tokens",
+          "latency"
+        ],
+        "passed": false
+      }
+    ]
+  },
+  "passed": false,
+  "limitations": [
+    "qualification or partial execution cannot supply effectiveness metrics"
+  ],
+  "reportHash": "62fc71948fb8a8cfa826de18f914a9decf8ad11a46fc276f9965a7b149cb579b"
+}

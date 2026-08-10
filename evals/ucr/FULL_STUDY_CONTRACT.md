@@ -65,6 +65,51 @@ Run a non-promotable qualification first:
 npm run eval:ucr:full-study:qualification
 ```
 
+The repository ships `scripts/ucr-live-study-driver.mjs`, an executable
+provider-CLI implementation of the shared driver protocol. Provision the
+operator-owned signing identity and hidden-variant secret outside the repository
+before qualification:
+
+```text
+npm run eval:ucr:identity:provision
+```
+
+The full-study runner also accepts comma-separated `--directions`, `--families`,
+and `--arms` selectors for bounded qualification. Filtered runs remain
+`executable-smoke` evidence and can never be promoted as powered effectiveness.
+Every negative, invalid, or interrupted attempt remains in its append-only
+attempt ledger.
+
+The August 10 live qualification preserves every attempt rather than selecting
+only favorable reruns. The initial Codex-to-Claude pair was valid but runtime
+increased tokens and latency. The first Claude-to-Codex pair made runtime
+incorrect while the empty control was correct. A hash-bound task-completion
+instruction corrected the missing consumer result on the first retry, which
+then exposed incomplete producer capture telemetry. The repaired driver moved
+hidden context to stdin, normalized nested provider structured output, raised
+the bounded producer budget, and recorded process completion telemetry. Its
+next Claude-to-Codex pair was valid and correct in both arms while runtime used
+34.9% fewer tokens and 38.2% less latency. A later Codex-to-Claude pair observed
+the empty control repeat the predecessor mistake while runtime prevented it and
+used 26.2% fewer tokens. These are signed qualification outcomes, not powered
+effectiveness evidence.
+
+Every bounded execution emits a separate `ucr.study-qualification/1` verdict.
+That gate requires complete selected execution, signed trial integrity,
+independent grading, no severe harm, correct treatment and safety arms,
+pre-action runtime delivery, control and hard-negative withholding, paired
+coverage, correctness non-inferiority, and at most 5% observed token overhead.
+An empty control may fail because prevention of that failure is a primary study
+outcome; changing prompts, graders, powered thresholds, or source after the
+gate passes invalidates scale-up.
+
+The immediate machine-gated Codex-to-Claude repetition kept integrity and
+correctness but failed token non-inferiority: runtime used 76,748 tokens versus
+58,983 for the empty control (+30.1%). This conflicts with the prior repetition
+where runtime prevented the control mistake with 26.2% fewer tokens. Both are
+retained. The direction is therefore unstable, and the powered run remains
+blocked rather than selecting the favorable sample.
+
 After every configured direction passes qualification without changing prompts,
 graders, thresholds, or source, run the frozen powered study:
 

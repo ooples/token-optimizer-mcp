@@ -19,6 +19,15 @@ export const STUDY_MODES = Object.freeze({
 export const STUDY_NEGATIVE_ARMS = Object.freeze(
   BENCHMARK_ARMS.filter((arm) => !['empty', 'runtime'].includes(arm))
 );
+export const STUDY_CONSUMER_PROMPT_SUFFIX = [
+  'Inspect TASK.md and the repository evidence.',
+  'Complete the task by writing result.json in the exact requested shape.',
+  'Do not merely describe the answer in your final response.',
+].join(' ');
+
+export function studyConsumerPrompt(variantPrompt) {
+  return `${variantPrompt}\n\n${STUDY_CONSUMER_PROMPT_SUFFIX}`;
+}
 
 export const REQUIRED_PRODUCTION_STAGES = Object.freeze([
   'shadow-selection',
@@ -276,7 +285,7 @@ export function buildFullStudyPlan({
             publicVariant: variant.publicTask.publicVariant,
             variantPrompt: variant.publicTask.prompt,
             graderBinding: variant.graderBinding,
-            promptHash: sha256(variant.publicTask.prompt),
+            promptHash: sha256(studyConsumerPrompt(variant.publicTask.prompt)),
             permissionsHash: sha256({ tools: 'benchmark-default' }),
             budgets: defaultBudgets,
             ...dimensions,
@@ -317,7 +326,7 @@ export function buildFullStudyPlan({
             publicVariant: variant.publicTask.publicVariant,
             variantPrompt: variant.publicTask.prompt,
             graderBinding: variant.graderBinding,
-            promptHash: sha256(variant.publicTask.prompt),
+            promptHash: sha256(studyConsumerPrompt(variant.publicTask.prompt)),
             permissionsHash: sha256({ tools: 'benchmark-default' }),
             budgets: defaultBudgets,
             ...dimensions,

@@ -30,16 +30,21 @@ if (!command || !existsSync(command)) {
   );
   process.exitCode = 2;
 } else {
-  const child = spawnSync(command, [], {
-    cwd: process.cwd(),
-    env: studyDriverChildEnvironment(process.env),
-    input: raw,
-    encoding: 'utf8',
-    timeout: Number(process.env.UCR_STUDY_DRIVER_TIMEOUT_MS) || 600_000,
-    maxBuffer: 64 * 1024 * 1024,
-    windowsHide: true,
-    shell: false,
-  });
+  const moduleDriver = /\.(?:cjs|mjs|js)$/i.test(command);
+  const child = spawnSync(
+    moduleDriver ? process.execPath : command,
+    moduleDriver ? [command] : [],
+    {
+      cwd: process.cwd(),
+      env: studyDriverChildEnvironment(process.env),
+      input: raw,
+      encoding: 'utf8',
+      timeout: Number(process.env.UCR_STUDY_DRIVER_TIMEOUT_MS) || 600_000,
+      maxBuffer: 64 * 1024 * 1024,
+      windowsHide: true,
+      shell: false,
+    }
+  );
   process.stdout.write(String(child.stdout || ''));
   process.stderr.write(String(child.stderr || child.error?.message || ''));
   process.exitCode = child.status ?? 1;

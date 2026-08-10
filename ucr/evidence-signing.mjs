@@ -61,8 +61,14 @@ export function loadProvisionedEvidenceIdentity({
  */
 export function resolveEvidenceVerificationPublicKey(
   report,
-  { environment = process.env, promotable = false } = {}
+  {
+    environment = process.env,
+    promotable = false,
+    trustedPublicKey = null,
+  } = {}
 ) {
+  if (report?.ledgerKeyId && trustedPublicKey)
+    return createPublicKey(trustedPublicKey);
   if (report?.ledgerKeyId)
     return loadProvisionedEvidenceIdentity({
       environment,

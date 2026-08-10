@@ -16,13 +16,27 @@
 
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, cpSync, mkdtempSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  cpSync,
+  mkdtempSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SHOTS = join(ROOT, 'artifacts', 'wiki-ui');
+const evidenceIndex = JSON.parse(
+  readFileSync(
+    join(ROOT, 'evals', 'ucr', 'results', 'evidence-index-v2.json'),
+    'utf8'
+  )
+);
+const expectedArtifactCount = evidenceIndex.artifacts.length;
 /**
  * An isolated port, chosen at random and asserted free.
  *
@@ -666,7 +680,10 @@ async function main() {
         );
         check(
           'UCR dashboard renders signed artifacts and live directions',
-          /Evidence artifacts\s*13\/13/i.test(ucrText || '') &&
+          new RegExp(
+            `Evidence artifacts\\s*${expectedArtifactCount}/${expectedArtifactCount}`,
+            'i'
+          ).test(ucrText || '') &&
             /Live directions\s*2\/3/i.test(ucrText || '') &&
             /Consumer MCP schema\s*0 tokens max/i.test(ucrText || '') &&
             /Combined token reduction\s*5\.66%/i.test(ucrText || '') &&
@@ -698,7 +715,7 @@ async function main() {
         );
         check(
           'UCR dashboard exposes every integrity-checked study',
-          artifactCount === 13,
+          artifactCount === expectedArtifactCount,
           String(artifactCount)
         );
         check(

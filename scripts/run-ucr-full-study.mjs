@@ -35,6 +35,7 @@ import {
   sha256,
   signGraderReceipt,
   STUDY_NEGATIVE_ARMS,
+  studyQualificationVerdict,
   stratifiedCostDiagnostics,
   validateTrialResult,
   validateStudyDriverResult,
@@ -57,6 +58,9 @@ const options = {
   negativeRepetitionsPerCell: 1,
   minimumSubgroupPairs: 30,
   maxTrials: null,
+  directions: null,
+  families: null,
+  arms: null,
   timeoutMs: 600_000,
 };
 
@@ -213,10 +217,25 @@ if (options.powered && options.maxTrials != null)
   throw new Error('a powered run cannot use --max-trials');
 const signingIdentity = loadProvisionedEvidenceIdentity();
 
+const selected = (value, configured) =>
+  !configured ||
+  String(configured)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .includes(value);
+const filteredTrials = plan.trials.filter(
+  (trial) =>
+    selected(trial.direction, options.directions) &&
+    selected(trial.family, options.families) &&
+    selected(trial.arm, options.arms)
+);
+if (!filteredTrials.length)
+  throw new Error('study selection did not match any frozen trial');
 const plannedTrials =
   options.maxTrials == null
-    ? plan.trials
-    : plan.trials.slice(0, options.maxTrials);
+    ? filteredTrials
+    : filteredTrials.slice(0, options.maxTrials);
 const taskById = new Map(benchmark.tasks.map((task) => [task.id, task]));
 const trialByPair = new Map();
 for (const trial of plan.trials) {
@@ -484,6 +503,11 @@ try {
   for (const row of rows) delete row.causalEvents;
 
   const complete = rows.length === plan.trials.length && failures.length === 0;
+  const qualification = studyQualificationVerdict({
+    rows,
+    plannedTrials,
+    failures,
+  });
   const evidenceClass =
     options.powered && poweredDesign && complete
       ? 'effectiveness'
@@ -533,6 +557,15 @@ try {
     complete,
     trialsPlanned: plan.trials.length,
     trialsExecuted: rows.length,
+    selection: {
+      directions: options.directions,
+      families: options.families,
+      arms: options.arms,
+      maxTrials: options.maxTrials,
+      selectedTrials: plannedTrials.length,
+      selectedTrialIdsHash: sha256(plannedTrials.map((trial) => trial.trialId)),
+    },
+    qualification,
     failures,
     ledger,
     ledgerKeyId: signingIdentity.keyId,
@@ -558,11 +591,12 @@ try {
       complete,
       trials: `${rows.length}/${plan.trials.length}`,
       failures: failures.length,
+      qualification: qualification.status,
       ledgerHash: ledger.ledgerHash,
       metrics: derived.metrics,
     })
   );
-  if (!report.passed) process.exitCode = 1;
+  if (!report.passed && !report.qualification.passed) process.exitCode = 1;
 } finally {
   rmSync(studyRoot, {
     recursive: true,

@@ -1,0 +1,2 @@
+{"arm":"empty","causalEvents":0,"driverValidation":[],"rowHash":"01e5ada4d9e7558e15b2dd5537310f8b317540080a1ae43e2fbb55cad33abd62","runnerExitCode":0,"trialId":"codex->claude-code:cross-model-001:0:empty","valid":true,"validation":[]}
+{"arm":"runtime","causalEvents":6,"driverValidation":[],"rowHash":"1044976c9ab82d75c2d6bbcef17a454ece8598ad42648bd6cb191c3c35a889c6","runnerExitCode":0,"trialId":"codex->claude-code:cross-model-001:0:runtime","valid":true,"validation":[]}

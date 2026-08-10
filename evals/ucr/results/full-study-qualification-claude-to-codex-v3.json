@@ -1,0 +1,599 @@
+{
+  "schemaVersion": "ucr.full-study/1",
+  "executedAt": "2026-08-10T14:51:54.591Z",
+  "evidenceClass": "executable-smoke",
+  "plan": {
+    "schemaVersion": "ucr.full-study-plan/1",
+    "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+    "seedHash": "41b25ff01f365e97e60404d48067231087bfdf3680c3243e04039cea20f40b62",
+    "clients": [
+      {
+        "id": "codex",
+        "model": "gpt-5.6-sol",
+        "modelFamily": "openai",
+        "version": "codex-cli 0.147.0",
+        "modelVersion": "gpt-5.6-sol",
+        "lifecycleFamily": "process-hook"
+      },
+      {
+        "id": "claude-code",
+        "model": "claude-sonnet-5",
+        "modelFamily": "anthropic",
+        "version": "2.1.225 (Claude Code)",
+        "modelVersion": "claude-sonnet-5",
+        "lifecycleFamily": "process-hook"
+      },
+      {
+        "id": "gemini",
+        "model": "gemini-2.5-pro",
+        "modelFamily": "google",
+        "version": "gemini-cli 0.28.1",
+        "modelVersion": "gemini-2.5-pro",
+        "lifecycleFamily": "process-hook"
+      }
+    ],
+    "directions": [
+      "codex->codex",
+      "codex->claude-code",
+      "codex->gemini",
+      "claude-code->codex",
+      "claude-code->claude-code",
+      "claude-code->gemini",
+      "gemini->codex",
+      "gemini->claude-code",
+      "gemini->gemini"
+    ],
+    "pairedRepetitionsPerCell": 1,
+    "negativeRepetitionsPerCell": 1,
+    "includeSameClient": true,
+    "budgets": {
+      "contextTokens": 160,
+      "retries": 1,
+      "toolCalls": 40,
+      "timeoutMs": 600000
+    },
+    "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549",
+    "primaryPairsPerDirection": 11,
+    "preregisteredPairsPerArm": 357,
+    "minimumSubgroupPairs": 30,
+    "minimumNegativeSamplesPerDirection": 1053,
+    "negativeConfidence": {
+      "samples": 1053,
+      "maximumRate": 0.01,
+      "z": 3.2607674853887727,
+      "comparisons": 45,
+      "familyAlpha": 0.05,
+      "method": "bonferroni-familywise-wilson-zero-failure-upper-bound"
+    },
+    "negativeSamplesPerDirectionPerArm": 11,
+    "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+    "trialCount": 693
+  },
+  "coverage": {
+    "passed": true,
+    "checks": {
+      "effectivenessDesign": true,
+      "metricMapping": true,
+      "competitiveBaselines": true,
+      "productionStages": true
+    },
+    "design": {
+      "passed": true,
+      "checks": {
+        "benchmarkFamilies": true,
+        "benchmarkArms": true,
+        "clients": true,
+        "modelFamilies": true,
+        "bidirectional": true,
+        "sameClient": true,
+        "crossClient": true,
+        "sameSession": true,
+        "crossSession": true,
+        "crossProject": true,
+        "concurrentAgents": true,
+        "pairedControls": true,
+        "isolatedWorkspaces": true,
+        "materialVariants": true,
+        "executionTopology": true
+      },
+      "coverage": {
+        "families": 1,
+        "arms": 1,
+        "clients": 3,
+        "modelFamilies": 3,
+        "directions": 9,
+        "materialVariants": 485
+      }
+    },
+    "competitionCoverage": 1,
+    "productionCoverage": 1,
+    "metricSources": {
+      "applicabilityPrecision": "full-effectiveness",
+      "applicabilityPrecisionIntervalLow": "full-effectiveness",
+      "preActionDelivery": "full-effectiveness",
+      "preActionDeliveryIntervalLow": "full-effectiveness",
+      "irrelevantDelivery": "full-effectiveness",
+      "irrelevantDeliveryIntervalHigh": "full-effectiveness",
+      "staleDelivery": "full-effectiveness",
+      "staleDeliveryIntervalHigh": "full-effectiveness",
+      "recurrenceReduction": "full-effectiveness",
+      "recurrenceIntervalLow": "full-effectiveness",
+      "naturalCorrectnessDelta": "full-effectiveness",
+      "naturalCorrectnessIntervalLow": "full-effectiveness",
+      "severeUnquarantined": "full-effectiveness",
+      "emptyP95Overhead": "full-effectiveness",
+      "reconstructionTokenReduction": "full-effectiveness",
+      "firstSuccessorTokenReduction": "full-effectiveness",
+      "firstSuccessorTokenIntervalLow": "full-effectiveness",
+      "latencyOverheadP95": "full-effectiveness",
+      "knownMistakeRecurrence": "full-effectiveness",
+      "contradictoryDelivery": "full-effectiveness",
+      "contradictoryDeliveryIntervalHigh": "full-effectiveness",
+      "negativeDeliveryIntervalHigh": "full-effectiveness",
+      "consumerSchemaTokensP95": "full-effectiveness",
+      "captureModelCallsP95": "full-effectiveness",
+      "writerIntegrity": "writer-conformance",
+      "crossClientPassed": "full-effectiveness",
+      "benchmarkFamilyCoverage": "full-effectiveness",
+      "benchmarkArmCoverage": "full-effectiveness",
+      "directionalCorrectnessIntervalLow": "full-effectiveness",
+      "familyCorrectnessIntervalLow": "full-effectiveness",
+      "directionalTokenOverheadHigh": "full-effectiveness",
+      "causalChainIntegrity": "full-effectiveness",
+      "trialIntegrity": "full-effectiveness",
+      "independentGrading": "full-effectiveness",
+      "competitivePassed": "live-competitive",
+      "competitiveCoverage": "live-competitive",
+      "competitiveReproducibility": "live-competitive"
+    },
+    "missingMetrics": []
+  },
+  "poweredDesign": false,
+  "complete": false,
+  "trialsPlanned": 693,
+  "trialsExecuted": 2,
+  "failures": [],
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "full-study-3726ed585d68b9cf",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "597b75c9fb2a20a171bdde67c7a40cc5aef9aa27ee730550a747c750a39243d2",
+      "sourceTreeHash": "73f83b7752a494dc71d2c2d626b12e9922c7dbdc2f6f879f16ebb29b23bca5ab",
+      "runner": {
+        "name": "ucr-full-study",
+        "node": "v25.6.0",
+        "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+        "registrationHash": "e171d5da8431aa64f847b8bd5452b7f40facdb4330d0c21d6b6e38d89b486549",
+        "poweredDesign": false,
+        "minimumSubgroupPairs": 30
+      },
+      "startedAt": "2026-08-10T14:51:54.585Z",
+      "runHash": "d964ad16a2a97b10c0c3546fb182b089bbc1529b68cd46ab63fc8343b4b25ccb"
+    },
+    "rows": [
+      {
+        "study": "full-effectiveness",
+        "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+        "trialId": "claude-code->codex:cross-model-001:0:runtime",
+        "pairId": "claude-code->codex:cross-model-001:0",
+        "studySequence": 211,
+        "taskId": "cross-model-001",
+        "family": "cross-model-handoff",
+        "arm": "runtime",
+        "direction": "claude-code->codex",
+        "producerClient": "claude-code",
+        "consumerClient": "codex",
+        "producerFamily": "anthropic",
+        "consumerFamily": "openai",
+        "producerModel": "claude-sonnet-5",
+        "consumerModel": "gpt-5.6-sol",
+        "model": "gpt-5.6-sol",
+        "modelVersion": "gpt-5.6-sol",
+        "permissionsHash": "99cfc916f214c8e56d0093fa298b4e7f8739bd206e7452bbdfe25a9396338a38",
+        "contextBudget": 160,
+        "retryBudget": 1,
+        "toolBudget": 40,
+        "sessionMode": "cross-session",
+        "projectMode": "same-project",
+        "agentMode": "single-successor",
+        "expectedProviderInvocations": 2,
+        "executionTopologyHash": "aaf8b828e56e6b316c31fef4d935cb0d9afa0cffc6a0980864ce8acf6fac4675",
+        "poweredStratum": false,
+        "correct": true,
+        "severeHarm": false,
+        "mistakeExecuted": false,
+        "knownMistake": false,
+        "quarantinedBeforeNext": false,
+        "applicable": true,
+        "eligible": true,
+        "selected": true,
+        "delivered": true,
+        "deliveryPhase": "pre-action",
+        "stale": false,
+        "contradictory": false,
+        "contextOverheadRatio": 0.00657929089864759,
+        "reconstructionTokens": 57453,
+        "totalTokens": 58193,
+        "latencyMs": 104060,
+        "phaseAccounting": {
+          "captureModelCalls": 0,
+          "contextTokens": 378,
+          "staticSchemaTokens": 0
+        },
+        "costLedger": {
+          "costUsd": null,
+          "source": "provider-cli-native"
+        },
+        "causalClaim": false,
+        "causalChain": null,
+        "causalChainValid": false,
+        "outcomeHash": "1548f7814671c163b253ef7b6179965986375f023860421f669007b8b04ead0b",
+        "workspaceStateHash": "a9e8fe5786addba21d4de4c6948b93c30757c4e72023920d1d8036e86dcfcf1b",
+        "changedProtected": [],
+        "trialIntegrityValid": true,
+        "graderVerified": true,
+        "graderReceiptHash": "148ffc8c804b1f2ccab2af82a2858e45be9eb564fec19d81391cf1f01b4b3345",
+        "runnerExitCode": 0,
+        "runnerOutputHash": "943936749140e554adec33f9be9ffced994b2cacc9e45c0b5b1d8614277b9498",
+        "runnerErrorHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "full-study-3726ed585d68b9cf",
+        "sequence": 0,
+        "previousHash": "d964ad16a2a97b10c0c3546fb182b089bbc1529b68cd46ab63fc8343b4b25ccb",
+        "rowHash": "debf41acd4499f2e6ba2172fc6411d841b37d7e3bfa47d2e5f218ea1ba561db8"
+      },
+      {
+        "study": "full-effectiveness",
+        "planHash": "8d0debfb4abd51a0da45754b1d232c17395fd5348a7c47971d2f69018dadbd93",
+        "trialId": "claude-code->codex:cross-model-001:0:empty",
+        "pairId": "claude-code->codex:cross-model-001:0",
+        "studySequence": 317,
+        "taskId": "cross-model-001",
+        "family": "cross-model-handoff",
+        "arm": "empty",
+        "direction": "claude-code->codex",
+        "producerClient": "claude-code",
+        "consumerClient": "codex",
+        "producerFamily": "anthropic",
+        "consumerFamily": "openai",
+        "producerModel": "claude-sonnet-5",
+        "consumerModel": "gpt-5.6-sol",
+        "model": "gpt-5.6-sol",
+        "modelVersion": "gpt-5.6-sol",
+        "permissionsHash": "99cfc916f214c8e56d0093fa298b4e7f8739bd206e7452bbdfe25a9396338a38",
+        "contextBudget": 160,
+        "retryBudget": 1,
+        "toolBudget": 40,
+        "sessionMode": "cross-session",
+        "projectMode": "same-project",
+        "agentMode": "single-successor",
+        "expectedProviderInvocations": 2,
+        "executionTopologyHash": "90e650a1c12171a71137a082d397eb3e9647503c1fce1b10e4bbfd10f2d8105f",
+        "poweredStratum": false,
+        "correct": true,
+        "severeHarm": false,
+        "mistakeExecuted": false,
+        "knownMistake": false,
+        "quarantinedBeforeNext": false,
+        "applicable": false,
+        "eligible": false,
+        "selected": false,
+        "delivered": false,
+        "deliveryPhase": null,
+        "stale": false,
+        "contradictory": false,
+        "contextOverheadRatio": 0,
+        "reconstructionTokens": 88287,
+        "totalTokens": 89335,
+        "latencyMs": 168462,
+        "phaseAccounting": {
+          "captureModelCalls": 0,
+          "contextTokens": 0,
+          "staticSchemaTokens": 0
+        },
+        "costLedger": {
+          "costUsd": null,
+          "source": "provider-cli-native"
+        },
+        "causalClaim": false,
+        "causalChain": null,
+        "causalChainValid": false,
+        "outcomeHash": "7efbf97ab80d299b820a79ec0f302f856d813f1f8192615cc1f0783c4fe7c4db",
+        "workspaceStateHash": "28b7b01275f1511139aee4ca16ac9ca7c18a1063b4983ce204f04359ff24af43",
+        "changedProtected": [],
+        "trialIntegrityValid": true,
+        "graderVerified": true,
+        "graderReceiptHash": "53e5f310ea887cd5c14f236e840778080c979d38830c287d7f211279334c5446",
+        "runnerExitCode": 0,
+        "runnerOutputHash": "8c53dcb6d6f1b705c6c3ce1476a7da198f70927b509a6fb9450218c21a22ba0a",
+        "runnerErrorHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "full-study-3726ed585d68b9cf",
+        "sequence": 1,
+        "previousHash": "debf41acd4499f2e6ba2172fc6411d841b37d7e3bfa47d2e5f218ea1ba561db8",
+        "rowHash": "f5b7fa29d091e211bf2362c55e718df2580200a0dc29b7e7aae4e2192bedb606"
+      }
+    ],
+    "rowCount": 2,
+    "chainHead": "f5b7fa29d091e211bf2362c55e718df2580200a0dc29b7e7aae4e2192bedb606",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-10T14:51:54.586Z",
+    "ledgerHash": "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc",
+    "signature": "3oJxdGA2RK2tBTxWNTM6hpU7QV3lrw+CGsV6RNL6kU1Dpmqiy/bk4AgKjdabAErA/TnkPTG2qWHY5D1c2ldzAg=="
+  },
+  "ledgerKeyId": "ucr-ed25519-77b546af455c7ecd3c9c",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc",
+    "rowCount": 2
+  },
+  "derived": {
+    "schemaVersion": "ucr.derived-metrics/2",
+    "metrics": {
+      "applicabilityPrecision": null,
+      "applicabilityPrecisionIntervalLow": null,
+      "preActionDelivery": null,
+      "preActionDeliveryIntervalLow": null,
+      "irrelevantDelivery": null,
+      "irrelevantDeliveryIntervalHigh": null,
+      "staleDelivery": null,
+      "staleDeliveryIntervalHigh": null,
+      "recurrenceReduction": null,
+      "recurrenceIntervalLow": null,
+      "naturalCorrectnessDelta": null,
+      "naturalCorrectnessIntervalLow": null,
+      "severeUnquarantined": 0,
+      "emptyP95Overhead": null,
+      "reconstructionTokenReduction": null,
+      "firstSuccessorTokenReduction": null,
+      "firstSuccessorTokenIntervalLow": null,
+      "latencyOverheadP95": null,
+      "knownMistakeRecurrence": null,
+      "contradictoryDelivery": null,
+      "contradictoryDeliveryIntervalHigh": null,
+      "negativeDeliveryIntervalHigh": null,
+      "consumerSchemaTokensP95": null,
+      "captureModelCallsP95": null,
+      "writerIntegrity": false,
+      "crossClientPassed": false,
+      "benchmarkFamilyCoverage": null,
+      "benchmarkArmCoverage": null,
+      "directionalCorrectnessIntervalLow": null,
+      "familyCorrectnessIntervalLow": null,
+      "directionalTokenOverheadHigh": null,
+      "causalChainIntegrity": false,
+      "trialIntegrity": false,
+      "independentGrading": false,
+      "competitivePassed": false,
+      "competitiveCoverage": null,
+      "competitiveReproducibility": false
+    },
+    "intervals": {
+      "recurrence": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "correctness": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "reconstruction": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      },
+      "firstSuccessorTokens": {
+        "pairs": 0,
+        "mean": null,
+        "low": null,
+        "high": null
+      }
+    },
+    "sources": {
+      "applicabilityPrecision": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "applicabilityPrecisionIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "preActionDeliveryIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "irrelevantDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "staleDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "recurrenceIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessDelta": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "naturalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "severeUnquarantined": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "emptyP95Overhead": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "reconstructionTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenReduction": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "firstSuccessorTokenIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "latencyOverheadP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "knownMistakeRecurrence": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "contradictoryDelivery": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "contradictoryDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "negativeDeliveryIntervalHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "consumerSchemaTokensP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "captureModelCallsP95": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "writerIntegrity": {
+        "requiredClass": "conformance",
+        "eligibleLedgerHashes": []
+      },
+      "crossClientPassed": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "benchmarkFamilyCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "benchmarkArmCoverage": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "familyCorrectnessIntervalLow": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "directionalTokenOverheadHigh": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "causalChainIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "trialIntegrity": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "independentGrading": {
+        "requiredClass": "effectiveness",
+        "eligibleLedgerHashes": []
+      },
+      "competitivePassed": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveCoverage": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      },
+      "competitiveReproducibility": {
+        "requiredClass": "superiority",
+        "eligibleLedgerHashes": []
+      }
+    },
+    "inputLedgerHashes": [
+      "7ecddbf163946f7b50d709c6c5446fff72a366d5792bf59f5ff5fd2ec73638fc"
+    ],
+    "rejectedLedgers": 0,
+    "derivedHash": "a2aaea46ba70a41862db4c3097c48606e5519f91fc2b2b809e4101c0491beba7"
+  },
+  "costDiagnostics": {
+    "passed": true,
+    "thresholds": {
+      "maximumTokenOverhead": 0.05,
+      "maximumLatencyOverhead": 0.05
+    },
+    "groups": [
+      {
+        "dimension": "direction",
+        "value": "claude-code->codex",
+        "pairs": 1,
+        "tokenOverhead": -0.34859797391839703,
+        "latencyOverheadP95": -0.3822939297883202,
+        "regressions": [],
+        "passed": true
+      },
+      {
+        "dimension": "family",
+        "value": "cross-model-handoff",
+        "pairs": 1,
+        "tokenOverhead": -0.34859797391839703,
+        "latencyOverheadP95": -0.3822939297883202,
+        "regressions": [],
+        "passed": true
+      },
+      {
+        "dimension": "client",
+        "value": "codex",
+        "pairs": 1,
+        "tokenOverhead": -0.34859797391839703,
+        "latencyOverheadP95": -0.3822939297883202,
+        "regressions": [],
+        "passed": true
+      }
+    ]
+  },
+  "passed": false,
+  "limitations": [
+    "qualification or partial execution cannot supply effectiveness metrics"
+  ],
+  "reportHash": "bf3b8cb154bed68e53ae70cefb03779bf2a4c82e016fdbf96890f362ece01828"
+}
