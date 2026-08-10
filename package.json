@@ -1,6 +1,6 @@
 {
   "name": "@ooples/token-optimizer-mcp",
-  "version": "5.6.1",
+  "version": "5.7.0",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
   "description": "Cross-client context optimization and durable live knowledge capture for AI coding agents and CLI tools",
   "main": "dist/server/index.js",

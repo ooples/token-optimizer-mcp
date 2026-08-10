@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.6.1...v5.7.0) (2026-08-10)
+
+
+### Features
+
+* add causal evidence and cross-client effectiveness ([#301](https://github.com/ooples/token-optimizer-mcp/issues/301)) ([59656c2](https://github.com/ooples/token-optimizer-mcp/commit/59656c2c64399165157ad2ba6564fef5a0991798))
+* add executable UCR effectiveness proof program ([#304](https://github.com/ooples/token-optimizer-mcp/issues/304)) ([1e5def5](https://github.com/ooples/token-optimizer-mcp/commit/1e5def52ea3bc5a92f26884e4a17994f35049f54))
+* **graph:** make the knowledge loop actually run -- harvest by default, and enforce recording ([#296](https://github.com/ooples/token-optimizer-mcp/issues/296)) ([8a7ebce](https://github.com/ooples/token-optimizer-mcp/commit/8a7ebce623a8a420f1f231d715da5dd21032d37d))
+* implement universal cognitive runtime evidence system ([#303](https://github.com/ooples/token-optimizer-mcp/issues/303)) ([ef34b71](https://github.com/ooples/token-optimizer-mcp/commit/ef34b715fbe1b134d07cf930cd2b4450566a6dc5))
+
+
+### Bug Fixes
+
+* **decide:** a dump redirected to a file is not a dump ([#298](https://github.com/ooples/token-optimizer-mcp/issues/298)) ([eb57606](https://github.com/ooples/token-optimizer-mcp/commit/eb57606a895c71ad5cc0946bbd5b23b4516a0490))
+* **forecast:** divide each arm by its own event count, not by the other's ([#297](https://github.com/ooples/token-optimizer-mcp/issues/297)) ([5491652](https://github.com/ooples/token-optimizer-mcp/commit/54916523a3c37fa57f156690beeed2fc8ee59385))
+
 ## [5.6.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.6.0...v5.6.1) (2026-08-08)
 
 
