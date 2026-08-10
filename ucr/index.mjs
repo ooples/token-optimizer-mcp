@@ -7,6 +7,8 @@ export * from './guards.mjs';
 export * from './credit.mjs';
 export * from './retrieval.mjs';
 export * from './context-vm.mjs';
+export * from './pre-action.mjs';
+export * from './semantic-harvest.mjs';
 export * from './checkpoint.mjs';
 export * from './coordination.mjs';
 export * from './consolidation.mjs';

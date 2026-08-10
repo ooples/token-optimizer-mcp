@@ -4,6 +4,7 @@ import {
   BOOTSTRAP_COGNITIVE_OPERATIONS,
   FederationPolicy,
   UCR_CLIENT_REGISTRY,
+  clientGuarantees,
   certifyAdapter,
   negotiateCapabilities,
   redactSecrets,
@@ -287,6 +288,20 @@ describe('minimal lazy capability surface and adapter SDK', () => {
     expect(new Set(results.map((result) => result.family))).toEqual(
       new Set(['process-hook', 'in-process-plugin', 'mcp-only', 'rules-only'])
     );
+    expect(clientGuarantees('codex')).toMatchObject({
+      preToolDelivery: 'enforced',
+      executableGuard: true,
+      crossSessionTaskTrust: 'requires-live-certification',
+    });
+    expect(clientGuarantees('claude-code')).toMatchObject({
+      taskContextDelivery: 'lifecycle-dependent',
+    });
+    for (const client of ['roo', 'zed', 'amp', 'continue', 'crush', 'droid']) {
+      expect(clientGuarantees(client)).toMatchObject({
+        executableGuard: false,
+        crossSessionTaskTrust: 'unproven',
+      });
+    }
   });
 
   test('two client adapters produce the same canonical event vocabulary', () => {

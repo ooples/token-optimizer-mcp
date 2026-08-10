@@ -1402,13 +1402,16 @@ Control hook behavior with these environment variables:
 
 The MCP server exposes an 18-tool core catalog by default so tool schemas do not
 consume a large share of the model context. Set
-`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 102
+`TOKEN_OPTIMIZER_TOOL_PROFILE=full` before starting the server to expose all 103
 specialized tools. `TOKEN_OPTIMIZER_TOOL_PROFILE=core` is the explicit form of
 the default. Live graph capture and continuity evaluations use
-`TOKEN_OPTIMIZER_TOOL_PROFILE=cognitive`, which exposes four operations. A real
-native-token audit measures 1,162 startup schema tokens in cognitive mode,
-4,815 in core, and 30,593 in full mode (96.2% less than full). Other enabled MCP
-servers add their own schemas independently.
+`TOKEN_OPTIMIZER_TOOL_PROFILE=cognitive`, which exposes four cognitive
+operations plus bounded receipt attestation. A real native-token audit measures
+71 startup schema tokens for attestation alone, 1,235 in cognitive mode, 4,815
+in core, and 30,666 in full mode. Stateful consumers normally receive zero MCP
+tools: host pre-action delivery adds only the selected capsule through the
+client lifecycle channel. Other enabled MCP servers add their own schemas
+independently.
 
 #### Performance Controls
 

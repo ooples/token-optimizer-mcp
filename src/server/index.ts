@@ -2615,6 +2615,7 @@ async function handleToolCall(request: {
         };
       }
       case 'context_page':
+      case 'context_receipt_verify':
       case 'cognition_record':
       case 'checkpoint_handoff':
       case 'outcome_report': {

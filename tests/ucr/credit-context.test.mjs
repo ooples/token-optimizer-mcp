@@ -240,6 +240,45 @@ describe('adaptive retrieval and context virtual machine', () => {
     );
   });
 
+  test('retrieves exact task-scoped cognition across query paraphrases', () => {
+    const scoped = graph();
+    scoped.objects.set('failure:scoped', {
+      id: 'failure:scoped',
+      type: 'failure',
+      state: 'active',
+      confidence: 0.95,
+      learnedAt: Date.now(),
+      correction: 'Apply GREEN-1',
+      applicability: ['only takeover-42'],
+      nonApplicability: ['every other task'],
+      scope: {
+        taskId: 'takeover-42',
+        projectId: 'project-a',
+        workspaceId: 'workspace-a',
+      },
+    });
+    const planner = new RetrievalPlanner({ graph: scoped });
+    const result = planner.plan('continue from where the other agent stopped', {
+      taskId: 'takeover-42',
+      projectId: 'project-a',
+      workspaceId: 'workspace-a',
+    });
+    expect(result.action).toBe('deliver');
+    expect(result.candidates[0]).toMatchObject({
+      objectId: 'failure:scoped',
+      kernels: expect.arrayContaining(['scope']),
+    });
+    expect(
+      planner.plan('continue from where the other agent stopped', {
+        taskId: 'different-task',
+      }).candidates
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ objectId: 'failure:scoped' }),
+      ])
+    );
+  });
+
   test('pages bounded capsules, supports an empty result, and caches raw expansion', () => {
     const planner = new RetrievalPlanner({ graph: graph() });
     let reads = 0;

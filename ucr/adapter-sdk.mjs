@@ -22,6 +22,39 @@ export const UCR_CLIENT_REGISTRY = Object.freeze({
   droid: { family: 'rules-only', tier: 'connected' },
 });
 
+export const UCR_FAMILY_GUARANTEES = Object.freeze({
+  'process-hook': Object.freeze({
+    taskContextDelivery: 'lifecycle-dependent',
+    preToolDelivery: 'enforced',
+    executableGuard: true,
+    crossSessionTaskTrust: 'requires-live-certification',
+  }),
+  'in-process-plugin': Object.freeze({
+    taskContextDelivery: 'lifecycle-dependent',
+    preToolDelivery: 'enforced',
+    executableGuard: true,
+    crossSessionTaskTrust: 'requires-live-certification',
+  }),
+  'mcp-only': Object.freeze({
+    taskContextDelivery: 'model-selected',
+    preToolDelivery: 'advisory',
+    executableGuard: false,
+    crossSessionTaskTrust: 'unproven',
+  }),
+  'rules-only': Object.freeze({
+    taskContextDelivery: 'model-selected',
+    preToolDelivery: 'advisory',
+    executableGuard: false,
+    crossSessionTaskTrust: 'unproven',
+  }),
+});
+
+export function clientGuarantees(client) {
+  const profile = UCR_CLIENT_REGISTRY[client];
+  if (!profile) throw new Error(`unknown UCR client ${client}`);
+  return UCR_FAMILY_GUARANTEES[profile.family];
+}
+
 const eventMapping = Object.freeze({
   session_start: 'task.created',
   user_prompt: 'observation.recorded',
@@ -126,6 +159,7 @@ export function certifyAdapter(client, fixture) {
     client,
     family: profile.family,
     tier: profile.tier,
+    guarantees: clientGuarantees(client),
     certified: diagnostics.length === 0,
     diagnostics,
     events,

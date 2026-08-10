@@ -27,7 +27,7 @@
     "graphRebuildInvariant": true,
     "guardFalsePositiveRate": 0,
     "guardFalseNegativeCount": 0,
-    "contextCapsuleTokens": 118,
+    "contextCapsuleTokens": 134,
     "contextBudgetTokens": 128,
     "coordinatedWriters": 100,
     "lostAcceptedEventsInRecovery": 0
@@ -46,7 +46,7 @@
     "modelRuns": 9,
     "executableClientSmokes": 3,
     "competitiveReproductions": 0,
-    "reportHash": "ba36659c8384b3647ac9d9f119d11c6f356ec42e9d324eadcb3118d39efe9699",
+    "reportHash": "cdab1418a009c5e75ee775cef7ed29f6169ed5da718db64b8c1515d2b83c0159",
     "evidenceTiers": {
       "transport": {
         "status": "missing",
@@ -59,7 +59,7 @@
         "ledgers": 2,
         "rows": 706,
         "hashes": [
-          "db545bd8b8d844bbf16d626c26e1a546b563b7397c981c97e6bc721a34b124a5",
+          "473c4a56568205ae3cb2ffd223e9741acd61435259dec6ab611f5482bcd012bf",
           "7d1f5cf0f9b027c2a6e3130860a17e580b6989ac2f6776237858ab296408545a"
         ]
       },
@@ -69,9 +69,9 @@
         "rows": 13,
         "hashes": [
           "c0becec243d72c42db68de9c6ba644875ef63a921a9e20d04b7114ded9ea2c24",
-          "3687c5556e820640f4935ed9c1f63896cc7b09a1f59ebd712514e3bcd4c506bb",
-          "1c0cf1af21ba062c77628de5780e4cb9b843fe9551edc04ed3e486a611bba675",
-          "3e249024e94cbe94dcc94dd1781817f99070a754b9465ef1a1a46f71cdcf00a5",
+          "e0357f955ac197f9e42665d91cec0b9345d1d8a15a620d25dd9ceb8f0cf4a9a8",
+          "2a7d286a8e6f567cfd9d7d51121ab2e95a9e03bfc55f576593a8af4f06614556",
+          "f4383a405fd5fec280108b65506179c78a8418a905ba1643277dc75b0478aef7",
           "ceac3e14739ed4b580f725befd832b9b3bce66718f451a1096cbcf7f6db77711"
         ]
       },
@@ -146,19 +146,81 @@
       "detail": "11/11 artifacts"
     },
     {
-      "name": "live cross-client smoke covers three passing directions without raw transcripts",
+      "name": "stateful cross-model smoke passes both primary directions and retains the blocked edge",
       "passed": true,
       "detail": {
         "artifactsValid": 11,
         "artifactsTotal": 11,
-        "liveDirectionsPassed": 3,
+        "liveDirectionsPassed": 2,
         "liveDirectionsAttempted": 3,
+        "liveDirectionMetrics": [
+          {
+            "direction": "codex->claude-code",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "delivered": true,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 212,
+            "controlTokenTraffic": 280958,
+            "runtimeTokenTraffic": 342820,
+            "tokenTrafficDelta": 0.2201823760134967,
+            "controlLatencyMs": 30845,
+            "runtimeLatencyMs": 64639,
+            "latencyDelta": 1.0956070675960448
+          },
+          {
+            "direction": "claude-code->codex",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "delivered": true,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 316,
+            "controlTokenTraffic": 56530,
+            "runtimeTokenTraffic": 88694,
+            "tokenTrafficDelta": 0.568972227136034,
+            "controlLatencyMs": 24644,
+            "runtimeLatencyMs": 47280,
+            "latencyDelta": 0.9185197208245415
+          },
+          {
+            "direction": "claude-code->copilot",
+            "integrityValid": true,
+            "passed": false,
+            "controlCorrect": false,
+            "runtimeCorrect": false,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "delivered": true,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 317,
+            "controlTokenTraffic": null,
+            "runtimeTokenTraffic": null,
+            "tokenTrafficDelta": null,
+            "controlLatencyMs": 3331,
+            "runtimeLatencyMs": 2807,
+            "latencyDelta": -0.15731011708195736
+          }
+        ],
+        "liveDirectionsWithLowerTokenTraffic": 0,
+        "liveDirectionsWithLowerLatency": 0,
+        "maximumConsumerStaticSchemaTokens": 0,
         "registeredClientProcesses": 16,
         "graphEvents": 1000000,
         "coordinationWorkers": 100,
         "productionFaults": 6,
-        "cognitiveSchemaTokens": 1162,
-        "cognitiveReductionVsFull": 0.9620174549733599
+        "cognitiveSchemaTokens": 1235,
+        "cognitiveReductionVsFull": 0.959727385377943
       }
     },
     {
@@ -167,14 +229,76 @@
       "detail": {
         "artifactsValid": 11,
         "artifactsTotal": 11,
-        "liveDirectionsPassed": 3,
+        "liveDirectionsPassed": 2,
         "liveDirectionsAttempted": 3,
+        "liveDirectionMetrics": [
+          {
+            "direction": "codex->claude-code",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "delivered": true,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 212,
+            "controlTokenTraffic": 280958,
+            "runtimeTokenTraffic": 342820,
+            "tokenTrafficDelta": 0.2201823760134967,
+            "controlLatencyMs": 30845,
+            "runtimeLatencyMs": 64639,
+            "latencyDelta": 1.0956070675960448
+          },
+          {
+            "direction": "claude-code->codex",
+            "integrityValid": true,
+            "passed": true,
+            "controlCorrect": true,
+            "runtimeCorrect": true,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "delivered": true,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 316,
+            "controlTokenTraffic": 56530,
+            "runtimeTokenTraffic": 88694,
+            "tokenTrafficDelta": 0.568972227136034,
+            "controlLatencyMs": 24644,
+            "runtimeLatencyMs": 47280,
+            "latencyDelta": 0.9185197208245415
+          },
+          {
+            "direction": "claude-code->copilot",
+            "integrityValid": true,
+            "passed": false,
+            "controlCorrect": false,
+            "runtimeCorrect": false,
+            "predecessorMistakeObserved": true,
+            "predecessorCorrectionVerified": true,
+            "repeatedFailure": false,
+            "delivered": true,
+            "consumerStaticSchemaTokens": 0,
+            "capsuleTokens": 317,
+            "controlTokenTraffic": null,
+            "runtimeTokenTraffic": null,
+            "tokenTrafficDelta": null,
+            "controlLatencyMs": 3331,
+            "runtimeLatencyMs": 2807,
+            "latencyDelta": -0.15731011708195736
+          }
+        ],
+        "liveDirectionsWithLowerTokenTraffic": 0,
+        "liveDirectionsWithLowerLatency": 0,
+        "maximumConsumerStaticSchemaTokens": 0,
         "registeredClientProcesses": 16,
         "graphEvents": 1000000,
         "coordinationWorkers": 100,
         "productionFaults": 6,
-        "cognitiveSchemaTokens": 1162,
-        "cognitiveReductionVsFull": 0.9620174549733599
+        "cognitiveSchemaTokens": 1235,
+        "cognitiveReductionVsFull": 0.959727385377943
       }
     },
     {
@@ -260,8 +384,8 @@
       "passed": true,
       "detail": {
         "action": "deliver",
-        "tokens": 118,
-        "maximum": 128
+        "tokens": 134,
+        "maximum": 384
       }
     },
     {
@@ -358,5 +482,5 @@
       }
     }
   ],
-  "reportHash": "94eba144ae3d99435b61a110240623b11b326e01d00ac9de5f9dd8d03ba549ad"
+  "reportHash": "d3e9fc278cbdf993e7c272b446c3d3209d3657dd9dbc64ded940308be0fb3deb"
 }

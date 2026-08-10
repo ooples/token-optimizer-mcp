@@ -36,10 +36,10 @@ Current integrity-checked results:
   policy fixtures, not model invocations or product comparisons.
 - Six of six local fault classes contained with zero event loss. This is a
   mechanism exercise, not production traffic.
-- Real MCP `tools/list` size measured with `tiktoken`: 1,162 tokens for the
-  four-operation cognitive profile, 4,815 for core, and 30,593 for the full
-  102-tool catalog. Cognitive mode reduces static schema context 75.9% versus
-  core and 96.2% versus full for all 16 registered adapters.
+- Real MCP `tools/list` size measured with `tiktoken`: 71 tokens for receipt
+  attestation alone, 1,235 for four cognitive operations plus attestation,
+  4,815 for core, and 30,666 for the full 103-tool catalog. The stateful live
+  consumers use host pre-action delivery and expose zero MCP tools.
 
 ## Live multi-model handoffs
 
@@ -56,20 +56,23 @@ npm run build
 npm run eval:ucr:multimodel
 ```
 
-Each direction uses a blinded empty control, an active-model semantic producer,
-and a fresh transcript-free consumer. The runner executes a deterministic
-fail-then-correct fixture, signs its observations outside the model process,
-requires the producer to verify the receipt before authoring cognition, and
-grades the event stream plus the final answer. Raw transcripts, secrets, and
-hidden recovery codes are never published.
+Each direction uses a stateful control, a real predecessor CLI that performs a
+generated-file mistake and correction, active-model semantic harvesting after
+external authentication, and a fresh transcript-free consumer working in a
+separate repository fixture. The end-state grader checks the canonical source,
+regenerated output, protected verifier hashes, and the fail-then-pass audit; it
+does not trust the model's final text.
 
-Committed passing edges cover Codex→Claude Code, Claude Code→Codex, and
-Codex→Copilot. Controls abstained in 3/3, runtime consumers succeeded in 3/3,
-and no consumer repeated the verified failed action. This is executable smoke,
-not a powered effectiveness estimate. The standalone Gemini authentication
-failure, Copilot Gemini model rejection, Claude provenance refusal before the
-verification operation existed, and Copilot quota exhaustion remain preserved
-as negative evidence.
+The stateful primary edges Codex→Claude Code and Claude Code→Codex pass with
+mandatory delivery, zero consumer MCP tools, and zero repeated predecessor
+mistakes. In the latest source-complete runs, Codex→Claude increased total token
+traffic 22.0% and latency 109.6%; Claude→Codex increased traffic 56.9% and
+latency 91.9%. An earlier Claude→Codex attempt had improved both metrics, so the
+directional reversal is explicit variance evidence, not a result to average
+away. The efficiency gate is currently 0/2. The Copilot edge is retained as
+negative evidence because its consumer invocation returned HTTP 402 after the
+account quota was exhausted. These are executable smokes, not powered
+effectiveness estimates.
 
 A later two-direction pilot deliberately repeated the OpenAI↔Anthropic study:
 Codex→Claude passed and Claude→Codex did not deliver the correction, so the

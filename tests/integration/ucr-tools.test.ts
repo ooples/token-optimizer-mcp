@@ -49,7 +49,7 @@ function semanticFailure() {
   };
 }
 
-describe('four-operation UCR MCP runtime', () => {
+describe('bounded UCR MCP runtime', () => {
   test('records verified active-model cognition and pages it back selectively', async () => {
     const { signGraderReceipt } = await import('../../ucr/index.mjs');
     const priorDelivery = await runUcrTool('context_page', {
@@ -105,10 +105,34 @@ describe('four-operation UCR MCP runtime', () => {
       budget: 512,
     });
     expect(context.action).toBe('deliver');
-    expect(context.capsules[0].payload).toContain(
-      'edit source/beta-policy.txt'
-    );
+    expect(context.capsules[0]).toMatchObject({
+      recordMeaning: 'verified correction to a prior failed attempt',
+      payload: expect.stringContaining('edit source/beta-policy.txt'),
+    });
     expect(context.deliveryEventId).toBeTruthy();
+    await expect(
+      runUcrTool('context_receipt_verify', {
+        deliveryEventId: context.deliveryEventId,
+      })
+    ).resolves.toMatchObject({
+      valid: true,
+      deliveryEventId: context.deliveryEventId,
+      objectIds: [recorded.object.id],
+      attestations: [
+        expect.objectContaining({
+          semanticKind: 'failure',
+          verifiedCorrection: expect.stringContaining(
+            'edit source/beta-policy.txt'
+          ),
+        }),
+      ],
+      verifier: 'external-deterministic-grader-receipt-chain',
+    });
+    await expect(
+      runUcrTool('context_receipt_verify', {
+        deliveryEventId: 'missing-delivery',
+      })
+    ).resolves.toMatchObject({ valid: false, objectIds: [] });
     const { EventStore, rebuildGraph } = await import('../../ucr/index.mjs');
     expect(
       rebuildGraph(new EventStore(root).read().events).integrity()

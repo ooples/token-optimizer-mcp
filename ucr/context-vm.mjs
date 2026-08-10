@@ -74,13 +74,25 @@ export function contextCapsule(
     capsuleId: `capsule:${sha256({ objectId: object.id, tier, eventId: object.eventId }).slice(0, 24)}`,
     tier,
     objectIds: [object.id],
+    recordMeaning: ['failure', 'guard'].includes(object.type)
+      ? 'verified correction to a prior failed attempt'
+      : object.type,
     payload:
       object.claim ||
       object.correction ||
       object.title ||
       object.desiredState ||
       object.steps,
-    provenance: object.provenance || [],
+    provenance: object.provenance || object.verificationReceiptIds || [],
+    ...(object.verificationReceiptIds?.length
+      ? {
+          verification: {
+            confidenceLabel: object.confidenceLabel || null,
+            receiptIds: object.verificationReceiptIds,
+            receiptHash: object.verificationReceiptHash || null,
+          },
+        }
+      : {}),
     applicability: object.applicability || [],
     nonApplicability: object.nonApplicability || [],
     uncertainty: { confidence: object.confidence ?? null, state: object.state },

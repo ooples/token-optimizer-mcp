@@ -415,6 +415,9 @@ export const ContextPageSchema = z
     budget: z.number().min(0).max(2048).optional(),
   })
   .passthrough();
+export const ContextReceiptVerifySchema = z
+  .object({ deliveryEventId: z.string().min(1) })
+  .strict();
 export const CognitionRecordSchema = z
   .object({
     operation: z.enum(['verify-evidence', 'record']).optional(),
@@ -999,6 +1002,7 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   wiki_write: WikiWriteSchema,
   wiki_read: WikiReadSchema,
   context_page: ContextPageSchema,
+  context_receipt_verify: ContextReceiptVerifySchema,
   cognition_record: CognitionRecordSchema,
   checkpoint_handoff: CheckpointHandoffSchema,
   outcome_report: OutcomeReportSchema,

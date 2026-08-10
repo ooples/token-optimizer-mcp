@@ -1,0 +1,323 @@
+{
+  "schemaVersion": "ucr.live-multimodel-handoff/1",
+  "evidenceClass": "live-multimodel-executable-smoke-not-powered-effectiveness",
+  "executedAt": "2026-08-10T01:27:42.160Z",
+  "sourceTreeHash": "85dc797d0ff92bcf2bd7fcbb3efd3c18cd96c7c6d188b2fe3e686b050e993d84",
+  "requestedDirections": [
+    "codex->claude-code"
+  ],
+  "directionsPassed": 0,
+  "directionResults": [
+    {
+      "study": "cross-client-handoff",
+      "direction": "codex->claude-code",
+      "producerClient": "codex",
+      "consumerClient": "claude-code",
+      "producerFamily": "openai",
+      "consumerFamily": "anthropic",
+      "producerModel": "gpt-5.6-sol",
+      "consumerModel": "sonnet",
+      "taskHash": "f294a99a0e340a1f6d132980502af1736bf5cfdb330860a970bdb393183bc653",
+      "control": {
+        "exitCode": 0,
+        "correct": false,
+        "abstained": true,
+        "usage": {
+          "inputTokens": 37903,
+          "cachedInputTokens": 28882,
+          "outputTokens": 26,
+          "totalTokens": 37929,
+          "costUsd": 0.0631746,
+          "tokenAccounting": "provider-cli-native-logical-input"
+        },
+        "latencyMs": 3405
+      },
+      "producer": {
+        "exitCode": 0,
+        "recorded": true,
+        "modelAuthored": true,
+        "evidenceAuthenticatedBeforeAuthoring": true,
+        "semanticHarvestReceipt": {
+          "schemaVersion": "ucr.semantic-harvest-receipt/1",
+          "modelAuthored": true,
+          "evidenceAuthenticatedBeforeAuthoring": true,
+          "kind": "failure",
+          "taskId": "multimodel-codex-claude-code-5ef1baef5da437c0",
+          "attempts": 1,
+          "modelOutputHash": "038c9838554e0f2f0201da940a8ca99d52a566cefc96ae2835cec6a5f109d52c",
+          "semanticObjectHash": "c5c0c8cfc208e0d43d1958c565dd6a40fc96a63b4c1a1ec93dddcf9b754a0b2b",
+          "activatedObjectId": "failure:c63216700e76aa3815455fd2",
+          "eventIds": [
+            "019fe948-18d1-74e9-9f27-b0c4294871bb",
+            "019fe948-18d2-7073-a3ad-d70df9a1638f",
+            "019fe948-18d3-7402-af05-d92e0eec66a1",
+            "019fe948-18d3-70ed-a932-930ceefd54cc"
+          ],
+          "receiptHash": "1f5bb310cdaf71449d4e627a7017d07a067e426de2c7a663ef9fb6cbd3201253"
+        },
+        "usage": {
+          "inputTokens": 13887,
+          "cachedInputTokens": 0,
+          "outputTokens": 409,
+          "totalTokens": null,
+          "costUsd": null,
+          "tokenAccounting": "provider-cli-native",
+          "invocations": 1
+        },
+        "latencyMs": 11911
+      },
+      "runtime": {
+        "exitCode": 0,
+        "correct": false,
+        "delivered": true,
+        "selected": true,
+        "retrievalAttempted": true,
+        "attested": false,
+        "attestationFailed": false,
+        "deliveryPhase": "adapter-pre-action",
+        "mistakeExecuted": false,
+        "usage": {
+          "inputTokens": 38254,
+          "cachedInputTokens": 28882,
+          "outputTokens": 641,
+          "totalTokens": 38895,
+          "costUsd": 0.0745056,
+          "tokenAccounting": "provider-cli-native-logical-input",
+          "staticSchemaTokens": 71,
+          "capsuleTokens": 204,
+          "instructionTokens": 263
+        },
+        "latencyMs": 14992,
+        "preflightLatencyMs": 148,
+        "consumerMcpExposed": true,
+        "preActionReceipt": {
+          "schemaVersion": "ucr.pre-action-receipt/1",
+          "retrievalAttempted": true,
+          "action": "deliver",
+          "delivered": true,
+          "taskId": "multimodel-codex-claude-code-5ef1baef5da437c0",
+          "sessionId": "consumer-session",
+          "trigger": "task",
+          "budget": 384,
+          "capsuleIds": [
+            "capsule:872251c09ebb1e5e85d3f8fa"
+          ],
+          "objectIds": [
+            "failure:c63216700e76aa3815455fd2"
+          ],
+          "capsuleTokens": 204,
+          "injectionTokens": 263,
+          "staticSchemaTokens": 71,
+          "consumerMcpExposed": true,
+          "exposedTools": [
+            "context_receipt_verify"
+          ],
+          "injectionChannel": "claude-session-start-hook-additional-context",
+          "deliveryEventId": "019fe948-196b-7a44-8156-43f7290b0cf8",
+          "latencyMs": 148,
+          "receiptHash": "6a6bcd13fb65e3a67ff4a0365b8a22c0d6eddec36c5f17ef45df1c80a7e6fa14"
+        }
+      },
+      "eventStreamHash": "43f05ce709fffa1cf39f5385d8c750c04053c79bf3540d8a561b185ee6d6588e",
+      "canonicalEvents": 5,
+      "passed": false,
+      "transcriptPublished": false
+    }
+  ],
+  "clients": {
+    "codex": {
+      "family": "openai",
+      "model": "gpt-5.6-sol",
+      "version": "codex-cli 0.147.0"
+    },
+    "claude-code": {
+      "family": "anthropic",
+      "model": "sonnet",
+      "version": "2.1.225 (Claude Code)"
+    },
+    "copilot": {
+      "family": "anthropic",
+      "model": "claude-sonnet-4.5",
+      "version": "GitHub Copilot CLI 0.0.396.\nRun 'copilot update' to check for updates."
+    }
+  },
+  "modelFamilies": 2,
+  "attestationSurface": {
+    "profile": "attestation",
+    "toolNames": [
+      "context_receipt_verify"
+    ],
+    "schemaTokens": 71,
+    "tokenAccounting": "tiktoken:cl100k_base"
+  },
+  "controlsAbstained": 1,
+  "repeatedVerifiedFailures": 0,
+  "ledger": {
+    "schemaVersion": "ucr.evidence-ledger/2",
+    "evidenceClass": "executable-smoke",
+    "run": {
+      "schemaVersion": "ucr.evidence-run/2",
+      "runId": "live-multimodel-3074402b2a5b2b44",
+      "evidenceClass": "executable-smoke",
+      "benchmarkHash": "4b2148b8a73d20f9d94a3008e1756f9fb38144818bb527b752ec5ff6ffa06f0e",
+      "sourceTreeHash": "85dc797d0ff92bcf2bd7fcbb3efd3c18cd96c7c6d188b2fe3e686b050e993d84",
+      "runner": {
+        "name": "live-multimodel-handoff",
+        "versions": {
+          "codex": "codex-cli 0.147.0",
+          "claude-code": "2.1.225 (Claude Code)",
+          "copilot": "GitHub Copilot CLI 0.0.396.\nRun 'copilot update' to check for updates."
+        }
+      },
+      "startedAt": "2026-08-10T01:27:42.155Z",
+      "runHash": "a0b6a019c0e2ce6c5567247d753c4f052429e037cfbb10f9bc8a0abe9cf72826"
+    },
+    "rows": [
+      {
+        "study": "cross-client-handoff",
+        "direction": "codex->claude-code",
+        "producerClient": "codex",
+        "consumerClient": "claude-code",
+        "producerFamily": "openai",
+        "consumerFamily": "anthropic",
+        "producerModel": "gpt-5.6-sol",
+        "consumerModel": "sonnet",
+        "taskHash": "f294a99a0e340a1f6d132980502af1736bf5cfdb330860a970bdb393183bc653",
+        "control": {
+          "exitCode": 0,
+          "correct": false,
+          "abstained": true,
+          "usage": {
+            "inputTokens": 37903,
+            "cachedInputTokens": 28882,
+            "outputTokens": 26,
+            "totalTokens": 37929,
+            "costUsd": 0.0631746,
+            "tokenAccounting": "provider-cli-native-logical-input"
+          },
+          "latencyMs": 3405
+        },
+        "producer": {
+          "exitCode": 0,
+          "recorded": true,
+          "modelAuthored": true,
+          "evidenceAuthenticatedBeforeAuthoring": true,
+          "semanticHarvestReceipt": {
+            "schemaVersion": "ucr.semantic-harvest-receipt/1",
+            "modelAuthored": true,
+            "evidenceAuthenticatedBeforeAuthoring": true,
+            "kind": "failure",
+            "taskId": "multimodel-codex-claude-code-5ef1baef5da437c0",
+            "attempts": 1,
+            "modelOutputHash": "038c9838554e0f2f0201da940a8ca99d52a566cefc96ae2835cec6a5f109d52c",
+            "semanticObjectHash": "c5c0c8cfc208e0d43d1958c565dd6a40fc96a63b4c1a1ec93dddcf9b754a0b2b",
+            "activatedObjectId": "failure:c63216700e76aa3815455fd2",
+            "eventIds": [
+              "019fe948-18d1-74e9-9f27-b0c4294871bb",
+              "019fe948-18d2-7073-a3ad-d70df9a1638f",
+              "019fe948-18d3-7402-af05-d92e0eec66a1",
+              "019fe948-18d3-70ed-a932-930ceefd54cc"
+            ],
+            "receiptHash": "1f5bb310cdaf71449d4e627a7017d07a067e426de2c7a663ef9fb6cbd3201253"
+          },
+          "usage": {
+            "inputTokens": 13887,
+            "cachedInputTokens": 0,
+            "outputTokens": 409,
+            "totalTokens": null,
+            "costUsd": null,
+            "tokenAccounting": "provider-cli-native",
+            "invocations": 1
+          },
+          "latencyMs": 11911
+        },
+        "runtime": {
+          "exitCode": 0,
+          "correct": false,
+          "delivered": true,
+          "selected": true,
+          "retrievalAttempted": true,
+          "attested": false,
+          "attestationFailed": false,
+          "deliveryPhase": "adapter-pre-action",
+          "mistakeExecuted": false,
+          "usage": {
+            "inputTokens": 38254,
+            "cachedInputTokens": 28882,
+            "outputTokens": 641,
+            "totalTokens": 38895,
+            "costUsd": 0.0745056,
+            "tokenAccounting": "provider-cli-native-logical-input",
+            "staticSchemaTokens": 71,
+            "capsuleTokens": 204,
+            "instructionTokens": 263
+          },
+          "latencyMs": 14992,
+          "preflightLatencyMs": 148,
+          "consumerMcpExposed": true,
+          "preActionReceipt": {
+            "schemaVersion": "ucr.pre-action-receipt/1",
+            "retrievalAttempted": true,
+            "action": "deliver",
+            "delivered": true,
+            "taskId": "multimodel-codex-claude-code-5ef1baef5da437c0",
+            "sessionId": "consumer-session",
+            "trigger": "task",
+            "budget": 384,
+            "capsuleIds": [
+              "capsule:872251c09ebb1e5e85d3f8fa"
+            ],
+            "objectIds": [
+              "failure:c63216700e76aa3815455fd2"
+            ],
+            "capsuleTokens": 204,
+            "injectionTokens": 263,
+            "staticSchemaTokens": 71,
+            "consumerMcpExposed": true,
+            "exposedTools": [
+              "context_receipt_verify"
+            ],
+            "injectionChannel": "claude-session-start-hook-additional-context",
+            "deliveryEventId": "019fe948-196b-7a44-8156-43f7290b0cf8",
+            "latencyMs": 148,
+            "receiptHash": "6a6bcd13fb65e3a67ff4a0365b8a22c0d6eddec36c5f17ef45df1c80a7e6fa14"
+          }
+        },
+        "eventStreamHash": "43f05ce709fffa1cf39f5385d8c750c04053c79bf3540d8a561b185ee6d6588e",
+        "canonicalEvents": 5,
+        "passed": false,
+        "transcriptPublished": false,
+        "studySequence": null,
+        "schemaVersion": "ucr.evidence-row/2",
+        "runId": "live-multimodel-3074402b2a5b2b44",
+        "sequence": 0,
+        "previousHash": "a0b6a019c0e2ce6c5567247d753c4f052429e037cfbb10f9bc8a0abe9cf72826",
+        "rowHash": "cc30a8210dce0238b08e4203329926b6e3ec818e0b2684a6a5d148b7bbae8f4d"
+      }
+    ],
+    "rowCount": 1,
+    "chainHead": "cc30a8210dce0238b08e4203329926b6e3ec818e0b2684a6a5d148b7bbae8f4d",
+    "transcriptsPublished": false,
+    "endedAt": "2026-08-10T01:27:42.156Z",
+    "ledgerHash": "910b542e94f557d4bfd73dcdec8cbf81584546c4fb346c2b3a5e6c95181c83c9",
+    "signature": "UEmGXyqOZTmcDEphdzo1yYLX3CDXVa7BGkJ57prNjr+BlD3W77JeEV6DNWytMM+bAhAf3Wzq3E/qqpUnsHI8BQ=="
+  },
+  "ledgerPublicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA9TbHYUY9BYEA6cf683Yr2c1j35HgkN+NHM56qC6SYVc=\n-----END PUBLIC KEY-----\n",
+  "ledgerVerification": {
+    "valid": true,
+    "diagnostics": [],
+    "validSignature": true,
+    "ledgerHash": "910b542e94f557d4bfd73dcdec8cbf81584546c4fb346c2b3a5e6c95181c83c9",
+    "rowCount": 1
+  },
+  "transcriptPublished": false,
+  "passed": false,
+  "limitations": [
+    "one task per direction is executable coverage, not a powered effectiveness estimate",
+    "mandatory adapter preflight is evaluated here; advisory-only clients require separate evidence and cannot claim guaranteed prevention",
+    "provider aliases require provider response metadata before exact model-version claims",
+    "the installed standalone Gemini CLI and the advertised Copilot Gemini model were unavailable to the authenticated accounts; their failed attempts remain separate negative evidence",
+    "no competitive superiority claim is permitted from this smoke matrix"
+  ],
+  "reportHash": "5e7155b55df024b4b21c6cacf91e0338f15c81d68a9a544eb4a9b0c5db760640"
+}

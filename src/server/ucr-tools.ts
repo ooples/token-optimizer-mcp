@@ -93,6 +93,22 @@ export const UCR_TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'context_receipt_verify',
+    description:
+      'Verify that one adapter-delivered context receipt and its correction trace to authenticated external grader evidence.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        deliveryEventId: {
+          type: 'string',
+          description: 'The delivery receipt ID supplied by the host adapter.',
+        },
+      },
+      required: ['deliveryEventId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'cognition_record',
     description:
       'Verify external grader evidence, then propose and activate evidence-backed cognition authored by the active model. Use operation=verify-evidence before recording unfamiliar evidence.',
@@ -145,6 +161,7 @@ export const UCR_TOOL_DEFINITIONS = [
             },
             invalidators: {
               type: 'array',
+              minItems: 1,
               items: { type: 'string', minLength: 1 },
               description:
                 'Future observations that would invalidate the cognition.',
@@ -382,6 +399,7 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
         taskId: args.taskId,
         trigger: args.trigger || 'task',
         projectId: requestedScope.projectId,
+        workspaceId: requestedScope.workspaceId,
       },
       { budget: args.budget ?? 512 }
     );
@@ -396,6 +414,83 @@ export async function runUcrTool(name: string, args: any): Promise<any> {
     });
     store.append(delivery);
     return { ...result, deliveryEventId: delivery.eventId };
+  }
+
+  if (name === 'context_receipt_verify') {
+    const graderSecret = process.env.TOKEN_OPTIMIZER_GRADER_SECRET;
+    const delivery = current.find(
+      (event: any) =>
+        event.eventId === args.deliveryEventId &&
+        event.type === 'context.delivered'
+    );
+    const graph = ucr.rebuildGraph(current);
+    const objectIds = delivery?.payload?.objectIds || [];
+    const objects = objectIds
+      .map((objectId: string) => graph.objects.get(objectId))
+      .filter(Boolean);
+    const attestations = objects.map((object: any) => {
+      const receiptEvents = (object.verificationReceiptIds || [])
+        .map((eventId: string) =>
+          current.find((event: any) => event.eventId === eventId)
+        )
+        .filter(Boolean);
+      const computedReceiptHash = ucr.sha256(
+        receiptEvents
+          .map((event: any) => ({
+            eventId: event.eventId,
+            type: event.type,
+            payloadHash: event.payloadHash || ucr.sha256(event.payload || {}),
+          }))
+          .sort((a: any, b: any) => a.eventId.localeCompare(b.eventId))
+      );
+      const valid =
+        object.state === 'active' &&
+        receiptEvents.length > 0 &&
+        computedReceiptHash === object.verificationReceiptHash &&
+        receiptEvents.every(
+          (event: any) =>
+            event.type === 'verification.passed' &&
+            ucr.verifyGraderReceipt(event.payload, graderSecret)
+        );
+      return {
+        objectId: object.id,
+        semanticKind: object.type,
+        recordMeaning:
+          object.type === 'failure'
+            ? 'verified correction to a prior failed attempt'
+            : 'verified semantic record',
+        rejectedAction: object.attemptedAction || null,
+        verifiedCorrection: object.correction || null,
+        verificationEvidence: object.verificationEvidence || null,
+        valid,
+        receiptIds: receiptEvents.map((event: any) => event.eventId).sort(),
+        receiptHash: computedReceiptHash,
+      };
+    });
+    const valid =
+      Boolean(delivery) &&
+      objects.length > 0 &&
+      objects.length === objectIds.length &&
+      attestations.every((attestation: any) => attestation.valid);
+    const attestation = create(
+      valid ? 'verification.passed' : 'verification.failed',
+      {
+        passed: valid,
+        operation: 'context-receipt-attestation',
+        deliveryEventId: args.deliveryEventId,
+        objectIds,
+        attestationHash: ucr.sha256(attestations),
+      }
+    );
+    store.append(attestation);
+    return {
+      valid,
+      deliveryEventId: args.deliveryEventId,
+      objectIds,
+      attestations,
+      verifier: 'external-deterministic-grader-receipt-chain',
+      attestationEventId: attestation.eventId,
+    };
   }
 
   if (name === 'cognition_record') {

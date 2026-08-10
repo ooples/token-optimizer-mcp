@@ -603,7 +603,8 @@ async function main() {
         check(
           'UCR dashboard renders signed artifacts and live directions',
           /Evidence artifacts\s*11\/11/i.test(ucrText || '') &&
-            /Live directions\s*3\/3/i.test(ucrText || '')
+            /Live directions\s*2\/3/i.test(ucrText || '') &&
+            /Consumer MCP schema\s*0 tokens max/i.test(ucrText || '')
         );
         const tierCount = await page.locator('#ucr-tiers tbody tr').count();
         const artifactCount = await page

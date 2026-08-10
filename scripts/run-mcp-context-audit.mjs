@@ -75,6 +75,7 @@ function listTools(profile, arm = 'full') {
 try {
   const configurations = [
     ['baseline', 'core', 'baseline'],
+    ['attestation', 'attestation', 'full'],
     ['cognitive', 'cognitive', 'full'],
     ['core', 'core', 'full'],
     ['full', 'full', 'full'],
@@ -104,6 +105,9 @@ try {
     shareOf1mContext: surface.schemaTokens / 1_000_000,
   }));
   const cognitive = enriched.find((surface) => surface.name === 'cognitive');
+  const attestation = enriched.find(
+    (surface) => surface.name === 'attestation'
+  );
   const core = enriched.find((surface) => surface.name === 'core');
   const body = {
     schemaVersion: 'ucr.mcp-context-audit/1',
@@ -120,6 +124,9 @@ try {
       defaultProfile: 'core',
       graphCaptureProfile: 'cognitive',
       graphCaptureTools: cognitive.tools,
+      attestationProfile: 'attestation',
+      attestationTools: attestation.tools,
+      attestationSchemaTokens: attestation.schemaTokens,
       fullCatalogTools: full.tools,
       graphCaptureSchemaTokens: cognitive.schemaTokens,
       defaultCoreSchemaTokens: core.schemaTokens,
@@ -132,8 +139,10 @@ try {
         'Every enabled MCP server adds its own tool schemas and instructions; client isolation must disable unrelated servers during evals.',
     },
     passed:
-      cognitive.tools === 4 &&
-      full.tools === 102 &&
+      attestation.tools === 1 &&
+      cognitive.tools === 5 &&
+      full.tools === 103 &&
+      attestation.schemaTokens < cognitive.schemaTokens &&
       cognitive.schemaTokens < core.schemaTokens &&
       core.schemaTokens < full.schemaTokens,
     limitations: [

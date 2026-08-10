@@ -185,10 +185,24 @@ check(
     : 'not assembled'
 );
 check(
-  'live cross-client smoke covers three passing directions without raw transcripts',
+  'stateful cross-model smoke passes both primary directions and retains the blocked edge',
   evidenceIndexValid &&
-    evidenceIndex.summary.liveDirectionsPassed === 3 &&
-    evidenceIndex.summary.liveDirectionsAttempted === 3,
+    evidenceIndex.summary.liveDirectionsPassed === 2 &&
+    evidenceIndex.summary.liveDirectionsAttempted === 3 &&
+    evidenceIndex.summary.liveDirectionMetrics
+      .filter((item) => item.passed)
+      .every(
+        (item) =>
+          item.predecessorMistakeObserved &&
+          item.predecessorCorrectionVerified &&
+          item.delivered &&
+          item.runtimeCorrect &&
+          !item.repeatedFailure &&
+          item.consumerStaticSchemaTokens === 0
+      ) &&
+    evidenceIndex.summary.liveDirectionMetrics.some(
+      (item) => item.direction === 'claude-code->copilot' && !item.passed
+    ),
   evidenceIndex?.summary
 );
 check(
@@ -394,13 +408,17 @@ const planner = new RetrievalPlanner({ graph: graphA });
 const context = new ContextVM({ planner, hardMaximumTokens: 512 });
 const page = context.page(
   { text: 'generated source failure' },
-  { taskId: 'verification-task', trigger: 'pre-tool' },
-  { budget: 128 }
+  {
+    projectId: 'cert-project',
+    workspaceId: 'cert-workspace',
+    trigger: 'pre-tool',
+  },
+  { budget: 384 }
 );
 check(
   'applicable context capsule is delivered within the decision budget',
-  page.action === 'deliver' && page.tokens <= 128,
-  { action: page.action, tokens: page.tokens, maximum: 128 }
+  page.action === 'deliver' && page.tokens <= 384,
+  { action: page.action, tokens: page.tokens, maximum: 384 }
 );
 
 // Workstream 7: stale checkpoints are detected before authorizing an action.

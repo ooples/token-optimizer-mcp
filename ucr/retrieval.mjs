@@ -73,6 +73,15 @@ function cosine(left, right) {
   return a && b ? dot / (a * b) : 0;
 }
 
+function scopeCompatibility(object, context) {
+  const reasons = [];
+  for (const field of ['taskId', 'projectId', 'workspaceId']) {
+    if (object.scope?.[field] && object.scope[field] !== context?.[field])
+      reasons.push(`${field} scope mismatch`);
+  }
+  return { compatible: reasons.length === 0, reasons };
+}
+
 export const RETRIEVAL_KERNELS = Object.freeze([
   'bm25',
   'vector',
@@ -82,6 +91,7 @@ export const RETRIEVAL_KERNELS = Object.freeze([
   'procedure',
   'checkpoint',
   'global',
+  'scope',
 ]);
 
 const DEFAULT_ROUTES = Object.freeze({
@@ -249,12 +259,44 @@ export class RetrievalPlanner {
           path: ['global', object.id],
         }));
     });
+    this.register('scope', ({ context = {} }) =>
+      [...this.graph.objects.values()]
+        .filter((object) => {
+          if (!context.taskId || object.scope?.taskId !== context.taskId)
+            return false;
+          if (
+            context.projectId &&
+            object.scope?.projectId &&
+            object.scope.projectId !== context.projectId
+          )
+            return false;
+          if (
+            context.workspaceId &&
+            object.scope?.workspaceId &&
+            object.scope.workspaceId !== context.workspaceId
+          )
+            return false;
+          return true;
+        })
+        .map((object) => ({
+          object,
+          score: 1,
+          path: ['scope', object.id],
+        }))
+    );
   }
 
   plan(query, context = {}, { minimumScore = 0.35, limit = 10 } = {}) {
     const family = classifyQuery(query);
-    const selected =
+    const routed =
       this.router?.routes?.[family] || DEFAULT_ROUTES[family] || ['bm25'];
+    // Exact task identity is a high-precision retrieval signal. Without it, a
+    // successor can miss the only applicable object merely by paraphrasing the
+    // predecessor's trigger. Compatibility filtering still enforces project
+    // and workspace isolation before the candidate can be selected.
+    const selected = context.taskId
+      ? [...new Set(['scope', ...routed])]
+      : routed;
     const started = Date.now();
     const union = new Map();
     const excluded = [];
@@ -265,9 +307,15 @@ export class RetrievalPlanner {
           embedding: query?.embedding,
           anchors: context.anchors,
           seeds: context.seeds,
+          context,
         }) || [];
       for (const row of rows) {
-        const compatibility = this.compatibility(row.object, context);
+        const scoped = scopeCompatibility(row.object, context);
+        const configured = this.compatibility(row.object, context);
+        const compatibility = {
+          compatible: scoped.compatible && configured.compatible,
+          reasons: [...scoped.reasons, ...(configured.reasons || [])],
+        };
         if (!compatibility.compatible) {
           excluded.push({
             objectId: row.object.id,

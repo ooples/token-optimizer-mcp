@@ -1,8 +1,8 @@
 {
   "schemaVersion": "ucr.mcp-context-audit/1",
   "evidenceClass": "native-tokenized-real-tools-list-conformance-not-model-effectiveness",
-  "executedAt": "2026-08-09T23:17:42.850Z",
-  "serverSourceHash": "03df5cd6c5a2b641f4b9440b345876e42774f8d48ac2db7fabad3fefcfa289d5",
+  "executedAt": "2026-08-10T01:55:36.773Z",
+  "serverSourceHash": "ba1741d4028e6d7d14a4fa00e59db5fb12f5bdad7205f7397b6683733f50308c",
   "surfaces": [
     {
       "name": "baseline",
@@ -13,27 +13,43 @@
       "schemaBytes": 2,
       "schemaTokens": 1,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.9999673127839702,
+      "reductionVsFull": 0.9999673905954477,
       "shareOf128kContext": 0.0000078125,
       "shareOf1mContext": 0.000001
+    },
+    {
+      "name": "attestation",
+      "profile": "attestation",
+      "arm": "full",
+      "tools": 1,
+      "toolNames": [
+        "context_receipt_verify"
+      ],
+      "schemaBytes": 382,
+      "schemaTokens": 71,
+      "tokenAccounting": "tiktoken:cl100k_base",
+      "reductionVsFull": 0.9976847322767887,
+      "shareOf128kContext": 0.0005546875,
+      "shareOf1mContext": 0.000071
     },
     {
       "name": "cognitive",
       "profile": "cognitive",
       "arm": "full",
-      "tools": 4,
+      "tools": 5,
       "toolNames": [
         "context_page",
+        "context_receipt_verify",
         "cognition_record",
         "checkpoint_handoff",
         "outcome_report"
       ],
-      "schemaBytes": 5501,
-      "schemaTokens": 1162,
+      "schemaBytes": 5895,
+      "schemaTokens": 1235,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.9620174549733599,
-      "shareOf128kContext": 0.009078125,
-      "shareOf1mContext": 0.001162
+      "reductionVsFull": 0.959727385377943,
+      "shareOf128kContext": 0.0096484375,
+      "shareOf1mContext": 0.001235
     },
     {
       "name": "core",
@@ -63,7 +79,7 @@
       "schemaBytes": 23367,
       "schemaTokens": 4815,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.8426110548164613,
+      "reductionVsFull": 0.8429857170808062,
       "shareOf128kContext": 0.0376171875,
       "shareOf1mContext": 0.004815
     },
@@ -71,7 +87,7 @@
       "name": "full",
       "profile": "full",
       "arm": "full",
-      "tools": 102,
+      "tools": 103,
       "toolNames": [
         "smart_complexity",
         "smart_dependencies",
@@ -94,6 +110,7 @@
         "wiki_write",
         "wiki_read",
         "context_page",
+        "context_receipt_verify",
         "cognition_record",
         "checkpoint_handoff",
         "outcome_report",
@@ -176,24 +193,27 @@
         "optimization_storage",
         "context_delta"
       ],
-      "schemaBytes": 148116,
-      "schemaTokens": 30593,
+      "schemaBytes": 148510,
+      "schemaTokens": 30666,
       "tokenAccounting": "tiktoken:cl100k_base",
       "reductionVsFull": 0,
-      "shareOf128kContext": 0.2390078125,
-      "shareOf1mContext": 0.030593
+      "shareOf128kContext": 0.239578125,
+      "shareOf1mContext": 0.030666
     }
   ],
   "findings": {
     "defaultProfile": "core",
     "graphCaptureProfile": "cognitive",
-    "graphCaptureTools": 4,
-    "fullCatalogTools": 102,
-    "graphCaptureSchemaTokens": 1162,
+    "graphCaptureTools": 5,
+    "attestationProfile": "attestation",
+    "attestationTools": 1,
+    "attestationSchemaTokens": 71,
+    "fullCatalogTools": 103,
+    "graphCaptureSchemaTokens": 1235,
     "defaultCoreSchemaTokens": 4815,
-    "fullCatalogSchemaTokens": 30593,
-    "graphCaptureReductionVsFull": 0.9620174549733599,
-    "graphCaptureReductionVsCore": 0.7586708203530633,
+    "fullCatalogSchemaTokens": 30666,
+    "graphCaptureReductionVsFull": 0.959727385377943,
+    "graphCaptureReductionVsCore": 0.7435098650051921,
     "appliesToRegisteredClients": 16,
     "userMcpServersAreAdditive": "Every enabled MCP server adds its own tool schemas and instructions; client isolation must disable unrelated servers during evals."
   },
@@ -203,5 +223,5 @@
     "client hosts may add wrappers, instructions, resources, or other MCP servers beyond this server response",
     "model effectiveness and empty-session p95 overhead require paired live provider runs"
   ],
-  "reportHash": "1860a2a38a1bb086a33273661f5c04296d1786aa6d3a206721551e6ed25f625a"
+  "reportHash": "131c7eef68a9f4aa864afdeeb601ad97f94d957cc6a4cd9bba306ec36a1f695a"
 }

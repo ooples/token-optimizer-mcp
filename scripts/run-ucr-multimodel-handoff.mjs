@@ -22,8 +22,12 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   EventStore,
+  PreActionController,
+  SEMANTIC_HARVEST_FAILURE_SCHEMA,
+  SemanticHarvestController,
   canonicalJson,
   createEvidenceRun,
+  createTiktokenCounter,
   sealEvidenceLedger,
   sha256,
   signGraderReceipt,
@@ -154,8 +158,8 @@ if (!options.execute) {
         directions: directions.map(
           ([producer, consumer]) => `${producer}->${consumer}`
         ),
-        modelInvocations: directions.length * 3,
-        note: 'Each direction uses a paid blinded control, producer, and consumer invocation.',
+        modelInvocations: directions.length * 4,
+        note: 'Each direction uses a paid stateful control, predecessor, semantic-harvest, and fresh-consumer invocation.',
       },
       null,
       2
@@ -215,7 +219,143 @@ function run(command, args, { cwd = ROOT, env = process.env } = {}) {
   });
 }
 
-function collectUsage(text) {
+function runContextPreflight(request, context) {
+  const started = Date.now();
+  const child = spawnSync(
+    process.execPath,
+    [join(ROOT, 'scripts', 'ucr-context-preflight.mjs')],
+    {
+      cwd: context.workspace,
+      env: { ...process.env, ...context.environment },
+      input: JSON.stringify(request),
+      encoding: 'utf8',
+      timeout: 30_000,
+      windowsHide: true,
+    }
+  );
+  if (child.status !== 0) {
+    throw new Error(
+      `adapter preflight failed before consumer invocation: ${String(
+        child.stderr || child.error?.message || ''
+      ).trim()}`
+    );
+  }
+  try {
+    return {
+      ...JSON.parse(child.stdout),
+      preflightProcessLatencyMs: Date.now() - started,
+    };
+  } catch (error) {
+    throw new Error(`adapter preflight returned invalid JSON: ${error.message}`);
+  }
+}
+
+function runCognitionSidecar(request, context) {
+  const child = spawnSync(
+    process.execPath,
+    [join(ROOT, 'scripts', 'ucr-cognition-sidecar.mjs')],
+    {
+      cwd: context.workspace,
+      env: { ...process.env, ...context.environment },
+      input: JSON.stringify(request),
+      encoding: 'utf8',
+      timeout: 30_000,
+      windowsHide: true,
+    }
+  );
+  if (child.status !== 0) {
+    throw new Error(
+      `cognition sidecar failed: ${String(
+        child.stderr || child.error?.message || ''
+      ).trim()}`
+    );
+  }
+  try {
+    return JSON.parse(child.stdout);
+  } catch (error) {
+    throw new Error(`cognition sidecar returned invalid JSON: ${error.message}`);
+  }
+}
+
+function auditToolSurface(profile, stateRoot) {
+  mkdirSync(stateRoot, { recursive: true });
+  const messages = [
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'handoff-surface-audit', version: '1.0.0' },
+      },
+    },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+  ];
+  const child = spawnSync(
+    process.execPath,
+    [join(ROOT, 'dist', 'server', 'index.js')],
+    {
+      cwd: stateRoot,
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_TOOL_PROFILE: profile,
+        TOKEN_OPTIMIZER_CACHE_DIR: join(stateRoot, 'cache'),
+        TOKEN_OPTIMIZER_WIKI_DIR: join(stateRoot, 'wiki'),
+        TOKEN_OPTIMIZER_STATE_DIR: join(stateRoot, 'state'),
+      },
+      input: `${messages.map(JSON.stringify).join('\n')}\n`,
+      encoding: 'utf8',
+      timeout: 30_000,
+      windowsHide: true,
+    }
+  );
+  if (child.status !== 0)
+    throw new Error(`failed to audit ${profile} MCP surface: ${child.stderr}`);
+  const response = child.stdout
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .find((item) => item.id === 2);
+  const tools = response?.result?.tools || [];
+  const counter = createTiktokenCounter('cl100k_base');
+  try {
+    return {
+      profile,
+      toolNames: tools.map((tool) => tool.name),
+      schemaTokens: counter.count(tools),
+      tokenAccounting: counter.method,
+    };
+  } finally {
+    counter.close();
+  }
+}
+
+function collectUsage(text, client = null) {
+  if (client === 'claude-code') {
+    try {
+      const parsed = JSON.parse(text);
+      const usage = parsed.usage || {};
+      const inputTokens =
+        (Number(usage.input_tokens) || 0) +
+        (Number(usage.cache_creation_input_tokens) || 0) +
+        (Number(usage.cache_read_input_tokens) || 0);
+      const outputTokens = Number(usage.output_tokens) || 0;
+      return {
+        inputTokens,
+        cachedInputTokens: Number(usage.cache_read_input_tokens) || 0,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        costUsd: Number.isFinite(parsed.total_cost_usd)
+          ? parsed.total_cost_usd
+          : null,
+        tokenAccounting: 'provider-cli-native-logical-input',
+      };
+    } catch {
+      // Fall through to the generic JSON/JSONL collector.
+    }
+  }
   const values = {};
   const visit = (value) => {
     if (!value || typeof value !== 'object') return;
@@ -257,6 +397,23 @@ function collectUsage(text) {
   };
 }
 
+function aggregateUsage(runs, client) {
+  const usage = runs.map((run) => collectUsage(run.stdout, client));
+  const sum = (key) => {
+    const values = usage.map((item) => item[key]).filter(Number.isFinite);
+    return values.length ? values.reduce((total, value) => total + value, 0) : null;
+  };
+  return {
+    inputTokens: sum('inputTokens'),
+    cachedInputTokens: sum('cachedInputTokens'),
+    outputTokens: sum('outputTokens'),
+    totalTokens: sum('totalTokens'),
+    costUsd: sum('costUsd'),
+    tokenAccounting: 'provider-cli-native',
+    invocations: runs.length,
+  };
+}
+
 function copyCopilotAuthentication(configDirectory) {
   const source = join(homedir(), '.copilot', 'config.json');
   if (!existsSync(source))
@@ -295,24 +452,109 @@ function tomlLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
+function configureClaudeContextPlugin(workspace, trustedContext) {
+  const pluginRoot = join(workspace, 'ucr-preaction-plugin');
+  const manifestDirectory = join(pluginRoot, '.claude-plugin');
+  const hooksDirectory = join(pluginRoot, 'hooks');
+  mkdirSync(manifestDirectory, { recursive: true });
+  mkdirSync(hooksDirectory, { recursive: true });
+  writeFileSync(
+    join(manifestDirectory, 'plugin.json'),
+    `${JSON.stringify(
+      {
+        name: 'ucr-preaction-context',
+        description: 'Injects host-retrieved UCR context at SessionStart.',
+        version: '1.0.0',
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+  writeFileSync(
+    join(hooksDirectory, 'hooks.json'),
+    `${JSON.stringify(
+      {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  command:
+                    'node "${CLAUDE_PLUGIN_ROOT}/hooks/inject-context.mjs"',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+  writeFileSync(
+    join(hooksDirectory, 'context.json'),
+    `${JSON.stringify({ trustedContext })}\n`,
+    'utf8'
+  );
+  writeFileSync(
+    join(hooksDirectory, 'inject-context.mjs'),
+    [
+      "import { readFileSync } from 'node:fs';",
+      "import { dirname, join } from 'node:path';",
+      "import { fileURLToPath } from 'node:url';",
+      'const here = dirname(fileURLToPath(import.meta.url));',
+      "const { trustedContext } = JSON.parse(readFileSync(join(here, 'context.json'), 'utf8'));",
+      "process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: trustedContext } }));",
+      '',
+    ].join('\n'),
+    'utf8'
+  );
+  return pluginRoot;
+}
+
 async function invoke(client, role, prompt, context) {
   const invocation = commands[client];
+  const processEnvironment = { ...process.env, ...context.environment };
+  const attestationEnvironment = context.attestation
+    ? {
+        ...context.environment,
+        TOKEN_OPTIMIZER_TOOL_PROFILE: 'attestation',
+      }
+    : context.environment;
   if (client === 'codex') {
+    const outputSchemaPath = context.outputSchema
+      ? join(context.workspace, 'semantic-output-schema.json')
+      : null;
+    if (outputSchemaPath)
+      writeFileSync(
+        outputSchemaPath,
+        `${JSON.stringify(context.outputSchema, null, 2)}\n`,
+        'utf8'
+      );
+    const trustedArgs = context.trustedContext
+      ? [
+          '-c',
+          `developer_instructions=${tomlLiteral(context.trustedContext)}`,
+        ]
+      : [];
     const mcpArgs =
-      role === 'baseline'
-        ? []
-        : [
+      role === 'producer' || context.attestation
+        ? [
             '-c',
             `mcp_servers.token-optimizer.command=${tomlLiteral(process.execPath)}`,
             '-c',
             `mcp_servers.token-optimizer.args=[${tomlLiteral(join(ROOT, 'dist', 'server', 'index.js'))}]`,
             '-c',
             `mcp_servers.token-optimizer.env={${Object.entries(
-              context.environment
+              attestationEnvironment
             )
               .map(([key, value]) => `${key}=${tomlLiteral(value)}`)
               .join(',')}}`,
-          ];
+          ]
+        : [];
     return run(
       invocation.command,
       [
@@ -325,10 +567,12 @@ async function invoke(client, role, prompt, context) {
         '--dangerously-bypass-approvals-and-sandbox',
         '--model',
         clients[client].model,
+        ...(outputSchemaPath ? ['--output-schema', outputSchemaPath] : []),
+        ...trustedArgs,
         ...mcpArgs,
         prompt,
       ],
-      { cwd: context.workspace }
+      { cwd: context.workspace, env: processEnvironment }
     );
   }
   if (client === 'claude-code') {
@@ -344,10 +588,9 @@ async function invoke(client, role, prompt, context) {
       '--no-session-persistence',
       '--setting-sources',
       'local',
-      '--permission-mode',
-      'dontAsk',
+      '--dangerously-skip-permissions',
     ];
-    if (role !== 'baseline') {
+    if (role === 'producer' || context.attestation) {
       args.push(
         '--strict-mcp-config',
         '--mcp-config',
@@ -356,17 +599,27 @@ async function invoke(client, role, prompt, context) {
             'token-optimizer': {
               command: process.execPath,
               args: [join(ROOT, 'dist', 'server', 'index.js')],
-              env: context.environment,
+              env: attestationEnvironment,
             },
           },
         }),
         '--allowedTools',
-        role === 'producer'
-          ? 'mcp__token-optimizer__cognition_record'
-          : 'mcp__token-optimizer__context_page'
+        context.attestation
+          ? 'mcp__token-optimizer__context_receipt_verify'
+          : 'mcp__token-optimizer__cognition_record'
       );
     }
-    return run(invocation.command, args, { cwd: context.workspace });
+    if (context.outputSchema)
+      args.push('--json-schema', JSON.stringify(context.outputSchema));
+    if (context.trustedContext)
+      args.push(
+        '--plugin-dir',
+        configureClaudeContextPlugin(context.workspace, context.trustedContext)
+      );
+    return run(invocation.command, args, {
+      cwd: context.workspace,
+      env: processEnvironment,
+    });
   }
   const configDirectory = join(context.workspace, 'copilot-config');
   copyCopilotAuthentication(configDirectory);
@@ -374,10 +627,13 @@ async function invoke(client, role, prompt, context) {
     '--disable-mcp-server',
     name,
   ]);
+  const effectivePrompt = context.trustedContext
+    ? `${context.trustedContext}\n\n${prompt}`
+    : prompt;
   const args = [
     ...invocation.prefix,
     '--prompt',
-    prompt,
+    effectivePrompt,
     '--silent',
     '--model',
     clients[client].model,
@@ -393,7 +649,7 @@ async function invoke(client, role, prompt, context) {
     'off',
     '--allow-all-tools',
   ];
-  if (role !== 'baseline') {
+  if (role === 'producer' || context.attestation) {
     args.push(
       '--additional-mcp-config',
       JSON.stringify({
@@ -402,26 +658,34 @@ async function invoke(client, role, prompt, context) {
             type: 'local',
             command: process.execPath,
             args: [join(ROOT, 'dist', 'server', 'index.js')],
-            env: context.environment,
-            tools: ['*'],
+            env: attestationEnvironment,
+            tools: context.attestation
+              ? ['context_receipt_verify']
+              : ['cognition_record'],
           },
         },
       })
     );
   }
-  return run(invocation.command, args, { cwd: context.workspace });
+  return run(invocation.command, args, {
+    cwd: context.workspace,
+    env: processEnvironment,
+  });
 }
 
 function finalResponse(client, stdout) {
   const normalize = (value) => {
     const text = String(value).trim();
-    const answers = text.match(/RECOVERY_CODE=[A-Z0-9-]+/g);
+    const answers = text.match(/IMPLEMENTATION_CHOICE=[A-Z0-9-]+/g);
     return answers?.at(-1) || text;
   };
   if (client === 'copilot') return normalize(stdout);
   if (client === 'claude-code') {
     try {
-      return normalize(JSON.parse(stdout).result || '');
+      const parsed = JSON.parse(stdout);
+      if (parsed.structured_output)
+        return JSON.stringify(parsed.structured_output);
+      return normalize(parsed.result || '');
     } catch {
       return normalize(stdout);
     }
@@ -439,6 +703,10 @@ function finalResponse(client, stdout) {
 }
 
 const temporary = mkdtempSync(join(tmpdir(), 'ucr-multimodel-live-'));
+const attestationSurface = auditToolSurface(
+  'attestation',
+  join(temporary, 'attestation-surface-audit')
+);
 const results = [];
 const attemptsPath = join(
   dirname(options.output),
@@ -447,26 +715,174 @@ const attemptsPath = join(
 mkdirSync(dirname(options.output), { recursive: true });
 const graderSecret = randomBytes(32).toString('hex');
 
-function executeRecoveryFixture({ taskId, recoveryCode, staleCode }) {
-  const expectedCode = recoveryCode;
-  const staleAttemptAccepted = staleCode === expectedCode;
-  const correctedAttemptAccepted = recoveryCode === expectedCode;
-  if (staleAttemptAccepted || !correctedAttemptAccepted) {
-    throw new Error(
-      'deterministic recovery fixture did not exercise fail then pass'
-    );
-  }
+const fixtureBanner = '// GENERATED FROM hooks-core; DO NOT EDIT DIRECTLY.\n';
+
+function fixtureSource(taskId, mode) {
+  return [
+    `export const taskId = '${taskId}';`,
+    `export const mode = '${mode}';`,
+    '',
+  ].join('\n');
+}
+
+function prepareImplementationWorkspace(root, taskId) {
+  const sourcePath = join(root, 'hooks-core', 'inject.mjs');
+  const generatedPath = join(
+    root,
+    'integrations',
+    'codex',
+    'hooks',
+    'lib',
+    'inject.mjs'
+  );
+  const syncPath = join(root, 'scripts', 'sync-hooks.mjs');
+  const verifyPath = join(root, 'scripts', 'verify-hooks.mjs');
+  mkdirSync(dirname(sourcePath), { recursive: true });
+  mkdirSync(dirname(generatedPath), { recursive: true });
+  mkdirSync(dirname(syncPath), { recursive: true });
+  const initialSource = fixtureSource(taskId, 'legacy');
+  const syncScript = [
+    "import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';",
+    "import { dirname, join } from 'node:path';",
+    "import { fileURLToPath } from 'node:url';",
+    "const root = join(dirname(fileURLToPath(import.meta.url)), '..');",
+    "const sourcePath = join(root, 'hooks-core', 'inject.mjs');",
+    "const generatedPath = join(root, 'integrations', 'codex', 'hooks', 'lib', 'inject.mjs');",
+    "const source = readFileSync(sourcePath, 'utf8');",
+    "const generatedBefore = readFileSync(generatedPath, 'utf8');",
+    "const mode = (text) => /export const mode = ['\"]([^'\"]+)['\"]/.exec(text)?.[1] || null;",
+    'if (process.env.UCR_FIXTURE_AUDIT_LOG) {',
+    "  appendFileSync(process.env.UCR_FIXTURE_AUDIT_LOG, `${JSON.stringify({ operation: 'sync', sourceMode: mode(source), generatedModeBeforeSync: mode(generatedBefore) })}\\n`, 'utf8');",
+    '}',
+    'mkdirSync(dirname(generatedPath), { recursive: true });',
+    `writeFileSync(generatedPath, ${JSON.stringify(fixtureBanner)} + source, 'utf8');`,
+    '',
+  ].join('\n');
+  const verifyScript = [
+    "import { appendFileSync, readFileSync } from 'node:fs';",
+    "import { dirname, join } from 'node:path';",
+    "import { fileURLToPath } from 'node:url';",
+    "import { spawnSync } from 'node:child_process';",
+    "const root = join(dirname(fileURLToPath(import.meta.url)), '..');",
+    "const sync = spawnSync(process.execPath, [join(root, 'scripts', 'sync-hooks.mjs')], { env: process.env, encoding: 'utf8' });",
+    "const source = readFileSync(join(root, 'hooks-core', 'inject.mjs'), 'utf8');",
+    "const generated = readFileSync(join(root, 'integrations', 'codex', 'hooks', 'lib', 'inject.mjs'), 'utf8');",
+    `const passed = sync.status === 0 && source.includes("export const mode = 'hardened'") && generated === ${JSON.stringify(fixtureBanner)} + source;`,
+    'if (process.env.UCR_FIXTURE_AUDIT_LOG) {',
+    "  appendFileSync(process.env.UCR_FIXTURE_AUDIT_LOG, `${JSON.stringify({ operation: 'verify', passed })}\\n`, 'utf8');",
+    '}',
+    "process.stdout.write(passed ? 'verification passed\\n' : 'verification failed\\n');",
+    'process.exitCode = passed ? 0 : 1;',
+    '',
+  ].join('\n');
+  writeFileSync(sourcePath, initialSource, 'utf8');
+  writeFileSync(generatedPath, `${fixtureBanner}${initialSource}`, 'utf8');
+  writeFileSync(syncPath, syncScript, 'utf8');
+  writeFileSync(verifyPath, verifyScript, 'utf8');
   return {
-    trigger: `continuing recovery task ${taskId}`,
-    attemptedAction: `apply recovery code ${staleCode}`,
-    observedFailure: `deterministic fixture rejected ${staleCode}`,
+    root,
+    sourcePath,
+    generatedPath,
+    syncPath,
+    verifyPath,
+    protectedHashes: {
+      sync: sha256(syncScript),
+      verify: sha256(verifyScript),
+    },
+  };
+}
+
+function readFixtureAudit(path) {
+  if (!existsSync(path)) return [];
+  return readFileSync(path, 'utf8')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function gradeImplementationWorkspace(fixture) {
+  const protectedFilesUnchanged =
+    sha256(readFileSync(fixture.syncPath, 'utf8')) ===
+      fixture.protectedHashes.sync &&
+    sha256(readFileSync(fixture.verifyPath, 'utf8')) ===
+      fixture.protectedHashes.verify;
+  if (!protectedFilesUnchanged) {
+    return {
+      passed: false,
+      protectedFilesUnchanged: false,
+      reason: 'fixture sync or verifier was modified',
+    };
+  }
+  const verification = spawnSync(process.execPath, [fixture.verifyPath], {
+    cwd: fixture.root,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  const source = readFileSync(fixture.sourcePath, 'utf8');
+  const generated = readFileSync(fixture.generatedPath, 'utf8');
+  const canonicalSourceChanged = source.includes(
+    "export const mode = 'hardened'"
+  );
+  const generatedSynchronized = generated === `${fixtureBanner}${source}`;
+  return {
+    passed:
+      verification.status === 0 &&
+      canonicalSourceChanged &&
+      generatedSynchronized,
+    protectedFilesUnchanged,
+    canonicalSourceChanged,
+    generatedSynchronized,
+    verifierExitCode: verification.status,
+    verifierOutput: String(verification.stdout || '').trim(),
+    sourceHash: sha256(source),
+    generatedHash: sha256(generated),
+  };
+}
+
+function predecessorObservations({
+  taskId,
+  recoveryCode,
+  staleCode,
+  auditEvents,
+  finalGrade,
+}) {
+  const staleIndex = auditEvents.findIndex(
+    (event) =>
+      event.operation === 'sync' &&
+      event.sourceMode === 'legacy' &&
+      event.generatedModeBeforeSync === 'hardened'
+  );
+  const failedIndex = auditEvents.findIndex(
+    (event, index) =>
+      index > staleIndex && event.operation === 'verify' && !event.passed
+  );
+  const correctionIndex = auditEvents.findIndex(
+    (event, index) =>
+      index > failedIndex &&
+      event.operation === 'sync' &&
+      event.sourceMode === 'hardened'
+  );
+  const passedIndex = auditEvents.findIndex(
+    (event, index) =>
+      index > correctionIndex && event.operation === 'verify' && event.passed
+  );
+  const staleAttemptObserved = staleIndex >= 0 && failedIndex > staleIndex;
+  const correctionObserved =
+    correctionIndex > failedIndex && passedIndex > correctionIndex;
+  return {
+    trigger: `continuing implementation task ${taskId}`,
+    attemptedAction: `apply implementation choice ${staleCode}`,
+    observedFailure: `regeneration verifier rejected ${staleCode} after overwriting the direct generated-hook edit`,
     rootCause:
-      'the attempted code did not match the hidden expected recovery code',
-    correction: `apply verified recovery code ${recoveryCode}`,
-    verificationEvidence: `deterministic fixture accepted ${recoveryCode} after rejecting ${staleCode}`,
-    expectedOutcome: `task ${taskId} recovers without repeating ${staleCode}`,
-    staleAttemptAccepted,
-    correctedAttemptAccepted,
+      'client hook copies are generated from hooks-core and direct edits do not survive synchronization',
+    correction: `apply verified implementation choice ${recoveryCode}`,
+    verificationEvidence: `external audit observed failed regeneration followed by a passing end-state grade for ${recoveryCode}`,
+    expectedOutcome: `task ${taskId} updates hooks-core, regenerates clients, and does not repeat ${staleCode}`,
+    staleAttemptObserved,
+    correctionObserved,
+    correctedAttemptAccepted: correctionObserved && finalGrade.passed,
+    auditHash: sha256(auditEvents),
+    finalGrade,
   };
 }
 
@@ -474,18 +890,68 @@ try {
   for (const [producerClient, consumerClient] of directions) {
     const nonce = randomBytes(8).toString('hex');
     const taskId = `multimodel-${producerClient}-${consumerClient}-${nonce}`;
-    const recoveryCode = `GREEN-${randomBytes(12).toString('hex').toUpperCase()}`;
-    const staleCode = `STALE-${randomBytes(8).toString('hex').toUpperCase()}`;
+    const recoveryCode = 'EDIT-HOOKS-CORE-THEN-SYNC';
+    const staleCode = 'EDIT-GENERATED-CLIENT-HOOK';
     const projectId = `ucr-multimodel-${nonce}`;
     const ucrRoot = join(temporary, taskId, 'ucr');
-    const observations = executeRecoveryFixture({
+    const workspace = (role, client) => {
+      const path = join(temporary, taskId, `${role}-${client}`);
+      mkdirSync(path, { recursive: true });
+      return path;
+    };
+    const predecessorWorkspace = workspace('predecessor', producerClient);
+    const predecessorAuditPath = join(
+      temporary,
+      taskId,
+      'predecessor-audit.jsonl'
+    );
+    const predecessorFixture = prepareImplementationWorkspace(
+      predecessorWorkspace,
+      taskId
+    );
+    const predecessorPrompt = [
+      `Complete implementation task ${taskId} in this repository.`,
+      "The generated client hook currently exports mode='legacy'; the required end state is mode='hardened' and must survive regeneration.",
+      'For this predecessor-mistake fixture, perform this exact sequence with your file and shell tools:',
+      "1. Edit only integrations/codex/hooks/lib/inject.mjs to mode='hardened', then run node scripts/verify-hooks.mjs and observe the expected failure.",
+      "2. Correct the mistake by editing hooks-core/inject.mjs to mode='hardened', then run node scripts/verify-hooks.mjs and observe success.",
+      'Do not modify scripts/sync-hooks.mjs or scripts/verify-hooks.mjs.',
+      `Finish with IMPLEMENTATION_CHOICE=${recoveryCode}.`,
+    ].join('\n');
+    console.log(
+      `running ${producerClient}->${consumerClient} stateful predecessor mistake and correction...`
+    );
+    const predecessor = await invoke(
+      producerClient,
+      'predecessor',
+      predecessorPrompt,
+      {
+        workspace: predecessorWorkspace,
+        environment: {
+          UCR_FIXTURE_AUDIT_LOG: predecessorAuditPath,
+        },
+      }
+    );
+    const predecessorGrade = gradeImplementationWorkspace(predecessorFixture);
+    const observations = predecessorObservations({
       taskId,
       recoveryCode,
       staleCode,
+      auditEvents: readFixtureAudit(predecessorAuditPath),
+      finalGrade: predecessorGrade,
     });
+    if (
+      predecessor.exitCode !== 0 ||
+      !observations.staleAttemptObserved ||
+      !observations.correctedAttemptAccepted
+    ) {
+      throw new Error(
+        `${producerClient} did not complete the authenticated fail-then-correct predecessor fixture`
+      );
+    }
     const receipt = signGraderReceipt(
       {
-        graderId: 'ucr-hidden-multimodel-recovery-v1',
+        graderId: 'ucr-stateful-multimodel-implementation-v3',
         passed: true,
         artifactHash: sha256({ taskId, observations }),
         taskId,
@@ -501,43 +967,47 @@ try {
       TOKEN_OPTIMIZER_WORKSPACE_ID: `workspace:${projectId}`,
       TOKEN_OPTIMIZER_GRADER_SECRET: graderSecret,
     };
-    const workspace = (role, client) => {
-      const path = join(temporary, taskId, `${role}-${client}`);
-      mkdirSync(path, { recursive: true });
-      return path;
-    };
+    const controlWorkspace = workspace('control', consumerClient);
+    const consumerWorkspace = workspace('consumer', consumerClient);
+    const controlAuditPath = join(temporary, taskId, 'control-audit.jsonl');
+    const consumerAuditPath = join(temporary, taskId, 'consumer-audit.jsonl');
+    const controlFixture = prepareImplementationWorkspace(
+      controlWorkspace,
+      taskId
+    );
+    const consumerFixture = prepareImplementationWorkspace(
+      consumerWorkspace,
+      taskId
+    );
     const controlPrompt = [
-      'This is a blinded continuity evaluation. Do not inspect files, shell state, user memory, or the internet.',
-      `For task ${taskId}, report the verified recovery code.`,
-      'If no authoritative evidence is present, answer exactly RECOVERY_CODE=ABSTAIN.',
-      'Otherwise answer exactly RECOVERY_CODE=<code>.',
-    ].join('\n');
-    const producerPrompt = [
-      'The user authorized this controlled semantic-harvest evaluation. Do not inspect or edit files and do not use shell tools.',
-      `An external deterministic benchmark runner executed a fail-then-correct fixture for task ${taskId}.`,
-      `First call cognition_record with operation=verify-evidence and this receipt as the only evidenceReceipts item: ${JSON.stringify(receipt)}`,
-      'Do not trust or record the supplied observations unless that tool returns valid=true.',
-      'After successful verification, call cognition_record again with operation=record, kind=failure, the same unchanged receipt, taskId, sessionId=producer-session, and a semanticObject authored from the authenticated observations returned by the verifier.',
-      'The semanticObject must include trigger, attemptedAction, observedFailure, rootCause, correction, verificationEvidence, applicability, nonApplicability, invalidators, scope, confidence, confidenceLabel, and expectedOutcome.',
-      `Applicability must be a non-empty array specific to ${taskId}; nonApplicability must exclude every other task; invalidators must be an array; confidenceLabel must be verified.`,
-      'If verification fails, answer exactly REJECTED. If record schema validation fails, correct it once. After successful activation answer exactly RECORDED.',
+      `Complete implementation task ${taskId} in this repository.`,
+      "Change the hook behavior from mode='legacy' to mode='hardened' so it survives regeneration and node scripts/verify-hooks.mjs passes.",
+      'Inspect the repository, make the necessary edits, and run the verifier.',
+      'Do not modify scripts/sync-hooks.mjs or scripts/verify-hooks.mjs.',
+      'This blinded control has no cross-session task evidence.',
+      'Finish by reporting IMPLEMENTATION_CHOICE=<the approach you used>.',
     ].join('\n');
     const consumerPrompt = [
-      'This is a fresh transcript-free takeover evaluation. Do not inspect files, shell state, user memory, or the internet.',
-      `Call context_page for task ${taskId} before answering, with query asking for its verified failure correction, taskId=${taskId}, trigger=task, and budget=256.`,
-      'Use only delivered evidence. Answer exactly RECOVERY_CODE=<code>, or RECOVERY_CODE=ABSTAIN if no applicable evidence is delivered.',
-      'Never output the failed stale code.',
+      `Take over and complete implementation task ${taskId} in this repository.`,
+      "Change the hook behavior from mode='legacy' to mode='hardened' so it survives regeneration and node scripts/verify-hooks.mjs passes.",
+      'The user authorizes the installed Token Optimizer adapter and its scope-matched, externally verified pre-action context.',
+      'Corroborate that context with the local files, make the edits, and run the verifier.',
+      'Do not modify scripts/sync-hooks.mjs or scripts/verify-hooks.mjs.',
+      'Do not repeat a rejected predecessor action.',
+      'Finish by reporting IMPLEMENTATION_CHOICE=<the approach you used>.',
     ].join('\n');
 
     console.log(
       `running ${producerClient}->${consumerClient} blinded control...`
     );
     const control = await invoke(consumerClient, 'baseline', controlPrompt, {
-      workspace: workspace('control', consumerClient),
-      environment: {},
+      workspace: controlWorkspace,
+      environment: { UCR_FIXTURE_AUDIT_LOG: controlAuditPath },
     });
-    console.log(`running ${producerClient}->${consumerClient} producer...`);
-    const producer = await invoke(producerClient, 'producer', producerPrompt, {
+    console.log(
+      `running ${producerClient}->${consumerClient} authenticated model-authored harvest...`
+    );
+    const producerContext = {
       workspace: workspace('producer', producerClient),
       environment: {
         ...baseEnvironment,
@@ -545,17 +1015,91 @@ try {
         TOKEN_OPTIMIZER_AGENT_ID: `producer-${producerClient}`,
         TOKEN_OPTIMIZER_MODEL: clients[producerClient].model,
       },
+    };
+    const producerRuns = [];
+    const harvestController = new SemanticHarvestController({
+      verifyEvidence: async ({ evidenceReceipts }) =>
+        runCognitionSidecar(
+          { operation: 'verify-evidence', evidenceReceipts },
+          producerContext
+        ),
+      persist: async (request) =>
+        runCognitionSidecar(request, producerContext),
     });
-    console.log(`running ${producerClient}->${consumerClient} consumer...`);
-    const consumer = await invoke(consumerClient, 'consumer', consumerPrompt, {
-      workspace: workspace('consumer', consumerClient),
+    const harvest = await harvestController.harvest(
+      {
+        kind: 'failure',
+        evidenceReceipts: [receipt],
+        taskId,
+        sessionId: 'producer-session',
+        scope: {
+          taskId,
+          projectId,
+          workspaceId: `workspace:${projectId}`,
+        },
+      },
+      async ({ prompt }) => {
+        const modelRun = await invoke(
+          producerClient,
+          'harvester',
+          prompt,
+          {
+            ...producerContext,
+            outputSchema: SEMANTIC_HARVEST_FAILURE_SCHEMA,
+          }
+        );
+        producerRuns.push(modelRun);
+        if (modelRun.exitCode !== 0)
+          throw new Error(`producer model exited ${modelRun.exitCode}`);
+        return finalResponse(producerClient, modelRun.stdout);
+      }
+    );
+    const producer = producerRuns.at(-1);
+    console.log(
+      `running ${producerClient}->${consumerClient} mandatory preflight and consumer...`
+    );
+    const consumerContext = {
+      workspace: consumerWorkspace,
       environment: {
         ...baseEnvironment,
         TOKEN_OPTIMIZER_CLIENT: consumerClient,
         TOKEN_OPTIMIZER_AGENT_ID: `consumer-${consumerClient}`,
         TOKEN_OPTIMIZER_MODEL: clients[consumerClient].model,
+        UCR_FIXTURE_AUDIT_LOG: consumerAuditPath,
       },
+    };
+    const controller = new PreActionController({
+      hardMaximumTokens: 384,
+      injectionChannel:
+        consumerClient === 'claude-code'
+          ? 'claude-session-start-hook-additional-context'
+          : consumerClient === 'codex'
+            ? 'codex-developer-instructions'
+            : 'host-preaction-prompt-envelope',
+      consumerMcpExposed: false,
+      staticSchemaTokens: 0,
+      exposedTools: [],
+      retrieve: async (request) =>
+        runContextPreflight(request, consumerContext),
     });
+    const takeover = await controller.invoke(
+      {
+        query: `continuing implementation task ${taskId}`,
+        taskId,
+        sessionId: 'consumer-session',
+        trigger: 'task',
+        budget: 384,
+        prompt: consumerPrompt,
+      },
+      ({ prompt, trustedContext }) =>
+        invoke(consumerClient, 'consumer', prompt, {
+          ...consumerContext,
+          trustedContext,
+          attestation: false,
+        })
+    );
+    const consumer = takeover.result;
+    const preAction = takeover.preAction;
     const events = new EventStore(ucrRoot).read().events;
     const activated = events.filter(
       (event) => event.type === 'finding.activated'
@@ -565,8 +1109,20 @@ try {
     );
     const controlAnswer = finalResponse(consumerClient, control.stdout);
     const consumerAnswer = finalResponse(consumerClient, consumer.stdout);
-    const controlCorrect = controlAnswer === `RECOVERY_CODE=${recoveryCode}`;
-    const controlAbstained = controlAnswer === 'RECOVERY_CODE=ABSTAIN';
+    const controlGrade = gradeImplementationWorkspace(controlFixture);
+    const consumerGrade = gradeImplementationWorkspace(consumerFixture);
+    const controlAuditEvents = readFixtureAudit(controlAuditPath);
+    const consumerAuditEvents = readFixtureAudit(consumerAuditPath);
+    const generatedOnlyAttempt = (auditEvents) =>
+      auditEvents.some(
+        (event) =>
+          event.operation === 'sync' &&
+          event.sourceMode === 'legacy' &&
+          event.generatedModeBeforeSync === 'hardened'
+      );
+    const controlCorrect = controlGrade.passed;
+    const controlAbstained =
+      controlAnswer === 'IMPLEMENTATION_CHOICE=ABSTAIN';
     const producerRecorded = activated.some(
       (event) =>
         event.actor.client === producerClient &&
@@ -577,20 +1133,43 @@ try {
     );
     const delivered = deliveries.some(
       (event) =>
+        event.eventId === preAction.deliveryEventId &&
         event.actor.client === consumerClient &&
         event.payload?.action === 'deliver' &&
         event.payload?.objectIds?.length > 0
     );
-    const consumerCorrect = consumerAnswer === `RECOVERY_CODE=${recoveryCode}`;
-    const repeatedFailure = consumerAnswer === `RECOVERY_CODE=${staleCode}`;
+    const attested = events.some(
+      (event) =>
+        event.type === 'verification.passed' &&
+        event.actor.client === consumerClient &&
+        event.payload?.operation === 'context-receipt-attestation' &&
+        event.payload?.deliveryEventId === preAction.deliveryEventId
+    );
+    const attestationFailed = events.some(
+      (event) =>
+        event.type === 'verification.failed' &&
+        event.actor.client === consumerClient &&
+        event.payload?.operation === 'context-receipt-attestation' &&
+        event.payload?.deliveryEventId === preAction.deliveryEventId
+    );
+    const consumerCorrect = consumerGrade.passed;
+    const repeatedFailure = generatedOnlyAttempt(consumerAuditEvents);
     const passed =
       control.exitCode === 0 &&
-      producer.exitCode === 0 &&
+      predecessor.exitCode === 0 &&
+      producerRuns.every((run) => run.exitCode === 0) &&
       consumer.exitCode === 0 &&
-      !controlCorrect &&
-      controlAbstained &&
+      observations.staleAttemptObserved &&
+      observations.correctedAttemptAccepted &&
       producerRecorded &&
+      harvest.receipt.modelAuthored &&
+      harvest.receipt.evidenceAuthenticatedBeforeAuthoring &&
       delivered &&
+      preAction.retrievalAttempted &&
+      !preAction.consumerMcpExposed &&
+      preAction.exposedTools.length === 0 &&
+      preAction.staticSchemaTokens === 0 &&
+      !attestationFailed &&
       consumerCorrect &&
       !repeatedFailure;
     const row = {
@@ -607,22 +1186,54 @@ try {
         exitCode: control.exitCode,
         correct: controlCorrect,
         abstained: controlAbstained,
-        usage: collectUsage(control.stdout),
+        mistakeExecuted: generatedOnlyAttempt(controlAuditEvents),
+        outcomeGrade: controlGrade,
+        usage: collectUsage(control.stdout, consumerClient),
         latencyMs: control.latencyMs,
       },
       producer: {
-        exitCode: producer.exitCode,
+        exitCode:
+          predecessor.exitCode === 0 &&
+          producerRuns.every((run) => run.exitCode === 0)
+            ? 0
+            : 1,
         recorded: producerRecorded,
-        usage: collectUsage(producer.stdout),
-        latencyMs: producer.latencyMs,
+        modelAuthored: harvest.receipt.modelAuthored,
+        evidenceAuthenticatedBeforeAuthoring:
+          harvest.receipt.evidenceAuthenticatedBeforeAuthoring,
+        predecessorMistakeObserved: observations.staleAttemptObserved,
+        predecessorCorrectionVerified:
+          observations.correctedAttemptAccepted,
+        predecessorEvidence: observations,
+        semanticHarvestReceipt: harvest.receipt,
+        workUsage: collectUsage(predecessor.stdout, producerClient),
+        harvestUsage: aggregateUsage(producerRuns, producerClient),
+        usage: aggregateUsage([predecessor, ...producerRuns], producerClient),
+        latencyMs:
+          predecessor.latencyMs +
+          producerRuns.reduce((total, run) => total + run.latencyMs, 0),
       },
       runtime: {
         exitCode: consumer.exitCode,
         correct: consumerCorrect,
         delivered,
+        selected: preAction.delivered,
+        retrievalAttempted: preAction.retrievalAttempted,
+        attested,
+        attestationFailed,
+        deliveryPhase: 'adapter-pre-action',
         mistakeExecuted: repeatedFailure,
-        usage: collectUsage(consumer.stdout),
+        outcomeGrade: consumerGrade,
+        usage: {
+          ...collectUsage(consumer.stdout, consumerClient),
+          staticSchemaTokens: preAction.staticSchemaTokens,
+          capsuleTokens: preAction.capsuleTokens,
+          instructionTokens: preAction.injectionTokens,
+        },
         latencyMs: consumer.latencyMs,
+        preflightLatencyMs: preAction.latencyMs,
+        consumerMcpExposed: preAction.consumerMcpExposed,
+        preActionReceipt: preAction,
       },
       eventStreamHash: new EventStore(ucrRoot).digest(),
       canonicalEvents: events.length,
@@ -642,8 +1253,8 @@ try {
     if (!passed) {
       const redact = (text) =>
         String(text || '')
-          .replaceAll(recoveryCode, '[RECOVERY_CODE_REDACTED]')
-          .replaceAll(staleCode, '[STALE_CODE_REDACTED]')
+          .replaceAll(recoveryCode, '[SAFE_CHOICE_REDACTED]')
+          .replaceAll(staleCode, '[REJECTED_CHOICE_REDACTED]')
           .replaceAll(graderSecret, '[GRADER_SECRET_REDACTED]')
           .slice(-3000);
       console.error(`${row.direction} producer: ${redact(producer.stdout)}`);
@@ -659,9 +1270,20 @@ try {
 
   const sourceTreeHash = sha256([
     readFileSync(join(ROOT, 'ucr', 'protocol.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'event-store.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'graph.mjs'), 'utf8'),
     readFileSync(join(ROOT, 'ucr', 'compiler.mjs'), 'utf8'),
     readFileSync(join(ROOT, 'ucr', 'checkpoint.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'retrieval.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'context-vm.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'pre-action.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'ucr', 'semantic-harvest.mjs'), 'utf8'),
     readFileSync(join(ROOT, 'src', 'server', 'ucr-tools.ts'), 'utf8'),
+    readFileSync(join(ROOT, 'src', 'server', 'tool-profile.ts'), 'utf8'),
+    readFileSync(join(ROOT, 'src', 'validation', 'tool-schemas.ts'), 'utf8'),
+    readFileSync(join(ROOT, 'scripts', 'ucr-context-preflight.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'scripts', 'ucr-cognition-sidecar.mjs'), 'utf8'),
+    readFileSync(join(ROOT, 'package-lock.json'), 'utf8'),
     readFileSync(fileURLToPath(import.meta.url), 'utf8'),
   ]);
   const run = createEvidenceRun({
@@ -701,6 +1323,7 @@ try {
     modelFamilies: new Set(
       Object.values(clients).map((client) => client.family)
     ).size,
+    attestationSurface,
     controlsAbstained: results.filter((result) => result.control.abstained)
       .length,
     repeatedVerifiedFailures: results.filter(
@@ -716,6 +1339,7 @@ try {
       ledgerVerification.valid,
     limitations: [
       'one task per direction is executable coverage, not a powered effectiveness estimate',
+      'mandatory adapter preflight is evaluated here; advisory-only clients require separate evidence and cannot claim guaranteed prevention',
       'provider aliases require provider response metadata before exact model-version claims',
       'the installed standalone Gemini CLI and the advertised Copilot Gemini model were unavailable to the authenticated accounts; their failed attempts remain separate negative evidence',
       'no competitive superiority claim is permitted from this smoke matrix',

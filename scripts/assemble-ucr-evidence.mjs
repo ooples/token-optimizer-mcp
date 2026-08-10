@@ -27,19 +27,20 @@ const definitions = [
   ['compounding', 'compounding-study-v1.json', 'conformance'],
   ['production-exercise', 'production-exercise-v1.json', 'executable-smoke'],
   [
-    'codex-to-claude',
-    'live-multimodel-handoff-edge-v1.json',
+    'stateful-codex-to-claude',
+    'stateful-preflight-codex-to-claude-v1.json',
     'executable-smoke',
   ],
   [
-    'claude-to-codex',
-    'live-multimodel-handoff-edge-claude-producer-v1.json',
+    'stateful-claude-to-codex',
+    'stateful-preflight-claude-to-codex-v1.json',
     'executable-smoke',
   ],
   [
-    'codex-to-copilot',
-    'live-multimodel-handoff-edge-copilot-v1.json',
+    'stateful-claude-to-copilot-quota',
+    'stateful-preflight-claude-to-copilot-v1.json',
     'executable-smoke',
+    false,
   ],
   [
     'effectiveness-pilot-negative',
@@ -147,7 +148,50 @@ const validArtifacts = artifacts.filter((artifact) => artifact.valid);
 const liveArtifacts = artifacts.filter(
   (artifact) =>
     artifact.evidenceClass === 'executable-smoke' &&
-    artifact.name.includes('-to-')
+    artifact.name.startsWith('stateful-')
+);
+const totalTraffic = (usage) =>
+  Number.isFinite(usage?.totalTokens)
+    ? usage.totalTokens
+    : Number.isFinite(usage?.inputTokens) && Number.isFinite(usage?.outputTokens)
+      ? usage.inputTokens + usage.outputTokens
+      : null;
+const percentDelta = (control, runtime) =>
+  Number.isFinite(control) && control > 0 && Number.isFinite(runtime)
+    ? (runtime - control) / control
+    : null;
+const liveDirectionMetrics = liveArtifacts.map((artifact) => {
+  const row = artifact.report?.directionResults?.[0];
+  const controlTraffic = totalTraffic(row?.control?.usage);
+  const runtimeTraffic = totalTraffic(row?.runtime?.usage);
+  return {
+    direction: row?.direction || artifact.name,
+    integrityValid: artifact.valid,
+    passed: artifact.passed === true,
+    controlCorrect: row?.control?.correct ?? null,
+    runtimeCorrect: row?.runtime?.correct ?? null,
+    predecessorMistakeObserved:
+      row?.producer?.predecessorMistakeObserved ?? null,
+    predecessorCorrectionVerified:
+      row?.producer?.predecessorCorrectionVerified ?? null,
+    repeatedFailure: row?.runtime?.mistakeExecuted ?? null,
+    delivered: row?.runtime?.delivered ?? null,
+    consumerStaticSchemaTokens:
+      row?.runtime?.usage?.staticSchemaTokens ?? null,
+    capsuleTokens: row?.runtime?.usage?.capsuleTokens ?? null,
+    controlTokenTraffic: controlTraffic,
+    runtimeTokenTraffic: runtimeTraffic,
+    tokenTrafficDelta: percentDelta(controlTraffic, runtimeTraffic),
+    controlLatencyMs: row?.control?.latencyMs ?? null,
+    runtimeLatencyMs: row?.runtime?.latencyMs ?? null,
+    latencyDelta: percentDelta(
+      row?.control?.latencyMs,
+      row?.runtime?.latencyMs
+    ),
+  };
+});
+const passedLiveDirections = liveDirectionMetrics.filter(
+  (direction) => direction.integrityValid && direction.passed
 );
 const body = {
   schemaVersion: 'ucr.evidence-index/2',
@@ -161,9 +205,21 @@ const body = {
   summary: {
     artifactsValid: validArtifacts.length,
     artifactsTotal: artifacts.length,
-    liveDirectionsPassed: liveArtifacts.filter((artifact) => artifact.valid)
-      .length,
+    liveDirectionsPassed: passedLiveDirections.length,
     liveDirectionsAttempted: liveArtifacts.length,
+    liveDirectionMetrics,
+    liveDirectionsWithLowerTokenTraffic: passedLiveDirections.filter(
+      (direction) => direction.tokenTrafficDelta < 0
+    ).length,
+    liveDirectionsWithLowerLatency: passedLiveDirections.filter(
+      (direction) => direction.latencyDelta < 0
+    ).length,
+    maximumConsumerStaticSchemaTokens: Math.max(
+      0,
+      ...passedLiveDirections
+        .map((direction) => direction.consumerStaticSchemaTokens)
+        .filter(Number.isFinite)
+    ),
     registeredClientProcesses: artifacts.find(
       (artifact) => artifact.name === 'adapter-processes'
     )?.report?.registeredClients,
@@ -193,7 +249,7 @@ const body = {
   claims: {
     conformance: validArtifacts.length === artifacts.length,
     executableCrossClient:
-      liveArtifacts.filter((artifact) => artifact.valid).length >= 2,
+      passedLiveDirections.length >= 2,
     effectiveness: tiers.effectiveness.status === 'present',
     superiority: tiers.superiority.status === 'present',
     production: tiers.production.status === 'present',

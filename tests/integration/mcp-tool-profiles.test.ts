@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import {
+  ATTESTATION_TOOL_NAMES,
   COGNITIVE_TOOL_NAMES,
   CORE_TOOL_NAMES,
 } from '../../src/server/tool-profile.js';
@@ -210,7 +211,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
     );
   });
 
-  it('keeps the complete 102-tool catalog behind the full profile', async () => {
+  it('keeps the complete 103-tool catalog behind the full profile', async () => {
     const [core, full] = await Promise.all([runServer(), runServer('full')]);
     expect(full.status).toBe(0);
 
@@ -218,7 +219,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
       ?.tools as ListedTool[];
     const fullTools = full.responses.find((message) => message.id === 2)?.result
       ?.tools as ListedTool[];
-    expect(fullTools).toHaveLength(102);
+    expect(fullTools).toHaveLength(103);
     expect(fullTools.map((tool) => tool.name)).toContain('cache_benchmark');
     expect(JSON.stringify(coreTools).length).toBeLessThan(
       JSON.stringify(fullTools).length * 0.35
@@ -244,7 +245,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
     expect(result.stderr).toContain('Invalid TOKEN_OPTIMIZER_TOOL_PROFILE');
   });
 
-  it('offers the four-operation cognitive bootstrap as an opt-in profile', async () => {
+  it('offers cognition plus bounded receipt attestation as an opt-in profile', async () => {
     const [result, core] = await Promise.all([
       runServer('cognitive'),
       runServer('core'),
@@ -260,6 +261,17 @@ describe('MCP tool profiles over the real stdio transport', () => {
     expect(JSON.stringify(tools).length).toBeLessThan(
       JSON.stringify(coreTools).length * 0.35
     );
+  });
+
+  it('offers only receipt verification in the attestation profile', async () => {
+    const result = await runServer('attestation');
+    expect(result.status).toBe(0);
+    const tools = result.responses.find((message) => message.id === 2)?.result
+      ?.tools as ListedTool[];
+    expect(tools.map((tool) => tool.name)).toEqual([
+      ...ATTESTATION_TOOL_NAMES,
+    ]);
+    expect(JSON.stringify(tools).length).toBeLessThan(600);
   });
 
   it('isolates the four causal experiment arms at the server boundary', async () => {

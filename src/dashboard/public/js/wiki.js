@@ -256,6 +256,24 @@ async function loadUcr() {
         ? `${status.evidenceIndex.summary.liveDirectionsPassed}/${status.evidenceIndex.summary.liveDirectionsAttempted}`
         : 'not run',
     ],
+    [
+      'Lower token traffic',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.liveDirectionsWithLowerTokenTraffic || 0}/${status.evidenceIndex.summary.liveDirectionsPassed || 0} passing`
+        : 'not measured',
+    ],
+    [
+      'Lower latency',
+      status.evidenceIndex
+        ? `${status.evidenceIndex.summary.liveDirectionsWithLowerLatency || 0}/${status.evidenceIndex.summary.liveDirectionsPassed || 0} passing`
+        : 'not measured',
+    ],
+    [
+      'Consumer MCP schema',
+      status.evidenceIndex?.summary.maximumConsumerStaticSchemaTokens != null
+        ? `${nf.format(status.evidenceIndex.summary.maximumConsumerStaticSchemaTokens)} tokens max`
+        : 'not measured',
+    ],
     ['Scale events', nf.format(status.evidenceIndex?.summary.graphEvents || 0)],
     [
       'Physical writers',
@@ -291,7 +309,7 @@ async function loadUcr() {
     ? `${status.deterministicEvidence.checksPassed}/${status.deterministicEvidence.checksTotal} deterministic gates`
     : 'no deterministic ledger';
   el('ucr-verdict').textContent =
-    `${verdict} · ${deterministic} · ${status.cognitiveOperations.length} lazy cognitive operations · ${status.malformed} malformed events`;
+    `${verdict} · ${deterministic} · ${status.cognitiveOperations?.length || 0} lazy cognitive operations · ${status.malformed || 0} malformed events`;
   el('ucr-verdict').dataset.state =
     verdict === 'passed'
       ? 'ok'
@@ -312,13 +330,14 @@ async function loadUcr() {
       )
       .join('')}</tbody>`;
   el('ucr-artifacts').innerHTML = `
-    <thead><tr><th>Study</th><th>Evidence class</th><th>Integrity</th></tr></thead>
+    <thead><tr><th>Study</th><th>Evidence class</th><th>Integrity</th><th>Outcome</th></tr></thead>
     <tbody>${(status.evidenceIndex?.artifacts || [])
       .map(
         (artifact) => `<tr>
           <td>${escapeHtml(artifact.name)}</td>
           <td>${escapeHtml(artifact.evidenceClass)}</td>
           <td>${artifact.valid ? 'valid' : 'invalid'}</td>
+          <td>${artifact.passed ? 'passed' : 'negative / incomplete'}</td>
         </tr>`
       )
       .join('')}</tbody>`;
