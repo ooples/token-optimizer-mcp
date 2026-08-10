@@ -251,6 +251,9 @@ export function deriveReleaseMetrics(ledgers) {
   const competitiveRows = superiority.filter(
     (row) => row.study === 'competitive' && row.fair === true
   );
+  const writerRows = conformance.filter(
+    (row) => row.study === 'writer-integrity'
+  );
   const metrics = {
     applicabilityPrecision: rate(applicability, (row) => row.applicable),
     preActionDelivery: rate(
@@ -283,10 +286,13 @@ export function deriveReleaseMetrics(ledgers) {
             return meanControl ? -reconstruction.mean / meanControl : null;
           })(),
     writerIntegrity:
-      conformance.length > 0 &&
-      conformance
-        .filter((row) => row.study === 'writer-integrity')
-        .every((row) => row.acceptedWrites === row.restoredWrites),
+      writerRows.length > 0 &&
+      writerRows.every(
+        (row) =>
+          Number.isFinite(row.acceptedWrites) &&
+          Number.isFinite(row.restoredWrites) &&
+          row.acceptedWrites === row.restoredWrites
+      ),
     crossClientPassed:
       directions.size >= 2 &&
       modelFamilies.size >= 2 &&

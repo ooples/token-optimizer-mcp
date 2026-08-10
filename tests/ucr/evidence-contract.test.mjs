@@ -83,6 +83,35 @@ describe('evidence contract v2', () => {
     expect(evidenceTierReport([ledger]).effectiveness.status).toBe('missing');
   });
 
+  test('fails writer integrity closed when coordination counts are absent or nonnumeric', () => {
+    const missingStudy = sealEvidenceLedger(run('conformance', 'missing'), [
+      { study: 'adapter-conformance', passed: true },
+    ]);
+    const missingCounts = sealEvidenceLedger(run('conformance', 'no-counts'), [
+      { study: 'writer-integrity', passed: false },
+    ]);
+    const invalidCounts = sealEvidenceLedger(
+      run('conformance', 'invalid-counts'),
+      [
+        {
+          study: 'writer-integrity',
+          acceptedWrites: 100,
+          restoredWrites: null,
+        },
+      ]
+    );
+
+    expect(deriveReleaseMetrics([missingStudy]).metrics.writerIntegrity).toBe(
+      false
+    );
+    expect(deriveReleaseMetrics([missingCounts]).metrics.writerIntegrity).toBe(
+      false
+    );
+    expect(deriveReleaseMetrics([invalidCounts]).metrics.writerIntegrity).toBe(
+      false
+    );
+  });
+
   test('derives paired correctness and recurrence only from eligible ledgers', () => {
     const ledger = sealEvidenceLedger(run('effectiveness'), [
       {

@@ -89,20 +89,28 @@ const coordination = artifacts.find(
 );
 const conformanceRows = artifacts
   .filter((artifact) => artifact.evidenceClass === 'conformance')
-  .map((artifact) => ({
-    study: artifact.name,
-    artifact: artifact.filename,
-    artifactHash: artifact.reportHash,
-    passed: artifact.valid,
-    ...(artifact.name === 'coordination-scale'
-      ? {
-          study: 'writer-integrity',
-          acceptedWrites: artifact.report.claimsAccepted,
-          restoredWrites:
-            artifact.report.claimsAccepted - artifact.report.lostAcceptedEvents,
-        }
-      : {}),
-  }));
+  .map((artifact) => {
+    const row = {
+      study: artifact.name,
+      artifact: artifact.filename,
+      artifactHash: artifact.reportHash,
+      passed: artifact.valid,
+    };
+    if (artifact.name !== 'coordination-scale') return row;
+
+    const acceptedWrites = artifact.report?.claimsAccepted;
+    const lostAcceptedEvents = artifact.report?.lostAcceptedEvents;
+    return {
+      ...row,
+      study: 'writer-integrity',
+      ...(Number.isFinite(acceptedWrites) && Number.isFinite(lostAcceptedEvents)
+        ? {
+            acceptedWrites,
+            restoredWrites: acceptedWrites - lostAcceptedEvents,
+          }
+        : {}),
+    };
+  });
 const sourceTreeHash = sha256(
   artifacts.map((artifact) => ({
     filename: artifact.filename,
