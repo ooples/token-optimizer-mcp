@@ -9,7 +9,8 @@
     "token-optimizer-mcp": "./dist/server/index.js",
     "token-optimizer-daemon": "./dist/server/daemon.js",
     "token-optimizer-install": "./scripts/install-cli.mjs",
-    "token-optimizer-doctor": "./scripts/doctor.mjs"
+    "token-optimizer-doctor": "./scripts/doctor.mjs",
+    "token-optimizer-diagnostics": "./scripts/export-diagnostics.mjs"
   },
   "files": [
     "dist/**/*",
@@ -35,6 +36,8 @@
     "screenshots": "node scripts/capture-screenshots.mjs",
     "uninstall-hooks": "node scripts/uninstall.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "diagnostics": "node scripts/export-diagnostics.mjs",
+    "projects:discover": "node scripts/discover-project-graphs.mjs",
     "build": "tsc && npm run copy:assets",
     "copy:assets": "node scripts/copy-assets.mjs",
     "start": "node dist/server/index.js",

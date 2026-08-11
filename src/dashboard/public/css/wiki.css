@@ -198,6 +198,7 @@
 
 #wiki-search,
 #wiki-type,
+#wiki-scope,
 .evidence-filters input,
 .evidence-filters select {
   width: 100%;
@@ -212,11 +213,20 @@
 
 #wiki-search:focus,
 #wiki-type:focus,
+#wiki-scope:focus,
 .evidence-filters input:focus,
 .evidence-filters select:focus {
   outline: 2px solid var(--saved);
   outline-offset: 1px;
   border-color: transparent;
+}
+
+.ctl-scope {
+  min-width: 210px;
+}
+
+.wiki-coverage {
+  margin: -8px 0 16px;
 }
 
 .wiki-modes {
@@ -597,12 +607,13 @@ body.wiki-detail-open {
  * That is a usability bug, not a test artefact -- a real user with the panel
  * open cannot reach those rows either.
  *
- * Applied to `main` rather than the list pane because the toolbar is a sibling of
- * the list, not a child -- shifting only the list left the buttons underneath.
- * Margin rather than padding so backgrounds do not extend under the panel, and
- * the same `min()` as the panel's width so the two cannot disagree.
+ * Applied to the entire shell because capture-health and effectiveness evidence
+ * sit above `main`. Reserving space only for `main` left those cards underneath
+ * the drawer even though the graph itself remained reachable. Margin rather
+ * than padding keeps card backgrounds out from beneath the panel, and the same
+ * `min()` as the panel's width keeps the two from disagreeing.
  */
-body.wiki-detail-open main {
+body.wiki-detail-open .shell {
   margin-right: min(460px, 92vw);
 }
 

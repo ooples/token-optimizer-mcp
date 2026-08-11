@@ -23,6 +23,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE = join(ROOT, 'hooks-core');
+const PACKAGE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, 'package.json'), 'utf8')
+).version;
 
 /** Every directory that must hold an identical copy of the core. */
 const TARGETS = [
@@ -44,7 +47,10 @@ const files = readdirSync(SOURCE).filter((f) => f.endsWith('.mjs'));
 
 const banner = (name) =>
   `// GENERATED FILE -- do not edit.\n` +
-  `// Source of truth: hooks-core/${name}. Regenerate with \`npm run sync:hooks\`.\n`;
+  `// Source of truth: hooks-core/${name}. Regenerate with \`npm run sync:hooks\`.\n` +
+  (name === 'observability.mjs'
+    ? `process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';\n`
+    : '');
 
 // The EOL-safe comparison this file used to carry locally now lives in
 // scripts/lib/text.mjs, because it was needed by the other two generators and

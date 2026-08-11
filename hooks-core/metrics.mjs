@@ -736,10 +736,7 @@ function canonicalKeyish(p) {
  * arms, multiplied by treated touches. Reporting it as a measured fact would be
  * the same overclaiming this project criticises competitors for.
  */
-export function report(dir) {
-  const events = readAll(dir);
-  // Injections and harvests come from the log that cannot be starved.
-  const balance = readBalance(dir);
+function buildReport(events, balance) {
 
   // COMMAND INJECTIONS ARE COUNTED SEPARATELY, not mixed into the balance.
   //
@@ -841,6 +838,15 @@ export function report(dir) {
   const sufficient = treated.length >= 20 && withheld.length >= 5;
 
   return {
+    memoryDeliveries: allInjections.filter((event) => !event.holdout).length,
+    memoryHoldouts: allInjections.filter((event) => event.holdout).length,
+    deliveryTokens: allInjections
+      .filter((event) => !event.holdout)
+      .reduce(
+        (sum, event) =>
+          sum + (event.deliveredTokens ?? event.tokens ?? 0),
+        0
+      ),
     injections: treated.length,
     sessionStartInjections: sessionStartInjections.length,
     sessionStartInjectedTokens: sessionStartInjections.reduce(
@@ -862,6 +868,27 @@ export function report(dir) {
         ? 'the graph is saving more than it costs'
         : 'the graph is NOT yet paying for itself',
   };
+}
+
+export function report(dir) {
+  return buildReport(readAll(dir), readBalance(dir));
+}
+
+/**
+ * One statistically valid machine/project-group report.
+ *
+ * Summing per-project verdicts is wrong: five projects with four treated reads
+ * each do not individually meet the threshold, but together they are twenty
+ * observations. Pooling the underlying events preserves the randomized arms
+ * and computes the means once over the selected population.
+ */
+export function reportMany(dirs) {
+  const unique = [...new Set((dirs || []).map((dir) => String(dir)))];
+  const report = buildReport(
+    unique.flatMap((dir) => readAll(dir)),
+    unique.flatMap((dir) => readBalance(dir))
+  );
+  return { ...report, projects: unique.length };
 }
 
 /**

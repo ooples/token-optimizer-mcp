@@ -96,7 +96,7 @@
             >
               ?
               <span class="tip tip-below tip-left" role="tooltip">
-                Files observed by supported coding agents are remembered here
+                Graph nodes observed by supported coding agents are remembered here
                 with their structure, discoveries, and provenance. Any supported
                 client can reuse that knowledge in a later session or project.
               </span>
@@ -115,7 +115,7 @@
       <section class="panels">
         <div class="card">
           <p class="card-title">
-            Where the context went
+            Observed activity by source
             <button
               class="explain"
               type="button"
@@ -123,35 +123,35 @@
             >
               ?
               <span class="tip" role="tooltip">
-                Which kinds of thing filled the workspace. Big slices are where
-                there is most left to win.
+                Lifecycle activity is grouped by CLI when cross-client telemetry
+                is available; older clients may report context categories instead.
               </span>
             </button>
           </p>
           <p class="card-sub">
-            Bigger slices are the best places to save more.
+            Cross-client observations are used instead of a single CLI's stale session file.
           </p>
           <div class="chart" id="category-chart"></div>
         </div>
 
         <div class="card">
           <p class="card-title">
-            Which actions cost the most
+            Which actions ran most
             <button
               class="explain"
               type="button"
-              aria-label="Which actions cost the most?"
+              aria-label="Which actions ran most?"
             >
               ?
               <span class="tip" role="tooltip">
-                Context used by each observed read, edit, search, command, or
-                connected tool. An action near the top every session is worth a
-                closer look.
+                Frequency of each observed read, edit, search, command, or
+                connected tool. Context cost is shown only when the client
+                actually reports it.
               </span>
             </button>
           </p>
           <p class="card-sub">
-            Ranked by how much of the workspace each one used.
+            Ranked by observed calls; no token amount is invented when a CLI omits it.
           </p>
           <div class="chart" id="server-chart"></div>
         </div>

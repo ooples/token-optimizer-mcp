@@ -183,9 +183,55 @@ a page. A mature graph holds thousands of nodes, and shipping it wholesale would
 make every page load a multi-megabyte download for a view that shows twenty
 things.
 
+The default **All known projects** scope combines captured graphs through an
+opaque machine-local project registry; filesystem paths never reach the
+browser. Lifecycle hooks register repositories as they are used. To backfill
+existing local checkouts without reading their source files, run the bounded
+discovery command against one or more explicit roots:
+
+```bash
+npm run projects:discover -- /absolute/path/to/repos /absolute/path/to/worktrees
+```
+
+Coverage distinguishes repositories with graph data from known repositories
+whose capture has not started. The balance cards are backed by persisted events:
+**Memory deliveries** counts graph context actually supplied to an agent,
+**Kept back for comparison** counts randomized control touches, and **Cost of
+remembering** combines delivered-context tokens with measured semantic-write
+payload cost. **Reading avoided** stays “Not enough comparisons” until at least
+20 deliveries and 5 holdouts exist; the dashboard does not manufacture a
+savings estimate from missing data.
+
 See [the causal evidence protocol](docs/EVIDENCE_PROTOCOL.md), the
 [cross-client capability contract](docs/CLIENT_SUPPORT.md), and the
 [live evaluation suite](evals/README.md).
+
+### Cross-client lifecycle diagnostics
+
+Every native hook writes the same bounded JSONL lifecycle record, including
+Claude Code's custom router and compaction paths. Records carry the client and
+plugin versions, event, hashed session/turn correlation, latency, outcome,
+input/output byte counts, and response key shape. They deliberately retain no
+prompt, command, tool output, file content, or raw working-directory path. The
+fields include OpenTelemetry log severity and resource semantics so the local
+files can be collected without inventing a second schema.
+
+```bash
+npm run diagnostics                         # last 24 hours, summary-first JSON
+npm run diagnostics -- --hours 72 --output hook-summary.json
+npm run diagnostics -- --include-events --limit 100 --output hook-report.json
+```
+
+Raw event rows are opt-in and capped at 1,000. The default report contains aggregate health and
+at most twenty recent failures/timeouts, keeping routine troubleshooting output small enough for
+CLI and model context windows.
+
+The dashboard's **Capture health** panel shows runs, failures, timeouts and
+p50/p95 latency by client. Logs rotate at 5 MiB, retain at most 40 files for 14
+days, and live under `.token-optimizer/logs` when a state directory is set (or
+`~/.token-optimizer/logs` otherwise). `TOKEN_OPTIMIZER_LOG_DIR`,
+`TOKEN_OPTIMIZER_LOG_MAX_BYTES`, `TOKEN_OPTIMIZER_LOG_MAX_FILES`, and
+`TOKEN_OPTIMIZER_LOG_RETENTION_DAYS` override those operational defaults.
 
 ---
 

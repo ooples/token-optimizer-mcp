@@ -10,11 +10,15 @@
  * drifted apart.
  */
 
+import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const PACKAGE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, 'package.json'), 'utf8')
+).version;
 
 /** [directory, client key, event, filename] */
 const ENTRIES = [
@@ -72,10 +76,20 @@ for (const [dir, client, event, name] of ENTRIES) {
 // GENERATED FILE -- do not edit. Regenerate with \`npm run sync:hooks\`.
 // Client entry point: names the client and event; all policy lives in the
 // shared core so no client can drift its own thresholds or guidance.
-import { run } from './lib/adapter.mjs';
-
 // Fail open: a defect in the optimizer must never cost the user a tool call.
-run('${client}', '${event}').catch(() => process.exit(0));
+// Bootstrap failures are still recorded so fail-open does not become fail-silent.
+process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';
+try {
+  const { run } = await import('./lib/adapter.mjs');
+  await run('${client}', '${event}');
+} catch (error) {
+  try {
+    const { recordHookBootstrapFailure } = await import('./lib/observability.mjs');
+    recordHookBootstrapFailure('${client}', '${event}', error);
+  } catch {
+    // A logger bootstrap failure is the only condition that remains silent.
+  }
+}
 `;
 
   if (check) {

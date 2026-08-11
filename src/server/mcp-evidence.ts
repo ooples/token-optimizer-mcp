@@ -17,6 +17,9 @@ interface EvidenceModules {
   metrics: {
     record(dir: string, event: Record<string, unknown>): unknown;
   };
+  projects: {
+    registerProject(options: Record<string, unknown>): unknown;
+  };
 }
 
 export interface McpClientInfo {
@@ -36,7 +39,11 @@ async function modules(): Promise<EvidenceModules> {
     cached = Promise.all([
       import(coreUrl('wiki.mjs')),
       import(coreUrl('metrics.mjs')),
-    ]).then(([wiki, metrics]) => ({ wiki, metrics }) as EvidenceModules);
+      import(coreUrl('projects.mjs')),
+    ]).then(
+      ([wiki, metrics, projects]) =>
+        ({ wiki, metrics, projects }) as EvidenceModules
+    );
   }
   return cached;
 }
@@ -49,7 +56,13 @@ export class McpEvidenceRecorder {
       const loaded = await modules();
       const cwd = process.cwd();
       const root = loaded.wiki.projectRootFor(path.join(cwd, '__mcp__'), cwd);
-      loaded.metrics.record(loaded.wiki.wikiDir(root), {
+      const dir = loaded.wiki.wikiDir(root);
+      loaded.projects.registerProject({
+        root,
+        graphDir: dir,
+        client: this.client?.name || 'unknown-mcp-client',
+      });
+      loaded.metrics.record(dir, {
         schemaVersion: 2,
         episodeId: processEpisodeId,
         sessionId: processEpisodeId,

@@ -46,6 +46,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { isFsSafePath } from './paths.mjs';
+import { noteHookOutput } from './observability.mjs';
 
 /** Enforcement modes, least to most permissive. */
 export const MODE_ENFORCE = 'enforce';
@@ -651,14 +652,15 @@ export function allow() {
  */
 export function allowWithContext(context) {
   if (context) {
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          additionalContext: withEscape(context),
-        },
-      })
-    );
+    const output = {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        additionalContext: withEscape(context),
+      },
+    };
+    const serialized = JSON.stringify(output);
+    noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
+    process.stdout.write(serialized);
   }
   process.exit(0);
 }
@@ -671,15 +673,16 @@ export function allowWithContext(context) {
  * says "use the optimized tool" gets met with a retry of the same call.
  */
 export function deny(reason) {
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: withEscape(reason),
-      },
-    })
-  );
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason: withEscape(reason),
+    },
+  };
+  const serialized = JSON.stringify(output);
+  noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
+  process.stdout.write(serialized);
   process.exit(0);
 }
 
@@ -704,14 +707,15 @@ export function withEscape(reason) {
 
 /** Lets the call through, attaching a note the model sees. */
 export function advise(context) {
-  process.stdout.write(
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        additionalContext: context,
-      },
-    })
-  );
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      additionalContext: context,
+    },
+  };
+  const serialized = JSON.stringify(output);
+  noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
+  process.stdout.write(serialized);
   process.exit(0);
 }
 
@@ -739,26 +743,34 @@ export function enforce(reason, deniedBefore) {
  * than an absent one, so the wait has a ceiling and expiring it is treated
  * exactly like unusable input.
  */
-export async function readPayload({
-  timeoutMs = 5000,
+export async function readPayloadResult({
+  timeoutMs = 1500,
   maxBytes = 8_000_000,
 } = {}) {
   const chunks = [];
   let size = 0;
+  let inputStatus = 'pending';
 
   const raw = await new Promise((resolve) => {
     const onData = (chunk) => {
-      size += chunk.length;
+      size += Buffer.byteLength(chunk, 'utf8');
       // A payload this large is not a tool call; refusing to buffer it
       // unboundedly keeps a hook from becoming a memory problem.
       if (size > maxBytes) {
+        inputStatus = 'too_large';
         finish(null);
         return;
       }
       chunks.push(chunk);
     };
-    const onEnd = () => finish(chunks.join(''));
-    const onError = () => finish(null);
+    const onEnd = () => {
+      inputStatus = 'received';
+      finish(chunks.join(''));
+    };
+    const onError = () => {
+      inputStatus = 'input_error';
+      finish(null);
+    };
 
     // Listeners are REMOVED on every exit path. Leaving them attached after the
     // timeout wins means a late chunk keeps growing a buffer nobody will read,
@@ -772,17 +784,21 @@ export async function readPayload({
       resolve(value);
     }
 
-    const timer = setTimeout(() => finish(null), timeoutMs);
+    const timer = setTimeout(() => {
+      inputStatus = 'timeout';
+      finish(null);
+    }, timeoutMs);
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', onData);
     process.stdin.on('end', onEnd);
     process.stdin.on('error', onError);
   });
 
-  if (raw === null) return null;
+  if (raw === null) return { payload: null, status: inputStatus, bytes: size };
+  if (!raw.trim()) return { payload: null, status: 'empty_input', bytes: size };
   try {
-    return JSON.parse(raw);
+    return { payload: JSON.parse(raw), status: 'ok', bytes: size };
   } catch {
-    return null;
+    return { payload: null, status: 'invalid_json', bytes: size };
   }
 }

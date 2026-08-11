@@ -49,6 +49,15 @@ each client executes hooks from a directory it controls (`~/.codex/hooks`, the
 Gemini extension path, the Claude Code plugin root) and no shared location
 resolves across all of them. `sync:hooks:check` is what keeps vendoring honest.
 
+All native lifecycle paths also import the same privacy-safe observability core.
+Each invocation produces one correlated completion event whether it succeeds,
+skips unusable input, times out, or fails open after an exception. The version
+stamped into vendored hooks comes from `package.json` during `sync:hooks`, so a
+mixed installation is visible in diagnostics instead of looking like a product
+logic failure. Claude Code's custom SessionStart, PreToolUse, and PreCompact
+paths are explicitly instrumented rather than being mistaken for generated
+adapter entries.
+
 ## How these were verified
 
 Every config shape was checked against the client's own published documentation,
@@ -89,6 +98,10 @@ needs the complete 102-tool specialist catalog. Use the four-operation
 | `TOKEN_OPTIMIZER_MODE`                  | `enforce` | `advise` = never refuse; `off` = disable |
 | `TOKEN_OPTIMIZER_LARGE_READ_BYTES`      | `25600`   | Size at which a read stops being cheap   |
 | `TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS` | `8000`    | Cap on pre-compaction work               |
+| `TOKEN_OPTIMIZER_LOG_DIR`               | state logs | Structured lifecycle JSONL directory     |
+| `TOKEN_OPTIMIZER_LOG_MAX_BYTES`         | `5242880` | Rotate an active lifecycle log at size   |
+| `TOKEN_OPTIMIZER_LOG_RETENTION_DAYS`    | `14`      | Maximum lifecycle log age                |
+| `TOKEN_OPTIMIZER_LOG_MAX_FILES`         | `40`      | Maximum retained lifecycle log files     |
 
 An unrecognised `TOKEN_OPTIMIZER_MODE` falls back to `enforce`, so a typo cannot
 quietly turn the product off.

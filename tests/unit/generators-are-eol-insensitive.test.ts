@@ -196,6 +196,10 @@ describe('a generator run against a CRLF working tree', () => {
       join(process.cwd(), 'scripts', 'lib', 'text.mjs'),
       join(root, 'scripts', 'lib', 'text.mjs')
     );
+    // Generated hook entries stamp the package version into lifecycle telemetry,
+    // making package.json an explicit generator input alongside the script and
+    // its EOL-safe text helper.
+    copyFileSync(join(process.cwd(), 'package.json'), join(root, 'package.json'));
     return root;
   }
 

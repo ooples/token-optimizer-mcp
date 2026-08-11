@@ -47,6 +47,8 @@ const state = {
   offset: 0,
   selected: null,
   items: [],
+  scope: 'all',
+  projects: [],
 };
 let knowledgeGraph3d = null;
 
@@ -65,6 +67,12 @@ async function api(path, options) {
   return response.json();
 }
 
+function scoped(path) {
+  const url = new URL(path, window.location.origin);
+  url.searchParams.set('scope', state.scope);
+  return `${url.pathname}${url.search}`;
+}
+
 /* ---- Balance --------------------------------------------------------- */
 
 const nf = new Intl.NumberFormat();
@@ -79,7 +87,7 @@ const nf = new Intl.NumberFormat();
 async function loadBalance() {
   let balance;
   try {
-    balance = await api('/api/wiki/balance');
+    balance = await api(scoped('/api/wiki/balance'));
   } catch {
     return;
   }
@@ -88,13 +96,25 @@ async function loadBalance() {
   // what "injected" means. The words describe what happened, not what the code
   // calls it.
   const tiles = [
-    ['Times memory was used', nf.format(balance.injections)],
-    ['Kept back for comparison', nf.format(balance.holdouts)],
-    ['Cost of remembering', `${nf.format(balance.injectedTokens)} tokens`],
+    [
+      'Memory deliveries',
+      nf.format(balance.memoryDeliveries ?? balance.injections),
+    ],
+    [
+      'Kept back for comparison',
+      nf.format(balance.memoryHoldouts ?? balance.holdouts),
+    ],
+    [
+      'Cost of remembering',
+      `${nf.format(
+        Number(balance.deliveryTokens ?? balance.injectedTokens) +
+          Number(balance.harvestTokens || 0)
+      )} tokens`,
+    ],
     [
       'Reading avoided',
       balance.estimatedTokensAvoided === null
-        ? '—'
+        ? 'Not enough comparisons'
         : `${nf.format(balance.estimatedTokensAvoided)} tokens`,
     ],
   ];
@@ -123,6 +143,10 @@ async function loadBalance() {
     el('balance-method').textContent =
       `Measured against ${nf.format(balance.holdouts)} withheld control touches — not estimated. ` +
       `Net after injection and harvest cost: ${nf.format(balance.netTokens)} tokens.`;
+  } else {
+    el('balance-method').textContent =
+      `The graph has ${nf.format(balance.injections)} measured file deliveries and ${nf.format(balance.holdouts)} file holdouts; ` +
+      'the savings estimate unlocks at 20 and 5. Command and session-start deliveries are counted above but excluded from the file-read comparison because they have no valid downstream file-read join.';
   }
 }
 
@@ -475,6 +499,8 @@ async function loadUcr() {
 
 function tagsFor(item) {
   const tags = [];
+  if (state.scope === 'all' && item.projectName)
+    tags.push({ text: item.projectName, status: 'project' });
   if (item.type && item.type !== 'finding') tags.push({ text: item.type });
   if (item.origin === 'human') tags.push({ text: '✎ human', status: 'human' });
   if (item.pinned) tags.push({ text: '★ pinned', status: 'pinned' });
@@ -541,7 +567,7 @@ async function search(append = false) {
     offset: String(state.offset),
     limit: '50',
   });
-  const result = await api(`/api/wiki/search?${params}`);
+  const result = await api(scoped(`/api/wiki/search?${params}`));
 
   state.items = append ? state.items.concat(result.items) : result.items;
   state.offset += result.items.length;
@@ -668,7 +694,7 @@ async function renderFocus(nodeId) {
  * after it settles.
  */
 async function renderConstellation() {
-  const data = await api('/api/wiki/constellation?cap=150');
+  const data = await api(scoped('/api/wiki/constellation?cap=150'));
   const svg = el('wiki-graph');
   const host = el('wiki-graph-3d');
   svg.setAttribute('hidden', '');
@@ -677,7 +703,9 @@ async function renderConstellation() {
   const hint = el('graph-hint');
   hint.hidden = false;
   hint.textContent = data.nodes.length
-    ? 'Drag to orbit, scroll to zoom, and select a node to inspect its evidence and history.'
+    ? data.capped
+      ? `Showing the ${nf.format(data.renderedFindings)} highest-confidence findings from ${nf.format(data.projects)} sources; ${nf.format(data.findings)} findings are captured in this scope. Drag to orbit, scroll to zoom, and select a node to inspect it.`
+      : `Showing all ${nf.format(data.findings)} findings from ${nf.format(data.projects)} sources. Drag to orbit, scroll to zoom, and select a node to inspect it.`
     : 'The 3D knowledge map will appear as supported coding agents capture project findings.';
 
   if (knowledgeGraph3d) {
@@ -795,6 +823,7 @@ function showDetail(node) {
     <h3>${escapeHtml(node.claim || node.key)}</h3>
     <dl>
       <dt>Kind</dt><dd>${escapeHtml(node.kind)}</dd>
+      <dt>Project</dt><dd>${escapeHtml(node.projectName || 'Current project')}</dd>
       <dt>Type</dt><dd>${escapeHtml(node.type || '—')}</dd>
       <dt>Origin</dt><dd>${node.origin === 'human' ? '✎ asserted by a person' : 'harvested from a session'}</dd>
       <dt>Confidence</dt><dd class="wiki-figure">${(node.confidence ?? 0.5).toFixed(2)}</dd>
@@ -833,7 +862,11 @@ function showDetail(node) {
         'content-type': 'application/json',
         'x-token-optimizer': 'dashboard',
       },
-      body: JSON.stringify({ key: node.key, ...body }),
+      body: JSON.stringify({
+        key: node.key,
+        projectId: node.projectId,
+        ...body,
+      }),
     });
     setDetailOpen(false);
     await Promise.all([search(), loadAudit()]);
@@ -856,7 +889,11 @@ function showDetail(node) {
         'content-type': 'application/json',
         'x-token-optimizer': 'dashboard',
       },
-      body: JSON.stringify({ findingId: node.key, rating }),
+      body: JSON.stringify({
+        findingId: node.key,
+        projectId: node.projectId,
+        rating,
+      }),
     });
     await loadEvidence();
   };
@@ -928,7 +965,7 @@ const AUDIT_GROUPS = [
 async function loadAudit() {
   let audit;
   try {
-    audit = await api('/api/wiki/audit');
+    audit = await api(scoped('/api/wiki/audit'));
   } catch {
     return;
   }
@@ -959,6 +996,115 @@ async function loadAudit() {
     '<p class="wiki-muted">Nothing needs attention. The graph is healthy.</p>';
 }
 
+async function loadHookHealth() {
+  const grid = el('hook-health-grid');
+  const status = el('hook-health-status');
+  const detail = el('hook-health-detail');
+  try {
+    const report = await api('/api/diagnostics/hooks?hours=24&limit=20');
+    const summary = report.summary;
+    const success =
+      summary.successRate === null
+        ? '—'
+        : `${(summary.successRate * 100).toFixed(1)}%`;
+    grid.innerHTML = [
+      ['Hook runs', nf.format(summary.total)],
+      ['Success rate', success],
+      ['Failures', nf.format(summary.failures)],
+      ['Timeouts', nf.format(summary.timeouts)],
+      [
+        'p50 latency',
+        summary.p50DurationMs == null ? '—' : `${summary.p50DurationMs} ms`,
+      ],
+      [
+        'p95 latency',
+        summary.p95DurationMs == null ? '—' : `${summary.p95DurationMs} ms`,
+      ],
+    ]
+      .map(
+        ([label, value]) => `
+        <div class="stat-card"><div class="stat-content">
+          <div class="stat-label">${escapeHtml(label)}</div>
+          <div class="stat-value wiki-figure">${escapeHtml(value)}</div>
+        </div></div>`
+      )
+      .join('');
+
+    const unhealthy = summary.failures > 0 || summary.timeouts > 0;
+    status.textContent = !summary.available
+      ? 'No lifecycle telemetry has been captured yet.'
+      : unhealthy
+        ? `${summary.failures} failure(s) and ${summary.timeouts} timeout(s) need attention.`
+        : 'Lifecycle capture is healthy across the observed clients.';
+    status.dataset.state = !summary.available
+      ? 'insufficient'
+      : unhealthy
+        ? 'bad'
+        : 'ok';
+    const clients = Object.entries(summary.byClient || {})
+      .map(
+        ([name, value]) =>
+          `${name}: ${value.total} runs, ${value.failures} failures, ${value.timeouts} timeouts, ${value.skipped || 0} skipped`
+      )
+      .join(' · ');
+    detail.textContent =
+      clients ||
+      'Privacy-safe JSONL diagnostics retain no prompts, commands, or tool output.';
+  } catch {
+    grid.innerHTML = '';
+    status.textContent = 'Capture diagnostics unavailable.';
+    status.dataset.state = 'bad';
+    detail.textContent = '';
+  }
+}
+
+async function loadProjects() {
+  const inventory = await api('/api/wiki/projects');
+  state.projects = inventory.projects || [];
+  const select = el('wiki-scope');
+  select.innerHTML = [
+    `<option value="all">All known projects (${nf.format(inventory.captured)} captured)</option>`,
+    ...state.projects.map(
+      (project) =>
+        `<option value="${escapeHtml(project.id)}">${escapeHtml(project.name)}${project.current ? ' — current' : ''}${project.captured ? '' : ' — no capture yet'}</option>`
+    ),
+  ].join('');
+  select.value = state.scope;
+  const missing = state.projects.filter((project) => !project.captured);
+  el('wiki-coverage').textContent = missing.length
+    ? `${nf.format(inventory.captured)} of ${nf.format(state.projects.length)} known sources contain graph data. Missing capture: ${missing.map((project) => project.name).join(', ')}.`
+    : `${nf.format(inventory.captured)} known sources contain graph data; no registered source is missing its graph.`;
+}
+
+async function loadGraphStatus() {
+  const status = await api(scoped('/api/wiki/status'));
+  const scopeLabel =
+    state.scope === 'all'
+      ? `${nf.format(status.capturedProjects)} captured sources`
+      : state.projects.find((project) => project.id === state.scope)?.name ||
+        'current project';
+  el('graph-stats').textContent = status.available
+    ? `${nf.format(status.findings)} findings · ${nf.format(status.nodes)} nodes · ${nf.format(status.edges)} edges · ${scopeLabel}`
+    : 'No graph yet — it builds as you work';
+  return status;
+}
+
+async function changeScope() {
+  state.scope = el('wiki-scope').value;
+  state.selected = null;
+  setDetailOpen(false);
+  el('wiki-export').href =
+    `/api/wiki/export?scope=${encodeURIComponent(state.scope)}`;
+  const status = await loadGraphStatus();
+  if (!status.available) return;
+  await Promise.all([
+    loadBalance(),
+    search(),
+    renderConstellation(),
+    loadAudit(),
+  ]);
+}
+
 /* ---- Wiring ---------------------------------------------------------- */
 
 function debounce(fn, ms) {
@@ -983,6 +1129,7 @@ el('wiki-search').addEventListener(
   debounce(() => search(), 250)
 );
 el('wiki-type').addEventListener('change', () => search());
+el('wiki-scope').addEventListener('change', changeScope);
 el('wiki-more-btn').addEventListener('click', () => search(true));
 for (const id of ['evidence-client', 'evidence-model', 'evidence-task']) {
   el(id).addEventListener('input', debounce(loadEvidence, 250));
@@ -1052,11 +1199,10 @@ if (typeof ResizeObserver !== 'undefined') {
 }
 
 (async function init() {
+  await loadHookHealth();
   try {
-    const status = await api('/api/wiki/status');
-    el('graph-stats').textContent = status.available
-      ? `${status.findings} findings · ${status.nodes} nodes · ${status.edges} edges`
-      : 'No graph yet — it builds as you work';
+    await loadProjects();
+    const status = await loadGraphStatus();
     if (!status.available) return;
   } catch {
     el('graph-stats').textContent = 'Graph unavailable';

@@ -15,6 +15,10 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { registerWikiRoutes } from './wiki-routes.js';
 import { registerUcrRoutes } from './ucr-routes.js';
+import {
+  readHookDiagnosticEvents,
+  summarizeHookDiagnostics,
+} from './hook-diagnostics.js';
 import { isValidSessionId } from '../utils/session-id.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -224,7 +228,16 @@ function getCurrentSessionId(): string | null {
       .readFileSync(sessionFilePath, 'utf-8')
       .replace(BOM_REGEX, '');
     const sessionData = JSON.parse(sessionContent);
-    return sessionData.sessionId;
+    const sessionId = sessionData.sessionId;
+    if (!isValidSessionId(sessionId)) return null;
+    const log = resolveSessionLogPath(sessionId);
+    if (!log) return null;
+    // The legacy Claude hook wrote a "current" pointer and never cleared it.
+    // On this machine it made a November 2025 CSV appear as the live August
+    // 2026 session. A stale pointer is historical data, not an active session.
+    if (Date.now() - fs.statSync(log).mtimeMs > 24 * 60 * 60 * 1000)
+      return null;
+    return sessionId;
   } catch (error) {
     console.error('Error getting current session ID:', error);
     return null;
@@ -554,11 +567,22 @@ app.get('/api/session-events', (req, res) => {
  * GET /api/health
  * Health check endpoint
  */
+app.get('/api/diagnostics/hooks', (req, res) => {
+  const hours = Math.min(24 * 30, Math.max(1, Number(req.query.hours) || 24));
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const sinceMs = hours * 60 * 60 * 1000;
+  res.json({
+    summary: summarizeHookDiagnostics(sinceMs),
+    events: readHookDiagnosticEvents(limit, sinceMs),
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     port: PORT,
+    hookDiagnostics: summarizeHookDiagnostics(),
   });
 });
 
