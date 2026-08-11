@@ -682,11 +682,26 @@ export function registerWikiRoutes(app: Express): void {
       : 100;
 
     try {
+      const selected = sourcesFor(req, mods);
+      const evidence =
+        selected.length > 1
+          ? mods.metrics.evidenceReportMany(
+              selected.map((source) => source.dir),
+              {
+                filters,
+                episodeLimit,
+              }
+            )
+          : mods.metrics.evidenceReport(
+              selected[0]?.dir || selectedSource(req, mods).dir,
+              {
+                filters,
+                episodeLimit,
+              }
+            );
       return res.json({
-        ...mods.metrics.evidenceReport(selectedSource(req, mods).dir, {
-          filters,
-          episodeLimit,
-        }),
+        ...evidence,
+        scope: String(req.query.scope || 'current'),
         capabilities: mods.capabilities.capabilitySummary(),
       });
     } catch (error) {

@@ -137,6 +137,10 @@ function readReport([name, filename, evidenceClass, requiredPass = true]) {
     reportHash,
     schemaVersion: report.schemaVersion,
     passed: report.passed === true,
+    qualificationStatus: report.qualification?.status || null,
+    qualificationPassed: report.qualification?.passed === true,
+    qualificationMaximumTokenOverhead:
+      report.qualification?.maximumObservedTokenOverhead ?? null,
     executedAt: report.executedAt || null,
     sourceTreeHash: report.sourceTreeHash || report.sourceHash || null,
     ledgerHash: ledgerVerification?.ledgerHash || null,

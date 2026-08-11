@@ -1295,8 +1295,8 @@ function concurrencySummary(runs) {
  * live hook traces, and randomized model evals remain visibly distinct: only
  * `eval-run` records with paired arms can produce a causal effect interval.
  */
-export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
-  const evidence = readEvidence(dir).filter((event) => matchesFilters(event, filters));
+function buildEvidenceReport(evidence, { filters = {}, episodeLimit = 100 } = {}) {
+  evidence = evidence.filter((event) => matchesFilters(event, filters));
   const runs = evidence.filter((event) => event.kind === 'eval-run');
   const handoffRuns = evidence.filter((event) => event.kind === 'handoff-run');
   const concurrencyRuns = evidence.filter((event) => event.kind === 'concurrency-run');
@@ -1400,6 +1400,47 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
       minimumPairs,
       handoffMinimumPairs: handoffMinimumPairs(),
       deterministicChecksAreCausalProof: false,
+    },
+  };
+}
+
+export function evidenceReport(dir, options = {}) {
+  const events = readEvidence(dir);
+  const report = buildEvidenceReport(events, options);
+  const hasMatchingEvidence = events.some((event) =>
+    matchesFilters(event, options.filters || {})
+  );
+  return {
+    ...report,
+    sourceCoverage: {
+      projects: 1,
+      projectsWithEvidence: hasMatchingEvidence ? 1 : 0,
+      projectsWithoutEvidence: hasMatchingEvidence ? 0 : 1,
+    },
+  };
+}
+
+/**
+ * Pools evidence across registered projects before computing cohorts.
+ *
+ * A cohort split across two worktrees is still one experiment. Summing already
+ * aggregated reports would lose pairing and produce invalid confidence
+ * intervals, so this combines the append-only source events first and runs the
+ * estimator exactly once.
+ */
+export function evidenceReportMany(dirs, options = {}) {
+  const unique = [...new Set((dirs || []).map((dir) => String(dir)))];
+  const sources = unique.map((dir) => readEvidence(dir));
+  const report = buildEvidenceReport(sources.flat(), options);
+  const projectsWithEvidence = sources.filter((events) =>
+    events.some((event) => matchesFilters(event, options.filters || {}))
+  ).length;
+  return {
+    ...report,
+    sourceCoverage: {
+      projects: unique.length,
+      projectsWithEvidence,
+      projectsWithoutEvidence: unique.length - projectsWithEvidence,
     },
   };
 }

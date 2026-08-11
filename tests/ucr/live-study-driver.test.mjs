@@ -101,6 +101,7 @@ describe('live study driver protocol helpers', () => {
       cachedInputTokens: 55000,
       cacheCreationInputTokens: 700,
       effectiveInputTokens: 55702,
+      totalTokens: 55714,
     });
     expect(
       parseLiveCliTelemetry('codex', sample).usage.effectiveInputTokens

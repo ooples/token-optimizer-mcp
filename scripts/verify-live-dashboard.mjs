@@ -116,6 +116,34 @@ try {
       element.__knowledgeGraph3d?.projectedNodes?.().length ?? null,
     selected: element.dataset.selected || null,
   }));
+  const detailVisible = await page.locator('#wiki-detail').isVisible();
+  await page.locator('.wiki-tab[data-tab="evidence"]').click();
+  await page.waitForFunction(
+    () => document.querySelectorAll('#evidence-summary .stat-card').length === 6
+  );
+  await page.waitForFunction(
+    () => document.querySelectorAll('#ucr-missing tbody tr').length > 0
+  );
+  const evidence = await page.evaluate(() => ({
+    summary: [...document.querySelectorAll('#evidence-summary .stat-card')].map(
+      (card) => ({
+        label: card.querySelector('.stat-label')?.textContent?.trim() || '',
+        value: card.querySelector('.stat-value')?.textContent?.trim() || '',
+      })
+    ),
+    status: document.querySelector('#evidence-status')?.textContent?.trim() || '',
+    ucrSummary: [...document.querySelectorAll('#ucr-summary .stat-card')].map(
+      (card) => ({
+        label: card.querySelector('.stat-label')?.textContent?.trim() || '',
+        value: card.querySelector('.stat-value')?.textContent?.trim() || '',
+      })
+    ),
+    missingMetrics: document.querySelectorAll('#ucr-missing tbody tr').length,
+  }));
+  await page.screenshot({
+    path: join(output, 'wiki-evidence.png'),
+    fullPage: true,
+  });
   const wiki = {
     listCount: await page.locator('#wiki-list li').count(),
     scopeOptions: await page.locator('#wiki-scope option').count(),
@@ -146,7 +174,8 @@ try {
     graph3d,
     cameraStability,
     afterSelect,
-    detailVisible: await page.locator('#wiki-detail').isVisible(),
+    evidence,
+    detailVisible,
     drawerOverlap: await page.evaluate(() => {
       const drawer = document.querySelector('#wiki-detail')?.getBoundingClientRect();
       if (!drawer) return null;
@@ -207,6 +236,18 @@ try {
     wiki.cameraStability.pitchSpread <= 0.0001 &&
     wiki.afterSelect.projected > 0 &&
     Boolean(wiki.afterSelect.selected) &&
+    wiki.evidence.summary.length === 6 &&
+    wiki.evidence.summary.every(({ value }) => value.length > 0 && value !== '—') &&
+    wiki.evidence.summary
+      .filter(({ label }) =>
+        ['Randomized runs', 'Handoff runs', 'Concurrency runs'].includes(label)
+      )
+      .every(({ value }) => value === 'Not run') &&
+    /selected projects have evidence events/i.test(wiki.evidence.status) &&
+    wiki.evidence.ucrSummary.some(
+      ({ label, value }) => label === 'UCR runtime events' && value === 'Not exercised'
+    ) &&
+    wiki.evidence.missingMetrics > 0 &&
     wiki.detailVisible &&
     wiki.drawerOverlap?.length === 0 &&
     errors.length === 0;

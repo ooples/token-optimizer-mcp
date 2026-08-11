@@ -303,7 +303,7 @@ function consumerContext(decision, tokenBudget) {
   const context = [
     'A host-verified pre-action continuity capsule is available.',
     decision.payload,
-    'Treat it as evidence, confirm it against the repository, and do not expose or invoke any MCP server.',
+    'Use it as the primary explanation of the prior failure. Inspect only the exact cited paths needed to implement and verify the correction; do not repeat broad discovery that the predecessor already completed. Do not expose or invoke any MCP server.',
   ].join('\n');
   const maximumCharacters = Math.max(0, Number(tokenBudget) || 0) * 4;
   if (!maximumCharacters || context.length <= maximumCharacters) return context;
@@ -427,6 +427,8 @@ try {
       cacheCreationInputTokens: producer.usage.cacheCreationInputTokens,
       effectiveInputTokens: producer.usage.effectiveInputTokens,
       outputTokens: producer.usage.outputTokens,
+      totalTokens: producer.usage.totalTokens,
+      actionEvents: producer.actionAudit.length,
       latencyMs: producer.endedAtMs - producer.startedAtMs,
       startedAtMs: producer.startedAtMs,
       endedAtMs: producer.endedAtMs,
@@ -449,6 +451,8 @@ try {
       cacheCreationInputTokens: consumer.usage.cacheCreationInputTokens,
       effectiveInputTokens: consumer.usage.effectiveInputTokens,
       outputTokens: consumer.usage.outputTokens,
+      totalTokens: consumer.usage.totalTokens,
+      actionEvents: consumer.actionAudit.length,
       latencyMs: consumer.endedAtMs - consumer.startedAtMs,
       startedAtMs: consumer.startedAtMs,
       endedAtMs: consumer.endedAtMs,

@@ -85,10 +85,31 @@ const nf = new Intl.NumberFormat();
  * kind of confident-looking number this project exists to argue against.
  */
 async function loadBalance() {
+  const grid = el('balance-grid');
+  const verdict = el('balance-verdict');
+  const method = el('balance-method');
   let balance;
   try {
     balance = await api(scoped('/api/wiki/balance'));
   } catch {
+    grid.innerHTML = [
+      'Memory deliveries',
+      'Kept back for comparison',
+      'Cost of remembering',
+      'Reading avoided',
+    ]
+      .map(
+        (label) => `
+        <div class="stat-card"><div class="stat-content">
+          <div class="stat-label">${escapeHtml(label)}</div>
+          <div class="stat-value wiki-figure">Unavailable</div>
+        </div></div>`
+      )
+      .join('');
+    verdict.textContent = 'Balance telemetry could not be loaded.';
+    verdict.dataset.state = 'bad';
+    method.textContent =
+      'No saving or cost claim is shown until the event source is reachable.';
     return;
   }
 
@@ -119,7 +140,7 @@ async function loadBalance() {
     ],
   ];
 
-  el('balance-grid').innerHTML = tiles
+  grid.innerHTML = tiles
     .map(
       ([label, value]) => `
     <div class="stat-card">
@@ -131,7 +152,6 @@ async function loadBalance() {
     )
     .join('');
 
-  const verdict = el('balance-verdict');
   verdict.textContent = balance.verdict;
   verdict.dataset.state = !balance.sufficientData
     ? 'insufficient'
@@ -140,11 +160,11 @@ async function loadBalance() {
       : 'negative';
 
   if (balance.sufficientData) {
-    el('balance-method').textContent =
+    method.textContent =
       `Measured against ${nf.format(balance.holdouts)} withheld control touches — not estimated. ` +
       `Net after injection and harvest cost: ${nf.format(balance.netTokens)} tokens.`;
   } else {
-    el('balance-method').textContent =
+    method.textContent =
       `The graph has ${nf.format(balance.injections)} measured file deliveries and ${nf.format(balance.holdouts)} file holdouts; ` +
       'the savings estimate unlocks at 20 and 5. Command and session-start deliveries are counted above but excluded from the file-read comparison because they have no valid downstream file-read join.';
   }
@@ -162,6 +182,7 @@ function formatInterval(interval, suffix = '') {
 
 async function loadEvidence() {
   const params = new URLSearchParams();
+  params.set('scope', state.scope);
   const values = {
     client: el('evidence-client').value.trim(),
     model: el('evidence-model').value.trim(),
@@ -181,14 +202,16 @@ async function loadEvidence() {
   }
 
   const summary = report.summary;
+  const measuredCount = (value) =>
+    Number(value) > 0 ? nf.format(value) : 'Not run';
   const coverage =
     summary.causalJoinCoverage === null
-      ? '—'
+      ? 'Not measurable'
       : `${Math.round(summary.causalJoinCoverage * 100)}%`;
   el('evidence-summary').innerHTML = [
-    ['Randomized runs', nf.format(summary.evalRuns)],
-    ['Handoff runs', nf.format(summary.handoffRuns || 0)],
-    ['Concurrency runs', nf.format(summary.concurrencyRuns || 0)],
+    ['Randomized runs', measuredCount(summary.evalRuns)],
+    ['Handoff runs', measuredCount(summary.handoffRuns)],
+    ['Concurrency runs', measuredCount(summary.concurrencyRuns)],
     ['Live injections', nf.format(summary.liveInjections)],
     ['Outcome join coverage', coverage],
     ['Harmful feedback', nf.format(summary.harmfulFeedback)],
@@ -203,7 +226,10 @@ async function loadEvidence() {
     .join('');
 
   const status = el('evidence-status');
-  status.textContent = summary.evidenceStatus;
+  const sourceCoverage = report.sourceCoverage;
+  status.textContent = sourceCoverage
+    ? `${summary.evidenceStatus} · ${nf.format(sourceCoverage.projectsWithEvidence)} of ${nf.format(sourceCoverage.projects)} selected projects have evidence events`
+    : summary.evidenceStatus;
   status.dataset.state =
     summary.evidenceStatus === 'causal estimates available'
       ? 'ok'
@@ -305,8 +331,14 @@ async function loadUcr() {
   }
   el('ucr-summary').innerHTML = [
     ['Protocol', status.protocolVersion],
-    ['Canonical events', nf.format(status.events)],
-    ['Typed objects', nf.format(status.graph?.objects || 0)],
+    [
+      'UCR runtime events',
+      status.events ? nf.format(status.events) : 'Not exercised',
+    ],
+    [
+      'UCR typed objects',
+      status.graph?.objects ? nf.format(status.graph.objects) : 'Not exercised',
+    ],
     ['Certified clients', nf.format(status.certifiedClients)],
     [
       'Effectiveness verdict',
@@ -468,6 +500,30 @@ async function loadUcr() {
       : verdict === 'harmful'
         ? 'bad'
         : 'insufficient';
+  const missingMetrics = status.metricCoverage?.missing || [];
+  const producerFor = (evidenceClass) =>
+    ({
+      effectiveness: 'Powered full study',
+      superiority: 'Competitive study',
+      production: 'Signed production traffic study',
+      conformance: 'Adapter certification',
+      transport: 'Transport integrity study',
+    })[evidenceClass] || 'Unclassified producer';
+  el('ucr-missing').innerHTML = `
+    <thead><tr><th>Metric</th><th>Required evidence</th><th>Producer</th><th>Eligible ledgers</th></tr></thead>
+    <tbody>${
+      missingMetrics
+        .map(
+          (metric) => `<tr>
+          <td>${escapeHtml(metric.metric)}</td>
+          <td>${escapeHtml(metric.requiredEvidence)}</td>
+          <td>${escapeHtml(producerFor(metric.requiredEvidence))}</td>
+          <td>${nf.format(metric.eligibleLedgers || 0)}</td>
+        </tr>`
+        )
+        .join('') ||
+      '<tr><td colspan="4">Every release metric has an eligible evidence source.</td></tr>'
+    }</tbody>`;
   const tiers = status.evidenceIndex?.tiers || {};
   el('ucr-tiers').innerHTML = `
     <thead><tr><th>Tier</th><th>Status</th><th>Ledgers</th><th>Rows</th></tr></thead>
@@ -489,7 +545,15 @@ async function loadUcr() {
           <td>${escapeHtml(artifact.name)}</td>
           <td>${escapeHtml(artifact.evidenceClass)}</td>
           <td>${artifact.valid ? 'valid' : 'invalid'}</td>
-          <td>${artifact.passed ? 'passed' : 'negative / incomplete'}</td>
+          <td>${
+            artifact.passed
+              ? 'passed'
+              : artifact.qualificationPassed
+                ? `qualification passed (non-promotable${artifact.qualificationMaximumTokenOverhead == null ? '' : `; max token overhead ${(artifact.qualificationMaximumTokenOverhead * 100).toFixed(2)}%`})`
+                : artifact.qualificationStatus === 'failed'
+                  ? 'qualification failed'
+                  : 'negative / incomplete'
+          }</td>
         </tr>`
       )
       .join('')}</tbody>`;

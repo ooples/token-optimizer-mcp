@@ -830,6 +830,17 @@ async function main() {
           ucrState === 'insufficient',
           ucrState
         );
+        const missingMetricRows = await page
+          .locator('#ucr-missing tbody tr')
+          .count();
+        const missingMetricText = await page.textContent('#ucr-missing');
+        check(
+          'UCR dashboard maps every missing metric to its evidence producer',
+          missingMetricRows > 0 &&
+            /effectiveness/i.test(missingMetricText || '') &&
+            /powered full study/i.test(missingMetricText || ''),
+          `${missingMetricRows} missing metrics`
+        );
         await page.screenshot({
           path: join(SHOTS, 'evidence.png'),
           fullPage: true,

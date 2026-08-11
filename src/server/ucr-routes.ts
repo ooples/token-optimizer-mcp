@@ -101,6 +101,23 @@ export function registerUcrRoutes(app: Express): void {
       const replay = store.read();
       const graph = ucr.rebuildGraph(replay.events);
       const evidence = releaseEvidence(ucr);
+      const metricSources = evidence.evidenceIndex?.derived?.sources || {};
+      const metrics = evidence.metrics || {};
+      const metricNames = [
+        ...new Set([...Object.keys(metricSources), ...Object.keys(metrics)]),
+      ];
+      const metricCoverage = metricNames.map((metric) => {
+        const value = metrics[metric];
+        return {
+          metric,
+          measured: value !== null && value !== undefined,
+          value,
+          requiredEvidence:
+            metricSources[metric]?.requiredClass || 'unclassified',
+          eligibleLedgers:
+            metricSources[metric]?.eligibleLedgerHashes?.length || 0,
+        };
+      });
       return res.json({
         available: true,
         protocolVersion: ucr.UCR_PROTOCOL_VERSION,
@@ -120,6 +137,11 @@ export function registerUcrRoutes(app: Express): void {
           evidence.evidenceIndex?.tieredVerdict ||
           ucr.tieredReleaseVerdict(evidence.metrics || {}),
         metrics: evidence.metrics,
+        metricCoverage: {
+          total: metricCoverage.length,
+          measured: metricCoverage.filter((metric) => metric.measured).length,
+          missing: metricCoverage.filter((metric) => !metric.measured),
+        },
         deterministicEvidence: evidence.deterministic
           ? {
               checksPassed:
@@ -152,6 +174,10 @@ export function registerUcrRoutes(app: Express): void {
                   evidenceClass: artifact.evidenceClass,
                   valid: artifact.valid,
                   passed: artifact.passed,
+                  qualificationStatus: artifact.qualificationStatus,
+                  qualificationPassed: artifact.qualificationPassed,
+                  qualificationMaximumTokenOverhead:
+                    artifact.qualificationMaximumTokenOverhead,
                   reportHash: artifact.reportHash,
                 })
               ),
