@@ -66,7 +66,16 @@ function seed(claim = BASELINE) {
   writeFileSync(file, '# x\n');
   writeHarvested(
     wikiA,
-    [{ type: 'command', claim, confidence: 0.9, trigger: 'build', anchors: [file] }],
+    [
+      {
+        type: 'command',
+        claim,
+        confidence: 0.9,
+        trigger: 'build',
+        scope: 'global',
+        anchors: [file],
+      },
+    ],
     { sessionId: 'seed', projectRoot: projectA }
   );
   return [...load(sharedDirOf()).nodes.values()].find((n) => n.kind === 'finding');

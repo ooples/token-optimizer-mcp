@@ -189,7 +189,97 @@ function contextOutput(client, eventName, additionalContext) {
 }
 
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
+function codexStringBindings(source) {
+  const values = new Map();
+  const declaration = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`))/gs;
+  for (const match of String(source || '').matchAll(declaration)) {
+    try {
+      const literal = match[2];
+      const value = literal.startsWith('`')
+        ? literal.slice(1, -1).replace(/\\`/g, '`')
+        : JSON.parse(literal.startsWith("'")
+          ? `"${literal.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"')}"`
+          : literal);
+      values.set(match[1], value);
+    } catch {
+      // A computed or malformed JavaScript expression is not safe to execute
+      // merely to understand a hook envelope. Leave it opaque.
+    }
+  }
+  return values;
+}
+
+function codexCallArguments(source, method) {
+  const calls = [];
+  const pattern = new RegExp(`(?:tools\\.)?${method}\\s*\\(\\s*([^),]+)`, 'gi');
+  for (const match of String(source || '').matchAll(pattern))
+    calls.push(match[1].trim());
+  return calls;
+}
+
+function codexLiteral(value, bindings) {
+  if (bindings.has(value)) return String(bindings.get(value));
+  try {
+    if (/^"(?:\\.|[^"\\])*"$/s.test(value)) return JSON.parse(value);
+    if (/^'(?:\\.|[^'\\])*'$/s.test(value))
+      return JSON.parse(
+        `"${value.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"')}"`
+      );
+    if (/^`(?:\\.|[^`\\])*`$/s.test(value))
+      return value.slice(1, -1).replace(/\\`/g, '`');
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function codexExecCommands(source, bindings) {
+  const commands = [];
+  for (const call of String(source || '').matchAll(
+    /(?:tools\.)?exec_command\s*\(\s*\{([\s\S]*?)\}\s*\)/gi
+  )) {
+    const property = /\bcmd\s*:\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`)|(?:[A-Za-z_$][\w$]*))/s.exec(call[1]);
+    if (!property) continue;
+    const command = codexLiteral(property[1], bindings);
+    if (command) commands.push(command);
+  }
+  return commands;
+}
+
 export function normalizeClientPayload(clientName, event, raw) {
+  if (clientName === 'codex') {
+    const outerName = String(raw.tool_name ?? raw.toolName ?? raw.tool ?? '');
+    if (/^(?:functions\.)?exec$/i.test(outerName)) {
+      const envelope = raw.tool_input ?? raw.toolInput ?? raw.arguments ?? raw.args;
+      const source =
+        typeof envelope === 'string'
+          ? envelope
+          : envelope?.code ?? envelope?.input ?? envelope?.source ?? '';
+      const bindings = codexStringBindings(source);
+      const patchCalls = codexCallArguments(source, 'apply_patch');
+      const patch = patchCalls
+        .map((argument) => codexLiteral(argument, bindings))
+        .find(Boolean);
+      const mutation = patchCalls.length > 0;
+      const commands = codexExecCommands(source, bindings);
+
+      // `functions.exec` is also the orchestration envelope for web, image and
+      // other non-filesystem tools. Do not reinterpret those as shell commands:
+      // doing so produced irrelevant cross-project advice and fabricated graph
+      // activity for operations the filesystem hooks never observed.
+      if (!mutation && !commands.length) return raw;
+      return {
+        ...raw,
+        tool_name: mutation ? 'apply_patch' : 'run_command',
+        tool_input: {
+          ...(envelope && typeof envelope === 'object' ? envelope : {}),
+          command: String(patch || commands.join('\n') || source || ''),
+          code_mode_envelope: true,
+        },
+      };
+    }
+  }
+
   if (clientName === 'cline') {
     const body = event === 'post-tool' ? raw.postToolUse : raw.preToolUse;
     if (!body) return raw;
@@ -385,6 +475,22 @@ function projectBriefing() {
 function observeAndInject(payload, state, episode, features) {
   const touched = touchedFiles(payload);
   const dirFor = (path) => wikiDir(projectRootFor(path, payload.cwd));
+  const registerRoot = (root) => {
+    const dir = wikiDir(root);
+    registerProject({
+      root,
+      graphDir: dir,
+      client: episode.client || 'unknown',
+    });
+    return dir;
+  };
+
+  // SessionStart is not delivered consistently by every host/version. The
+  // graph was still written in that case, but the dashboard registry never
+  // learned it existed. Register every repository observed by a real tool call
+  // as a second, idempotent production path.
+  for (const { path } of touched)
+    registerRoot(projectRootFor(path, payload.cwd));
 
   const bytes = readCostBytes(payload);
   if (bytes && payload.tool_input.file_path) {
@@ -425,7 +531,7 @@ function observeAndInject(payload, state, episode, features) {
     const command = payload.tool_input?.command;
     if (command) {
       const root = commandProjectRoot(payload, payload.cwd);
-      const dir = wikiDir(root);
+      const dir = registerRoot(root);
       const local = forCommand(dir, load(dir), command, {
         sessionId: payload.session_id,
         alreadyInjected,
@@ -750,7 +856,14 @@ async function runHook(clientName, event, invocation) {
       client.canDeny &&
       event === 'pre-tool' &&
       !repeat &&
-      mode() !== MODE_ADVISE
+      mode() !== MODE_ADVISE &&
+      // Codex code mode presents an orchestration program as one outer
+      // `functions.exec` call. Refusing that envelope is rendered by the host
+      // as a failed script and can discard several otherwise-safe nested
+      // operations. Observe it, capture it and advise, but reserve a hard veto
+      // for legacy one-operation Codex tool calls where the denied operation is
+      // unambiguous.
+      !(clientName === 'codex' && payload.tool_input?.code_mode_envelope)
   );
 
   if (canRefuse) {
@@ -759,19 +872,23 @@ async function runHook(clientName, event, invocation) {
     // Every client's refusal carries the off switch, for the same reason Claude
     // Code's does: enforcement that hides its own disable is coercive.
     if (client.denyStyle === 'top-level') {
+      invocation.block('policy_denied');
       emit({ decision: 'deny', reason: withEscape(verdict.reason) });
     } else if (client.denyStyle === 'top-level-permission') {
+      invocation.block('policy_denied');
       emit({
         permissionDecision: 'deny',
         permissionDecisionReason: withEscape(verdict.reason),
       });
     } else if (client.denyStyle === 'cline') {
+      invocation.block('policy_denied');
       emit({
         cancel: true,
         contextModification: '',
         errorMessage: withEscape(verdict.reason),
       });
     } else if (client.denyStyle === 'cursor') {
+      invocation.block('policy_denied');
       emit({
         continue: true,
         permission: 'deny',
@@ -780,9 +897,11 @@ async function runHook(clientName, event, invocation) {
           'Token Optimizer redirected an expensive built-in operation.',
       });
     } else if (client.denyStyle === 'exit-2') {
+      invocation.block('policy_denied');
       process.stderr.write(withEscape(verdict.reason));
       process.exit(2);
     } else {
+      invocation.block('policy_denied');
       emit({
         hookSpecificOutput: {
           hookEventName: eventName,

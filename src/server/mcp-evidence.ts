@@ -3,6 +3,7 @@
 import path from 'path';
 import { dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { recordMcpDiagnostic } from './mcp-diagnostics.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const processEpisodeId =
@@ -51,6 +52,16 @@ async function modules(): Promise<EvidenceModules> {
 export class McpEvidenceRecorder {
   private client: McpClientInfo | null = null;
 
+  constructor(private readonly serviceVersion: string) {
+    recordMcpDiagnostic({
+      serviceVersion,
+      event: 'mcp.process_started',
+      outcome: 'success',
+      toolProfile: process.env.TOKEN_OPTIMIZER_TOOL_PROFILE || 'core',
+      experimentArm: process.env.TOKEN_OPTIMIZER_EXPERIMENT_ARM || 'full',
+    });
+  }
+
   private async record(event: Record<string, unknown>): Promise<void> {
     try {
       const loaded = await modules();
@@ -78,6 +89,13 @@ export class McpEvidenceRecorder {
 
   clientInitialized(info?: McpClientInfo): void {
     this.client = info || null;
+    recordMcpDiagnostic({
+      serviceVersion: this.serviceVersion,
+      event: 'mcp.client_initialized',
+      outcome: 'success',
+      client: info?.name || 'unknown-mcp-client',
+      clientVersion: info?.version || null,
+    });
     void this.record({
       kind: 'mcp-client',
       clientTitle: info?.title || null,
@@ -85,11 +103,63 @@ export class McpEvidenceRecorder {
   }
 
   toolOutcome(toolName: string, durationMs: number, success: boolean): void {
+    recordMcpDiagnostic({
+      serviceVersion: this.serviceVersion,
+      event: 'mcp.tool_completed',
+      outcome: success ? 'success' : 'failure',
+      client: this.client?.name || 'unknown-mcp-client',
+      clientVersion: this.client?.version || null,
+      toolName,
+      durationMs,
+    });
     void this.record({
       kind: 'mcp-tool',
       toolName,
       durationMs,
       success,
+    });
+  }
+
+  toolsListed(toolCount: number): void {
+    recordMcpDiagnostic({
+      serviceVersion: this.serviceVersion,
+      event: 'mcp.tools_listed',
+      outcome: 'success',
+      client: this.client?.name || 'unknown-mcp-client',
+      clientVersion: this.client?.version || null,
+      toolCount,
+      toolProfile: process.env.TOKEN_OPTIMIZER_TOOL_PROFILE || 'core',
+    });
+  }
+
+  transportConnected(): void {
+    recordMcpDiagnostic({
+      serviceVersion: this.serviceVersion,
+      event: 'mcp.transport_connected',
+      outcome: 'success',
+      client: this.client?.name || null,
+      clientVersion: this.client?.version || null,
+    });
+  }
+
+  startupFailed(error: unknown): void {
+    recordMcpDiagnostic({
+      serviceVersion: this.serviceVersion,
+      event: 'mcp.startup_failed',
+      outcome: 'failure',
+      client: this.client?.name || null,
+      clientVersion: this.client?.version || null,
+      error,
+    });
+  }
+
+  shutdown(): void {
+    recordMcpDiagnostic({
+      serviceVersion: this.serviceVersion,
+      event: 'mcp.shutdown',
+      outcome: 'success',
+      client: this.client?.name || null,
+      clientVersion: this.client?.version || null,
     });
   }
 }

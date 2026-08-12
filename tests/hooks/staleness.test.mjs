@@ -81,6 +81,27 @@ describe('symbol extraction', () => {
     expect(names).toContain('Run');
   });
 
+  test('finds C# Allman-style methods used by real projects', () => {
+    const names = extractSymbols('ParameterComponentRegistry.cs', [
+      'public sealed class ParameterComponentRegistry<T>',
+      '{',
+      '    public void SetParameters(Vector<T> parameters)',
+      '    {',
+      '        ArgumentNullException.ThrowIfNull(parameters);',
+      '    }',
+      '',
+      '    private CapturedLayout CaptureLayout()',
+      '    {',
+      '        return new CapturedLayout();',
+      '    }',
+      '}',
+    ].join('\n')).map((s) => s.name);
+
+    expect(names).toEqual(
+      expect.arrayContaining(['ParameterComponentRegistry', 'SetParameters', 'CaptureLayout'])
+    );
+  });
+
   test('an unknown language yields no symbols rather than junk', () => {
     expect(languageOf('notes.xyz')).toBeNull();
     expect(extractSymbols('notes.xyz', 'def foo():')).toEqual([]);

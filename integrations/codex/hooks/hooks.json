@@ -17,7 +17,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Read|read_file|view_file|Grep|grep|search_file_content|Glob|glob|find_files|Edit|edit_file|apply_patch|Write|write_file|Bash|shell|run_command",
+        "matcher": "Read|read_file|view_file|Grep|grep|search_file_content|Glob|glob|find_files|Edit|edit_file|apply_patch|Write|write_file|Bash|shell|run_command|functions\\.exec|exec",
         "hooks": [
           {
             "type": "command",
@@ -31,7 +31,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "apply_patch|Edit|Write|edit_file|write_file|smart_edit|smart_write",
+        "matcher": "apply_patch|Edit|Write|edit_file|write_file|smart_edit|smart_write|functions\\.exec|exec",
         "hooks": [
           {
             "type": "command",

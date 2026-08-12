@@ -3,6 +3,8 @@ import os from 'os';
 import path from 'path';
 
 export interface HookDiagnosticEvent {
+  event?: string;
+  invocationId?: string;
   timestamp?: string;
   client?: string;
   hookEvent?: string;
@@ -42,7 +44,8 @@ function readTail(file: string): string {
 
 export function readHookDiagnosticEvents(
   limit = 200,
-  sinceMs = 24 * 60 * 60 * 1000
+  sinceMs = 24 * 60 * 60 * 1000,
+  includeLifecycle = false
 ): HookDiagnosticEvent[] {
   try {
     const directory = hookDiagnosticDirectory();
@@ -62,6 +65,7 @@ export function readHookDiagnosticEvents(
         try {
           const event = JSON.parse(line) as HookDiagnosticEvent;
           if (event.timestamp && Date.parse(event.timestamp) < cutoff) continue;
+          if (!includeLifecycle && event.event === 'hook.started') continue;
           events.push(event);
           if (events.length >= limit) return events;
         } catch {
@@ -78,33 +82,68 @@ export function readHookDiagnosticEvents(
 export function summarizeHookDiagnostics(
   sinceMs = 24 * 60 * 60 * 1000
 ): Record<string, unknown> {
-  const events = readHookDiagnosticEvents(5000, sinceMs);
-  const failures = events.filter((event) => event.outcome === 'failure');
-  const timeouts = events.filter((event) => event.outcome === 'timeout');
-  const skipped = events.filter((event) => event.outcome === 'skipped');
-  const successes = events.filter((event) => event.outcome === 'success');
-  const durations = events
+  const events = readHookDiagnosticEvents(10000, sinceMs, true);
+  const starts = events.filter((event) => event.event === 'hook.started');
+  const completed = events.filter(
+    (event) => event.event === 'hook.completed' || !event.event
+  );
+  const completedIds = new Set(
+    completed.map((event) => event.invocationId).filter(Boolean)
+  );
+  const abandoned = starts
+    .filter(
+      (event) =>
+        event.invocationId &&
+        !completedIds.has(event.invocationId) &&
+        Date.now() - Date.parse(event.timestamp || '') > 10_000
+    )
+    .map((event) => ({
+      ...event,
+      event: 'hook.completed',
+      outcome: 'failure',
+      reason: 'process_terminated_before_completion',
+    }));
+  const runs = [...completed, ...abandoned];
+  const failures = runs.filter((event) => event.outcome === 'failure');
+  const timeouts = runs.filter((event) => event.outcome === 'timeout');
+  const skipped = runs.filter((event) => event.outcome === 'skipped');
+  const blocked = runs.filter((event) => event.outcome === 'blocked');
+  const successes = runs.filter((event) => event.outcome === 'success');
+  const durations = runs
     .map((event) => Number(event.durationMs))
     .filter(Number.isFinite)
     .sort((a, b) => a - b);
   const byClient: Record<
     string,
-    { total: number; failures: number; timeouts: number; skipped: number }
+    {
+      total: number;
+      failures: number;
+      timeouts: number;
+      skipped: number;
+      blocked: number;
+      hookEvents: string[];
+    }
   > = {};
-  for (const event of events) {
+  for (const event of runs) {
     const key = event.client || 'unknown';
     const current = byClient[key] || {
       total: 0,
       failures: 0,
       timeouts: 0,
       skipped: 0,
+      blocked: 0,
+      hookEvents: [],
     };
     current.total++;
     if (event.outcome === 'failure') current.failures++;
     if (event.outcome === 'timeout') current.timeouts++;
     if (event.outcome === 'skipped') current.skipped++;
+    if (event.outcome === 'blocked') current.blocked++;
+    if (event.hookEvent && !current.hookEvents.includes(event.hookEvent))
+      current.hookEvents.push(event.hookEvent);
     byClient[key] = current;
   }
+  for (const current of Object.values(byClient)) current.hookEvents.sort();
   const percentile = (fraction: number): number | null =>
     durations.length
       ? durations[
@@ -115,17 +154,31 @@ export function summarizeHookDiagnostics(
         ]
       : null;
   return {
-    available: events.length > 0,
+    schemaVersion: 2,
+    available: runs.length > 0,
     windowHours: sinceMs / 3_600_000,
-    total: events.length,
+    total: runs.length,
     failures: failures.length,
     timeouts: timeouts.length,
     skipped: skipped.length,
-    successRate: events.length ? successes.length / events.length : null,
+    blocked: blocked.length,
+    abandoned: abandoned.length,
+    successes: successes.length,
+    successRate: runs.length
+      ? (successes.length + skipped.length + blocked.length) / runs.length
+      : null,
+    healthStatus:
+      failures.length || timeouts.length
+        ? 'failing'
+        : skipped.length
+          ? 'degraded'
+          : runs.length
+            ? 'healthy'
+            : 'unavailable',
     p50DurationMs: percentile(0.5),
     p95DurationMs: percentile(0.95),
     byClient,
-    recentFailures: events
+    recentFailures: runs
       .filter(
         (event) => event.outcome === 'failure' || event.outcome === 'timeout'
       )

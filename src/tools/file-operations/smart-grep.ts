@@ -770,6 +770,13 @@ export const SMART_GREP_TOOL_DEFINITION = {
   name: 'smart_grep',
   description:
     'Search file contents with 80% token reduction through match-only output and smart filtering',
+  annotations: {
+    title: 'Search file contents efficiently',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: 'object',
     properties: {

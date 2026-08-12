@@ -654,6 +654,13 @@ export const SMART_GLOB_TOOL_DEFINITION = {
   name: 'smart_glob',
   description:
     'Search files with glob patterns and 75% token reduction through path-only results and smart filtering',
+  annotations: {
+    title: 'Find files efficiently',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: 'object',
     properties: {

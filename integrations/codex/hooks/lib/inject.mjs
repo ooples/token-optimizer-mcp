@@ -31,6 +31,7 @@ import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { annotatedSkeleton } from './skeleton.mjs';
 import { substitutionBudget } from './metrics.mjs';
 import { assessFindings } from './utility.mjs';
+import { quarantineSharedSource } from './harvest-write.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
@@ -562,6 +563,7 @@ export function forRepeatedAct(
     const home = projectRoot ? canonicalPath(projectRoot) : null;
     for (const node of graph.nodes.values()) {
       if (node.kind !== 'finding' || node.retired || !node.claim) continue;
+      if (quarantineSharedSource(node.sourceProject)) continue;
       if (home && node.sourceProject && canonicalPath(node.sourceProject) === home) continue;
       const claimClasses = classesOf(node.claim, 'claim');
       if (![...crossedClasses].some((c) => claimClasses.has(c))) continue;
@@ -667,6 +669,7 @@ export function forSharedCommand(
     const candidates = [];
     for (const node of graph.nodes.values()) {
       if (node.kind !== 'finding' || node.retired) continue;
+      if (quarantineSharedSource(node.sourceProject)) continue;
       if (alreadyInjected.has(node.key)) continue;
       // ITS OWN LESSON IS NOT NEWS. A finding this project contributed is already
       // served by the local path; repeating it under a "from elsewhere" label

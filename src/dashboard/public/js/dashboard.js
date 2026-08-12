@@ -112,7 +112,10 @@ async function load() {
 function activityFromDiagnostics(report) {
   const events = report.events || [];
   const actions = events.filter(
-    (event) => event.hookEvent === 'pre-tool' && event.toolName
+    (event) =>
+      event.event !== 'hook.started' &&
+      event.hookEvent === 'pre-tool' &&
+      event.toolName
   );
   const toolBreakdown = {};
   for (const event of actions) {

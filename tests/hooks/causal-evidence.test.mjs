@@ -73,6 +73,40 @@ describe('causal episode tracing', () => {
     });
   });
 
+  test('an exact repeat enriches the existing finding with newly resolvable anchors', () => {
+    const key = seed();
+    const second = join(workspace, 'package.json');
+    writeFileSync(second, '{"scripts":{"test":"jest"}}\n');
+
+    const repeated = writeHarvested(dir, [{
+      type: 'command',
+      claim: 'Use npm test instead of the unsupported direct probe.',
+      evidence: 'The package command passed and the direct probe exited one.',
+      applicability: 'When verification uses the unsupported direct probe.',
+      confidenceLabel: 'verified',
+      confidence: 0.98,
+      scope: 'project',
+      invalidators: ['package.json test script changes'],
+      trigger: 'bad-command',
+      anchors: [anchor, second],
+    }], { sessionId: 'second-session', origin: ORIGIN_AGENT, projectRoot: workspace })[0];
+
+    const graph = load(dir);
+    const finding = [...graph.nodes.values()].find((item) => item.key === key);
+    const findingCount = [...graph.nodes.values()].filter(
+      (item) => item.kind === 'finding' && item.claim === finding.claim
+    ).length;
+    const anchors = new Set(
+      graph.edges
+        .filter((edge) => edge.from === finding.id && edge.edge === 'derived_from')
+        .map((edge) => edge.to)
+    );
+
+    expect(repeated).toBe(key);
+    expect(findingCount).toBe(1);
+    expect(anchors.size).toBe(2);
+  });
+
   test('joins a tool outcome to the exact injection id', () => {
     const injection = record(dir, {
       kind: 'inject', episodeId: 'episode-1', sessionId: 'session-1',

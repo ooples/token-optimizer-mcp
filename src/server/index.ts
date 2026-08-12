@@ -580,10 +580,14 @@ if (typeof memoPruneTimer.unref === 'function') {
 }
 
 // Create MCP server
+const packageVersion = JSON.parse(
+  fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+).version as string;
+
 const server = new Server(
   {
     name: 'token-optimizer-mcp',
-    version: '0.2.0',
+    version: packageVersion,
   },
   {
     capabilities: {
@@ -591,7 +595,7 @@ const server = new Server(
     },
   }
 );
-const mcpEvidence = new McpEvidenceRecorder();
+const mcpEvidence = new McpEvidenceRecorder(packageVersion);
 server.oninitialized = () => {
   mcpEvidence.clientInitialized(server.getClientVersion());
 };
@@ -931,6 +935,7 @@ const { assertRequiredFields, assertKnownFields } = createToolArgumentChecker(
 
 // Define tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+  mcpEvidence.toolsListed(ADVERTISED_TOOL_DEFINITIONS.length);
   return {
     tools: ADVERTISED_TOOL_DEFINITIONS,
   };
@@ -2883,78 +2888,94 @@ async function handleToolCall(request: {
   }
 }
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (!ADVERTISED_TOOL_NAMES.has(request.params.name)) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            error:
-              `Tool ${request.params.name} is not available in the active MCP tool profile. ` +
-              'Set TOKEN_OPTIMIZER_TOOL_PROFILE=full before starting the server to expose the full catalog.',
-          }),
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  // Following a pointer is handled here rather than in the tool switch, because
-  // it is not an operation on the codebase -- it is an operation on what we
-  // already said about it.
-  if (request.params.name === 'expand') {
-    return expandRef(request.params.arguments as any);
-  }
-
-  // Likewise the audit: it reports on the tool log rather than operating on the
-  // codebase, and its own output must not be disclosed away.
-  if (request.params.name === 'waste_audit') {
-    return wasteAudit(request.params.arguments as any);
-  }
-
-  if (request.params.name === 'cache_audit') {
-    return cacheAudit();
-  }
-
-  if (request.params.name === 'model_routing') {
-    return modelRouting(request.params.arguments as any);
-  }
-
-  if (request.params.name === 'token_audit') {
-    return tokenAudit(request.params.arguments as any);
-  }
-
-  if (request.params.name === 'install_doctor') {
-    return installDoctor(request.params.arguments as any);
-  }
-
-  if (request.params.name === 'fleet_audit') {
-    return fleetAudit(request.params.arguments as any);
-  }
-
+async function observeMcpToolCall<T>(
+  toolName: string,
+  operation: () => T | Promise<T>
+): Promise<T> {
   const started = Date.now();
-  const result = await handleToolCall(request);
-  // Best-effort: feed savings into analytics so the report/breakdown tools have
-  // real data. Never blocks meaningfully or breaks the tool call.
-  await recordToolAnalytics(analyticsManager, request.params.name, result);
-  mcpEvidence.toolOutcome(
-    request.params.name,
-    Date.now() - started,
-    !(result as { isError?: boolean } | null)?.isError
-  );
 
-  // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
-  // per-tool is what keeps it a single policy instead of ninety. The elapsed
-  // time is passed along because it is what later decides whether a stale
-  // artifact is worth regenerating or worth serving with a marker.
-  return discloseResult(
-    request.params.name,
-    request.params.arguments as Record<string, unknown> | undefined,
-    result as any,
-    Date.now() - started
-  ) as any;
-});
+  try {
+    const result = await operation();
+    mcpEvidence.toolOutcome(
+      toolName,
+      Date.now() - started,
+      !(result as { isError?: boolean } | null)?.isError
+    );
+    return result;
+  } catch (error) {
+    mcpEvidence.toolOutcome(toolName, Date.now() - started, false);
+    throw error;
+  }
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) =>
+  observeMcpToolCall(request.params.name, async () => {
+    if (!ADVERTISED_TOOL_NAMES.has(request.params.name)) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              error:
+                `Tool ${request.params.name} is not available in the active MCP tool profile. ` +
+                'Set TOKEN_OPTIMIZER_TOOL_PROFILE=full before starting the server to expose the full catalog.',
+            }),
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    // Following a pointer is handled here rather than in the tool switch, because
+    // it is not an operation on the codebase -- it is an operation on what we
+    // already said about it.
+    if (request.params.name === 'expand') {
+      return expandRef(request.params.arguments as any);
+    }
+
+    // Likewise the audit: it reports on the tool log rather than operating on the
+    // codebase, and its own output must not be disclosed away.
+    if (request.params.name === 'waste_audit') {
+      return wasteAudit(request.params.arguments as any);
+    }
+
+    if (request.params.name === 'cache_audit') {
+      return cacheAudit();
+    }
+
+    if (request.params.name === 'model_routing') {
+      return modelRouting(request.params.arguments as any);
+    }
+
+    if (request.params.name === 'token_audit') {
+      return tokenAudit(request.params.arguments as any);
+    }
+
+    if (request.params.name === 'install_doctor') {
+      return installDoctor(request.params.arguments as any);
+    }
+
+    if (request.params.name === 'fleet_audit') {
+      return fleetAudit(request.params.arguments as any);
+    }
+
+    const started = Date.now();
+    const result = await handleToolCall(request);
+    // Best-effort: feed savings into analytics so the report/breakdown tools have
+    // real data. Never blocks meaningfully or breaks the tool call.
+    await recordToolAnalytics(analyticsManager, request.params.name, result);
+    // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than
+    // per-tool is what keeps it a single policy instead of ninety. The elapsed
+    // time is passed along because it is what later decides whether a stale
+    // artifact is worth regenerating or worth serving with a marker.
+    return discloseResult(
+      request.params.name,
+      request.params.arguments as Record<string, unknown> | undefined,
+      result as any,
+      Date.now() - started
+    ) as any;
+  })
+);
 
 // Helper to run cleanup operations with error handling
 async function runCleanupOperations(
@@ -2971,6 +2992,7 @@ async function runCleanupOperations(
 
 // Shared cleanup function to avoid duplication between signal handlers
 async function cleanup() {
+  mcpEvidence.shutdown();
   await runCleanupOperations([
     {
       fn: async () => await analyticsManager.close(),
@@ -3000,6 +3022,7 @@ async function cleanup() {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  mcpEvidence.transportConnected();
 
   // All termination paths (SIGINT/SIGTERM/SIGHUP + stdin end/close/error) run
   // through one guarded shutdown. See ./lifecycle.ts for the full rationale
@@ -3008,6 +3031,7 @@ async function main() {
 }
 
 main().catch((error) => {
+  mcpEvidence.startupFailed(error);
   console.error('Server error:', error);
   process.exit(1);
 });

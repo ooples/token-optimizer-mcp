@@ -428,6 +428,13 @@ export const SMART_READ_TOOL_DEFINITION = {
   name: 'smart_read',
   description:
     'Read files with 80% token reduction through intelligent caching, diff-based updates, and syntax-aware optimization',
+  annotations: {
+    title: 'Read a file efficiently',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: 'object',
     properties: {

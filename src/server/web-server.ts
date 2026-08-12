@@ -19,6 +19,10 @@ import {
   readHookDiagnosticEvents,
   summarizeHookDiagnostics,
 } from './hook-diagnostics.js';
+import {
+  readMcpDiagnosticEvents,
+  summarizeMcpDiagnostics,
+} from './mcp-diagnostics.js';
 import { isValidSessionId } from '../utils/session-id.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -577,12 +581,23 @@ app.get('/api/diagnostics/hooks', (req, res) => {
   });
 });
 
+app.get('/api/diagnostics/mcp', (req, res) => {
+  const hours = Math.min(24 * 30, Math.max(1, Number(req.query.hours) || 24));
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const sinceMs = hours * 60 * 60 * 1000;
+  res.json({
+    summary: summarizeMcpDiagnostics(sinceMs),
+    events: readMcpDiagnosticEvents(limit, sinceMs),
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     port: PORT,
     hookDiagnostics: summarizeHookDiagnostics(),
+    mcpDiagnostics: summarizeMcpDiagnostics(),
   });
 });
 

@@ -103,7 +103,7 @@ try {
 
   await page.goto(`${base}/wiki`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#wiki-list li');
-  await waitForCount('#hook-health-grid .stat-card', 6, 'hook health cards');
+  await waitForCount('#hook-health-grid .stat-card', 14, 'runtime health cards');
   const captureHealth = await page.evaluate(() => {
     const values = [...document.querySelectorAll('#hook-health-grid .stat-card')]
       .map((card) => ({
@@ -262,9 +262,24 @@ try {
     ['memoryDeliveries', 'memoryHoldouts', 'rememberingCost', 'readingAvoided']
       .every((key) => wiki.balanceContract.metrics?.[key]?.source) &&
     /selected projects have telemetry/i.test(wiki.balanceContract.method) &&
-    wiki.captureHealth.values.length === 6 &&
+    wiki.captureHealth.values.length === 14 &&
     wiki.captureHealth.values.some(
       ({ label, value }) => label === 'Hook runs' && Number(value.replaceAll(',', '')) > 0
+    ) &&
+    wiki.captureHealth.values.some(
+      ({ label, value }) => label === 'Policy blocks' && Number(value.replaceAll(',', '')) >= 0
+    ) &&
+    wiki.captureHealth.values.some(
+      ({ label, value }) => label === 'Abandoned' && Number(value.replaceAll(',', '')) === 0
+    ) &&
+    wiki.captureHealth.values.some(
+      ({ label, value }) => label === 'MCP handshakes' && Number(value.replaceAll(',', '')) > 0
+    ) &&
+    wiki.captureHealth.values.some(
+      ({ label, value }) => label === 'Tools advertised' && Number(value.replaceAll(',', '')) > 0
+    ) &&
+    wiki.captureHealth.values.some(
+      ({ label, value }) => label === 'MCP failures' && Number(value.replaceAll(',', '')) === 0
     ) &&
     wiki.captureHealth.state === 'ok' &&
     wiki.graph3d.width > 0 &&

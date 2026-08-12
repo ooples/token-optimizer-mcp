@@ -1097,8 +1097,12 @@ async function loadHookHealth() {
   const status = el('hook-health-status');
   const detail = el('hook-health-detail');
   try {
-    const report = await api('/api/diagnostics/hooks?hours=24&limit=20');
+    const [report, mcpReport] = await Promise.all([
+      api('/api/diagnostics/hooks?hours=24&limit=20'),
+      api('/api/diagnostics/mcp?hours=24&limit=20'),
+    ]);
     const summary = report.summary;
+    const mcp = mcpReport.summary;
     const success =
       summary.successRate === null
         ? '—'
@@ -1108,6 +1112,8 @@ async function loadHookHealth() {
       ['Success rate', success],
       ['Failures', nf.format(summary.failures)],
       ['Timeouts', nf.format(summary.timeouts)],
+      ['Policy blocks', nf.format(summary.blocked || 0)],
+      ['Abandoned', nf.format(summary.abandoned || 0)],
       [
         'p50 latency',
         summary.p50DurationMs == null ? '—' : `${summary.p50DurationMs} ms`,
@@ -1115,6 +1121,18 @@ async function loadHookHealth() {
       [
         'p95 latency',
         summary.p95DurationMs == null ? '—' : `${summary.p95DurationMs} ms`,
+      ],
+      ['MCP processes', nf.format(mcp.processes)],
+      ['MCP handshakes', nf.format(mcp.initializedClients)],
+      [
+        'Tools advertised',
+        mcp.advertisedTools == null ? '—' : nf.format(mcp.advertisedTools),
+      ],
+      ['MCP tool calls', nf.format(mcp.toolCalls)],
+      ['MCP failures', nf.format(mcp.failures)],
+      [
+        'MCP p95 latency',
+        mcp.p95DurationMs == null ? '—' : `${mcp.p95DurationMs} ms`,
       ],
     ]
       .map(
@@ -1126,25 +1144,37 @@ async function loadHookHealth() {
       )
       .join('');
 
-    const unhealthy = summary.failures > 0 || summary.timeouts > 0;
-    status.textContent = !summary.available
-      ? 'No lifecycle telemetry has been captured yet.'
-      : unhealthy
-        ? `${summary.failures} failure(s) and ${summary.timeouts} timeout(s) need attention.`
-        : 'Lifecycle capture is healthy across the observed clients.';
-    status.dataset.state = !summary.available
-      ? 'insufficient'
-      : unhealthy
-        ? 'bad'
-        : 'ok';
+    const unhealthy =
+      summary.failures > 0 ||
+      summary.timeouts > 0 ||
+      summary.abandoned > 0 ||
+      mcp.failures > 0;
+    status.textContent =
+      !summary.available && !mcp.available
+        ? 'No hook or MCP lifecycle telemetry has been captured yet.'
+        : unhealthy
+          ? `${summary.failures} hook failure(s), ${summary.timeouts} timeout(s), and ${mcp.failures} MCP failure(s) need attention.`
+          : `${summary.blocked || 0} intentional policy block(s); hook and MCP runtime show no failures.`;
+    status.dataset.state =
+      !summary.available && !mcp.available
+        ? 'insufficient'
+        : unhealthy
+          ? 'bad'
+          : 'ok';
     const clients = Object.entries(summary.byClient || {})
       .map(
         ([name, value]) =>
-          `${name}: ${value.total} runs, ${value.failures} failures, ${value.timeouts} timeouts, ${value.skipped || 0} skipped`
+          `${name}: ${value.total} runs, ${value.failures} failures, ${value.timeouts} timeouts, ${value.blocked || 0} policy blocks, ${value.skipped || 0} skipped; surfaces: ${(value.hookEvents || []).join(', ') || 'unknown'}`
+      )
+      .join(' · ');
+    const mcpClients = Object.entries(mcp.clients || {})
+      .map(
+        ([name, value]) =>
+          `${name}: ${value.initialized} MCP handshake(s), ${value.calls} call(s), ${value.failures} failure(s)`
       )
       .join(' · ');
     detail.textContent =
-      clients ||
+      [clients, mcpClients].filter(Boolean).join(' · ') ||
       'Privacy-safe JSONL diagnostics retain no prompts, commands, or tool output.';
   } catch {
     grid.innerHTML = '';

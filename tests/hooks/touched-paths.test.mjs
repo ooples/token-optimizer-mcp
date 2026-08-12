@@ -67,6 +67,24 @@ describe('a touch is a touch however the tool spells it', () => {
   test('a path that does not resolve is not recorded', () => {
     expect(bash('wc -l src/nope.ts', repoA)).toEqual([]);
   });
+
+  test('a Codex code-mode patch records the files it changed', () => {
+    const added = join(repoA, 'src', 'added.ts');
+    writeFileSync(added, 'export const added = true;\n');
+    const out = touchedPaths({
+      tool_name: 'Edit',
+      tool_input: {
+        command:
+          '*** Begin Patch\n' +
+          '*** Update File: src/main.ts\n' +
+          '*** Add File: src/added.ts\n' +
+          '*** End Patch',
+      },
+      cwd: repoA,
+    });
+
+    expect(names(out).sort()).toEqual(['src/added.ts', 'src/main.ts']);
+  });
 });
 
 describe('a `cd` inside the command changes where operands resolve', () => {
