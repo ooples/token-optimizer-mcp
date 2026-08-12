@@ -14,10 +14,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { normalizeTool, normalizePayload } from '../../hooks-core/decide.mjs';
-import {
-  CLIENTS,
-  normalizeClientPayload,
-} from '../../hooks-core/adapter.mjs';
+import { CLIENTS, normalizeClientPayload } from '../../hooks-core/adapter.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -117,6 +114,44 @@ describe('payload shapes normalize across clients', () => {
     expect(command.tool_name).toBe('Bash');
     expect(command.tool_input.command).toBe('git status --short');
     expect(web.tool_name).toBeNull();
+  });
+
+  test('Codex code mode decodes quoted Windows paths without losing backslashes', () => {
+    const payload = normalizePayload(
+      normalizeClientPayload('codex', 'pre-tool', {
+        tool_name: 'functions.exec',
+        tool_input: {
+          code: String.raw`const task = 'Get-Content C:\\Users\\cheat\\project\\file.cs'; await tools.exec_command({ cmd: task });`,
+        },
+      })
+    );
+
+    expect(payload.tool_name).toBe('Bash');
+    expect(payload.tool_input.command).toBe(
+      'Get-Content C:\\Users\\cheat\\project\\file.cs'
+    );
+  });
+
+  test('Codex code mode decodes bounded escapes without evaluating interpolation', () => {
+    const escaped = normalizePayload(
+      normalizeClientPayload('codex', 'pre-tool', {
+        tool_name: 'functions.exec',
+        tool_input: {
+          code: String.raw`await tools.exec_command({ cmd: 'first\nsecond\x21' });`,
+        },
+      })
+    );
+    const interpolated = normalizePayload(
+      normalizeClientPayload('codex', 'pre-tool', {
+        tool_name: 'functions.exec',
+        tool_input: {
+          code: 'const value = `git ${unsafe}`; await tools.exec_command({ cmd: value });',
+        },
+      })
+    );
+
+    expect(escaped.tool_input.command).toBe('first\nsecond!');
+    expect(interpolated.tool_name).toBeNull();
   });
 
   test('Gemini-style absolute_path and start_line are understood', () => {

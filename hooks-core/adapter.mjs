@@ -186,19 +186,75 @@ function contextOutput(client, eventName, additionalContext) {
   };
 }
 
+/** Convert one static JavaScript string literal without evaluating code. */
+function codexStringLiteral(literal) {
+  if (typeof literal !== 'string' || literal.length < 2) return null;
+  const quote = literal[0];
+  if (!['"', "'", '`'].includes(quote) || literal.at(-1) !== quote) return null;
+
+  let decoded = '';
+  for (let index = 1; index < literal.length - 1; index += 1) {
+    const character = literal[index];
+    if (quote === '`' && character === '$' && literal[index + 1] === '{')
+      return null;
+    if (character !== '\\') {
+      decoded += character;
+      continue;
+    }
+
+    index += 1;
+    if (index >= literal.length - 1) return null;
+    const escaped = literal[index];
+    const simple = {
+      b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', 0: '\0',
+      '\\': '\\', "'": "'", '"': '"', '`': '`', '$': '$',
+    };
+    if (Object.hasOwn(simple, escaped)) {
+      decoded += simple[escaped];
+      continue;
+    }
+    if (escaped === '\n') continue;
+    if (escaped === '\r') {
+      if (literal[index + 1] === '\n') index += 1;
+      continue;
+    }
+    if (escaped === 'x') {
+      const digits = literal.slice(index + 1, index + 3);
+      if (!/^[0-9a-f]{2}$/i.test(digits)) return null;
+      decoded += String.fromCodePoint(Number.parseInt(digits, 16));
+      index += 2;
+      continue;
+    }
+    if (escaped === 'u') {
+      const braced = literal[index + 1] === '{';
+      const close = braced ? literal.indexOf('}', index + 2) : index + 5;
+      const digits = braced
+        ? literal.slice(index + 2, close)
+        : literal.slice(index + 1, close);
+      if (
+        close < 0 ||
+        !(braced ? /^[0-9a-f]{1,6}$/i : /^[0-9a-f]{4}$/i).test(digits)
+      ) return null;
+      const codePoint = Number.parseInt(digits, 16);
+      if (codePoint > 0x10ffff) return null;
+      decoded += String.fromCodePoint(codePoint);
+      index = close;
+      continue;
+    }
+    // JavaScript identity escapes drop the slash (for example, '\q' is 'q').
+    decoded += escaped;
+  }
+  return decoded;
+}
+
 /** Convert client-specific lifecycle envelopes into the common tool shape. */
 function codexStringBindings(source) {
   const values = new Map();
   const declaration = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*((?:"(?:\\.|[^"\\])*")|(?:'(?:\\.|[^'\\])*')|(?:`(?:\\.|[^`\\])*`))/gs;
   for (const match of String(source || '').matchAll(declaration)) {
     try {
-      const literal = match[2];
-      const value = literal.startsWith('`')
-        ? literal.slice(1, -1).replace(/\\`/g, '`')
-        : JSON.parse(literal.startsWith("'")
-          ? `"${literal.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"')}"`
-          : literal);
-      values.set(match[1], value);
+      const value = codexStringLiteral(match[2]);
+      if (value !== null) values.set(match[1], value);
     } catch {
       // A computed or malformed JavaScript expression is not safe to execute
       // merely to understand a hook envelope. Leave it opaque.
@@ -217,18 +273,7 @@ function codexCallArguments(source, method) {
 
 function codexLiteral(value, bindings) {
   if (bindings.has(value)) return String(bindings.get(value));
-  try {
-    if (/^"(?:\\.|[^"\\])*"$/s.test(value)) return JSON.parse(value);
-    if (/^'(?:\\.|[^'\\])*'$/s.test(value))
-      return JSON.parse(
-        `"${value.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"')}"`
-      );
-    if (/^`(?:\\.|[^`\\])*`$/s.test(value))
-      return value.slice(1, -1).replace(/\\`/g, '`');
-  } catch {
-    return null;
-  }
-  return null;
+  return codexStringLiteral(value);
 }
 
 function codexExecCommands(source, bindings) {
