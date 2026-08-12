@@ -48,6 +48,7 @@ const SERVER_COLORS = [
 
 const $ = (id) => document.getElementById(id);
 let overviewGraph = null;
+let loadGeneration = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
   $('refresh-btn').addEventListener('click', load);
@@ -55,31 +56,64 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(load, 30_000);
 });
 
-async function get(path) {
+async function get(path, timeoutMs = 20_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${API}${path}`);
+    const res = await fetch(`${API}${path}`, { signal: controller.signal });
     const body = await res.json().catch(() => null);
     return { ok: res.ok, body };
   } catch {
     return { ok: false, body: null };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 async function load() {
-  // Every panel is independent: the graph is worth showing even when there is
-  // no active session, and vice versa. One missing answer must not blank the
-  // whole page.
-  const [diagnostics, analytics, balance, status, constellation] =
-    await Promise.all([
-      get('/diagnostics/hooks?hours=24&limit=100'),
-      get('/analytics/overview?limit=40'),
-      get('/wiki/balance?scope=all'),
-      get('/wiki/status?scope=all'),
-      get('/wiki/constellation?cap=90&scope=all'),
-    ]);
+  // Optimizer accounting is the primary product answer. Render it as soon as
+  // its small local ledger returns; a cold all-project graph can take seconds
+  // and must never hold Saved so far, agent attribution, or action cost blank.
+  const generation = ++loadGeneration;
+  const diagnosticsPromise = get('/diagnostics/hooks?hours=24&limit=100');
+  const analyticsPromise = get('/analytics/overview?limit=40');
+
+  const analytics = await analyticsPromise;
+  if (generation !== loadGeneration) return;
+  const measuredAnalytics =
+    analytics.ok && analytics.body?.available ? analytics.body : null;
+
+  // First meaningful paint: MCP measurements do not depend on graph APIs.
+  renderSavings(measuredAnalytics, null, null);
+  renderAccounting(measuredAnalytics, null);
+  renderVerdict(measuredAnalytics, null, null);
+  if (measuredAnalytics) {
+    const optimizerOnly = joinActivity(
+      null,
+      measuredAnalytics,
+      null,
+      null,
+      null
+    );
+    renderClientLedger(optimizerOnly, null);
+    renderServers(optimizerOnly);
+    renderTimeline(optimizerOnly.events);
+    renderBreakdown(optimizerOnly);
+  }
+
+  // Do not even start the synchronous graph work until the browser has the
+  // primary accounting response. Starting these requests earlier can let a
+  // cold graph route monopolize the local Node process before analytics is
+  // delivered, recreating the same blank hero through server-side contention.
+  const balancePromise = get('/wiki/balance?scope=all');
+  const statusPromise = get('/wiki/status?scope=all');
+  const constellationPromise = get('/wiki/constellation?cap=90&scope=all');
+
+  const diagnostics = await diagnosticsPromise;
+  if (generation !== loadGeneration) return;
   const needsLegacy =
     !(diagnostics.ok && diagnostics.body?.summary?.available) &&
-    !(analytics.ok && analytics.body?.available);
+    !measuredAnalytics;
   const [summary, events] = needsLegacy
     ? await Promise.all([
         get('/session-summary'),
@@ -87,23 +121,48 @@ async function load() {
       ])
     : [null, null];
 
-  renderSavings(analytics.body, balance.body, status.body);
-  renderAccounting(analytics.body, balance.body);
-  renderVerdict(analytics.body, balance.body, status.body);
-  renderGraph(constellation.body, status.body);
-
-  const session = joinActivity(
+  let session = joinActivity(
     diagnostics.ok && diagnostics.body?.summary?.available
       ? activityFromDiagnostics(diagnostics.body)
       : null,
-    analytics.ok && analytics.body?.available ? analytics.body : null,
+    measuredAnalytics,
     summary?.ok && summary.body?.success ? summary.body : null,
     events?.ok ? events.body?.events : null,
-    balance.body
+    null
   );
   renderKpis(session);
-  renderClientLedger(session, balance.body);
+  renderClientLedger(session, null);
   renderCategories(session);
+  renderServers(session);
+  renderTimeline(session?.events);
+  renderBreakdown(session);
+
+  // Graph data enriches the already-visible optimizer ledger when ready. Each
+  // request is bounded, so a damaged graph cannot leave a refresh pending
+  // forever or accumulate overlapping 30-second refreshes.
+  const [balance, status, constellation] = await Promise.all([
+    balancePromise,
+    statusPromise,
+    constellationPromise,
+  ]);
+  if (generation !== loadGeneration) return;
+  const graphBalance = balance.ok ? balance.body : null;
+  const graphStatus = status.ok ? status.body : null;
+  renderSavings(measuredAnalytics, graphBalance, graphStatus);
+  renderAccounting(measuredAnalytics, graphBalance);
+  renderVerdict(measuredAnalytics, graphBalance, graphStatus);
+  renderGraph(constellation.ok ? constellation.body : null, graphStatus);
+
+  session = joinActivity(
+    diagnostics.ok && diagnostics.body?.summary?.available
+      ? activityFromDiagnostics(diagnostics.body)
+      : null,
+    measuredAnalytics,
+    summary?.ok && summary.body?.success ? summary.body : null,
+    events?.ok ? events.body?.events : null,
+    graphBalance
+  );
+  renderClientLedger(session, graphBalance);
   renderServers(session);
   renderTimeline(session?.events);
   renderBreakdown(session);
@@ -219,6 +278,7 @@ function renderSavings(analytics, balance, status) {
   const nativeSaved = Number(balance?.nativeOptimizer?.tokensSaved || 0);
   const saved = mcpSaved + nativeSaved;
   const foot = $('saved-foot');
+  const card = $('saved-card');
 
   const hasDirectMeasurement =
     Boolean(analytics?.summary?.measuredSavingsOperations) ||
@@ -229,6 +289,11 @@ function renderSavings(analytics, balance, status) {
     $('saved-tokens').textContent = '—';
     $('saved-money').textContent = '—';
     $('saved-percent').textContent = '—';
+    $('saved-tokens').dataset.state = analytics?.available
+      ? 'collecting'
+      : 'not-measured';
+    card.dataset.state = $('saved-tokens').dataset.state;
+    card.setAttribute('aria-busy', 'false');
     $('comparison').innerHTML = '';
 
     const learned = Number(status?.nodes) || 0;
@@ -237,6 +302,10 @@ function renderSavings(analytics, balance, status) {
       : `Nothing measured yet. Use an optimizer read, search, edit, or other context-reducing tool and this fills itself in.`;
     return;
   }
+
+  $('saved-tokens').dataset.state = 'measured';
+  card.dataset.state = 'measured';
+  card.setAttribute('aria-busy', 'false');
 
   const spentAnyway =
     Number(analytics?.summary?.measuredOptimizedTokens || 0) +
@@ -279,6 +348,7 @@ function formatUsd(value) {
 
 function renderAccounting(analytics, balance) {
   const host = $('accounting-grid');
+  const section = $('token-accounting');
   const note = $('accounting-note');
   const summary = analytics?.summary;
   const graphCost =
@@ -363,6 +433,8 @@ function renderAccounting(analytics, balance) {
     </div>`
     )
     .join('');
+  section.dataset.state = hasSavingsMeasurement ? 'measured' : 'not-measured';
+  section.setAttribute('aria-busy', 'false');
   note.textContent = hasDirect
     ? `${analytics?.source || 'No MCP operation rows yet'}; ${balance?.nativeOptimizer?.source || 'no native substitutions recorded'}. USD uses a $${analytics?.referenceUsdPerMillionTokens || USD_PER_MILLION_TOKENS}/million reference rate; graph causal savings are never counted before the holdout gate passes.`
     : 'No direct optimizer before/after measurements have been recorded yet.';
@@ -370,6 +442,7 @@ function renderAccounting(analytics, balance) {
 
 function renderClientLedger(session, balance) {
   const host = $('client-ledger');
+  const section = $('measured-by-agent');
   const analytics = session?.analytics;
   const activeClients = new Set(Object.keys(session?.clients || {}));
   const rows = (analytics?.byClient || []).map((row) => ({ ...row }));
@@ -417,6 +490,8 @@ function renderClientLedger(session, balance) {
       'No agent attribution yet',
       'New MCP operations record their client identity after the handshake.'
     );
+    section.dataset.state = 'not-measured';
+    section.setAttribute('aria-busy', 'false');
     return;
   }
   host.innerHTML = rows
@@ -434,6 +509,8 @@ function renderClientLedger(session, balance) {
       </div>`
     )
     .join('');
+  section.dataset.state = 'measured';
+  section.setAttribute('aria-busy', 'false');
 }
 
 /** A number that lands rather than appearing. Skipped when motion is reduced. */

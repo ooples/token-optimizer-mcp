@@ -9,9 +9,7 @@ import { chromium } from 'playwright';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const base = process.argv[2] || 'http://localhost:3101';
 const output = join(ROOT, 'artifacts', 'live-dashboard');
-const documentationOutput = process.argv[3]
-  ? resolve(process.argv[3])
-  : null;
+const documentationOutput = process.argv[3] ? resolve(process.argv[3]) : null;
 mkdirSync(output, { recursive: true });
 if (documentationOutput) mkdirSync(documentationOutput, { recursive: true });
 
@@ -25,6 +23,11 @@ page.on('pageerror', (error) => errors.push(`page:${error.message}`));
 page.on('requestfailed', (request) =>
   errors.push(`request:${request.url()}:${request.failure()?.errorText}`)
 );
+page.on('response', (response) => {
+  if (response.url().includes('/api/') && !response.ok()) {
+    errors.push(`response:${response.status()}:${response.url()}`);
+  }
+});
 
 async function waitForCount(selector, minimum, label) {
   try {
@@ -35,19 +38,21 @@ async function waitForCount(selector, minimum, label) {
       { timeout: 30_000 }
     );
   } catch (error) {
-    const diagnostic = await page.evaluate((query) => ({
-      url: location.href,
-      count: document.querySelectorAll(query).length,
-      status:
-        document.querySelector('#hook-health-status')?.textContent?.trim() ||
-        null,
-      state:
-        document.querySelector('#hook-health-status')?.dataset.state || null,
-    }), selector);
-    throw new Error(
-      `${label} did not render: ${JSON.stringify(diagnostic)}`,
-      { cause: error }
+    const diagnostic = await page.evaluate(
+      (query) => ({
+        url: location.href,
+        count: document.querySelectorAll(query).length,
+        status:
+          document.querySelector('#hook-health-status')?.textContent?.trim() ||
+          null,
+        state:
+          document.querySelector('#hook-health-status')?.dataset.state || null,
+      }),
+      selector
     );
+    throw new Error(`${label} did not render: ${JSON.stringify(diagnostic)}`, {
+      cause: error,
+    });
   }
 }
 
@@ -81,7 +86,23 @@ async function measureCameraStability(host) {
 }
 
 try {
-  await page.goto(base, { waitUntil: 'networkidle' });
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(
+    () => {
+      const saved = document.querySelector('#saved-tokens');
+      return (
+        saved?.dataset.state === 'measured' &&
+        Number(saved.textContent?.replaceAll(',', '')) > 0 &&
+        document.querySelectorAll('#accounting-grid .accounting-card')
+          .length === 6 &&
+        document.querySelectorAll('#client-ledger .client-ledger-row').length >
+          0
+      );
+    },
+    undefined,
+    { timeout: 20_000 }
+  );
+  await page.waitForSelector('#constellation canvas', { timeout: 30_000 });
   await page.waitForTimeout(1_100);
   const overviewBody = await page.locator('body').innerText();
   const overview = {
@@ -95,19 +116,30 @@ try {
     staleLegacySession: /november 2025|2025-11-02/i.test(overviewBody),
     activityCards: await page.locator('#kpis .kpi').evaluateAll((cards) =>
       cards.map((card) => ({
-        label: card.querySelector('.kpi-label')?.childNodes[0]?.textContent?.trim() || '',
+        label:
+          card
+            .querySelector('.kpi-label')
+            ?.childNodes[0]?.textContent?.trim() || '',
         value: card.querySelector('.kpi-value')?.textContent?.trim() || '',
       }))
     ),
     savedTokens: await page.locator('#saved-tokens').innerText(),
     savedMoney: await page.locator('#saved-money').innerText(),
+    accessibility: {
+      savings: await page.locator('#saved-card').ariaSnapshot(),
+      accounting: await page.locator('#token-accounting').ariaSnapshot(),
+      agents: await page.locator('#measured-by-agent').ariaSnapshot(),
+    },
     accountingCards: await page
       .locator('#accounting-grid .accounting-card')
       .evaluateAll((cards) =>
         cards.map((card) => ({
-          label: card.querySelector('.accounting-label')?.textContent?.trim() || '',
-          value: card.querySelector('.accounting-value')?.textContent?.trim() || '',
-          detail: card.querySelector('.accounting-detail')?.textContent?.trim() || '',
+          label:
+            card.querySelector('.accounting-label')?.textContent?.trim() || '',
+          value:
+            card.querySelector('.accounting-value')?.textContent?.trim() || '',
+          detail:
+            card.querySelector('.accounting-detail')?.textContent?.trim() || '',
         }))
       ),
     clientRows: await page
@@ -116,14 +148,18 @@ try {
     recentRows: await page
       .locator('#timeline-container .event')
       .evaluateAll((rows) => rows.map((row) => row.textContent?.trim() || '')),
-    actionRows: await page.locator('#tool-breakdown-body tr').evaluateAll((rows) =>
-      rows.map((row) =>
-        [...row.querySelectorAll('td')].map(
-          (cell) => cell.textContent?.trim() || ''
+    actionRows: await page
+      .locator('#tool-breakdown-body tr')
+      .evaluateAll((rows) =>
+        rows.map((row) =>
+          [...row.querySelectorAll('td')].map(
+            (cell) => cell.textContent?.trim() || ''
+          )
         )
-      )
+      ),
+    cameraStability: await measureCameraStability(
+      page.locator('#constellation')
     ),
-    cameraStability: await measureCameraStability(page.locator('#constellation')),
   };
   await page.screenshot({
     path: join(output, 'overview.png'),
@@ -141,20 +177,30 @@ try {
 
   await page.goto(`${base}/wiki`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#wiki-list li');
-  await waitForCount('#hook-health-grid .stat-card', 14, 'runtime health cards');
+  await waitForCount(
+    '#hook-health-grid .stat-card',
+    14,
+    'runtime health cards'
+  );
   const captureHealth = await page.evaluate(() => {
-    const values = [...document.querySelectorAll('#hook-health-grid .stat-card')]
-      .map((card) => ({
-        label: card.querySelector('.stat-label')?.textContent?.trim() || '',
-        value: card.querySelector('.stat-value')?.textContent?.trim() || '',
-      }));
+    const values = [
+      ...document.querySelectorAll('#hook-health-grid .stat-card'),
+    ].map((card) => ({
+      label: card.querySelector('.stat-label')?.textContent?.trim() || '',
+      value: card.querySelector('.stat-value')?.textContent?.trim() || '',
+    }));
     return {
       values,
-      status: document.querySelector('#hook-health-status')?.textContent?.trim() || '',
+      status:
+        document.querySelector('#hook-health-status')?.textContent?.trim() ||
+        '',
       state: document.querySelector('#hook-health-status')?.dataset.state || '',
-      detail: document.querySelector('#hook-health-detail')?.textContent?.trim() || '',
-      clients: [...document.querySelectorAll('#hook-health-clients .capture-client')]
-        .map((card) => card.textContent?.trim() || ''),
+      detail:
+        document.querySelector('#hook-health-detail')?.textContent?.trim() ||
+        '',
+      clients: [
+        ...document.querySelectorAll('#hook-health-clients .capture-client'),
+      ].map((card) => card.textContent?.trim() || ''),
     };
   });
   await page.screenshot({
@@ -162,19 +208,24 @@ try {
     fullPage: true,
   });
   if (documentationOutput) {
-    await page.locator('section.wiki-balance').nth(0).screenshot({
-      path: join(documentationOutput, 'capture-health-live.png'),
-    });
-    await page.locator('section.wiki-balance').nth(1).screenshot({
-      path: join(documentationOutput, 'graph-balance-live.png'),
-    });
+    await page
+      .locator('section.wiki-balance')
+      .nth(0)
+      .screenshot({
+        path: join(documentationOutput, 'capture-health-live.png'),
+      });
+    await page
+      .locator('section.wiki-balance')
+      .nth(1)
+      .screenshot({
+        path: join(documentationOutput, 'graph-balance-live.png'),
+      });
   }
   const host = page.locator('#wiki-graph-3d');
   const graph3d = await host.evaluate((element) => ({
     width: element.clientWidth,
     height: element.clientHeight,
-    projected:
-      element.__knowledgeGraph3d?.projectedNodes?.().length ?? null,
+    projected: element.__knowledgeGraph3d?.projectedNodes?.().length ?? null,
     selected: element.dataset.selected || null,
   }));
   const cameraStability = await measureCameraStability(host);
@@ -183,8 +234,7 @@ try {
   await page.locator('#wiki-list li').first().click();
   await page.waitForTimeout(500);
   const afterSelect = await host.evaluate((element) => ({
-    projected:
-      element.__knowledgeGraph3d?.projectedNodes?.().length ?? null,
+    projected: element.__knowledgeGraph3d?.projectedNodes?.().length ?? null,
     selected: element.dataset.selected || null,
   }));
   const detailVisible = await page.locator('#wiki-detail').isVisible();
@@ -205,7 +255,8 @@ try {
         value: card.querySelector('.stat-value')?.textContent?.trim() || '',
       })
     ),
-    status: document.querySelector('#evidence-status')?.textContent?.trim() || '',
+    status:
+      document.querySelector('#evidence-status')?.textContent?.trim() || '',
     ucrSummary: [...document.querySelectorAll('#ucr-summary .stat-card')].map(
       (card) => ({
         label: card.querySelector('.stat-label')?.textContent?.trim() || '',
@@ -243,21 +294,24 @@ try {
         missingProjects: inventory.missing,
       };
     }),
-    balanceCards: await page.locator('#balance-grid .stat-card').evaluateAll((cards) =>
-      cards.map((card) => ({
-        label: card.querySelector('.stat-label')?.textContent?.trim() || '',
-        value: card.querySelector('.stat-value')?.textContent?.trim() || '',
-      }))
-    ),
+    balanceCards: await page
+      .locator('#balance-grid .stat-card')
+      .evaluateAll((cards) =>
+        cards.map((card) => ({
+          label: card.querySelector('.stat-label')?.textContent?.trim() || '',
+          value: card.querySelector('.stat-value')?.textContent?.trim() || '',
+        }))
+      ),
     balanceContract: await page.evaluate(async () => {
-      const report = await fetch('/api/wiki/balance?scope=all').then((response) =>
-        response.json()
+      const report = await fetch('/api/wiki/balance?scope=all').then(
+        (response) => response.json()
       );
       return {
         coverage: report.measurement?.sourceCoverage || null,
         freshness: report.measurement?.freshness || null,
         metrics: report.measurement?.metrics || null,
-        method: document.querySelector('#balance-method')?.textContent?.trim() || '',
+        method:
+          document.querySelector('#balance-method')?.textContent?.trim() || '',
       };
     }),
     captureHealth,
@@ -267,7 +321,9 @@ try {
     evidence,
     detailVisible,
     drawerOverlap: await page.evaluate(() => {
-      const drawer = document.querySelector('#wiki-detail')?.getBoundingClientRect();
+      const drawer = document
+        .querySelector('#wiki-detail')
+        ?.getBoundingClientRect();
       if (!drawer) return null;
       const selectors = [
         '#hook-health-grid .stat-card',
@@ -296,10 +352,14 @@ try {
     !overview.staleLegacySession &&
     overview.activityCards.length === 4 &&
     overview.activityCards.some(
-      ({ label, value }) => label === 'Lifecycle events' && Number(value.replaceAll(',', '')) > 0
+      ({ label, value }) =>
+        label === 'Lifecycle events' && Number(value.replaceAll(',', '')) > 0
     ) &&
     Number(overview.savedTokens.replaceAll(',', '')) > 0 &&
     /^\$/.test(overview.savedMoney) &&
+    overview.accessibility.savings.includes(overview.savedTokens) &&
+    /Returned context/i.test(overview.accessibility.accounting) &&
+    /codex|claude-code|gemini/i.test(overview.accessibility.agents) &&
     overview.accountingCards.length === 6 &&
     overview.accountingCards.some(
       ({ label, value, detail }) =>
@@ -308,9 +368,12 @@ try {
         /\$/.test(detail)
     ) &&
     overview.clientRows.length >= 2 &&
-    overview.recentRows.some((row) => /\$/.test(row) && /saved|baseline/i.test(row)) &&
+    overview.recentRows.some(
+      (row) => /\$/.test(row) && /saved|baseline/i.test(row)
+    ) &&
     overview.actionRows.some(
-      (row) => row.length === 5 && /^\$/.test(row[3]) && row[4] !== 'Not measured'
+      (row) =>
+        row.length === 5 && /^\$/.test(row[3]) && row[4] !== 'Not measured'
     ) &&
     overview.cameraStability.widthSpread <= 1 &&
     overview.cameraStability.heightSpread <= 1 &&
@@ -331,8 +394,13 @@ try {
     wiki.balanceContract.coverage?.projects >= 1 &&
     wiki.balanceContract.coverage?.projectsWithTelemetry >= 1 &&
     wiki.balanceContract.freshness?.lastEventAt &&
-    ['nativeSubstitutions', 'memoryDeliveries', 'memoryHoldouts', 'rememberingCost', 'readingAvoided']
-      .every((key) => wiki.balanceContract.metrics?.[key]?.source) &&
+    [
+      'nativeSubstitutions',
+      'memoryDeliveries',
+      'memoryHoldouts',
+      'rememberingCost',
+      'readingAvoided',
+    ].every((key) => wiki.balanceContract.metrics?.[key]?.source) &&
     /selected projects have telemetry/i.test(wiki.balanceContract.method) &&
     wiki.captureHealth.values.length === 14 &&
     wiki.captureHealth.clients.length >= 2 &&
@@ -341,22 +409,28 @@ try {
     ) &&
     wiki.captureHealth.detail.length < 180 &&
     wiki.captureHealth.values.some(
-      ({ label, value }) => label === 'Hook runs' && Number(value.replaceAll(',', '')) > 0
+      ({ label, value }) =>
+        label === 'Hook runs' && Number(value.replaceAll(',', '')) > 0
     ) &&
     wiki.captureHealth.values.some(
-      ({ label, value }) => label === 'Policy blocks' && Number(value.replaceAll(',', '')) >= 0
+      ({ label, value }) =>
+        label === 'Policy blocks' && Number(value.replaceAll(',', '')) >= 0
     ) &&
     wiki.captureHealth.values.some(
-      ({ label, value }) => label === 'Abandoned' && Number(value.replaceAll(',', '')) === 0
+      ({ label, value }) =>
+        label === 'Abandoned' && Number(value.replaceAll(',', '')) === 0
     ) &&
     wiki.captureHealth.values.some(
-      ({ label, value }) => label === 'MCP handshakes' && Number(value.replaceAll(',', '')) > 0
+      ({ label, value }) =>
+        label === 'MCP handshakes' && Number(value.replaceAll(',', '')) > 0
     ) &&
     wiki.captureHealth.values.some(
-      ({ label, value }) => label === 'Tools advertised' && Number(value.replaceAll(',', '')) > 0
+      ({ label, value }) =>
+        label === 'Tools advertised' && Number(value.replaceAll(',', '')) > 0
     ) &&
     wiki.captureHealth.values.some(
-      ({ label, value }) => label === 'MCP failures' && Number(value.replaceAll(',', '')) === 0
+      ({ label, value }) =>
+        label === 'MCP failures' && Number(value.replaceAll(',', '')) === 0
     ) &&
     wiki.captureHealth.state === 'ok' &&
     wiki.graph3d.width > 0 &&
@@ -370,7 +444,9 @@ try {
     wiki.afterSelect.projected > 0 &&
     Boolean(wiki.afterSelect.selected) &&
     wiki.evidence.summary.length === 6 &&
-    wiki.evidence.summary.every(({ value }) => value.length > 0 && value !== '—') &&
+    wiki.evidence.summary.every(
+      ({ value }) => value.length > 0 && value !== '—'
+    ) &&
     wiki.evidence.summary
       .filter(({ label }) =>
         ['Randomized runs', 'Handoff runs', 'Concurrency runs'].includes(label)
@@ -378,7 +454,8 @@ try {
       .every(({ value }) => value === 'Not run') &&
     /selected projects have evidence events/i.test(wiki.evidence.status) &&
     wiki.evidence.ucrSummary.some(
-      ({ label, value }) => label === 'UCR runtime events' && value === 'Not exercised'
+      ({ label, value }) =>
+        label === 'UCR runtime events' && value === 'Not exercised'
     ) &&
     wiki.evidence.missingMetrics > 0 &&
     wiki.detailVisible &&

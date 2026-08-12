@@ -405,8 +405,7 @@ async function main() {
         );
         check(
           'balance renders direct and causal token accounting',
-          tiles.length === 8 &&
-            tiles.some((value) => /900 tokens/.test(value)),
+          tiles.length === 8 && tiles.some((value) => /900 tokens/.test(value)),
           tiles.join(' | ')
         );
 
@@ -1118,7 +1117,57 @@ async function main() {
         body: JSON.stringify({ success: true, events: [] }),
       })
     );
-    await measuredOverview.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    // Reproduce the live failure from port 3100: all-project graph endpoints
+    // can be cold while the small analytics ledger is already available. The
+    // primary token answer must paint without waiting for those requests.
+    for (const pattern of [
+      '**/api/wiki/balance*',
+      '**/api/wiki/status*',
+      '**/api/wiki/constellation*',
+    ]) {
+      await measuredOverview.route(pattern, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 2_500));
+        await route.continue();
+      });
+    }
+    const overviewStartedAt = Date.now();
+    await measuredOverview.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await measuredOverview.waitForFunction(
+      () =>
+        document.querySelector('#saved-tokens')?.dataset.state === 'measured' &&
+        Number(
+          document
+            .querySelector('#saved-tokens')
+            ?.textContent?.replaceAll(',', '')
+        ) === 1050 &&
+        document.querySelectorAll('#accounting-grid .accounting-card')
+          .length === 6 &&
+        document.querySelectorAll('#client-ledger .client-ledger-row').length >
+          0,
+      undefined,
+      { timeout: 2_000 }
+    );
+    const optimizerPaintMs = Date.now() - overviewStartedAt;
+    check(
+      'optimizer accounting renders before delayed graph APIs',
+      optimizerPaintMs < 2_500 &&
+        (await measuredOverview.getAttribute('#saved-card', 'aria-busy')) ===
+          'false' &&
+        /1,050/.test(
+          await measuredOverview.locator('#saved-card').ariaSnapshot()
+        ),
+      `${optimizerPaintMs} ms`
+    );
+    await measuredOverview.waitForFunction(
+      () =>
+        Number(
+          document
+            .querySelector('#saved-tokens')
+            ?.textContent?.replaceAll(',', '')
+        ) === 1950,
+      undefined,
+      { timeout: 10_000 }
+    );
     await measuredOverview.waitForTimeout(1_100);
     const measuredBody = await measuredOverview.textContent('body');
     check(
@@ -1128,8 +1177,7 @@ async function main() {
           ',',
           ''
         ) || 0
-      ) === 1950 &&
-        /MCP \+ native/i.test(measuredBody || '')
+      ) === 1950 && /MCP \+ native/i.test(measuredBody || '')
     );
     check(
       'combined overview attributes optimizer metrics across clients',
@@ -1142,14 +1190,21 @@ async function main() {
       .allTextContents();
     check(
       'recent activity prices context and refuses fake zero savings',
-      recentRows.some((row) => /wiki_read/i.test(row) && /no before baseline/i.test(row)) &&
-        recentRows.some((row) => /smart_read/i.test(row) && /750 saved/i.test(row)) &&
-        !recentRows.some((row) => /wiki_read/i.test(row) && /0 saved/i.test(row)),
+      recentRows.some(
+        (row) => /wiki_read/i.test(row) && /no before baseline/i.test(row)
+      ) &&
+        recentRows.some(
+          (row) => /smart_read/i.test(row) && /750 saved/i.test(row)
+        ) &&
+        !recentRows.some(
+          (row) => /wiki_read/i.test(row) && /0 saved/i.test(row)
+        ),
       recentRows.join(' | ')
     );
     check(
       'every action exposes returned context USD and token savings',
-      (await measuredOverview.locator('#tool-breakdown-body tr').count()) === 3 &&
+      (await measuredOverview.locator('#tool-breakdown-body tr').count()) ===
+        3 &&
         !/Not measured/.test(
           (await measuredOverview.textContent('#tool-breakdown-body')) || ''
         )

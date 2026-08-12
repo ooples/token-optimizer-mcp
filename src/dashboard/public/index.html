@@ -34,7 +34,13 @@
 
       <!-- THE HERO. What you kept, beside what it learned. -->
       <section class="hero">
-        <div class="card hero-saved">
+        <div
+          class="card hero-saved"
+          id="saved-card"
+          data-state="loading"
+          aria-busy="true"
+          aria-live="polite"
+        >
           <p class="card-title">
             Saved so far
             <button
@@ -48,18 +54,22 @@
                 called the context window. Fill it up and earlier work can fall
                 out. This is how much of that workspace you got back &mdash;
                 directly removed from optimizer results, including live-graph
-                substitutions. The separate graph-effect estimate uses a
-                holdout and is never added until its evidence gate passes.
+                substitutions. The separate graph-effect estimate uses a holdout
+                and is never added until its evidence gate passes.
               </span>
             </button>
           </p>
 
-          <div class="big num" id="saved-tokens">&mdash;</div>
-          <div class="big-unit" id="saved-unit">measured context tokens removed from optimizer results</div>
+          <div class="big num" id="saved-tokens" data-state="loading">
+            Loading&hellip;
+          </div>
+          <div class="big-unit" id="saved-unit">
+            measured context tokens removed from optimizer results
+          </div>
 
           <div class="saved-side">
             <div>
-              <span class="ss-value num" id="saved-money">&mdash;</span>
+              <span class="ss-value num" id="saved-money">Loading&hellip;</span>
               <span class="ss-label">
                 estimated
                 <button
@@ -77,7 +87,9 @@
               </span>
             </div>
             <div>
-              <span class="ss-value num" id="saved-percent">&mdash;</span>
+              <span class="ss-value num" id="saved-percent"
+                >Loading&hellip;</span
+              >
               <span class="ss-label">smaller than it would have been</span>
             </div>
           </div>
@@ -97,9 +109,10 @@
             >
               ?
               <span class="tip tip-below tip-left" role="tooltip">
-                Graph nodes observed by supported coding agents are remembered here
-                with their structure, discoveries, and provenance. Any supported
-                client can reuse that knowledge in a later session or project.
+                Graph nodes observed by supported coding agents are remembered
+                here with their structure, discoveries, and provenance. Any
+                supported client can reuse that knowledge in a later session or
+                project.
               </span>
             </button>
           </p>
@@ -109,17 +122,27 @@
         </div>
       </section>
 
-      <section class="card accounting" aria-labelledby="accounting-heading">
+      <section
+        class="card accounting"
+        id="token-accounting"
+        data-state="loading"
+        aria-busy="true"
+        aria-live="polite"
+        aria-labelledby="accounting-heading"
+      >
         <div class="section-heading-row">
           <div>
             <p class="card-title" id="accounting-heading">Token accounting</p>
             <p class="card-sub">
-              Direct optimizer measurements and graph-memory costs share one ledger without mixing in an unfinished causal estimate.
+              Direct optimizer measurements and graph-memory costs share one
+              ledger without mixing in an unfinished causal estimate.
             </p>
           </div>
           <span class="source-chip">measured on this machine</span>
         </div>
-        <div class="accounting-grid" id="accounting-grid"></div>
+        <div class="accounting-grid" id="accounting-grid" role="status">
+          <p>Loading measured token accounting&hellip;</p>
+        </div>
         <p class="accounting-note" id="accounting-note"></p>
       </section>
 
@@ -127,12 +150,24 @@
            code calls it, and every one can explain itself. -->
       <section class="kpis" id="kpis"></section>
 
-      <section class="card client-accounting" aria-labelledby="client-accounting-heading">
-        <p class="card-title" id="client-accounting-heading">Measured by agent</p>
-        <p class="card-sub">
-          New optimizer measurements use MCP handshake identity. Historical rows without identity remain unattributed instead of being guessed.
+      <section
+        class="card client-accounting"
+        id="measured-by-agent"
+        data-state="loading"
+        aria-busy="true"
+        aria-live="polite"
+        aria-labelledby="client-accounting-heading"
+      >
+        <p class="card-title" id="client-accounting-heading">
+          Measured by agent
         </p>
-        <div class="client-ledger" id="client-ledger"></div>
+        <p class="card-sub">
+          New optimizer measurements use MCP handshake identity. Historical rows
+          without identity remain unattributed instead of being guessed.
+        </p>
+        <div class="client-ledger" id="client-ledger" role="status">
+          <p>Loading agent attribution&hellip;</p>
+        </div>
       </section>
 
       <section class="panels">
@@ -147,12 +182,14 @@
               ?
               <span class="tip" role="tooltip">
                 Lifecycle activity is grouped by CLI when cross-client telemetry
-                is available; older clients may report context categories instead.
+                is available; older clients may report context categories
+                instead.
               </span>
             </button>
           </p>
           <p class="card-sub">
-            Cross-client observations are used instead of a single CLI's stale session file.
+            Cross-client observations are used instead of a single CLI's stale
+            session file.
           </p>
           <div class="chart" id="category-chart"></div>
         </div>
@@ -174,7 +211,8 @@
             </button>
           </p>
           <p class="card-sub">
-            Ranked by observed calls; no token amount is invented when a CLI omits it.
+            Ranked by observed calls; no token amount is invented when a CLI
+            omits it.
           </p>
           <div class="chart" id="server-chart"></div>
         </div>
@@ -183,7 +221,8 @@
       <section class="card">
         <p class="card-title">Recent measured optimizer activity</p>
         <p class="card-sub">
-          Before/after context cost and savings from optimizer operations, most recent first.
+          Before/after context cost and savings from optimizer operations, most
+          recent first.
         </p>
         <div id="timeline-container" class="timeline"></div>
       </section>
