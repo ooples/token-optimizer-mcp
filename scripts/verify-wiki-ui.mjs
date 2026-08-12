@@ -998,8 +998,9 @@ async function main() {
     measuredOverview.on('pageerror', (error) =>
       consoleErrors.push(`measured overview: ${error.message}`)
     );
-    await measuredOverview.route('**/api/diagnostics/hooks*', (route) =>
-      route.fulfill({
+    await measuredOverview.route('**/api/diagnostics/hooks*', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           summary: {
@@ -1018,8 +1019,8 @@ async function main() {
           },
           events: [],
         }),
-      })
-    );
+      });
+    });
     await measuredOverview.route('**/api/analytics/overview*', (route) =>
       route.fulfill({
         contentType: 'application/json',

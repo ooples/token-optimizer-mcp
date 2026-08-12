@@ -75,10 +75,7 @@ async function load() {
   // its small local ledger returns; a cold all-project graph can take seconds
   // and must never hold Saved so far, agent attribution, or action cost blank.
   const generation = ++loadGeneration;
-  const diagnosticsPromise = get('/diagnostics/hooks?hours=24&limit=100');
-  const analyticsPromise = get('/analytics/overview?limit=40');
-
-  const analytics = await analyticsPromise;
+  const analytics = await get('/analytics/overview?limit=40');
   if (generation !== loadGeneration) return;
   const measuredAnalytics =
     analytics.ok && analytics.body?.available ? analytics.body : null;
@@ -105,6 +102,7 @@ async function load() {
   // primary accounting response. Starting these requests earlier can let a
   // cold graph route monopolize the local Node process before analytics is
   // delivered, recreating the same blank hero through server-side contention.
+  const diagnosticsPromise = get('/diagnostics/hooks?hours=24&limit=100');
   const balancePromise = get('/wiki/balance?scope=all');
   const statusPromise = get('/wiki/status?scope=all');
   const constellationPromise = get('/wiki/constellation?cap=90&scope=all');
