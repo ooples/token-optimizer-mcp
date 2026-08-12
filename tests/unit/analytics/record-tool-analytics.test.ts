@@ -119,11 +119,15 @@ describe('recordToolAnalytics', () => {
     );
     const action = await manager.getActionAnalytics();
     expect(action.summary.totalOperations).toBe(1);
-    expect(action.summary.totalTokensSaved).toBe(900);
+    expect(action.summary.totalOriginalTokens).toBe(1000);
+    expect(action.summary.totalOptimizedTokens).toBeGreaterThan(0);
+    expect(action.summary.totalTokensSaved).toBe(
+      1000 - action.summary.totalOptimizedTokens
+    );
     expect(action.byAction[0].name).toBe('smart_read');
   });
 
-  it('does not record error results, in-band failures, or non-JSON output', async () => {
+  it('does not record error results or in-band failures', async () => {
     await recordToolAnalytics(
       manager,
       'smart_read',
@@ -134,14 +138,42 @@ describe('recordToolAnalytics', () => {
       'smart_read',
       mcpResult({ success: false, originalTokens: 1000, tokensSaved: 900 })
     );
-    await recordToolAnalytics(manager, 'x', {
-      content: [{ type: 'text', text: 'not json' }],
+    expect(await manager.count()).toBe(0);
+  });
+
+  it('records actual returned context for operations without a savings baseline', async () => {
+    await recordToolAnalytics(manager, 'wiki_read', {
+      content: [{ type: 'text', text: 'durable finding text' }],
     });
+
+    const [entry] = await manager.getEntries();
+    expect(entry).toMatchObject({
+      toolName: 'wiki_read',
+      savingsMeasured: false,
+      tokensSaved: 0,
+    });
+    expect(entry.optimizedTokens).toBeGreaterThan(0);
+    expect(entry.originalTokens).toBe(entry.optimizedTokens);
+  });
+
+  it('prices the actual disclosed result against the tool baseline', async () => {
     await recordToolAnalytics(
       manager,
-      'count_tokens',
-      mcpResult({ tokens: 2001 })
+      'smart_read',
+      { content: [{ type: 'text', text: JSON.stringify({ compact: true }) }] },
+      { client: 'codex', clientVersion: '0.147.0' },
+      mcpResult({
+        originalTokens: 1000,
+        optimizedTokens: 100,
+        tokensSaved: 900,
+      })
     );
-    expect(await manager.count()).toBe(0);
+
+    const [entry] = await manager.getEntries();
+    expect(entry.savingsMeasured).toBe(true);
+    expect(entry.originalTokens).toBe(1000);
+    expect(entry.optimizedTokens).toBeGreaterThan(0);
+    expect(entry.tokensSaved).toBe(1000 - entry.optimizedTokens);
+    expect(entry.client).toBe('codex');
   });
 });

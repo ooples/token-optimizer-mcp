@@ -84,6 +84,49 @@ describe('AnalyticsManager', () => {
       const count = await manager.count();
       expect(count).toBe(2);
     });
+
+    it('migrates and persists client and model attribution', async () => {
+      await manager.track({
+        hookPhase: 'Unknown',
+        toolName: 'smart_read',
+        mcpServer: 'token-optimizer',
+        originalTokens: 1000,
+        optimizedTokens: 100,
+        tokensSaved: 900,
+        client: 'codex',
+        clientVersion: '0.147.0',
+        model: 'gpt-5.6-sol',
+        modelVersion: '2026-08',
+      });
+
+      await expect(manager.getEntries()).resolves.toEqual([
+        expect.objectContaining({
+          client: 'codex',
+          clientVersion: '0.147.0',
+          model: 'gpt-5.6-sol',
+          modelVersion: '2026-08',
+        }),
+      ]);
+    });
+
+    it('persists context-only measurements without treating them as savings', async () => {
+      await manager.track({
+        hookPhase: 'Unknown',
+        toolName: 'wiki_read',
+        mcpServer: 'token-optimizer',
+        originalTokens: 250,
+        optimizedTokens: 250,
+        tokensSaved: 0,
+        savingsMeasured: false,
+      });
+
+      await expect(manager.getEntries()).resolves.toEqual([
+        expect.objectContaining({
+          optimizedTokens: 250,
+          savingsMeasured: false,
+        }),
+      ]);
+    });
   });
 
   describe('getHookAnalytics', () => {

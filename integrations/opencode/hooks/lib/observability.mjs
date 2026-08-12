@@ -433,6 +433,14 @@ export function hookHealthSummary(options = {}) {
   const skipped = runs.filter((event) => event.outcome === 'skipped');
   const blocked = runs.filter((event) => event.outcome === 'blocked');
   const successes = runs.filter((event) => event.outcome === 'success');
+  const actions = runs.filter(
+    (event) => event.hookEvent === 'pre-tool' && event.toolName
+  );
+  const byTool = {};
+  for (const event of actions) {
+    const name = String(event.toolName || 'Unknown action');
+    byTool[name] = (byTool[name] || 0) + 1;
+  }
   const byClient = {};
   for (const event of runs) {
     const key = event.client || 'unknown';
@@ -469,6 +477,8 @@ export function hookHealthSummary(options = {}) {
     blocked: blocked.length,
     abandoned: abandoned.length,
     successes: successes.length,
+    actions: actions.length,
+    byTool,
     // A skipped or policy-blocked hook completed its protocol successfully.
     // Runtime health answers whether the hook process worked, not whether the
     // optimizer chose to allow the host operation.

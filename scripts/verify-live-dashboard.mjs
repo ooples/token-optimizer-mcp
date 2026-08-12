@@ -2,14 +2,18 @@
 /** Read-only Playwright verification against an already running dashboard. */
 
 import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const base = process.argv[2] || 'http://localhost:3101';
 const output = join(ROOT, 'artifacts', 'live-dashboard');
+const documentationOutput = process.argv[3]
+  ? resolve(process.argv[3])
+  : null;
 mkdirSync(output, { recursive: true });
+if (documentationOutput) mkdirSync(documentationOutput, { recursive: true });
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -78,6 +82,7 @@ async function measureCameraStability(host) {
 
 try {
   await page.goto(base, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1_100);
   const overviewBody = await page.locator('body').innerText();
   const overview = {
     title: await page.title(),
@@ -94,12 +99,45 @@ try {
         value: card.querySelector('.kpi-value')?.textContent?.trim() || '',
       }))
     ),
+    savedTokens: await page.locator('#saved-tokens').innerText(),
+    savedMoney: await page.locator('#saved-money').innerText(),
+    accountingCards: await page
+      .locator('#accounting-grid .accounting-card')
+      .evaluateAll((cards) =>
+        cards.map((card) => ({
+          label: card.querySelector('.accounting-label')?.textContent?.trim() || '',
+          value: card.querySelector('.accounting-value')?.textContent?.trim() || '',
+          detail: card.querySelector('.accounting-detail')?.textContent?.trim() || '',
+        }))
+      ),
+    clientRows: await page
+      .locator('#client-ledger .client-ledger-row')
+      .evaluateAll((rows) => rows.map((row) => row.textContent?.trim() || '')),
+    recentRows: await page
+      .locator('#timeline-container .event')
+      .evaluateAll((rows) => rows.map((row) => row.textContent?.trim() || '')),
+    actionRows: await page.locator('#tool-breakdown-body tr').evaluateAll((rows) =>
+      rows.map((row) =>
+        [...row.querySelectorAll('td')].map(
+          (cell) => cell.textContent?.trim() || ''
+        )
+      )
+    ),
     cameraStability: await measureCameraStability(page.locator('#constellation')),
   };
   await page.screenshot({
     path: join(output, 'overview.png'),
     fullPage: true,
   });
+  if (documentationOutput) {
+    await page.screenshot({
+      path: join(documentationOutput, 'overview-live.png'),
+      fullPage: true,
+    });
+    await page.locator('.client-accounting').screenshot({
+      path: join(documentationOutput, 'agent-accounting-live.png'),
+    });
+  }
 
   await page.goto(`${base}/wiki`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#wiki-list li');
@@ -115,12 +153,22 @@ try {
       status: document.querySelector('#hook-health-status')?.textContent?.trim() || '',
       state: document.querySelector('#hook-health-status')?.dataset.state || '',
       detail: document.querySelector('#hook-health-detail')?.textContent?.trim() || '',
+      clients: [...document.querySelectorAll('#hook-health-clients .capture-client')]
+        .map((card) => card.textContent?.trim() || ''),
     };
   });
   await page.screenshot({
     path: join(output, 'wiki-capture-health.png'),
     fullPage: true,
   });
+  if (documentationOutput) {
+    await page.locator('section.wiki-balance').nth(0).screenshot({
+      path: join(documentationOutput, 'capture-health-live.png'),
+    });
+    await page.locator('section.wiki-balance').nth(1).screenshot({
+      path: join(documentationOutput, 'graph-balance-live.png'),
+    });
+  }
   const host = page.locator('#wiki-graph-3d');
   const graph3d = await host.evaluate((element) => ({
     width: element.clientWidth,
@@ -140,6 +188,11 @@ try {
     selected: element.dataset.selected || null,
   }));
   const detailVisible = await page.locator('#wiki-detail').isVisible();
+  if (documentationOutput) {
+    await page.locator('#tab-explore').screenshot({
+      path: join(documentationOutput, 'graph-explorer-live.png'),
+    });
+  }
   await page.locator('.wiki-tab[data-tab="evidence"]').click();
   await waitForCount('#evidence-summary .stat-card', 6, 'evidence cards');
   await page.waitForFunction(
@@ -165,6 +218,11 @@ try {
     path: join(output, 'wiki-evidence.png'),
     fullPage: true,
   });
+  if (documentationOutput) {
+    await page.locator('#tab-evidence').screenshot({
+      path: join(documentationOutput, 'evidence-console-live.png'),
+    });
+  }
   const wiki = {
     listCount: await page.locator('#wiki-list li').count(),
     scopeOptions: await page.locator('#wiki-scope option').count(),
@@ -240,6 +298,20 @@ try {
     overview.activityCards.some(
       ({ label, value }) => label === 'Lifecycle events' && Number(value.replaceAll(',', '')) > 0
     ) &&
+    Number(overview.savedTokens.replaceAll(',', '')) > 0 &&
+    /^\$/.test(overview.savedMoney) &&
+    overview.accountingCards.length === 6 &&
+    overview.accountingCards.some(
+      ({ label, value, detail }) =>
+        label === 'Returned context' &&
+        value !== 'Not measured' &&
+        /\$/.test(detail)
+    ) &&
+    overview.clientRows.length >= 2 &&
+    overview.recentRows.some((row) => /\$/.test(row) && /saved|baseline/i.test(row)) &&
+    overview.actionRows.some(
+      (row) => row.length === 5 && /^\$/.test(row[3]) && row[4] !== 'Not measured'
+    ) &&
     overview.cameraStability.widthSpread <= 1 &&
     overview.cameraStability.heightSpread <= 1 &&
     overview.cameraStability.zoomSpread <= 0.0001 &&
@@ -254,15 +326,20 @@ try {
     // The coverage assertion above accepts both the partial and complete-copy;
     // this field only needs to remain a valid non-negative count.
     wiki.aggregateCoverage.missingProjects >= 0 &&
-    wiki.balanceCards.length === 4 &&
+    wiki.balanceCards.length === 8 &&
     wiki.balanceCards.every(({ value }) => value.length > 0 && value !== '—') &&
     wiki.balanceContract.coverage?.projects >= 1 &&
     wiki.balanceContract.coverage?.projectsWithTelemetry >= 1 &&
     wiki.balanceContract.freshness?.lastEventAt &&
-    ['memoryDeliveries', 'memoryHoldouts', 'rememberingCost', 'readingAvoided']
+    ['nativeSubstitutions', 'memoryDeliveries', 'memoryHoldouts', 'rememberingCost', 'readingAvoided']
       .every((key) => wiki.balanceContract.metrics?.[key]?.source) &&
     /selected projects have telemetry/i.test(wiki.balanceContract.method) &&
     wiki.captureHealth.values.length === 14 &&
+    wiki.captureHealth.clients.length >= 2 &&
+    wiki.captureHealth.clients.every((client) =>
+      /Activity|Runtime|Control|Coverage/.test(client)
+    ) &&
+    wiki.captureHealth.detail.length < 180 &&
     wiki.captureHealth.values.some(
       ({ label, value }) => label === 'Hook runs' && Number(value.replaceAll(',', '')) > 0
     ) &&

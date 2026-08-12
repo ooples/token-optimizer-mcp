@@ -47,14 +47,15 @@
                 Your coding agent reads project data into a limited workspace
                 called the context window. Fill it up and earlier work can fall
                 out. This is how much of that workspace you got back &mdash;
-                measured against a holdout group of reads deliberately left
-                alone, so it is a comparison, not an estimate.
+                directly removed from optimizer results, including live-graph
+                substitutions. The separate graph-effect estimate uses a
+                holdout and is never added until its evidence gate passes.
               </span>
             </button>
           </p>
 
           <div class="big num" id="saved-tokens">&mdash;</div>
-          <div class="big-unit">tokens you did not have to spend</div>
+          <div class="big-unit" id="saved-unit">measured context tokens removed from optimizer results</div>
 
           <div class="saved-side">
             <div>
@@ -108,9 +109,31 @@
         </div>
       </section>
 
+      <section class="card accounting" aria-labelledby="accounting-heading">
+        <div class="section-heading-row">
+          <div>
+            <p class="card-title" id="accounting-heading">Token accounting</p>
+            <p class="card-sub">
+              Direct optimizer measurements and graph-memory costs share one ledger without mixing in an unfinished causal estimate.
+            </p>
+          </div>
+          <span class="source-chip">measured on this machine</span>
+        </div>
+        <div class="accounting-grid" id="accounting-grid"></div>
+        <p class="accounting-note" id="accounting-note"></p>
+      </section>
+
       <!-- Plain-language metrics. Every label says what it is, not what the
            code calls it, and every one can explain itself. -->
       <section class="kpis" id="kpis"></section>
+
+      <section class="card client-accounting" aria-labelledby="client-accounting-heading">
+        <p class="card-title" id="client-accounting-heading">Measured by agent</p>
+        <p class="card-sub">
+          New optimizer measurements use MCP handshake identity. Historical rows without identity remain unattributed instead of being guessed.
+        </p>
+        <div class="client-ledger" id="client-ledger"></div>
+      </section>
 
       <section class="panels">
         <div class="card">
@@ -158,9 +181,9 @@
       </section>
 
       <section class="card">
-        <p class="card-title">Recent agent activity</p>
+        <p class="card-title">Recent measured optimizer activity</p>
         <p class="card-sub">
-          What the active CLI actually did, most recent first.
+          Before/after context cost and savings from optimizer operations, most recent first.
         </p>
         <div id="timeline-container" class="timeline"></div>
       </section>
@@ -174,6 +197,8 @@
                 <th scope="col">Action</th>
                 <th scope="col" class="right">Times used</th>
                 <th scope="col" class="right">Context used</th>
+                <th scope="col" class="right">Context USD</th>
+                <th scope="col" class="right">Tokens saved</th>
               </tr>
             </thead>
             <tbody id="tool-breakdown-body"></tbody>

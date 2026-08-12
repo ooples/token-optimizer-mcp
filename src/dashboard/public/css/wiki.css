@@ -137,6 +137,93 @@
   line-height: 1.55;
 }
 
+.capture-clients {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.capture-client {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  grid-template-columns: minmax(140px, 0.72fr) minmax(0, 1.6fr);
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.capture-client.is-unhealthy {
+  border-color: var(--bad);
+}
+
+.capture-client-name strong,
+.capture-client-name span {
+  display: block;
+}
+
+.capture-client-name strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.capture-client-name span,
+.capture-client dt {
+  color: var(--ink-3);
+  font-size: 10.5px;
+  margin-top: 3px;
+}
+
+.capture-client dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  margin: 0;
+}
+
+.capture-client dt,
+.capture-client dd {
+  margin: 0;
+}
+
+.capture-client dd {
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.method-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.method-fact {
+  border-left: 2px solid var(--line-bright);
+  display: grid;
+  gap: 3px;
+  padding: 4px 10px;
+}
+
+.method-fact span {
+  color: var(--ink-3);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.method-fact strong {
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+@media (max-width: 560px) {
+  .capture-client {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ----------------------------------------------------------------- tabs -- */
 
 .wiki-tabs {

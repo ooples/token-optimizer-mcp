@@ -469,7 +469,13 @@ ${nudge}`
           // Carried through so a substitution can be told apart from a test
           // fixture later. Without it the balance sheet counted the suite's own
           // 366 fixture writes as product value.
-          { sessionId: payload.session_id }
+          {
+            sessionId: payload.session_id,
+            client: episode.client,
+            clientVersion: episode.clientVersion,
+            model: episode.model,
+            modelVersion: episode.modelVersion,
+          }
         );
         if (substitution) reason = substitution;
       }

@@ -744,6 +744,43 @@ function canonicalKeyish(p) {
  */
 function buildReport(events, balance, sourceCoverage = {}) {
 
+  const substitutions = balance.filter(
+    (event) => event.kind === 'substitute' && !isFixtureAnchor(event.anchor)
+  );
+  const servedSubstitutions = substitutions.filter((event) => !event.holdout);
+  const substitutionTokensSaved = servedSubstitutions.reduce(
+    (sum, event) =>
+      sum +
+      (event.tokensNetAvoided ??
+        Math.max(
+          0,
+          Math.ceil((event.bytesAvoided || 0) / 4) - (event.tokens || 0)
+        )),
+    0
+  );
+  const substitutionTokensReturned = servedSubstitutions.reduce(
+    (sum, event) => sum + (event.tokens || 0),
+    0
+  );
+  const substitutionByClient = {};
+  for (const event of servedSubstitutions) {
+    const name = event.client || 'Historical — client not recorded';
+    const current = substitutionByClient[name] || {
+      substitutions: 0,
+      tokensReturned: 0,
+      tokensSaved: 0,
+    };
+    current.substitutions += 1;
+    current.tokensReturned += event.tokens || 0;
+    current.tokensSaved +=
+      event.tokensNetAvoided ??
+      Math.max(
+        0,
+        Math.ceil((event.bytesAvoided || 0) / 4) - (event.tokens || 0)
+      );
+    substitutionByClient[name] = current;
+  }
+
   // COMMAND INJECTIONS ARE COUNTED SEPARATELY, not mixed into the balance.
   //
   // The saving is measured by joining an injection to the READS of its anchor
@@ -876,6 +913,37 @@ function buildReport(events, balance, sourceCoverage = {}) {
   });
 
   return {
+    nativeOptimizer: {
+      substitutions: servedSubstitutions.length,
+      holdouts: substitutions.filter((event) => event.holdout).length,
+      tokensReturned: substitutionTokensReturned,
+      tokensSaved: substitutionTokensSaved,
+      byClient: substitutionByClient,
+      recent: servedSubstitutions
+        .slice()
+        .sort((a, b) => (b.at || 0) - (a.at || 0))
+        .slice(0, 40)
+        .map((event) => {
+          const tokensSaved =
+            event.tokensNetAvoided ??
+            Math.max(
+              0,
+              Math.ceil((event.bytesAvoided || 0) / 4) -
+                (event.tokens || 0)
+            );
+          return {
+            name: 'live_graph_substitution',
+            client: event.client || 'Historical — client not recorded',
+            originalTokens: (event.tokens || 0) + tokensSaved,
+            optimizedTokens: event.tokens || 0,
+            tokensSaved,
+            savingsMeasured: true,
+            timestamp: event.at ? new Date(event.at).toISOString() : null,
+          };
+        }),
+      source:
+        'balance.jsonl: full-file tokens minus annotated-skeleton tokens for served substitutions',
+    },
     memoryDeliveries: allInjections.filter((event) => !event.holdout).length,
     memoryHoldouts: allInjections.filter((event) => event.holdout).length,
     deliveryTokens: allInjections
@@ -927,6 +995,11 @@ function buildReport(events, balance, sourceCoverage = {}) {
             : 'stale',
       },
       metrics: {
+        nativeSubstitutions: metric(
+          balanceMeasured ? 'measured' : 'not-measured',
+          'balance.jsonl: full-file tokens minus annotated-skeleton tokens for served substitutions',
+          servedSubstitutions.length
+        ),
         memoryDeliveries: metric(
           balanceMeasured ? 'measured' : 'not-measured',
           'balance.jsonl: inject events in the treated arm',

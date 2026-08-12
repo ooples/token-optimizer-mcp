@@ -24,6 +24,7 @@ import {
   summarizeMcpDiagnostics,
 } from './mcp-diagnostics.js';
 import { isValidSessionId } from '../utils/session-id.js';
+import { readDashboardAnalytics } from './dashboard-analytics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -589,6 +590,20 @@ app.get('/api/diagnostics/mcp', (req, res) => {
     summary: summarizeMcpDiagnostics(sinceMs),
     events: readMcpDiagnosticEvents(limit, sinceMs),
   });
+});
+
+app.get('/api/analytics/overview', async (req, res) => {
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 40));
+  try {
+    res.json(await readDashboardAnalytics(limit));
+  } catch (error) {
+    console.error('Error in /api/analytics/overview:', error);
+    res.status(500).json({
+      schemaVersion: 1,
+      available: false,
+      error: 'optimizer analytics could not be loaded',
+    });
+  }
 });
 
 app.get('/api/health', (_req, res) => {

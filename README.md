@@ -3,7 +3,7 @@
 <h1 align="center">Token Optimizer MCP</h1>
 
 <p align="center">
-  <strong>Your coding agent wastes most of its context window. This stops it — by default, on install, across 15 clients.</strong>
+  <strong>Spend fewer tokens, keep the conclusions, and prove what every coding agent saved — across 16 clients.</strong>
 </p>
 
 <p align="center">
@@ -15,17 +15,17 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/enforced-by%20default-2ea043" alt="Enforced by default">
-  <img src="https://img.shields.io/badge/clients-15-8b5cf6" alt="15 clients">
-  <img src="https://img.shields.io/badge/savings-measured%20vs%20a%20control%20arm-3b82f6" alt="Measured against a control arm">
+  <img src="https://img.shields.io/badge/clients-16-8b5cf6" alt="16 clients">
+  <img src="https://img.shields.io/badge/direct%20savings-before%20%2F%20actual%20return-3b82f6" alt="Direct savings measured before and after">
   <img src="https://img.shields.io/badge/telemetry-none-2ea043" alt="No telemetry">
   <img src="https://img.shields.io/badge/commercial%20use-MIT%2C%20allowed-0d9488" alt="MIT, commercial use allowed">
 </p>
 
 <p align="center">
-  <img alt="The knowledge graph: findings, decisions and dead ends accreted from real agent work, with a token balance measured against a withheld control arm" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/constellation-dark.png" width="900">
+  <img alt="Live Token Optimizer dashboard combining tool savings, per-agent attribution, graph cost, and the knowledge graph" src="./docs/media/live/overview-live.png" width="1000">
 </p>
 
-<p align="center"><em>Everything your agent worked out, kept — and a savings figure measured against a withheld control arm, not estimated.</em></p>
+<p align="center"><em>One local ledger for optimizer tools, live-graph substitutions, every agent, and the graph's own cost.</em></p>
 
 ---
 
@@ -36,7 +36,7 @@ that have not changed, dumping a whole file to see three lines, running
 unbounded searches, and re-deriving conclusions it reached last session and then
 forgot.
 
-Token Optimizer attacks that on three fronts.
+Token Optimizer attacks that on four fronts.
 
 **1. It makes the expensive call impossible.** Install the plugin and a built-in
 `Read` of a 200 KB file is **denied**, with the refusal naming the cached,
@@ -51,12 +51,37 @@ feeds them back the moment the agent touches the relevant file. A finding costs
 ~150 tokens to carry. Re-deriving it costs 5k–50k.
 
 **3. It measures itself, in public, and tells you when it is losing.** A
-randomized control arm for savings. A forecast that keeps its own accuracy
-record. Cache economics read from your client's own transcript rather than
-modelled. Every number here is measured or absent — never estimated and
-presented as fact.
+before/actual-return measurement for optimizer operations. Direct full-file
+minus returned-skeleton savings for live-graph substitutions. A randomized
+control arm for the graph's separate downstream effect. Every number is either
+measured, visibly collecting, or absent — never guessed into an empty card.
+
+**4. It attributes the bill.** Returned context, reference USD, and tokens saved
+are grouped by operation and by MCP handshake identity. Codex, Claude Code,
+Gemini, and any other connected client get separate rows. Old records without
+identity remain explicitly unattributed instead of being assigned to whichever
+agent happens to be open now.
 
 No account, no telemetry, no hosted service. MIT, so it is usable at work.
+
+### What the dashboard proves on a real machine
+
+The screenshots in this README come from the shipped server reading persisted
+local data, not a design mockup. In the capture above it reports:
+
+- **485,994,128 direct tokens saved** across 2,019 recorded MCP operations plus
+  one live-graph substitution;
+- **6 actual-return operations** from a live Codex / Claude Code / Gemini smoke,
+  with each client attributed independently;
+- **2,647 graph nodes, 6,470 edges, and 58 findings** across 11 local projects;
+- **1,047 hook runs with zero failures and zero timeouts** across six active CLI
+  clients in the selected 24-hour window;
+- **6,332 direct graph-substitution tokens saved**, while the different causal
+  graph-reuse study remains excluded and visibly marked `Collecting`.
+
+The USD values use a clearly labelled $3 per million reference rate. Historical
+rows from older builds use their stored optimizer before/after counts; current
+rows count the text actually returned over MCP. The dashboard shows that split.
 
 ## Quick start
 
@@ -69,7 +94,7 @@ what enforces; adding the server alone just gives the model tools it can ignore.
 /reload-plugins
 ```
 
-That is the entire installation. [All fifteen clients →](#installation)
+That is the entire installation. [All sixteen clients →](#installation)
 
 Then, whenever you want to know what to do next:
 
@@ -135,48 +160,91 @@ output never enters context at all. Not compressed. Absent.
 ## The dashboard
 
 ```bash
+npm install
+npm run build
 npm run dashboard      # http://localhost:3100
 ```
 
 <p align="center">
-  <img alt="Knowledge graph browser with focus view, token balance and audit tab" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/graph-dark.png" width="900">
+  <img alt="Per-agent token accounting with historical rows left unattributed and live Codex, Claude Code, and Gemini rows measured separately" src="./docs/media/live/agent-accounting-live.png" width="1000">
 </p>
 
-<table>
-<tr><td width="50%">
+The overview answers the questions a token optimizer should answer first:
 
-**Token balance**
-Earned, spent and net — with the control-arm method stated up front rather than
-buried. When the experiment cannot yet support a headline figure, it says so.
+1. **How many tokens did it remove?** The headline combines direct MCP optimizer
+   savings with direct live-graph substitutions.
+2. **How much context still reached the agents?** Every successful current MCP
+   result records its actual returned text, even when no valid before-state
+   exists. That row is context-accounted but savings-unmeasured.
+3. **Which agent and action spent it?** The client ledger and action table show
+   operations, returned context, reference USD, and tokens saved. Lifecycle-only
+   clients say `Not measured`; no zero is invented.
+4. **Did remembering cost more than it saved?** Delivery and semantic-harvest
+   tokens are charged to the graph. A causal benefit is added only after the
+   treated/holdout evidence gate passes.
 
-**Knowledge graph browser**
-Focus view for one node and its neighbourhood; constellation view for the whole
-project. Click a finding to see what it was derived from, what superseded it,
-and what contradicts it.
+### Walkthrough: get useful data, not an empty dashboard
 
-</td><td width="50%">
+1. Install the MCP server and the native adapter for your CLI. The MCP handshake
+   provides per-client accounting; native lifecycle hooks provide automatic
+   routing, capture, health, and delivery where the client protocol permits it.
+2. Use `smart_read`, `smart_grep`, `smart_glob`, `smart_edit`, or any other MCP
+   operation normally. Every successful result records returned context; tools
+   with a real before-state also record direct savings.
+3. Let the active model record durable conclusions with `wiki_write`. Before a
+   new agent re-derives work, call `wiki_read` for the project or the files it is
+   about to touch. Native clients can also deliver matching knowledge
+   automatically.
+4. Open `http://localhost:3100`. Use **Overview** for combined accounting and
+   **What it knows** for capture health, graph exploration, audits, and causal
+   evidence.
+5. To register existing local repositories without reading their source, run
+   `npm run projects:discover -- /absolute/path/to/repos`. This makes coverage
+   gaps explicit; it does not fabricate findings.
 
-**Audit tab**
-Contradictions, stale findings, and anything the graph believes that the code no
-longer supports — each with the diff that invalidated it.
+For maintainers, this live smoke exercises the shipped stdio transport and
+creates separately attributed rows without seeding the analytics database:
 
-**Evidence console**
-Client/model/task cohorts, matched four-arm effects with 95% intervals, live
-injection-to-outcome traces, harm feedback, and the honest capability tier for
-all sixteen supported CLIs. Insufficient evidence stays visibly insufficient.
-
-**One-click Markdown export**
-Your agent's accumulated knowledge as documentation you can review, edit and
-commit. The graph stops being a black box the moment you can read it as prose.
-
-</td></tr>
-</table>
+```bash
+npm run dashboard:attribution-smoke -- /absolute/path/to/project /absolute/path/to/large-file
+npm run dashboard:verify-live -- http://localhost:3100
+```
 
 <p align="center">
-  <img alt="Audit tab surfacing contradictions, stale findings and low-confidence claims" src="https://raw.githubusercontent.com/ooples/token-optimizer-mcp/master/docs/media/audit-dark.png" width="900">
+  <img alt="Structured cross-client hook and MCP health cards from live local data" src="./docs/media/live/capture-health-live.png" width="1000">
 </p>
 
-<p align="center"><em>The audit tab: two findings that contradict each other, surfaced automatically.</em></p>
+The health panel is deliberately operational rather than a raw text dump. Each
+client has activity, runtime failures/timeouts, policy outcomes, and observed
+surface coverage. Diagnostics keep no prompts, commands, paths, or tool output.
+
+<p align="center">
+  <img alt="Direct graph savings, remembering cost, holdouts, and an honest collecting causal study" src="./docs/media/live/graph-balance-live.png" width="1000">
+</p>
+
+Direct substitution savings and causal graph effects are different claims. The
+first is `full-file tokens - returned skeleton tokens` and is available
+immediately. The second asks whether delivered knowledge prevented later reads;
+it uses a control arm and remains `Collecting` until there are at least 20
+treated file touches and 5 holdouts with valid downstream joins.
+
+<p align="center">
+  <img alt="Interactive 3D knowledge graph spanning eleven local projects" src="./docs/media/live/graph-explorer-live.png" width="1000">
+</p>
+
+Drag to orbit, scroll to zoom, click a node for provenance, or switch to the
+bounded one-hop focus view. The default **All known projects** scope pools local
+graphs through opaque project IDs; filesystem paths never reach the browser.
+
+**Audit tab.** Contradictions, stale findings, and low-confidence claims remain
+reviewable instead of silently becoming model truth.
+
+**Evidence console.** Client/model/task cohorts, matched effects with 95%
+intervals, live outcome joins, harm feedback, and capability tiers for all 16
+clients. Release and superiority claims fail closed while evidence is missing.
+
+**One-click Markdown export.** The accumulated graph becomes documentation you
+can inspect, edit, and commit.
 
 Server-side by design: the browser asks for a neighbourhood, a search result or
 a page. A mature graph holds thousands of nodes, and shipping it wholesale would
@@ -198,9 +266,9 @@ whose capture has not started. The balance cards are backed by persisted events:
 **Memory deliveries** counts graph context actually supplied to an agent,
 **Kept back for comparison** counts randomized control touches, and **Cost of
 remembering** combines delivered-context tokens with measured semantic-write
-payload cost. **Reading avoided** stays “Not enough comparisons” until at least
-20 deliveries and 5 holdouts exist; the dashboard does not manufacture a
-savings estimate from missing data.
+payload cost. **Reading avoided** stays `Collecting` or `Not measured` until at
+least 20 treated file touches and 5 holdouts exist with a downstream join; the
+dashboard does not manufacture a savings estimate from missing data.
 
 See [the causal evidence protocol](docs/EVIDENCE_PROTOCOL.md), the
 [cross-client capability contract](docs/CLIENT_SUPPORT.md), and the
@@ -374,15 +442,21 @@ npm run uninstall-hooks -- --apply   # carry it out
 
 ---
 
-## It proves its own savings against a control arm
+## It separates direct savings from causal graph evidence
 
 Every tool in this space reports "tokens saved" computed from its own
 assumptions. That number cannot be wrong, because nothing checks it.
 
-This runs a **randomized holdout**: injection is silently withheld on a slice of
-file touches, stratified by file so the comparison is within-file, and the
-saving is the measured difference between the arms. It refuses to print a
-headline figure until the experiment can support one, and it will tell you
+For optimizer results, this records the known before-state and the text actually
+returned to the client. For a native graph substitution it records full-file
+tokens minus returned-skeleton tokens. Those direct measurements power the main
+dashboard immediately.
+
+The graph's broader claim—whether delivered knowledge prevented later
+re-reading—is causal, so it runs a **randomized holdout**. Delivery is silently
+withheld on a slice of file touches, stratified by file, and the effect is the
+difference in downstream reads between arms. That effect is not added to the
+combined net until the experiment can support it, and the page will tell you
 plainly:
 
 > the graph is NOT yet paying for itself
@@ -394,14 +468,21 @@ silent false negative, and dollars get quoted to other people.
 
 ## It runs everywhere, and says which tier
 
-**Enforcing** — a pre-execution veto exists: Claude Code, Codex, OpenCode.
+The tier is a protocol guarantee, not a preference:
 
-**Directive** — MCP plus an always-applied rules file: Cursor, Windsurf, Cline,
-Roo, Kilo, Zed, Amp, Continue, Crush, Droid, Copilot, Gemini, Qwen.
+- **Lifecycle continuation:** Claude Code, Codex, GitHub Copilot CLI, Gemini CLI,
+  Qwen Code, and Cursor. Native routing/capture/delivery plus one active-model
+  completion reflection.
+- **Native observation:** Cline, OpenCode, Kilo, and Windsurf. Native
+  routing/capture/delivery; the active model performs semantic writes.
+- **MCP + rules:** Roo Code, Zed, Amp, Continue, Crush, and Droid. MCP-visible
+  activity and explicit graph tools, with no claim over hidden built-in calls.
 
-Gemini and Qwen sit in the second tier **despite having hooks**, because their
-only tool hook fires _after_ the read is paid for. Claiming enforcement there
-would be a lie you would discover on your first large file.
+The exact surfaces still differ. For example, a protocol that can replace a
+large read before it reaches the model provides a stronger token guarantee than
+one that can only observe it. The generated registry, adapters, dashboard, and
+certification report all read the same capability source so those claims cannot
+drift independently.
 
 Every config shape is confirmed against that client's published documentation,
 with the source URL recorded in its README.
@@ -414,7 +495,7 @@ npm run verify:all
 
 | Suite            | Checks | What it proves                                                                                                          |
 | ---------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `test`           | 416    | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
+| `test`           | 2,340  | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
 | `verify:clients` | 129    | Every client config matches its documented schema                                                                       |
 | `verify:harvest` | 26     | Request shape, response parsing, and that **no secret from a tool result crosses the wire**                             |
 | `verify:ui`      | 22     | Real headless Chromium: layout, label collisions, legibility                                                            |
@@ -432,13 +513,13 @@ a plan and deleted nothing.
 | **License**                  | MIT — commercial use fine                          | Often noncommercial-only; check before using at work |
 | Default behaviour            | Refuses the wasteful call                          | Suggests a better tool                               |
 | Re-read of an unchanged file | Returns a diff                                     | Returns the file again                               |
-| Savings figure               | Measured against a withheld control                | Computed from the tool's own assumptions             |
+| Savings figure               | Direct before/return ledger; causal graph effect separately held out | Computed from the tool's own assumptions             |
 | Cross-session memory         | Findings, decisions, dead ends                     | Usually none                                         |
 | Compaction                   | Consolidation, ranked by cost-to-rederive          | Checkpoint and replay                                |
 | Cache economics              | Measured from the transcript, attributed to a line | Rarely addressed                                     |
 | Model routing                | Measured from episode outcomes                     | Guessed from task size                               |
 | Cross-project                | Fixes transfer by content hash                     | Per-project only                                     |
-| Clients                      | 15                                                 | 3–6 typical                                          |
+| Clients                      | 16                                                 | 3–6 typical                                          |
 | Telemetry                    | None                                               | Varies                                               |
 
 ---
@@ -450,7 +531,7 @@ but they differ in what they let a hook _do_, and that difference is the whole
 product. A client with a pre-execution veto can have the wasteful call refused;
 one without can only be told. Both are listed honestly below.
 
-Ready-made configuration for all fifteen lives in
+Ready-made configuration for all sixteen lives in
 [`integrations/`](./integrations), generated from one source and validated by
 `npm run verify:clients`. Full matrix: [`docs/CLIENT_SUPPORT.md`](./docs/CLIENT_SUPPORT.md).
 

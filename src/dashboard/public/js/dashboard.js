@@ -69,44 +69,117 @@ async function load() {
   // Every panel is independent: the graph is worth showing even when there is
   // no active session, and vice versa. One missing answer must not blank the
   // whole page.
-  const [diagnostics, balance, status, constellation] = await Promise.all([
-    get('/diagnostics/hooks?hours=24&limit=100'),
-    get('/wiki/balance?scope=all'),
-    get('/wiki/status?scope=all'),
-    get('/wiki/constellation?cap=90&scope=all'),
-  ]);
-  let summary = { ok: false, body: null };
-  let events = { ok: false, body: null };
-  if (!diagnostics.ok || !diagnostics.body?.summary?.available) {
-    [summary, events] = await Promise.all([
-      get('/session-summary'),
-      get('/session-events?limit=100'),
+  const [diagnostics, analytics, balance, status, constellation] =
+    await Promise.all([
+      get('/diagnostics/hooks?hours=24&limit=100'),
+      get('/analytics/overview?limit=40'),
+      get('/wiki/balance?scope=all'),
+      get('/wiki/status?scope=all'),
+      get('/wiki/constellation?cap=90&scope=all'),
     ]);
-  }
+  const needsLegacy =
+    !(diagnostics.ok && diagnostics.body?.summary?.available) &&
+    !(analytics.ok && analytics.body?.available);
+  const [summary, events] = needsLegacy
+    ? await Promise.all([
+        get('/session-summary'),
+        get('/session-events?limit=100'),
+      ])
+    : [null, null];
 
-  renderSavings(balance.body, status.body);
-  renderVerdict(balance.body, status.body);
+  renderSavings(analytics.body, balance.body, status.body);
+  renderAccounting(analytics.body, balance.body);
+  renderVerdict(analytics.body, balance.body, status.body);
   renderGraph(constellation.body, status.body);
 
-  const session =
+  const session = joinActivity(
     diagnostics.ok && diagnostics.body?.summary?.available
       ? activityFromDiagnostics(diagnostics.body)
-      : summary.ok && summary.body?.success
-        ? summary.body
-        : null;
+      : null,
+    analytics.ok && analytics.body?.available ? analytics.body : null,
+    summary?.ok && summary.body?.success ? summary.body : null,
+    events?.ok ? events.body?.events : null,
+    balance.body
+  );
   renderKpis(session);
+  renderClientLedger(session, balance.body);
   renderCategories(session);
   renderServers(session);
-  renderTimeline(
-    session?.activityMode === 'hooks'
-      ? session.events
-      : events.ok
-        ? events.body?.events
-        : null
-  );
+  renderTimeline(session?.events);
   renderBreakdown(session);
 
   $('last-updated').textContent = new Date().toLocaleTimeString();
+}
+
+function joinActivity(hooks, analytics, legacy, legacyEvents, balance) {
+  if (!hooks && !analytics && !legacy) return null;
+  if (!hooks && !analytics) return { ...legacy, events: legacyEvents || [] };
+
+  const measuredRows = analytics?.byAction || [];
+  const measuredByName = new Map(measuredRows.map((row) => [row.name, row]));
+  const hookRows = toolRows(hooks);
+  const names = new Set([
+    ...measuredByName.keys(),
+    ...hookRows.map((row) => row.name),
+  ]);
+  const toolBreakdown = [...names].map((name) => {
+    const measured = measuredByName.get(name);
+    const observed = hookRows.find((row) => row.name === name);
+    return {
+      name,
+      count: observed?.count ?? measured?.totalOperations ?? 0,
+      observedCalls: observed?.count ?? null,
+      measuredOperations: measured?.totalOperations ?? 0,
+      tokens: measured?.totalOptimizedTokens ?? null,
+      totalOriginalTokens: measured?.totalOriginalTokens ?? null,
+      tokensSaved: measured?.totalTokensSaved ?? null,
+      contextUsd: measured?.contextUsd ?? null,
+      savedUsd: measured?.savedUsd ?? null,
+    };
+  });
+  const native = balance?.nativeOptimizer;
+  if (native?.substitutions) {
+    toolBreakdown.push({
+      name: 'live_graph_substitution',
+      count: native.substitutions,
+      observedCalls: native.substitutions,
+      measuredOperations: native.substitutions,
+      tokens: native.tokensReturned,
+      totalOriginalTokens: native.tokensReturned + native.tokensSaved,
+      tokensSaved: native.tokensSaved,
+      contextUsd: (native.tokensReturned / 1e6) * USD_PER_MILLION_TOKENS,
+      savedUsd: (native.tokensSaved / 1e6) * USD_PER_MILLION_TOKENS,
+    });
+  }
+  const recentMeasured = [
+    ...(analytics?.recent || []),
+    ...(native?.recent || []).map((row) => ({
+      ...row,
+      contextUsd:
+        (Number(row.optimizedTokens || 0) / 1e6) * USD_PER_MILLION_TOKENS,
+      savedUsd: (Number(row.tokensSaved || 0) / 1e6) * USD_PER_MILLION_TOKENS,
+    })),
+  ].sort(
+    (a, b) => Date.parse(b.timestamp || '') - Date.parse(a.timestamp || '')
+  );
+
+  return {
+    ...(hooks || {}),
+    activityMode: 'combined',
+    analytics,
+    legacy,
+    totalTokens:
+      analytics?.summary?.totalOptimizedTokens ?? legacy?.totalTokens ?? null,
+    totalTools:
+      hooks?.totalTools ??
+      analytics?.summary?.totalOperations ??
+      legacy?.totalTools ??
+      0,
+    toolBreakdown,
+    events: recentMeasured.length
+      ? recentMeasured
+      : legacyEvents || hooks?.events || [],
+  };
 }
 
 function activityFromDiagnostics(report) {
@@ -123,10 +196,13 @@ function activityFromDiagnostics(report) {
     toolBreakdown[name] ||= { count: 0, tokens: null };
     toolBreakdown[name].count += 1;
   }
+  for (const [name, count] of Object.entries(report.summary.byTool || {})) {
+    toolBreakdown[name] = { count, tokens: null };
+  }
   return {
     activityMode: 'hooks',
     totalHooks: report.summary.total || 0,
-    totalTools: actions.length,
+    totalTools: report.summary.actions ?? actions.length,
     activeClients: Object.keys(report.summary.byClient || {}).length,
     p95DurationMs: report.summary.p95DurationMs,
     successRate: report.summary.successRate,
@@ -138,11 +214,16 @@ function activityFromDiagnostics(report) {
 
 /* ------------------------------------------------------------- the hero -- */
 
-function renderSavings(balance, status) {
-  const saved = Number(balance?.estimatedTokensAvoided);
+function renderSavings(analytics, balance, status) {
+  const mcpSaved = Number(analytics?.summary?.totalTokensSaved || 0);
+  const nativeSaved = Number(balance?.nativeOptimizer?.tokensSaved || 0);
+  const saved = mcpSaved + nativeSaved;
   const foot = $('saved-foot');
 
-  if (!balance?.sufficientData || !Number.isFinite(saved) || saved <= 0) {
+  const hasDirectMeasurement =
+    Boolean(analytics?.summary?.measuredSavingsOperations) ||
+    Number(balance?.nativeOptimizer?.substitutions || 0) > 0;
+  if (!hasDirectMeasurement || !Number.isFinite(saved)) {
     // Before there is a measurement, say what will appear and why -- and do
     // NOT show a zero, which reads as failure rather than as "not yet".
     $('saved-tokens').textContent = '—';
@@ -152,21 +233,25 @@ function renderSavings(balance, status) {
 
     const learned = Number(status?.nodes) || 0;
     foot.innerHTML = learned
-      ? `Still measuring. ${fmt(learned)} things learned so far — the savings ` +
-        `figure appears once there is enough of a comparison to be honest about.`
-      : `Nothing measured yet. Work normally in a supported coding agent for a few minutes ` +
-        `and this fills itself in.`;
+      ? `${fmt(learned)} things are learned. Measured optimizer savings appear after an optimizer operation reports both its original and returned context size.`
+      : `Nothing measured yet. Use an optimizer read, search, edit, or other context-reducing tool and this fills itself in.`;
     return;
   }
 
   const spentAnyway =
-    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
-  const wouldHave = saved + spentAnyway;
+    Number(analytics?.summary?.measuredOptimizedTokens || 0) +
+    Number(balance?.nativeOptimizer?.tokensReturned || 0);
+  const wouldHave =
+    Number(analytics?.summary?.totalOriginalTokens || 0) +
+    nativeSaved +
+    Number(balance?.nativeOptimizer?.tokensReturned || 0);
   const percent = wouldHave > 0 ? (saved / wouldHave) * 100 : 0;
 
   countUp($('saved-tokens'), saved);
-  $('saved-money').textContent =
-    `$${((saved / 1e6) * USD_PER_MILLION_TOKENS).toFixed(2)}`;
+  $('saved-money').textContent = formatUsd(
+    Number(analytics?.summary?.savedUsd || 0) +
+      (nativeSaved / 1e6) * USD_PER_MILLION_TOKENS
+  );
   $('saved-percent').textContent = `${percent.toFixed(0)}%`;
 
   comparison($('comparison'), {
@@ -177,8 +262,178 @@ function renderSavings(balance, status) {
   });
 
   foot.textContent =
-    `Measured against ${fmt(balance.holdouts)} reads deliberately left alone, ` +
-    `so this is a comparison rather than a guess.`;
+    `${fmt(analytics?.summary?.totalOperations || 0)} MCP operations context-accounted and ${fmt(balance?.nativeOptimizer?.substitutions || 0)} native substitutions recorded. ` +
+    `Graph-effect savings remain separate and are ${balance?.sufficientData ? 'measured' : 'still collecting'}.`;
+}
+
+function formatUsd(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 'Not measured';
+  if (number === 0) return '$0.00';
+  if (number < 0.01) return `$${number.toFixed(4)}`;
+  return `$${number.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function renderAccounting(analytics, balance) {
+  const host = $('accounting-grid');
+  const note = $('accounting-note');
+  const summary = analytics?.summary;
+  const graphCost =
+    Number(balance?.deliveryTokens ?? balance?.injectedTokens ?? 0) +
+    Number(balance?.harvestTokens || 0);
+  const causalSaved = balance?.sufficientData
+    ? Number(balance.estimatedTokensAvoided)
+    : null;
+  const hasDirect =
+    Boolean(summary?.totalOperations) ||
+    Number(balance?.nativeOptimizer?.substitutions || 0) > 0;
+  const hasSavingsMeasurement =
+    Boolean(summary?.measuredSavingsOperations) ||
+    Number(balance?.nativeOptimizer?.substitutions || 0) > 0;
+  const canComputeNet = hasSavingsMeasurement || causalSaved != null;
+  const combinedNet = canComputeNet
+    ? Number(summary?.totalTokensSaved || 0) +
+      Number(balance?.nativeOptimizer?.tokensSaved || 0) +
+      Number(causalSaved || 0) -
+      graphCost
+    : null;
+  const cards = [
+    [
+      'Original context',
+      summary?.measuredSavingsOperations
+        ? compact(summary.totalOriginalTokens)
+        : 'Not measured',
+      'known before-state only',
+    ],
+    [
+      'Returned context',
+      summary ? compact(summary.totalOptimizedTokens) : 'Not measured',
+      summary
+        ? `${formatUsd(summary.contextUsd)} · ${fmt(summary.actualReturnedContextOperations || 0)} actual-return · ${fmt(summary.legacyReportedContextOperations || 0)} legacy rows`
+        : 'actual results returned to clients',
+    ],
+    [
+      'Optimizer saved',
+      hasSavingsMeasurement
+        ? compact(
+            Number(summary?.totalTokensSaved || 0) +
+              Number(balance?.nativeOptimizer?.tokensSaved || 0)
+          )
+        : 'Not measured',
+      hasSavingsMeasurement
+        ? `${formatUsd(
+            Number(summary?.savedUsd || 0) +
+              (Number(balance?.nativeOptimizer?.tokensSaved || 0) / 1e6) *
+                USD_PER_MILLION_TOKENS
+          )} · MCP + native`
+        : 'USD unavailable',
+    ],
+    [
+      'Graph memory cost',
+      balance ? compact(graphCost) : 'Not measured',
+      balance
+        ? `${formatUsd((graphCost / 1e6) * USD_PER_MILLION_TOKENS)} · delivery + harvest`
+        : 'delivery + harvest',
+    ],
+    [
+      'Causal graph saving',
+      causalSaved == null ? 'Collecting' : compact(causalSaved),
+      causalSaved == null
+        ? `${fmt(balance?.injections || 0)}/20 treated · ${fmt(balance?.holdouts || 0)}/5 holdout`
+        : 'holdout measured',
+    ],
+    [
+      'Combined net measured',
+      combinedNet == null ? 'Not measured' : compact(combinedNet),
+      causalSaved == null
+        ? 'optimizer saving − graph cost; causal graph benefit excluded'
+        : 'optimizer + causal graph saving − graph cost',
+    ],
+  ];
+  host.innerHTML = cards
+    .map(
+      ([label, value, detail]) => `
+    <div class="accounting-card">
+      <span class="accounting-label">${escapeHtml(label)}</span>
+      <strong class="accounting-value num">${escapeHtml(value)}</strong>
+      <span class="accounting-detail">${escapeHtml(detail)}</span>
+    </div>`
+    )
+    .join('');
+  note.textContent = hasDirect
+    ? `${analytics?.source || 'No MCP operation rows yet'}; ${balance?.nativeOptimizer?.source || 'no native substitutions recorded'}. USD uses a $${analytics?.referenceUsdPerMillionTokens || USD_PER_MILLION_TOKENS}/million reference rate; graph causal savings are never counted before the holdout gate passes.`
+    : 'No direct optimizer before/after measurements have been recorded yet.';
+}
+
+function renderClientLedger(session, balance) {
+  const host = $('client-ledger');
+  const analytics = session?.analytics;
+  const activeClients = new Set(Object.keys(session?.clients || {}));
+  const rows = (analytics?.byClient || []).map((row) => ({ ...row }));
+  for (const [name, native] of Object.entries(
+    balance?.nativeOptimizer?.byClient || {}
+  )) {
+    const current = rows.find((row) => row.name === name);
+    if (current) {
+      current.totalOperations += native.substitutions || 0;
+      current.totalOptimizedTokens += native.tokensReturned || 0;
+      current.totalTokensSaved += native.tokensSaved || 0;
+      current.contextUsd +=
+        ((native.tokensReturned || 0) / 1e6) * USD_PER_MILLION_TOKENS;
+      current.nativeSubstitutions = native.substitutions || 0;
+    } else {
+      rows.push({
+        name,
+        attribution:
+          name === 'Historical — client not recorded'
+            ? 'historical-unattributed'
+            : 'recorded',
+        totalOperations: native.substitutions || 0,
+        totalOptimizedTokens: native.tokensReturned || 0,
+        totalTokensSaved: native.tokensSaved || 0,
+        contextUsd:
+          ((native.tokensReturned || 0) / 1e6) * USD_PER_MILLION_TOKENS,
+        nativeSubstitutions: native.substitutions || 0,
+      });
+    }
+  }
+  for (const client of activeClients) {
+    if (!rows.some((row) => row.name === client)) {
+      rows.push({
+        name: client,
+        attribution: 'lifecycle-only',
+        totalOperations: 0,
+        totalOptimizedTokens: null,
+        totalTokensSaved: null,
+        contextUsd: null,
+      });
+    }
+  }
+  if (!rows.length) {
+    host.innerHTML = teach(
+      'No agent attribution yet',
+      'New MCP operations record their client identity after the handshake.'
+    );
+    return;
+  }
+  host.innerHTML = rows
+    .map(
+      (row) => `
+      <div class="client-ledger-row">
+        <div>
+          <strong>${escapeHtml(row.name)}</strong>
+          <span>${row.attribution === 'historical-unattributed' ? 'historical total; client was not stored' : row.attribution === 'lifecycle-only' ? 'lifecycle active; optimizer cost not yet attributed' : `${row.nativeSubstitutions ? `${fmt(row.nativeSubstitutions)} graph substitutions · ` : ''}attributed by client protocol`}</span>
+        </div>
+        <div><span>Operations</span><strong class="num">${fmt(row.totalOperations)}</strong></div>
+        <div><span>Returned context</span><strong class="num">${row.totalOptimizedTokens == null ? 'Not measured' : fmt(row.totalOptimizedTokens)}</strong></div>
+        <div><span>Context USD</span><strong class="num">${row.contextUsd == null ? 'Not measured' : formatUsd(row.contextUsd)}</strong></div>
+        <div><span>Saved</span><strong class="num saved-cell">${row.totalTokensSaved == null ? 'Not measured' : fmt(row.totalTokensSaved)}</strong></div>
+      </div>`
+    )
+    .join('');
 }
 
 /** A number that lands rather than appearing. Skipped when motion is reduced. */
@@ -198,12 +453,26 @@ function countUp(node, target) {
   requestAnimationFrame(step);
 }
 
-function renderVerdict(balance, status) {
+function renderVerdict(analytics, balance, status) {
   const box = $('verdict');
   const title = $('verdict-title');
   const detail = $('verdict-detail');
   box.hidden = false;
   box.classList.remove('is-ok', 'is-warn', 'is-bad');
+
+  const directSaved =
+    Number(analytics?.summary?.totalTokensSaved || 0) +
+    Number(balance?.nativeOptimizer?.tokensSaved || 0);
+  const graphCost =
+    Number(balance?.deliveryTokens ?? balance?.injectedTokens ?? 0) +
+    Number(balance?.harvestTokens || 0);
+
+  if (!balance?.sufficientData && directSaved > 0) {
+    box.classList.add('is-ok');
+    title.textContent = 'Saving context now';
+    detail.textContent = `${fmt(directSaved)} tokens were removed by measured optimizer operations. The separate causal graph-effect study is still collecting (${fmt(balance?.injections || 0)}/20 treated, ${fmt(balance?.holdouts || 0)}/5 holdout).`;
+    return;
+  }
 
   if (!balance?.sufficientData) {
     box.classList.add('is-warn');
@@ -215,10 +484,9 @@ function renderVerdict(balance, status) {
     return;
   }
 
-  const net = Number(balance.netTokens || 0);
-  const cost =
-    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
-  const ratio = cost > 0 ? (net + cost) / cost : Infinity;
+  const net =
+    directSaved + Number(balance.estimatedTokensAvoided || 0) - graphCost;
+  const ratio = graphCost > 0 ? (net + graphCost) / graphCost : Infinity;
 
   if (net > 0) {
     box.classList.add('is-ok');
@@ -379,7 +647,7 @@ function renderKpis(s) {
   }
 
   const cards =
-    s.activityMode === 'hooks'
+    s.activityMode === 'hooks' || s.activityMode === 'combined'
       ? [
           {
             label: 'Lifecycle events',
@@ -449,7 +717,7 @@ function renderKpis(s) {
 
 function renderCategories(s) {
   const host = $('category-chart');
-  if (s?.activityMode === 'hooks') {
+  if (s?.clients) {
     const slices = Object.entries(s.clients).map(([client, values], index) => ({
       label: client,
       value: values.total || 0,
@@ -481,24 +749,24 @@ function renderCategories(s) {
 
 function renderServers(s) {
   const host = $('server-chart');
-  if (s?.activityMode === 'hooks') {
+  if (s?.analytics?.byAction?.length) {
     const slices = toolRows(s)
-      .filter((row) => row.count > 0)
+      .filter((row) => Number(row.tokensSaved) > 0)
       .map((row, index) => ({
         label: row.name || row.tool,
-        value: row.count,
+        value: row.tokensSaved,
         color: SERVER_COLORS[index % SERVER_COLORS.length],
       }))
       .sort((a, b) => b.value - a.value);
     if (!slices.length) {
       host.innerHTML = teach(
-        'No actions observed yet',
-        'Lifecycle hooks are healthy, but no pre-tool action is present in the selected 24-hour window.'
+        'No measured savings yet',
+        'Optimizer operations are recorded here after both their original and returned context sizes are known.'
       );
       return;
     }
     donut(host, slices, {
-      centerLabel: 'actions observed',
+      centerLabel: 'tokens saved',
       centerValue: compact(slices.reduce((sum, item) => sum + item.value, 0)),
     });
     return;
@@ -550,7 +818,7 @@ function renderTimeline(events) {
           <span class="ev-name">${escapeHtml(action.tool)}</span>
           <span class="ev-detail">${escapeHtml(action.detail)}</span>
         </span>
-        <span class="ev-meta num">${action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
+        <span class="ev-meta num">${action.contextTokens != null ? (action.tokens == null ? `${compact(action.contextTokens)} context · ${action.costLabel}` : `${compact(action.contextTokens)} context · ${formatUsd(action.contextUsd)} · ${compact(action.tokens)} saved`) : action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
         <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
       </div>`;
     })
@@ -558,6 +826,26 @@ function renderTimeline(events) {
 }
 
 function describeEvent(event) {
+  if (event.originalTokens != null && event.optimizedTokens != null) {
+    const isNative = event.name === 'live_graph_substitution';
+    return {
+      tool: isNative
+        ? `Live graph substitution${event.client ? ` · ${event.client}` : ''}`
+        : `${event.name || event.toolName || 'optimizer operation'}${event.client ? ` · ${event.client}` : ''}`,
+      detail:
+        event.savingsMeasured === false
+          ? `${fmt(event.optimizedTokens)} returned context tokens; no before baseline`
+          : `${fmt(event.originalTokens)} → ${fmt(event.optimizedTokens)} context tokens`,
+      tokens:
+        event.savingsMeasured === false ? null : Number(event.tokensSaved || 0),
+      contextTokens: Number(event.optimizedTokens || 0),
+      contextUsd: event.contextUsd,
+      costLabel:
+        event.savingsMeasured === false
+          ? `${formatUsd(event.contextUsd)} context · saving not measurable`
+          : `${formatUsd(event.contextUsd)} context · ${formatUsd(event.savedUsd)} saved`,
+    };
+  }
   const hookEvent = String(event.hookEvent || '').trim();
   const client = String(event.client || '').trim();
   const tool = String(
@@ -602,7 +890,7 @@ function renderBreakdown(s) {
   const rows = toolRows(s);
   if (!rows.length) {
     body.innerHTML =
-      '<tr><td colspan="3">' +
+      '<tr><td colspan="5">' +
       teach(
         'No actions counted yet',
         'Each kind of observed agent action gets a row here, so repeat costs are easy to spot.'
@@ -617,6 +905,8 @@ function renderBreakdown(s) {
         <td>${escapeHtml(t.name || t.tool)}</td>
         <td class="right num">${fmt(t.count)}</td>
         <td class="right num">${t.tokens == null ? 'Not measured' : fmt(t.tokens)}</td>
+        <td class="right num">${t.contextUsd == null ? 'Not measured' : formatUsd(t.contextUsd)}</td>
+        <td class="right num saved-cell">${t.tokensSaved == null ? 'Not measured' : fmt(t.tokensSaved)}</td>
       </tr>`
     )
     .join('');

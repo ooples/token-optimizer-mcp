@@ -109,6 +109,19 @@ export function summarizeHookDiagnostics(
   const skipped = runs.filter((event) => event.outcome === 'skipped');
   const blocked = runs.filter((event) => event.outcome === 'blocked');
   const successes = runs.filter((event) => event.outcome === 'success');
+  const actions = runs.filter(
+    (event) =>
+      event.hookEvent === 'pre-tool' &&
+      'toolName' in event &&
+      Boolean(event.toolName)
+  );
+  const byTool: Record<string, number> = {};
+  for (const event of actions) {
+    const name = String(
+      ('toolName' in event && event.toolName) || 'Unknown action'
+    );
+    byTool[name] = (byTool[name] || 0) + 1;
+  }
   const durations = runs
     .map((event) => Number(event.durationMs))
     .filter(Number.isFinite)
@@ -164,6 +177,8 @@ export function summarizeHookDiagnostics(
     blocked: blocked.length,
     abandoned: abandoned.length,
     successes: successes.length,
+    actions: actions.length,
+    byTool,
     successRate: runs.length
       ? (successes.length + skipped.length + blocked.length) / runs.length
       : null,

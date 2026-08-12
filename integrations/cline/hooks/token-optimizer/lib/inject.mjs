@@ -1057,7 +1057,13 @@ export function standingRules(dir, graph, { budget = standingBudget(), episode =
  * informative response available -- more useful than the file, not a lossier
  * version of it.
  */
-export function substitutionFor(dir, graph, rawPath, source, { sessionId } = {}) {
+export function substitutionFor(
+  dir,
+  graph,
+  rawPath,
+  source,
+  { sessionId, client = null, clientVersion = null, model = null, modelVersion = null } = {}
+) {
   const filePath = canonicalPath(rawPath);
   const budget = substitutionBudget(dir, filePath);
   const built = annotatedSkeleton(graph, rawPath, source, { budget });
@@ -1092,6 +1098,10 @@ export function substitutionFor(dir, graph, rawPath, source, { sessionId } = {})
     // on this machine turned out to be the enforcement suite's own fixture and
     // nothing distinguished them from real work.
     sessionId,
+    client,
+    clientVersion,
+    model,
+    modelVersion,
     holdout,
     tokens: holdout ? 0 : built.tokens,
     findings: built.findings,

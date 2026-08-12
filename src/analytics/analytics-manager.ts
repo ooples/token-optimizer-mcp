@@ -294,7 +294,10 @@ export class AnalyticsManager {
     entries: AnalyticsEntry[]
   ): AggregatedStats {
     const totalOperations = entries.length;
-    const totalOriginalTokens = entries.reduce(
+    const savingsEntries = entries.filter(
+      (entry) => entry.savingsMeasured !== false
+    );
+    const totalOriginalTokens = savingsEntries.reduce(
       (sum, e) => sum + e.originalTokens,
       0
     );
@@ -302,7 +305,10 @@ export class AnalyticsManager {
       (sum, e) => sum + e.optimizedTokens,
       0
     );
-    const totalTokensSaved = entries.reduce((sum, e) => sum + e.tokensSaved, 0);
+    const totalTokensSaved = savingsEntries.reduce(
+      (sum, e) => sum + e.tokensSaved,
+      0
+    );
     const averageTokensSaved = totalTokensSaved / totalOperations;
     const savingsPercentage =
       totalOriginalTokens > 0

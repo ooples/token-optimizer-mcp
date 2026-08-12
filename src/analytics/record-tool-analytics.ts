@@ -16,12 +16,15 @@
 
 import type { AnalyticsManager } from './analytics-manager.js';
 import type { HookPhase } from './analytics-types.js';
+import { TokenCounter } from '../core/token-counter.js';
 
 /** MCP tool result shape (the parts we read). */
 interface McpToolResult {
   content?: Array<{ type?: string; text?: string }>;
   isError?: boolean;
 }
+
+const resultTokenCounter = new TokenCounter();
 
 /** A normalized savings measurement extracted from a tool result. */
 export interface SavingsTriplet {
@@ -164,18 +167,28 @@ export function currentHookPhase(): HookPhase {
 export async function recordToolAnalytics(
   manager: AnalyticsManager,
   toolName: string,
-  result: McpToolResult
+  result: McpToolResult,
+  attribution: {
+    client?: string | null;
+    clientVersion?: string | null;
+    model?: string | null;
+    modelVersion?: string | null;
+  } = {},
+  baselineResult: McpToolResult | null = null
 ): Promise<void> {
   try {
     if (!result || result.isError) return;
-    const text = result.content?.find((c) => c?.type !== 'image')?.text;
+    const text = (result.content || [])
+      .filter((content) => typeof content?.text === 'string')
+      .map((content) => content.text || '')
+      .join('\n');
     if (!text) return;
 
-    let payload: unknown;
+    let payload: unknown = null;
     try {
       payload = JSON.parse(text);
     } catch {
-      return; // non-JSON output (e.g. raw text) — nothing to record
+      // Plain text still has a directly measurable returned-context cost.
     }
 
     // Don't record failures the tool reported in-band.
@@ -187,21 +200,56 @@ export async function recordToolAnalytics(
       return;
     }
 
-    const savings = extractSavings(payload);
-    if (!savings) return;
+    let baselinePayload: unknown = payload;
+    if (baselineResult) {
+      const baselineText = (baselineResult.content || [])
+        .filter((content) => typeof content?.text === 'string')
+        .map((content) => content.text || '')
+        .join('\n');
+      try {
+        baselinePayload = JSON.parse(baselineText);
+      } catch {
+        baselinePayload = null;
+      }
+    }
+    const savings = extractSavings(baselinePayload);
+    const returnedTokens = resultTokenCounter.count(text).tokens;
+    const savingsMeasured = savings !== null;
+    const originalTokens = savings?.originalTokens ?? returnedTokens;
+    const tokensSaved = savingsMeasured ? originalTokens - returnedTokens : 0;
 
     const sessionId =
       process.env.TOKEN_OPTIMIZER_SESSION_ID ||
-      ((payload as Record<string, unknown>).sessionId as string | undefined);
+      (payload && typeof payload === 'object'
+        ? ((payload as Record<string, unknown>).sessionId as string | undefined)
+        : undefined);
 
     await manager.track({
       hookPhase: currentHookPhase(),
       toolName,
       mcpServer: 'token-optimizer',
-      originalTokens: savings.originalTokens,
-      optimizedTokens: savings.optimizedTokens,
-      tokensSaved: savings.tokensSaved,
+      originalTokens,
+      optimizedTokens: returnedTokens,
+      tokensSaved,
+      savingsMeasured,
       ...(sessionId ? { sessionId } : {}),
+      ...(attribution.client ? { client: attribution.client } : {}),
+      ...(attribution.clientVersion
+        ? { clientVersion: attribution.clientVersion }
+        : {}),
+      ...(attribution.model ? { model: attribution.model } : {}),
+      ...(attribution.modelVersion
+        ? { modelVersion: attribution.modelVersion }
+        : {}),
+      metadata: {
+        measurement: savingsMeasured
+          ? 'optimizer-before-actual-return'
+          : 'actual-return-context-only',
+        client: attribution.client || 'unattributed',
+        clientVersion: attribution.clientVersion || null,
+        model: attribution.model || null,
+        modelVersion: attribution.modelVersion || null,
+      },
     });
   } catch {
     // Analytics must never break a tool call.

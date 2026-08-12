@@ -360,6 +360,45 @@ describe('P5 measurement', () => {
     expect(out.measurement.freshness.status).toBe('not-measured');
   });
 
+  test('direct native substitutions remain reportable before the causal gate', () => {
+    record(dir, {
+      kind: 'substitute',
+      anchor: '/src/real.ts',
+      holdout: false,
+      tokens: 100,
+      tokensNetAvoided: 900,
+      client: 'claude-code',
+    });
+
+    const out = report(dir);
+    expect(out.sufficientData).toBe(false);
+    expect(out.nativeOptimizer).toMatchObject({
+      substitutions: 1,
+      holdouts: 0,
+      tokensReturned: 100,
+      tokensSaved: 900,
+      byClient: {
+        'claude-code': {
+          substitutions: 1,
+          tokensReturned: 100,
+          tokensSaved: 900,
+        },
+      },
+    });
+    expect(out.nativeOptimizer.recent[0]).toMatchObject({
+      name: 'live_graph_substitution',
+      client: 'claude-code',
+      originalTokens: 1000,
+      optimizedTokens: 100,
+      tokensSaved: 900,
+      savingsMeasured: true,
+    });
+    expect(out.measurement.metrics.nativeSubstitutions).toMatchObject({
+      status: 'measured',
+      samples: 1,
+    });
+  });
+
   test('an empty pooled report preserves zero project coverage', () => {
     const out = reportMany([]);
     expect(out.projects).toBe(0);

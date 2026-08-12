@@ -93,6 +93,10 @@ async function loadBalance() {
     balance = await api(scoped('/api/wiki/balance'));
   } catch {
     grid.innerHTML = [
+      'Graph substitutions',
+      'Direct graph tokens saved',
+      'Graph context returned',
+      'Direct saving value',
       'Memory deliveries',
       'Kept back for comparison',
       'Cost of remembering',
@@ -125,6 +129,31 @@ async function loadBalance() {
   // what "injected" means. The words describe what happened, not what the code
   // calls it.
   const tiles = [
+    [
+      'Graph substitutions',
+      measuredValue(
+        'nativeSubstitutions',
+        balance.nativeOptimizer?.substitutions
+      ),
+    ],
+    [
+      'Direct graph tokens saved',
+      metricState('nativeSubstitutions')?.status === 'not-measured'
+        ? 'Not measured'
+        : `${nf.format(balance.nativeOptimizer?.tokensSaved || 0)} tokens`,
+    ],
+    [
+      'Graph context returned',
+      metricState('nativeSubstitutions')?.status === 'not-measured'
+        ? 'Not measured'
+        : `${nf.format(balance.nativeOptimizer?.tokensReturned || 0)} tokens`,
+    ],
+    [
+      'Direct saving value',
+      metricState('nativeSubstitutions')?.status === 'not-measured'
+        ? 'Not measured'
+        : `$${((Number(balance.nativeOptimizer?.tokensSaved || 0) / 1e6) * 3).toFixed(4)}`,
+    ],
     [
       'Memory deliveries',
       measuredValue(
@@ -170,7 +199,10 @@ async function loadBalance() {
     )
     .join('');
 
-  verdict.textContent = balance.verdict;
+  verdict.textContent =
+    !balance.sufficientData && Number(balance.nativeOptimizer?.tokensSaved) > 0
+      ? `${nf.format(balance.nativeOptimizer.tokensSaved)} tokens saved by ${nf.format(balance.nativeOptimizer.substitutions)} direct graph substitutions; the separate causal reuse study is still collecting.`
+      : balance.verdict;
   verdict.dataset.state = !balance.sufficientData
     ? 'insufficient'
     : balance.netTokens > 0
@@ -189,17 +221,52 @@ async function loadBalance() {
       ? `latest event ${new Date(freshness.lastEventAt).toLocaleString()}`
       : 'no telemetry event has been observed';
 
-  if (balance.sufficientData) {
-    method.textContent =
-      `Measured against ${nf.format(balance.holdouts)} withheld control touches — not estimated. ` +
-      `Net after injection and harvest cost: ${nf.format(balance.netTokens)} tokens. ` +
-      `${coverageText}; ${freshnessText}.`;
-  } else {
-    method.textContent =
-      `The graph has ${nf.format(balance.injections)} measured file deliveries and ${nf.format(balance.holdouts)} file holdouts; ` +
-      'the savings estimate unlocks at 20 and 5. Command and session-start deliveries are counted above but excluded from the file-read comparison because they have no valid downstream file-read join. ' +
-      `${coverageText}; ${freshnessText}.`;
-  }
+  const facts = balance.sufficientData
+    ? [
+        [
+          'Study',
+          `${nf.format(balance.injections)} treated · ${nf.format(balance.holdouts)} holdout`,
+        ],
+        [
+          'Causal method',
+          'Control-arm comparison of downstream reads; not estimated from file size',
+        ],
+        [
+          'Net graph effect',
+          `${nf.format(balance.netTokens)} tokens after delivery and harvest cost`,
+        ],
+        ['Coverage', coverageText],
+        ['Freshness', freshnessText],
+      ]
+    : [
+        [
+          'Direct substitution',
+          `${nf.format(balance.nativeOptimizer?.tokensSaved || 0)} tokens saved across ${nf.format(balance.nativeOptimizer?.substitutions || 0)} served results`,
+        ],
+        [
+          'Causal method',
+          'Control-arm comparison of downstream reads; no effect is estimated before the evidence gate',
+        ],
+        [
+          'File study',
+          `${nf.format(balance.injections)}/20 treated · ${nf.format(balance.holdouts)}/5 holdout`,
+        ],
+        [
+          'Excluded surfaces',
+          'Command and session-start deliveries have no valid downstream file-read join',
+        ],
+        ['Coverage', coverageText],
+        ['Freshness', freshnessText],
+      ];
+  method.innerHTML = facts
+    .map(
+      ([label, value]) => `
+      <div class="method-fact">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>`
+    )
+    .join('');
 }
 
 /* ---- Causal evidence ------------------------------------------------ */
@@ -1096,6 +1163,7 @@ async function loadHookHealth() {
   const grid = el('hook-health-grid');
   const status = el('hook-health-status');
   const detail = el('hook-health-detail');
+  const clientsHost = el('hook-health-clients');
   try {
     const [report, mcpReport] = await Promise.all([
       api('/api/diagnostics/hooks?hours=24&limit=20'),
@@ -1161,25 +1229,66 @@ async function loadHookHealth() {
         : unhealthy
           ? 'bad'
           : 'ok';
-    const clients = Object.entries(summary.byClient || {})
+    const clients = new Map();
+    for (const [name, value] of Object.entries(summary.byClient || {})) {
+      clients.set(name, {
+        name,
+        kinds: ['Lifecycle hooks'],
+        activity: [`${nf.format(value.total)} hook runs`],
+        reliability: [
+          `${nf.format(value.failures)} hook failures · ${nf.format(value.timeouts)} timeouts`,
+        ],
+        policy: [
+          `${nf.format(value.blocked || 0)} blocked · ${nf.format(value.skipped || 0)} skipped`,
+        ],
+        coverage: [
+          `hooks: ${(value.hookEvents || []).join(', ') || 'surface unknown'}`,
+        ],
+        unhealthy: value.failures > 0 || value.timeouts > 0,
+      });
+    }
+    for (const [name, value] of Object.entries(mcp.clients || {})) {
+      const client = clients.get(name) || {
+        name,
+        kinds: [],
+        activity: [],
+        reliability: [],
+        policy: [],
+        coverage: [],
+        unhealthy: false,
+      };
+      client.kinds.push('MCP');
+      client.activity.push(`${nf.format(value.calls)} MCP calls`);
+      client.reliability.push(`${nf.format(value.failures)} MCP failures`);
+      client.policy.push(`${nf.format(value.initialized)} handshakes`);
+      client.coverage.push('MCP: stdio tool protocol');
+      client.unhealthy ||= value.failures > 0;
+      clients.set(name, client);
+    }
+    clientsHost.innerHTML = [...clients.values()]
       .map(
-        ([name, value]) =>
-          `${name}: ${value.total} runs, ${value.failures} failures, ${value.timeouts} timeouts, ${value.blocked || 0} policy blocks, ${value.skipped || 0} skipped; surfaces: ${(value.hookEvents || []).join(', ') || 'unknown'}`
+        (client) => `
+        <article class="capture-client${client.unhealthy ? ' is-unhealthy' : ''}">
+          <div class="capture-client-name">
+            <strong>${escapeHtml(client.name)}</strong>
+            <span>${escapeHtml(client.kinds.join(' + '))}</span>
+          </div>
+          <dl>
+            <div><dt>Activity</dt><dd>${escapeHtml(client.activity.join(' · '))}</dd></div>
+            <div><dt>Runtime</dt><dd>${escapeHtml(client.reliability.join(' · '))}</dd></div>
+            <div><dt>Control</dt><dd>${escapeHtml(client.policy.join(' · '))}</dd></div>
+            <div><dt>Coverage</dt><dd>${escapeHtml(client.coverage.join(' · '))}</dd></div>
+          </dl>
+        </article>`
       )
-      .join(' · ');
-    const mcpClients = Object.entries(mcp.clients || {})
-      .map(
-        ([name, value]) =>
-          `${name}: ${value.initialized} MCP handshake(s), ${value.calls} call(s), ${value.failures} failure(s)`
-      )
-      .join(' · ');
+      .join('');
     detail.textContent =
-      [clients, mcpClients].filter(Boolean).join(' · ') ||
-      'Privacy-safe JSONL diagnostics retain no prompts, commands, or tool output.';
+      'Diagnostics are privacy-safe: no prompts, commands, file paths, or tool output are retained.';
   } catch {
     grid.innerHTML = '';
     status.textContent = 'Capture diagnostics unavailable.';
     status.dataset.state = 'bad';
+    clientsHost.innerHTML = '';
     detail.textContent = '';
   }
 }

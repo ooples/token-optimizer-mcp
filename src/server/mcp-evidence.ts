@@ -102,6 +102,20 @@ export class McpEvidenceRecorder {
     });
   }
 
+  analyticsAttribution(): {
+    client: string;
+    clientVersion: string | null;
+    model: string | null;
+    modelVersion: string | null;
+  } {
+    return {
+      client: this.client?.name || 'unattributed',
+      clientVersion: this.client?.version || null,
+      model: process.env.TOKEN_OPTIMIZER_MODEL || null,
+      modelVersion: process.env.TOKEN_OPTIMIZER_MODEL_VERSION || null,
+    };
+  }
+
   toolOutcome(toolName: string, durationMs: number, success: boolean): void {
     recordMcpDiagnostic({
       serviceVersion: this.serviceVersion,
