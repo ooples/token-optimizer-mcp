@@ -380,6 +380,23 @@ describe('P5 measurement', () => {
     expect(metrics.readingAvoided.status).toBe('not-measured');
   });
 
+  test('balance cohorts without downstream outcomes do not measure reading avoided', () => {
+    for (let i = 0; i < 25; i++) {
+      record(dir, { kind: 'inject', holdout: false, tokens: 100 });
+    }
+    for (let i = 0; i < 8; i++) {
+      record(dir, { kind: 'inject', holdout: true, tokens: 0 });
+    }
+
+    const out = report(dir);
+    expect(out.sufficientData).toBe(false);
+    expect(out.estimatedTokensAvoided).toBeNull();
+    expect(out.measurement.metrics.readingAvoided).toMatchObject({
+      status: 'not-measured',
+      samples: 0,
+    });
+  });
+
   test('freshness handles event logs beyond the engine argument limit', () => {
     const events = Array.from({ length: 150_000 }, (_, at) => ({ at }));
     expect(latestEventTimestamp(events)).toBe(149_999);

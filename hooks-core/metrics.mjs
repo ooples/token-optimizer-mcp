@@ -843,9 +843,11 @@ function buildReport(events, balance, sourceCoverage = {}) {
     const key = `${event.sessionId || ''}|${event.anchor}`;
     return (reads.get(key) || []).some((read) => (read.at ?? 0) >= (event.at ?? 0));
   }).length;
+  const downstreamMeasured = downstreamSamples > 0;
 
   // Below this, arm means are noise and a ratio would be theatre.
-  const sufficient = treated.length >= 20 && withheld.length >= 5;
+  const sufficient =
+    downstreamMeasured && treated.length >= 20 && withheld.length >= 5;
 
   const coverageNumber = (value, fallback) => {
     if (value === null || value === undefined || value === '') return fallback;
@@ -939,7 +941,7 @@ function buildReport(events, balance, sourceCoverage = {}) {
           allInjections.length + balance.filter((event) => event.kind === 'harvest').length
         ),
         readingAvoided: metric(
-          !balanceMeasured ? 'not-measured' : sufficient ? 'measured' : 'collecting',
+          !downstreamMeasured ? 'not-measured' : sufficient ? 'measured' : 'collecting',
           'stratified file-touch holdout joined to downstream read events',
           downstreamSamples,
           {
