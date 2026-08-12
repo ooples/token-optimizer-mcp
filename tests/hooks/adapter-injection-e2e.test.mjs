@@ -132,6 +132,9 @@ function run(client, payload) {
     encoding: 'utf8',
     env: {
       ...process.env,
+      // This is a delivery/parity test, not the randomized holdout test.
+      // Pin treatment so the date-based arm cannot make it nondeterministic.
+      TOKEN_OPTIMIZER_HOLDOUT: '0',
       TOKEN_OPTIMIZER_STATE_DIR: join(project, '.state'),
       TOKEN_OPTIMIZER_WIKI_DIR: dir,
       TOKEN_OPTIMIZER_SHARED_DIR: dir,

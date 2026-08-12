@@ -34,7 +34,13 @@
 
       <!-- THE HERO. What you kept, beside what it learned. -->
       <section class="hero">
-        <div class="card hero-saved">
+        <div
+          class="card hero-saved"
+          id="saved-card"
+          data-state="loading"
+          aria-busy="true"
+          aria-live="polite"
+        >
           <p class="card-title">
             Saved so far
             <button
@@ -47,20 +53,26 @@
                 Your coding agent reads project data into a limited workspace
                 called the context window. Fill it up and earlier work can fall
                 out. This is how much of that workspace you got back &mdash;
-                measured against a holdout group of reads deliberately left
-                alone, so it is a comparison, not an estimate.
+                directly removed between a materialized MCP result and the
+                payload actually returned, less any later expansion payloads.
+                Tool-reported, historical, and graph counterfactual estimates
+                are shown separately and never enter this headline.
               </span>
             </button>
           </p>
 
-          <div class="big num" id="saved-tokens">&mdash;</div>
-          <div class="big-unit">tokens you did not have to spend</div>
+          <div class="big num" id="saved-tokens" data-state="loading">
+            Loading&hellip;
+          </div>
+          <div class="big-unit" id="saved-unit">
+            net context tokens avoided at the MCP transport
+          </div>
 
           <div class="saved-side">
             <div>
-              <span class="ss-value num" id="saved-money">&mdash;</span>
+              <span class="ss-value num" id="saved-money">Loading&hellip;</span>
               <span class="ss-label">
-                estimated
+                direct API-price equivalent saved
                 <button
                   class="explain"
                   type="button"
@@ -68,15 +80,20 @@
                 >
                   ?
                   <span class="tip" role="tooltip">
-                    Tokens shown at a $3 per million reference rate. Provider,
-                    plan, cache, and model pricing differ, so this is a scale,
-                    not an invoice.
+                    Each verified payload reduction is priced as one immediate
+                    uncached input reduction using that operation's exact model
+                    and billing route. Native cache reads, cache writes, and
+                    output are accounted separately below. This is an API-price
+                    equivalent, not a subscription invoice or a claim about
+                    unmeasured future cache reuse.
                   </span>
                 </button>
               </span>
             </div>
             <div>
-              <span class="ss-value num" id="saved-percent">&mdash;</span>
+              <span class="ss-value num" id="saved-percent"
+                >Loading&hellip;</span
+              >
               <span class="ss-label">smaller than it would have been</span>
             </div>
           </div>
@@ -96,9 +113,10 @@
             >
               ?
               <span class="tip tip-below tip-left" role="tooltip">
-                Graph nodes observed by supported coding agents are remembered here
-                with their structure, discoveries, and provenance. Any supported
-                client can reuse that knowledge in a later session or project.
+                Graph nodes observed by supported coding agents are remembered
+                here with their structure, discoveries, and provenance. Any
+                supported client can reuse that knowledge in a later session or
+                project.
               </span>
             </button>
           </p>
@@ -108,9 +126,95 @@
         </div>
       </section>
 
+      <section
+        class="card accounting"
+        id="token-accounting"
+        data-state="loading"
+        aria-busy="true"
+        aria-live="polite"
+        aria-labelledby="accounting-heading"
+      >
+        <div class="section-heading-row">
+          <div>
+            <p class="card-title" id="accounting-heading">Token accounting</p>
+            <p class="card-sub">
+              Gross payload reductions, later expansions, observed returns,
+              quarantined reports, and graph estimates stay separate.
+            </p>
+          </div>
+          <span class="source-chip">provenance-gated on this machine</span>
+        </div>
+        <div class="accounting-grid" id="accounting-grid" role="status">
+          <p>Loading measured token accounting&hellip;</p>
+        </div>
+        <p class="accounting-note" id="accounting-note"></p>
+      </section>
+
+      <section
+        class="card provider-accounting"
+        id="provider-accounting"
+        data-state="loading"
+        aria-busy="true"
+        aria-live="polite"
+        aria-labelledby="provider-accounting-heading"
+      >
+        <div class="section-heading-row">
+          <div>
+            <p class="card-title" id="provider-accounting-heading">
+              Provider usage &amp; price
+            </p>
+            <p class="card-sub">
+              Native uncached input, cache reads, cache writes, and output from
+              local CLI transcripts, deduplicated by provider request.
+            </p>
+          </div>
+          <span class="source-chip" id="provider-price-coverage">Loading</span>
+        </div>
+        <div class="accounting-grid" id="provider-accounting-grid" role="status">
+          <p>Loading native provider usage&hellip;</p>
+        </div>
+        <div class="table-scroll">
+          <table class="table provider-table">
+            <thead>
+              <tr>
+                <th scope="col">CLI &amp; model</th>
+                <th scope="col" class="right">Requests</th>
+                <th scope="col" class="right">Uncached input</th>
+                <th scope="col" class="right">Cache read</th>
+                <th scope="col" class="right">Cache write</th>
+                <th scope="col" class="right">Output</th>
+                <th scope="col" class="right">API-price equivalent</th>
+              </tr>
+            </thead>
+            <tbody id="provider-breakdown-body"></tbody>
+          </table>
+        </div>
+        <p class="accounting-note" id="provider-accounting-note"></p>
+      </section>
+
       <!-- Plain-language metrics. Every label says what it is, not what the
            code calls it, and every one can explain itself. -->
       <section class="kpis" id="kpis"></section>
+
+      <section
+        class="card client-accounting"
+        id="measured-by-agent"
+        data-state="loading"
+        aria-busy="true"
+        aria-live="polite"
+        aria-labelledby="client-accounting-heading"
+      >
+        <p class="card-title" id="client-accounting-heading">
+          Measured by agent
+        </p>
+        <p class="card-sub">
+          New optimizer measurements use MCP handshake identity. Historical rows
+          without identity remain unattributed instead of being guessed.
+        </p>
+        <div class="client-ledger" id="client-ledger" role="status">
+          <p>Loading agent attribution&hellip;</p>
+        </div>
+      </section>
 
       <section class="panels">
         <div class="card">
@@ -124,12 +228,14 @@
               ?
               <span class="tip" role="tooltip">
                 Lifecycle activity is grouped by CLI when cross-client telemetry
-                is available; older clients may report context categories instead.
+                is available; older clients may report context categories
+                instead.
               </span>
             </button>
           </p>
           <p class="card-sub">
-            Cross-client observations are used instead of a single CLI's stale session file.
+            Cross-client observations are used instead of a single CLI's stale
+            session file.
           </p>
           <div class="chart" id="category-chart"></div>
         </div>
@@ -151,16 +257,18 @@
             </button>
           </p>
           <p class="card-sub">
-            Ranked by observed calls; no token amount is invented when a CLI omits it.
+            Ranked by observed calls; no token amount is invented when a CLI
+            omits it.
           </p>
           <div class="chart" id="server-chart"></div>
         </div>
       </section>
 
       <section class="card">
-        <p class="card-title">Recent agent activity</p>
+        <p class="card-title">Recent measured optimizer activity</p>
         <p class="card-sub">
-          What the active CLI actually did, most recent first.
+          Verified reductions, observed returns, and excluded historical claims,
+          most recent first.
         </p>
         <div id="timeline-container" class="timeline"></div>
       </section>
@@ -174,6 +282,9 @@
                 <th scope="col">Action</th>
                 <th scope="col" class="right">Times used</th>
                 <th scope="col" class="right">Context used</th>
+                <th scope="col" class="right">Cost equivalent</th>
+                <th scope="col" class="right">Verified saved</th>
+                <th scope="col" class="right">Excluded report</th>
               </tr>
             </thead>
             <tbody id="tool-breakdown-body"></tbody>
@@ -182,8 +293,9 @@
       </section>
 
       <p class="footer-note">
-        Updated <span id="last-updated">never</span>. Everything here is
-        measured on this machine and never leaves it.
+        Updated <span id="last-updated">never</span>. Everything here is stored
+        on this machine and never leaves it. Token counts are local tokenizer
+        estimates unless a provider reports otherwise.
       </p>
     </div>
 

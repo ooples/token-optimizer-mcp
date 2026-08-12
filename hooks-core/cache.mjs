@@ -1,12 +1,12 @@
 /**
  * Prompt-cache economics.
  *
- * Cache economics is real money in a way most compression is not: a cache read
- * costs a tenth of a fresh token and a cache WRITE costs a quarter more than
- * one, so a prefix that keeps invalidating can cost more than every saving this
- * product makes elsewhere. It is also the one area where we do not have to
- * model anything -- the client's own transcript records cache_read_input_tokens
- * and cache_creation_input_tokens per turn, which is ground truth.
+ * Anthropic prompt-cache usage, read from Claude Code transcripts. A cache read
+ * and a cache write are both billable, at different published multipliers from
+ * uncached input. Raw cache_read_input_tokens and
+ * cache_creation_input_tokens are observations. Any multiplier-based value is
+ * an Anthropic input-cost equivalent, not a universally comparable token count
+ * and not a provider invoice.
  *
  * MEASUREMENT ALONE IS NOT ACTIONABLE. A hit rate tells you the cache missed;
  * it cannot tell you why, and an unactionable number is the same dead thing as
@@ -28,7 +28,15 @@
  * cache-safety-by-construction half of this file.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync, openSync, readSync, closeSync } from 'node:fs';
+import {
+  readFileSync,
+  readdirSync,
+  statSync,
+  existsSync,
+  openSync,
+  readSync,
+  closeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -49,7 +57,8 @@ export const READ_MULTIPLIER = 0.1;
 const SYNTHETIC_MODEL = '<synthetic>';
 
 /** True for a turn naming a model an inference actually ran under. */
-const realModel = (turn) => Boolean(turn.model) && turn.model !== SYNTHETIC_MODEL;
+const realModel = (turn) =>
+  Boolean(turn.model) && turn.model !== SYNTHETIC_MODEL;
 
 /* -------------------------------------------------------------- MEASUREMENT */
 
@@ -70,7 +79,10 @@ export function transcriptFor(cwd = process.cwd()) {
   try {
     const files = readdirSync(dir)
       .filter((name) => name.endsWith('.jsonl'))
-      .map((name) => ({ path: join(dir, name), at: statSync(join(dir, name)).mtimeMs }))
+      .map((name) => ({
+        path: join(dir, name),
+        at: statSync(join(dir, name)).mtimeMs,
+      }))
       .sort((a, b) => b.at - a.at);
     return files.length ? files[0].path : null;
   } catch {
@@ -155,7 +167,8 @@ export function cacheHealth(turns) {
     read += turn.read;
     written += turn.written;
     if (!realModel(turn)) continue;
-    if (!models.has(turn.model)) models.set(turn.model, { read: 0, written: 0, turns: 0 });
+    if (!models.has(turn.model))
+      models.set(turn.model, { read: 0, written: 0, turns: 0 });
     const entry = models.get(turn.model);
     entry.read += turn.read;
     entry.written += turn.written;
@@ -169,20 +182,28 @@ export function cacheHealth(turns) {
   // attribution price, made keepWarm answer "unknown", and returned null from
   // modelSwitchCost under a guard its caller does not share, which crashed
   // cache_audit outright with "Cannot read properties of null".
-  const last = turns.reduce((best, turn) => (turn.read + turn.written > 0 ? turn : best), turns[turns.length - 1]);
+  const last = turns.reduce(
+    (best, turn) => (turn.read + turn.written > 0 ? turn : best),
+    turns[turns.length - 1]
+  );
   const total = read + written;
 
   return {
+    provider: 'anthropic',
+    source: 'claude-code-transcript',
     turns: turns.length,
     read,
     written,
     hitRate: total ? read / total : null,
     prefixTokens: last.read + last.written,
-    // Priced in plain-token equivalents, which is what makes it comparable with
-    // every other saving this product reports.
-    writeCost: Math.round(written * WRITE_MULTIPLIER),
-    readCost: Math.round(read * READ_MULTIPLIER),
-    savedVersusNoCache: Math.round(read * (1 - READ_MULTIPLIER)),
+    // These are Anthropic uncached-input cost equivalents. They stay outside
+    // the verified MCP transport ledger and must not be relabeled as tokens
+    // saved across clients.
+    writeInputCostEquivalent: Math.round(written * WRITE_MULTIPLIER),
+    readInputCostEquivalent: Math.round(read * READ_MULTIPLIER),
+    inputCostEquivalentAvoidedVersusUncached: Math.round(
+      read * (1 - READ_MULTIPLIER)
+    ),
     models: Object.fromEntries(models),
   };
 }
@@ -198,13 +219,17 @@ export function modelSwitchCost(turns) {
   const health = cacheHealth(turns);
   if (!health?.prefixTokens) return null;
 
-  const switched = new Set(turns.filter(realModel).map((t) => t.model)).size > 1;
+  const switched =
+    new Set(turns.filter(realModel).map((t) => t.model)).size > 1;
   return {
     prefixTokens: health.prefixTokens,
-    rewriteCost: Math.round(health.prefixTokens * WRITE_MULTIPLIER),
+    rewriteInputCostEquivalent: Math.round(
+      health.prefixTokens * WRITE_MULTIPLIER
+    ),
     alreadySwitched: switched,
-    text: `Switching model now discards a ${health.prefixTokens.toLocaleString()}-token warm prefix; ` +
-      `re-writing it costs about ${Math.round(health.prefixTokens * WRITE_MULTIPLIER).toLocaleString()} tokens.`,
+    text:
+      `Switching model now discards a ${health.prefixTokens.toLocaleString()}-token warm prefix; ` +
+      `under Anthropic's current 5-minute write multiplier, re-writing it is about ${Math.round(health.prefixTokens * WRITE_MULTIPLIER).toLocaleString()} uncached-input cost-equivalent tokens.`,
   };
 }
 
@@ -219,17 +244,38 @@ export function modelSwitchCost(turns) {
  * time. That is why this class of bug survives -- nothing about it looks wrong.
  */
 const VOLATILE = [
-  { id: 'timestamp', re: /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/, why: 'an embedded timestamp' },
-  { id: 'date', re: /\b(?:today|current date)\b[^\n]{0,40}\d{4}-\d{2}-\d{2}/i, why: 'an embedded current date' },
+  {
+    id: 'timestamp',
+    re: /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/,
+    why: 'an embedded timestamp',
+  },
+  {
+    id: 'date',
+    re: /\b(?:today|current date)\b[^\n]{0,40}\d{4}-\d{2}-\d{2}/i,
+    why: 'an embedded current date',
+  },
   // A bare date is a SUSPICION, not a measurement: "- 2025-10-31: reworked the
   // loader" is byte-identical every session. Kept, because stableText fails
   // closed over our own output and dropping a line there costs little -- but
   // NOT priced, because in the blame report a false positive invents a
   // per-session cost and tells the user to delete their changelog.
-  { id: 'iso-date', re: /\b\d{4}-\d{2}-\d{2}\b/, why: 'an embedded date', priced: false },
-  { id: 'session-id', re: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i, why: 'a session id' },
+  {
+    id: 'iso-date',
+    re: /\b\d{4}-\d{2}-\d{2}\b/,
+    why: 'an embedded date',
+    priced: false,
+  },
+  {
+    id: 'session-id',
+    re: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
+    why: 'a session id',
+  },
   { id: 'git-sha', re: /\b[0-9a-f]{40}\b/, why: 'a git sha' },
-  { id: 'counter', re: /\b(?:run|build|attempt|iteration)\s*#?\d+\b/i, why: 'a run counter' },
+  {
+    id: 'counter',
+    re: /\b(?:run|build|attempt|iteration)\s*#?\d+\b/i,
+    why: 'a run counter',
+  },
   { id: 'epoch', re: /\b1[6-9]\d{11}\b/, why: 'an epoch timestamp' },
 ];
 
@@ -240,7 +286,13 @@ export function volatileLines(text) {
   for (let i = 0; i < lines.length; i++) {
     for (const rule of VOLATILE) {
       if (!rule.re.test(lines[i])) continue;
-      out.push({ line: i + 1, id: rule.id, why: rule.why, priced: rule.priced !== false, text: lines[i].trim().slice(0, 120) });
+      out.push({
+        line: i + 1,
+        id: rule.id,
+        why: rule.why,
+        priced: rule.priced !== false,
+        text: lines[i].trim().slice(0, 120),
+      });
       break; // one cause per line is enough to act on
     }
   }
@@ -262,7 +314,11 @@ const estimate = (text) => Math.ceil(String(text || '').length / 4);
  * unknown, and this reports the construct WITHOUT a price rather than inventing
  * one.
  */
-export function attributeInvalidation(cwd, prefixTokens = null, { files = null } = {}) {
+export function attributeInvalidation(
+  cwd,
+  prefixTokens = null,
+  { files = null } = {}
+) {
   // Ordered as the client assembles them: the client preamble and tool
   // definitions come first, then project instructions, then the conversation.
   const candidates = files || ['CLAUDE.md', 'AGENTS.md', '.claude/CLAUDE.md'];
@@ -290,7 +346,8 @@ export function attributeInvalidation(cwd, prefixTokens = null, { files = null }
       // prefix -- 3.75x the entire prefix. Conservative still: the preamble
       // ahead of the file is not counted, so this remains a floor.
       const ahead = offset + estimate(lines.slice(0, hit.line - 1).join('\n'));
-      const downstream = prefixTokens != null ? Math.max(0, prefixTokens - ahead) : null;
+      const downstream =
+        prefixTokens != null ? Math.max(0, prefixTokens - ahead) : null;
       // A prefix cache invalidates ONCE, at the earliest difference. A later
       // volatile line in the same file costs nothing extra until the first one
       // is fixed, so it is reported for context but not billed again.
@@ -302,7 +359,9 @@ export function attributeInvalidation(cwd, prefixTokens = null, { files = null }
       // into a reported zero.
       const firstPriced = found.find((h) => h.priced);
       const subsumedBy =
-        hit.priced && firstPriced && firstPriced !== hit ? `${relative}:${firstPriced.line}` : null;
+        hit.priced && firstPriced && firstPriced !== hit
+          ? `${relative}:${firstPriced.line}`
+          : null;
       out.push({
         file: relative,
         line: hit.line,
@@ -314,9 +373,12 @@ export function attributeInvalidation(cwd, prefixTokens = null, { files = null }
         // decline to price. 0 means measured and genuinely free, which is what a
         // subsumed hit is: real, but already billed by the earlier line. Folding
         // those two into one value is the same mistake this file warns about.
-        costPerSession: downstream == null || !hit.priced
-          ? null
-          : (subsumedBy ? 0 : Math.round(downstream * WRITE_MULTIPLIER)),
+        costPerSession:
+          downstream == null || !hit.priced
+            ? null
+            : subsumedBy
+              ? 0
+              : Math.round(downstream * WRITE_MULTIPLIER),
         remedy: {
           kind: 'yours',
           type: 'edit',
@@ -367,7 +429,7 @@ export function stableText(text) {
  */
 export function cacheOrdered(items) {
   return [...items].sort((a, b) => {
-    const stability = (item) => (item.volatility ?? (item.fresh ? 1 : 0));
+    const stability = (item) => item.volatility ?? (item.fresh ? 1 : 0);
     return stability(a) - stability(b);
   });
 }

@@ -67,9 +67,13 @@ export async function cacheAudit(): Promise<{
   const health = mods.cache.cacheHealth(turns);
 
   if (health) {
-    lines.push("Measured, from this client's own transcript:");
-    lines.push(`  cache reads ......... ${health.read.toLocaleString()}`);
-    lines.push(`  cache writes ........ ${health.written.toLocaleString()}`);
+    lines.push('Measured, from the selected Claude Code transcript:');
+    lines.push(
+      `  Anthropic cache-read input .... ${health.read.toLocaleString()} tokens`
+    );
+    lines.push(
+      `  Anthropic cache-write input ... ${health.written.toLocaleString()} tokens`
+    );
     lines.push(
       `  hit rate ............ ${Math.round((health.hitRate || 0) * 100)}%`
     );
@@ -77,7 +81,10 @@ export async function cacheAudit(): Promise<{
       `  warm prefix ......... ${health.prefixTokens.toLocaleString()} tokens`
     );
     lines.push(
-      `  saved vs no cache ... ${health.savedVersusNoCache.toLocaleString()} tokens`
+      `  read discount vs uncached ... ${health.inputCostEquivalentAvoidedVersusUncached.toLocaleString()} uncached-input cost-equivalent tokens`
+    );
+    lines.push(
+      '  billing caveat ....... Anthropic-specific equivalent; excluded from universal savings and not an invoice'
     );
 
     const models = Object.keys(health.models);
@@ -85,12 +92,12 @@ export async function cacheAudit(): Promise<{
       const cost = mods.cache.modelSwitchCost(turns);
       lines.push(
         `  ! ${models.length} models used in this session -- each switch re-writes the prefix ` +
-          `(about ${cost.rewriteCost.toLocaleString()} tokens at its current size)`
+          `(about ${cost.rewriteInputCostEquivalent.toLocaleString()} Anthropic uncached-input cost-equivalent tokens at its current size)`
       );
     }
   } else {
     lines.push(
-      "No cache measurements available: this client's transcript could not be read."
+      'No Anthropic cache measurements available: a Claude Code transcript could not be read.'
     );
     lines.push('The attribution below still applies, without prices.');
   }
@@ -138,8 +145,6 @@ export async function cacheAudit(): Promise<{
 export const CACHE_TOOL = {
   name: 'cache_audit',
   description:
-    'Report prompt-cache economics for this project: measured hit rate, cache-write spend and warm prefix size read from ' +
-    "the client's own transcript, plus the file and line responsible for each invalidation priced by how much sits behind " +
-    "it. Also reports whether keep-warm is worth buying at each TTL tier, decided from this project's observed gaps.",
+    'Report Anthropic prompt-cache economics for this project: measured cache-read input, cache-write input, hit rate, and warm prefix size read from a Claude Code transcript, plus likely invalidation sources. Cost equivalents are labeled Anthropic-specific, excluded from universal savings, and are not invoices.',
   inputSchema: { type: 'object', properties: {} },
 } as const;

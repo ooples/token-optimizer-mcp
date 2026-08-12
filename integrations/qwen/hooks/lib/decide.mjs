@@ -392,6 +392,21 @@ export function touchedFiles(payload) {
   add(input.path);
   add(input.notebook_path);
 
+  // Codex code mode carries apply_patch as the nested program text rather than
+  // as a first-class file_path. Without reading these headers, successful
+  // code-mode edits incremented the semantic-harvest counter but produced no
+  // structural file/symbol nodes, which is why the live dashboard showed very
+  // few nodes after substantial work. PostToolUse can resolve Add/Update paths
+  // because the file now exists; deleted paths deliberately remain absent.
+  for (const match of command.matchAll(
+    /^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm
+  )) {
+    add(match[1].trim().replace(/^['"]|['"]$/g, ''));
+  }
+  for (const match of command.matchAll(/^\*\*\* Move to:\s*(.+)$/gm)) {
+    add(match[1].trim().replace(/^['"]|['"]$/g, ''));
+  }
+
   // EVERY pipeline segment, not just the first. `fileOperands` looks only at
   // the head of the pipeline because that is where the COST is -- `git log |
   // head` must not be mistaken for a file dump. But observation is a different

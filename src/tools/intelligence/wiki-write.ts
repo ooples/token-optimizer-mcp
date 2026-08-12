@@ -301,6 +301,13 @@ export const WIKI_WRITE_TOOL_DEFINITION = {
     'lets the claim be invalidated when that code changes, and what makes it surface ' +
     'automatically when the file is next touched. Costs nothing and sends nothing off ' +
     'the machine.',
+  annotations: {
+    title: 'Record project knowledge',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: 'object',
     properties: {

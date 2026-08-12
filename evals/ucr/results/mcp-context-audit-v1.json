@@ -1,8 +1,8 @@
 {
   "schemaVersion": "ucr.mcp-context-audit/1",
   "evidenceClass": "native-tokenized-real-tools-list-conformance-not-model-effectiveness",
-  "executedAt": "2026-08-10T04:42:33.220Z",
-  "serverSourceHash": "1753baaa743ad320f491ac0d2d7a19354e23f664eb9e84a4a96b7a6895d89550",
+  "executedAt": "2026-08-12T13:32:02.466Z",
+  "serverSourceHash": "4795aae9db9dcbc7813618193220d01a641961a84940554b3c908c52a494650f",
   "surfaces": [
     {
       "name": "baseline",
@@ -13,7 +13,7 @@
       "schemaBytes": 2,
       "schemaTokens": 1,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.9999668049792532,
+      "reductionVsFull": 0.9999669825337604,
       "shareOf128kContext": 0.0000078125,
       "shareOf1mContext": 0.000001
     },
@@ -28,7 +28,7 @@
       "schemaBytes": 382,
       "schemaTokens": 71,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.997643153526971,
+      "reductionVsFull": 0.9976557598969855,
       "shareOf128kContext": 0.0005546875,
       "shareOf1mContext": 0.000071
     },
@@ -44,7 +44,7 @@
       "schemaBytes": 2393,
       "schemaTokens": 480,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.9840663900414938,
+      "reductionVsFull": 0.9841516162049724,
       "shareOf128kContext": 0.00375,
       "shareOf1mContext": 0.00048
     },
@@ -63,7 +63,7 @@
       "schemaBytes": 3519,
       "schemaTokens": 694,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.9769626556016597,
+      "reductionVsFull": 0.9770858784296893,
       "shareOf128kContext": 0.005421875,
       "shareOf1mContext": 0.000694
     },
@@ -92,12 +92,12 @@
         "smart_grep",
         "get_optimization_report"
       ],
-      "schemaBytes": 23367,
-      "schemaTokens": 4815,
+      "schemaBytes": 24067,
+      "schemaTokens": 4977,
       "tokenAccounting": "tiktoken:cl100k_base",
-      "reductionVsFull": 0.8401659751037345,
-      "shareOf128kContext": 0.0376171875,
-      "shareOf1mContext": 0.004815
+      "reductionVsFull": 0.8356720705253079,
+      "shareOf128kContext": 0.0388828125,
+      "shareOf1mContext": 0.004977
     },
     {
       "name": "full",
@@ -209,12 +209,12 @@
         "optimization_storage",
         "context_delta"
       ],
-      "schemaBytes": 146134,
-      "schemaTokens": 30125,
+      "schemaBytes": 146834,
+      "schemaTokens": 30287,
       "tokenAccounting": "tiktoken:cl100k_base",
       "reductionVsFull": 0,
-      "shareOf128kContext": 0.2353515625,
-      "shareOf1mContext": 0.030125
+      "shareOf128kContext": 0.2366171875,
+      "shareOf1mContext": 0.030287
     }
   ],
   "findings": {
@@ -227,10 +227,10 @@
     "fullCatalogTools": 103,
     "graphCaptureSchemaTokens": 480,
     "extendedCognitiveSchemaTokens": 694,
-    "defaultCoreSchemaTokens": 4815,
-    "fullCatalogSchemaTokens": 30125,
-    "graphCaptureReductionVsFull": 0.9840663900414938,
-    "graphCaptureReductionVsCore": 0.9003115264797508,
+    "defaultCoreSchemaTokens": 4977,
+    "fullCatalogSchemaTokens": 30287,
+    "graphCaptureReductionVsFull": 0.9841516162049724,
+    "graphCaptureReductionVsCore": 0.9035563592525617,
     "appliesToRegisteredClients": 16,
     "userMcpServersAreAdditive": "Every enabled MCP server adds its own tool schemas and instructions; client isolation must disable unrelated servers during evals."
   },
@@ -240,5 +240,5 @@
     "client hosts may add wrappers, instructions, resources, or other MCP servers beyond this server response",
     "model effectiveness and empty-session p95 overhead require paired live provider runs"
   ],
-  "reportHash": "3841fd34a174c1b9e1822dbc21b570d1050ff2c2ff5b976252b95287d0b967ca"
+  "reportHash": "520517a3d28c3a0fef9eeb971e269a800e47f775134018cd1752be27a5d39e6a"
 }

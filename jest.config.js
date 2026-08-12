@@ -25,7 +25,11 @@ export default {
   // Linked worktrees are independent checkouts, not nested test fixtures. If a
   // worktree lives under this checkout, discovering it would execute stale PR
   // tests a second time and contaminate the current branch's evidence.
-  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/worktrees/'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '<rootDir>/worktrees/',
+  ],
   // Points file backups at a temp directory for every worker, so no test can
   // write into the developer's real ~/.token-optimizer/backups. See the file
   // for why this is not left to individual tests to remember.

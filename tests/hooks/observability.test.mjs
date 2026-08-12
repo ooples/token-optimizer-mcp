@@ -60,7 +60,7 @@ describe('cross-client hook observability', () => {
     const events = readHookEvents();
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       service: 'token-optimizer',
       serviceVersion: 'test-version',
       event: 'hook.completed',
@@ -69,6 +69,8 @@ describe('cross-client hook observability', () => {
       client: 'codex',
       hookEvent: 'post-tool',
       toolName: 'apply_patch',
+      rawToolName: 'apply_patch',
+      codeModeEnvelope: false,
       payloadBytes: 321,
       severityText: 'INFO',
       severityNumber: 9,
@@ -133,6 +135,41 @@ describe('cross-client hook observability', () => {
     );
   });
 
+  test('reports an unpaired lifecycle start as an abandoned failure', () => {
+    writeHookEvent({
+      event: 'hook.started',
+      timestamp: new Date(Date.now() - 20_000).toISOString(),
+      invocationId: 'abandoned-probe',
+      client: 'codex',
+      hookEvent: 'pre-tool',
+    });
+
+    expect(readHookEvents()).toHaveLength(0);
+    const health = hookHealthSummary();
+    expect(health).toMatchObject({
+      total: 1,
+      failures: 1,
+      abandoned: 1,
+      healthStatus: 'failing',
+    });
+    expect(health.recentFailures[0]).toMatchObject({
+      reason: 'process_terminated_before_completion',
+    });
+  });
+
+  test('separates an intentional policy block from a hook failure', () => {
+    const invocation = beginHookInvocation('codex', 'pre-tool');
+    invocation.block('policy_denied');
+
+    expect(hookHealthSummary()).toMatchObject({
+      total: 1,
+      failures: 0,
+      blocked: 1,
+      successRate: 1,
+      healthStatus: 'healthy',
+    });
+  });
+
   test('fails open before the host timeout when stdin never closes', async () => {
     const started = Date.now();
     const child = spawn(
@@ -159,9 +196,11 @@ describe('cross-client hook observability', () => {
     const file = readdirSync(join(workspace, 'timeout-logs')).find((name) =>
       name.endsWith('.jsonl')
     );
-    const event = JSON.parse(
-      readFileSync(join(workspace, 'timeout-logs', file), 'utf8').trim()
-    );
+    const event = readFileSync(join(workspace, 'timeout-logs', file), 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line))
+      .find((row) => row.event === 'hook.completed');
     expect(event.outcome).toBe('timeout');
     expect(event.reason).toBe('stdin_timeout');
     expect(event.inputStatus).toBe('timeout');
@@ -189,7 +228,7 @@ describe('cross-client hook observability', () => {
 
     const [event] = readEventsFrom(join(workspace, 'claude-logs'));
     expect(event).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       serviceVersion: '5.7.0',
       client: 'claude-code',
       hookEvent: 'pre-tool',
@@ -246,7 +285,7 @@ describe('cross-client hook observability', () => {
     for (const { client, exitCode, event } of results) {
       expect(exitCode).toBe(0);
       expect(event).toMatchObject({
-        schemaVersion: 1,
+      schemaVersion: 2,
         service: 'token-optimizer',
         serviceVersion: '5.7.0',
         client,
@@ -337,5 +376,6 @@ function readEventsFrom(directory) {
   return readFileSync(join(directory, file), 'utf8')
     .trim()
     .split(/\r?\n/)
-    .map((line) => JSON.parse(line));
+    .map((line) => JSON.parse(line))
+    .filter((event) => event.event !== 'hook.started');
 }

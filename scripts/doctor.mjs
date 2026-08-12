@@ -32,13 +32,16 @@ if (hookHealth.total === 0) {
 } else {
   console.log(
     `  ${hookHealth.total} runs; ${hookHealth.failures} failures; ` +
-    `${hookHealth.timeouts} timeouts; ${hookHealth.skipped} skipped; ` +
+    `${hookHealth.timeouts} timeouts; ${hookHealth.blocked} policy blocks; ` +
+    `${hookHealth.abandoned} abandoned; ${hookHealth.skipped} skipped; ` +
     `p95 ${hookHealth.p95DurationMs ?? 'n/a'} ms.`
   );
   for (const [client, counts] of Object.entries(hookHealth.byClient)) {
     console.log(
       `  ${client}: ${counts.total} runs, ${counts.failures} failures, ` +
-      `${counts.timeouts} timeouts, ${counts.skipped || 0} skipped.`
+      `${counts.timeouts} timeouts, ${counts.blocked || 0} policy blocks, ` +
+      `${counts.skipped || 0} skipped; surfaces: ` +
+      `${counts.hookEvents?.join(', ') || 'unknown'}.`
     );
   }
 }

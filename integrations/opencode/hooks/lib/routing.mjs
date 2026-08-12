@@ -65,7 +65,9 @@ export function modelCosts() {
   if (raw) {
     try {
       return JSON.parse(raw);
-    } catch { /* fall through to the defaults */ }
+    } catch {
+      /* fall through to the defaults */
+    }
   }
   return { haiku: 1, sonnet: 3, opus: 15 };
 }
@@ -106,7 +108,12 @@ export function readEpisodes(path, { maxBytes = 6_000_000 } = {}) {
   let current = null;
 
   const close = () => {
-    if (current && current.turns > 0) episodes.push({ ...current, files: [...current.files], tools: [...current.tools] });
+    if (current && current.turns > 0)
+      episodes.push({
+        ...current,
+        files: [...current.files],
+        tools: [...current.tools],
+      });
     current = null;
   };
 
@@ -123,7 +130,15 @@ export function readEpisodes(path, { maxBytes = 6_000_000 } = {}) {
     // a new episode.
     if (row.type === 'user' && typeof row.message?.content === 'string') {
       close();
-      current = { at: Date.parse(row.timestamp) || null, models: new Set(), tools: new Set(), files: new Set(), turns: 0, errors: 0, results: 0 };
+      current = {
+        at: Date.parse(row.timestamp) || null,
+        models: new Set(),
+        tools: new Set(),
+        files: new Set(),
+        turns: 0,
+        errors: 0,
+        results: 0,
+      };
       continue;
     }
     if (!current) continue;
@@ -157,8 +172,16 @@ export function readEpisodes(path, { maxBytes = 6_000_000 } = {}) {
 
 /* ---------------------------------------------------------------- SHAPES */
 
-const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'smart_edit', 'smart_write']);
-const TEST_PATTERN = /\b(test|jest|pytest|vitest|dotnet test|npm test|go test)\b/i;
+const EDIT_TOOLS = new Set([
+  'Edit',
+  'MultiEdit',
+  'Write',
+  'NotebookEdit',
+  'smart_edit',
+  'smart_write',
+]);
+const TEST_PATTERN =
+  /\b(test|jest|pytest|vitest|dotnet test|npm test|go test)\b/i;
 
 /**
  * What kind of work this was.
@@ -171,11 +194,19 @@ export function classifyShape(episode) {
   const tools = new Set(episode.tools || []);
   const edited = [...tools].some((t) => EDIT_TOOLS.has(t));
   const files = (episode.files || []).length;
-  const ranTests = [...tools].some((t) => TEST_PATTERN.test(t)) || (episode.tools || []).includes('Bash');
+  const ranTests =
+    [...tools].some((t) => TEST_PATTERN.test(t)) ||
+    (episode.tools || []).includes('Bash');
 
   if (edited && files >= 3) return 'multi-file-change';
   if (edited) return 'single-file-change';
-  if (files > 0 || tools.has('Grep') || tools.has('Glob') || tools.has('smart_grep')) return 'investigation';
+  if (
+    files > 0 ||
+    tools.has('Grep') ||
+    tools.has('Glob') ||
+    tools.has('smart_grep')
+  )
+    return 'investigation';
   if (ranTests) return 'build-or-test';
   return 'conversation';
 }
@@ -208,7 +239,13 @@ export function outcomeTable(episodes) {
     const tier = [...tiers][0];
 
     table[shape] = table[shape] || {};
-    const cell = table[shape][tier] = table[shape][tier] || { episodes: 0, turns: 0, errors: 0, results: 0, errored: 0 };
+    const cell = (table[shape][tier] = table[shape][tier] || {
+      episodes: 0,
+      turns: 0,
+      errors: 0,
+      results: 0,
+      errored: 0,
+    });
     cell.episodes += 1;
     cell.turns += episode.turns;
     cell.errors += episode.errors;
@@ -287,7 +324,8 @@ export function route(shape, table = {}) {
       shape,
       recommend: heuristic,
       basis: 'heuristic',
-      reason: `every measured tier for ${shape} needed a retry in more than ` +
+      reason:
+        `every measured tier for ${shape} needed a retry in more than ` +
         `${Math.round(MAX_ERROR_RATE * 100)}% of episodes; falling back to the shipped default`,
       excluded: excluded.map((o) => ({ tier: o.tier, errorRate: o.errorRate })),
       options,
@@ -306,17 +344,24 @@ export function route(shape, table = {}) {
     recommend: best.tier,
     basis: 'measured',
     // What each mistake would cost, from this project's own rates.
-    overpowered: strongest.tier === best.tier ? null : {
-      tier: strongest.tier,
-      wasted: Number((strongest.cost - best.cost).toFixed(2)),
-    },
-    underpowered: cheapest.tier === best.tier ? null : {
-      tier: cheapest.tier,
-      expectedCost: Number(cheapest.cost.toFixed(2)),
-      errorRate: cheapest.errorRate,
-      excluded: cheapest.errorRate > MAX_ERROR_RATE,
-    },
-    reason: `${shape}: ${best.tier} costs ${best.cost.toFixed(2)} in expectation over ${best.episodes} episodes ` +
+    overpowered:
+      strongest.tier === best.tier
+        ? null
+        : {
+            tier: strongest.tier,
+            wasted: Number((strongest.cost - best.cost).toFixed(2)),
+          },
+    underpowered:
+      cheapest.tier === best.tier
+        ? null
+        : {
+            tier: cheapest.tier,
+            expectedCost: Number(cheapest.cost.toFixed(2)),
+            errorRate: cheapest.errorRate,
+            excluded: cheapest.errorRate > MAX_ERROR_RATE,
+          },
+    reason:
+      `${shape}: ${best.tier} costs ${best.cost.toFixed(2)} in expectation over ${best.episodes} episodes ` +
       `(${Math.round(best.errorRate * 100)}% needed a retry)`,
     options,
   };
@@ -340,20 +385,31 @@ export function routingNote(shape, table, { currentModel, switchCost } = {}) {
   const lines = [decision.reason];
 
   if (decision.underpowered) {
-    lines.push(`  ${decision.underpowered.tier} looks cheaper per token, but needed a retry in ` +
-      `${Math.round(decision.underpowered.errorRate * 100)}% of episodes -- expected cost ${decision.underpowered.expectedCost}` +
-      `${decision.underpowered.excluded ? ', which is why it is not a candidate here at any price' : ''}.`);
+    lines.push(
+      `  ${decision.underpowered.tier} looks cheaper per token, but needed a retry in ` +
+        `${Math.round(decision.underpowered.errorRate * 100)}% of episodes -- expected cost ${decision.underpowered.expectedCost}` +
+        `${decision.underpowered.excluded ? ', which is why it is not a candidate here at any price' : ''}.`
+    );
   }
   if (decision.overpowered) {
-    lines.push(`  ${decision.overpowered.tier} would spend ${decision.overpowered.wasted} more than needed here.`);
+    lines.push(
+      `  ${decision.overpowered.tier} would spend ${decision.overpowered.wasted} more than needed here.`
+    );
   }
 
   if (switchCost?.prefixTokens) {
-    lines.push(`  Switching now also discards a ${switchCost.prefixTokens.toLocaleString()}-token warm prefix ` +
-      `(~${switchCost.rewriteCost.toLocaleString()} tokens to re-write); consider switching at the next break.`);
+    lines.push(
+      `  Switching now also discards a ${switchCost.prefixTokens.toLocaleString()}-token warm prefix ` +
+        `(~${switchCost.rewriteInputCostEquivalent.toLocaleString()} Anthropic uncached-input cost-equivalent tokens to re-write); consider switching at the next break.`
+    );
   }
 
-  return { shape, recommend: decision.recommend, basis: decision.basis, text: lines.join('\n') };
+  return {
+    shape,
+    recommend: decision.recommend,
+    basis: decision.basis,
+    text: lines.join('\n'),
+  };
 }
 
 /**
@@ -371,7 +427,9 @@ export function routingBriefing(table) {
     const decision = route(shape, table);
     if (decision.basis !== 'measured') continue;
     if (decision.recommend === HEURISTIC[shape]) continue; // nothing learned worth saying
-    lines.push(`${shape.replace(/-/g, ' ')} work goes better on ${decision.recommend} in this project.`);
+    lines.push(
+      `${shape.replace(/-/g, ' ')} work goes better on ${decision.recommend} in this project.`
+    );
   }
   return lines.length ? lines.join('\n') : null;
 }
@@ -389,7 +447,11 @@ export function routingBriefing(table) {
  * few more episodes accumulated would invalidate the cache behind it. Stability
  * is the feature; the memo is how it is bought.
  */
-export function cachedRoutingBriefing(dir, transcriptPath, { growthBytes = 4_000_000, maxAgeMs = 24 * 60 * 60 * 1000 } = {}) {
+export function cachedRoutingBriefing(
+  dir,
+  transcriptPath,
+  { growthBytes = 4_000_000, maxAgeMs = 24 * 60 * 60 * 1000 } = {}
+) {
   const memoPath = join(dir, 'routing-brief.json');
   let stat;
   try {
@@ -400,17 +462,31 @@ export function cachedRoutingBriefing(dir, transcriptPath, { growthBytes = 4_000
 
   try {
     const memo = JSON.parse(readFileSync(memoPath, 'utf8'));
-    const fresh = memo.path === transcriptPath
-      && Math.abs(stat.size - memo.size) < growthBytes
-      && Date.now() - memo.at < maxAgeMs;
+    const fresh =
+      memo.path === transcriptPath &&
+      Math.abs(stat.size - memo.size) < growthBytes &&
+      Date.now() - memo.at < maxAgeMs;
     if (fresh) return memo.text || null;
-  } catch { /* no memo, or an unreadable one; recompute */ }
+  } catch {
+    /* no memo, or an unreadable one; recompute */
+  }
 
   const text = routingBriefing(outcomeTable(readEpisodes(transcriptPath)));
   try {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
-    writeFileSync(memoPath, JSON.stringify({ path: transcriptPath, size: stat.size, at: Date.now(), text }), { mode: 0o600 });
-  } catch { /* the memo is an optimisation; failing to write it costs latency, not correctness */ }
+    writeFileSync(
+      memoPath,
+      JSON.stringify({
+        path: transcriptPath,
+        size: stat.size,
+        at: Date.now(),
+        text,
+      }),
+      { mode: 0o600 }
+    );
+  } catch {
+    /* the memo is an optimisation; failing to write it costs latency, not correctness */
+  }
 
   return text;
 }
@@ -427,9 +503,11 @@ export function routingReport(table) {
     for (const tier of Object.keys(table[shape])) {
       const cell = table[shape][tier];
       const cost = expectedCost(tier, cell);
-      lines.push(`    ${tier.padEnd(7)} ${cell.episodes} episode(s), ` +
-        `${cell.meanTurns.toFixed(1)} turns avg, ${Math.round(cell.errorRate * 100)}% needed a retry, ` +
-        `expected cost ${cost.cost.toFixed(2)}${cell.measured ? '' : ' [too few episodes to trust]'}`);
+      lines.push(
+        `    ${tier.padEnd(7)} ${cell.episodes} episode(s), ` +
+          `${cell.meanTurns.toFixed(1)} turns avg, ${Math.round(cell.errorRate * 100)}% needed a retry, ` +
+          `expected cost ${cost.cost.toFixed(2)}${cell.measured ? '' : ' [too few episodes to trust]'}`
+      );
     }
   }
   return lines.join('\n');

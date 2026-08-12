@@ -19,7 +19,15 @@ import {
   readHookDiagnosticEvents,
   summarizeHookDiagnostics,
 } from './hook-diagnostics.js';
+import {
+  readMcpDiagnosticEvents,
+  summarizeMcpDiagnostics,
+} from './mcp-diagnostics.js';
 import { isValidSessionId } from '../utils/session-id.js';
+import {
+  readDashboardAnalytics,
+  readDashboardProviderUsage,
+} from './dashboard-analytics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -577,12 +585,50 @@ app.get('/api/diagnostics/hooks', (req, res) => {
   });
 });
 
+app.get('/api/diagnostics/mcp', (req, res) => {
+  const hours = Math.min(24 * 30, Math.max(1, Number(req.query.hours) || 24));
+  const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const sinceMs = hours * 60 * 60 * 1000;
+  res.json({
+    summary: summarizeMcpDiagnostics(sinceMs),
+    events: readMcpDiagnosticEvents(limit, sinceMs),
+  });
+});
+
+app.get('/api/analytics/overview', async (req, res) => {
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 40));
+  try {
+    res.json(await readDashboardAnalytics(limit));
+  } catch (error) {
+    console.error('Error in /api/analytics/overview:', error);
+    res.status(500).json({
+      schemaVersion: 1,
+      available: false,
+      error: 'optimizer analytics could not be loaded',
+    });
+  }
+});
+
+app.get('/api/analytics/provider-usage', async (req, res) => {
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 40));
+  try {
+    res.json(await readDashboardProviderUsage(limit));
+  } catch (error) {
+    console.error('Error in /api/analytics/provider-usage:', error);
+    res.status(500).json({
+      available: false,
+      error: 'native provider usage could not be loaded',
+    });
+  }
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     port: PORT,
     hookDiagnostics: summarizeHookDiagnostics(),
+    mcpDiagnostics: summarizeMcpDiagnostics(),
   });
 });
 

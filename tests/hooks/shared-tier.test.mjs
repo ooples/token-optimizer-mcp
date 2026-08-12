@@ -59,10 +59,12 @@ beforeEach(() => {
   shared = mkdtempSync(join(tmpdir(), 'shared-tier-'));
   stateDir = mkdtempSync(join(tmpdir(), 'shared-state-'));
   process.env.TOKEN_OPTIMIZER_SHARED_DIR = shared;
+  process.env.TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED = '1';
 });
 
 afterEach(() => {
   delete process.env.TOKEN_OPTIMIZER_SHARED_DIR;
+  delete process.env.TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED;
   for (const d of [projectA, projectB, shared, stateDir]) {
     try {
       rmSync(d, { recursive: true, force: true });
@@ -78,7 +80,7 @@ function learnIn(root, wikiDirOf, finding) {
   writeFileSync(file, 'module.exports = 1;\n');
   return writeHarvested(
     wikiDirOf,
-    [{ ...finding, anchors: [file] }],
+    [{ scope: 'global', ...finding, anchors: [file] }],
     { sessionId: 'learn', projectRoot: root }
   );
 }
@@ -114,6 +116,34 @@ const NPM_LESSON = {
 };
 
 describe('a lesson learned in one project', () => {
+  test('quarantines synthetic evaluation sources from the machine-wide tier', () => {
+    const evalRoot = join(projectA, 'artifacts', 'live-eval', 'scenario-auto');
+    mkdirSync(join(evalRoot, '.git'), { recursive: true });
+    mkdirSync(join(evalRoot, '.token-optimizer', 'wiki'), { recursive: true });
+    const file = join(evalRoot, 'build.js');
+    writeFileSync(file, 'module.exports = 1;\n');
+
+    delete process.env.TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED;
+    process.env.TOKEN_OPTIMIZER_STRICT_SHARED_PROVENANCE = '1';
+    try {
+      writeHarvested(
+        join(evalRoot, '.token-optimizer', 'wiki'),
+        [{ ...NPM_LESSON, scope: 'global', anchors: [file] }],
+        { sessionId: 'synthetic-study', projectRoot: evalRoot }
+      );
+    } finally {
+      delete process.env.TOKEN_OPTIMIZER_STRICT_SHARED_PROVENANCE;
+      process.env.TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED = '1';
+    }
+
+    expect(runCommandIn(projectB, 'npx jest')).not.toContain('npm test');
+    expect(
+      [...loadGraph(sharedDirOf()).nodes.values()].filter(
+        (node) => node.kind === 'finding'
+      )
+    ).toHaveLength(0);
+  });
+
   test('is served in a DIFFERENT project on the command it applies to', () => {
     // The whole feature in one assertion. Project B has never seen this lesson,
     // has its own empty graph, and shares nothing with A but the machine.
@@ -143,6 +173,7 @@ describe('a lesson learned in one project', () => {
     // files that repository does not have.
     learnIn(projectA, wikiA, {
       type: 'finding',
+      scope: 'project',
       claim: 'parse() trims its input before returning, and callers depend on it',
       confidence: 0.9,
       trigger: 'jest',
@@ -151,6 +182,23 @@ describe('a lesson learned in one project', () => {
     const context = runCommandIn(projectB, 'npx jest');
 
     expect(context).not.toContain('parse() trims');
+  });
+
+  test('does not publish an omitted scope outside its project', () => {
+    const file = join(projectA, 'local-only.md');
+    writeFileSync(file, '# local\n');
+    writeHarvested(
+      wikiA,
+      [{ ...NPM_LESSON, anchors: [file] }],
+      { sessionId: 'local-default', projectRoot: projectA }
+    );
+
+    expect(runCommandIn(projectB, 'npx jest')).not.toContain('npm test');
+    expect(
+      [...loadGraph(sharedDirOf()).nodes.values()].filter(
+        (node) => node.kind === 'finding'
+      )
+    ).toHaveLength(0);
   });
 
   test('is not read back to the project that taught it, as foreign news', () => {
@@ -288,6 +336,7 @@ describe('a lesson learned in one project', () => {
           claim:
             'Confirm the sabotage actually applied before trusting a canary result: an edit that silently matched nothing reports PASS, which reads as "the guard works".',
           confidence: 0.9,
+          scope: 'global',
           anchors: [file],
         },
       ],
@@ -312,6 +361,7 @@ describe('a lesson learned in one project', () => {
           claim:
             'Confirm the sabotage actually applied before trusting a canary result.',
           confidence: 0.9,
+          scope: 'global',
           anchors: [(() => { const f = join(projectA, 'g2.md'); writeFileSync(f, 'x\n'); return f; })()],
         },
       ],
@@ -340,6 +390,7 @@ describe('a lesson learned in one project', () => {
           claim:
             'Confirm the sabotage actually applied before trusting a canary result: an edit that silently matched nothing reports PASS.',
           confidence: 0.9,
+          scope: 'global',
           anchors: [file],
         },
       ],
@@ -370,6 +421,7 @@ describe('a lesson learned in one project', () => {
           type: 'feedback',
           claim: 'Confirm the sabotage actually applied before trusting a canary result.',
           confidence: 0.9,
+          scope: 'global',
           anchors: [file],
         },
       ],

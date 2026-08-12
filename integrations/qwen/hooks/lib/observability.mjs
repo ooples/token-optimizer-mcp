@@ -26,7 +26,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-export const HOOK_LOG_SCHEMA_VERSION = 1;
+export const HOOK_LOG_SCHEMA_VERSION = 2;
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_RETENTION_DAYS = 14;
 const DEFAULT_MAX_FILES = 40;
@@ -197,6 +197,8 @@ export function beginHookInvocation(client, event, options = {}) {
     turnIdHash: null,
     toolUseIdHash: null,
     toolName: null,
+    rawToolName: null,
+    codeModeEnvelope: false,
     clientVersion: null,
     model: null,
     cwdHash: null,
@@ -208,12 +210,29 @@ export function beginHookInvocation(client, event, options = {}) {
   const spanId = hash(invocationId, 16);
   let traceId = hash(invocationId, 32);
 
+  // Write the start before reading stdin or importing project state. If the
+  // host kills the process, Node aborts, or a native call terminates without a
+  // JavaScript exception, diagnostics can now reconcile this record with the
+  // missing completion instead of reporting a false success rate.
+  writeHookEvent({
+    level: 'info',
+    event: 'hook.started',
+    invocationId,
+    traceId,
+    spanId,
+    client,
+    hookEvent: event,
+    processId: process.pid,
+  });
+
   let deadline;
   const finish = (nextOutcome = outcome, nextReason = reason, nextError = error) => {
     if (ended) return;
     ended = true;
     if (deadline) clearTimeout(deadline);
     process.removeListener('exit', onExit);
+    process.removeListener('uncaughtException', onUncaughtException);
+    process.removeListener('unhandledRejection', onUnhandledRejection);
     writeHookEvent({
       level: nextOutcome === 'failure' || nextOutcome === 'timeout' ? 'error' : 'info',
       event: 'hook.completed',
@@ -231,7 +250,17 @@ export function beginHookInvocation(client, event, options = {}) {
     });
   };
   const onExit = () => finish();
+  const onUncaughtException = (nextError) => {
+    finish('failure', 'uncaught_exception', nextError);
+    process.exit(0);
+  };
+  const onUnhandledRejection = (nextError) => {
+    finish('failure', 'unhandled_rejection', nextError);
+    process.exit(0);
+  };
   process.once('exit', onExit);
+  process.once('uncaughtException', onUncaughtException);
+  process.once('unhandledRejection', onUnhandledRejection);
 
   deadline = setTimeout(() => {
     outcome = 'timeout';
@@ -250,6 +279,11 @@ export function beginHookInvocation(client, event, options = {}) {
       dimensions.turnIdHash = hash(raw.turn_id ?? raw.turnId ?? null);
       dimensions.toolUseIdHash = hash(raw.tool_use_id ?? raw.toolUseId ?? null);
       dimensions.toolName = payload?.tool_name ?? raw.tool_name ?? raw.toolName ?? null;
+      dimensions.rawToolName = dimension(
+        raw.tool_name ?? raw.toolName ?? raw.tool ?? null
+      );
+      dimensions.codeModeEnvelope =
+        payload?.tool_input?.code_mode_envelope === true;
       dimensions.clientVersion = dimension(raw.client_version ?? raw.clientVersion ?? null);
       dimensions.model = dimension(raw.model ?? raw.model_name ?? raw.modelName ?? null);
       dimensions.cwdHash = hash(raw.cwd ?? raw.working_directory ?? process.cwd());
@@ -291,6 +325,11 @@ export function beginHookInvocation(client, event, options = {}) {
       error = nextError;
       finish(outcome, reason, error);
     },
+    block(nextReason = 'policy_denied') {
+      outcome = 'blocked';
+      reason = nextReason;
+      finish(outcome, reason);
+    },
     succeed(nextReason = 'completed') {
       outcome = 'success';
       reason = nextReason;
@@ -321,7 +360,11 @@ export function recordHookBootstrapFailure(client, event, error) {
   });
 }
 
-export function readHookEvents({ limit = 200, sinceMs = 24 * 60 * 60 * 1000 } = {}) {
+export function readHookEvents({
+  limit = 200,
+  sinceMs = 24 * 60 * 60 * 1000,
+  includeLifecycle = false,
+} = {}) {
   try {
     const dir = hookLogDirectory();
     if (!existsSync(dir)) return [];
@@ -338,6 +381,7 @@ export function readHookEvents({ limit = 200, sinceMs = 24 * 60 * 60 * 1000 } = 
         try {
           const event = JSON.parse(line);
           if (Date.parse(event.timestamp) < cutoff) continue;
+          if (!includeLifecycle && event.event === 'hook.started') continue;
           events.push(event);
           if (events.length >= limit) return events;
         } catch {
@@ -353,38 +397,102 @@ export function readHookEvents({ limit = 200, sinceMs = 24 * 60 * 60 * 1000 } = 
 
 export function hookHealthSummary(options = {}) {
   const sinceMs = options.sinceMs ?? 24 * 60 * 60 * 1000;
-  const events = readHookEvents({ limit: options.limit || 5000, sinceMs });
-  const durations = events
+  const events = readHookEvents({
+    limit: options.limit || 10000,
+    sinceMs,
+    includeLifecycle: true,
+  });
+  const starts = events.filter((event) => event.event === 'hook.started');
+  const completed = events.filter(
+    (event) => event.event === 'hook.completed' || !event.event
+  );
+  const completedIds = new Set(
+    completed.map((event) => event.invocationId).filter(Boolean)
+  );
+  const abandoned = starts
+    .filter(
+      (event) =>
+        event.invocationId &&
+        !completedIds.has(event.invocationId) &&
+        Date.now() - Date.parse(event.timestamp) > 10_000
+    )
+    .map((event) => ({
+      ...event,
+      event: 'hook.completed',
+      outcome: 'failure',
+      reason: 'process_terminated_before_completion',
+      durationMs: null,
+    }));
+  const runs = [...completed, ...abandoned];
+  const durations = runs
     .map((event) => Number(event.durationMs))
     .filter(Number.isFinite)
     .sort((a, b) => a - b);
-  const failures = events.filter((event) => event.outcome === 'failure');
-  const timeouts = events.filter((event) => event.outcome === 'timeout');
-  const skipped = events.filter((event) => event.outcome === 'skipped');
-  const successes = events.filter((event) => event.outcome === 'success');
+  const failures = runs.filter((event) => event.outcome === 'failure');
+  const timeouts = runs.filter((event) => event.outcome === 'timeout');
+  const skipped = runs.filter((event) => event.outcome === 'skipped');
+  const blocked = runs.filter((event) => event.outcome === 'blocked');
+  const successes = runs.filter((event) => event.outcome === 'success');
+  const actions = runs.filter(
+    (event) => event.hookEvent === 'pre-tool' && event.toolName
+  );
+  const byTool = {};
+  for (const event of actions) {
+    const name = String(event.toolName || 'Unknown action');
+    byTool[name] = (byTool[name] || 0) + 1;
+  }
   const byClient = {};
-  for (const event of events) {
+  for (const event of runs) {
     const key = event.client || 'unknown';
-    const current = byClient[key] || { total: 0, failures: 0, timeouts: 0, skipped: 0 };
+    const current = byClient[key] || {
+      total: 0,
+      failures: 0,
+      timeouts: 0,
+      skipped: 0,
+      blocked: 0,
+      hookEvents: [],
+    };
     current.total++;
     if (event.outcome === 'failure') current.failures++;
     if (event.outcome === 'timeout') current.timeouts++;
     if (event.outcome === 'skipped') current.skipped++;
+    if (event.outcome === 'blocked') current.blocked++;
+    if (event.hookEvent && !current.hookEvents.includes(event.hookEvent))
+      current.hookEvents.push(event.hookEvent);
     byClient[key] = current;
   }
+  for (const current of Object.values(byClient)) current.hookEvents.sort();
   const percentile = (p) =>
     durations.length
       ? durations[Math.min(durations.length - 1, Math.floor(durations.length * p))]
       : null;
   const summary = {
     schemaVersion: HOOK_LOG_SCHEMA_VERSION,
-    available: events.length > 0,
+    available: runs.length > 0,
     windowHours: sinceMs / 3_600_000,
-    total: events.length,
+    total: runs.length,
     failures: failures.length,
     timeouts: timeouts.length,
     skipped: skipped.length,
-    successRate: events.length ? successes.length / events.length : null,
+    blocked: blocked.length,
+    abandoned: abandoned.length,
+    successes: successes.length,
+    actions: actions.length,
+    byTool,
+    // A skipped or policy-blocked hook completed its protocol successfully.
+    // Runtime health answers whether the hook process worked, not whether the
+    // optimizer chose to allow the host operation.
+    successRate: runs.length
+      ? (successes.length + skipped.length + blocked.length) / runs.length
+      : null,
+    healthStatus:
+      failures.length || timeouts.length
+        ? 'failing'
+        : skipped.length
+          ? 'degraded'
+          : runs.length
+            ? 'healthy'
+            : 'unavailable',
     p50DurationMs: percentile(0.5),
     p95DurationMs: percentile(0.95),
     byClient,

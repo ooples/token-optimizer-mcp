@@ -231,6 +231,13 @@ export const WIKI_READ_TOOL_DEFINITION = {
     'rejected, commands that worked — plus lessons carried from other repositories on this ' +
     'machine. Subagents especially: you never receive the session-start briefing, so this is the ' +
     'only way to reach the graph. Costs nothing and sends nothing off the machine.',
+  annotations: {
+    title: 'Read project knowledge',
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
   inputSchema: {
     type: 'object',
     properties: {

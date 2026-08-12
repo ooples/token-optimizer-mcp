@@ -93,6 +93,10 @@ async function loadBalance() {
     balance = await api(scoped('/api/wiki/balance'));
   } catch {
     grid.innerHTML = [
+      'Graph substitutions',
+      'Modeled graph tokens avoided',
+      'Graph context returned',
+      'Graph saving classification',
       'Memory deliveries',
       'Kept back for comparison',
       'Cost of remembering',
@@ -113,30 +117,73 @@ async function loadBalance() {
     return;
   }
 
+  const measurement = balance.measurement || {};
+  const metricState = (key) => measurement.metrics?.[key] || null;
+  const measuredValue = (key, value, suffix = '') => {
+    const state = metricState(key);
+    if (state?.status === 'not-measured') return 'Not measured';
+    return `${nf.format(Number(value) || 0)}${suffix}`;
+  };
+
   // Plain language, because someone reading this page has no reason to know
   // what "injected" means. The words describe what happened, not what the code
   // calls it.
   const tiles = [
     [
+      'Graph substitutions',
+      measuredValue(
+        'nativeSubstitutions',
+        balance.nativeOptimizer?.substitutions
+      ),
+    ],
+    [
+      'Modeled graph tokens avoided',
+      metricState('nativeSubstitutions')?.status === 'not-measured'
+        ? 'Not measured'
+        : `${nf.format(balance.nativeOptimizer?.tokensSaved || 0)} tokens`,
+    ],
+    [
+      'Graph context returned',
+      metricState('nativeSubstitutions')?.status === 'not-measured'
+        ? 'Not measured'
+        : `${nf.format(balance.nativeOptimizer?.tokensReturned || 0)} tokens`,
+    ],
+    [
+      'Graph saving classification',
+      metricState('nativeSubstitutions')?.status === 'not-measured'
+        ? 'Not measured'
+        : 'Modeled counterfactual',
+    ],
+    [
       'Memory deliveries',
-      nf.format(balance.memoryDeliveries ?? balance.injections),
+      measuredValue(
+        'memoryDeliveries',
+        balance.memoryDeliveries ?? balance.injections
+      ),
     ],
     [
       'Kept back for comparison',
-      nf.format(balance.memoryHoldouts ?? balance.holdouts),
+      measuredValue(
+        'memoryHoldouts',
+        balance.memoryHoldouts ?? balance.holdouts
+      ),
     ],
     [
       'Cost of remembering',
-      `${nf.format(
-        Number(balance.deliveryTokens ?? balance.injectedTokens) +
-          Number(balance.harvestTokens || 0)
-      )} tokens`,
+      measuredValue(
+        'rememberingCost',
+        Number(balance.deliveryTokens ?? balance.injectedTokens ?? 0) +
+          Number(balance.harvestTokens || 0),
+        ' tokens'
+      ),
     ],
     [
       'Reading avoided',
-      balance.estimatedTokensAvoided === null
-        ? 'Not enough comparisons'
-        : `${nf.format(balance.estimatedTokensAvoided)} tokens`,
+      metricState('readingAvoided')?.status === 'not-measured'
+        ? 'Not measured'
+        : balance.estimatedTokensAvoided == null
+          ? `Collecting (${nf.format(balance.injections)} treated, ${nf.format(balance.holdouts)} held back)`
+          : `${nf.format(balance.estimatedTokensAvoided)} tokens`,
     ],
   ];
 
@@ -152,22 +199,74 @@ async function loadBalance() {
     )
     .join('');
 
-  verdict.textContent = balance.verdict;
+  verdict.textContent =
+    !balance.sufficientData && Number(balance.nativeOptimizer?.tokensSaved) > 0
+      ? `${nf.format(balance.nativeOptimizer.tokensSaved)} tokens are modeled as avoided by ${nf.format(balance.nativeOptimizer.substitutions)} graph substitutions; they are not part of the verified MCP headline. The causal reuse study is still collecting.`
+      : balance.verdict;
   verdict.dataset.state = !balance.sufficientData
     ? 'insufficient'
     : balance.netTokens > 0
       ? 'positive'
       : 'negative';
 
-  if (balance.sufficientData) {
-    method.textContent =
-      `Measured against ${nf.format(balance.holdouts)} withheld control touches — not estimated. ` +
-      `Net after injection and harvest cost: ${nf.format(balance.netTokens)} tokens.`;
-  } else {
-    method.textContent =
-      `The graph has ${nf.format(balance.injections)} measured file deliveries and ${nf.format(balance.holdouts)} file holdouts; ` +
-      'the savings estimate unlocks at 20 and 5. Command and session-start deliveries are counted above but excluded from the file-read comparison because they have no valid downstream file-read join.';
-  }
+  const coverage = measurement.sourceCoverage;
+  const freshness = measurement.freshness;
+  const coverageText =
+    Number.isFinite(Number(coverage?.projects)) &&
+    Number.isFinite(Number(coverage?.projectsWithTelemetry))
+      ? `${nf.format(coverage.projectsWithTelemetry)} of ${nf.format(coverage.projects)} selected projects have telemetry`
+      : 'Telemetry coverage was not reported by this server';
+  const freshnessText =
+    freshness?.lastEventAt && freshness.status !== 'not-measured'
+      ? `latest event ${new Date(freshness.lastEventAt).toLocaleString()}`
+      : 'no telemetry event has been observed';
+
+  const facts = balance.sufficientData
+    ? [
+        [
+          'Study',
+          `${nf.format(balance.injections)} treated · ${nf.format(balance.holdouts)} holdout`,
+        ],
+        [
+          'Causal method',
+          'Control-arm comparison of downstream reads; not estimated from file size',
+        ],
+        [
+          'Net graph effect',
+          `${nf.format(balance.netTokens)} tokens after delivery and harvest cost`,
+        ],
+        ['Coverage', coverageText],
+        ['Freshness', freshnessText],
+      ]
+    : [
+        [
+          'Modeled substitution',
+          `${nf.format(balance.nativeOptimizer?.tokensSaved || 0)} tokens reported across ${nf.format(balance.nativeOptimizer?.substitutions || 0)} served results; excluded from verified MCP savings`,
+        ],
+        [
+          'Causal method',
+          'Control-arm comparison of downstream reads; no effect is estimated before the evidence gate',
+        ],
+        [
+          'File study',
+          `${nf.format(balance.injections)}/20 treated · ${nf.format(balance.holdouts)}/5 holdout`,
+        ],
+        [
+          'Excluded surfaces',
+          'Command and session-start deliveries have no valid downstream file-read join',
+        ],
+        ['Coverage', coverageText],
+        ['Freshness', freshnessText],
+      ];
+  method.innerHTML = facts
+    .map(
+      ([label, value]) => `
+      <div class="method-fact">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>`
+    )
+    .join('');
 }
 
 /* ---- Causal evidence ------------------------------------------------ */
@@ -1064,9 +1163,14 @@ async function loadHookHealth() {
   const grid = el('hook-health-grid');
   const status = el('hook-health-status');
   const detail = el('hook-health-detail');
+  const clientsHost = el('hook-health-clients');
   try {
-    const report = await api('/api/diagnostics/hooks?hours=24&limit=20');
+    const [report, mcpReport] = await Promise.all([
+      api('/api/diagnostics/hooks?hours=24&limit=20'),
+      api('/api/diagnostics/mcp?hours=24&limit=20'),
+    ]);
     const summary = report.summary;
+    const mcp = mcpReport.summary;
     const success =
       summary.successRate === null
         ? '—'
@@ -1076,6 +1180,8 @@ async function loadHookHealth() {
       ['Success rate', success],
       ['Failures', nf.format(summary.failures)],
       ['Timeouts', nf.format(summary.timeouts)],
+      ['Policy blocks', nf.format(summary.blocked || 0)],
+      ['Abandoned', nf.format(summary.abandoned || 0)],
       [
         'p50 latency',
         summary.p50DurationMs == null ? '—' : `${summary.p50DurationMs} ms`,
@@ -1083,6 +1189,18 @@ async function loadHookHealth() {
       [
         'p95 latency',
         summary.p95DurationMs == null ? '—' : `${summary.p95DurationMs} ms`,
+      ],
+      ['MCP processes', nf.format(mcp.processes)],
+      ['MCP handshakes', nf.format(mcp.initializedClients)],
+      [
+        'Tools advertised',
+        mcp.advertisedTools == null ? '—' : nf.format(mcp.advertisedTools),
+      ],
+      ['MCP tool calls', nf.format(mcp.toolCalls)],
+      ['MCP failures', nf.format(mcp.failures)],
+      [
+        'MCP p95 latency',
+        mcp.p95DurationMs == null ? '—' : `${mcp.p95DurationMs} ms`,
       ],
     ]
       .map(
@@ -1094,30 +1212,83 @@ async function loadHookHealth() {
       )
       .join('');
 
-    const unhealthy = summary.failures > 0 || summary.timeouts > 0;
-    status.textContent = !summary.available
-      ? 'No lifecycle telemetry has been captured yet.'
-      : unhealthy
-        ? `${summary.failures} failure(s) and ${summary.timeouts} timeout(s) need attention.`
-        : 'Lifecycle capture is healthy across the observed clients.';
-    status.dataset.state = !summary.available
-      ? 'insufficient'
-      : unhealthy
-        ? 'bad'
-        : 'ok';
-    const clients = Object.entries(summary.byClient || {})
+    const unhealthy =
+      summary.failures > 0 ||
+      summary.timeouts > 0 ||
+      summary.abandoned > 0 ||
+      mcp.failures > 0;
+    status.textContent =
+      !summary.available && !mcp.available
+        ? 'No hook or MCP lifecycle telemetry has been captured yet.'
+        : unhealthy
+          ? `${summary.failures} hook failure(s), ${summary.timeouts} timeout(s), and ${mcp.failures} MCP failure(s) need attention.`
+          : `${summary.blocked || 0} intentional policy block(s); hook and MCP runtime show no failures.`;
+    status.dataset.state =
+      !summary.available && !mcp.available
+        ? 'insufficient'
+        : unhealthy
+          ? 'bad'
+          : 'ok';
+    const clients = new Map();
+    for (const [name, value] of Object.entries(summary.byClient || {})) {
+      clients.set(name, {
+        name,
+        kinds: ['Lifecycle hooks'],
+        activity: [`${nf.format(value.total)} hook runs`],
+        reliability: [
+          `${nf.format(value.failures)} hook failures · ${nf.format(value.timeouts)} timeouts`,
+        ],
+        policy: [
+          `${nf.format(value.blocked || 0)} blocked · ${nf.format(value.skipped || 0)} skipped`,
+        ],
+        coverage: [
+          `hooks: ${(value.hookEvents || []).join(', ') || 'surface unknown'}`,
+        ],
+        unhealthy: value.failures > 0 || value.timeouts > 0,
+      });
+    }
+    for (const [name, value] of Object.entries(mcp.clients || {})) {
+      const client = clients.get(name) || {
+        name,
+        kinds: [],
+        activity: [],
+        reliability: [],
+        policy: [],
+        coverage: [],
+        unhealthy: false,
+      };
+      client.kinds.push('MCP');
+      client.activity.push(`${nf.format(value.calls)} MCP calls`);
+      client.reliability.push(`${nf.format(value.failures)} MCP failures`);
+      client.policy.push(`${nf.format(value.initialized)} handshakes`);
+      client.coverage.push('MCP: stdio tool protocol');
+      client.unhealthy ||= value.failures > 0;
+      clients.set(name, client);
+    }
+    clientsHost.innerHTML = [...clients.values()]
       .map(
-        ([name, value]) =>
-          `${name}: ${value.total} runs, ${value.failures} failures, ${value.timeouts} timeouts, ${value.skipped || 0} skipped`
+        (client) => `
+        <article class="capture-client${client.unhealthy ? ' is-unhealthy' : ''}">
+          <div class="capture-client-name">
+            <strong>${escapeHtml(client.name)}</strong>
+            <span>${escapeHtml(client.kinds.join(' + '))}</span>
+          </div>
+          <dl>
+            <div><dt>Activity</dt><dd>${escapeHtml(client.activity.join(' · '))}</dd></div>
+            <div><dt>Runtime</dt><dd>${escapeHtml(client.reliability.join(' · '))}</dd></div>
+            <div><dt>Control</dt><dd>${escapeHtml(client.policy.join(' · '))}</dd></div>
+            <div><dt>Coverage</dt><dd>${escapeHtml(client.coverage.join(' · '))}</dd></div>
+          </dl>
+        </article>`
       )
-      .join(' · ');
+      .join('');
     detail.textContent =
-      clients ||
-      'Privacy-safe JSONL diagnostics retain no prompts, commands, or tool output.';
+      'Diagnostics are privacy-safe: no prompts, commands, file paths, or tool output are retained.';
   } catch {
     grid.innerHTML = '';
     status.textContent = 'Capture diagnostics unavailable.';
     status.dataset.state = 'bad';
+    clientsHost.innerHTML = '';
     detail.textContent = '';
   }
 }

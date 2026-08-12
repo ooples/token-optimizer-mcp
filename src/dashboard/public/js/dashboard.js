@@ -18,9 +18,6 @@ import { createKnowledgeGraph3D } from './graph3d.js';
 
 const API = '/api';
 
-/** Reference rate for scale only. Provider and model prices vary. */
-const USD_PER_MILLION_TOKENS = 3;
-
 const CATEGORY_COLORS = {
   tools: 'var(--graph)',
   hooks: 'var(--saved)',
@@ -48,6 +45,7 @@ const SERVER_COLORS = [
 
 const $ = (id) => document.getElementById(id);
 let overviewGraph = null;
+let loadGeneration = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
   $('refresh-btn').addEventListener('click', load);
@@ -55,64 +53,216 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(load, 30_000);
 });
 
-async function get(path) {
+async function get(path, timeoutMs = 20_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${API}${path}`);
+    const res = await fetch(`${API}${path}`, { signal: controller.signal });
     const body = await res.json().catch(() => null);
     return { ok: res.ok, body };
   } catch {
     return { ok: false, body: null };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 async function load() {
-  // Every panel is independent: the graph is worth showing even when there is
-  // no active session, and vice versa. One missing answer must not blank the
-  // whole page.
-  const [diagnostics, balance, status, constellation] = await Promise.all([
-    get('/diagnostics/hooks?hours=24&limit=100'),
-    get('/wiki/balance?scope=all'),
-    get('/wiki/status?scope=all'),
-    get('/wiki/constellation?cap=90&scope=all'),
-  ]);
-  let summary = { ok: false, body: null };
-  let events = { ok: false, body: null };
-  if (!diagnostics.ok || !diagnostics.body?.summary?.available) {
-    [summary, events] = await Promise.all([
-      get('/session-summary'),
-      get('/session-events?limit=100'),
-    ]);
+  // Optimizer accounting is the primary product answer. Render it as soon as
+  // its small local ledger returns; a cold all-project graph can take seconds
+  // and must never hold Saved so far, agent attribution, or action cost blank.
+  const generation = ++loadGeneration;
+  const analytics = await get('/analytics/overview?limit=40');
+  if (generation !== loadGeneration) return;
+  const measuredAnalytics =
+    analytics.ok && analytics.body?.available ? analytics.body : null;
+
+  // First meaningful paint: MCP measurements do not depend on graph APIs.
+  renderSavings(measuredAnalytics, null, null);
+  renderAccounting(measuredAnalytics, null);
+  renderProviderAccounting(measuredAnalytics);
+  renderVerdict(measuredAnalytics, null, null);
+  if (measuredAnalytics) {
+    const optimizerOnly = joinActivity(
+      null,
+      measuredAnalytics,
+      null,
+      null,
+      null
+    );
+    renderClientLedger(optimizerOnly, null);
+    renderServers(optimizerOnly);
+    renderTimeline(optimizerOnly.events);
+    renderBreakdown(optimizerOnly);
   }
+  const providerUsagePromise = get(
+    '/analytics/provider-usage?limit=40',
+    60_000
+  );
 
-  renderSavings(balance.body, status.body);
-  renderVerdict(balance.body, status.body);
-  renderGraph(constellation.body, status.body);
+  // Do not even start the synchronous graph work until the browser has the
+  // primary accounting response. Starting these requests earlier can let a
+  // cold graph route monopolize the local Node process before analytics is
+  // delivered, recreating the same blank hero through server-side contention.
+  const diagnosticsPromise = get('/diagnostics/hooks?hours=24&limit=100');
+  const balancePromise = get('/wiki/balance?scope=all');
+  const statusPromise = get('/wiki/status?scope=all');
+  const constellationPromise = get('/wiki/constellation?cap=90&scope=all');
 
-  const session =
+  const diagnostics = await diagnosticsPromise;
+  if (generation !== loadGeneration) return;
+  const needsLegacy =
+    !(diagnostics.ok && diagnostics.body?.summary?.available) &&
+    !measuredAnalytics;
+  const [summary, events] = needsLegacy
+    ? await Promise.all([
+        get('/session-summary'),
+        get('/session-events?limit=100'),
+      ])
+    : [null, null];
+
+  let session = joinActivity(
     diagnostics.ok && diagnostics.body?.summary?.available
       ? activityFromDiagnostics(diagnostics.body)
-      : summary.ok && summary.body?.success
-        ? summary.body
-        : null;
+      : null,
+    measuredAnalytics,
+    summary?.ok && summary.body?.success ? summary.body : null,
+    events?.ok ? events.body?.events : null,
+    null
+  );
   renderKpis(session);
+  renderClientLedger(session, null);
   renderCategories(session);
   renderServers(session);
-  renderTimeline(
-    session?.activityMode === 'hooks'
-      ? session.events
-      : events.ok
-        ? events.body?.events
-        : null
+  renderTimeline(session?.events);
+  renderBreakdown(session);
+
+  const providerUsage = await providerUsagePromise;
+  if (generation !== loadGeneration) return;
+  if (measuredAnalytics && providerUsage.ok)
+    measuredAnalytics.providerUsage = providerUsage.body;
+  renderProviderAccounting(measuredAnalytics);
+
+  // Graph data enriches the already-visible optimizer ledger when ready. Each
+  // request is bounded, so a damaged graph cannot leave a refresh pending
+  // forever or accumulate overlapping 30-second refreshes.
+  const [balance, status, constellation] = await Promise.all([
+    balancePromise,
+    statusPromise,
+    constellationPromise,
+  ]);
+  if (generation !== loadGeneration) return;
+  const graphBalance = balance.ok ? balance.body : null;
+  const graphStatus = status.ok ? status.body : null;
+  renderSavings(measuredAnalytics, graphBalance, graphStatus);
+  renderAccounting(measuredAnalytics, graphBalance);
+  renderVerdict(measuredAnalytics, graphBalance, graphStatus);
+  renderGraph(constellation.ok ? constellation.body : null, graphStatus);
+
+  session = joinActivity(
+    diagnostics.ok && diagnostics.body?.summary?.available
+      ? activityFromDiagnostics(diagnostics.body)
+      : null,
+    measuredAnalytics,
+    summary?.ok && summary.body?.success ? summary.body : null,
+    events?.ok ? events.body?.events : null,
+    graphBalance
   );
+  renderClientLedger(session, graphBalance);
+  renderServers(session);
+  renderTimeline(session?.events);
   renderBreakdown(session);
 
   $('last-updated').textContent = new Date().toLocaleTimeString();
 }
 
+function joinActivity(hooks, analytics, legacy, legacyEvents, balance) {
+  if (!hooks && !analytics && !legacy) return null;
+  if (!hooks && !analytics) return { ...legacy, events: legacyEvents || [] };
+
+  const measuredRows = analytics?.byAction || [];
+  const measuredByName = new Map(measuredRows.map((row) => [row.name, row]));
+  const hookRows = toolRows(hooks);
+  const names = new Set([
+    ...measuredByName.keys(),
+    ...hookRows.map((row) => row.name),
+  ]);
+  const toolBreakdown = [...names].map((name) => {
+    const measured = measuredByName.get(name);
+    const observed = hookRows.find((row) => row.name === name);
+    return {
+      name,
+      count: observed?.count ?? measured?.totalOperations ?? 0,
+      observedCalls: observed?.count ?? null,
+      measuredOperations: measured?.totalOperations ?? 0,
+      tokens: measured?.observedReturnedContextOperations
+        ? measured.totalOptimizedTokens
+        : null,
+      totalOriginalTokens: measured?.totalOriginalTokens ?? null,
+      tokensSaved: measured?.totalTokensSaved ?? null,
+      unverifiedReportedTokensSaved:
+        measured?.unverifiedReportedTokensSaved ?? null,
+      contextUsd: measured?.contextUsd ?? null,
+      savedUsd: measured?.savedUsd ?? null,
+    };
+  });
+  const native = balance?.nativeOptimizer;
+  if (native?.substitutions) {
+    toolBreakdown.push({
+      name: 'live_graph_substitution',
+      count: native.substitutions,
+      observedCalls: native.substitutions,
+      measuredOperations: native.substitutions,
+      tokens: native.tokensReturned,
+      totalOriginalTokens: native.tokensReturned + native.tokensSaved,
+      tokensSaved: null,
+      unverifiedReportedTokensSaved: native.tokensSaved,
+      contextUsd: priceTokens(analytics, native.tokensReturned),
+      savedUsd: null,
+      classification: 'modeled-counterfactual',
+    });
+  }
+  const recentMeasured = [
+    ...(analytics?.recent || []),
+    ...(native?.recent || []).map((row) => ({
+      ...row,
+      classification: row.classification || 'modeled-counterfactual',
+      savingsMeasured: false,
+      reportedTokensSaved: Number(row.tokensSaved || 0),
+      tokensSaved: 0,
+      contextUsd: priceTokens(analytics, Number(row.optimizedTokens || 0)),
+      savedUsd: null,
+    })),
+  ].sort(
+    (a, b) => Date.parse(b.timestamp || '') - Date.parse(a.timestamp || '')
+  );
+
+  return {
+    ...(hooks || {}),
+    activityMode: 'combined',
+    analytics,
+    legacy,
+    totalTokens:
+      analytics?.summary?.totalOptimizedTokens ?? legacy?.totalTokens ?? null,
+    totalTools:
+      hooks?.totalTools ??
+      analytics?.summary?.totalOperations ??
+      legacy?.totalTools ??
+      0,
+    toolBreakdown,
+    events: recentMeasured.length
+      ? recentMeasured
+      : legacyEvents || hooks?.events || [],
+  };
+}
+
 function activityFromDiagnostics(report) {
   const events = report.events || [];
   const actions = events.filter(
-    (event) => event.hookEvent === 'pre-tool' && event.toolName
+    (event) =>
+      event.event !== 'hook.started' &&
+      event.hookEvent === 'pre-tool' &&
+      event.toolName
   );
   const toolBreakdown = {};
   for (const event of actions) {
@@ -120,10 +270,13 @@ function activityFromDiagnostics(report) {
     toolBreakdown[name] ||= { count: 0, tokens: null };
     toolBreakdown[name].count += 1;
   }
+  for (const [name, count] of Object.entries(report.summary.byTool || {})) {
+    toolBreakdown[name] = { count, tokens: null };
+  }
   return {
     activityMode: 'hooks',
     totalHooks: report.summary.total || 0,
-    totalTools: actions.length,
+    totalTools: report.summary.actions ?? actions.length,
     activeClients: Object.keys(report.summary.byClient || {}).length,
     p95DurationMs: report.summary.p95DurationMs,
     successRate: report.summary.successRate,
@@ -135,35 +288,52 @@ function activityFromDiagnostics(report) {
 
 /* ------------------------------------------------------------- the hero -- */
 
-function renderSavings(balance, status) {
-  const saved = Number(balance?.estimatedTokensAvoided);
+function renderSavings(analytics, balance, status) {
+  const mcpSaved = Number(analytics?.summary?.totalTokensSaved || 0);
+  const saved = mcpSaved;
   const foot = $('saved-foot');
+  const card = $('saved-card');
 
-  if (!balance?.sufficientData || !Number.isFinite(saved) || saved <= 0) {
+  const hasDirectMeasurement = Boolean(
+    analytics?.summary?.measuredSavingsOperations
+  );
+  if (!hasDirectMeasurement || !Number.isFinite(saved)) {
     // Before there is a measurement, say what will appear and why -- and do
     // NOT show a zero, which reads as failure rather than as "not yet".
     $('saved-tokens').textContent = '—';
     $('saved-money').textContent = '—';
     $('saved-percent').textContent = '—';
+    $('saved-tokens').dataset.state = analytics?.available
+      ? 'collecting'
+      : 'not-measured';
+    card.dataset.state = $('saved-tokens').dataset.state;
+    card.setAttribute('aria-busy', 'false');
     $('comparison').innerHTML = '';
 
-    const learned = Number(status?.nodes) || 0;
-    foot.innerHTML = learned
-      ? `Still measuring. ${fmt(learned)} things learned so far — the savings ` +
-        `figure appears once there is enough of a comparison to be honest about.`
-      : `Nothing measured yet. Work normally in a supported coding agent for a few minutes ` +
-        `and this fills itself in.`;
+    const excluded = Number(
+      analytics?.summary?.unverifiedReportedTokensSaved || 0
+    );
+    foot.textContent = excluded
+      ? `${fmt(excluded)} historically reported tokens are quarantined because their baselines cannot be verified. A verified total appears after a materialized MCP payload is actually reduced.`
+      : `Nothing verified yet. Savings appear after the server observes both a materialized MCP payload and the smaller payload actually returned; later expansions are debited.`;
     return;
   }
 
-  const spentAnyway =
-    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
-  const wouldHave = saved + spentAnyway;
+  $('saved-tokens').dataset.state = 'measured';
+  card.dataset.state = 'measured';
+  card.setAttribute('aria-busy', 'false');
+
+  const spentAnyway = Number(analytics?.summary?.measuredOptimizedTokens || 0);
+  const wouldHave = Number(analytics?.summary?.totalOriginalTokens || 0);
   const percent = wouldHave > 0 ? (saved / wouldHave) * 100 : 0;
 
   countUp($('saved-tokens'), saved);
+  $('saved-unit').textContent =
+    saved >= 0
+      ? 'net context tokens avoided at the MCP transport'
+      : 'net context tokens added at the MCP transport';
   $('saved-money').textContent =
-    `$${((saved / 1e6) * USD_PER_MILLION_TOKENS).toFixed(2)}`;
+    `${formatUsd(analytics?.summary?.savedUsd)} · ${fmt(analytics?.summary?.pricedSavingsOperations || 0)}/${fmt((analytics?.summary?.measuredSavingsOperations || 0) + (analytics?.summary?.verifiedExpansionOperations || 0))} ops`;
   $('saved-percent').textContent = `${percent.toFixed(0)}%`;
 
   comparison($('comparison'), {
@@ -174,8 +344,307 @@ function renderSavings(balance, status) {
   });
 
   foot.textContent =
-    `Measured against ${fmt(balance.holdouts)} reads deliberately left alone, ` +
-    `so this is a comparison rather than a guess.`;
+    `${fmt(analytics?.summary?.measuredSavingsOperations || 0)} of ${fmt(analytics?.summary?.totalOperations || 0)} MCP operations have a verified comparable baseline. ` +
+    `${fmt(analytics?.summary?.verifiedExpansionOperations || 0)} later expansion(s) returned ${fmt(analytics?.summary?.expansionTokensReturned || 0)} tokens and were debited. Historical reports and ${fmt(balance?.nativeOptimizer?.substitutions || 0)} modeled graph substitutions remain separate.`;
+}
+
+function formatUsd(value) {
+  if (value === null || value === undefined) return 'Not priced';
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 'Not priced';
+  if (number === 0) return '$0.00';
+  if (Math.abs(number) < 0.01) return `$${number.toFixed(4)}`;
+  return `$${number.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function priceTokens(analytics, tokens) {
+  return null;
+}
+
+function currencyAmount(amounts) {
+  const entries = Object.entries(amounts || {}).filter(([, amount]) =>
+    Number.isFinite(Number(amount))
+  );
+  if (!entries.length) return 'Not priced';
+  return entries
+    .map(([currency, amount]) => {
+      const value = Number(amount);
+      return currency === 'USD'
+        ? formatUsd(value)
+        : `${currency} ${value.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`;
+    })
+    .join(' + ');
+}
+
+function renderProviderAccounting(analytics) {
+  const section = $('provider-accounting');
+  const host = $('provider-accounting-grid');
+  const body = $('provider-breakdown-body');
+  const note = $('provider-accounting-note');
+  const coverage = $('provider-price-coverage');
+  const report = analytics?.providerUsage;
+  if (!report?.available) {
+    section.dataset.state = 'not-measured';
+    section.setAttribute('aria-busy', 'false');
+    coverage.textContent = 'No native usage yet';
+    host.innerHTML = teach(
+      'No provider usage captured',
+      'Run Codex, Claude Code, or Gemini CLI. Native usage appears here without estimating omitted dimensions.'
+    );
+    body.innerHTML = '';
+    note.textContent = '';
+    return;
+  }
+  const usage = report.usage || {};
+  const writes =
+    Number(usage.cacheWrite5mInputTokens || 0) +
+    Number(usage.cacheWrite1hInputTokens || 0) +
+    Number(usage.cacheWriteInputTokens || 0);
+  const cards = [
+    [
+      'Provider requests',
+      fmt(report.requestCount),
+      `${fmt(report.pricedRequestCount)} exactly priced`,
+    ],
+    [
+      'Uncached input',
+      compact(usage.uncachedInputTokens || 0),
+      'native billable usage',
+    ],
+    [
+      'Cache reads',
+      compact(usage.cachedInputTokens || 0),
+      'native billable usage',
+    ],
+    ['Cache writes', compact(writes), '5-minute + 1-hour + generic'],
+    [
+      'Output',
+      compact(usage.outputTokens || 0),
+      'thinking included when provider bills it',
+    ],
+    [
+      'API-price equivalent',
+      currencyAmount(report.apiEquivalentCost),
+      'list price; not necessarily your invoice',
+    ],
+  ];
+  host.innerHTML = cards
+    .map(
+      ([label, value, detail]) => `
+      <div class="accounting-card">
+        <span class="accounting-label">${escapeHtml(label)}</span>
+        <strong class="accounting-value num">${escapeHtml(value)}</strong>
+        <span class="accounting-detail">${escapeHtml(detail)}</span>
+      </div>`
+    )
+    .join('');
+  coverage.textContent = `${Number(report.pricingCoveragePercent || 0).toFixed(1)}% price coverage`;
+  body.innerHTML = (report.byModel || [])
+    .map((row) => {
+      const rowWrites =
+        Number(row.usage.cacheWrite5mInputTokens || 0) +
+        Number(row.usage.cacheWrite1hInputTokens || 0) +
+        Number(row.usage.cacheWriteInputTokens || 0);
+      const source = row.priceSourceUrl
+        ? `<a href="${escapeHtml(row.priceSourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.priceSourceLabel)}</a>`
+        : escapeHtml(row.priceSourceLabel);
+      return `<tr>
+        <td><strong>${escapeHtml(row.client)} · ${escapeHtml(row.model)}</strong><br><span class="table-note">${escapeHtml(row.billingRoute)}${row.plan ? ` · ${escapeHtml(row.plan)}` : ''} · ${source}</span></td>
+        <td class="right num">${fmt(row.requestCount)}</td>
+        <td class="right num">${fmt(row.usage.uncachedInputTokens)}</td>
+        <td class="right num">${fmt(row.usage.cachedInputTokens)}</td>
+        <td class="right num">${fmt(rowWrites)}</td>
+        <td class="right num">${fmt(row.usage.outputTokens)}</td>
+        <td class="right num">${row.pricedRequestCount === row.requestCount ? currencyAmount(row.apiEquivalentCost) : `${currencyAmount(row.apiEquivalentCost)} · ${fmt(row.requestCount - row.pricedRequestCount)} unpriced`}</td>
+      </tr>`;
+    })
+    .join('');
+  const nativeCost = currencyAmount(report.nativeReportedCost);
+  note.textContent =
+    `${report.source}. Window: ${escapeHtml(report.window?.firstSeen ? new Date(report.window.firstSeen).toLocaleString() : 'no first receipt')} to ${escapeHtml(report.window?.lastSeen ? new Date(report.window.lastSeen).toLocaleString() : 'no last receipt')}. ` +
+    `API-price equivalent: ${currencyAmount(report.apiEquivalentCost)} across ${fmt(report.pricedRequestCount)}/${fmt(report.requestCount)} requests. ` +
+    `Provider-reported actual charge: ${nativeCost}. Missing exact model ids and unpublished dimensions stay unpriced instead of using a blended guess.`;
+  section.dataset.state = 'measured';
+  section.setAttribute('aria-busy', 'false');
+}
+
+function renderAccounting(analytics, balance) {
+  const host = $('accounting-grid');
+  const section = $('token-accounting');
+  const note = $('accounting-note');
+  const summary = analytics?.summary;
+  const graphCost =
+    Number(balance?.deliveryTokens ?? balance?.injectedTokens ?? 0) +
+    Number(balance?.harvestTokens || 0);
+  const causalSaved = balance?.sufficientData
+    ? Number(balance.estimatedTokensAvoided)
+    : null;
+  const hasDirect =
+    Boolean(summary?.totalOperations) ||
+    Number(balance?.nativeOptimizer?.substitutions || 0) > 0;
+  const hasSavingsMeasurement = Boolean(summary?.measuredSavingsOperations);
+  const canComputeNet = hasSavingsMeasurement || causalSaved != null;
+  const combinedNet = canComputeNet
+    ? Number(summary?.totalTokensSaved || 0) +
+      Number(causalSaved || 0) -
+      graphCost
+    : null;
+  const cards = [
+    [
+      'Original context',
+      summary?.measuredSavingsOperations
+        ? compact(summary.totalOriginalTokens)
+        : 'Not measured',
+      'known before-state only',
+    ],
+    [
+      'Returned context',
+      summary ? compact(summary.totalOptimizedTokens) : 'Not measured',
+      summary
+        ? `${formatUsd(summary.contextUsd)} from ${fmt(summary.pricedReturnedContextOperations || 0)}/${fmt(summary.observedReturnedContextOperations || 0)} exactly modeled operations · ${fmt(summary.unverifiedReportedOperations || 0)} unverified rows excluded`
+        : 'actual results returned to clients',
+    ],
+    [
+      'Optimizer saved',
+      hasSavingsMeasurement
+        ? compact(Number(summary?.totalTokensSaved || 0))
+        : 'Not measured',
+      hasSavingsMeasurement
+        ? `${formatUsd(summary?.savedUsd)} from ${fmt(summary?.pricedSavingsOperations || 0)} exactly modeled operations · ${compact(summary.grossTokensSaved)} gross − ${compact(summary.expansionTokensReturned)} expanded`
+        : 'No comparable payload pair yet',
+    ],
+    [
+      'Excluded reported saving',
+      summary?.unverifiedReportedOperations
+        ? compact(summary.unverifiedReportedTokensSaved)
+        : 'None',
+      summary?.unverifiedReportedOperations
+        ? `${fmt(summary.unverifiedReportedOperations)} legacy/tool rows retained for audit, excluded from totals`
+        : 'no quarantined claims',
+    ],
+    [
+      'Graph memory cost',
+      balance ? compact(graphCost) : 'Not measured',
+      balance
+        ? 'delivery + harvest; price requires model attribution'
+        : 'delivery + harvest',
+    ],
+    [
+      'Causal graph saving',
+      causalSaved == null ? 'Collecting' : compact(causalSaved),
+      causalSaved == null
+        ? `${fmt(balance?.injections || 0)}/20 treated · ${fmt(balance?.holdouts || 0)}/5 holdout`
+        : 'holdout measured',
+    ],
+    [
+      'Verified net',
+      combinedNet == null ? 'Not measured' : compact(combinedNet),
+      causalSaved == null
+        ? 'verified MCP saving − graph cost; modeled graph benefits excluded'
+        : 'verified MCP + holdout graph saving − graph cost',
+    ],
+  ];
+  host.innerHTML = cards
+    .map(
+      ([label, value, detail]) => `
+    <div class="accounting-card">
+      <span class="accounting-label">${escapeHtml(label)}</span>
+      <strong class="accounting-value num">${escapeHtml(value)}</strong>
+      <span class="accounting-detail">${escapeHtml(detail)}</span>
+    </div>`
+    )
+    .join('');
+  section.dataset.state = hasSavingsMeasurement ? 'measured' : 'not-measured';
+  section.setAttribute('aria-busy', 'false');
+  note.textContent = hasDirect
+    ? `${analytics?.source || 'No MCP operation rows yet'}. ${analytics?.measurement?.tokenCountMethod || ''} ${analytics?.pricing?.explanation || 'Cost is not priced.'} Graph counterfactuals remain outside the verified MCP total.`
+    : 'No direct optimizer before/after measurements have been recorded yet.';
+}
+
+function renderClientLedger(session, balance) {
+  const host = $('client-ledger');
+  const section = $('measured-by-agent');
+  const analytics = session?.analytics;
+  const activeClients = new Set(Object.keys(session?.clients || {}));
+  const rows = (analytics?.byClient || []).map((row) => ({ ...row }));
+  for (const [name, native] of Object.entries(
+    balance?.nativeOptimizer?.byClient || {}
+  )) {
+    const current = rows.find((row) => row.name === name);
+    if (current) {
+      current.totalOperations += native.substitutions || 0;
+      current.unverifiedReportedOperations =
+        Number(current.unverifiedReportedOperations || 0) +
+        Number(native.substitutions || 0);
+      current.unverifiedReportedTokensSaved =
+        Number(current.unverifiedReportedTokensSaved || 0) +
+        Number(native.tokensSaved || 0);
+      current.nativeSubstitutions = native.substitutions || 0;
+    } else {
+      rows.push({
+        name,
+        attribution:
+          name === 'Historical — client not recorded'
+            ? 'historical-unattributed'
+            : 'recorded',
+        totalOperations: native.substitutions || 0,
+        observedReturnedContextOperations: 0,
+        verifiedSavingsOperations: 0,
+        unverifiedReportedOperations: native.substitutions || 0,
+        totalOptimizedTokens: null,
+        totalTokensSaved: null,
+        unverifiedReportedTokensSaved: native.tokensSaved || 0,
+        contextUsd: null,
+        savedUsd: null,
+        nativeSubstitutions: native.substitutions || 0,
+      });
+    }
+  }
+  for (const client of activeClients) {
+    if (!rows.some((row) => row.name === client)) {
+      rows.push({
+        name: client,
+        attribution: 'lifecycle-only',
+        totalOperations: 0,
+        totalOptimizedTokens: null,
+        totalTokensSaved: null,
+        contextUsd: null,
+      });
+    }
+  }
+  if (!rows.length) {
+    host.innerHTML = teach(
+      'No agent attribution yet',
+      'New MCP operations record their client identity after the handshake.'
+    );
+    section.dataset.state = 'not-measured';
+    section.setAttribute('aria-busy', 'false');
+    return;
+  }
+  host.innerHTML = rows
+    .map(
+      (row) => `
+      <div class="client-ledger-row">
+        <div>
+          <strong>${escapeHtml(row.name)}</strong>
+          <span>${row.attribution === 'historical-unattributed' ? 'historical reports quarantined; client was not stored' : row.attribution === 'lifecycle-only' ? 'lifecycle active; optimizer cost not yet attributed' : `${row.nativeSubstitutions ? `${fmt(row.nativeSubstitutions)} modeled graph substitutions · ` : ''}attributed by client protocol`}</span>
+        </div>
+        <div><span>Operations</span><strong class="num">${fmt(row.totalOperations)}</strong></div>
+        <div><span>Returned context</span><strong class="num">${row.totalOptimizedTokens == null ? 'Not measured' : fmt(row.totalOptimizedTokens)}</strong></div>
+        <div><span>Cost equivalent</span><strong class="num">${formatUsd(row.contextUsd)}</strong></div>
+        <div><span>Verified net</span><strong class="num saved-cell">${row.totalTokensSaved == null ? 'Not measured' : fmt(row.totalTokensSaved)}</strong></div>
+        <div><span>Excluded report</span><strong class="num">${fmt(row.unverifiedReportedTokensSaved || 0)}</strong></div>
+      </div>`
+    )
+    .join('');
+  section.dataset.state = 'measured';
+  section.setAttribute('aria-busy', 'false');
 }
 
 /** A number that lands rather than appearing. Skipped when motion is reduced. */
@@ -195,12 +664,24 @@ function countUp(node, target) {
   requestAnimationFrame(step);
 }
 
-function renderVerdict(balance, status) {
+function renderVerdict(analytics, balance, status) {
   const box = $('verdict');
   const title = $('verdict-title');
   const detail = $('verdict-detail');
   box.hidden = false;
   box.classList.remove('is-ok', 'is-warn', 'is-bad');
+
+  const directSaved = Number(analytics?.summary?.totalTokensSaved || 0);
+  const graphCost =
+    Number(balance?.deliveryTokens ?? balance?.injectedTokens ?? 0) +
+    Number(balance?.harvestTokens || 0);
+
+  if (!balance?.sufficientData && directSaved > 0) {
+    box.classList.add('is-ok');
+    title.textContent = 'Saving context now';
+    detail.textContent = `${fmt(directSaved)} tokens were removed by measured optimizer operations. The separate causal graph-effect study is still collecting (${fmt(balance?.injections || 0)}/20 treated, ${fmt(balance?.holdouts || 0)}/5 holdout).`;
+    return;
+  }
 
   if (!balance?.sufficientData) {
     box.classList.add('is-warn');
@@ -212,10 +693,9 @@ function renderVerdict(balance, status) {
     return;
   }
 
-  const net = Number(balance.netTokens || 0);
-  const cost =
-    Number(balance.injectedTokens || 0) + Number(balance.harvestTokens || 0);
-  const ratio = cost > 0 ? (net + cost) / cost : Infinity;
+  const net =
+    directSaved + Number(balance.estimatedTokensAvoided || 0) - graphCost;
+  const ratio = graphCost > 0 ? (net + graphCost) / graphCost : Infinity;
 
   if (net > 0) {
     box.classList.add('is-ok');
@@ -376,7 +856,7 @@ function renderKpis(s) {
   }
 
   const cards =
-    s.activityMode === 'hooks'
+    s.activityMode === 'hooks' || s.activityMode === 'combined'
       ? [
           {
             label: 'Lifecycle events',
@@ -446,7 +926,7 @@ function renderKpis(s) {
 
 function renderCategories(s) {
   const host = $('category-chart');
-  if (s?.activityMode === 'hooks') {
+  if (s?.clients) {
     const slices = Object.entries(s.clients).map(([client, values], index) => ({
       label: client,
       value: values.total || 0,
@@ -478,24 +958,24 @@ function renderCategories(s) {
 
 function renderServers(s) {
   const host = $('server-chart');
-  if (s?.activityMode === 'hooks') {
+  if (s?.analytics?.byAction?.length) {
     const slices = toolRows(s)
-      .filter((row) => row.count > 0)
+      .filter((row) => Number(row.tokensSaved) > 0)
       .map((row, index) => ({
         label: row.name || row.tool,
-        value: row.count,
+        value: row.tokensSaved,
         color: SERVER_COLORS[index % SERVER_COLORS.length],
       }))
       .sort((a, b) => b.value - a.value);
     if (!slices.length) {
       host.innerHTML = teach(
-        'No actions observed yet',
-        'Lifecycle hooks are healthy, but no pre-tool action is present in the selected 24-hour window.'
+        'No measured savings yet',
+        'Optimizer operations are recorded here after both their original and returned context sizes are known.'
       );
       return;
     }
     donut(host, slices, {
-      centerLabel: 'actions observed',
+      centerLabel: 'tokens saved',
       centerValue: compact(slices.reduce((sum, item) => sum + item.value, 0)),
     });
     return;
@@ -547,7 +1027,7 @@ function renderTimeline(events) {
           <span class="ev-name">${escapeHtml(action.tool)}</span>
           <span class="ev-detail">${escapeHtml(action.detail)}</span>
         </span>
-        <span class="ev-meta num">${action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
+        <span class="ev-meta num">${action.contextTokens != null ? (action.tokens == null ? `${compact(action.contextTokens)} context · ${action.costLabel}` : `${compact(action.contextTokens)} context · ${formatUsd(action.contextUsd)} · ${action.tokens < 0 ? `${compact(Math.abs(action.tokens))} expansion debit` : `${compact(action.tokens)} saved`}`) : action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
         <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
       </div>`;
     })
@@ -555,6 +1035,37 @@ function renderTimeline(events) {
 }
 
 function describeEvent(event) {
+  if (event.originalTokens != null && event.optimizedTokens != null) {
+    const isNative = event.name === 'live_graph_substitution';
+    const classification = String(event.classification || '');
+    const expansion = classification === 'verified-transport-expansion-debit';
+    const unverified =
+      classification === 'unverified-reported' ||
+      classification === 'modeled-counterfactual';
+    return {
+      tool: isNative
+        ? `Live graph substitution${event.client ? ` · ${event.client}` : ''}`
+        : `${event.name || event.toolName || 'optimizer operation'}${event.client ? ` · ${event.client}` : ''}`,
+      detail: unverified
+        ? `${fmt(event.reportedTokensSaved || 0)} reported tokens excluded; no comparable materialized payload`
+        : expansion
+          ? `${fmt(event.optimizedTokens)} expansion tokens returned; debited from the linked preview`
+          : event.savingsMeasured === false
+            ? `${fmt(event.optimizedTokens)} returned context tokens; no before baseline`
+            : `${fmt(event.originalTokens)} → ${fmt(event.optimizedTokens)} context tokens`,
+      tokens:
+        event.savingsMeasured === false ? null : Number(event.tokensSaved || 0),
+      contextTokens: unverified ? null : Number(event.optimizedTokens || 0),
+      contextUsd: event.contextUsd,
+      costLabel: unverified
+        ? 'excluded from verified totals'
+        : event.savingsMeasured === false
+          ? `${formatUsd(event.contextUsd)} context · saving not measurable`
+          : expansion
+            ? `${formatUsd(event.contextUsd)} context · ${formatUsd(event.savedUsd)} net adjustment`
+            : `${formatUsd(event.contextUsd)} context · ${formatUsd(event.savedUsd)} saved`,
+    };
+  }
   const hookEvent = String(event.hookEvent || '').trim();
   const client = String(event.client || '').trim();
   const tool = String(
@@ -599,7 +1110,7 @@ function renderBreakdown(s) {
   const rows = toolRows(s);
   if (!rows.length) {
     body.innerHTML =
-      '<tr><td colspan="3">' +
+      '<tr><td colspan="6">' +
       teach(
         'No actions counted yet',
         'Each kind of observed agent action gets a row here, so repeat costs are easy to spot.'
@@ -614,6 +1125,9 @@ function renderBreakdown(s) {
         <td>${escapeHtml(t.name || t.tool)}</td>
         <td class="right num">${fmt(t.count)}</td>
         <td class="right num">${t.tokens == null ? 'Not measured' : fmt(t.tokens)}</td>
+        <td class="right num">${formatUsd(t.contextUsd)}</td>
+        <td class="right num saved-cell">${t.tokensSaved == null ? 'Not measured' : fmt(t.tokensSaved)}</td>
+        <td class="right num">${t.unverifiedReportedTokensSaved == null ? 'None' : fmt(t.unverifiedReportedTokensSaved)}</td>
       </tr>`
     )
     .join('');

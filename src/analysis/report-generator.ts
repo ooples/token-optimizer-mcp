@@ -730,9 +730,15 @@ function generateProjectMarkdownReport(
   md += `- **Average Tokens/Operation:** ${analysis.summary.averageTokensPerOperation.toLocaleString()}\n\n`;
 
   md += `## Cost Estimation\n\n`;
-  md += `- **Total Cost:** $${analysis.costEstimation.totalCost.toFixed(2)} ${analysis.costEstimation.currency}\n`;
-  md += `- **Average Cost/Session:** $${analysis.costEstimation.averageCostPerSession.toFixed(2)}\n`;
-  md += `- **Pricing Model:** ${analysis.costEstimation.model} ($${analysis.costEstimation.costPerMillionTokens}/M tokens)\n\n`;
+  if (analysis.costEstimation.totalCost == null) {
+    md += `- **Total Cost:** Not priced\n`;
+    md += `- **Reason:** ${analysis.costEstimation.explanation}\n\n`;
+  } else {
+    md += `- **Total Cost Equivalent:** $${analysis.costEstimation.totalCost.toFixed(2)} ${analysis.costEstimation.currency}\n`;
+    md += `- **Average Cost Equivalent/Session:** $${analysis.costEstimation.averageCostPerSession?.toFixed(2)}\n`;
+    md += `- **Rate:** ${analysis.costEstimation.model} ($${analysis.costEstimation.costPerMillionTokens}/M tokens)\n`;
+    md += `- **Caveat:** ${analysis.costEstimation.explanation}\n\n`;
+  }
 
   md += `## Top Contributing Sessions\n\n`;
   md += `| Session ID | Total Tokens | Duration | Top Tool |\n`;
@@ -993,12 +999,12 @@ function generateProjectHTMLReport(analysis: ProjectAnalysisResult): string {
                         <div class="stat-label">Avg Tokens/Session</div>
                     </div>
                     <div class="stat-card cost-card">
-                        <div class="stat-value">$${analysis.costEstimation.totalCost.toFixed(2)}</div>
-                        <div class="stat-label">Total Cost (${analysis.costEstimation.model})</div>
+                        <div class="stat-value">${analysis.costEstimation.totalCost == null ? 'Not priced' : `$${analysis.costEstimation.totalCost.toFixed(2)}`}</div>
+                        <div class="stat-label">${analysis.costEstimation.totalCost == null ? 'Cost unavailable' : 'Total cost equivalent'}</div>
                     </div>
                     <div class="stat-card cost-card">
-                        <div class="stat-value">$${analysis.costEstimation.averageCostPerSession.toFixed(2)}</div>
-                        <div class="stat-label">Avg Cost/Session</div>
+                        <div class="stat-value">${analysis.costEstimation.averageCostPerSession == null ? 'Not priced' : `$${analysis.costEstimation.averageCostPerSession.toFixed(2)}`}</div>
+                        <div class="stat-label">${analysis.costEstimation.averageCostPerSession == null ? 'Set an effective rate' : 'Avg cost equivalent/session'}</div>
                     </div>
                 </div>
             </section>
@@ -1177,7 +1183,9 @@ ${escapeJsonForScript(JSON.stringify(analysis))}
             md += '## Summary\\n';
             md += '- Total Sessions: ' + analysis.summary.totalSessions + '\\n';
             md += '- Total Tokens: ' + analysis.summary.totalTokens.toLocaleString() + '\\n';
-            md += '- Total Cost: $' + analysis.costEstimation.totalCost.toFixed(2) + '\\n\\n';
+            md += analysis.costEstimation.totalCost == null
+                ? '- Total Cost: Not priced\\n\\n'
+                : '- Total Cost Equivalent: $' + analysis.costEstimation.totalCost.toFixed(2) + '\\n\\n';
             md += '## Top Tools\\n\\n';
             analysis.topTools.forEach(function(t, i) {
                 md += (i + 1) + '. **' + t.toolName + '**: ' + t.totalTokens.toLocaleString() + ' tokens\\n';

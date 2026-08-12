@@ -48,7 +48,11 @@ const PATTERNS = {
     /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait|impl)\s+([A-Za-z_]\w*)/,
   ],
   clike: [
-    /^\s*(?:public|private|protected|internal|static|final|abstract|virtual|override|async|\s)*(?:[\w<>\[\],.?]+\s+)([A-Za-z_]\w*)\s*\([^;]*\)\s*\{/,
+    // Accept both K&R (`Run() {`) and Allman (`Run()` then `{`) declarations.
+    // Requiring the opening brace on the declaration line silently discarded
+    // nearly every method in idiomatic C# projects, leaving file nodes but no
+    // symbol nodes and making valid `file.cs#Method` anchors unresolved.
+    /^\s*(?:public|private|protected|internal|static|final|abstract|virtual|override|async|sealed|new|extern|unsafe|partial|\s)*(?:[\w<>\[\],.?]+\s+)([A-Za-z_]\w*)(?:<[^;()]+>)?\s*\([^;]*\)\s*(?:\{|=>|$)/,
     /^\s*(?:public|private|protected|internal|static|abstract|sealed|partial|\s)*(?:class|struct|interface|enum|record)\s+([A-Za-z_]\w*)/,
   ],
   ruby: [

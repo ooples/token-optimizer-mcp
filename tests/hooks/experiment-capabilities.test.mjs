@@ -34,6 +34,42 @@ describe('experiment arms and metadata', () => {
       client: 'codex', clientVersion: 'v1', model: 'm1', arm: 'retrieval', pairId: 'p1',
     });
     expect(usageFrom({ usage: { uncached_input_tokens: 10, cached_input_tokens: 20, output_tokens: 3 } }))
-      .toEqual({ uncachedInputTokens: 10, cachedInputTokens: 20, outputTokens: 3, totalTokens: null });
+      .toEqual({
+        uncachedInputTokens: 10, cachedInputTokens: 20,
+        cacheWrite5mInputTokens: null, cacheWrite1hInputTokens: null,
+        cacheWriteInputTokens: null, outputTokens: 3, totalTokens: null,
+        usageMeasurementId: null,
+      });
+  });
+
+  test('keeps provider cache semantics separate instead of double counting input', () => {
+    expect(usageFrom({ requestId: 'claude-1', usage: {
+      input_tokens: 2,
+      cache_read_input_tokens: 26_065,
+      cache_creation_input_tokens: 30_372,
+      cache_creation: { ephemeral_1h_input_tokens: 30_372, ephemeral_5m_input_tokens: 0 },
+      output_tokens: 165,
+    } })).toMatchObject({
+      uncachedInputTokens: 2,
+      cachedInputTokens: 26_065,
+      cacheWrite5mInputTokens: 0,
+      cacheWrite1hInputTokens: 30_372,
+      cacheWriteInputTokens: 0,
+      outputTokens: 165,
+      usageMeasurementId: 'claude-1',
+    });
+    expect(usageFrom({ responseId: 'gemini-1', usageMetadata: {
+      promptTokenCount: 9_070,
+      cachedContentTokenCount: 8_408,
+      candidatesTokenCount: 34,
+      thoughtsTokenCount: 218,
+      totalTokenCount: 9_322,
+    } })).toMatchObject({
+      uncachedInputTokens: 662,
+      cachedInputTokens: 8_408,
+      outputTokens: 252,
+      totalTokens: 9_322,
+      usageMeasurementId: 'gemini-1',
+    });
   });
 });

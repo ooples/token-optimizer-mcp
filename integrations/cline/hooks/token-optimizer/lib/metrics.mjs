@@ -19,8 +19,15 @@
  */
 
 import {
-  appendFileSync, readFileSync, existsSync, mkdirSync, chmodSync,
-  statSync, openSync, readSync, closeSync,
+  appendFileSync,
+  readFileSync,
+  existsSync,
+  mkdirSync,
+  chmodSync,
+  statSync,
+  openSync,
+  readSync,
+  closeSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
@@ -86,6 +93,10 @@ export const BALANCE_KINDS = new Set([
   'keepwarm',
 ]);
 
+/** Latest timestamp without passing an unbounded event log as function arguments. */
+export const latestEventTimestamp = (rows) =>
+  rows.reduce((latest, event) => Math.max(latest, Number(event.at) || 0), 0);
+
 /**
  * Causal records have their own bounded log.  Tool outcomes are much rarer
  * than read/capture telemetry but more frequent than balance records; mixing
@@ -130,7 +141,7 @@ export function inHoldout(anchorKey, now = Date.now()) {
   // other side than before. With nine holdout records in existence that costs
   // nothing, and stratification is a fresh draw either way.
   const digest = createHash('sha256').update(`${anchorKey}:${epoch}`).digest();
-  return (digest[0] / 256) < fraction;
+  return digest[0] / 256 < fraction;
 }
 
 /**
@@ -258,7 +269,8 @@ export function record(dir, event) {
  * It is also the right statistics. A saving measured months ago says little
  * about the code as it stands now.
  */
-const MAX_BYTES = Number(process.env.TOKEN_OPTIMIZER_METRICS_BYTES) || 2_000_000;
+const MAX_BYTES =
+  Number(process.env.TOKEN_OPTIMIZER_METRICS_BYTES) || 2_000_000;
 const MAX_EVENTS = Number(process.env.TOKEN_OPTIMIZER_METRICS_WINDOW) || 5000;
 
 /**
@@ -432,7 +444,10 @@ export function readBalance(dir) {
     // path for records written before ids existed; it is lossy by nature, which
     // is precisely why new records carry an id instead.
     const id =
-      e.id ?? [e.kind, e.at, e.anchor ?? '', e.sessionId ?? '', e.tokens ?? ''].join('|');
+      e.id ??
+      [e.kind, e.at, e.anchor ?? '', e.sessionId ?? '', e.tokens ?? ''].join(
+        '|'
+      );
     if (seen.has(id)) continue;
     seen.add(id);
     out.push(e);
@@ -493,16 +508,24 @@ export function recordToolOutcome(dir, outcome) {
   const evidence = readEvidence(dir);
   const anchor = String(outcome.anchor || '').slice(0, 120);
   const candidates = evidence
-    .filter((event) => event.kind === 'inject' && event.episodeId === outcome.episodeId)
+    .filter(
+      (event) =>
+        event.kind === 'inject' && event.episodeId === outcome.episodeId
+    )
     .filter((event) => {
       if (outcome.toolCallId && event.toolCallId)
         return String(event.toolCallId) === String(outcome.toolCallId);
-      return event.surface === outcome.surface && String(event.anchor || '').slice(0, 120) === anchor;
+      return (
+        event.surface === outcome.surface &&
+        String(event.anchor || '').slice(0, 120) === anchor
+      );
     })
     .sort((a, b) => (b.at || 0) - (a.at || 0));
   const injection = candidates[0] || null;
   const joinMethod = injection
-    ? (outcome.toolCallId && injection.toolCallId ? 'tool-call-id' : 'episode-anchor')
+    ? outcome.toolCallId && injection.toolCallId
+      ? 'tool-call-id'
+      : 'episode-anchor'
     : 'none';
 
   return record(dir, {
@@ -542,12 +565,11 @@ export function isFixtureAnchor(anchor) {
   // code: it excluded ALL temp paths -- including a real project checked out
   // under /tmp -- and on macOS excluded nothing at all, because tmpdir() there
   // is /var/folders/<x>/<y>/T/ and did not match.
-  const underTemp =
-    new RegExp(
-      '[\\\\/](AppData[\\\\/]Local[\\\\/])?(Temp|tmp)[\\\\/]' +
-        '|[\\\\/]var[\\\\/]folders[\\\\/][^\\\\/]+[\\\\/][^\\\\/]+[\\\\/]T[\\\\/]',
-      'i'
-    ).test(p);
+  const underTemp = new RegExp(
+    '[\\\\/](AppData[\\\\/]Local[\\\\/])?(Temp|tmp)[\\\\/]' +
+      '|[\\\\/]var[\\\\/]folders[\\\\/][^\\\\/]+[\\\\/][^\\\\/]+[\\\\/]T[\\\\/]',
+    'i'
+  ).test(p);
   if (!underTemp) return false;
 
   // Only names this suite actually creates. A user's own scratch checkout under
@@ -686,8 +708,12 @@ export function balanceSheet(dir) {
       // THE CONTROL ARM'S ACTUAL COST. `tokensFullFile` was recorded and read
       // by nothing, so the comparison the holdout exists for was not
       // computable from the report.
-      controlArmTokens: withheldSubs.reduce((sum, e) => sum + (e.tokensFullFile || 0), 0),
-      assumption: 'that the model would have read the file it explicitly requested',
+      controlArmTokens: withheldSubs.reduce(
+        (sum, e) => sum + (e.tokensFullFile || 0),
+        0
+      ),
+      assumption:
+        'that the model would have read the file it explicitly requested',
     },
     estimatedCausal: {
       what: 'findings injection, from the stratified holdout',
@@ -702,7 +728,12 @@ export function balanceSheet(dir) {
         };
       })(),
     },
-    costs: { injection: injectCost, harvest: harvestCost, standing: standingCost, substitution: substitutionCost },
+    costs: {
+      injection: injectCost,
+      harvest: harvestCost,
+      standing: standingCost,
+      substitution: substitutionCost,
+    },
     waste,
     // Deliberately NOT a single number. The two benefit lines are known
     // differently; adding them would launder an assumption into a measurement.
@@ -727,7 +758,9 @@ export function balanceSheet(dir) {
 
 /** Cheap path normalisation for grouping reads; not the identity canonicaliser. */
 function canonicalKeyish(p) {
-  return String(p || '').replace(/\\/g, '/').toLowerCase();
+  return String(p || '')
+    .replace(/\\/g, '/')
+    .toLowerCase();
 }
 
 /**
@@ -738,7 +771,43 @@ function canonicalKeyish(p) {
  * arms, multiplied by treated touches. Reporting it as a measured fact would be
  * the same overclaiming this project criticises competitors for.
  */
-function buildReport(events, balance) {
+function buildReport(events, balance, sourceCoverage = {}) {
+  const substitutions = balance.filter(
+    (event) => event.kind === 'substitute' && !isFixtureAnchor(event.anchor)
+  );
+  const servedSubstitutions = substitutions.filter((event) => !event.holdout);
+  const substitutionTokensSaved = servedSubstitutions.reduce(
+    (sum, event) =>
+      sum +
+      (event.tokensNetAvoided ??
+        Math.max(
+          0,
+          Math.ceil((event.bytesAvoided || 0) / 4) - (event.tokens || 0)
+        )),
+    0
+  );
+  const substitutionTokensReturned = servedSubstitutions.reduce(
+    (sum, event) => sum + (event.tokens || 0),
+    0
+  );
+  const substitutionByClient = {};
+  for (const event of servedSubstitutions) {
+    const name = event.client || 'Historical — client not recorded';
+    const current = substitutionByClient[name] || {
+      substitutions: 0,
+      tokensReturned: 0,
+      tokensSaved: 0,
+    };
+    current.substitutions += 1;
+    current.tokensReturned += event.tokens || 0;
+    current.tokensSaved +=
+      event.tokensNetAvoided ??
+      Math.max(
+        0,
+        Math.ceil((event.bytesAvoided || 0) / 4) - (event.tokens || 0)
+      );
+    substitutionByClient[name] = current;
+  }
 
   // COMMAND INJECTIONS ARE COUNTED SEPARATELY, not mixed into the balance.
   //
@@ -762,13 +831,19 @@ function buildReport(events, balance) {
   // Report its cost independently so it cannot dilute the file-touch estimate.
   const isSessionStart = (e) => e.surface === 'session-start';
   const sessionStartInjections = allInjections.filter(isSessionStart);
-  const commandInjections = allInjections.filter((e) => !isSessionStart(e) && isCommand(e));
-  const injections = allInjections.filter((e) => !isSessionStart(e) && !isCommand(e));
+  const commandInjections = allInjections.filter(
+    (e) => !isSessionStart(e) && isCommand(e)
+  );
+  const injections = allInjections.filter(
+    (e) => !isSessionStart(e) && !isCommand(e)
+  );
   const treated = injections.filter((e) => !e.holdout);
   const withheld = injections.filter((e) => e.holdout);
 
   const mean = (rows, field) =>
-    rows.length ? rows.reduce((sum, r) => sum + (r[field] || 0), 0) / rows.length : 0;
+    rows.length
+      ? rows.reduce((sum, r) => sum + (r[field] || 0), 0) / rows.length
+      : 0;
 
   const injectedTokens = treated.reduce((sum, e) => sum + (e.tokens || 0), 0);
   const harvestTokens = balance
@@ -819,7 +894,9 @@ function buildReport(events, balance) {
 
     const after = event.at ?? 0;
     const total = bucket.reduce(
-      (sum, r) => sum + ((r.at ?? 0) >= after ? (r.tokens || 0) : 0), 0);
+      (sum, r) => sum + ((r.at ?? 0) >= after ? r.tokens || 0 : 0),
+      0
+    );
 
     // Split across the injections that share this key. Each touch is one
     // observation, so charging every one the full total would count the same
@@ -828,52 +905,198 @@ function buildReport(events, balance) {
   };
 
   const meanDownstream = (rows) =>
-    rows.length ? rows.reduce((sum, r) => sum + downstreamOf(r), 0) / rows.length : 0;
+    rows.length
+      ? rows.reduce((sum, r) => sum + downstreamOf(r), 0) / rows.length
+      : 0;
 
   const treatedCost = meanDownstream(treated);
   const withheldCost = meanDownstream(withheld);
 
   const perTouchSaving = withheldCost - treatedCost;
-  const estimatedAvoided = Math.max(0, Math.round(perTouchSaving * treated.length));
+  const estimatedAvoided = Math.max(
+    0,
+    Math.round(perTouchSaving * treated.length)
+  );
+
+  const downstreamSamples = injections.filter((event) => {
+    if (event.downstream != null) return true;
+    const key = `${event.sessionId || ''}|${event.anchor}`;
+    return (reads.get(key) || []).some(
+      (read) => (read.at ?? 0) >= (event.at ?? 0)
+    );
+  }).length;
+  const downstreamMeasured = downstreamSamples > 0;
 
   // Below this, arm means are noise and a ratio would be theatre.
-  const sufficient = treated.length >= 20 && withheld.length >= 5;
+  const sufficient =
+    downstreamMeasured && treated.length >= 20 && withheld.length >= 5;
+
+  const coverageNumber = (value, fallback) => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, number) : fallback;
+  };
+  const projectCount = coverageNumber(sourceCoverage.projects, 1);
+  const telemetryProjects = coverageNumber(
+    sourceCoverage.projectsWithTelemetry,
+    0
+  );
+  const balanceProjects = coverageNumber(
+    sourceCoverage.projectsWithBalanceEvents,
+    balance.length ? 1 : 0
+  );
+  const lastEventAt = Math.max(
+    latestEventTimestamp(events),
+    latestEventTimestamp(balance)
+  );
+  const measured =
+    telemetryProjects > 0 || events.length > 0 || balance.length > 0;
+  const balanceMeasured = balanceProjects > 0 || balance.length > 0;
+  const metric = (status, source, samples, extra = {}) => ({
+    status,
+    source,
+    samples,
+    ...extra,
+  });
 
   return {
+    nativeOptimizer: {
+      substitutions: servedSubstitutions.length,
+      holdouts: substitutions.filter((event) => event.holdout).length,
+      tokensReturned: substitutionTokensReturned,
+      tokensSaved: substitutionTokensSaved,
+      byClient: substitutionByClient,
+      recent: servedSubstitutions
+        .slice()
+        .sort((a, b) => (b.at || 0) - (a.at || 0))
+        .slice(0, 40)
+        .map((event) => {
+          const tokensSaved =
+            event.tokensNetAvoided ??
+            Math.max(
+              0,
+              Math.ceil((event.bytesAvoided || 0) / 4) - (event.tokens || 0)
+            );
+          return {
+            name: 'live_graph_substitution',
+            client: event.client || 'Historical — client not recorded',
+            originalTokens: (event.tokens || 0) + tokensSaved,
+            optimizedTokens: event.tokens || 0,
+            tokensSaved,
+            savingsMeasured: false,
+            classification: 'modeled-counterfactual',
+            reportedTokensSaved: tokensSaved,
+            timestamp: event.at ? new Date(event.at).toISOString() : null,
+          };
+        }),
+      source:
+        'balance.jsonl: modeled full-file counterfactual minus annotated-skeleton tokens; excluded from verified MCP savings',
+    },
     memoryDeliveries: allInjections.filter((event) => !event.holdout).length,
     memoryHoldouts: allInjections.filter((event) => event.holdout).length,
     deliveryTokens: allInjections
       .filter((event) => !event.holdout)
       .reduce(
-        (sum, event) =>
-          sum + (event.deliveredTokens ?? event.tokens ?? 0),
+        (sum, event) => sum + (event.deliveredTokens ?? event.tokens ?? 0),
         0
       ),
     injections: treated.length,
     sessionStartInjections: sessionStartInjections.length,
     sessionStartInjectedTokens: sessionStartInjections.reduce(
-      (sum, event) => sum + (event.deliveredTokens ?? event.tokens ?? 0), 0
+      (sum, event) => sum + (event.deliveredTokens ?? event.tokens ?? 0),
+      0
     ),
     commandInjections: commandInjections.length,
     commandHoldouts: commandInjections.filter((e) => e.holdout).length,
     holdouts: withheld.length,
     staleServed: injections.filter((e) => e.stale).length,
-    staleRate: injections.length ? injections.filter((e) => e.stale).length / injections.length : 0,
+    staleRate: injections.length
+      ? injections.filter((e) => e.stale).length / injections.length
+      : 0,
     injectedTokens,
     harvestTokens,
     estimatedTokensAvoided: sufficient ? estimatedAvoided : null,
-    netTokens: sufficient ? estimatedAvoided - injectedTokens - harvestTokens : null,
+    netTokens: sufficient
+      ? estimatedAvoided - injectedTokens - harvestTokens
+      : null,
     sufficientData: sufficient,
     verdict: !sufficient
       ? `insufficient data (${treated.length} treated, ${withheld.length} holdout; need 20 and 5)`
       : estimatedAvoided > injectedTokens + harvestTokens
         ? 'the graph is saving more than it costs'
         : 'the graph is NOT yet paying for itself',
+    measurement: {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      sourceCoverage: {
+        projects: projectCount,
+        projectsWithTelemetry: telemetryProjects || (measured ? 1 : 0),
+        projectsWithBalanceEvents: balanceProjects,
+        projectsWithoutTelemetry: Math.max(
+          0,
+          projectCount - (telemetryProjects || (measured ? 1 : 0))
+        ),
+      },
+      freshness: {
+        lastEventAt: lastEventAt || null,
+        ageMs: lastEventAt ? Math.max(0, Date.now() - lastEventAt) : null,
+        status: !lastEventAt
+          ? 'not-measured'
+          : Date.now() - lastEventAt <= 7 * 86_400_000
+            ? 'fresh'
+            : 'stale',
+      },
+      metrics: {
+        nativeSubstitutions: metric(
+          balanceMeasured ? 'measured' : 'not-measured',
+          'balance.jsonl: modeled full-file counterfactual minus annotated-skeleton tokens; not a materialized MCP before/after pair',
+          servedSubstitutions.length,
+          { classification: 'modeled-counterfactual' }
+        ),
+        memoryDeliveries: metric(
+          balanceMeasured ? 'measured' : 'not-measured',
+          'balance.jsonl: inject events in the treated arm',
+          allInjections.filter((event) => !event.holdout).length
+        ),
+        memoryHoldouts: metric(
+          balanceMeasured ? 'measured' : 'not-measured',
+          'balance.jsonl: inject events in the withheld arm',
+          allInjections.filter((event) => event.holdout).length
+        ),
+        rememberingCost: metric(
+          balanceMeasured ? 'measured' : 'not-measured',
+          'balance.jsonl: delivered injection tokens plus semantic harvest tokens',
+          allInjections.length +
+            balance.filter((event) => event.kind === 'harvest').length
+        ),
+        readingAvoided: metric(
+          !downstreamMeasured
+            ? 'not-measured'
+            : sufficient
+              ? 'measured'
+              : 'collecting',
+          'stratified file-touch holdout joined to downstream read events',
+          downstreamSamples,
+          {
+            treated: treated.length,
+            holdouts: withheld.length,
+            requiredTreated: 20,
+            requiredHoldouts: 5,
+          }
+        ),
+      },
+    },
   };
 }
 
 export function report(dir) {
-  return buildReport(readAll(dir), readBalance(dir));
+  const events = readAll(dir);
+  const balance = readBalance(dir);
+  return buildReport(events, balance, {
+    projects: 1,
+    projectsWithTelemetry: events.length || balance.length ? 1 : 0,
+    projectsWithBalanceEvents: balance.length ? 1 : 0,
+  });
 }
 
 /**
@@ -886,10 +1109,16 @@ export function report(dir) {
  */
 export function reportMany(dirs) {
   const unique = [...new Set((dirs || []).map((dir) => String(dir)))];
-  const report = buildReport(
-    unique.flatMap((dir) => readAll(dir)),
-    unique.flatMap((dir) => readBalance(dir))
-  );
+  const eventSources = unique.map((dir) => readAll(dir));
+  const balanceSources = unique.map((dir) => readBalance(dir));
+  const report = buildReport(eventSources.flat(), balanceSources.flat(), {
+    projects: unique.length,
+    projectsWithTelemetry: eventSources.filter(
+      (events, index) => events.length || balanceSources[index].length
+    ).length,
+    projectsWithBalanceEvents: balanceSources.filter((events) => events.length)
+      .length,
+  });
   return { ...report, projects: unique.length };
 }
 
@@ -907,7 +1136,11 @@ export function reportMany(dirs) {
  * costs almost nothing. Without a control arm there is no way to tell those two
  * apart, which is why nobody else can do this.
  */
-export function substitutionBudget(dir, anchor, { floor = 300, base = 1200, ceiling = 3000 } = {}) {
+export function substitutionBudget(
+  dir,
+  anchor,
+  { floor = 300, base = 1200, ceiling = 3000 } = {}
+) {
   const events = readAll(dir);
 
   const mine = events.filter((e) => e.kind === 'inject' && e.anchor === anchor);
@@ -932,13 +1165,17 @@ export function substitutionBudget(dir, anchor, { floor = 300, base = 1200, ceil
     for (const row of rows) {
       const bucket = reads.get(row.sessionId || '') || [];
       const after = row.at ?? 0;
-      total += bucket.reduce((sum, r) => sum + ((r.at ?? 0) >= after ? (r.tokens || 0) : 0), 0);
+      total += bucket.reduce(
+        (sum, r) => sum + ((r.at ?? 0) >= after ? r.tokens || 0 : 0),
+        0
+      );
     }
     return total / rows.length;
   };
 
   const saved = downstream(withheld) - downstream(treated);
-  const spent = treated.reduce((sum, e) => sum + (e.tokens || 0), 0) / treated.length;
+  const spent =
+    treated.reduce((sum, e) => sum + (e.tokens || 0), 0) / treated.length;
 
   // Ratio of what annotating this file avoided to what annotating it cost.
   // Above 1 it is paying for itself and earns room; below, it shrinks.
@@ -959,7 +1196,10 @@ export function substitutionBudget(dir, anchor, { floor = 300, base = 1200, ceil
  * graph whose index leads to queries grows its allowance; a noisy one shrinks
  * back toward the floor. Nobody configures it, and it cannot run away.
  */
-export function indexBudget(dir, { floor = 150, base = 300, ceiling = 1200 } = {}) {
+export function indexBudget(
+  dir,
+  { floor = 150, base = 300, ceiling = 1200 } = {}
+) {
   const events = readAll(dir);
   const listed = events.filter((e) => e.kind === 'index').length;
   const queries = events.filter((e) => e.kind === 'query').length;
@@ -968,7 +1208,9 @@ export function indexBudget(dir, { floor = 150, base = 300, ceiling = 1200 } = {
 
   const hitRate = queries / listed;
   // 0% hit rate falls to the floor; ~50% and above reaches the ceiling.
-  const scaled = Math.round(floor + (ceiling - floor) * Math.min(1, hitRate * 2));
+  const scaled = Math.round(
+    floor + (ceiling - floor) * Math.min(1, hitRate * 2)
+  );
   return Math.max(floor, Math.min(ceiling, scaled));
 }
 
@@ -1005,7 +1247,10 @@ function seededRandom(seedText) {
 }
 
 /** Percentile bootstrap interval for a mean, paired delta, or other scalar. */
-export function bootstrapMeanInterval(values, { samples = 1000, seed = 'token-optimizer' } = {}) {
+export function bootstrapMeanInterval(
+  values,
+  { samples = 1000, seed = 'token-optimizer' } = {}
+) {
   const finite = values.map(numeric).filter((value) => value !== null);
   if (!finite.length) return { mean: null, low: null, high: null, n: 0 };
   if (finite.length === 1) {
@@ -1037,24 +1282,32 @@ export function proportionInterval(successes, total, z = 1.96) {
   const denominator = 1 + (z * z) / total;
   const centre = (rate + (z * z) / (2 * total)) / denominator;
   const radius =
-    (z / denominator) * Math.sqrt((rate * (1 - rate)) / total + (z * z) / (4 * total * total));
-  return { rate, low: Math.max(0, centre - radius), high: Math.min(1, centre + radius), n: total };
+    (z / denominator) *
+    Math.sqrt((rate * (1 - rate)) / total + (z * z) / (4 * total * total));
+  return {
+    rate,
+    low: Math.max(0, centre - radius),
+    high: Math.min(1, centre + radius),
+    n: total,
+  };
 }
 
-const cohortKey = (run) => [
-  run.client || 'unknown',
-  run.clientVersion || 'unknown',
-  run.model || 'unknown',
-  run.modelVersion || 'unknown',
-  run.taskId || 'unknown',
-].join('|');
+const cohortKey = (run) =>
+  [
+    run.client || 'unknown',
+    run.clientVersion || 'unknown',
+    run.model || 'unknown',
+    run.modelVersion || 'unknown',
+    run.taskId || 'unknown',
+  ].join('|');
 
 function armMetrics(runs) {
   const correct = runs.filter((run) => run.correct === true).length;
-  const interval = (field) => bootstrapMeanInterval(
-    runs.map((run) => run[field]).filter((value) => numeric(value) !== null),
-    { seed: field }
-  );
+  const interval = (field) =>
+    bootstrapMeanInterval(
+      runs.map((run) => run[field]).filter((value) => numeric(value) !== null),
+      { seed: field }
+    );
   return {
     runs: runs.length,
     correctness: proportionInterval(correct, runs.length),
@@ -1068,29 +1321,40 @@ function armMetrics(runs) {
     latencyMs: interval('latencyMs'),
     costUsd: interval('costUsd'),
     injectedTokens: interval('injectedTokens'),
-    harmfulFindings: runs.reduce((sum, run) => sum + (numeric(run.harmfulFindings) || 0), 0),
+    harmfulFindings: runs.reduce(
+      (sum, run) => sum + (numeric(run.harmfulFindings) || 0),
+      0
+    ),
   };
 }
 
-function pairedEffects(runs, controlArm, treatmentArm, contrastType = 'incremental') {
+function pairedEffects(
+  runs,
+  controlArm,
+  treatmentArm,
+  contrastType = 'incremental'
+) {
   const pairs = new Map();
   for (const run of runs) {
     if (!run.pairId || ![controlArm, treatmentArm].includes(run.arm)) continue;
     if (!pairs.has(run.pairId)) pairs.set(run.pairId, {});
     pairs.get(run.pairId)[run.arm] = run;
   }
-  const complete = [...pairs.values()].filter((pair) => pair[controlArm] && pair[treatmentArm]);
-  const delta = (field, lowerIsBetter = true) => bootstrapMeanInterval(
-    complete
-      .map((pair) => {
-        const baseline = numeric(pair[controlArm][field]);
-        const treatment = numeric(pair[treatmentArm][field]);
-        if (baseline === null || treatment === null) return null;
-        return lowerIsBetter ? baseline - treatment : treatment - baseline;
-      })
-      .filter((value) => value !== null),
-    { seed: `${controlArm}:${treatmentArm}:${field}` }
+  const complete = [...pairs.values()].filter(
+    (pair) => pair[controlArm] && pair[treatmentArm]
   );
+  const delta = (field, lowerIsBetter = true) =>
+    bootstrapMeanInterval(
+      complete
+        .map((pair) => {
+          const baseline = numeric(pair[controlArm][field]);
+          const treatment = numeric(pair[treatmentArm][field]);
+          if (baseline === null || treatment === null) return null;
+          return lowerIsBetter ? baseline - treatment : treatment - baseline;
+        })
+        .filter((value) => value !== null),
+      { seed: `${controlArm}:${treatmentArm}:${field}` }
+    );
   return {
     arm: treatmentArm,
     controlArm,
@@ -1111,21 +1375,32 @@ function pairedEffects(runs, controlArm, treatmentArm, contrastType = 'increment
 }
 
 function matchesFilters(event, filters) {
-  for (const field of ['client', 'clientVersion', 'model', 'modelVersion', 'taskId', 'arm']) {
+  for (const field of [
+    'client',
+    'clientVersion',
+    'model',
+    'modelVersion',
+    'taskId',
+    'arm',
+  ]) {
     if (!filters[field]) continue;
     let actual = event[field];
     if (event.kind === 'handoff-run') {
-      actual = field === 'taskId'
-        ? event.scenarioId
-        : field === 'arm'
-          ? event.arm
-          : (event.consumer?.[field] ?? event.producer?.[field] ?? event[field]);
+      actual =
+        field === 'taskId'
+          ? event.scenarioId
+          : field === 'arm'
+            ? event.arm
+            : (event.consumer?.[field] ??
+              event.producer?.[field] ??
+              event[field]);
     } else if (event.kind === 'concurrency-run') {
-      actual = field === 'taskId'
-        ? 'concurrent-combined'
-        : field === 'arm'
-          ? event.arm
-          : (event.consumer?.[field] ?? event[field]);
+      actual =
+        field === 'taskId'
+          ? 'concurrent-combined'
+          : field === 'arm'
+            ? event.arm
+            : (event.consumer?.[field] ?? event[field]);
     }
     if (String(actual || '') !== String(filters[field])) return false;
   }
@@ -1134,11 +1409,15 @@ function matchesFilters(event, filters) {
 
 function handoffArmMetrics(runs) {
   const consumers = runs.map((run) => run.consumer || {});
-  const count = (field) => consumers.filter((consumer) => consumer[field] === true).length;
-  const interval = (field) => bootstrapMeanInterval(
-    consumers.map((consumer) => consumer[field]).filter((value) => numeric(value) !== null),
-    { seed: `handoff:${field}` }
-  );
+  const count = (field) =>
+    consumers.filter((consumer) => consumer[field] === true).length;
+  const interval = (field) =>
+    bootstrapMeanInterval(
+      consumers
+        .map((consumer) => consumer[field])
+        .filter((value) => numeric(value) !== null),
+      { seed: `handoff:${field}` }
+    );
   return {
     runs: runs.length,
     delivery: proportionInterval(
@@ -1147,7 +1426,10 @@ function handoffArmMetrics(runs) {
     ),
     correctness: proportionInterval(count('correct'), runs.length),
     firstPass: proportionInterval(count('firstPass'), runs.length),
-    mistakeAttempted: proportionInterval(count('mistakeAttempted'), runs.length),
+    mistakeAttempted: proportionInterval(
+      count('mistakeAttempted'),
+      runs.length
+    ),
     mistakeExecuted: proportionInterval(count('mistakeExecuted'), runs.length),
     totalTokens: interval('totalTokens'),
     toolCalls: interval('toolCalls'),
@@ -1163,16 +1445,21 @@ function handoffPairedEffect(runs, controlArm, treatmentArm) {
     if (!pairs.has(run.pairId)) pairs.set(run.pairId, {});
     pairs.get(run.pairId)[run.arm] = run;
   }
-  const complete = [...pairs.values()].filter((pair) => pair[controlArm] && pair[treatmentArm]);
-  const effect = (field, positiveWhenLower = true) => bootstrapMeanInterval(
-    complete.map((pair) => {
-      const control = numeric(pair[controlArm].consumer?.[field]);
-      const treatment = numeric(pair[treatmentArm].consumer?.[field]);
-      if (control === null || treatment === null) return null;
-      return positiveWhenLower ? control - treatment : treatment - control;
-    }).filter((value) => value !== null),
-    { seed: `handoff:${controlArm}:${treatmentArm}:${field}` }
+  const complete = [...pairs.values()].filter(
+    (pair) => pair[controlArm] && pair[treatmentArm]
   );
+  const effect = (field, positiveWhenLower = true) =>
+    bootstrapMeanInterval(
+      complete
+        .map((pair) => {
+          const control = numeric(pair[controlArm].consumer?.[field]);
+          const treatment = numeric(pair[treatmentArm].consumer?.[field]);
+          if (control === null || treatment === null) return null;
+          return positiveWhenLower ? control - treatment : treatment - control;
+        })
+        .filter((value) => value !== null),
+      { seed: `handoff:${controlArm}:${treatmentArm}:${field}` }
+    );
   return {
     comparison: `${treatmentArm} vs ${controlArm}`,
     pairs: complete.length,
@@ -1187,13 +1474,22 @@ function handoffPairedEffect(runs, controlArm, treatmentArm) {
   };
 }
 
-const handoffKey = (run) => [
-  run.producer?.client || 'unknown', run.producer?.model || 'unknown',
-  run.consumer?.client || 'unknown', run.consumer?.model || 'unknown',
-  run.scenarioId || 'unknown',
-].join('|');
+const handoffKey = (run) =>
+  [
+    run.producer?.client || 'unknown',
+    run.producer?.model || 'unknown',
+    run.consumer?.client || 'unknown',
+    run.consumer?.model || 'unknown',
+    run.scenarioId || 'unknown',
+  ].join('|');
 
-const HANDOFF_REPORT_ARMS = ['empty', 'natural', 'oracle', 'irrelevant', 'stale'];
+const HANDOFF_REPORT_ARMS = [
+  'empty',
+  'natural',
+  'oracle',
+  'irrelevant',
+  'stale',
+];
 const handoffMinimumPairs = () =>
   Math.max(2, Number(process.env.TOKEN_OPTIMIZER_HANDOFF_MIN_PAIRS) || 10);
 
@@ -1206,43 +1502,54 @@ function handoffCohorts(runs) {
   }
   const minimumPairs = handoffMinimumPairs();
   return [...grouped.entries()].map(([key, rows]) => {
-    const arms = Object.fromEntries(HANDOFF_REPORT_ARMS.map((arm) => [
-      arm, handoffArmMetrics(rows.filter((row) => row.arm === arm)),
-    ]));
+    const arms = Object.fromEntries(
+      HANDOFF_REPORT_ARMS.map((arm) => [
+        arm,
+        handoffArmMetrics(rows.filter((row) => row.arm === arm)),
+      ])
+    );
     const naturalRows = rows.filter((row) => row.arm === 'natural');
     const naturalVsEmpty = handoffPairedEffect(rows, 'empty', 'natural');
     const naturalVsOracle = handoffPairedEffect(rows, 'oracle', 'natural');
     const captureRate = naturalRows.length
-      ? naturalRows.filter((row) => row.producer?.captureSuccess).length / naturalRows.length
+      ? naturalRows.filter((row) => row.producer?.captureSuccess).length /
+        naturalRows.length
       : null;
     const preActionDeliveryRate = naturalRows.length
-      ? naturalRows.filter((row) => row.delivery?.beforeFirstExecutedMistake).length / naturalRows.length
+      ? naturalRows.filter((row) => row.delivery?.beforeFirstExecutedMistake)
+          .length / naturalRows.length
       : null;
     const emptyRecurrence = arms.empty.mistakeExecuted.rate;
     const naturalRecurrence = arms.natural.mistakeExecuted.rate;
-    const relativeRecurrenceReduction = emptyRecurrence !== null
-      && naturalRecurrence !== null
-      && emptyRecurrence !== 0
-      ? (emptyRecurrence - naturalRecurrence) / emptyRecurrence
-      : null;
-    const controlsSafe = ['irrelevant', 'stale'].every((arm) =>
-      arms[arm].correctness.rate !== null
-      && arms.empty.correctness.rate !== null
-      && arms[arm].correctness.rate >= arms.empty.correctness.rate - 0.1
+    const relativeRecurrenceReduction =
+      emptyRecurrence !== null &&
+      naturalRecurrence !== null &&
+      emptyRecurrence !== 0
+        ? (emptyRecurrence - naturalRecurrence) / emptyRecurrence
+        : null;
+    const controlsSafe = ['irrelevant', 'stale'].every(
+      (arm) =>
+        arms[arm].correctness.rate !== null &&
+        arms.empty.correctness.rate !== null &&
+        arms[arm].correctness.rate >= arms.empty.correctness.rate - 0.1
     );
-    const irrelevantSuppressed = arms.irrelevant.delivery.rate !== null
-      && arms.irrelevant.delivery.rate === 0;
+    const irrelevantSuppressed =
+      arms.irrelevant.delivery.rate !== null &&
+      arms.irrelevant.delivery.rate === 0;
     const gates = {
       minimumPairs: naturalVsEmpty.pairs >= minimumPairs,
       capture: captureRate !== null && captureRate >= 0.8,
       recurrenceMagnitude:
-        relativeRecurrenceReduction !== null && relativeRecurrenceReduction >= 0.5,
-      recurrenceInterval: (naturalVsEmpty.executedMistakesPrevented.low ?? -Infinity) > 0,
+        relativeRecurrenceReduction !== null &&
+        relativeRecurrenceReduction >= 0.5,
+      recurrenceInterval:
+        (naturalVsEmpty.executedMistakesPrevented.low ?? -Infinity) > 0,
       correctness:
-        arms.natural.correctness.rate !== null
-        && arms.empty.correctness.rate !== null
-        && arms.natural.correctness.rate >= arms.empty.correctness.rate - 0.1,
-      preActionDelivery: preActionDeliveryRate !== null && preActionDeliveryRate >= 0.8,
+        arms.natural.correctness.rate !== null &&
+        arms.empty.correctness.rate !== null &&
+        arms.natural.correctness.rate >= arms.empty.correctness.rate - 0.1,
+      preActionDelivery:
+        preActionDeliveryRate !== null && preActionDeliveryRate >= 0.8,
       negativeControls: controlsSafe && irrelevantSuppressed,
     };
     const claimReady = Object.values(gates).every(Boolean);
@@ -1269,14 +1576,24 @@ function handoffCohorts(runs) {
 function concurrencySummary(runs) {
   const natural = runs.filter((run) => run.arm === 'natural');
   const writers = natural.reduce((sum, run) => sum + (run.writerCount || 0), 0);
-  const captures = natural.reduce((sum, run) => sum + (run.captureSuccesses || 0), 0);
-  const integrityPasses = natural.filter((run) =>
-    run.integrity?.zeroLoss
-    && run.integrity?.parseable
-    && run.integrity?.orphanedFindings === 0
+  const captures = natural.reduce(
+    (sum, run) => sum + (run.captureSuccesses || 0),
+    0
+  );
+  const integrityPasses = natural.filter(
+    (run) =>
+      run.integrity?.zeroLoss &&
+      run.integrity?.parseable &&
+      run.integrity?.orphanedFindings === 0
   ).length;
-  const delivered = natural.reduce((sum, run) => sum + (run.delivery?.delivered || 0), 0);
-  const expected = natural.reduce((sum, run) => sum + (run.delivery?.expected || 0), 0);
+  const delivered = natural.reduce(
+    (sum, run) => sum + (run.delivery?.delivered || 0),
+    0
+  );
+  const expected = natural.reduce(
+    (sum, run) => sum + (run.delivery?.expected || 0),
+    0
+  );
   const effect = handoffPairedEffect(runs, 'empty', 'natural');
   return {
     runs: runs.length,
@@ -1286,7 +1603,8 @@ function concurrencySummary(runs) {
     integrityPassRate: natural.length ? integrityPasses / natural.length : null,
     deliveryCoverage: expected ? delivered / expected : null,
     naturalCorrectness: proportionInterval(
-      natural.filter((run) => run.consumer?.correct).length, natural.length
+      natural.filter((run) => run.consumer?.correct).length,
+      natural.length
     ),
     effect,
   };
@@ -1297,17 +1615,26 @@ function concurrencySummary(runs) {
  * live hook traces, and randomized model evals remain visibly distinct: only
  * `eval-run` records with paired arms can produce a causal effect interval.
  */
-function buildEvidenceReport(evidence, { filters = {}, episodeLimit = 100 } = {}) {
+function buildEvidenceReport(
+  evidence,
+  { filters = {}, episodeLimit = 100 } = {}
+) {
   evidence = evidence.filter((event) => matchesFilters(event, filters));
   const runs = evidence.filter((event) => event.kind === 'eval-run');
   const handoffRuns = evidence.filter((event) => event.kind === 'handoff-run');
-  const concurrencyRuns = evidence.filter((event) => event.kind === 'concurrency-run');
+  const concurrencyRuns = evidence.filter(
+    (event) => event.kind === 'concurrency-run'
+  );
   const injections = evidence.filter((event) => event.kind === 'inject');
   const outcomes = evidence.filter((event) => event.kind === 'tool-outcome');
-  const feedback = evidence.filter((event) => event.kind === 'finding-feedback');
+  const feedback = evidence.filter(
+    (event) => event.kind === 'finding-feedback'
+  );
 
   const byInjection = new Map(
-    outcomes.filter((event) => event.injectionId).map((event) => [event.injectionId, event])
+    outcomes
+      .filter((event) => event.injectionId)
+      .map((event) => [event.injectionId, event])
   );
   const traced = injections
     .slice()
@@ -1337,7 +1664,10 @@ function buildEvidenceReport(evidence, { filters = {}, episodeLimit = 100 } = {}
     grouped.get(key).push(run);
   }
 
-  const minimumPairs = Math.max(2, Number(process.env.TOKEN_OPTIMIZER_EVAL_MIN_PAIRS) || 5);
+  const minimumPairs = Math.max(
+    2,
+    Number(process.env.TOKEN_OPTIMIZER_EVAL_MIN_PAIRS) || 5
+  );
   const cohorts = [...grouped.entries()].map(([key, cohortRuns]) => {
     const arms = Object.fromEntries(
       ['baseline', 'optimizer', 'retrieval', 'full'].map((arm) => [
@@ -1387,7 +1717,9 @@ function buildEvidenceReport(evidence, { filters = {}, episodeLimit = 100 } = {}
       cohorts: cohorts.length,
       harmfulFeedback: harmful,
       harmRate: feedback.length ? harmful / feedback.length : null,
-      evidenceStatus: cohorts.some((cohort) => cohort.evidenceStatus === 'causal estimate available')
+      evidenceStatus: cohorts.some(
+        (cohort) => cohort.evidenceStatus === 'causal estimate available'
+      )
         ? 'causal estimates available'
         : 'insufficient randomized evidence',
     },
@@ -1396,7 +1728,8 @@ function buildEvidenceReport(evidence, { filters = {}, episodeLimit = 100 } = {}
     concurrency,
     episodes: traced,
     methodology: {
-      intervals: 'deterministic percentile bootstrap (95%); Wilson interval for correctness',
+      intervals:
+        'deterministic percentile bootstrap (95%); Wilson interval for correctness',
       causalRule:
         'matched pairs estimate optimizer vs baseline, retrieval vs optimizer, full vs retrieval, and full vs baseline',
       minimumPairs,

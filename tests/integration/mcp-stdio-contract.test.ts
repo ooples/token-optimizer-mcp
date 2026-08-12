@@ -57,6 +57,7 @@ let server: ChildProcessWithoutNullStreams;
 let fixtures: string;
 let nextId = 1;
 let stdoutBuffer = '';
+let initializeResult: any;
 const pending = new Map<number, (value: unknown) => void>();
 
 /** One JSON-RPC round trip. Resolves with the `result` object. */
@@ -136,8 +137,10 @@ beforeAll(async () => {
     env: {
       ...process.env,
       // Keep the server's own graph and state out of the developer's real ones.
-      TOKEN_OPTIMIZER_WIKI_DIR: join, TOKEN_OPTIMIZER_SHARED_DIR: join(fixtures, '.wiki'),
+      TOKEN_OPTIMIZER_WIKI_DIR: join(fixtures, '.wiki'),
+      TOKEN_OPTIMIZER_SHARED_DIR: join(fixtures, '.wiki'),
       TOKEN_OPTIMIZER_STATE_DIR: join(fixtures, '.state'),
+      TOKEN_OPTIMIZER_LOG_DIR: join(fixtures, '.logs'),
     },
   });
 
@@ -165,7 +168,7 @@ beforeAll(async () => {
     }
   });
 
-  await call('initialize', {
+  initializeResult = await call('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
     clientInfo: { name: 'contract-test', version: '0.0.0' },
@@ -204,6 +207,16 @@ afterAll(async () => {
 });
 
 describe('the server answers over stdio at all', () => {
+  it('advertises the package version clients actually installed', () => {
+    const packageVersion = JSON.parse(
+      readFileSync(join(ROOT, 'package.json'), 'utf8')
+    ).version;
+    expect(initializeResult?.serverInfo).toMatchObject({
+      name: 'token-optimizer-mcp',
+      version: packageVersion,
+    });
+  });
+
   it('lists its tools', async () => {
     // If this fails everything below is meaningless, so it is asserted first
     // rather than assumed.
@@ -214,6 +227,25 @@ describe('the server answers over stdio at all', () => {
     expect(result.tools.map((t: { name: string }) => t.name)).toContain(
       'smart_grep'
     );
+
+    const byName = new Map(
+      result.tools.map((tool: { name: string }) => [tool.name, tool])
+    );
+    expect(byName.get('smart_read')).toMatchObject({
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    });
+    expect(byName.get('wiki_write')).toMatchObject({
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
+    });
   });
 });
 
@@ -393,5 +425,49 @@ describe('smart_edit over the wire', () => {
     expect(after.startsWith(TEN)).toBe(true);
     expect(after).toContain('L11');
     expect(after.endsWith('\n')).toBe(true);
+  });
+});
+
+describe('production MCP diagnostics over the wire', () => {
+  it('records the real handshake, inventory, and every tool outcome', async () => {
+    // Exercise an early-return audit tool as well as normal tools. Before the
+    // central observer was added these calls bypassed diagnostics completely.
+    const audit = await call('tools/call', {
+      name: 'cache_audit',
+      arguments: {},
+    });
+    expect(audit?.isError).not.toBe(true);
+
+    const directory = join(fixtures, '.logs');
+    const rows = readdirSync(directory)
+      .filter((name) => name.startsWith('mcp-events-'))
+      .flatMap((name) =>
+        readFileSync(join(directory, name), 'utf8')
+          .split(/\r?\n/)
+          .filter(Boolean)
+          .map((line) => JSON.parse(line))
+      );
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ event: 'mcp.process_started' }),
+        expect.objectContaining({
+          event: 'mcp.client_initialized',
+          client: 'contract-test',
+        }),
+        expect.objectContaining({
+          event: 'mcp.tools_listed',
+          toolCount: expect.any(Number),
+        }),
+        expect.objectContaining({
+          event: 'mcp.tool_completed',
+          toolName: 'cache_audit',
+          outcome: 'success',
+        }),
+      ])
+    );
+    expect(rows.some((row) => 'arguments' in row || 'output' in row)).toBe(
+      false
+    );
   });
 });

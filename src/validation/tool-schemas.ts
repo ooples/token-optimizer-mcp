@@ -151,9 +151,8 @@ export const AnalyzeProjectTokensSchema = z.object({
     .number()
     .min(0)
     .optional()
-    .default(30)
     .describe(
-      'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).'
+      'Optional effective USD cost per million input tokens. No provider price is assumed when omitted.'
     ),
 });
 

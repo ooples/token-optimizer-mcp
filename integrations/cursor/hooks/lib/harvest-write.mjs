@@ -24,7 +24,7 @@
  */
 
 import {
-  putNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode,
+  putNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode, putEdge,
 } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
@@ -46,6 +46,37 @@ import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
  * becomes content-dependent, it stops being shareable in the same commit.
  */
 export const SHAREABLE_TYPES = new Set(['command', 'failure', 'decision', 'feedback']);
+
+/**
+ * Synthetic study traffic must never become advice for an unrelated live repo.
+ * Evaluation roots are intentionally realistic and may carry their own `.git`
+ * marker, so repository discovery alone cannot distinguish them. Publication
+ * remains useful inside the isolated study store; this guard protects only the
+ * default machine-wide store when a harness was accidentally run without an
+ * isolated TOKEN_OPTIMIZER_SHARED_DIR.
+ */
+export function isEphemeralProject(projectRoot) {
+  const root = canonicalPath(projectRoot || '').toLowerCase();
+  if (!root) return true;
+  return (
+    /\/appdata\/local\/temp\//.test(root) ||
+    /(^|\/)tmp\//.test(root) ||
+    /\/(artifacts|\.token-optimizer)\/(?:[^/]*\/)*(?:eval|scenario|study|fixture|debug)[^/]*\//.test(`${root}/`)
+  );
+}
+
+export function quarantineSharedSource(projectRoot) {
+  if (process.env.TOKEN_OPTIMIZER_ALLOW_EPHEMERAL_SHARED === '1') return false;
+  if (!isEphemeralProject(projectRoot)) return false;
+  // Isolated studies deliberately point the shared tier at scratch storage.
+  // Their findings may cross their own fixture projects, but cannot escape into
+  // the user's default machine-wide graph. Strict mode exists for a regression
+  // probe that verifies the guard without writing to a real user directory.
+  return (
+    !process.env.TOKEN_OPTIMIZER_SHARED_DIR ||
+    process.env.TOKEN_OPTIMIZER_STRICT_SHARED_PROVENANCE === '1'
+  );
+}
 
 /** Claim text, normalised enough that the same lesson learned twice is one row. */
 const claimFingerprint = (claim) =>
@@ -72,6 +103,7 @@ function promoteToShared(finding, { projectRoot, sessionId, provenance, key }) {
     if (!projectRoot) return false;
 
     const root = canonicalPath(projectRoot);
+    if (quarantineSharedSource(root)) return false;
     const rootId = nodeId('file', root);
 
     // Same claim, already carried up from anywhere: keep the first. Two repos
@@ -367,11 +399,21 @@ export function writeHarvested(
       && !node.retired
       && node.type === finding.type
       && claimFingerprint(node.claim) === fingerprint
-      && resolved.every((target) => currentGraph.edges.some((edge) =>
-        edge.from === node.id && edge.edge === 'derived_from' && edge.to === target
-      ))
     );
     if (duplicate) {
+      // Enrich, do not duplicate. A symbol extractor may learn how to resolve a
+      // previously file-only anchor (or a later session may add another real
+      // anchor) after the claim was first stored. Repeating the same semantic
+      // conclusion should connect that existing node to the newly available
+      // evidence, not create a second dashboard card with the same text.
+      for (const target of resolved) {
+        const alreadyLinked = currentGraph.edges.some((edge) =>
+          edge.from === duplicate.id
+          && edge.edge === 'derived_from'
+          && edge.to === target
+        );
+        if (!alreadyLinked) putEdge(dir, duplicate.id, 'derived_from', target);
+      }
       written.push(duplicate.key);
       continue;
     }
@@ -437,7 +479,12 @@ export function writeHarvested(
     if (
       id
       && !isSharedDir(dir)
-      && (finding.scope === undefined || finding.scope === 'organization' || finding.scope === 'global')
+      // Cross-project publication is explicit. `writeHarvested` stores an
+      // omitted scope as project-local above, so treating `undefined` as global
+      // here contradicted the stored record and promoted fixture/evaluation
+      // seeds into real user sessions. This was observed live as "learned in
+      // scenario" advice while working in AiDotNet.
+      && (finding.scope === 'organization' || finding.scope === 'global')
     ) {
       promoteToShared(finding, { projectRoot, sessionId, provenance, key });
     }

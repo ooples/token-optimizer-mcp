@@ -35,6 +35,15 @@ export interface AnalyticsEntry {
   sessionId?: string;
   /** Optional additional metadata */
   metadata?: Record<string, unknown>;
+  /** MCP handshake attribution for new measurements; absent on historical rows. */
+  client?: string;
+  clientVersion?: string;
+  model?: string;
+  modelVersion?: string;
+  /** Whether a real before-state exists for this operation's savings claim. */
+  savingsMeasured?: boolean;
+  /** Stable per-request identity used to reject transport retries. */
+  measurementId?: string;
 }
 
 /**

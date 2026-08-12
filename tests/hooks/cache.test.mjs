@@ -13,12 +13,25 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  readCacheUsage, cacheHealth, modelSwitchCost, volatileLines, attributeInvalidation,
-  stableText, cacheOrdered, transcriptFor, WRITE_MULTIPLIER,
+  readCacheUsage,
+  cacheHealth,
+  modelSwitchCost,
+  volatileLines,
+  attributeInvalidation,
+  stableText,
+  cacheOrdered,
+  transcriptFor,
+  WRITE_MULTIPLIER,
 } from '../../hooks-core/cache.mjs';
 import {
-  gapDistribution, keepWarmDecision, ttlTier, tripwire, shouldKeepWarm,
-  recordRefreshOutcome, TIERS, TRIPWIRE_MIN,
+  gapDistribution,
+  keepWarmDecision,
+  ttlTier,
+  tripwire,
+  shouldKeepWarm,
+  recordRefreshOutcome,
+  TIERS,
+  TRIPWIRE_MIN,
 } from '../../hooks-core/keepwarm.mjs';
 import { record, readMetrics } from '../../hooks-core/metrics.mjs';
 import { policyText } from '../../hooks-core/adapter.mjs';
@@ -36,21 +49,28 @@ afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 /** A transcript in the client's own format. */
 function transcript(turns) {
   const path = join(workspace, 'transcript.jsonl');
-  writeFileSync(path, turns.map((t) => JSON.stringify({
-    timestamp: new Date(t.at || Date.now()).toISOString(),
-    message: {
-      model: t.model || 'claude-opus-5',
-      usage: {
-        cache_read_input_tokens: t.read || 0,
-        cache_creation_input_tokens: t.written || 0,
-        input_tokens: t.input || 0,
-      },
-    },
-  })).join('\n') + '\n');
+  writeFileSync(
+    path,
+    turns
+      .map((t) =>
+        JSON.stringify({
+          timestamp: new Date(t.at || Date.now()).toISOString(),
+          message: {
+            model: t.model || 'claude-opus-5',
+            usage: {
+              cache_read_input_tokens: t.read || 0,
+              cache_creation_input_tokens: t.written || 0,
+              input_tokens: t.input || 0,
+            },
+          },
+        })
+      )
+      .join('\n') + '\n'
+  );
   return path;
 }
 
-describe('the loss is measured from the client\'s own record', () => {
+describe("the loss is measured from the client's own record", () => {
   test('hit rate and prefix size come out of the transcript, not out of a model', () => {
     const path = transcript([
       { read: 0, written: 40_000 },
@@ -65,9 +85,13 @@ describe('the loss is measured from the client\'s own record', () => {
     expect(health.prefixTokens).toBe(40_700);
   });
 
-  test('savings are priced in plain-token equivalents, so they compare with everything else', () => {
-    const health = cacheHealth(readCacheUsage(transcript([{ read: 100_000, written: 0 }])));
-    expect(health.savedVersusNoCache).toBe(90_000);
+  test('Anthropic cache discounts stay labeled as cost equivalents', () => {
+    const health = cacheHealth(
+      readCacheUsage(transcript([{ read: 100_000, written: 0 }]))
+    );
+    expect(health.provider).toBe('anthropic');
+    expect(health.inputCostEquivalentAvoidedVersusUncached).toBe(90_000);
+    expect(health.savedVersusNoCache).toBeUndefined();
   });
 
   test('a missing transcript yields nothing rather than invented economics', () => {
@@ -78,27 +102,37 @@ describe('the loss is measured from the client\'s own record', () => {
 
   test('a truncated tail line is skipped rather than throwing', () => {
     const path = transcript([{ read: 10, written: 10 }]);
-    writeFileSync(path, `{"broken":\n${JSON.stringify({ message: { usage: { cache_read_input_tokens: 5 } } })}\n`);
+    writeFileSync(
+      path,
+      `{"broken":\n${JSON.stringify({ message: { usage: { cache_read_input_tokens: 5 } } })}\n`
+    );
     expect(readCacheUsage(path)).toHaveLength(1);
   });
 });
 
 describe('the cause is attributed, because a hit rate is not actionable', () => {
   test('a volatile construct is found with its line and its reason', () => {
-    const hits = volatileLines('# Project\nBuilt on 2026-07-30T09:14 by the pipeline\nStable line\n');
+    const hits = volatileLines(
+      '# Project\nBuilt on 2026-07-30T09:14 by the pipeline\nStable line\n'
+    );
     expect(hits[0].line).toBe(2);
     expect(hits[0].why).toMatch(/timestamp/);
   });
 
   test('a stable file produces nothing', () => {
-    expect(volatileLines('# Project\nUse tabs.\nRun the tests.\n')).toHaveLength(0);
+    expect(
+      volatileLines('# Project\nUse tabs.\nRun the tests.\n')
+    ).toHaveLength(0);
   });
 
   test('the price is the tokens POSITIONED AFTER it, not the size of the construct', () => {
     // The same timestamp is nearly free at the end of a prefix and ruinous near
     // the front, which is why a flat list of cache-breaking constructs is not
     // enough and position has to be part of the finding.
-    writeFileSync(join(workspace, 'CLAUDE.md'), 'Generated 2026-07-30T09:14\nrest of the file\n');
+    writeFileSync(
+      join(workspace, 'CLAUDE.md'),
+      'Generated 2026-07-30T09:14\nrest of the file\n'
+    );
     const [hit] = attributeInvalidation(workspace, 47_000);
 
     expect(hit.file).toBe('CLAUDE.md');
@@ -124,8 +158,12 @@ describe('the cause is attributed, because a hit rate is not actionable', () => 
 
 describe('a model switch is priced before it is paid, not detected after', () => {
   test('the cost of discarding the warm prefix is stated in advance', () => {
-    const cost = modelSwitchCost(readCacheUsage(transcript([{ read: 62_000, written: 0 }])));
-    expect(cost.rewriteCost).toBe(Math.round(62_000 * WRITE_MULTIPLIER));
+    const cost = modelSwitchCost(
+      readCacheUsage(transcript([{ read: 62_000, written: 0 }]))
+    );
+    expect(cost.rewriteInputCostEquivalent).toBe(
+      Math.round(62_000 * WRITE_MULTIPLIER)
+    );
     expect(cost.text).toMatch(/discards a 62,000-token warm prefix/);
   });
 
@@ -144,7 +182,9 @@ describe('keep-warm is decided in advance, not regretted afterwards', () => {
     const base = Date.now() - count * gapMs;
     const path = join(dir, 'metrics.jsonl');
     record(dir, { kind: 'seed' });
-    const lines = Array.from({ length: count }, (_, i) => JSON.stringify({ kind: 'read', at: base + i * gapMs }));
+    const lines = Array.from({ length: count }, (_, i) =>
+      JSON.stringify({ kind: 'read', at: base + i * gapMs })
+    );
     writeFileSync(path, lines.join('\n') + '\n');
   };
 
@@ -152,7 +192,10 @@ describe('keep-warm is decided in advance, not regretted afterwards', () => {
     // Seven minutes: the entry would have expired, and one refresh reaches the
     // next turn. This is the only regime where a ping earns anything.
     seedGaps(7 * 60 * 1000);
-    const decision = keepWarmDecision({ prefixTokens: 47_000, gaps: gapDistribution(dir) });
+    const decision = keepWarmDecision({
+      prefixTokens: 47_000,
+      gaps: gapDistribution(dir),
+    });
 
     expect(decision.action).toBe('refresh');
     // A verdict that cannot be checked is indistinguishable from a bug.
@@ -165,13 +208,19 @@ describe('keep-warm is decided in advance, not regretted afterwards', () => {
     // keep-warm and are in fact the case where it buys nothing, because every
     // real turn has already refreshed the entry.
     seedGaps(30_000);
-    const decision = keepWarmDecision({ prefixTokens: 47_000, gaps: gapDistribution(dir) });
+    const decision = keepWarmDecision({
+      prefixTokens: 47_000,
+      gaps: gapDistribution(dir),
+    });
     expect(decision.action).toBe('skip');
   });
 
   test('gaps far beyond the TTL make it a loss, and it is declined', () => {
     seedGaps(45 * 60 * 1000);
-    const decision = keepWarmDecision({ prefixTokens: 47_000, gaps: gapDistribution(dir) });
+    const decision = keepWarmDecision({
+      prefixTokens: 47_000,
+      gaps: gapDistribution(dir),
+    });
     expect(decision.action).toBe('skip');
     expect(decision.expectedValue).toBeLessThan(0);
   });
@@ -180,7 +229,10 @@ describe('keep-warm is decided in advance, not regretted afterwards', () => {
     // Pricing the refresh as a write -- the obvious-looking model -- overstates
     // its cost more than twelvefold and rejects refreshes worth buying.
     seedGaps(7 * 60 * 1000);
-    const decision = keepWarmDecision({ prefixTokens: 47_000, gaps: gapDistribution(dir) });
+    const decision = keepWarmDecision({
+      prefixTokens: 47_000,
+      gaps: gapDistribution(dir),
+    });
     expect(decision.costOfPing).toBe(4700);
   });
 
@@ -194,19 +246,27 @@ describe('keep-warm is decided in advance, not regretted afterwards', () => {
 
   test('when neither tier pays, the answer is null rather than a default', () => {
     seedGaps(6 * 60 * 60 * 1000);
-    expect(ttlTier({ prefixTokens: 47_000, gaps: gapDistribution(dir) })).toBeNull();
+    expect(
+      ttlTier({ prefixTokens: 47_000, gaps: gapDistribution(dir) })
+    ).toBeNull();
   });
 
   test('with too little history it says so instead of guessing', () => {
     expect(gapDistribution(dir)).toBeNull();
-    expect(keepWarmDecision({ prefixTokens: 47_000, gaps: null }).action).toBe('unknown');
+    expect(keepWarmDecision({ prefixTokens: 47_000, gaps: null }).action).toBe(
+      'unknown'
+    );
   });
 });
 
 describe('the tripwire stays underneath the expected-value decision', () => {
   test('it holds its tongue until it has enough refreshes to have an opinion', () => {
     for (let i = 0; i < TRIPWIRE_MIN - 1; i++) {
-      recordRefreshOutcome(dir, { tier: '5m', prefixTokens: 10_000, hit: false });
+      recordRefreshOutcome(dir, {
+        tier: '5m',
+        prefixTokens: 10_000,
+        hit: false,
+      });
     }
     expect(tripwire(dir).tripped).toBe(false);
     expect(tripwire(dir).reason).toMatch(/refreshes observed/);
@@ -216,7 +276,11 @@ describe('the tripwire stays underneath the expected-value decision', () => {
     // Distributions shift -- a user changes working pattern, a project goes
     // quiet -- so the expected-value decision needs a backstop.
     for (let i = 0; i < TRIPWIRE_MIN + 2; i++) {
-      recordRefreshOutcome(dir, { tier: '5m', prefixTokens: 10_000, hit: false });
+      recordRefreshOutcome(dir, {
+        tier: '5m',
+        prefixTokens: 10_000,
+        hit: false,
+      });
     }
     const trip = tripwire(dir);
     expect(trip.tripped).toBe(true);
@@ -225,7 +289,11 @@ describe('the tripwire stays underneath the expected-value decision', () => {
 
   test('a tripped wire vetoes an otherwise positive expected value', () => {
     for (let i = 0; i < TRIPWIRE_MIN + 2; i++) {
-      recordRefreshOutcome(dir, { tier: '5m', prefixTokens: 10_000, hit: false });
+      recordRefreshOutcome(dir, {
+        tier: '5m',
+        prefixTokens: 10_000,
+        hit: false,
+      });
     }
     const out = shouldKeepWarm(dir, { prefixTokens: 47_000 });
     expect(out.action).toBe('skip');
@@ -234,7 +302,11 @@ describe('the tripwire stays underneath the expected-value decision', () => {
 
   test('refreshes that get used are counted as the gain they are', () => {
     for (let i = 0; i < TRIPWIRE_MIN + 2; i++) {
-      recordRefreshOutcome(dir, { tier: '5m', prefixTokens: 10_000, hit: true });
+      recordRefreshOutcome(dir, {
+        tier: '5m',
+        prefixTokens: 10_000,
+        hit: true,
+      });
     }
     expect(tripwire(dir).tripped).toBe(false);
     expect(tripwire(dir).realised).toBeGreaterThan(0);
@@ -245,7 +317,9 @@ describe('our own contribution to the prefix is stable by construction', () => {
   test('a volatile line in our own output is dropped, not emitted', () => {
     // We do not merely observe the cache, we write into it. Failing closed is
     // right: missing guidance costs a little, a volatile line costs the prefix.
-    const out = stableText('Stable guidance line\nRun 2026-07-30T09:14 found 3 things\nAnother stable line');
+    const out = stableText(
+      'Stable guidance line\nRun 2026-07-30T09:14 found 3 things\nAnother stable line'
+    );
     expect(out.dropped).toBe(1);
     expect(out.text).not.toMatch(/2026-07-30/);
     expect(out.text).toContain('Stable guidance line');
@@ -291,7 +365,9 @@ describe('keep-warm scores refreshes with the model it bought them under', () =>
     recordRefreshOutcome(dir, { tier: tier.name, prefixTokens, hit: true });
     recordRefreshOutcome(dir, { tier: tier.name, prefixTokens, hit: false });
 
-    const rows = readMetrics(dir).filter((e) => e.kind === 'keepwarm' && e.action === 'outcome');
+    const rows = readMetrics(dir).filter(
+      (e) => e.kind === 'keepwarm' && e.action === 'outcome'
+    );
     const hit = rows.find((r) => r.hit);
     const miss = rows.find((r) => !r.hit);
 
@@ -313,7 +389,8 @@ describe('keep-warm scores refreshes with the model it bought them under', () =>
 
     // What the decision thinks of a gap profile with that much of its mass in the refresh window.
     const gaps = {
-      probabilityWithin: (ms) => (ms <= TIERS[0].ms ? 0 : ms <= TIERS[0].ms * 2 ? hitRate : 1),
+      probabilityWithin: (ms) =>
+        ms <= TIERS[0].ms ? 0 : ms <= TIERS[0].ms * 2 ? hitRate : 1,
     };
     expect(keepWarmDecision({ prefixTokens, gaps }).action).toBe('refresh');
 
@@ -321,7 +398,9 @@ describe('keep-warm scores refreshes with the model it bought them under', () =>
     const refreshes = 20;
     for (let i = 0; i < refreshes; i++) {
       recordRefreshOutcome(dir, {
-        tier: TIERS[0].name, prefixTokens, hit: i < Math.round(refreshes * hitRate),
+        tier: TIERS[0].name,
+        prefixTokens,
+        hit: i < Math.round(refreshes * hitRate),
       });
     }
     const trip = tripwire(dir);
@@ -334,7 +413,11 @@ describe('keep-warm scores refreshes with the model it bought them under', () =>
     // The guard must not have been turned into a rubber stamp: below the true break-even the wire
     // still fires, which is the whole reason it exists.
     for (let i = 0; i < 20; i++) {
-      recordRefreshOutcome(dir, { tier: TIERS[0].name, prefixTokens: 10_000, hit: false });
+      recordRefreshOutcome(dir, {
+        tier: TIERS[0].name,
+        prefixTokens: 10_000,
+        hit: false,
+      });
     }
     const trip = tripwire(dir);
     expect(trip.tripped).toBe(true);
@@ -348,7 +431,9 @@ describe('keep-warm never returns a verdict that contradicts its own reason', ()
     const base = Date.now() - count * gapMs;
     const path = join(dir, 'metrics.jsonl');
     record(dir, { kind: 'seed' });
-    const lines = Array.from({ length: count }, (_, i) => JSON.stringify({ kind: 'read', at: base + i * gapMs }));
+    const lines = Array.from({ length: count }, (_, i) =>
+      JSON.stringify({ kind: 'read', at: base + i * gapMs })
+    );
     writeFileSync(path, lines.join('\n') + '\n');
   };
 
@@ -377,20 +462,28 @@ describe('keep-warm never returns a verdict that contradicts its own reason', ()
 
     const gaps = gapDistribution(dir);
     expect(ttlTier({ prefixTokens: 47_000, gaps })).toBeNull();
-    expect(keepWarmDecision({ prefixTokens: 47_000, gaps }).action).toBe('refresh');
+    expect(keepWarmDecision({ prefixTokens: 47_000, gaps }).action).toBe(
+      'refresh'
+    );
 
     const verdict = shouldKeepWarm(dir, { prefixTokens: 47_000 });
     expect(verdict.action).toBe('refresh');
     // And the invariant that failed before: no verdict may contradict its own stated reason.
-    if (/expected gain/.test(verdict.reason || '')) expect(verdict.action).not.toBe('skip');
-    if (/expected loss/.test(verdict.reason || '')) expect(verdict.action).not.toBe('refresh');
+    if (/expected gain/.test(verdict.reason || ''))
+      expect(verdict.action).not.toBe('skip');
+    if (/expected loss/.test(verdict.reason || ''))
+      expect(verdict.action).not.toBe('refresh');
   });
 
   test('a non-finite turn count cannot produce a refresh built from NaN', () => {
     // Math.max(1, NaN) is NaN, so perTurn was NaN, `NaN >= 1` was false, and the guard PASSED --
     // returning action:'refresh' with expectedValue NaN and "NaN% of gaps land inside 5m".
     const gaps = { probabilityWithin: () => 0.9 };
-    const out = ttlTier({ prefixTokens: 10_000, gaps, turnsPerSession: Number.NaN });
+    const out = ttlTier({
+      prefixTokens: 10_000,
+      gaps,
+      turnsPerSession: Number.NaN,
+    });
     if (out) {
       expect(Number.isFinite(out.expectedValue)).toBe(true);
       expect(Number.isFinite(out.expectedCostPerTurn)).toBe(true);
@@ -407,10 +500,15 @@ describe('the backstop can actually reach its own threshold', () => {
     // "only N/10 refreshes observed" for the life of the project, and shouldKeepWarm could never
     // be vetoed -- a guard that cannot reach its own threshold is not a guard.
     for (let i = 0; i < TRIPWIRE_MIN + 2; i++) {
-      recordRefreshOutcome(dir, { tier: TIERS[0].name, prefixTokens: 10_000, hit: false });
+      recordRefreshOutcome(dir, {
+        tier: TIERS[0].name,
+        prefixTokens: 10_000,
+        hit: false,
+      });
     }
     // Bury them under more events than the window will hold.
-    for (let i = 0; i < 5_200; i++) record(dir, { kind: 'read', anchor: `/n${i}.ts`, tokens: 10 });
+    for (let i = 0; i < 5_200; i++)
+      record(dir, { kind: 'read', anchor: `/n${i}.ts`, tokens: 10 });
 
     const windowed = readMetrics(dir).filter((e) => e.kind === 'keepwarm');
     expect(windowed.length).toBeLessThan(TRIPWIRE_MIN); // the window really did evict them
@@ -432,11 +530,18 @@ describe('a gap between two sessions is not a gap between turns', () => {
     const events = [];
     for (let s = 0; s < 2; s++) {
       for (let i = 0; i < 6; i++) {
-        events.push({ kind: 'read', sessionId: `s${s}`, at: base + s * 24 * 3600_000 + i * 60_000 });
+        events.push({
+          kind: 'read',
+          sessionId: `s${s}`,
+          at: base + s * 24 * 3600_000 + i * 60_000,
+        });
       }
     }
     record(dir, { kind: 'seed' });
-    writeFileSync(join(dir, 'metrics.jsonl'), `${events.map((e) => JSON.stringify(e)).join('\n')}\n`);
+    writeFileSync(
+      join(dir, 'metrics.jsonl'),
+      `${events.map((e) => JSON.stringify(e)).join('\n')}\n`
+    );
 
     const gaps = gapDistribution(dir);
     expect(gaps).not.toBeNull();
@@ -450,10 +555,15 @@ describe('a gap between two sessions is not a gap between turns', () => {
     // is, which is the direction this project cares about most.
     const base = Date.now() - 10 * 60 * 60 * 1000;
     const events = Array.from({ length: 8 }, (_, i) => ({
-      kind: 'read', sessionId: 'one', at: base + i * 90 * 60_000,
+      kind: 'read',
+      sessionId: 'one',
+      at: base + i * 90 * 60_000,
     }));
     record(dir, { kind: 'seed' });
-    writeFileSync(join(dir, 'metrics.jsonl'), `${events.map((e) => JSON.stringify(e)).join('\n')}\n`);
+    writeFileSync(
+      join(dir, 'metrics.jsonl'),
+      `${events.map((e) => JSON.stringify(e)).join('\n')}\n`
+    );
 
     const gaps = gapDistribution(dir);
     expect(gaps.median).toBeGreaterThan(60 * 60_000);

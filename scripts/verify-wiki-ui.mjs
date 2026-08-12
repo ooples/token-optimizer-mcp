@@ -62,6 +62,8 @@ process.env.TOKEN_OPTIMIZER_SHARED_DIR = GRAPH;
 process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(GRAPH, 'projects.jsonl');
 const UCR = mkdtempSync(join(tmpdir(), 'wiki-ui-ucr-'));
 process.env.TOKEN_OPTIMIZER_UCR_DIR = UCR;
+const ANALYTICS = mkdtempSync(join(tmpdir(), 'wiki-ui-analytics-'));
+process.env.TOKEN_OPTIMIZER_ANALYTICS_DB = join(ANALYTICS, 'analytics.db');
 
 const results = [];
 const check = (name, pass, detail = '') => {
@@ -204,6 +206,15 @@ async function seed() {
       downstream: 2400,
     });
   record(GRAPH, { kind: 'harvest', tokens: 800 });
+  record(GRAPH, {
+    kind: 'substitute',
+    anchor: join(src, 'auth.ts'),
+    holdout: false,
+    tokens: 100,
+    tokensNetAvoided: 900,
+    client: 'claude-code',
+    at: Date.now(),
+  });
   for (let pair = 1; pair <= 5; pair++) {
     for (const [arm, totalTokens, toolCalls] of [
       ['baseline', 1000, 10],
@@ -393,8 +404,8 @@ async function main() {
           els.map((e) => e.textContent.trim())
         );
         check(
-          'balance renders four figures',
-          tiles.length === 4,
+          'balance renders direct and causal token accounting',
+          tiles.length === 8 && tiles.some((value) => /900 tokens/.test(value)),
           tiles.join(' | ')
         );
 
@@ -879,6 +890,12 @@ async function main() {
         body: JSON.stringify({ summary: { available: false }, events: [] }),
       })
     );
+    await overview.route('**/api/analytics/overview*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ available: false }),
+      })
+    );
     await overview.route('**/api/session-summary*', (route) =>
       route.fulfill({
         contentType: 'application/json',
@@ -926,7 +943,7 @@ async function main() {
     const overviewText = await overview.textContent('body');
     check(
       'overview is provider and CLI neutral',
-      !/claude(?: code)?/i.test(overviewText || '')
+      !/what claude did/i.test(overviewText || '')
     );
     const eventText = await overview.locator('.event').first().textContent();
     check(
@@ -967,6 +984,283 @@ async function main() {
     });
     await overview.close();
 
+    // Preferred path: all successful MCP operations report actual returned
+    // context, while only rows with a real before-state claim savings. Native
+    // graph substitutions join the same presentation without being confused
+    // with the separately gated causal graph-effect estimate.
+    const measuredOverview = await browser.newPage({
+      viewport: { width: 1440, height: 1000 },
+    });
+    measuredOverview.on('console', (message) => {
+      if (message.type() === 'error')
+        consoleErrors.push(`measured overview: ${message.text()}`);
+    });
+    measuredOverview.on('pageerror', (error) =>
+      consoleErrors.push(`measured overview: ${error.message}`)
+    );
+    await measuredOverview.route('**/api/diagnostics/hooks*', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          summary: {
+            available: true,
+            total: 12,
+            actions: 6,
+            activeClients: 3,
+            p95DurationMs: 14,
+            successRate: 1,
+            byTool: { smart_read: 2, wiki_read: 1 },
+            byClient: {
+              codex: { total: 5 },
+              'claude-code': { total: 4 },
+              gemini: { total: 3 },
+            },
+          },
+          events: [],
+        }),
+      });
+    });
+    await measuredOverview.route('**/api/analytics/overview*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schemaVersion: 2,
+          available: true,
+          source: 'browser fixture: actual returned context',
+          pricing: {
+            available: false,
+            effectiveInputUsdPerMillion: null,
+            source: 'unavailable',
+            explanation: 'browser fixture: billing is not observable',
+          },
+          summary: {
+            totalOperations: 3,
+            totalOriginalTokens: 1400,
+            totalOptimizedTokens: 500,
+            measuredOptimizedTokens: 350,
+            totalTokensSaved: 1050,
+            unverifiedReportedTokensSaved: 0,
+            savingsPercentage: 75,
+            contextUsd: null,
+            savedUsd: null,
+            measuredSavingsOperations: 2,
+            unmeasuredSavingsOperations: 1,
+            actualReturnedContextOperations: 3,
+            legacyReportedContextOperations: 0,
+            observedReturnedContextOperations: 3,
+            unverifiedReportedOperations: 0,
+          },
+          byAction: [
+            {
+              name: 'smart_read',
+              totalOperations: 2,
+              totalOriginalTokens: 1400,
+              totalOptimizedTokens: 350,
+              totalTokensSaved: 1050,
+              unverifiedReportedTokensSaved: 0,
+              observedReturnedContextOperations: 2,
+              unverifiedReportedOperations: 0,
+              contextUsd: null,
+              savedUsd: null,
+            },
+            {
+              name: 'wiki_read',
+              totalOperations: 1,
+              totalOriginalTokens: 0,
+              totalOptimizedTokens: 150,
+              totalTokensSaved: 0,
+              unverifiedReportedTokensSaved: 0,
+              observedReturnedContextOperations: 1,
+              unverifiedReportedOperations: 0,
+              contextUsd: null,
+              savedUsd: null,
+            },
+          ],
+          byClient: [
+            {
+              name: 'codex',
+              attribution: 'recorded',
+              totalOperations: 2,
+              observedReturnedContextOperations: 2,
+              verifiedSavingsOperations: 2,
+              unverifiedReportedOperations: 0,
+              totalOptimizedTokens: 350,
+              totalTokensSaved: 1050,
+              unverifiedReportedTokensSaved: 0,
+              contextUsd: null,
+              savedUsd: null,
+            },
+            {
+              name: 'gemini',
+              attribution: 'recorded',
+              totalOperations: 1,
+              observedReturnedContextOperations: 1,
+              verifiedSavingsOperations: 0,
+              unverifiedReportedOperations: 0,
+              totalOptimizedTokens: 150,
+              totalTokensSaved: null,
+              unverifiedReportedTokensSaved: 0,
+              contextUsd: null,
+              savedUsd: null,
+            },
+            {
+              name: 'claude-code',
+              attribution: 'recorded',
+              totalOperations: 1,
+              observedReturnedContextOperations: 1,
+              verifiedSavingsOperations: 0,
+              unverifiedReportedOperations: 0,
+              totalOptimizedTokens: 90,
+              totalTokensSaved: null,
+              unverifiedReportedTokensSaved: 0,
+              contextUsd: null,
+              savedUsd: null,
+            },
+          ],
+          recent: [
+            {
+              name: 'wiki_read',
+              originalTokens: 150,
+              optimizedTokens: 150,
+              tokensSaved: 0,
+              reportedTokensSaved: 0,
+              savingsMeasured: false,
+              classification: 'observed-return-only',
+              contextUsd: null,
+              savedUsd: null,
+              timestamp: '2026-08-12T15:02:00Z',
+            },
+            {
+              name: 'smart_read',
+              originalTokens: 1000,
+              optimizedTokens: 250,
+              tokensSaved: 750,
+              reportedTokensSaved: 0,
+              savingsMeasured: true,
+              classification: 'verified-transport-reduction',
+              contextUsd: null,
+              savedUsd: null,
+              timestamp: '2026-08-12T15:01:00Z',
+            },
+          ],
+          measurement: {
+            tokenCountMethod: 'browser fixture tokenizer estimate',
+          },
+        }),
+      })
+    );
+    await measuredOverview.route('**/api/session-summary*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false }),
+      })
+    );
+    await measuredOverview.route('**/api/session-events*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, events: [] }),
+      })
+    );
+    // Reproduce the live failure from port 3100: all-project graph endpoints
+    // can be cold while the small analytics ledger is already available. The
+    // primary token answer must paint without waiting for those requests.
+    for (const pattern of [
+      '**/api/wiki/balance*',
+      '**/api/wiki/status*',
+      '**/api/wiki/constellation*',
+    ]) {
+      await measuredOverview.route(pattern, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 2_500));
+        await route.continue();
+      });
+    }
+    const overviewStartedAt = Date.now();
+    await measuredOverview.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await measuredOverview.waitForFunction(
+      () =>
+        document.querySelector('#saved-tokens')?.dataset.state === 'measured' &&
+        Number(
+          document
+            .querySelector('#saved-tokens')
+            ?.textContent?.replaceAll(',', '')
+        ) === 1050 &&
+        document.querySelectorAll('#accounting-grid .accounting-card')
+          .length === 7 &&
+        document.querySelectorAll('#client-ledger .client-ledger-row').length >
+          0,
+      undefined,
+      { timeout: 2_000 }
+    );
+    const optimizerPaintMs = Date.now() - overviewStartedAt;
+    check(
+      'optimizer accounting renders before delayed graph APIs',
+      optimizerPaintMs < 2_500 &&
+        (await measuredOverview.getAttribute('#saved-card', 'aria-busy')) ===
+          'false' &&
+        /1,050/.test(
+          await measuredOverview.locator('#saved-card').ariaSnapshot()
+        ),
+      `${optimizerPaintMs} ms`
+    );
+    await measuredOverview.waitForFunction(
+      () =>
+        Number(
+          document
+            .querySelector('#saved-tokens')
+            ?.textContent?.replaceAll(',', '')
+        ) === 1050,
+      undefined,
+      { timeout: 10_000 }
+    );
+    await measuredOverview.waitForTimeout(1_100);
+    const measuredBody = await measuredOverview.textContent('body');
+    check(
+      'combined overview keeps modeled graph savings out of the verified headline',
+      Number(
+        (await measuredOverview.textContent('#saved-tokens'))?.replaceAll(
+          ',',
+          ''
+        ) || 0
+      ) === 1050 &&
+        /modeled graph substitutions remain separate/i.test(measuredBody || '')
+    );
+    check(
+      'combined overview attributes optimizer metrics across clients',
+      /codex/i.test(measuredBody || '') &&
+        /claude-code/i.test(measuredBody || '') &&
+        /gemini/i.test(measuredBody || '')
+    );
+    const recentRows = await measuredOverview
+      .locator('#timeline-container .event')
+      .allTextContents();
+    check(
+      'recent activity marks unpriced context and refuses fake zero savings',
+      recentRows.some(
+        (row) => /wiki_read/i.test(row) && /no before baseline/i.test(row)
+      ) &&
+        recentRows.some(
+          (row) => /smart_read/i.test(row) && /750 saved/i.test(row)
+        ) &&
+        !recentRows.some(
+          (row) => /wiki_read/i.test(row) && /0 saved/i.test(row)
+        ),
+      recentRows.join(' | ')
+    );
+    check(
+      'every action exposes returned context, verified savings, and pricing absence',
+      (await measuredOverview.locator('#tool-breakdown-body tr').count()) ===
+        2 &&
+        /Not priced/.test(
+          (await measuredOverview.textContent('#tool-breakdown-body')) || ''
+        )
+    );
+    await measuredOverview.screenshot({
+      path: join(SHOTS, 'overview-combined-accounting.png'),
+      fullPage: true,
+    });
+    await measuredOverview.close();
+
     check(
       'no console or page errors',
       consoleErrors.length === 0,
@@ -977,6 +1271,7 @@ async function main() {
     server.kill();
     rmSync(GRAPH, { recursive: true, force: true });
     rmSync(UCR, { recursive: true, force: true });
+    rmSync(ANALYTICS, { recursive: true, force: true });
   }
 
   const failed = results.filter((r) => !r.pass);

@@ -25,7 +25,8 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
       '.token-optimizer-mcp',
       'analytics.db'
     );
-    const finalPath = dbPath || defaultPath;
+    const finalPath =
+      dbPath || process.env.TOKEN_OPTIMIZER_ANALYTICS_DB || defaultPath;
 
     // Ensure directory exists
     const dir = path.dirname(finalPath);
@@ -62,6 +63,35 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
       CREATE INDEX IF NOT EXISTS idx_timestamp ON analytics(timestamp);
       CREATE INDEX IF NOT EXISTS idx_session_id ON analytics(session_id);
     `);
+
+    const columns = new Set(
+      (
+        this.db.prepare('PRAGMA table_info(analytics)').all() as Array<{
+          name: string;
+        }>
+      ).map((column) => column.name)
+    );
+    for (const [name, definition] of [
+      ['client', 'TEXT'],
+      ['client_version', 'TEXT'],
+      ['model', 'TEXT'],
+      ['model_version', 'TEXT'],
+      ['measurement_id', 'TEXT'],
+      // A pre-existing row has no provenance proving that its two token fields
+      // are comparable. Defaulting this column to true silently certified every
+      // historical estimate during migration. New writers opt in explicitly.
+      ['savings_measured', 'INTEGER NOT NULL DEFAULT 0'],
+    ]) {
+      if (!columns.has(name))
+        this.db.exec(`ALTER TABLE analytics ADD COLUMN ${name} ${definition}`);
+    }
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_client ON analytics(client);
+      CREATE INDEX IF NOT EXISTS idx_model ON analytics(model);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_measurement_id
+        ON analytics(measurement_id)
+        WHERE measurement_id LIKE 'mcp:%';
+    `);
   }
 
   /**
@@ -89,8 +119,11 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
       INSERT INTO analytics (
         hook_phase, tool_name, mcp_server,
         original_tokens, optimized_tokens, tokens_saved,
-        timestamp, session_id, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        timestamp, session_id, metadata,
+        client, client_version, model, model_version, savings_measured,
+        measurement_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT DO NOTHING
     `);
 
     const insertMany = this.db.transaction((entries: AnalyticsEntry[]) => {
@@ -104,7 +137,13 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
           entry.tokensSaved,
           entry.timestamp,
           entry.sessionId || null,
-          entry.metadata ? JSON.stringify(entry.metadata) : null
+          entry.metadata ? JSON.stringify(entry.metadata) : null,
+          entry.client || null,
+          entry.clientVersion || null,
+          entry.model || null,
+          entry.modelVersion || null,
+          entry.savingsMeasured === true ? 1 : 0,
+          entry.measurementId || null
         );
       }
     });
@@ -238,6 +277,12 @@ export class SqliteAnalyticsStorage implements AnalyticsStorage {
       timestamp: row.timestamp,
       sessionId: row.session_id || undefined,
       metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+      client: row.client || undefined,
+      clientVersion: row.client_version || undefined,
+      model: row.model || undefined,
+      modelVersion: row.model_version || undefined,
+      savingsMeasured: row.savings_measured !== 0,
+      measurementId: row.measurement_id || undefined,
     }));
   }
 

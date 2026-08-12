@@ -10,6 +10,23 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
+const verifiedSavings = {
+  savingsMeasured: true,
+  measurementId: 'measurement-1',
+  metadata: {
+    measurementId: 'measurement-1',
+    measurementSchemaVersion: 2,
+    measurementClass: 'verified-transport-reduction',
+    baselineKind: 'materialized-undisclosed-mcp-result',
+    disclosureRef: 'a'.repeat(16),
+    baselineBytes: 4_000,
+    returnedBytes: 1_000,
+    bytesSaved: 3_000,
+    baselineSha256: 'a'.repeat(64),
+    returnedSha256: 'b'.repeat(64),
+  },
+} as const;
+
 describe('AnalyticsManager', () => {
   let manager: AnalyticsManager;
   let testDbPath: string;
@@ -66,6 +83,9 @@ describe('AnalyticsManager', () => {
           originalTokens: 1000,
           optimizedTokens: 800,
           tokensSaved: 200,
+          ...verifiedSavings,
+          ...verifiedSavings,
+          ...verifiedSavings,
         },
         {
           hookPhase: 'PostToolUse' as const,
@@ -74,6 +94,9 @@ describe('AnalyticsManager', () => {
           originalTokens: 500,
           optimizedTokens: 400,
           tokensSaved: 100,
+          ...verifiedSavings,
+          ...verifiedSavings,
+          ...verifiedSavings,
         },
       ];
 
@@ -83,6 +106,65 @@ describe('AnalyticsManager', () => {
 
       const count = await manager.count();
       expect(count).toBe(2);
+    });
+
+    it('migrates and persists client and model attribution', async () => {
+      await manager.track({
+        hookPhase: 'Unknown',
+        toolName: 'smart_read',
+        mcpServer: 'token-optimizer',
+        originalTokens: 1000,
+        optimizedTokens: 100,
+        tokensSaved: 900,
+        client: 'codex',
+        clientVersion: '0.147.0',
+        model: 'gpt-5.6-sol',
+        modelVersion: '2026-08',
+      });
+
+      await expect(manager.getEntries()).resolves.toEqual([
+        expect.objectContaining({
+          client: 'codex',
+          clientVersion: '0.147.0',
+          model: 'gpt-5.6-sol',
+          modelVersion: '2026-08',
+        }),
+      ]);
+    });
+
+    it('persists context-only measurements without treating them as savings', async () => {
+      await manager.track({
+        hookPhase: 'Unknown',
+        toolName: 'wiki_read',
+        mcpServer: 'token-optimizer',
+        originalTokens: 250,
+        optimizedTokens: 250,
+        tokensSaved: 0,
+        savingsMeasured: false,
+      });
+
+      await expect(manager.getEntries()).resolves.toEqual([
+        expect.objectContaining({
+          optimizedTokens: 250,
+          savingsMeasured: false,
+        }),
+      ]);
+    });
+
+    it('deduplicates retries carrying the same MCP request identity', async () => {
+      const entry = {
+        hookPhase: 'Unknown' as const,
+        toolName: 'wiki_read',
+        mcpServer: 'token-optimizer',
+        originalTokens: 250,
+        optimizedTokens: 250,
+        tokensSaved: 0,
+        measurementId: 'mcp:process:stdio:42',
+      };
+      await manager.track(entry);
+      await manager.track(entry);
+
+      expect(await manager.count()).toBe(1);
     });
   });
 
@@ -96,6 +178,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 1000,
           optimizedTokens: 800,
           tokensSaved: 200,
+          ...verifiedSavings,
         },
         {
           hookPhase: 'PreToolUse',
@@ -104,6 +187,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 500,
           optimizedTokens: 400,
           tokensSaved: 100,
+          ...verifiedSavings,
         },
         {
           hookPhase: 'PostToolUse',
@@ -112,6 +196,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 300,
           optimizedTokens: 250,
           tokensSaved: 50,
+          ...verifiedSavings,
         },
       ]);
 
@@ -138,6 +223,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 1000,
           optimizedTokens: 800,
           tokensSaved: 200,
+          ...verifiedSavings,
         },
         {
           hookPhase: 'PostToolUse',
@@ -146,6 +232,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 500,
           optimizedTokens: 400,
           tokensSaved: 100,
+          ...verifiedSavings,
         },
         {
           hookPhase: 'PreToolUse',
@@ -154,6 +241,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 300,
           optimizedTokens: 250,
           tokensSaved: 50,
+          ...verifiedSavings,
         },
       ]);
 
@@ -180,6 +268,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 1000,
           optimizedTokens: 800,
           tokensSaved: 200,
+          ...verifiedSavings,
         },
         {
           hookPhase: 'PostToolUse',
@@ -188,6 +277,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 500,
           optimizedTokens: 400,
           tokensSaved: 100,
+          ...verifiedSavings,
         },
         {
           hookPhase: 'PreToolUse',
@@ -196,6 +286,7 @@ describe('AnalyticsManager', () => {
           originalTokens: 300,
           optimizedTokens: 250,
           tokensSaved: 50,
+          ...verifiedSavings,
         },
       ]);
 

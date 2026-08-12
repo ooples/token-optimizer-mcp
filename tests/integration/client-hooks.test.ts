@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,10 +16,19 @@ const repoRoot = resolve(process.cwd());
 // scripts with thin entry files that call the shared core. These tests assert
 // the CURRENT architecture; they previously asserted the advisor files, which
 // is why they passed on a stale tree and failed in CI once the files were gone.
-const codexSessionStart = join(repoRoot, 'integrations/codex/hooks/session-start.mjs');
+const codexSessionStart = join(
+  repoRoot,
+  'integrations/codex/hooks/session-start.mjs'
+);
 const codexPreTool = join(repoRoot, 'integrations/codex/hooks/pre-tool.mjs');
-const geminiSessionStart = join(repoRoot, 'integrations/gemini/hooks/session-start.mjs');
-const geminiPostTool = join(repoRoot, 'integrations/gemini/hooks/post-tool.mjs');
+const geminiSessionStart = join(
+  repoRoot,
+  'integrations/gemini/hooks/session-start.mjs'
+);
+const geminiPostTool = join(
+  repoRoot,
+  'integrations/gemini/hooks/post-tool.mjs'
+);
 const copilotHook = join(
   repoRoot,
   'integrations/copilot/.github/hooks/token-optimizer-advisor.mjs'
@@ -123,7 +138,9 @@ describe('native CLI hook integrations', () => {
     });
 
     expect(codex.hookSpecificOutput.permissionDecision).toBe('deny');
-    expect(codex.hookSpecificOutput.permissionDecisionReason).toContain('smart_read');
+    expect(codex.hookSpecificOutput.permissionDecisionReason).toContain(
+      'smart_read'
+    );
 
     expect(gemini.hookSpecificOutput.permissionDecision).toBeUndefined();
     expect(gemini.hookSpecificOutput.additionalContext).toContain('smart_read');
@@ -160,10 +177,16 @@ describe('native CLI hook integrations', () => {
         .split('\n')
         .filter(
           (line, index) =>
-            !(index < 2 && (line.startsWith('// GENERATED FILE') || line.startsWith('// Source of truth')))
+            !(
+              index < 2 &&
+              (line.startsWith('// GENERATED FILE') ||
+                line.startsWith('// Source of truth'))
+            )
         )
         .join('\n');
-    const core = stripBanner(readFileSync(join(repoRoot, 'hooks-core/decide.mjs'), 'utf8'));
+    const core = stripBanner(
+      readFileSync(join(repoRoot, 'hooks-core/decide.mjs'), 'utf8')
+    );
     const clients = [
       'plugin/hooks/lib/decide.mjs',
       'integrations/codex/hooks/lib/decide.mjs',
@@ -174,7 +197,9 @@ describe('native CLI hook integrations', () => {
     ];
 
     for (const client of clients) {
-      expect(stripBanner(readFileSync(join(repoRoot, client), 'utf8'))).toBe(core);
+      expect(stripBanner(readFileSync(join(repoRoot, client), 'utf8'))).toBe(
+        core
+      );
     }
   });
 
@@ -195,10 +220,13 @@ describe('native CLI hook integrations', () => {
       readFileSync(join(pluginRoot, 'hooks/hooks.json'), 'utf8')
     );
     const standaloneManifest = JSON.parse(
-      readFileSync(join(repoRoot, 'integrations/codex/hooks/hooks.json'), 'utf8')
+      readFileSync(
+        join(repoRoot, 'integrations/codex/hooks/hooks.json'),
+        'utf8'
+      )
     );
-    const pluginHooks = Object.values(pluginManifest.hooks).flatMap((groups: any) =>
-      groups.flatMap((group: any) => group.hooks)
+    const pluginHooks = Object.values(pluginManifest.hooks).flatMap(
+      (groups: any) => groups.flatMap((group: any) => group.hooks)
     ) as Array<{ command: string; commandWindows: string }>;
 
     expect(pluginHooks).toHaveLength(4);
@@ -213,7 +241,9 @@ describe('native CLI hook integrations', () => {
     );
     expect(pluginManifest.hooks.Stop).toBeDefined();
     for (const hook of pluginHooks) {
-      const relative = hook.command.match(/\$\{PLUGIN_ROOT\}\/([^\"]+\.mjs)/)?.[1];
+      const relative = hook.command.match(
+        /\$\{PLUGIN_ROOT\}\/([^\"]+\.mjs)/
+      )?.[1];
       expect(relative).toBeTruthy();
       expect(existsSync(join(pluginRoot, relative!))).toBe(true);
       expect(hook.commandWindows).toContain(relative!.replaceAll('/', '\\'));
@@ -230,13 +260,19 @@ describe('native CLI hook integrations', () => {
 
   it('ships a Codex plugin MCP config that Codex can discover', () => {
     const config = JSON.parse(
-      readFileSync(join(repoRoot, 'integrations/codex/plugin/.mcp.json'), 'utf8')
+      readFileSync(
+        join(repoRoot, 'integrations/codex/plugin/.mcp.json'),
+        'utf8'
+      )
     );
 
     expect(config.mcp_servers).toBeUndefined();
     expect(config.mcpServers?.['token-optimizer']).toEqual({
       command: 'npx',
       args: ['-y', '@ooples/token-optimizer-mcp@latest'],
+      required: true,
+      startup_timeout_sec: 30,
+      tool_timeout_sec: 120,
     });
   });
 
@@ -247,8 +283,14 @@ describe('native CLI hook integrations', () => {
       'post-tool.mjs',
       'stop.mjs',
     ]) {
-      const standalone = readFileSync(join(repoRoot, 'integrations/codex/hooks', entry), 'utf8');
-      const plugin = readFileSync(join(repoRoot, 'integrations/codex/plugin/hooks', entry), 'utf8');
+      const standalone = readFileSync(
+        join(repoRoot, 'integrations/codex/hooks', entry),
+        'utf8'
+      );
+      const plugin = readFileSync(
+        join(repoRoot, 'integrations/codex/plugin/hooks', entry),
+        'utf8'
+      );
       expect(plugin).toBe(standalone);
     }
   });

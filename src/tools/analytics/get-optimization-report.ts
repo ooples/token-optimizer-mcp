@@ -10,11 +10,18 @@
 
 import type { AnalyticsManager } from '../../analytics/analytics-manager.js';
 import type { AggregatedStats } from '../../analytics/analytics-types.js';
+import {
+  hasObservedReturnedContext,
+  isVerifiedSavingsEntry,
+  verifiedTransportDelta,
+} from '../../analytics/savings-classification.js';
+import { priceTokenUsage } from '../../analytics/provider-pricing.js';
+import type { AnalyticsEntry } from '../../analytics/analytics-types.js';
 
 export const GET_OPTIMIZATION_REPORT_TOOL_DEFINITION = {
   name: 'get_optimization_report',
   description:
-    'Get a complete token-savings report: total tokens saved, overall savings %, and full breakdowns by action/tool, by hook phase, and by MCP server. Returns structured data plus a ready-to-display formatted text summary. Use this to show the user how much context/token budget token-optimizer has saved them.',
+    'Get a provenance-gated token report. Verified savings require a materialized MCP payload before and after optimization; historical and tool-reported estimates are excluded. Direct API-price equivalents use each exact captured model and route; ambiguous operations remain unpriced.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -50,11 +57,48 @@ function pct(n: number): string {
   return `${n.toFixed(1)}%`;
 }
 
-/** Approximate USD saved, assuming input-token pricing (~$3 / 1M tokens). */
-function approxCost(tokens: number): string {
-  const usd = (tokens / 1_000_000) * 3;
-  if (usd < 0.01) return '<$0.01';
-  return `$${usd.toFixed(2)}`;
+function directPrice(entries: AnalyticsEntry[]): {
+  amount: number | null;
+  display: string;
+  pricedOperations: number;
+  eligibleOperations: number;
+} {
+  let amount = 0;
+  let pricedOperations = 0;
+  const eligible = entries.filter(
+    (entry) => verifiedTransportDelta(entry) !== 0
+  );
+  for (const entry of eligible) {
+    const tokens = verifiedTransportDelta(entry);
+    const metadata = entry.metadata || {};
+    const priced = priceTokenUsage({
+      client: entry.client || String(metadata.client || ''),
+      provider: String(metadata.provider || ''),
+      route: String(metadata.pricingRoute || metadata.route || ''),
+      model: entry.model || String(metadata.model || ''),
+      timestamp: entry.timestamp,
+      usage: { uncachedInputTokens: Math.abs(tokens) },
+    });
+    if (
+      !priced.available ||
+      priced.currency !== 'USD' ||
+      priced.amount === null
+    )
+      continue;
+    amount += Math.sign(tokens) * priced.amount;
+    pricedOperations += 1;
+  }
+  return {
+    amount: pricedOperations ? amount : null,
+    display:
+      pricedOperations === 0
+        ? 'not priced'
+        : Math.abs(amount) < 0.01
+          ? '<$0.01'
+          : `$${amount.toFixed(2)}`,
+    pricedOperations,
+    eligibleOperations: eligible.length,
+  };
 }
 
 function bar(fraction: number, width = 20): string {
@@ -101,31 +145,38 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
       const topN = args.topN && args.topN > 0 ? args.topN : 10;
       const range = { startDate: args.startDate, endDate: args.endDate };
 
-      const [hook, action, server, totalCount] = await Promise.all([
-        analyticsManager.getHookAnalytics(range),
-        analyticsManager.getActionAnalytics(range),
-        analyticsManager.getServerAnalytics(range),
-        analyticsManager.count(),
-      ]);
+      const [hook, action, server, totalCount, scopedEntries] =
+        await Promise.all([
+          analyticsManager.getHookAnalytics(range),
+          analyticsManager.getActionAnalytics(range),
+          analyticsManager.getServerAnalytics(range),
+          analyticsManager.count(),
+          analyticsManager.getEntries({
+            startDate: args.startDate,
+            endDate: args.endDate,
+            sessionId: args.sessionId,
+          }),
+        ]);
 
       // If scoped to a session, recompute the summary from filtered entries.
       let summary = action.summary;
       let byAction = action.byAction;
       if (args.sessionId) {
-        const entries = await analyticsManager.getEntries({
-          sessionId: args.sessionId,
-          startDate: args.startDate,
-          endDate: args.endDate,
-        });
-        const totalOriginalTokens = entries.reduce(
+        const entries = scopedEntries;
+        const verifiedEntries = entries.filter(isVerifiedSavingsEntry);
+        const observedEntries = entries.filter(hasObservedReturnedContext);
+        const totalOriginalTokens = verifiedEntries.reduce(
           (s, e) => s + e.originalTokens,
           0
         );
-        const totalOptimizedTokens = entries.reduce(
+        const totalOptimizedTokens = observedEntries.reduce(
           (s, e) => s + e.optimizedTokens,
           0
         );
-        const totalTokensSaved = entries.reduce((s, e) => s + e.tokensSaved, 0);
+        const totalTokensSaved = entries.reduce(
+          (s, e) => s + verifiedTransportDelta(e),
+          0
+        );
         summary = {
           totalOperations: entries.length,
           totalTokensSaved,
@@ -143,13 +194,14 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         ? `session ${args.sessionId}`
         : `${args.startDate || 'all time'} → ${args.endDate || 'present'}`;
 
+      const cost = directPrice(scopedEntries);
+
       const formatted = [
-        '╔══ Token Optimizer — Savings Report ══╗',
+        '╔══ Token Optimizer — Verified Savings Report ══╗',
         `  scope: ${scope}`,
         '',
-        `  ✨ Total tokens saved : ${num(
-          summary.totalTokensSaved
-        )}  (~${approxCost(summary.totalTokensSaved)} @ $3/1M)`,
+        `  ✨ Verified saved     : ${num(summary.totalTokensSaved)}`,
+        `  💵 Direct API price  : ${cost.display} (${num(cost.pricedOperations)}/${num(cost.eligibleOperations)} savings operations exactly modeled)`,
         `  \u{1F4E5} Original tokens    : ${num(summary.totalOriginalTokens)}`,
         `  \u{1F4E6} After optimization : ${num(summary.totalOptimizedTokens)}`,
         `  \u{1F4C9} Overall reduction  : ${pct(savingsPercentage)}  ${bar(
@@ -169,7 +221,20 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
           success: true,
           scope,
           summary: { ...summary, savingsPercentage },
-          approxUsdSaved: approxCost(summary.totalTokensSaved),
+          costEquivalentUsd: cost.amount,
+          pricing: {
+            source: 'versioned-provider-model-catalog',
+            pricedOperations: cost.pricedOperations,
+            eligibleOperations: cost.eligibleOperations,
+            definition:
+              'one immediate uncached-input equivalent per verified transport delta; hypothetical future cache reuse is excluded',
+          },
+          measurement: {
+            definition:
+              'materialized undisclosed MCP payload tokens minus initial returned payload tokens, less later linked expansion payloads',
+            legacyPolicy:
+              'rows without versioned comparable-baseline provenance are excluded',
+          },
           byAction,
           byHook: hook.byHook,
           byServer: server.byServer,
