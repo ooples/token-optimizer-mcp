@@ -18,9 +18,6 @@ import { createKnowledgeGraph3D } from './graph3d.js';
 
 const API = '/api';
 
-/** Reference rate for scale only. Provider and model prices vary. */
-const USD_PER_MILLION_TOKENS = 3;
-
 const CATEGORY_COLORS = {
   tools: 'var(--graph)',
   hooks: 'var(--saved)',
@@ -187,9 +184,13 @@ function joinActivity(hooks, analytics, legacy, legacyEvents, balance) {
       count: observed?.count ?? measured?.totalOperations ?? 0,
       observedCalls: observed?.count ?? null,
       measuredOperations: measured?.totalOperations ?? 0,
-      tokens: measured?.totalOptimizedTokens ?? null,
+      tokens: measured?.observedReturnedContextOperations
+        ? measured.totalOptimizedTokens
+        : null,
       totalOriginalTokens: measured?.totalOriginalTokens ?? null,
       tokensSaved: measured?.totalTokensSaved ?? null,
+      unverifiedReportedTokensSaved:
+        measured?.unverifiedReportedTokensSaved ?? null,
       contextUsd: measured?.contextUsd ?? null,
       savedUsd: measured?.savedUsd ?? null,
     };
@@ -203,18 +204,23 @@ function joinActivity(hooks, analytics, legacy, legacyEvents, balance) {
       measuredOperations: native.substitutions,
       tokens: native.tokensReturned,
       totalOriginalTokens: native.tokensReturned + native.tokensSaved,
-      tokensSaved: native.tokensSaved,
-      contextUsd: (native.tokensReturned / 1e6) * USD_PER_MILLION_TOKENS,
-      savedUsd: (native.tokensSaved / 1e6) * USD_PER_MILLION_TOKENS,
+      tokensSaved: null,
+      unverifiedReportedTokensSaved: native.tokensSaved,
+      contextUsd: priceTokens(analytics, native.tokensReturned),
+      savedUsd: null,
+      classification: 'modeled-counterfactual',
     });
   }
   const recentMeasured = [
     ...(analytics?.recent || []),
     ...(native?.recent || []).map((row) => ({
       ...row,
-      contextUsd:
-        (Number(row.optimizedTokens || 0) / 1e6) * USD_PER_MILLION_TOKENS,
-      savedUsd: (Number(row.tokensSaved || 0) / 1e6) * USD_PER_MILLION_TOKENS,
+      classification: row.classification || 'modeled-counterfactual',
+      savingsMeasured: false,
+      reportedTokensSaved: Number(row.tokensSaved || 0),
+      tokensSaved: 0,
+      contextUsd: priceTokens(analytics, Number(row.optimizedTokens || 0)),
+      savedUsd: null,
     })),
   ].sort(
     (a, b) => Date.parse(b.timestamp || '') - Date.parse(a.timestamp || '')
@@ -273,14 +279,13 @@ function activityFromDiagnostics(report) {
 
 function renderSavings(analytics, balance, status) {
   const mcpSaved = Number(analytics?.summary?.totalTokensSaved || 0);
-  const nativeSaved = Number(balance?.nativeOptimizer?.tokensSaved || 0);
-  const saved = mcpSaved + nativeSaved;
+  const saved = mcpSaved;
   const foot = $('saved-foot');
   const card = $('saved-card');
 
-  const hasDirectMeasurement =
-    Boolean(analytics?.summary?.measuredSavingsOperations) ||
-    Number(balance?.nativeOptimizer?.substitutions || 0) > 0;
+  const hasDirectMeasurement = Boolean(
+    analytics?.summary?.measuredSavingsOperations
+  );
   if (!hasDirectMeasurement || !Number.isFinite(saved)) {
     // Before there is a measurement, say what will appear and why -- and do
     // NOT show a zero, which reads as failure rather than as "not yet".
@@ -294,10 +299,12 @@ function renderSavings(analytics, balance, status) {
     card.setAttribute('aria-busy', 'false');
     $('comparison').innerHTML = '';
 
-    const learned = Number(status?.nodes) || 0;
-    foot.innerHTML = learned
-      ? `${fmt(learned)} things are learned. Measured optimizer savings appear after an optimizer operation reports both its original and returned context size.`
-      : `Nothing measured yet. Use an optimizer read, search, edit, or other context-reducing tool and this fills itself in.`;
+    const excluded = Number(
+      analytics?.summary?.unverifiedReportedTokensSaved || 0
+    );
+    foot.textContent = excluded
+      ? `${fmt(excluded)} historically reported tokens are quarantined because their baselines cannot be verified. A verified total appears after a materialized MCP payload is actually reduced.`
+      : `Nothing verified yet. Savings appear after the server observes both a materialized MCP payload and the smaller payload actually returned; later expansions are debited.`;
     return;
   }
 
@@ -305,20 +312,16 @@ function renderSavings(analytics, balance, status) {
   card.dataset.state = 'measured';
   card.setAttribute('aria-busy', 'false');
 
-  const spentAnyway =
-    Number(analytics?.summary?.measuredOptimizedTokens || 0) +
-    Number(balance?.nativeOptimizer?.tokensReturned || 0);
-  const wouldHave =
-    Number(analytics?.summary?.totalOriginalTokens || 0) +
-    nativeSaved +
-    Number(balance?.nativeOptimizer?.tokensReturned || 0);
+  const spentAnyway = Number(analytics?.summary?.measuredOptimizedTokens || 0);
+  const wouldHave = Number(analytics?.summary?.totalOriginalTokens || 0);
   const percent = wouldHave > 0 ? (saved / wouldHave) * 100 : 0;
 
   countUp($('saved-tokens'), saved);
-  $('saved-money').textContent = formatUsd(
-    Number(analytics?.summary?.savedUsd || 0) +
-      (nativeSaved / 1e6) * USD_PER_MILLION_TOKENS
-  );
+  $('saved-unit').textContent =
+    saved >= 0
+      ? 'net context tokens avoided at the MCP transport'
+      : 'net context tokens added at the MCP transport';
+  $('saved-money').textContent = formatUsd(analytics?.summary?.savedUsd);
   $('saved-percent').textContent = `${percent.toFixed(0)}%`;
 
   comparison($('comparison'), {
@@ -329,19 +332,26 @@ function renderSavings(analytics, balance, status) {
   });
 
   foot.textContent =
-    `${fmt(analytics?.summary?.totalOperations || 0)} MCP operations context-accounted and ${fmt(balance?.nativeOptimizer?.substitutions || 0)} native substitutions recorded. ` +
-    `Graph-effect savings remain separate and are ${balance?.sufficientData ? 'measured' : 'still collecting'}.`;
+    `${fmt(analytics?.summary?.measuredSavingsOperations || 0)} of ${fmt(analytics?.summary?.totalOperations || 0)} MCP operations have a verified comparable baseline. ` +
+    `${fmt(analytics?.summary?.verifiedExpansionOperations || 0)} later expansion(s) returned ${fmt(analytics?.summary?.expansionTokensReturned || 0)} tokens and were debited. Historical reports and ${fmt(balance?.nativeOptimizer?.substitutions || 0)} modeled graph substitutions remain separate.`;
 }
 
 function formatUsd(value) {
+  if (value === null || value === undefined) return 'Not priced';
   const number = Number(value);
-  if (!Number.isFinite(number)) return 'Not measured';
+  if (!Number.isFinite(number)) return 'Not priced';
   if (number === 0) return '$0.00';
-  if (number < 0.01) return `$${number.toFixed(4)}`;
+  if (Math.abs(number) < 0.01) return `$${number.toFixed(4)}`;
   return `$${number.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function priceTokens(analytics, tokens) {
+  const rate = analytics?.pricing?.effectiveInputUsdPerMillion;
+  if (!Number.isFinite(Number(rate)) || Number(rate) <= 0) return null;
+  return (Number(tokens || 0) / 1e6) * Number(rate);
 }
 
 function renderAccounting(analytics, balance) {
@@ -358,13 +368,10 @@ function renderAccounting(analytics, balance) {
   const hasDirect =
     Boolean(summary?.totalOperations) ||
     Number(balance?.nativeOptimizer?.substitutions || 0) > 0;
-  const hasSavingsMeasurement =
-    Boolean(summary?.measuredSavingsOperations) ||
-    Number(balance?.nativeOptimizer?.substitutions || 0) > 0;
+  const hasSavingsMeasurement = Boolean(summary?.measuredSavingsOperations);
   const canComputeNet = hasSavingsMeasurement || causalSaved != null;
   const combinedNet = canComputeNet
     ? Number(summary?.totalTokensSaved || 0) +
-      Number(balance?.nativeOptimizer?.tokensSaved || 0) +
       Number(causalSaved || 0) -
       graphCost
     : null;
@@ -380,30 +387,32 @@ function renderAccounting(analytics, balance) {
       'Returned context',
       summary ? compact(summary.totalOptimizedTokens) : 'Not measured',
       summary
-        ? `${formatUsd(summary.contextUsd)} · ${fmt(summary.actualReturnedContextOperations || 0)} actual-return · ${fmt(summary.legacyReportedContextOperations || 0)} legacy rows`
+        ? `${formatUsd(summary.contextUsd)} · ${fmt(summary.observedReturnedContextOperations || 0)} observed · ${fmt(summary.unverifiedReportedOperations || 0)} unverified rows excluded`
         : 'actual results returned to clients',
     ],
     [
       'Optimizer saved',
       hasSavingsMeasurement
-        ? compact(
-            Number(summary?.totalTokensSaved || 0) +
-              Number(balance?.nativeOptimizer?.tokensSaved || 0)
-          )
+        ? compact(Number(summary?.totalTokensSaved || 0))
         : 'Not measured',
       hasSavingsMeasurement
-        ? `${formatUsd(
-            Number(summary?.savedUsd || 0) +
-              (Number(balance?.nativeOptimizer?.tokensSaved || 0) / 1e6) *
-                USD_PER_MILLION_TOKENS
-          )} · MCP + native`
-        : 'USD unavailable',
+        ? `${formatUsd(summary?.savedUsd)} · ${compact(summary.grossTokensSaved)} gross − ${compact(summary.expansionTokensReturned)} expanded`
+        : 'No comparable payload pair yet',
+    ],
+    [
+      'Excluded reported saving',
+      summary?.unverifiedReportedOperations
+        ? compact(summary.unverifiedReportedTokensSaved)
+        : 'None',
+      summary?.unverifiedReportedOperations
+        ? `${fmt(summary.unverifiedReportedOperations)} legacy/tool rows retained for audit, excluded from totals`
+        : 'no quarantined claims',
     ],
     [
       'Graph memory cost',
       balance ? compact(graphCost) : 'Not measured',
       balance
-        ? `${formatUsd((graphCost / 1e6) * USD_PER_MILLION_TOKENS)} · delivery + harvest`
+        ? `${formatUsd(priceTokens(analytics, graphCost))} · delivery + harvest`
         : 'delivery + harvest',
     ],
     [
@@ -414,11 +423,11 @@ function renderAccounting(analytics, balance) {
         : 'holdout measured',
     ],
     [
-      'Combined net measured',
+      'Verified net',
       combinedNet == null ? 'Not measured' : compact(combinedNet),
       causalSaved == null
-        ? 'optimizer saving − graph cost; causal graph benefit excluded'
-        : 'optimizer + causal graph saving − graph cost',
+        ? 'verified MCP saving − graph cost; modeled graph benefits excluded'
+        : 'verified MCP + holdout graph saving − graph cost',
     ],
   ];
   host.innerHTML = cards
@@ -434,7 +443,7 @@ function renderAccounting(analytics, balance) {
   section.dataset.state = hasSavingsMeasurement ? 'measured' : 'not-measured';
   section.setAttribute('aria-busy', 'false');
   note.textContent = hasDirect
-    ? `${analytics?.source || 'No MCP operation rows yet'}; ${balance?.nativeOptimizer?.source || 'no native substitutions recorded'}. USD uses a $${analytics?.referenceUsdPerMillionTokens || USD_PER_MILLION_TOKENS}/million reference rate; graph causal savings are never counted before the holdout gate passes.`
+    ? `${analytics?.source || 'No MCP operation rows yet'}. ${analytics?.measurement?.tokenCountMethod || ''} ${analytics?.pricing?.explanation || 'Cost is not priced.'} Graph counterfactuals remain outside the verified MCP total.`
     : 'No direct optimizer before/after measurements have been recorded yet.';
 }
 
@@ -450,10 +459,12 @@ function renderClientLedger(session, balance) {
     const current = rows.find((row) => row.name === name);
     if (current) {
       current.totalOperations += native.substitutions || 0;
-      current.totalOptimizedTokens += native.tokensReturned || 0;
-      current.totalTokensSaved += native.tokensSaved || 0;
-      current.contextUsd +=
-        ((native.tokensReturned || 0) / 1e6) * USD_PER_MILLION_TOKENS;
+      current.unverifiedReportedOperations =
+        Number(current.unverifiedReportedOperations || 0) +
+        Number(native.substitutions || 0);
+      current.unverifiedReportedTokensSaved =
+        Number(current.unverifiedReportedTokensSaved || 0) +
+        Number(native.tokensSaved || 0);
       current.nativeSubstitutions = native.substitutions || 0;
     } else {
       rows.push({
@@ -463,10 +474,14 @@ function renderClientLedger(session, balance) {
             ? 'historical-unattributed'
             : 'recorded',
         totalOperations: native.substitutions || 0,
-        totalOptimizedTokens: native.tokensReturned || 0,
-        totalTokensSaved: native.tokensSaved || 0,
-        contextUsd:
-          ((native.tokensReturned || 0) / 1e6) * USD_PER_MILLION_TOKENS,
+        observedReturnedContextOperations: 0,
+        verifiedSavingsOperations: 0,
+        unverifiedReportedOperations: native.substitutions || 0,
+        totalOptimizedTokens: null,
+        totalTokensSaved: null,
+        unverifiedReportedTokensSaved: native.tokensSaved || 0,
+        contextUsd: null,
+        savedUsd: null,
         nativeSubstitutions: native.substitutions || 0,
       });
     }
@@ -498,12 +513,13 @@ function renderClientLedger(session, balance) {
       <div class="client-ledger-row">
         <div>
           <strong>${escapeHtml(row.name)}</strong>
-          <span>${row.attribution === 'historical-unattributed' ? 'historical total; client was not stored' : row.attribution === 'lifecycle-only' ? 'lifecycle active; optimizer cost not yet attributed' : `${row.nativeSubstitutions ? `${fmt(row.nativeSubstitutions)} graph substitutions · ` : ''}attributed by client protocol`}</span>
+          <span>${row.attribution === 'historical-unattributed' ? 'historical reports quarantined; client was not stored' : row.attribution === 'lifecycle-only' ? 'lifecycle active; optimizer cost not yet attributed' : `${row.nativeSubstitutions ? `${fmt(row.nativeSubstitutions)} modeled graph substitutions · ` : ''}attributed by client protocol`}</span>
         </div>
         <div><span>Operations</span><strong class="num">${fmt(row.totalOperations)}</strong></div>
         <div><span>Returned context</span><strong class="num">${row.totalOptimizedTokens == null ? 'Not measured' : fmt(row.totalOptimizedTokens)}</strong></div>
-        <div><span>Context USD</span><strong class="num">${row.contextUsd == null ? 'Not measured' : formatUsd(row.contextUsd)}</strong></div>
-        <div><span>Saved</span><strong class="num saved-cell">${row.totalTokensSaved == null ? 'Not measured' : fmt(row.totalTokensSaved)}</strong></div>
+        <div><span>Cost equivalent</span><strong class="num">${formatUsd(row.contextUsd)}</strong></div>
+        <div><span>Verified net</span><strong class="num saved-cell">${row.totalTokensSaved == null ? 'Not measured' : fmt(row.totalTokensSaved)}</strong></div>
+        <div><span>Excluded report</span><strong class="num">${fmt(row.unverifiedReportedTokensSaved || 0)}</strong></div>
       </div>`
     )
     .join('');
@@ -535,9 +551,7 @@ function renderVerdict(analytics, balance, status) {
   box.hidden = false;
   box.classList.remove('is-ok', 'is-warn', 'is-bad');
 
-  const directSaved =
-    Number(analytics?.summary?.totalTokensSaved || 0) +
-    Number(balance?.nativeOptimizer?.tokensSaved || 0);
+  const directSaved = Number(analytics?.summary?.totalTokensSaved || 0);
   const graphCost =
     Number(balance?.deliveryTokens ?? balance?.injectedTokens ?? 0) +
     Number(balance?.harvestTokens || 0);
@@ -893,7 +907,7 @@ function renderTimeline(events) {
           <span class="ev-name">${escapeHtml(action.tool)}</span>
           <span class="ev-detail">${escapeHtml(action.detail)}</span>
         </span>
-        <span class="ev-meta num">${action.contextTokens != null ? (action.tokens == null ? `${compact(action.contextTokens)} context · ${action.costLabel}` : `${compact(action.contextTokens)} context · ${formatUsd(action.contextUsd)} · ${compact(action.tokens)} saved`) : action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
+        <span class="ev-meta num">${action.contextTokens != null ? (action.tokens == null ? `${compact(action.contextTokens)} context · ${action.costLabel}` : `${compact(action.contextTokens)} context · ${formatUsd(action.contextUsd)} · ${action.tokens < 0 ? `${compact(Math.abs(action.tokens))} expansion debit` : `${compact(action.tokens)} saved`}`) : action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
         <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
       </div>`;
     })
@@ -903,22 +917,33 @@ function renderTimeline(events) {
 function describeEvent(event) {
   if (event.originalTokens != null && event.optimizedTokens != null) {
     const isNative = event.name === 'live_graph_substitution';
+    const classification = String(event.classification || '');
+    const expansion = classification === 'verified-transport-expansion-debit';
+    const unverified =
+      classification === 'unverified-reported' ||
+      classification === 'modeled-counterfactual';
     return {
       tool: isNative
         ? `Live graph substitution${event.client ? ` · ${event.client}` : ''}`
         : `${event.name || event.toolName || 'optimizer operation'}${event.client ? ` · ${event.client}` : ''}`,
-      detail:
-        event.savingsMeasured === false
-          ? `${fmt(event.optimizedTokens)} returned context tokens; no before baseline`
-          : `${fmt(event.originalTokens)} → ${fmt(event.optimizedTokens)} context tokens`,
+      detail: unverified
+        ? `${fmt(event.reportedTokensSaved || 0)} reported tokens excluded; no comparable materialized payload`
+        : expansion
+          ? `${fmt(event.optimizedTokens)} expansion tokens returned; debited from the linked preview`
+          : event.savingsMeasured === false
+            ? `${fmt(event.optimizedTokens)} returned context tokens; no before baseline`
+            : `${fmt(event.originalTokens)} → ${fmt(event.optimizedTokens)} context tokens`,
       tokens:
         event.savingsMeasured === false ? null : Number(event.tokensSaved || 0),
-      contextTokens: Number(event.optimizedTokens || 0),
+      contextTokens: unverified ? null : Number(event.optimizedTokens || 0),
       contextUsd: event.contextUsd,
-      costLabel:
-        event.savingsMeasured === false
+      costLabel: unverified
+        ? 'excluded from verified totals'
+        : event.savingsMeasured === false
           ? `${formatUsd(event.contextUsd)} context · saving not measurable`
-          : `${formatUsd(event.contextUsd)} context · ${formatUsd(event.savedUsd)} saved`,
+          : expansion
+            ? `${formatUsd(event.contextUsd)} context · ${formatUsd(event.savedUsd)} net adjustment`
+            : `${formatUsd(event.contextUsd)} context · ${formatUsd(event.savedUsd)} saved`,
     };
   }
   const hookEvent = String(event.hookEvent || '').trim();
@@ -965,7 +990,7 @@ function renderBreakdown(s) {
   const rows = toolRows(s);
   if (!rows.length) {
     body.innerHTML =
-      '<tr><td colspan="5">' +
+      '<tr><td colspan="6">' +
       teach(
         'No actions counted yet',
         'Each kind of observed agent action gets a row here, so repeat costs are easy to spot.'
@@ -980,8 +1005,9 @@ function renderBreakdown(s) {
         <td>${escapeHtml(t.name || t.tool)}</td>
         <td class="right num">${fmt(t.count)}</td>
         <td class="right num">${t.tokens == null ? 'Not measured' : fmt(t.tokens)}</td>
-        <td class="right num">${t.contextUsd == null ? 'Not measured' : formatUsd(t.contextUsd)}</td>
+        <td class="right num">${formatUsd(t.contextUsd)}</td>
         <td class="right num saved-cell">${t.tokensSaved == null ? 'Not measured' : fmt(t.tokensSaved)}</td>
+        <td class="right num">${t.unverifiedReportedTokensSaved == null ? 'None' : fmt(t.unverifiedReportedTokensSaved)}</td>
       </tr>`
     )
     .join('');

@@ -32,11 +32,13 @@ The global hooks system provides **7-phase token optimization** that runs automa
 ## Prerequisites
 
 ### All Platforms
+
 - **Claude Code** CLI installed globally
 - **Node.js** 18+ and npm
 - **token-optimizer-mcp** package (will be installed by installer)
 
 ### Platform-Specific
+
 - **Windows**: PowerShell 5.1+
 - **macOS**: Bash 4.0+, Homebrew recommended
 - **Linux**: Bash 4.0+
@@ -434,18 +436,21 @@ chmod +x ~/.claude-global/hooks/helpers/*.sh
 ### 1. Check Hooks Are Firing
 
 **Windows:**
+
 ```powershell
 # View dispatcher log
 Get-Content "$env:USERPROFILE\.claude-global\hooks\logs\dispatcher.log" -Tail 20
 ```
 
 **macOS / Linux:**
+
 ```bash
 # View dispatcher log
 tail -20 ~/.claude-global/hooks/logs/dispatcher.log
 ```
 
 You should see entries like:
+
 ```
 [2025-10-26 10:00:00] [PreToolUse] DISPATCHER INVOKED
 [2025-10-26 10:00:01] [PreToolUse] Tool: Read
@@ -455,18 +460,21 @@ You should see entries like:
 ### 2. Check MCP Tools Are Being Called
 
 **Windows:**
+
 ```powershell
 # View MCP invocation log
 Get-Content "$env:USERPROFILE\.claude-global\hooks\logs\mcp-invocation.log" -Tail 20
 ```
 
 **macOS / Linux:**
+
 ```bash
 # View MCP invocation log
 tail -20 ~/.claude-global/hooks/logs/mcp-invocation.log
 ```
 
 You should see:
+
 ```
 [2025-10-26 10:00:00] [DEBUG] Invoking MCP: token-optimizer -> smart_read
 [2025-10-26 10:00:01] [DEBUG] Request: {"jsonrpc":"2.0",...}
@@ -475,18 +483,21 @@ You should see:
 ### 3. Check Token Optimization
 
 **Windows:**
+
 ```powershell
 # View token optimizer log
 Get-Content "$env:USERPROFILE\.claude-global\hooks\logs\token-optimizer.log" -Tail 10
 ```
 
 **macOS / Linux:**
+
 ```bash
 # View token optimizer log
 tail -10 ~/.claude-global/hooks/logs/token-optimizer.log
 ```
 
 You should see savings like:
+
 ```
 [2025-10-26 10:00:00] [SUGGEST] Read File (~5000 tokens) → Token Optimizer (~1850 tokens) | Savings: 3150 tokens (63%)
 ```
@@ -494,6 +505,7 @@ You should see savings like:
 ### 4. Check Operations Tracking
 
 **Windows:**
+
 ```powershell
 # View most recent operations CSV
 Get-ChildItem "$env:USERPROFILE\.claude-global\hooks\data\operations-*.csv" |
@@ -503,6 +515,7 @@ Get-ChildItem "$env:USERPROFILE\.claude-global\hooks\data\operations-*.csv" |
 ```
 
 **macOS / Linux:**
+
 ```bash
 # View most recent operations CSV
 ls -t ~/.claude-global/hooks/data/operations-*.csv | head -1 | xargs tail -10
@@ -515,6 +528,7 @@ ls -t ~/.claude-global/hooks/data/operations-*.csv | head -1 | xargs tail -10
 **Symptom**: No log entries in dispatcher.log
 
 **Solutions**:
+
 1. Check workspace trust is accepted (see Manual Installation Step 5 for your platform)
 2. Verify settings.json hook commands have correct paths
 3. Restart Claude Code
@@ -527,14 +541,17 @@ ls -t ~/.claude-global/hooks/data/operations-*.csv | head -1 | xargs tail -10
 **Symptom**: dispatcher.log shows hooks firing but no MCP calls
 
 **Solutions**:
+
 1. Verify token-optimizer MCP server is running:
 
    **Windows:**
+
    ```powershell
    Get-Process | Where-Object { $_.Name -like "*node*" -and $_.CommandLine -like "*token-optimizer*" }
    ```
 
    **macOS / Linux:**
+
    ```bash
    ps aux | grep token-optimizer | grep -v grep
    ```
@@ -552,6 +569,7 @@ ls -t ~/.claude-global/hooks/data/operations-*.csv | head -1 | xargs tail -10
 **Symptom**: "File cannot be loaded because running scripts is disabled"
 
 **Solution**:
+
 ```powershell
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
@@ -561,6 +579,7 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 **Symptom**: "Permission denied" errors when running hooks
 
 **Solution**:
+
 ```bash
 # Make all hook scripts executable
 chmod +x ~/.claude-global/hooks/dispatcher.sh
@@ -576,6 +595,7 @@ ls -la ~/.claude-global/hooks/dispatcher.sh
 **Symptom**: "Bad substitution" or syntax errors
 
 **Solution**: macOS ships with Bash 3.x, but hooks require Bash 4+
+
 ```bash
 # Install Bash 4+ via Homebrew
 brew install bash
@@ -731,23 +751,17 @@ C:\Users\YOUR_USERNAME\
         └── token-optimizer-mcp         # MCP server
 ```
 
-## Token Reduction Metrics
+## Token reduction measurement
 
-Based on production usage across 38,000+ operations:
+Static reduction percentages and repository scan sizes are not production
+savings evidence. Current releases require a materialized MCP payload before
+progressive disclosure and the actual returned payload, then debit every linked
+`expand` response. Run `get_optimization_report` for the verified net or
+`npm run dashboard:audit-savings` to inspect both qualifying and excluded rows.
 
-| Tool | Average Tokens Before | Average Tokens After | Reduction % |
-|------|----------------------|---------------------|-------------|
-| Read | 5,000 | 1,850 | 63% |
-| Grep | 2,000 | 740 | 63% |
-| Glob | 1,500 | 555 | 63% |
-| Edit | 3,500 | 1,295 | 63% |
-| **Overall** | **3,000** | **1,110** | **63%** |
-
-### Session-Level Impact
-
-- **Operations per session**: ~200-500
-- **Token savings per session**: 300,000-700,000 tokens
-- **Cost savings (at $3/M tokens)**: $0.90-$2.10 per session
+Dollar values are **Not priced** unless the user configures an effective blended
+input-token rate that reflects their provider, model, cache read/write mix,
+route, tier, plan, and credits. See [Token accounting](./TOKEN_ACCOUNTING.md).
 
 ## Advanced Configuration
 

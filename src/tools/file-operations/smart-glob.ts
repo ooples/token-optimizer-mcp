@@ -112,6 +112,8 @@ export interface SmartGlobResult {
     compressionRatio: number;
     duration: number;
     cacheHit: boolean;
+    savingsClassification?: 'unmeasured';
+    savingsReason?: string;
     /** Real matches withheld by the ignore patterns; absent when none were. */
     ignoredMatches?: number;
     /** Plain-language explanation of what was withheld and how to see it. */
@@ -219,6 +221,7 @@ export class SmartGlobTool {
 
       // Check cache first
       const cacheKey = generateCacheKey('glob', {
+        measurementContract: 2,
         pattern,
         options: opts,
         // Any write through this server invalidates every cached search.
@@ -434,30 +437,13 @@ export class SmartGlobTool {
         JSON.stringify(results)
       ).tokens;
 
-      // WHAT WAS ACTUALLY WITHHELD, not a multiplier.
-      //
-      // This used to report `resultTokens * 50` as the baseline in path-only
-      // mode -- so listing 2,400 files claimed to have saved 117,943 tokens
-      // without having read a single one. Nothing was read, so nothing about
-      // file CONTENT was saved; the 50x came from nowhere.
-      //
-      // A listing's real saving is what pagination and filtering kept out of
-      // the response: the paths that matched and were not returned. That is
-      // countable, so it is counted. When everything matched fits in the
-      // response, the honest answer is that nothing was saved.
-      const withheldPaths = files
-        .slice(opts.offset + paginatedFiles.length)
-        .map((f) => f.path);
-      const withheldTokens = withheldPaths.length
-        ? this.tokenCounter.count(JSON.stringify(withheldPaths)).tokens
-        : 0;
-
-      const originalTokens = resultTokens + withheldTokens;
-      const tokensSaved = withheldTokens;
-      // An honest baseline can now equal the result (nothing was withheld), so
-      // the ratio must not divide by zero or report a nonsense figure.
-      const compressionRatio =
-        originalTokens > 0 ? resultTokens / originalTokens : 1;
+      // Pagination is caller-requested behaviour, not a savings baseline. A
+      // conventional glob given the same limit would also omit those paths.
+      // No unpaginated MCP payload is materialized, so there is no comparable
+      // before-state and no defensible token saving to claim.
+      const originalTokens = resultTokens;
+      const tokensSaved = 0;
+      const compressionRatio = 1;
 
       // Build result
       const result: SmartGlobResult = {
@@ -473,6 +459,9 @@ export class SmartGlobTool {
           compressionRatio,
           duration: 0, // Will be set below
           cacheHit: false,
+          savingsClassification: 'unmeasured',
+          savingsReason:
+            'No comparable unoptimized glob response was materialized; caller-requested pagination is not optimizer-created savings.',
           // Only present when something was actually withheld, so a normal
           // search stays as quiet as it was.
           ...(ignoredMatches > 0

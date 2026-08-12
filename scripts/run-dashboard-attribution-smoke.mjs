@@ -13,9 +13,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(process.argv[2] || process.cwd());
-const target = resolve(
-  process.argv[3] || `${root}/README.md`
-);
+const target = resolve(process.argv[3] || `${root}/README.md`);
 const serverEntry = resolve('dist/server/index.js');
 
 if (!existsSync(serverEntry))
@@ -57,7 +55,8 @@ async function exercise(client) {
           if (entry) {
             clearTimeout(entry.timer);
             pending.delete(message.id);
-            if (message.error) entry.reject(new Error(JSON.stringify(message.error)));
+            if (message.error)
+              entry.reject(new Error(JSON.stringify(message.error)));
             else entry.resolve(message.result);
           }
         } catch {
@@ -72,7 +71,8 @@ async function exercise(client) {
     const id = nextId++;
     return new Promise((resolveCall, reject) => {
       const timer = setTimeout(
-        () => reject(new Error(`${client.name}: timed out waiting for ${method}`)),
+        () =>
+          reject(new Error(`${client.name}: timed out waiting for ${method}`)),
         30_000
       );
       pending.set(id, { resolve: resolveCall, reject, timer });
@@ -99,10 +99,35 @@ async function exercise(client) {
       name: 'smart_read',
       arguments: { path: target, maxSize: 8_000 },
     });
+    const grep = await call('tools/call', {
+      name: 'smart_grep',
+      arguments: {
+        path: target,
+        pattern: ' ',
+        limit: 400,
+        useCache: false,
+      },
+    });
     const knowledgeChars = knowledge?.content?.[0]?.text?.length || 0;
     const readChars = read?.content?.[0]?.text?.length || 0;
+    const grepChars = grep?.content?.[0]?.text?.length || 0;
+    let expandedChars = 0;
+    if (client.name === 'codex') {
+      const ref = /\bexpand\s+([a-f0-9]{16})\b/i.exec(
+        grep?.content?.[0]?.text || ''
+      )?.[1];
+      if (!ref)
+        throw new Error(
+          'codex: smart_grep preview did not expose an expansion reference'
+        );
+      const expanded = await call('tools/call', {
+        name: 'expand',
+        arguments: { ref, reason: 'verify net expansion accounting' },
+      });
+      expandedChars = expanded?.content?.[0]?.text?.length || 0;
+    }
     process.stdout.write(
-      `${client.name}: wiki_read ${knowledgeChars} chars; smart_read ${readChars} chars\n`
+      `${client.name}: wiki_read ${knowledgeChars} chars; smart_read ${readChars} chars; smart_grep ${grepChars} chars${expandedChars ? `; expand ${expandedChars} chars` : ''}\n`
     );
   } finally {
     child.stdin.end();

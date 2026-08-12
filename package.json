@@ -2,7 +2,7 @@
   "name": "@ooples/token-optimizer-mcp",
   "version": "5.7.0",
   "mcpName": "io.github.ooples/token-optimizer-mcp",
-  "description": "Measure token savings per AI coding agent, optimize context, and share a live local knowledge graph across 16 CLI clients",
+  "description": "Audit net MCP context avoided per AI coding agent, optimize context, and share a live local knowledge graph across 16 CLI clients",
   "main": "dist/server/index.js",
   "types": "dist/server/index.d.ts",
   "bin": {
@@ -104,6 +104,7 @@
     "verify:interactions": "node scripts/verify-wiki-interactions.mjs",
     "dashboard:verify-live": "node scripts/verify-live-dashboard.mjs",
     "dashboard:attribution-smoke": "node scripts/run-dashboard-attribution-smoke.mjs",
+    "dashboard:audit-savings": "node scripts/audit-token-savings.mjs",
     "explore:wiki": "node scripts/explore-wiki.mjs"
   },
   "repository": {

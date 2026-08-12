@@ -119,11 +119,9 @@ describe('recordToolAnalytics', () => {
     );
     const action = await manager.getActionAnalytics();
     expect(action.summary.totalOperations).toBe(1);
-    expect(action.summary.totalOriginalTokens).toBe(1000);
+    expect(action.summary.totalOriginalTokens).toBe(0);
     expect(action.summary.totalOptimizedTokens).toBeGreaterThan(0);
-    expect(action.summary.totalTokensSaved).toBe(
-      1000 - action.summary.totalOptimizedTokens
-    );
+    expect(action.summary.totalTokensSaved).toBe(0);
     expect(action.byAction[0].name).toBe('smart_read');
   });
 
@@ -156,24 +154,98 @@ describe('recordToolAnalytics', () => {
     expect(entry.originalTokens).toBe(entry.optimizedTokens);
   });
 
-  it('prices the actual disclosed result against the tool baseline', async () => {
+  it('measures the materialized undisclosed payload against the actual return', async () => {
     await recordToolAnalytics(
       manager,
       'smart_read',
-      { content: [{ type: 'text', text: JSON.stringify({ compact: true }) }] },
+      {
+        content: [{ type: 'text', text: JSON.stringify({ compact: true }) }],
+        _meta: { tokenOptimizer: { disclosureRef: 'a'.repeat(16) } },
+      },
       { client: 'codex', clientVersion: '0.147.0' },
-      mcpResult({
-        originalTokens: 1000,
-        optimizedTokens: 100,
-        tokensSaved: 900,
-      })
+      {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              content: 'x'.repeat(10_000),
+            }),
+          },
+        ],
+      }
     );
 
     const [entry] = await manager.getEntries();
     expect(entry.savingsMeasured).toBe(true);
-    expect(entry.originalTokens).toBe(1000);
+    expect(entry.originalTokens).toBeGreaterThan(entry.optimizedTokens);
     expect(entry.optimizedTokens).toBeGreaterThan(0);
-    expect(entry.tokensSaved).toBe(1000 - entry.optimizedTokens);
+    expect(entry.tokensSaved).toBe(
+      entry.originalTokens - entry.optimizedTokens
+    );
     expect(entry.client).toBe('codex');
+    expect(entry.metadata).toMatchObject({
+      measurementId: expect.any(String),
+      measurementSchemaVersion: 2,
+      measurementClass: 'verified-transport-reduction',
+      baselineKind: 'materialized-undisclosed-mcp-result',
+      disclosureRef: 'a'.repeat(16),
+      baselineSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      returnedSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+  });
+
+  it('quarantines tool-reported savings when disclosure did not reduce the payload', async () => {
+    const result = mcpResult({
+      originalTokens: 1_000_000,
+      optimizedTokens: 10,
+      tokensSaved: 999_990,
+    });
+    await recordToolAnalytics(manager, 'smart_grep', result, {}, result);
+
+    const [entry] = await manager.getEntries();
+    expect(entry.savingsMeasured).toBe(false);
+    expect(entry.tokensSaved).toBe(0);
+    expect(entry.originalTokens).toBe(entry.optimizedTokens);
+    expect(entry.metadata?.reportedToolSavings).toMatchObject({
+      tokensSaved: 999_990,
+    });
+  });
+
+  it('debits later expansion transport from the linked verified preview', async () => {
+    const ref = 'c'.repeat(16);
+    await recordToolAnalytics(
+      manager,
+      'smart_grep',
+      {
+        content: [{ type: 'text', text: 'short preview' }],
+        _meta: { tokenOptimizer: { disclosureRef: ref } },
+      },
+      { operationId: 'mcp:process:stdio:1' },
+      { content: [{ type: 'text', text: 'full result '.repeat(2_000) }] }
+    );
+    await recordToolAnalytics(
+      manager,
+      'expand',
+      {
+        content: [{ type: 'text', text: 'expanded section '.repeat(200) }],
+        _meta: { tokenOptimizer: { expansionRef: ref } },
+      },
+      { operationId: 'mcp:process:stdio:2' }
+    );
+
+    const entries = await manager.getEntries();
+    const preview = entries.find((entry) => entry.toolName === 'smart_grep');
+    const expansion = entries.find((entry) => entry.toolName === 'expand');
+    expect(preview?.savingsMeasured).toBe(true);
+    expect(expansion?.metadata).toMatchObject({
+      measurementClass: 'verified-transport-expansion-debit',
+      expansionRef: ref,
+      creditedMeasurementId: preview?.measurementId,
+    });
+    const net = preview!.tokensSaved - expansion!.optimizedTokens;
+    expect((await manager.getHookAnalytics()).summary.totalTokensSaved).toBe(
+      net
+    );
   });
 });

@@ -42,6 +42,8 @@ export interface AnalyticsEntry {
   modelVersion?: string;
   /** Whether a real before-state exists for this operation's savings claim. */
   savingsMeasured?: boolean;
+  /** Stable per-request identity used to reject transport retries. */
+  measurementId?: string;
 }
 
 /**

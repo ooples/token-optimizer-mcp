@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const base = process.argv[2] || 'http://localhost:3101';
+const base = process.argv[2] || 'http://localhost:3100';
 const output = join(ROOT, 'artifacts', 'live-dashboard');
 const documentationOutput = process.argv[3] ? resolve(process.argv[3]) : null;
 mkdirSync(output, { recursive: true });
@@ -91,10 +91,11 @@ try {
     () => {
       const saved = document.querySelector('#saved-tokens');
       return (
-        saved?.dataset.state === 'measured' &&
-        Number(saved.textContent?.replaceAll(',', '')) > 0 &&
+        ['measured', 'collecting', 'not-measured'].includes(
+          saved?.dataset.state
+        ) &&
         document.querySelectorAll('#accounting-grid .accounting-card')
-          .length === 6 &&
+          .length === 7 &&
         document.querySelectorAll('#client-ledger .client-ledger-row').length >
           0
       );
@@ -355,25 +356,26 @@ try {
       ({ label, value }) =>
         label === 'Lifecycle events' && Number(value.replaceAll(',', '')) > 0
     ) &&
-    Number(overview.savedTokens.replaceAll(',', '')) > 0 &&
-    /^\$/.test(overview.savedMoney) &&
+    /^(?:[\d,]+|—)$/.test(overview.savedTokens) &&
+    overview.savedMoney === 'Not priced' &&
     overview.accessibility.savings.includes(overview.savedTokens) &&
     /Returned context/i.test(overview.accessibility.accounting) &&
     /codex|claude-code|gemini/i.test(overview.accessibility.agents) &&
-    overview.accountingCards.length === 6 &&
+    overview.accountingCards.length === 7 &&
     overview.accountingCards.some(
       ({ label, value, detail }) =>
         label === 'Returned context' &&
         value !== 'Not measured' &&
-        /\$/.test(detail)
+        /Not priced|\$/.test(detail)
     ) &&
     overview.clientRows.length >= 2 &&
     overview.recentRows.some(
-      (row) => /\$/.test(row) && /saved|baseline/i.test(row)
+      (row) =>
+        /Not priced|\$|excluded/i.test(row) &&
+        /saved|baseline|excluded/i.test(row)
     ) &&
     overview.actionRows.some(
-      (row) =>
-        row.length === 5 && /^\$/.test(row[3]) && row[4] !== 'Not measured'
+      (row) => row.length === 6 && row[3] === 'Not priced'
     ) &&
     overview.cameraStability.widthSpread <= 1 &&
     overview.cameraStability.heightSpread <= 1 &&

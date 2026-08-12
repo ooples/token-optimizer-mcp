@@ -4,8 +4,24 @@ import fs from 'fs';
 import { AnalyticsManager } from '../analytics/analytics-manager.js';
 import { SqliteAnalyticsStorage } from '../analytics/analytics-storage.js';
 import type { AnalyticsEntry } from '../analytics/analytics-types.js';
+import {
+  classifySavings,
+  hasObservedReturnedContext,
+  isVerifiedSavingsEntry,
+  isVerifiedExpansionDebit,
+  reportedSavings,
+  verifiedTransportDelta,
+  type SavingsClassification,
+} from '../analytics/savings-classification.js';
 
-export const DASHBOARD_USD_PER_MILLION_TOKENS = 3;
+const EFFECTIVE_RATE_ENV = 'TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION';
+
+interface EffectivePricing {
+  available: boolean;
+  effectiveInputUsdPerMillion: number | null;
+  source: 'configured-effective-rate' | 'unavailable';
+  explanation: string;
+}
 
 export interface DashboardActionAnalytics {
   name: string;
@@ -13,60 +29,81 @@ export interface DashboardActionAnalytics {
   totalOriginalTokens: number;
   totalOptimizedTokens: number;
   totalTokensSaved: number;
+  grossTokensSaved: number;
+  expansionTokensReturned: number;
+  unverifiedReportedTokensSaved: number;
   savingsPercentage: number | null;
-  contextUsd: number;
-  savedUsd: number;
+  contextUsd: number | null;
+  savedUsd: number | null;
   firstSeen: string;
   lastSeen: string;
   measuredSavingsOperations: number;
+  verifiedExpansionOperations: number;
   unmeasuredSavingsOperations: number;
+  observedReturnedContextOperations: number;
+  unverifiedReportedOperations: number;
 }
 
 export interface DashboardAnalyticsReport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   available: boolean;
   source: string;
-  referenceUsdPerMillionTokens: number;
+  pricing: EffectivePricing;
   summary: {
     totalOperations: number;
     totalOriginalTokens: number;
     totalOptimizedTokens: number;
     measuredOptimizedTokens: number;
     totalTokensSaved: number;
+    grossTokensSaved: number;
+    expansionTokensReturned: number;
+    unverifiedReportedTokensSaved: number;
     savingsPercentage: number | null;
-    contextUsd: number;
-    savedUsd: number;
+    contextUsd: number | null;
+    savedUsd: number | null;
     firstSeen: string | null;
     lastSeen: string | null;
     measuredSavingsOperations: number;
+    verifiedExpansionOperations: number;
     unmeasuredSavingsOperations: number;
     actualReturnedContextOperations: number;
     legacyReportedContextOperations: number;
+    observedReturnedContextOperations: number;
+    unverifiedReportedOperations: number;
   };
   byAction: DashboardActionAnalytics[];
   byClient: Array<{
     name: string;
     attribution: 'recorded' | 'historical-unattributed';
     totalOperations: number;
-    totalOptimizedTokens: number;
-    totalTokensSaved: number;
-    contextUsd: number;
-    savedUsd: number;
+    observedReturnedContextOperations: number;
+    verifiedSavingsOperations: number;
+    verifiedExpansionOperations: number;
+    unverifiedReportedOperations: number;
+    totalOptimizedTokens: number | null;
+    totalTokensSaved: number | null;
+    unverifiedReportedTokensSaved: number;
+    contextUsd: number | null;
+    savedUsd: number | null;
   }>;
   recent: Array<{
     name: string;
     originalTokens: number;
     optimizedTokens: number;
     tokensSaved: number;
-    contextUsd: number;
-    savedUsd: number;
+    reportedTokensSaved: number;
+    contextUsd: number | null;
+    savedUsd: number | null;
     timestamp: string;
     savingsMeasured: boolean;
+    classification: SavingsClassification;
     client: string | null;
     model: string | null;
   }>;
   measurement: {
     definition: string;
+    tokenCountMethod: string;
+    legacyPolicy: string;
     priceBasis: string;
   };
 }
@@ -76,25 +113,41 @@ function finite(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function usd(tokens: number, rate: number): number {
-  return (tokens / 1_000_000) * rate;
+function pricing(override: unknown): EffectivePricing {
+  const candidate =
+    override === undefined ? process.env[EFFECTIVE_RATE_ENV] : override;
+  const rate = Number(candidate);
+  if (candidate !== undefined && Number.isFinite(rate) && rate > 0) {
+    return {
+      available: true,
+      effectiveInputUsdPerMillion: rate,
+      source: 'configured-effective-rate',
+      explanation: `Configured by ${EFFECTIVE_RATE_ENV}. It must already reflect the user's provider, model, plan, cache mix, processing tier, and included credits.`,
+    };
+  }
+  return {
+    available: false,
+    effectiveInputUsdPerMillion: null,
+    source: 'unavailable',
+    explanation: `No cost is claimed because the MCP server cannot observe billing. Set ${EFFECTIVE_RATE_ENV} to an effective blended input-token rate to show a cost equivalent.`,
+  };
+}
+
+function usd(tokens: number, contract: EffectivePricing): number | null {
+  const rate = contract.effectiveInputUsdPerMillion;
+  return rate === null ? null : (tokens / 1_000_000) * rate;
 }
 
 /**
- * Turns durable before/after optimizer measurements into the dashboard contract.
- *
- * These are direct output-size measurements, not the graph's causal holdout
- * estimate. Keeping the two contracts separate lets the overview report what
- * optimizer tools have already removed while the wiki can continue refusing a
- * graph-effect claim until its treated and control cohorts are large enough.
+ * Summarize only provenance-qualified savings. Historical tool-reported rows
+ * stay visible as an audit population, but never enter the verified headline.
  */
 export function summarizeDashboardAnalytics(
   input: AnalyticsEntry[],
-  options: { limit?: number; usdPerMillionTokens?: number } = {}
+  options: { limit?: number; effectiveInputUsdPerMillion?: number } = {}
 ): DashboardAnalyticsReport {
   const limit = Math.min(100, Math.max(1, finite(options.limit) || 40));
-  const rate =
-    finite(options.usdPerMillionTokens) || DASHBOARD_USD_PER_MILLION_TOKENS;
+  const price = pricing(options.effectiveInputUsdPerMillion);
   const entries = input
     .filter(
       (entry) =>
@@ -121,21 +174,36 @@ export function summarizeDashboardAnalytics(
 
   const byAction = [...groups.entries()]
     .map(([name, rows]): DashboardActionAnalytics => {
-      const measuredRows = rows.filter((row) => row.savingsMeasured !== false);
-      const totalOriginalTokens = measuredRows.reduce(
+      const verifiedRows = rows.filter(isVerifiedSavingsEntry);
+      const expansionRows = rows.filter(isVerifiedExpansionDebit);
+      const observedRows = rows.filter(hasObservedReturnedContext);
+      const unverifiedRows = rows.filter(
+        (row) =>
+          !isVerifiedSavingsEntry(row) &&
+          !isVerifiedExpansionDebit(row) &&
+          reportedSavings(row) > 0
+      );
+      const totalOriginalTokens = verifiedRows.reduce(
         (sum, row) => sum + row.originalTokens,
         0
       );
-      const totalOptimizedTokens = rows.reduce(
+      const totalOptimizedTokens = observedRows.reduce(
         (sum, row) => sum + row.optimizedTokens,
         0
       );
-      const totalTokensSaved = rows.reduce(
-        (sum, row) =>
-          sum + (row.savingsMeasured === false ? 0 : row.tokensSaved),
+      const grossTokensSaved = verifiedRows.reduce(
+        (sum, row) => sum + reportedSavings(row),
         0
       );
-      const measuredSavingsOperations = measuredRows.length;
+      const expansionTokensReturned = expansionRows.reduce(
+        (sum, row) => sum + row.optimizedTokens,
+        0
+      );
+      const totalTokensSaved = grossTokensSaved - expansionTokensReturned;
+      const unverifiedReportedTokensSaved = unverifiedRows.reduce(
+        (sum, row) => sum + reportedSavings(row),
+        0
+      );
       const timestamps = rows.map((row) => row.timestamp).sort();
       return {
         name,
@@ -143,19 +211,30 @@ export function summarizeDashboardAnalytics(
         totalOriginalTokens,
         totalOptimizedTokens,
         totalTokensSaved,
+        grossTokensSaved,
+        expansionTokensReturned,
+        unverifiedReportedTokensSaved,
         savingsPercentage:
           totalOriginalTokens > 0
             ? (totalTokensSaved / totalOriginalTokens) * 100
             : null,
-        contextUsd: usd(totalOptimizedTokens, rate),
-        savedUsd: usd(totalTokensSaved, rate),
+        contextUsd: usd(totalOptimizedTokens, price),
+        savedUsd: usd(totalTokensSaved, price),
         firstSeen: timestamps[0],
         lastSeen: timestamps.at(-1) || timestamps[0],
-        measuredSavingsOperations,
-        unmeasuredSavingsOperations: rows.length - measuredSavingsOperations,
+        measuredSavingsOperations: verifiedRows.length,
+        verifiedExpansionOperations: expansionRows.length,
+        unmeasuredSavingsOperations:
+          rows.length - verifiedRows.length - expansionRows.length,
+        observedReturnedContextOperations: observedRows.length,
+        unverifiedReportedOperations: unverifiedRows.length,
       };
     })
-    .sort((a, b) => b.totalTokensSaved - a.totalTokensSaved);
+    .sort(
+      (a, b) =>
+        b.totalTokensSaved - a.totalTokensSaved ||
+        b.unverifiedReportedTokensSaved - a.unverifiedReportedTokensSaved
+    );
 
   const clientGroups = new Map<string, AnalyticsEntry[]>();
   for (const entry of entries) {
@@ -171,13 +250,30 @@ export function summarizeDashboardAnalytics(
   }
   const byClient = [...clientGroups.entries()]
     .map(([name, rows]) => {
-      const totalOptimizedTokens = rows.reduce(
+      const observedRows = rows.filter(hasObservedReturnedContext);
+      const verifiedRows = rows.filter(isVerifiedSavingsEntry);
+      const expansionRows = rows.filter(isVerifiedExpansionDebit);
+      const unverifiedRows = rows.filter(
+        (row) =>
+          !isVerifiedSavingsEntry(row) &&
+          !isVerifiedExpansionDebit(row) &&
+          reportedSavings(row) > 0
+      );
+      const totalOptimizedTokens = observedRows.reduce(
         (sum, row) => sum + row.optimizedTokens,
         0
       );
-      const totalTokensSaved = rows.reduce(
-        (sum, row) =>
-          sum + (row.savingsMeasured === false ? 0 : row.tokensSaved),
+      const grossTokensSaved = verifiedRows.reduce(
+        (sum, row) => sum + reportedSavings(row),
+        0
+      );
+      const expansionTokensReturned = expansionRows.reduce(
+        (sum, row) => sum + row.optimizedTokens,
+        0
+      );
+      const totalTokensSaved = grossTokensSaved - expansionTokensReturned;
+      const unverifiedReportedTokensSaved = unverifiedRows.reduce(
+        (sum, row) => sum + reportedSavings(row),
         0
       );
       return {
@@ -187,87 +283,136 @@ export function summarizeDashboardAnalytics(
             ? ('historical-unattributed' as const)
             : ('recorded' as const),
         totalOperations: rows.length,
-        totalOptimizedTokens,
-        totalTokensSaved,
-        contextUsd: usd(totalOptimizedTokens, rate),
-        savedUsd: usd(totalTokensSaved, rate),
+        observedReturnedContextOperations: observedRows.length,
+        verifiedSavingsOperations: verifiedRows.length,
+        verifiedExpansionOperations: expansionRows.length,
+        unverifiedReportedOperations: unverifiedRows.length,
+        totalOptimizedTokens: observedRows.length ? totalOptimizedTokens : null,
+        totalTokensSaved:
+          verifiedRows.length || expansionRows.length ? totalTokensSaved : null,
+        grossTokensSaved,
+        expansionTokensReturned,
+        unverifiedReportedTokensSaved,
+        contextUsd: observedRows.length
+          ? usd(totalOptimizedTokens, price)
+          : null,
+        savedUsd:
+          verifiedRows.length || expansionRows.length
+            ? usd(totalTokensSaved, price)
+            : null,
       };
     })
-    .sort((a, b) => b.totalTokensSaved - a.totalTokensSaved);
+    .sort(
+      (a, b) =>
+        (b.totalTokensSaved || 0) - (a.totalTokensSaved || 0) ||
+        b.totalOperations - a.totalOperations
+    );
 
-  const measuredEntries = entries.filter(
-    (entry) => entry.savingsMeasured !== false
+  const verifiedEntries = entries.filter(isVerifiedSavingsEntry);
+  const expansionEntries = entries.filter(isVerifiedExpansionDebit);
+  const observedEntries = entries.filter(hasObservedReturnedContext);
+  const historicalEntries = entries.filter(
+    (entry) => classifySavings(entry) === 'unverified-reported'
   );
-  const totalOriginalTokens = measuredEntries.reduce(
+  const unverifiedEntries = entries.filter(
+    (entry) =>
+      !isVerifiedSavingsEntry(entry) &&
+      !isVerifiedExpansionDebit(entry) &&
+      reportedSavings(entry) > 0
+  );
+  const totalOriginalTokens = verifiedEntries.reduce(
     (sum, entry) => sum + entry.originalTokens,
     0
   );
-  const totalOptimizedTokens = entries.reduce(
+  const totalOptimizedTokens = observedEntries.reduce(
     (sum, entry) => sum + entry.optimizedTokens,
     0
   );
-  const totalTokensSaved = entries.reduce(
-    (sum, entry) =>
-      sum + (entry.savingsMeasured === false ? 0 : entry.tokensSaved),
+  const grossTokensSaved = verifiedEntries.reduce(
+    (sum, entry) => sum + reportedSavings(entry),
     0
   );
-  const measuredOptimizedTokens = measuredEntries.reduce(
+  const expansionTokensReturned = expansionEntries.reduce(
     (sum, entry) => sum + entry.optimizedTokens,
     0
   );
-  const measuredSavingsOperations = measuredEntries.length;
-  const actualReturnedContextOperations = entries.filter((entry) =>
-    ['actual-return-context-only', 'optimizer-before-actual-return'].includes(
-      String(entry.metadata?.measurement || '')
-    )
-  ).length;
+  const totalTokensSaved = grossTokensSaved - expansionTokensReturned;
+  const unverifiedReportedTokensSaved = unverifiedEntries.reduce(
+    (sum, entry) => sum + reportedSavings(entry),
+    0
+  );
+  const measuredOptimizedTokens = [
+    ...verifiedEntries,
+    ...expansionEntries,
+  ].reduce((sum, entry) => sum + entry.optimizedTokens, 0);
   const timestamps = entries.map((entry) => entry.timestamp).sort();
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     available: entries.length > 0,
     source:
-      'analytics.db: historical optimizer before/after rows plus actual returned context for newly recorded MCP operations',
-    referenceUsdPerMillionTokens: rate,
+      'analytics.db: verified materialized MCP before/after payloads; legacy and tool-reported estimates quarantined',
+    pricing: price,
     summary: {
       totalOperations: entries.length,
       totalOriginalTokens,
       totalOptimizedTokens,
       measuredOptimizedTokens,
       totalTokensSaved,
+      grossTokensSaved,
+      expansionTokensReturned,
+      unverifiedReportedTokensSaved,
       savingsPercentage:
         totalOriginalTokens > 0
           ? (totalTokensSaved / totalOriginalTokens) * 100
           : null,
-      contextUsd: usd(totalOptimizedTokens, rate),
-      savedUsd: usd(totalTokensSaved, rate),
+      contextUsd: usd(totalOptimizedTokens, price),
+      savedUsd: usd(totalTokensSaved, price),
       firstSeen: timestamps[0] || null,
       lastSeen: timestamps.at(-1) || null,
-      measuredSavingsOperations,
-      unmeasuredSavingsOperations: entries.length - measuredSavingsOperations,
-      actualReturnedContextOperations,
-      legacyReportedContextOperations:
-        entries.length - actualReturnedContextOperations,
+      measuredSavingsOperations: verifiedEntries.length,
+      verifiedExpansionOperations: expansionEntries.length,
+      unmeasuredSavingsOperations:
+        entries.length - verifiedEntries.length - expansionEntries.length,
+      actualReturnedContextOperations: observedEntries.length,
+      legacyReportedContextOperations: historicalEntries.length,
+      observedReturnedContextOperations: observedEntries.length,
+      unverifiedReportedOperations: unverifiedEntries.length,
     },
     byAction,
     byClient,
-    recent: entries.slice(0, limit).map((entry) => ({
-      name: entry.toolName.trim(),
-      originalTokens: entry.originalTokens,
-      optimizedTokens: entry.optimizedTokens,
-      tokensSaved: entry.tokensSaved,
-      savingsMeasured: entry.savingsMeasured !== false,
-      contextUsd: usd(entry.optimizedTokens, rate),
-      savedUsd: usd(entry.tokensSaved, rate),
-      timestamp: entry.timestamp,
-      client:
-        entry.client && entry.client !== 'unattributed' ? entry.client : null,
-      model: entry.model || null,
-    })),
+    recent: entries.slice(0, limit).map((entry) => {
+      const classification = classifySavings(entry);
+      const verified = classification === 'verified-transport-reduction';
+      const expansion = classification === 'verified-transport-expansion-debit';
+      const observed = classification !== 'unverified-reported';
+      return {
+        name: entry.toolName.trim(),
+        originalTokens: verified ? entry.originalTokens : entry.optimizedTokens,
+        optimizedTokens: entry.optimizedTokens,
+        tokensSaved: verifiedTransportDelta(entry),
+        reportedTokensSaved: verified ? 0 : reportedSavings(entry),
+        savingsMeasured: verified || expansion,
+        classification,
+        contextUsd: observed ? usd(entry.optimizedTokens, price) : null,
+        savedUsd:
+          verified || expansion
+            ? usd(verifiedTransportDelta(entry), price)
+            : null,
+        timestamp: entry.timestamp,
+        client:
+          entry.client && entry.client !== 'unattributed' ? entry.client : null,
+        model: entry.model || null,
+      };
+    }),
     measurement: {
       definition:
-        'Original tool-result tokens minus the optimized result tokens actually returned to the client.',
-      priceBasis: `$${rate} per million tokens is a reference scale, not a provider invoice.`,
+        'Net verified MCP transport avoided equals materialized payload tokens minus the initial returned payload, less any later expansion payloads.',
+      tokenCountMethod:
+        'Local GPT-4-compatible tiktoken estimate; exact provider billing tokens are not observable at the MCP boundary.',
+      legacyPolicy:
+        'Rows without versioned baseline provenance remain visible as unverified reported estimates and are excluded from verified totals.',
+      priceBasis: price.explanation,
     },
   };
 }

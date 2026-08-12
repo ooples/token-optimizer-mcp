@@ -94,9 +94,9 @@ async function loadBalance() {
   } catch {
     grid.innerHTML = [
       'Graph substitutions',
-      'Direct graph tokens saved',
+      'Modeled graph tokens avoided',
       'Graph context returned',
-      'Direct saving value',
+      'Graph saving classification',
       'Memory deliveries',
       'Kept back for comparison',
       'Cost of remembering',
@@ -137,7 +137,7 @@ async function loadBalance() {
       ),
     ],
     [
-      'Direct graph tokens saved',
+      'Modeled graph tokens avoided',
       metricState('nativeSubstitutions')?.status === 'not-measured'
         ? 'Not measured'
         : `${nf.format(balance.nativeOptimizer?.tokensSaved || 0)} tokens`,
@@ -149,10 +149,10 @@ async function loadBalance() {
         : `${nf.format(balance.nativeOptimizer?.tokensReturned || 0)} tokens`,
     ],
     [
-      'Direct saving value',
+      'Graph saving classification',
       metricState('nativeSubstitutions')?.status === 'not-measured'
         ? 'Not measured'
-        : `$${((Number(balance.nativeOptimizer?.tokensSaved || 0) / 1e6) * 3).toFixed(4)}`,
+        : 'Modeled counterfactual',
     ],
     [
       'Memory deliveries',
@@ -201,7 +201,7 @@ async function loadBalance() {
 
   verdict.textContent =
     !balance.sufficientData && Number(balance.nativeOptimizer?.tokensSaved) > 0
-      ? `${nf.format(balance.nativeOptimizer.tokensSaved)} tokens saved by ${nf.format(balance.nativeOptimizer.substitutions)} direct graph substitutions; the separate causal reuse study is still collecting.`
+      ? `${nf.format(balance.nativeOptimizer.tokensSaved)} tokens are modeled as avoided by ${nf.format(balance.nativeOptimizer.substitutions)} graph substitutions; they are not part of the verified MCP headline. The causal reuse study is still collecting.`
       : balance.verdict;
   verdict.dataset.state = !balance.sufficientData
     ? 'insufficient'
@@ -240,8 +240,8 @@ async function loadBalance() {
       ]
     : [
         [
-          'Direct substitution',
-          `${nf.format(balance.nativeOptimizer?.tokensSaved || 0)} tokens saved across ${nf.format(balance.nativeOptimizer?.substitutions || 0)} served results`,
+          'Modeled substitution',
+          `${nf.format(balance.nativeOptimizer?.tokensSaved || 0)} tokens reported across ${nf.format(balance.nativeOptimizer?.substitutions || 0)} served results; excluded from verified MCP savings`,
         ],
         [
           'Causal method',

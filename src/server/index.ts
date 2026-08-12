@@ -377,7 +377,7 @@ import {
   resolveSessionLogPath,
 } from './session-log-parser.js';
 import fs from 'fs';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { isValidSessionId } from '../utils/session-id.js';
 import path from 'path';
 import os from 'os';
@@ -401,18 +401,18 @@ const compression = new CompressionEngine();
 const metrics = new MetricsCollector();
 
 const analyticsManager = new AnalyticsManager();
+const ANALYTICS_PROCESS_ID = randomUUID();
 
 async function recordDirectToolResult<T>(
   toolName: string,
-  operation: () => T | Promise<T>
+  operation: () => T | Promise<T>,
+  operationId?: string | null
 ): Promise<T> {
   const result = await operation();
-  await recordToolAnalytics(
-    analyticsManager,
-    toolName,
-    result as any,
-    mcpEvidence.analyticsAttribution()
-  );
+  await recordToolAnalytics(analyticsManager, toolName, result as any, {
+    ...mcpEvidence.analyticsAttribution(),
+    operationId,
+  });
   return result;
 }
 
@@ -829,7 +829,7 @@ const TOOL_DEFINITIONS = [
   {
     name: 'analyze_project_tokens',
     description:
-      'Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all session-log-*.jsonl files, provides project-level statistics, identifies top contributing sessions and tools, and estimates monetary costs based on token usage.',
+      'Analyze observed token usage across multiple sessions within a project. Aggregates session logs and identifies top contributors. Cost is Not priced unless the caller supplies an effective input-token rate; any resulting value is a cost equivalent, not an invoice.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -853,9 +853,8 @@ const TOOL_DEFINITIONS = [
         costPerMillionTokens: {
           type: 'number',
           description:
-            'Cost per million tokens in USD. Defaults to 30 (GPT-4 Turbo pricing).',
-          default: 30,
-          exclusiveMinimum: 0,
+            'Optional effective USD cost per million input tokens. No provider price is assumed when omitted.',
+          minimum: 0,
         },
       },
     },
@@ -2922,8 +2921,9 @@ async function observeMcpToolCall<T>(
   }
 }
 
-server.setRequestHandler(CallToolRequestSchema, async (request) =>
+server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
   observeMcpToolCall(request.params.name, async () => {
+    const operationId = `mcp:${ANALYTICS_PROCESS_ID}:${String(extra.sessionId || 'stdio')}:${String(extra.requestId)}`;
     if (!ADVERTISED_TOOL_NAMES.has(request.params.name)) {
       return {
         content: [
@@ -2944,44 +2944,60 @@ server.setRequestHandler(CallToolRequestSchema, async (request) =>
     // it is not an operation on the codebase -- it is an operation on what we
     // already said about it.
     if (request.params.name === 'expand') {
-      return recordDirectToolResult(request.params.name, () =>
-        expandRef(request.params.arguments as any)
+      return recordDirectToolResult(
+        request.params.name,
+        () => expandRef(request.params.arguments as any),
+        operationId
       );
     }
 
     // Likewise the audit: it reports on the tool log rather than operating on the
     // codebase, and its own output must not be disclosed away.
     if (request.params.name === 'waste_audit') {
-      return recordDirectToolResult(request.params.name, () =>
-        wasteAudit(request.params.arguments as any)
+      return recordDirectToolResult(
+        request.params.name,
+        () => wasteAudit(request.params.arguments as any),
+        operationId
       );
     }
 
     if (request.params.name === 'cache_audit') {
-      return recordDirectToolResult(request.params.name, () => cacheAudit());
+      return recordDirectToolResult(
+        request.params.name,
+        () => cacheAudit(),
+        operationId
+      );
     }
 
     if (request.params.name === 'model_routing') {
-      return recordDirectToolResult(request.params.name, () =>
-        modelRouting(request.params.arguments as any)
+      return recordDirectToolResult(
+        request.params.name,
+        () => modelRouting(request.params.arguments as any),
+        operationId
       );
     }
 
     if (request.params.name === 'token_audit') {
-      return recordDirectToolResult(request.params.name, () =>
-        tokenAudit(request.params.arguments as any)
+      return recordDirectToolResult(
+        request.params.name,
+        () => tokenAudit(request.params.arguments as any),
+        operationId
       );
     }
 
     if (request.params.name === 'install_doctor') {
-      return recordDirectToolResult(request.params.name, () =>
-        installDoctor(request.params.arguments as any)
+      return recordDirectToolResult(
+        request.params.name,
+        () => installDoctor(request.params.arguments as any),
+        operationId
       );
     }
 
     if (request.params.name === 'fleet_audit') {
-      return recordDirectToolResult(request.params.name, () =>
-        fleetAudit(request.params.arguments as any)
+      return recordDirectToolResult(
+        request.params.name,
+        () => fleetAudit(request.params.arguments as any),
+        operationId
       );
     }
 
@@ -3000,7 +3016,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) =>
       analyticsManager,
       request.params.name,
       disclosed,
-      mcpEvidence.analyticsAttribution(),
+      { ...mcpEvidence.analyticsAttribution(), operationId },
       result
     );
     // THE ONE PLACE EVERY TOOL RESULT PASSES THROUGH. Disclosing here rather than

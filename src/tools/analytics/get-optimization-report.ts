@@ -10,11 +10,16 @@
 
 import type { AnalyticsManager } from '../../analytics/analytics-manager.js';
 import type { AggregatedStats } from '../../analytics/analytics-types.js';
+import {
+  hasObservedReturnedContext,
+  isVerifiedSavingsEntry,
+  verifiedTransportDelta,
+} from '../../analytics/savings-classification.js';
 
 export const GET_OPTIMIZATION_REPORT_TOOL_DEFINITION = {
   name: 'get_optimization_report',
   description:
-    'Get a complete token-savings report: total tokens saved, overall savings %, and full breakdowns by action/tool, by hook phase, and by MCP server. Returns structured data plus a ready-to-display formatted text summary. Use this to show the user how much context/token budget token-optimizer has saved them.',
+    'Get a provenance-gated token report. Verified savings require a materialized MCP payload before and after optimization; historical and tool-reported estimates are excluded. Cost is unavailable unless TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION is configured.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -50,11 +55,23 @@ function pct(n: number): string {
   return `${n.toFixed(1)}%`;
 }
 
-/** Approximate USD saved, assuming input-token pricing (~$3 / 1M tokens). */
-function approxCost(tokens: number): string {
-  const usd = (tokens / 1_000_000) * 3;
-  if (usd < 0.01) return '<$0.01';
-  return `$${usd.toFixed(2)}`;
+function effectivePrice(tokens: number): {
+  amount: number | null;
+  display: string;
+  rate: number | null;
+} {
+  const rate = Number(
+    process.env.TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION
+  );
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return { amount: null, display: 'not priced', rate: null };
+  }
+  const amount = (tokens / 1_000_000) * rate;
+  return {
+    amount,
+    display: amount < 0.01 ? '<$0.01' : `$${amount.toFixed(2)}`,
+    rate,
+  };
 }
 
 function bar(fraction: number, width = 20): string {
@@ -117,15 +134,20 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
           startDate: args.startDate,
           endDate: args.endDate,
         });
-        const totalOriginalTokens = entries.reduce(
+        const verifiedEntries = entries.filter(isVerifiedSavingsEntry);
+        const observedEntries = entries.filter(hasObservedReturnedContext);
+        const totalOriginalTokens = verifiedEntries.reduce(
           (s, e) => s + e.originalTokens,
           0
         );
-        const totalOptimizedTokens = entries.reduce(
+        const totalOptimizedTokens = observedEntries.reduce(
           (s, e) => s + e.optimizedTokens,
           0
         );
-        const totalTokensSaved = entries.reduce((s, e) => s + e.tokensSaved, 0);
+        const totalTokensSaved = entries.reduce(
+          (s, e) => s + verifiedTransportDelta(e),
+          0
+        );
         summary = {
           totalOperations: entries.length,
           totalTokensSaved,
@@ -143,13 +165,14 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         ? `session ${args.sessionId}`
         : `${args.startDate || 'all time'} → ${args.endDate || 'present'}`;
 
+      const cost = effectivePrice(summary.totalTokensSaved);
+
       const formatted = [
-        '╔══ Token Optimizer — Savings Report ══╗',
+        '╔══ Token Optimizer — Verified Savings Report ══╗',
         `  scope: ${scope}`,
         '',
-        `  ✨ Total tokens saved : ${num(
-          summary.totalTokensSaved
-        )}  (~${approxCost(summary.totalTokensSaved)} @ $3/1M)`,
+        `  ✨ Verified saved     : ${num(summary.totalTokensSaved)}`,
+        `  💵 Cost equivalent   : ${cost.display}${cost.rate ? ` @ configured $${cost.rate}/1M effective input` : ' (billing plan and cache mix are not observable)'}`,
         `  \u{1F4E5} Original tokens    : ${num(summary.totalOriginalTokens)}`,
         `  \u{1F4E6} After optimization : ${num(summary.totalOptimizedTokens)}`,
         `  \u{1F4C9} Overall reduction  : ${pct(savingsPercentage)}  ${bar(
@@ -169,7 +192,17 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
           success: true,
           scope,
           summary: { ...summary, savingsPercentage },
-          approxUsdSaved: approxCost(summary.totalTokensSaved),
+          costEquivalentUsd: cost.amount,
+          pricing: {
+            effectiveInputUsdPerMillion: cost.rate,
+            source: cost.rate ? 'configured-effective-rate' : 'unavailable',
+          },
+          measurement: {
+            definition:
+              'materialized undisclosed MCP payload tokens minus initial returned payload tokens, less later linked expansion payloads',
+            legacyPolicy:
+              'rows without versioned comparable-baseline provenance are excluded',
+          },
           byAction,
           byHook: hook.byHook,
           byServer: server.byServer,

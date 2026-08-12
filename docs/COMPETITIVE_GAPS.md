@@ -5,8 +5,8 @@ from its README and documentation site rather than from memory.
 
 ## A correction I owe first
 
-On issue #201 I wrote that they "audit waste in your *setup*" while we "change
-what the *operations* cost", and that those compose. **That was wrong.**
+On issue #201 I wrote that they "audit waste in your _setup_" while we "change
+what the _operations_ cost", and that those compose. **That was wrong.**
 
 They ship active compression that changes operation cost directly:
 
@@ -24,14 +24,14 @@ model choosing to cooperate. Ours requires the model to reissue the call against
 
 ## Where we are genuinely ahead
 
-| | Us | Them |
-|---|---|---|
-| **License** | MIT | PolyForm **Noncommercial** — unusable at work |
-| Clients | 15 | 6 |
-| Savings measurement | **withheld control arm** | counterfactual baseline + metered receipts, no control |
-| Operational tooling | ~100 MCP tools (git, build, db, API, search) | none — it is not an MCP server |
-| Cross-session knowledge | anchored graph with computed staleness | decision extraction, capped at 10/session |
-| Enforcement | refusal with the replacement named | nudges and transparent rewriting |
+|                         | Us                                           | Them                                                   |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------ |
+| **License**             | MIT                                          | PolyForm **Noncommercial** — unusable at work          |
+| Clients                 | 15                                           | 6                                                      |
+| Savings measurement     | **withheld control arm**                     | counterfactual baseline + metered receipts, no control |
+| Operational tooling     | ~100 MCP tools (git, build, db, API, search) | none — it is not an MCP server                         |
+| Cross-session knowledge | anchored graph with computed staleness       | decision extraction, capped at 10/session              |
+| Enforcement             | refusal with the replacement named           | nudges and transparent rewriting                       |
 
 The licence is still the single most decisive line for anyone using this at
 work, and the control-arm measurement is a claim they cannot make. The MCP tool
@@ -61,7 +61,7 @@ decision density, agent efficiency), letter grades S–F, a status-line integrat
 with colour transitions, and degradation tracking framed against MRCR falling
 93% → 76% as context grows.
 
-We have nothing here. It is also the most *visible* feature they have — it is on
+We have nothing here. It is also the most _visible_ feature they have — it is on
 screen constantly, which is worth more than its accuracy.
 
 ### 3. Progressive disclosure of tool results
@@ -108,10 +108,14 @@ per-message cost breakdown.
 We have `get_optimization_report`. The gap is less about capability than about
 there being an obvious thing to run that tells you what to do next.
 
-### 8. Dollars, not tokens
+### 8. Billing evidence, not a universal token price
 
-They price against four tiers and report `$/month` with receipts. We report
-tokens. Same data, and the unit people actually feel.
+Provider/model tables alone cannot reconstruct a CLI user's bill because cache
+reads and writes, routing, long-context tiers, subscriptions, included credits,
+and enterprise agreements change marginal cost. Token Optimizer now reports
+verified transport tokens and fails closed on dollars unless the user supplies
+an effective blended rate. Provider-native billing exports remain the source of
+truth for actual spend.
 
 ### 9. Skills and configuration health
 

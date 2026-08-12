@@ -17,14 +17,24 @@
 import type { AnalyticsManager } from './analytics-manager.js';
 import type { HookPhase } from './analytics-types.js';
 import { TokenCounter } from '../core/token-counter.js';
+import {
+  isVerifiedSavingsEntry,
+  SAVINGS_MEASUREMENT_SCHEMA_VERSION,
+} from './savings-classification.js';
+import { createHash, randomUUID } from 'node:crypto';
 
 /** MCP tool result shape (the parts we read). */
 interface McpToolResult {
   content?: Array<{ type?: string; text?: string }>;
   isError?: boolean;
+  _meta?: Record<string, unknown>;
 }
 
 const resultTokenCounter = new TokenCounter();
+
+function sha256(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
 
 /** A normalized savings measurement extracted from a tool result. */
 export interface SavingsTriplet {
@@ -173,6 +183,7 @@ export async function recordToolAnalytics(
     clientVersion?: string | null;
     model?: string | null;
     modelVersion?: string | null;
+    operationId?: string | null;
   } = {},
   baselineResult: McpToolResult | null = null
 ): Promise<void> {
@@ -201,8 +212,9 @@ export async function recordToolAnalytics(
     }
 
     let baselinePayload: unknown = payload;
+    let baselineText: string | null = null;
     if (baselineResult) {
-      const baselineText = (baselineResult.content || [])
+      baselineText = (baselineResult.content || [])
         .filter((content) => typeof content?.text === 'string')
         .map((content) => content.text || '')
         .join('\n');
@@ -212,17 +224,53 @@ export async function recordToolAnalytics(
         baselinePayload = null;
       }
     }
-    const savings = extractSavings(baselinePayload);
+    // Tool-reported fields are retained as an audit trail, never promoted to a
+    // verified saving. Across the tool fleet they describe incompatible things
+    // (file size, rows scanned, compressed content, or a modeled alternative).
+    const reported = extractSavings(baselinePayload);
     const returnedTokens = resultTokenCounter.count(text).tokens;
-    const savingsMeasured = savings !== null;
-    const originalTokens = savings?.originalTokens ?? returnedTokens;
-    const tokensSaved = savingsMeasured ? originalTokens - returnedTokens : 0;
+    const baselineTokens = baselineText
+      ? resultTokenCounter.count(baselineText).tokens
+      : returnedTokens;
+    const baselineBytes = baselineText
+      ? Buffer.byteLength(baselineText, 'utf8')
+      : Buffer.byteLength(text, 'utf8');
+    const returnedBytes = Buffer.byteLength(text, 'utf8');
+    const savingsMeasured =
+      baselineText !== null &&
+      baselineText !== text &&
+      baselineTokens > returnedTokens &&
+      baselineBytes > returnedBytes;
+    const originalTokens = savingsMeasured ? baselineTokens : returnedTokens;
+    const tokensSaved = savingsMeasured ? baselineTokens - returnedTokens : 0;
 
     const sessionId =
       process.env.TOKEN_OPTIMIZER_SESSION_ID ||
       (payload && typeof payload === 'object'
         ? ((payload as Record<string, unknown>).sessionId as string | undefined)
         : undefined);
+
+    const resultMeta = result._meta?.tokenOptimizer;
+    const transportMeta =
+      resultMeta && typeof resultMeta === 'object'
+        ? (resultMeta as Record<string, unknown>)
+        : {};
+    const measurementId = attribution.operationId || randomUUID();
+    const expansionRef =
+      typeof transportMeta.expansionRef === 'string'
+        ? transportMeta.expansionRef
+        : null;
+    let creditedMeasurementId: string | null = null;
+    if (expansionRef) {
+      const existing = await manager.getEntries();
+      const credited = existing.find(
+        (entry) =>
+          isVerifiedSavingsEntry(entry) &&
+          entry.metadata?.disclosureRef === expansionRef &&
+          typeof entry.measurementId === 'string'
+      );
+      creditedMeasurementId = credited?.measurementId || null;
+    }
 
     await manager.track({
       hookPhase: currentHookPhase(),
@@ -232,6 +280,7 @@ export async function recordToolAnalytics(
       optimizedTokens: returnedTokens,
       tokensSaved,
       savingsMeasured,
+      measurementId,
       ...(sessionId ? { sessionId } : {}),
       ...(attribution.client ? { client: attribution.client } : {}),
       ...(attribution.clientVersion
@@ -242,9 +291,35 @@ export async function recordToolAnalytics(
         ? { modelVersion: attribution.modelVersion }
         : {}),
       metadata: {
+        measurementId,
+        measurementSchemaVersion: SAVINGS_MEASUREMENT_SCHEMA_VERSION,
         measurement: savingsMeasured
-          ? 'optimizer-before-actual-return'
-          : 'actual-return-context-only',
+          ? 'materialized-transport-before-after'
+          : expansionRef && creditedMeasurementId
+            ? 'actual-expansion-transport-debit'
+            : 'actual-return-context-only',
+        measurementClass: savingsMeasured
+          ? 'verified-transport-reduction'
+          : expansionRef && creditedMeasurementId
+            ? 'verified-transport-expansion-debit'
+            : 'observed-return-only',
+        baselineKind: savingsMeasured
+          ? 'materialized-undisclosed-mcp-result'
+          : null,
+        baselineBytes,
+        returnedBytes,
+        bytesSaved: savingsMeasured ? baselineBytes - returnedBytes : 0,
+        baselineSha256: baselineText ? sha256(baselineText) : null,
+        returnedSha256: sha256(text),
+        disclosureRef:
+          typeof transportMeta.disclosureRef === 'string'
+            ? transportMeta.disclosureRef
+            : null,
+        expansionRef,
+        creditedMeasurementId,
+        tokenCountMethod: 'tiktoken-gpt-4-compatible-local-estimate',
+        tokenCounterModel: resultTokenCounter.model,
+        reportedToolSavings: savingsMeasured ? null : reported,
         client: attribution.client || 'unattributed',
         clientVersion: attribution.clientVersion || null,
         model: attribution.model || null,

@@ -12,6 +12,11 @@ import type {
   HookPhase,
 } from './analytics-types.js';
 import { SqliteAnalyticsStorage } from './analytics-storage.js';
+import {
+  hasObservedReturnedContext,
+  isVerifiedSavingsEntry,
+  verifiedTransportDelta,
+} from './savings-classification.js';
 
 /**
  * Manager for tracking and analyzing token usage
@@ -294,19 +299,18 @@ export class AnalyticsManager {
     entries: AnalyticsEntry[]
   ): AggregatedStats {
     const totalOperations = entries.length;
-    const savingsEntries = entries.filter(
-      (entry) => entry.savingsMeasured !== false
-    );
+    const savingsEntries = entries.filter(isVerifiedSavingsEntry);
+    const returnedEntries = entries.filter(hasObservedReturnedContext);
     const totalOriginalTokens = savingsEntries.reduce(
       (sum, e) => sum + e.originalTokens,
       0
     );
-    const totalOptimizedTokens = entries.reduce(
+    const totalOptimizedTokens = returnedEntries.reduce(
       (sum, e) => sum + e.optimizedTokens,
       0
     );
-    const totalTokensSaved = savingsEntries.reduce(
-      (sum, e) => sum + e.tokensSaved,
+    const totalTokensSaved = entries.reduce(
+      (sum, e) => sum + verifiedTransportDelta(e),
       0
     );
     const averageTokensSaved = totalTokensSaved / totalOperations;

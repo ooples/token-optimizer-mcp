@@ -15,10 +15,22 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { record, recordRead } from '../../hooks-core/metrics.mjs';
 import {
-  buildQueue, renderAudit, decline, declines, habitTrend, raise, DECLINE_LIMIT,
+  buildQueue,
+  renderAudit,
+  decline,
+  declines,
+  habitTrend,
+  raise,
+  DECLINE_LIMIT,
 } from '../../hooks-core/audit.mjs';
 import { applyRemedy } from '../../hooks-core/remedy.mjs';
-import { dollars, money, monthly, prices, priceNote } from '../../hooks-core/pricing.mjs';
+import {
+  dollars,
+  money,
+  monthly,
+  prices,
+  priceNote,
+} from '../../hooks-core/pricing.mjs';
 import { detect } from '../../hooks-core/waste.mjs';
 
 let workspace;
@@ -28,62 +40,70 @@ beforeEach(() => {
   workspace = mkdtempSync(join(tmpdir(), 'audit-'));
   dir = join(workspace, '.token-optimizer', 'wiki');
   delete process.env.TOKEN_OPTIMIZER_PRICES;
+  delete process.env.TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION;
 });
 
 afterEach(() => {
   rmSync(workspace, { recursive: true, force: true });
   delete process.env.TOKEN_OPTIMIZER_PRICES;
+  delete process.env.TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION;
 });
 
-const read = (sessionId, anchor, tokens) => recordRead(dir, { sessionId, anchor, bytes: tokens * 4 });
+const read = (sessionId, anchor, tokens) =>
+  recordRead(dir, { sessionId, anchor, bytes: tokens * 4 });
 
 const finding = (over) => ({
-  id: 'barren-anchor', title: 'schema.ts: read in 9 sessions, never a finding',
-  costPerSession: 3000, anchor: '/repo/schema.ts',
+  id: 'barren-anchor',
+  title: 'schema.ts: read in 9 sessions, never a finding',
+  costPerSession: 3000,
+  anchor: '/repo/schema.ts',
   remedy: { kind: 'ours', type: 'skeleton-only', anchor: '/repo/schema.ts' },
   ...over,
 });
 
 describe('dollars are the same data with three rules attached', () => {
-  test('tokens convert at the published rate for the tier', () => {
-    expect(dollars(1_000_000, { tier: 'opus' })).toBeCloseTo(15);
-    expect(dollars(1_000_000, { tier: 'haiku' })).toBeCloseTo(1);
+  test('tokens are not priced without a user-configured effective rate', () => {
+    expect(dollars(1_000_000)).toBeNull();
   });
 
-  test('cache reads and writes carry their own multipliers', () => {
-    expect(dollars(1_000_000, { tier: 'opus', kind: 'cacheRead' })).toBeCloseTo(1.5);
-    expect(dollars(1_000_000, { tier: 'opus', kind: 'cacheWrite' })).toBeCloseTo(18.75);
+  test('the configured rate already represents cache, model, plan, and credits', () => {
+    process.env.TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION = '2.25';
+    expect(dollars(1_000_000, { kind: 'cacheRead' })).toBeCloseTo(2.25);
+    expect(dollars(1_000_000, { kind: 'cacheWrite' })).toBeCloseTo(2.25);
   });
 
   test('an unmeasured saving has no price, and does not become zero', () => {
     // "$0.00" reads as "saved nothing", which is a different claim entirely --
     // and a wrong number in dollars gets quoted to other people.
     expect(dollars(null)).toBeNull();
-    expect(money(null)).toBe('not yet measurable');
+    expect(money(null)).toBe('not priced');
     expect(money(0)).toBe('$0.00');
   });
 
-  test('the table is overridable, so a stale rate is visible rather than silent', () => {
-    process.env.TOKEN_OPTIMIZER_PRICES = JSON.stringify({ asOf: '2027-01', opus: { input: 20, output: 100 } });
-    expect(dollars(1_000_000, { tier: 'opus' })).toBeCloseTo(20);
-    expect(priceNote('opus')).toMatch(/2027-01, overridden/);
-  });
-
-  test('an unparseable override is ignored rather than fatal', () => {
-    process.env.TOKEN_OPTIMIZER_PRICES = 'not json';
-    expect(prices().asOf).toBeTruthy();
+  test('the configured rate is visible rather than hidden in code', () => {
+    process.env.TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION = '20';
+    expect(dollars(1_000_000)).toBeCloseTo(20);
+    expect(priceNote()).toMatch(/configured effective input rate \$20\/M/);
+    expect(prices()).toMatchObject({
+      source: 'configured-effective-rate',
+      effectiveInputUsdPerMillion: 20,
+    });
   });
 
   test('a monthly figure states the assumption it rests on', () => {
-    const out = monthly(3000, { tier: 'opus', sessionsPerMonth: 60 });
+    process.env.TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION = '15';
+    const out = monthly(3000, { sessionsPerMonth: 60 });
     expect(out.sessionsPerMonth).toBe(60);
-    expect(out.amount).toBeCloseTo(dollars(180_000, { tier: 'opus' }));
+    expect(out.amount).toBeCloseTo(dollars(180_000));
   });
 });
 
 describe('the queue is ranked, and knows what is already handled', () => {
   test('the most expensive finding comes first', () => {
-    const { queue } = buildQueue(dir, [finding({ costPerSession: 400, anchor: '/a.ts' }), finding({ costPerSession: 9000, anchor: '/b.ts' })]);
+    const { queue } = buildQueue(dir, [
+      finding({ costPerSession: 400, anchor: '/a.ts' }),
+      finding({ costPerSession: 9000, anchor: '/b.ts' }),
+    ]);
     expect(queue[0].costPerSession).toBe(9000);
   });
 
@@ -97,8 +117,9 @@ describe('the queue is ranked, and knows what is already handled', () => {
 
   test('applied fixes are reported with what they ACTUALLY saved', () => {
     for (const s of ['s1', 's2', 's3']) read(s, '/repo/schema.ts', 3000);
-    const detected = detect(dir, null).find((d) => d.id === 'barren-anchor')
-      || finding({ anchor: '/repo/schema.ts' });
+    const detected =
+      detect(dir, null).find((d) => d.id === 'barren-anchor') ||
+      finding({ anchor: '/repo/schema.ts' });
     applyRemedy(dir, detected);
     read('s4', '/repo/schema.ts', 100);
     read('s5', '/repo/schema.ts', 100);
@@ -134,7 +155,9 @@ describe('advice declined twice stops being offered', () => {
     const item = finding();
     const id = buildQueue(dir, [item]).queue[0].id;
     for (let i = 0; i < DECLINE_LIMIT; i++) decline(dir, id);
-    expect(renderAudit(dir, [item], { full: true }).text).toMatch(/declined 2x/);
+    expect(renderAudit(dir, [item], { full: true }).text).toMatch(
+      /declined 2x/
+    );
   });
 });
 
@@ -174,25 +197,37 @@ describe('the audit is held to its own standard', () => {
   test('it states its own cost and what it found', () => {
     // An audit that spends 8,000 tokens describing 6,000 of waste is a net loss.
     const out = renderAudit(dir, [finding()]);
-    expect(out.text).toMatch(/This report cost about [\d,]+ tokens and names [\d,]+ tokens\/session/);
+    expect(out.text).toMatch(
+      /This report cost about [\d,]+ tokens and names [\d,]+ tokens\/session/
+    );
     expect(out.selfCostTokens).toBeGreaterThan(0);
   });
 
   test('findings worth less than their printing cost are withheld, and counted', () => {
     const items = [
       finding({ costPerSession: 9000, anchor: '/big.ts' }),
-      ...Array.from({ length: 6 }, (_, i) => finding({ costPerSession: 3, anchor: `/tiny${i}.ts`, title: `tiny finding number ${i} with a fairly long title` })),
+      ...Array.from({ length: 6 }, (_, i) =>
+        finding({
+          costPerSession: 3,
+          anchor: `/tiny${i}.ts`,
+          title: `tiny finding number ${i} with a fairly long title`,
+        })
+      ),
     ];
     const out = renderAudit(dir, items);
 
     expect(out.withheld).toBe(6);
     // Never a silent cap: what was dropped and what it is worth are both stated.
-    expect(out.text).toMatch(/6 more finding\(s\) worth \d+ tokens\/session in total/);
+    expect(out.text).toMatch(
+      /6 more finding\(s\) worth \d+ tokens\/session in total/
+    );
     expect(out.text).toMatch(/full=true/);
   });
 
   test('full=true prints everything regardless of what it costs', () => {
-    const items = Array.from({ length: 6 }, (_, i) => finding({ costPerSession: 3, anchor: `/tiny${i}.ts` }));
+    const items = Array.from({ length: 6 }, (_, i) =>
+      finding({ costPerSession: 3, anchor: `/tiny${i}.ts` })
+    );
     expect(renderAudit(dir, items, { full: true }).withheld).toBe(0);
   });
 
@@ -203,7 +238,12 @@ describe('the audit is held to its own standard', () => {
     // project corrects everywhere else.
     const out = renderAudit(dir, [
       finding({ costPerSession: 9000, anchor: '/big.ts' }),
-      finding({ costPerSession: null, anchor: '/y', remedy: null, title: 'multi-file work is routed to a tier that keeps retrying' }),
+      finding({
+        costPerSession: null,
+        anchor: '/y',
+        remedy: null,
+        title: 'multi-file work is routed to a tier that keeps retrying',
+      }),
     ]);
 
     expect(out.withheld).toBe(0);
@@ -226,8 +266,18 @@ describe('the audit is held to its own standard', () => {
   test('every line carries a way to act on it', () => {
     const out = renderAudit(dir, [
       finding(),
-      finding({ anchor: '/x', remedy: { kind: 'yours', type: 'edit', file: 'CLAUDE.md' }, title: 'CLAUDE.md timestamp', costPerSession: 5000 }),
-      finding({ anchor: '/y', remedy: null, title: 'session spike', costPerSession: 4000 }),
+      finding({
+        anchor: '/x',
+        remedy: { kind: 'yours', type: 'edit', file: 'CLAUDE.md' },
+        title: 'CLAUDE.md timestamp',
+        costPerSession: 5000,
+      }),
+      finding({
+        anchor: '/y',
+        remedy: null,
+        title: 'session spike',
+        costPerSession: 4000,
+      }),
     ]);
     expect(out.text).toMatch(/apply: waste_audit/);
     expect(out.text).toMatch(/needs your yes, nothing changed/);
@@ -235,7 +285,9 @@ describe('the audit is held to its own standard', () => {
   });
 
   test('the price table is printed beside the figures', () => {
-    expect(renderAudit(dir, [finding()]).text).toMatch(/prices: opus \$15\/\$75 per Mtok/);
+    expect(renderAudit(dir, [finding()]).text).toMatch(
+      /cost not priced: set TOKEN_OPTIMIZER_EFFECTIVE_INPUT/
+    );
   });
 });
 
@@ -247,9 +299,17 @@ describe('the report does not misstate its own numbers', () => {
     // to 0 and hard-sets it on the co-occurrence detector.
     const dir = mkdtempSync(join(tmpdir(), 'auditzero-'));
     try {
-      const out = renderAudit(dir,
-        [{ id: 'co-occurrence', title: 'a and b are always opened together', costPerSession: 0 }],
-        { full: true });
+      const out = renderAudit(
+        dir,
+        [
+          {
+            id: 'co-occurrence',
+            title: 'a and b are always opened together',
+            costPerSession: 0,
+          },
+        ],
+        { full: true }
+      );
       expect(out.text).not.toMatch(/cost not yet measurable \(~\$0\.00/);
       expect(out.text).toMatch(/0 tokens\/session/);
     } finally {
@@ -263,9 +323,18 @@ describe('the report does not misstate its own numbers', () => {
     // remedy -- could never be suppressed no matter how often a user declined them.
     const dir = mkdtempSync(join(tmpdir(), 'auditid-'));
     try {
-      const out = renderAudit(dir,
-        [{ id: 'model-routing', title: 'a cheaper model would do', costPerSession: 100, remedy: null }],
-        { full: true });
+      const out = renderAudit(
+        dir,
+        [
+          {
+            id: 'model-routing',
+            title: 'a cheaper model would do',
+            costPerSession: 100,
+            remedy: null,
+          },
+        ],
+        { full: true }
+      );
       expect(out.text).toMatch(/decline: model-routing/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -278,10 +347,20 @@ describe('the report does not misstate its own numbers', () => {
     // exists to make honest.
     const dir = mkdtempSync(join(tmpdir(), 'auditself-'));
     try {
-      const out = renderAudit(dir,
-        [{ id: 'x', title: 'a finding with a reasonably long title to bulk the body', costPerSession: 5000 }],
-        { full: true });
-      const stated = Number(/cost about ([\d,]+) tokens/.exec(out.text)[1].replace(/,/g, ''));
+      const out = renderAudit(
+        dir,
+        [
+          {
+            id: 'x',
+            title: 'a finding with a reasonably long title to bulk the body',
+            costPerSession: 5000,
+          },
+        ],
+        { full: true }
+      );
+      const stated = Number(
+        /cost about ([\d,]+) tokens/.exec(out.text)[1].replace(/,/g, '')
+      );
       const actual = Math.ceil(out.text.length / 4);
       // The stated figure must not undercount the rendered report.
       expect(stated).toBeGreaterThanOrEqual(actual * 0.9);

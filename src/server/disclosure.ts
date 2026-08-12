@@ -57,6 +57,7 @@ async function modules(): Promise<DisclosureModules | null> {
 interface ToolResult {
   content?: Array<{ type: string; text?: string }>;
   isError?: boolean;
+  _meta?: Record<string, unknown>;
 }
 
 /** The file this call is about, if it names one. */
@@ -161,6 +162,13 @@ export async function discloseResult(
     return {
       ...result,
       content: [{ type: 'text', text: out.text }],
+      _meta: {
+        ...(result._meta || {}),
+        tokenOptimizer: {
+          disclosureRef: ref,
+          disclosureMode: out.mode,
+        },
+      },
     };
   } catch {
     // Disclosure is an optimisation. It must never be the reason a tool fails.
@@ -220,7 +228,10 @@ export async function expandRef(input: {
     });
   }
 
-  return { content: [{ type: 'text', text: out.text }] };
+  return {
+    content: [{ type: 'text', text: out.text }],
+    _meta: { tokenOptimizer: { expansionRef: input.ref } },
+  };
 }
 
 /** The tool definition, kept next to the implementation it describes. */

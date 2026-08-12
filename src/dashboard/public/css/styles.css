@@ -279,7 +279,7 @@
   border-bottom: 1px solid var(--line);
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(190px, 1.5fr) repeat(4, minmax(105px, 0.7fr));
+  grid-template-columns: minmax(190px, 1.5fr) repeat(5, minmax(105px, 0.7fr));
   padding: 10px 8px;
 }
 

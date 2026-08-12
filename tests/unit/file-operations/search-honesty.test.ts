@@ -93,7 +93,7 @@ describe('search tools bound their output', () => {
     expect(r.metadata.truncated).toBe(true);
   });
 
-  it('reports a saving measured against the files it actually searched', async () => {
+  it('does not price corpus bytes as avoided grep context', async () => {
     const { dir, counter, cache } = bigRepo();
     const grep = new SmartGrepTool(cache, counter, new MetricsCollector());
 
@@ -104,19 +104,13 @@ describe('search tools bound their output', () => {
     });
 
     const md = r.metadata;
-    // Not a multiplier of the result -- the old code produced exactly 100x,
-    // 20x or 5x, which is the signature of an invented baseline.
-    for (const factor of [5, 20, 100]) {
-      expect(md.originalTokenCount).not.toBe(md.tokenCount * factor);
-    }
-    // And the baseline must be at least as large as the result it replaced.
-    expect(md.originalTokenCount).toBeGreaterThanOrEqual(md.tokenCount);
-    expect(md.tokensSaved).toBe(
-      Math.max(0, md.originalTokenCount - md.tokenCount)
-    );
+    expect(md.originalTokenCount).toBe(md.tokenCount);
+    expect(md.tokensSaved).toBe(0);
+    expect(md.savingsClassification).toBe('unmeasured');
+    expect(md.savingsReason).toMatch(/corpus|repository|context/i);
   });
 
-  it('a glob claims only what pagination actually withheld', async () => {
+  it('a glob does not claim caller-requested pagination as savings', async () => {
     const { dir, counter, cache } = bigRepo();
     const glob = new SmartGlobTool(cache, counter, new MetricsCollector());
 
@@ -126,20 +120,14 @@ describe('search tools bound their output', () => {
     expect(all.metadata.tokensSaved).toBe(0);
     expect(all.metadata.originalTokenCount).toBe(all.metadata.tokenCount);
 
-    // With a limit, the saving is the paths held back -- countable, so counted.
+    // A limit is part of the request. It cannot double as a counterfactual.
     const paged = await glob.glob('src/**/*.ts', {
       cwd: dir,
       limit: 5,
       useCache: false,
     });
-    expect(paged.metadata.tokensSaved).toBeGreaterThan(0);
-    expect(paged.metadata.originalTokenCount).toBeGreaterThan(
-      paged.metadata.tokenCount
-    );
-    for (const factor of [10, 50]) {
-      expect(paged.metadata.originalTokenCount).not.toBe(
-        paged.metadata.tokenCount * factor
-      );
-    }
+    expect(paged.metadata.tokensSaved).toBe(0);
+    expect(paged.metadata.originalTokenCount).toBe(paged.metadata.tokenCount);
+    expect(paged.metadata.savingsClassification).toBe('unmeasured');
   });
 });

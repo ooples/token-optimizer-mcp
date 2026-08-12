@@ -3,7 +3,7 @@
 <h1 align="center">Token Optimizer MCP</h1>
 
 <p align="center">
-  <strong>Spend fewer tokens, keep the conclusions, and prove what every coding agent saved — across 16 clients.</strong>
+  <strong>Spend less context, keep the conclusions, and audit every claim across 16 coding clients.</strong>
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img alt="Live Token Optimizer dashboard combining tool savings, per-agent attribution, graph cost, and the knowledge graph" src="./docs/media/live/overview-live.png" width="1000">
+  <img alt="Live Token Optimizer dashboard separating verified net MCP transport savings, excluded reports, per-agent attribution, and graph evidence" src="./docs/media/live/overview-live.png" width="1000">
 </p>
 
 <p align="center"><em>One local ledger for optimizer tools, live-graph substitutions, every agent, and the graph's own cost.</em></p>
@@ -51,13 +51,13 @@ feeds them back the moment the agent touches the relevant file. A finding costs
 ~150 tokens to carry. Re-deriving it costs 5k–50k.
 
 **3. It measures itself, in public, and tells you when it is losing.** A
-before/actual-return measurement for optimizer operations. Direct full-file
-minus returned-skeleton savings for live-graph substitutions. A randomized
-control arm for the graph's separate downstream effect. Every number is either
-measured, visibly collecting, or absent — never guessed into an empty card.
+materialized before/actual-return measurement for MCP progressive disclosure,
+with later expansions debited from the same net. Modeled graph substitutions
+and the randomized control arm for downstream graph effects remain separate.
+Every number is measured, visibly collecting, excluded, or absent.
 
-**4. It attributes the bill.** Returned context, reference USD, and tokens saved
-are grouped by operation and by MCP handshake identity. Codex, Claude Code,
+**4. It attributes the traffic.** Returned context, optional cost equivalents,
+and net transport avoided are grouped by operation and MCP handshake identity. Codex, Claude Code,
 Gemini, and any other connected client get separate rows. Old records without
 identity remain explicitly unattributed instead of being assigned to whichever
 agent happens to be open now.
@@ -69,19 +69,22 @@ No account, no telemetry, no hosted service. MIT, so it is usable at work.
 The screenshots in this README come from the shipped server reading persisted
 local data, not a design mockup. In the capture above it reports:
 
-- **485,994,128 direct tokens saved** across 2,019 recorded MCP operations plus
-  one live-graph substitution;
-- **6 actual-return operations** from a live Codex / Claude Code / Gemini smoke,
-  with each client attributed independently;
-- **2,647 graph nodes, 6,470 edges, and 58 findings** across 11 local projects;
-- **1,047 hook runs with zero failures and zero timeouts** across six active CLI
-  clients in the selected 24-hour window;
-- **6,332 direct graph-substitution tokens saved**, while the different causal
-  graph-reuse study remains excluded and visibly marked `Collecting`.
+- **43,491 net verified MCP transport tokens avoided** in the current live
+  proof: 54,037 gross reduction minus a deliberate 10,546-token expansion;
+- **486,074,740 historical/tool-reported tokens quarantined**, dominated by
+  repository scan volume that never entered model context;
+- a live Codex / Claude Code / Gemini stdio smoke against AiDotNet, with each
+  client attributed independently;
+- **2,648 graph nodes, 6,527 edges, and 58 findings** across 11 local projects;
+- **more than 1,000 hook runs with zero failures and zero timeouts** across six
+  active CLI clients in the selected rolling 24-hour window;
+- **6,332 tokens of modeled graph-substitution potential**, excluded from the
+  verified headline while the causal graph-reuse study remains `Collecting`.
 
-The USD values use a clearly labelled $3 per million reference rate. Historical
-rows from older builds use their stored optimizer before/after counts; current
-rows count the text actually returned over MCP. The dashboard shows that split.
+USD is **Not priced** by default because an MCP server cannot observe provider,
+model, cache read/write mix, account route, processing tier, or included
+credits. Configure your own effective blended input rate if a cost equivalent
+is useful. See the [token accounting contract](./docs/TOKEN_ACCOUNTING.md).
 
 ## Quick start
 
@@ -102,8 +105,9 @@ Then, whenever you want to know what to do next:
 token_audit
 ```
 
-One ranked queue: what is costing the most, priced per session and per month,
-each line naming how to fix it. Not a dashboard, not six reports — a queue.
+One ranked queue: what is costing the most per session, with an optional monthly
+cost equivalent only after you configure your own effective rate. Each line
+names how to fix it. Not a dashboard, not six reports — a queue.
 
 ---
 
@@ -171,14 +175,15 @@ npm run dashboard      # http://localhost:3100
 
 The overview answers the questions a token optimizer should answer first:
 
-1. **How many tokens did it remove?** The headline combines direct MCP optimizer
-   savings with direct live-graph substitutions.
+1. **How much MCP context did it avoid?** The headline is gross materialized
+   payload reduction minus every later linked expansion. Graph estimates are
+   intentionally separate.
 2. **How much context still reached the agents?** Every successful current MCP
    result records its actual returned text, even when no valid before-state
    exists. That row is context-accounted but savings-unmeasured.
 3. **Which agent and action spent it?** The client ledger and action table show
-   operations, returned context, reference USD, and tokens saved. Lifecycle-only
-   clients say `Not measured`; no zero is invented.
+   operations, returned context, optional cost equivalent, and net tokens
+   avoided. Lifecycle-only clients say `Not measured`; no zero is invented.
 4. **Did remembering cost more than it saved?** Delivery and semantic-harvest
    tokens are charged to the graph. A causal benefit is added only after the
    treated/holdout evidence gate passes.
@@ -190,7 +195,8 @@ The overview answers the questions a token optimizer should answer first:
    routing, capture, health, and delivery where the client protocol permits it.
 2. Use `smart_read`, `smart_grep`, `smart_glob`, `smart_edit`, or any other MCP
    operation normally. Every successful result records returned context; tools
-   with a real before-state also record direct savings.
+   with a comparable materialized before-state also record a gross reduction;
+   later `expand` calls debit that reduction.
 3. Let the active model record durable conclusions with `wiki_write`. Before a
    new agent re-derives work, call `wiki_read` for the project or the files it is
    about to touch. Native clients can also deliver matching knowledge
@@ -222,9 +228,9 @@ surface coverage. Diagnostics keep no prompts, commands, paths, or tool output.
   <img alt="Direct graph savings, remembering cost, holdouts, and an honest collecting causal study" src="./docs/media/live/graph-balance-live.png" width="1000">
 </p>
 
-Direct substitution savings and causal graph effects are different claims. The
-first is `full-file tokens - returned skeleton tokens` and is available
-immediately. The second asks whether delivered knowledge prevented later reads;
+Modeled substitution potential and causal graph effects are different claims.
+The first is a full-file counterfactual and is never promoted to the verified
+MCP headline. The second asks whether delivered knowledge prevented later reads;
 it uses a control arm and remains `Collecting` until there are at least 20
 treated file touches and 5 holdouts with valid downstream joins.
 
@@ -344,10 +350,13 @@ never happens.
 
 ### Prompt-cache economics, measured from your own transcript
 
-A cache write costs 1.25× a plain token and a read costs 0.1×, so a prefix that
-keeps invalidating can cost more than every saving elsewhere. This reads the
-real numbers your client already recorded — then does the part a hit rate
-cannot:
+Provider caches are billable and provider-specific; a cache hit is not a free
+input token. For example, Anthropic publishes separate cache-read and
+cache-write multipliers, while OpenAI and Gemini expose their own cached-input
+usage and pricing rules. Token Optimizer reads native cache fields when the
+client supplies them and keeps reads, writes, uncached input, and output
+separate. It never applies one provider's cache multiplier to another client.
+The attribution view then does the part a hit rate cannot:
 
 ```
 ! CLAUDE.md:2 has an embedded timestamp, invalidating everything after it
@@ -376,7 +385,7 @@ has actually saved:
 
 ```
 generated/schema.d.ts: read in 9/9 sessions, never the source of a finding
-    3,400 tokens/session (~$3.06/month); apply: waste_audit action="apply"
+    3,400 tokens/session; cost equivalent not priced; apply: waste_audit action="apply"
 ```
 
 Anything that touches **your** files is proposed as a diff and never applied.
@@ -447,10 +456,10 @@ npm run uninstall-hooks -- --apply   # carry it out
 Every tool in this space reports "tokens saved" computed from its own
 assumptions. That number cannot be wrong, because nothing checks it.
 
-For optimizer results, this records the known before-state and the text actually
-returned to the client. For a native graph substitution it records full-file
-tokens minus returned-skeleton tokens. Those direct measurements power the main
-dashboard immediately.
+For optimizer results, this records the materialized before-state and the text
+actually returned to the client, then subtracts any linked expansion responses.
+Native graph-substitution counterfactuals stay labeled as modeled and outside
+the main headline.
 
 The graph's broader claim—whether delivered knowledge prevented later
 re-reading—is causal, so it runs a **randomized holdout**. Delivery is silently
@@ -508,19 +517,19 @@ a plan and deleted nothing.
 
 ## Honest comparison
 
-|                              | Token Optimizer                                    | Typical alternatives                                 |
-| ---------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
-| **License**                  | MIT — commercial use fine                          | Often noncommercial-only; check before using at work |
-| Default behaviour            | Refuses the wasteful call                          | Suggests a better tool                               |
-| Re-read of an unchanged file | Returns a diff                                     | Returns the file again                               |
+|                              | Token Optimizer                                                      | Typical alternatives                                 |
+| ---------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------- |
+| **License**                  | MIT — commercial use fine                                            | Often noncommercial-only; check before using at work |
+| Default behaviour            | Refuses the wasteful call                                            | Suggests a better tool                               |
+| Re-read of an unchanged file | Returns a diff                                                       | Returns the file again                               |
 | Savings figure               | Direct before/return ledger; causal graph effect separately held out | Computed from the tool's own assumptions             |
-| Cross-session memory         | Findings, decisions, dead ends                     | Usually none                                         |
-| Compaction                   | Consolidation, ranked by cost-to-rederive          | Checkpoint and replay                                |
-| Cache economics              | Measured from the transcript, attributed to a line | Rarely addressed                                     |
-| Model routing                | Measured from episode outcomes                     | Guessed from task size                               |
-| Cross-project                | Fixes transfer by content hash                     | Per-project only                                     |
-| Clients                      | 16                                                 | 3–6 typical                                          |
-| Telemetry                    | None                                               | Varies                                               |
+| Cross-session memory         | Findings, decisions, dead ends                                       | Usually none                                         |
+| Compaction                   | Consolidation, ranked by cost-to-rederive                            | Checkpoint and replay                                |
+| Cache economics              | Measured from the transcript, attributed to a line                   | Rarely addressed                                     |
+| Model routing                | Measured from episode outcomes                                       | Guessed from task size                               |
+| Cross-project                | Fixes transfer by content hash                                       | Per-project only                                     |
+| Clients                      | 16                                                                   | 3–6 typical                                          |
+| Telemetry                    | None                                                                 | Varies                                               |
 
 ---
 
@@ -884,12 +893,6 @@ Any stdio-capable MCP client can launch Token Optimizer with:
 
 Additional ready-made integration files are available for [Claude Desktop](./examples/claude_desktop_config.json), [Codex](./integrations/codex/config.toml), [Gemini CLI](./integrations/gemini/), [OpenCode](./integrations/opencode/), and [GitHub Copilot](./integrations/copilot/mcp-config.json).
 
-## See it in action
-
-![Token Optimizer savings report showing 117,915 tokens saved and a 53 percent reduction across three operations](./docs/assets/token-savings-report.png)
-
-_Real `get_optimization_report` output from an MCP smoke run over this repository's tool reference, server source, and dependency lockfile. Savings vary with content and workflow._
-
 ## Use it
 
 You normally use Token Optimizer by asking your agent in plain language:
@@ -956,11 +959,12 @@ For clients that expose direct MCP tool calls, the core inputs are small JSON ob
 }
 ```
 
-`get_optimization_report` aggregates recorded operations into:
+`get_optimization_report` applies the same versioned measurement contract as
+the dashboard and aggregates qualifying operations into:
 
-- original, optimized, and saved token totals;
-- overall reduction percentage;
-- operations tracked;
+- gross preview reduction, linked expansion debits, and net transport avoided;
+- observed returned context and the net reduction percentage;
+- verified operations tracked, with legacy and tool-reported claims excluded;
 - breakdowns by action/tool, hook phase, and MCP server;
 - optional date-range and session filters.
 
@@ -1411,18 +1415,14 @@ When global hooks are installed, token-optimizer-mcp runs automatically on **eve
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Production Performance
+### Performance evidence
 
-Based on 38,000+ operations in real-world usage:
-
-| Tool Category     | Avg Token Reduction | Cache Hit Rate |
-| ----------------- | ------------------- | -------------- |
-| File Operations   | 60-90%              | >80%           |
-| API Responses     | 83-95%              | >75%           |
-| Database Queries  | 83-90%              | >70%           |
-| Build/Test Output | 70-85%              | >65%           |
-
-**Per-Session Savings**: 300K-700K tokens (worth $0.90-$2.10 at $3/M tokens)
+Reduction targets in tool descriptions are design goals, not production
+measurements. They never enter the verified ledger. Use the dashboard or
+`get_optimization_report` for request-level measurements, and
+`npm run dashboard:audit-savings` to inspect both qualifying and excluded rows.
+No universal dollar value is claimed: configure an effective rate only when it
+reflects your own provider, model, cache, route, plan, tier, and credits.
 
 ### Usage Examples
 

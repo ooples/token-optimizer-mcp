@@ -13,7 +13,7 @@
 
 import { readFileSync, statSync } from 'fs';
 import { globSync } from 'glob';
-import { relative, join, resolve } from 'path';
+import { relative, join } from 'path';
 import { homedir } from 'os';
 import { CacheEngine } from '../../core/cache-engine.js';
 import { TokenCounter } from '../../core/token-counter.js';
@@ -116,6 +116,8 @@ export interface SmartGrepResult {
     compressionRatio: number;
     duration: number;
     cacheHit: boolean;
+    savingsClassification?: 'unmeasured';
+    savingsReason?: string;
   };
   matches?: GrepMatch[]; // Matches (if not filesWithMatches or count mode)
   files?: string[]; // Files with matches (if filesWithMatches mode)
@@ -244,6 +246,7 @@ export class SmartGrepTool {
 
       // Check cache first
       const cacheKey = generateCacheKey('grep', {
+        measurementContract: 2,
         pattern,
         options: opts,
         // Any write through this server invalidates every cached search.
@@ -475,40 +478,16 @@ export class SmartGrepTool {
         ).tokens;
       }
 
-      // THE BASELINE IS MEASURED, NOT INVENTED.
-      //
-      // This used to multiply the result by 100, 20 or 5 depending on mode and
-      // call the difference a saving. Those numbers came from nowhere: a search
-      // returning 200 tokens claimed to have saved 19,800 without anything
-      // having been read. An overstated saving is the one number this project
-      // must never produce, and this was the largest one it produced.
-      //
-      // The honest comparison is the alternative the caller actually had: to
-      // find these matches by hand they would have read the files that contain
-      // them. That is a real quantity -- the files are known and their sizes
-      // are on disk -- so it is summed rather than guessed. Files that could
-      // not be stat'd are simply not counted, which understates the saving; of
-      // the two directions to be wrong in, that is the safe one.
-      let searchedBytes = 0;
-      for (const file of filesWithMatches) {
-        try {
-          searchedBytes += statSync(resolve(opts.cwd, file)).size;
-        } catch {
-          // Not counted rather than estimated.
-        }
-      }
-      // ~4 bytes per token is the same conversion used elsewhere in this
-      // codebase for byte-denominated budgets.
-      const originalTokens = Math.max(
-        resultTokens,
-        Math.round(searchedBytes / 4)
-      );
-
-      const tokensSaved = Math.max(0, originalTokens - resultTokens);
-      // An honest baseline can now equal the result (nothing was withheld), so
-      // the ratio must not divide by zero or report a nonsense figure.
-      const compressionRatio =
-        originalTokens > 0 ? resultTokens / originalTokens : 1;
+      // Corpus bytes scanned are compute, not context. A conventional grep
+      // would return matching lines; it would not deliver every matching file
+      // to the model. The old baseline summed those files and turned one search
+      // into tens of millions of alleged saved tokens. No comparable raw grep
+      // payload is materialized here, so the only defensible savings value is
+      // unmeasured. The actual serialized MCP boundary still records any real
+      // reduction performed later by progressive disclosure.
+      const originalTokens = resultTokens;
+      const tokensSaved = 0;
+      const compressionRatio = 1;
 
       // Build result
       const result: SmartGrepResult = {
@@ -527,6 +506,9 @@ export class SmartGrepTool {
           compressionRatio,
           duration: 0, // Will be set below
           cacheHit: false,
+          savingsClassification: 'unmeasured',
+          savingsReason:
+            'No comparable unoptimized grep response was materialized; repository bytes scanned are not model-context tokens.',
         },
         // PLAIN OBJECT, not the Map. This result is JSON-serialised on its way
         // to every caller, and a Map stringifies to `{}` -- so count mode

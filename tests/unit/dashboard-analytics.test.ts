@@ -2,8 +2,8 @@ import { describe, expect, it } from '@jest/globals';
 import { summarizeDashboardAnalytics } from '../../src/server/dashboard-analytics.js';
 import type { AnalyticsEntry } from '../../src/analytics/analytics-types.js';
 
-const rows: AnalyticsEntry[] = [
-  {
+function row(overrides: Partial<AnalyticsEntry> = {}): AnalyticsEntry {
+  return {
     hookPhase: 'Unknown',
     toolName: 'smart_read',
     mcpServer: 'token-optimizer',
@@ -11,138 +11,195 @@ const rows: AnalyticsEntry[] = [
     optimizedTokens: 250,
     tokensSaved: 750,
     timestamp: '2026-08-12T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
+const verified = row({
+  savingsMeasured: true,
+  measurementId: 'measurement-1',
+  client: 'codex',
+  metadata: {
+    measurementId: 'measurement-1',
+    measurementSchemaVersion: 2,
+    measurementClass: 'verified-transport-reduction',
+    baselineKind: 'materialized-undisclosed-mcp-result',
+    disclosureRef: 'a'.repeat(16),
+    baselineBytes: 4_000,
+    returnedBytes: 1_000,
+    bytesSaved: 3_000,
+    baselineSha256: 'a'.repeat(64),
+    returnedSha256: 'b'.repeat(64),
   },
-  {
-    hookPhase: 'Unknown',
-    toolName: 'smart_read',
-    mcpServer: 'token-optimizer',
-    originalTokens: 400,
-    optimizedTokens: 100,
-    tokensSaved: 300,
-    timestamp: '2026-08-12T12:01:00.000Z',
-  },
-  {
-    hookPhase: 'Unknown',
-    toolName: 'smart_grep',
-    mcpServer: 'token-optimizer',
-    originalTokens: 300,
-    optimizedTokens: 200,
-    tokensSaved: 100,
-    timestamp: '2026-08-12T12:02:00.000Z',
-  },
-];
+});
 
 describe('dashboard optimizer analytics contract', () => {
-  it('reports direct before/after totals, per-action USD, and recent rows', () => {
-    const report = summarizeDashboardAnalytics(rows, {
-      limit: 2,
-      usdPerMillionTokens: 3,
-    });
+  it('reports only versioned materialized payload reductions as verified', () => {
+    const report = summarizeDashboardAnalytics(
+      [
+        verified,
+        row({
+          toolName: 'smart_grep',
+          originalTokens: 47_000_000,
+          optimizedTokens: 2_000,
+          tokensSaved: 46_998_000,
+          timestamp: '2026-08-12T12:01:00.000Z',
+        }),
+        row({
+          toolName: 'wiki_read',
+          originalTokens: 100,
+          optimizedTokens: 100,
+          tokensSaved: 0,
+          savingsMeasured: false,
+          timestamp: '2026-08-12T12:02:00.000Z',
+          metadata: {
+            measurementSchemaVersion: 2,
+            measurementClass: 'observed-return-only',
+            measurement: 'actual-return-context-only',
+          },
+        }),
+      ],
+      { effectiveInputUsdPerMillion: 0.5 }
+    );
 
-    expect(report.available).toBe(true);
+    expect(report.schemaVersion).toBe(2);
     expect(report.summary).toMatchObject({
       totalOperations: 3,
-      totalOriginalTokens: 1_700,
-      totalOptimizedTokens: 550,
-      totalTokensSaved: 1_150,
-      contextUsd: 0.00165,
-      savedUsd: 0.00345,
-      actualReturnedContextOperations: 0,
-      legacyReportedContextOperations: 3,
-    });
-    expect(report.byAction[0]).toMatchObject({
-      name: 'smart_read',
-      totalOperations: 2,
-      totalOriginalTokens: 1_400,
+      totalOriginalTokens: 1_000,
       totalOptimizedTokens: 350,
-      totalTokensSaved: 1_050,
-      contextUsd: 0.00105,
+      totalTokensSaved: 750,
+      unverifiedReportedTokensSaved: 46_998_000,
+      measuredSavingsOperations: 1,
+      observedReturnedContextOperations: 2,
+      unverifiedReportedOperations: 1,
+      legacyReportedContextOperations: 1,
+      contextUsd: 0.000175,
+      savedUsd: 0.000375,
     });
-    expect(report.recent.map((row) => row.name)).toEqual([
-      'smart_grep',
-      'smart_read',
+    expect(
+      report.byAction.find((item) => item.name === 'smart_grep')
+    ).toMatchObject({
+      totalOptimizedTokens: 0,
+      totalTokensSaved: 0,
+      unverifiedReportedTokensSaved: 46_998_000,
+      unverifiedReportedOperations: 1,
+    });
+    expect(report.recent[0]).toMatchObject({
+      name: 'wiki_read',
+      classification: 'observed-return-only',
+      savingsMeasured: false,
+    });
+  });
+
+  it('leaves cost unavailable until an effective billing rate is configured', () => {
+    const report = summarizeDashboardAnalytics([verified]);
+
+    expect(report.pricing).toMatchObject({
+      available: false,
+      effectiveInputUsdPerMillion: null,
+      source: 'unavailable',
+    });
+    expect(report.summary.contextUsd).toBeNull();
+    expect(report.summary.savedUsd).toBeNull();
+    expect(report.measurement.priceBasis).toMatch(/cannot observe billing/i);
+  });
+
+  it('does not certify a legacy row merely because savingsMeasured is true', () => {
+    const report = summarizeDashboardAnalytics([
+      row({ savingsMeasured: true }),
     ]);
-    expect(report.byClient).toEqual([
-      expect.objectContaining({
-        name: 'Historical — client not recorded',
-        attribution: 'historical-unattributed',
-        totalOperations: 3,
+
+    expect(report.summary.totalTokensSaved).toBe(0);
+    expect(report.summary.measuredSavingsOperations).toBe(0);
+    expect(report.summary.unverifiedReportedTokensSaved).toBe(750);
+    expect(report.summary.legacyReportedContextOperations).toBe(1);
+  });
+
+  it('rejects a versioned row when its materialized delta is inconsistent', () => {
+    const report = summarizeDashboardAnalytics([
+      row({
+        ...verified,
+        metadata: { ...verified.metadata, bytesSaved: 2_999 },
       }),
     ]);
-    expect(report.source).toMatch(/actual returned context/i);
+
+    expect(report.summary.totalTokensSaved).toBe(0);
+    expect(report.summary.measuredSavingsOperations).toBe(0);
+    expect(report.summary.unverifiedReportedTokensSaved).toBe(750);
   });
 
-  it('attributes new optimizer measurements to the MCP handshake client', () => {
+  it('subtracts a linked expansion from net verified transport avoided', () => {
     const report = summarizeDashboardAnalytics([
-      {
-        ...rows[0],
-        client: 'codex',
-        clientVersion: '0.147.0',
-      },
-      rows[1],
+      verified,
+      row({
+        toolName: 'expand',
+        originalTokens: 400,
+        optimizedTokens: 400,
+        tokensSaved: 0,
+        savingsMeasured: false,
+        measurementId: 'measurement-2',
+        timestamp: '2026-08-12T12:03:00.000Z',
+        metadata: {
+          measurementId: 'measurement-2',
+          measurementSchemaVersion: 2,
+          measurementClass: 'verified-transport-expansion-debit',
+          measurement: 'actual-expansion-transport-debit',
+          expansionRef: 'a'.repeat(16),
+          creditedMeasurementId: 'measurement-1',
+          returnedBytes: 1_600,
+          returnedSha256: 'c'.repeat(64),
+        },
+      }),
     ]);
 
-    expect(report.byClient).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'codex', attribution: 'recorded' }),
-        expect.objectContaining({
-          name: 'Historical — client not recorded',
-          attribution: 'historical-unattributed',
-        }),
-      ])
-    );
+    expect(report.summary).toMatchObject({
+      grossTokensSaved: 750,
+      expansionTokensReturned: 400,
+      totalTokensSaved: 350,
+      verifiedExpansionOperations: 1,
+      totalOptimizedTokens: 650,
+    });
+    expect(report.recent[0]).toMatchObject({
+      name: 'expand',
+      classification: 'verified-transport-expansion-debit',
+      tokensSaved: -400,
+      savingsMeasured: true,
+    });
   });
 
-  it('returns explicit unavailable state instead of zero-valued claims', () => {
+  it('keeps new tool-reported estimates outside verified savings', () => {
+    const report = summarizeDashboardAnalytics([
+      row({
+        originalTokens: 250,
+        optimizedTokens: 250,
+        tokensSaved: 0,
+        savingsMeasured: false,
+        metadata: {
+          measurementSchemaVersion: 2,
+          measurementClass: 'observed-return-only',
+          measurement: 'actual-return-context-only',
+          reportedToolSavings: {
+            originalTokens: 10_000,
+            optimizedTokens: 250,
+            tokensSaved: 9_750,
+          },
+        },
+      }),
+    ]);
+
+    expect(report.summary.totalTokensSaved).toBe(0);
+    expect(report.summary.totalOptimizedTokens).toBe(250);
+    expect(report.summary.unverifiedReportedTokensSaved).toBe(9_750);
+    expect(report.summary.unverifiedReportedOperations).toBe(1);
+    expect(report.summary.legacyReportedContextOperations).toBe(0);
+  });
+
+  it('returns an explicit unavailable state for an empty ledger', () => {
     const report = summarizeDashboardAnalytics([]);
 
     expect(report.available).toBe(false);
     expect(report.summary.totalOperations).toBe(0);
     expect(report.byAction).toEqual([]);
     expect(report.recent).toEqual([]);
-  });
-
-  it('keeps zero-savings operations as measured context', () => {
-    const report = summarizeDashboardAnalytics([
-      {
-        ...rows[0],
-        originalTokens: 100,
-        optimizedTokens: 100,
-        tokensSaved: 0,
-      },
-    ]);
-
-    expect(report.available).toBe(true);
-    expect(report.summary.totalTokensSaved).toBe(0);
-    expect(report.summary.totalOptimizedTokens).toBe(100);
-    expect(report.summary.savingsPercentage).toBe(0);
-  });
-
-  it('counts returned context without inventing or diluting a before-state', () => {
-    const report = summarizeDashboardAnalytics([
-      rows[0],
-      {
-        ...rows[1],
-        originalTokens: 900,
-        optimizedTokens: 900,
-        tokensSaved: 0,
-        savingsMeasured: false,
-        metadata: { measurement: 'actual-return-context-only' },
-      },
-    ]);
-
-    expect(report.summary).toMatchObject({
-      totalOperations: 2,
-      totalOriginalTokens: 1_000,
-      totalOptimizedTokens: 1_150,
-      measuredOptimizedTokens: 250,
-      totalTokensSaved: 750,
-      savingsPercentage: 75,
-      measuredSavingsOperations: 1,
-      unmeasuredSavingsOperations: 1,
-      actualReturnedContextOperations: 1,
-      legacyReportedContextOperations: 1,
-    });
-    expect(report.recent[0]).toMatchObject({ savingsMeasured: false });
   });
 });

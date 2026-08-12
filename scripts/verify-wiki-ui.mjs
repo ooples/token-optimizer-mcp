@@ -1025,23 +1025,31 @@ async function main() {
       route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
-          schemaVersion: 1,
+          schemaVersion: 2,
           available: true,
           source: 'browser fixture: actual returned context',
-          referenceUsdPerMillionTokens: 3,
+          pricing: {
+            available: false,
+            effectiveInputUsdPerMillion: null,
+            source: 'unavailable',
+            explanation: 'browser fixture: billing is not observable',
+          },
           summary: {
             totalOperations: 3,
             totalOriginalTokens: 1400,
             totalOptimizedTokens: 500,
             measuredOptimizedTokens: 350,
             totalTokensSaved: 1050,
+            unverifiedReportedTokensSaved: 0,
             savingsPercentage: 75,
-            contextUsd: 0.0015,
-            savedUsd: 0.00315,
+            contextUsd: null,
+            savedUsd: null,
             measuredSavingsOperations: 2,
             unmeasuredSavingsOperations: 1,
             actualReturnedContextOperations: 3,
             legacyReportedContextOperations: 0,
+            observedReturnedContextOperations: 3,
+            unverifiedReportedOperations: 0,
           },
           byAction: [
             {
@@ -1050,8 +1058,11 @@ async function main() {
               totalOriginalTokens: 1400,
               totalOptimizedTokens: 350,
               totalTokensSaved: 1050,
-              contextUsd: 0.00105,
-              savedUsd: 0.00315,
+              unverifiedReportedTokensSaved: 0,
+              observedReturnedContextOperations: 2,
+              unverifiedReportedOperations: 0,
+              contextUsd: null,
+              savedUsd: null,
             },
             {
               name: 'wiki_read',
@@ -1059,8 +1070,11 @@ async function main() {
               totalOriginalTokens: 0,
               totalOptimizedTokens: 150,
               totalTokensSaved: 0,
-              contextUsd: 0.00045,
-              savedUsd: 0,
+              unverifiedReportedTokensSaved: 0,
+              observedReturnedContextOperations: 1,
+              unverifiedReportedOperations: 0,
+              contextUsd: null,
+              savedUsd: null,
             },
           ],
           byClient: [
@@ -1068,17 +1082,40 @@ async function main() {
               name: 'codex',
               attribution: 'recorded',
               totalOperations: 2,
+              observedReturnedContextOperations: 2,
+              verifiedSavingsOperations: 2,
+              unverifiedReportedOperations: 0,
               totalOptimizedTokens: 350,
               totalTokensSaved: 1050,
-              contextUsd: 0.00105,
+              unverifiedReportedTokensSaved: 0,
+              contextUsd: null,
+              savedUsd: null,
             },
             {
               name: 'gemini',
               attribution: 'recorded',
               totalOperations: 1,
+              observedReturnedContextOperations: 1,
+              verifiedSavingsOperations: 0,
+              unverifiedReportedOperations: 0,
               totalOptimizedTokens: 150,
-              totalTokensSaved: 0,
-              contextUsd: 0.00045,
+              totalTokensSaved: null,
+              unverifiedReportedTokensSaved: 0,
+              contextUsd: null,
+              savedUsd: null,
+            },
+            {
+              name: 'claude-code',
+              attribution: 'recorded',
+              totalOperations: 1,
+              observedReturnedContextOperations: 1,
+              verifiedSavingsOperations: 0,
+              unverifiedReportedOperations: 0,
+              totalOptimizedTokens: 90,
+              totalTokensSaved: null,
+              unverifiedReportedTokensSaved: 0,
+              contextUsd: null,
+              savedUsd: null,
             },
           ],
           recent: [
@@ -1087,9 +1124,11 @@ async function main() {
               originalTokens: 150,
               optimizedTokens: 150,
               tokensSaved: 0,
+              reportedTokensSaved: 0,
               savingsMeasured: false,
-              contextUsd: 0.00045,
-              savedUsd: 0,
+              classification: 'observed-return-only',
+              contextUsd: null,
+              savedUsd: null,
               timestamp: '2026-08-12T15:02:00Z',
             },
             {
@@ -1097,12 +1136,17 @@ async function main() {
               originalTokens: 1000,
               optimizedTokens: 250,
               tokensSaved: 750,
+              reportedTokensSaved: 0,
               savingsMeasured: true,
-              contextUsd: 0.00075,
-              savedUsd: 0.00225,
+              classification: 'verified-transport-reduction',
+              contextUsd: null,
+              savedUsd: null,
               timestamp: '2026-08-12T15:01:00Z',
             },
           ],
+          measurement: {
+            tokenCountMethod: 'browser fixture tokenizer estimate',
+          },
         }),
       })
     );
@@ -1142,7 +1186,7 @@ async function main() {
             ?.textContent?.replaceAll(',', '')
         ) === 1050 &&
         document.querySelectorAll('#accounting-grid .accounting-card')
-          .length === 6 &&
+          .length === 7 &&
         document.querySelectorAll('#client-ledger .client-ledger-row').length >
           0,
       undefined,
@@ -1165,20 +1209,21 @@ async function main() {
           document
             .querySelector('#saved-tokens')
             ?.textContent?.replaceAll(',', '')
-        ) === 1950,
+        ) === 1050,
       undefined,
       { timeout: 10_000 }
     );
     await measuredOverview.waitForTimeout(1_100);
     const measuredBody = await measuredOverview.textContent('body');
     check(
-      'combined overview renders direct MCP and graph savings',
+      'combined overview keeps modeled graph savings out of the verified headline',
       Number(
         (await measuredOverview.textContent('#saved-tokens'))?.replaceAll(
           ',',
           ''
         ) || 0
-      ) === 1950 && /MCP \+ native/i.test(measuredBody || '')
+      ) === 1050 &&
+        /modeled graph substitutions remain separate/i.test(measuredBody || '')
     );
     check(
       'combined overview attributes optimizer metrics across clients',
@@ -1190,7 +1235,7 @@ async function main() {
       .locator('#timeline-container .event')
       .allTextContents();
     check(
-      'recent activity prices context and refuses fake zero savings',
+      'recent activity marks unpriced context and refuses fake zero savings',
       recentRows.some(
         (row) => /wiki_read/i.test(row) && /no before baseline/i.test(row)
       ) &&
@@ -1203,10 +1248,10 @@ async function main() {
       recentRows.join(' | ')
     );
     check(
-      'every action exposes returned context USD and token savings',
+      'every action exposes returned context, verified savings, and pricing absence',
       (await measuredOverview.locator('#tool-breakdown-body tr').count()) ===
-        3 &&
-        !/Not measured/.test(
+        2 &&
+        /Not priced/.test(
           (await measuredOverview.textContent('#tool-breakdown-body')) || ''
         )
     );

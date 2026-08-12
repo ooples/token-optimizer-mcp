@@ -21,11 +21,13 @@ This document provides comprehensive documentation for all 61 tools available in
 Compress and cache text to reduce token usage. This is the primary tool for removing content from your context window.
 
 **Parameters:**
+
 - `text` (string, required) - Text to optimize
 - `key` (string, required) - Cache key for storing
 - `quality` (number, optional) - Compression quality 0-11 (default: 11)
 
 **Returns:**
+
 - `success` (boolean) - Operation status
 - `key` (string) - Cache key
 - `originalTokens` (number) - Tokens before optimization
@@ -37,12 +39,13 @@ Compress and cache text to reduce token usage. This is the primary tool for remo
 **Token Reduction:** 60-90% average
 
 **Example:**
+
 ```typescript
 optimize_text({
-  text: "Large API response or file content...",
-  key: "api-response-key",
-  quality: 11
-})
+  text: 'Large API response or file content...',
+  key: 'api-response-key',
+  quality: 11,
+});
 ```
 
 ---
@@ -52,17 +55,20 @@ optimize_text({
 Retrieve previously cached and optimized text.
 
 **Parameters:**
+
 - `key` (string, required) - Cache key to retrieve
 
 **Returns:**
+
 - `success` (boolean) - Operation status
 - `key` (string) - Cache key
 - `text` (string) - Original cached text
 - `fromCache` (boolean) - Whether data was found in cache
 
 **Example:**
+
 ```typescript
-get_cached({ key: "api-response-key" })
+get_cached({ key: 'api-response-key' });
 ```
 
 ---
@@ -72,10 +78,12 @@ get_cached({ key: "api-response-key" })
 Compress text using Brotli compression. Returns base64-encoded compressed data.
 
 **Parameters:**
+
 - `text` (string, required) - Text to compress
 - `quality` (number, optional) - Compression quality 0-11 (default: 11)
 
 **Returns:**
+
 - `compressed` (string) - Base64-encoded compressed data
 
 **Note:** Base64 encoding adds ~33% overhead. Use `optimize_text` for better token reduction.
@@ -87,9 +95,11 @@ Compress text using Brotli compression. Returns base64-encoded compressed data.
 Decompress base64-encoded Brotli-compressed text.
 
 **Parameters:**
+
 - `compressed` (string, required) - Base64-encoded compressed text
 
 **Returns:**
+
 - `text` (string) - Original decompressed text
 
 ---
@@ -99,15 +109,18 @@ Decompress base64-encoded Brotli-compressed text.
 Count tokens in text using tiktoken (GPT-4 tokenizer).
 
 **Parameters:**
+
 - `text` (string, required) - Text to count tokens for
 
 **Returns:**
+
 - `tokens` (number) - Token count
 - `characters` (number) - Character count
 
 **Example:**
+
 ```typescript
-count_tokens({ text: "Your text here" })
+count_tokens({ text: 'Your text here' });
 // Result: { tokens: 150, characters: 500 }
 ```
 
@@ -118,9 +131,11 @@ count_tokens({ text: "Your text here" })
 Analyze text and provide recommendations for optimization including compression benefits and token savings.
 
 **Parameters:**
+
 - `text` (string, required) - Text to analyze
 
 **Returns:**
+
 - `tokens` - Token analysis
   - `current` (number) - Current token count
   - `afterCompression` (number) - Estimated tokens after compression
@@ -144,6 +159,7 @@ Get comprehensive cache statistics including hit rate, compression ratio, and to
 **Parameters:** None
 
 **Returns:**
+
 - `totalEntries` (number) - Number of cached entries
 - `totalSize` (number) - Total cache size in bytes
 - `hits` (number) - Cache hits
@@ -159,9 +175,11 @@ Get comprehensive cache statistics including hit rate, compression ratio, and to
 Clear all cached data. Use with caution.
 
 **Parameters:**
+
 - `confirm` (boolean, required) - Must be true to confirm
 
 **Returns:**
+
 - `success` (boolean) - Operation status
 
 ---
@@ -173,6 +191,7 @@ Clear all cached data. Use with caution.
 Read files with 80% token reduction through intelligent caching and diff-based updates.
 
 **Parameters:**
+
 - `path` (string, required) - Path to file
 - `diffMode` (boolean, optional) - Return only diff if previously read (default: true)
 - `maxSize` (number, optional) - Max content size in bytes (default: 100000)
@@ -182,12 +201,13 @@ Read files with 80% token reduction through intelligent caching and diff-based u
 **Token Reduction:** 80% on subsequent reads (diff-only)
 
 **Example:**
+
 ```typescript
 // First read: full content
-smart_read({ path: "/src/app.ts" })
+smart_read({ path: '/src/app.ts' });
 
 // Subsequent reads: only changes
-smart_read({ path: "/src/app.ts" })
+smart_read({ path: '/src/app.ts' });
 ```
 
 ---
@@ -197,6 +217,7 @@ smart_read({ path: "/src/app.ts" })
 Write files with verification, atomic operations, and change tracking.
 
 **Parameters:**
+
 - `path` (string, required) - Path to file
 - `content` (string, required) - Content to write
 - `atomic` (boolean, optional) - Use atomic write with temp file (default: true)
@@ -213,6 +234,7 @@ Write files with verification, atomic operations, and change tracking.
 Line-based file editing with diff-only output.
 
 **Parameters:**
+
 - `path` (string, required) - Path to file
 - `operations` (array, required) - Edit operations
   - `type` - "replace", "insert", or "delete"
@@ -234,6 +256,7 @@ Line-based file editing with diff-only output.
 Search file contents with match-only output and smart filtering.
 
 **Parameters:**
+
 - `pattern` (string, required) - Search pattern (regex)
 - `cwd` (string, optional) - Working directory for search
 - `files` (array, optional) - File patterns to search (glob patterns)
@@ -256,7 +279,8 @@ Search file contents with match-only output and smart filtering.
 File pattern matching with path-only results and smart filtering.
 
 **Parameters:**
-- `pattern` (string, required) - Glob pattern (e.g., "src/**/*.ts")
+
+- `pattern` (string, required) - Glob pattern (e.g., "src/\*_/_.ts")
 - `cwd` (string, optional) - Working directory
 - `extensions` (array, optional) - Filter by file extensions
 - `includeMetadata` (boolean, optional) - Include file metadata (default: false)
@@ -273,6 +297,7 @@ File pattern matching with path-only results and smart filtering.
 Git diffs with diff-only output and smart filtering.
 
 **Parameters:**
+
 - `source` (string, optional) - Source commit/branch (default: HEAD)
 - `target` (string, optional) - Target commit/branch (default: working directory)
 - `files` (array, optional) - Specific files to diff
@@ -292,10 +317,11 @@ Git diffs with diff-only output and smart filtering.
 Git branch listing with structured JSON output and smart filtering.
 
 **Parameters:**
+
 - `cwd` (string, optional) - Working directory
 - `all` (boolean, optional) - Include local and remote branches (default: false)
 - `remote` (boolean, optional) - Include remote branches (default: false)
-- `pattern` (string, optional) - Filter branches by pattern (e.g., "feature/*")
+- `pattern` (string, optional) - Filter branches by pattern (e.g., "feature/\*")
 - `merged` (boolean, optional) - Only show merged branches (default: false)
 - `unmerged` (boolean, optional) - Only show unmerged branches (default: false)
 - `includeCommit` (boolean, optional) - Include last commit info (default: false)
@@ -313,6 +339,7 @@ Git branch listing with structured JSON output and smart filtering.
 Git commit history with smart filtering and structured output.
 
 **Parameters:**
+
 - `cwd` (string, optional) - Working directory
 - `limit` (number, optional) - Maximum commits to return (default: 50)
 - `offset` (number, optional) - Skip first N commits (default: 0)
@@ -335,6 +362,7 @@ Git commit history with smart filtering and structured output.
 Git merge management with structured status and conflict analysis.
 
 **Parameters:**
+
 - `mode` (string, optional) - "status", "merge", "abort", or "continue" (default: "status")
 - `branch` (string, optional) - Branch to merge from (for merge mode)
 - `commit` (string, optional) - Specific commit to merge (for merge mode)
@@ -358,6 +386,7 @@ Git merge management with structured status and conflict analysis.
 Git status with status-only output and smart filtering.
 
 **Parameters:**
+
 - `cwd` (string, optional) - Repository directory
 - `summaryOnly` (boolean, optional) - Return counts only (default: false)
 - `staged` (boolean, optional) - Only staged files
@@ -379,6 +408,7 @@ Git status with status-only output and smart filtering.
 HTTP requests with intelligent caching and retry logic.
 
 **Parameters:**
+
 - `method` (string, required) - HTTP method: "GET", "POST", "PUT", "DELETE", "PATCH"
 - `url` (string, required) - Request URL
 - `headers` (object, optional) - Request headers
@@ -393,19 +423,20 @@ HTTP requests with intelligent caching and retry logic.
 **Token Reduction:** 83% on cache hits, 95% on cached responses
 
 **Example:**
+
 ```typescript
 // First request: fetch and cache
 smart_api_fetch({
-  method: "GET",
-  url: "https://api.example.com/data",
-  ttl: 300
-})
+  method: 'GET',
+  url: 'https://api.example.com/data',
+  ttl: 300,
+});
 
 // Subsequent requests: cached (95% reduction)
 smart_api_fetch({
-  method: "GET",
-  url: "https://api.example.com/data"
-})
+  method: 'GET',
+  url: 'https://api.example.com/data',
+});
 ```
 
 ---
@@ -415,6 +446,7 @@ smart_api_fetch({
 API response caching with TTL, ETag, and event-based invalidation strategies.
 
 **Parameters:**
+
 - `action` (string, required) - "get", "set", "invalidate", "analyze", or "warm"
 - `request` (object, optional) - API request data (for get/set)
   - `url` (string) - Request URL
@@ -427,7 +459,7 @@ API response caching with TTL, ETag, and event-based invalidation strategies.
 - `ttl` (number, optional) - Time-to-live in seconds (default: 3600)
 - `tags` (array, optional) - Tags for grouping cached entries
 - `invalidationPattern` (string, optional) - "time", "pattern", "tag", "manual", "event"
-- `pattern` (string, optional) - URL pattern for invalidation (e.g., "/api/users/*")
+- `pattern` (string, optional) - URL pattern for invalidation (e.g., "/api/users/\*")
 - `endpoints` (array, optional) - Endpoints to warm (for warm action)
 - `normalizeQuery` (boolean, optional) - Normalize query parameters (default: true)
 - `ignoreHeaders` (array, optional) - Headers to exclude from cache key
@@ -445,6 +477,7 @@ API response caching with TTL, ETag, and event-based invalidation strategies.
 Database queries with connection pooling, circuit breaking, and intelligent caching.
 
 **Parameters:**
+
 - `query` (string, optional) - SQL query to execute (required for query/explain/analyze/optimize)
 - `action` (string, optional) - "query", "explain", "analyze", "optimize", "health", "pool", "slow", "batch" (default: "query")
 - `engine` (string, optional) - "postgresql", "mysql", "sqlite", "mongodb", "redis", "generic" (default: "generic")
@@ -473,6 +506,7 @@ Database queries with connection pooling, circuit breaking, and intelligent cach
 SQL query analysis with optimization suggestions and execution plan analysis.
 
 **Parameters:**
+
 - `query` (string, required) - SQL query to analyze
 - `action` (string, optional) - "analyze", "explain", "validate", "optimize", "history" (default: "analyze")
 - `database` (string, optional) - "postgresql", "mysql", "sqlite", "sqlserver"
@@ -490,6 +524,7 @@ SQL query analysis with optimization suggestions and execution plan analysis.
 Database schema analysis with intelligent caching and 83% token reduction.
 
 **Parameters:**
+
 - `connectionString` (string, required) - Database connection string
   - PostgreSQL: `postgresql://user:pass@host:port/db`
   - MySQL: `mysql://user:pass@host/db`
@@ -510,6 +545,7 @@ Database schema analysis with intelligent caching and 83% token reduction.
 GraphQL query optimization with complexity analysis and N+1 detection.
 
 **Parameters:**
+
 - `query` (string, required) - GraphQL query to analyze
 - `operationName` (string, optional) - Operation name
 - `variables` (object, optional) - Query variables
@@ -529,6 +565,7 @@ GraphQL query optimization with complexity analysis and N+1 detection.
 REST API analysis with endpoint discovery and health scoring.
 
 **Parameters:**
+
 - `specContent` (string, optional) - OpenAPI/Swagger spec content (JSON string)
 - `specUrl` (string, optional) - OpenAPI/Swagger spec URL (not yet supported)
 - `baseUrl` (string, optional) - Base API URL
@@ -550,6 +587,7 @@ REST API analysis with endpoint discovery and health scoring.
 ORM query optimization with N+1 detection and eager loading suggestions.
 
 **Parameters:**
+
 - `ormCode` (string, required) - ORM query code to analyze
 - `ormType` (string, required) - "prisma", "sequelize", "typeorm", "mongoose", "generic"
 - `modelDefinitions` (string, optional) - Schema/model definitions for enhanced analysis
@@ -569,6 +607,7 @@ ORM query optimization with N+1 detection and eager loading suggestions.
 Database migration tracking with status monitoring and 83% token reduction.
 
 **Parameters:**
+
 - `action` (string, optional) - "list", "status", "pending", "history", "rollback", "generate" (default: "list")
 - `migrationId` (string, optional) - Migration ID (required for rollback and generate)
 - `direction` (string, optional) - "up" or "down" for rollback (default: "down")
@@ -585,6 +624,7 @@ Database migration tracking with status monitoring and 83% token reduction.
 WebSocket connection management with message tracking and 83% token reduction.
 
 **Parameters:**
+
 - `url` (string, required) - WebSocket URL (ws:// or wss://)
 - `action` (string, required) - "connect", "disconnect", "send", "history", "analyze"
 - `message` (any, optional) - Message to send (for send action)
@@ -608,6 +648,7 @@ WebSocket connection management with message tracking and 83% token reduction.
 TypeScript builds with intelligent caching and diff-based change detection.
 
 **Parameters:**
+
 - `projectRoot` (string, optional) - Project root directory
 - `tsconfig` (string, optional) - TypeScript config file path
 - `force` (boolean, optional) - Force full rebuild, ignore cache (default: false)
@@ -624,6 +665,7 @@ TypeScript builds with intelligent caching and diff-based change detection.
 Test execution with intelligent caching and incremental test selection.
 
 **Parameters:**
+
 - `projectRoot` (string, optional) - Project root directory
 - `pattern` (string, optional) - Pattern to match test files
 - `onlyChanged` (boolean, optional) - Run only tests that changed (default: false)
@@ -641,6 +683,7 @@ Test execution with intelligent caching and incremental test selection.
 ESLint with intelligent caching, incremental analysis, and auto-fix suggestions.
 
 **Parameters:**
+
 - `files` (string/array, required) - Files or pattern to lint
 - `projectRoot` (string, optional) - Project root directory
 - `fix` (boolean, optional) - Auto-fix issues (default: false)
@@ -658,6 +701,7 @@ ESLint with intelligent caching, incremental analysis, and auto-fix suggestions.
 TypeScript type checking with intelligent caching and categorized error reporting.
 
 **Parameters:**
+
 - `projectRoot` (string, optional) - Project root directory
 - `tsconfig` (string, optional) - TypeScript config file path
 - `watch` (boolean, optional) - Watch mode for continuous type checking (default: false)
@@ -673,6 +717,7 @@ TypeScript type checking with intelligent caching and categorized error reportin
 Package installation with dependency analysis, conflict detection, and smart caching.
 
 **Parameters:**
+
 - `packages` (array, optional) - Packages to install (if empty, installs all from package.json)
 - `projectRoot` (string, optional) - Project root directory
 - `dev` (boolean, optional) - Install as dev dependency (default: false)
@@ -689,6 +734,7 @@ Package installation with dependency analysis, conflict detection, and smart cac
 Docker operations with build/run/stop/logs support, image layer analysis, and optimization suggestions.
 
 **Parameters:**
+
 - `operation` (string, required) - "build", "run", "stop", "logs", "ps"
 - `projectRoot` (string, optional) - Project root directory
 - `imageName` (string, optional) - Image name for build/run
@@ -711,6 +757,7 @@ Docker operations with build/run/stop/logs support, image layer analysis, and op
 System log aggregation and analysis with multi-source support, pattern filtering, error detection, and insights.
 
 **Parameters:**
+
 - `sources` (array, optional) - Log sources to aggregate (file paths or system logs)
 - `projectRoot` (string, optional) - Project root directory
 - `level` (string, optional) - Filter by log level: "error", "warn", "info", "debug", "all" (default: "all")
@@ -729,6 +776,7 @@ System log aggregation and analysis with multi-source support, pattern filtering
 Network diagnostics and monitoring with connectivity testing, port scanning, DNS resolution, and anomaly detection.
 
 **Parameters:**
+
 - `operation` (string, required) - "ping", "port-scan", "dns", "traceroute", "all"
 - `hosts` (array, optional) - Hosts to test (for ping/port-scan operations)
 - `ports` (array, optional) - Ports to scan (for port-scan operation)
@@ -747,6 +795,7 @@ Network diagnostics and monitoring with connectivity testing, port scanning, DNS
 Monitor and analyze system processes with anomaly detection and resource tracking.
 
 **Parameters:**
+
 - `projectRoot` (string, optional) - Project root directory
 - `filter` (string, optional) - Filter processes by name pattern
 - `cpuThreshold` (number, optional) - Show only high CPU usage processes (> threshold %)
@@ -764,6 +813,7 @@ Monitor and analyze system processes with anomaly detection and resource trackin
 System resource monitoring with CPU, memory, disk usage tracking, anomaly detection, and performance recommendations.
 
 **Parameters:**
+
 - `projectRoot` (string, optional) - Project root directory
 - `includeDisk` (boolean, optional) - Include disk metrics (default: true)
 - `diskPaths` (array, optional) - Disk paths to monitor (default: root partition)
@@ -782,6 +832,7 @@ System resource monitoring with CPU, memory, disk usage tracking, anomaly detect
 Advanced multi-tier cache (L1/L2/L3) with 6 eviction strategies, stampede prevention, and automatic tier management.
 
 **Parameters:**
+
 - `operation` (string, required) - "get", "set", "delete", "clear", "stats", "configure", "promote", "demote", "batch-get", "batch-set", "export", "import"
 - `key` (string, optional) - Cache key (for get/set/delete/promote/demote operations)
 - `value` (string, optional) - Value to store (for set operation)
@@ -809,8 +860,9 @@ Advanced multi-tier cache (L1/L2/L3) with 6 eviction strategies, stampede preven
 Intelligent cache pre-warming with 87%+ token reduction, schedule-based warming, pattern analysis, dependency resolution, and progressive warming strategies.
 
 **Parameters:**
+
 - `operation` (string, required) - "schedule", "immediate", "pattern-based", "dependency-based", "selective", "status", "cancel", "pause", "resume", "configure"
-- `schedule` (string, optional) - Cron expression for scheduled warmup (e.g., '0 * * * *')
+- `schedule` (string, optional) - Cron expression for scheduled warmup (e.g., '0 \* \* \* \*')
 - `keys` (array, optional) - Keys to warm (for immediate/selective operations)
 - `pattern` (string, optional) - Regex pattern for key matching
 - `accessHistory` (array, optional) - Access history for pattern-based warmup
@@ -845,6 +897,7 @@ Intelligent cache pre-warming with 87%+ token reduction, schedule-based warming,
 Comprehensive cache analytics with 88%+ token reduction. Real-time dashboards, trend analysis, alerting, heatmaps, bottleneck detection, and cost optimization.
 
 **Parameters:**
+
 - `operation` (string, required) - "dashboard", "metrics", "trends", "alerts", "heatmap", "bottlenecks", "cost-analysis", "export-data"
 - `metricTypes` (array, optional) - Types of metrics: "performance", "usage", "efficiency", "cost", "health"
 - `timeRange` (object, optional) - Time range for analysis
@@ -872,6 +925,7 @@ Comprehensive cache analytics with 88%+ token reduction. Real-time dashboards, t
 Cache performance benchmarking with 89% token reduction through comprehensive testing and analysis.
 
 **Parameters:**
+
 - `operation` (string, required) - "run-benchmark", "compare", "load-test", "latency-test", "throughput-test", "report"
 - `config` (object, optional) - Cache configuration for single benchmark
   - `name` (string) - Configuration name
@@ -908,6 +962,7 @@ Cache performance benchmarking with 89% token reduction through comprehensive te
 Advanced compression strategies with 89%+ token reduction. Supports 6 algorithms (gzip, brotli, lz4, zstd, snappy, custom), adaptive selection, dictionary-based compression, and delta compression.
 
 **Parameters:**
+
 - `operation` (string, required) - "compress", "decompress", "analyze", "optimize", "benchmark", "configure"
 - `data` (any, required for compress/decompress/analyze) - Data to process
 - `algorithm` (string, optional) - "gzip", "brotli", "lz4", "zstd", "snappy", "custom"
@@ -933,10 +988,11 @@ Advanced compression strategies with 89%+ token reduction. Supports 6 algorithms
 Comprehensive cache invalidation with 88%+ token reduction, dependency tracking, pattern matching, scheduled invalidation, and distributed coordination.
 
 **Parameters:**
+
 - `operation` (string, required) - "invalidate", "invalidate-pattern", "invalidate-tag", "invalidate-dependency", "schedule-invalidation", "cancel-scheduled", "audit-log", "set-dependency", "remove-dependency", "validate", "configure", "stats", "clear-audit"
 - `key` (string, optional) - Cache key to invalidate
 - `keys` (array, optional) - Array of cache keys to invalidate
-- `pattern` (string, optional) - Pattern for matching keys (wildcards: * for any chars, ? for single char)
+- `pattern` (string, optional) - Pattern for matching keys (wildcards: \* for any chars, ? for single char)
 - `tag` (string, optional) - Tag to invalidate all associated keys
 - `tags` (array, optional) - Array of tags to invalidate
 - `parentKey` (string, optional) - Parent key for dependency relationship
@@ -967,6 +1023,7 @@ Comprehensive cache invalidation with 88%+ token reduction, dependency tracking,
 Advanced cache optimization with 89%+ token reduction. Analyzes performance, benchmarks strategies, provides ML-based recommendations, detects bottlenecks, and performs cost-benefit analysis.
 
 **Parameters:**
+
 - `operation` (string, required) - "analyze", "benchmark", "optimize", "recommend", "simulate", "tune", "detect-bottlenecks", "cost-benefit", "configure", "report"
 - `workloadPattern` (string, optional) - "uniform", "skewed", "temporal", "burst", "predictable", "unknown"
 - `objective` (string, optional) - "hit-rate", "latency", "memory", "throughput", "balanced" (default: "balanced")
@@ -986,6 +1043,7 @@ Advanced cache optimization with 89%+ token reduction. Analyzes performance, ben
 Advanced cache partitioning and sharding with 87%+ token reduction through consistent hashing, automatic rebalancing, and partition isolation.
 
 **Parameters:**
+
 - `operation` (string, required) - "create-partition", "delete-partition", "list-partitions", "migrate", "rebalance", "configure-sharding", "stats"
 - `partitionId` (string, optional) - Partition identifier (required for create/delete)
 - `strategy` (string, optional) - "hash", "range", "category", "geographic", "custom" (default: "hash")
@@ -1011,6 +1069,7 @@ Advanced cache partitioning and sharding with 87%+ token reduction through consi
 Distributed cache replication with 88%+ token reduction. Supports primary-replica and multi-primary modes, strong/eventual consistency, automatic conflict resolution, failover, incremental sync, and health monitoring.
 
 **Parameters:**
+
 - `operation` (string, required) - "configure", "add-replica", "remove-replica", "promote-replica", "sync", "status", "health-check", "resolve-conflicts", "snapshot", "restore", "rebalance"
 - `mode` (string, optional) - "primary-replica", "multi-primary", "master-slave", "peer-to-peer" (for configure)
 - `consistency` (string, optional) - "eventual", "strong", "causal" (for configure)
@@ -1040,6 +1099,7 @@ Distributed cache replication with 88%+ token reduction. Supports primary-replic
 ML-based predictive caching with 91%+ token reduction using ARIMA, exponential smoothing, LSTM, and collaborative filtering.
 
 **Parameters:**
+
 - `operation` (string, required) - "train", "predict", "auto-warm", "evaluate", "retrain", "export-model", "import-model", "record-access", "get-patterns"
 - `modelType` (string, optional) - "arima", "exponential", "lstm", "hybrid" (default: "hybrid")
 - `trainData` (array, optional) - Training data (for train operation)
@@ -1070,6 +1130,7 @@ ML-based predictive caching with 91%+ token reduction using ARIMA, exponential s
 Comprehensive alerting system with multi-channel notifications (email, Slack, webhook), intelligent routing, and 89% token reduction.
 
 **Parameters:**
+
 - `operation` (string, required) - "create-alert", "update-alert", "delete-alert", "list-alerts", "trigger", "get-history", "configure-channels", "silence"
 - `alertName` (string, optional) - Alert name (required for create, optional for others)
 - `alertId` (string, optional) - Alert identifier (required for update, delete, trigger, silence)
@@ -1117,6 +1178,7 @@ Comprehensive alerting system with multi-channel notifications (email, Slack, we
 Comprehensive metrics collection and aggregation with multi-source support, time-series compression, and 88% token reduction.
 
 **Parameters:**
+
 - `operation` (string, required) - "collect", "query", "aggregate", "export", "list-sources", "configure-source", "get-stats", "purge"
 - `sourceId` (string, optional) - Source identifier
 - `sourceName` (string, optional) - Source name
@@ -1151,6 +1213,7 @@ Comprehensive metrics collection and aggregation with multi-source support, time
 External monitoring platform integration with 87% token reduction through data compression and intelligent caching.
 
 **Parameters:**
+
 - `operation` (string, required) - "connect", "disconnect", "list-connections", "sync-metrics", "sync-alerts", "push-data", "get-status", "configure-mapping"
 - `connectionId` (string, optional) - Connection identifier
 - `connectionName` (string, optional) - Connection name
@@ -1169,6 +1232,7 @@ External monitoring platform integration with 87% token reduction through data c
 Create and manage custom dashboard widgets with 88% token reduction through template caching and configuration compression.
 
 **Parameters:**
+
 - `operation` (string, required) - "create", "update", "delete", "list", "render", "create-template", "validate", "get-schema"
 - `widgetId` (string, optional) - Widget ID (required for update, delete, render)
 - `widgetName` (string, optional) - Widget name (required for create)
@@ -1192,6 +1256,7 @@ Create and manage custom dashboard widgets with 88% token reduction through temp
 Create and manage interactive data visualizations with 92% token reduction through SVG/Canvas optimization and configuration caching.
 
 **Parameters:**
+
 - `operation` (string, required) - "create-chart", "update-chart", "delete-chart", "list-charts", "render", "export", "create-heatmap", "create-timeline", "create-network", "create-sankey", "create-animation"
 - `chartId` (string, optional) - Chart ID (required for update, delete, render)
 - `chartType` (string, optional) - "line", "bar", "pie", "scatter", "area", "radar", "bubble"
@@ -1218,6 +1283,7 @@ Create and manage interactive data visualizations with 92% token reduction throu
 Monitor system and application health with 91% token reduction through health state compression and metric aggregation.
 
 **Parameters:**
+
 - `operation` (string, required) - "register-endpoint", "unregister-endpoint", "check-health", "list-endpoints", "get-history", "set-threshold", "get-summary", "run-diagnostic"
 - `endpointId` (string, optional) - Endpoint ID
 - `endpointName` (string, optional) - Endpoint name
@@ -1239,6 +1305,7 @@ Monitor system and application health with 91% token reduction through health st
 Interactive log analysis dashboard with filtering, searching, pattern detection, and 90% token reduction.
 
 **Parameters:**
+
 - `operation` (string, required) - "create", "update", "query", "aggregate", "detect-anomalies", "create-filter", "export", "tail"
 - `dashboardId` (string, optional) - Dashboard identifier
 - `dashboardName` (string, optional) - Dashboard name (required for create)
@@ -1277,9 +1344,10 @@ Interactive log analysis dashboard with filtering, searching, pattern detection,
 Intelligent scheduled task management with smart caching (85%+ token reduction). Manage cron jobs (Linux/macOS) and Windows Task Scheduler with validation, history tracking, and next run predictions.
 
 **Parameters:**
+
 - `operation` (string, required) - "list", "add", "remove", "enable", "disable", "history", "predict-next", "validate"
 - `taskName` (string, optional) - Name of the scheduled task
-- `schedule` (string, optional) - Cron expression (e.g., "0 2 * * *") or Windows schedule
+- `schedule` (string, optional) - Cron expression (e.g., "0 2 \* \* \*") or Windows schedule
 - `command` (string, optional) - Command to execute
 - `description` (string, optional) - Task description
 - `enabled` (boolean, optional) - Whether the task is enabled
@@ -1294,25 +1362,26 @@ Intelligent scheduled task management with smart caching (85%+ token reduction).
 **Token Reduction:** 85% through smart caching
 
 **Example:**
+
 ```typescript
 // List all scheduled tasks
-smart_cron({ operation: "list" })
+smart_cron({ operation: 'list' });
 
 // Add a new cron job
 smart_cron({
-  operation: "add",
-  taskName: "daily-backup",
-  schedule: "0 2 * * *",  // Daily at 2am
-  command: "/path/to/backup.sh",
-  description: "Daily backup job"
-})
+  operation: 'add',
+  taskName: 'daily-backup',
+  schedule: '0 2 * * *', // Daily at 2am
+  command: '/path/to/backup.sh',
+  description: 'Daily backup job',
+});
 
 // Predict next 5 runs
 smart_cron({
-  operation: "predict-next",
-  taskName: "daily-backup",
-  predictCount: 5
-})
+  operation: 'predict-next',
+  taskName: 'daily-backup',
+  predictCount: 5,
+});
 ```
 
 ---
@@ -1322,6 +1391,7 @@ smart_cron({
 Intelligent user and permission management with smart caching (86%+ token reduction). Manage users, groups, permissions, ACLs, and perform security audits across Windows, Linux, and macOS.
 
 **Parameters:**
+
 - `operation` (string, required) - "list-users", "list-groups", "check-permissions", "audit-security", "get-acl", "get-user-info", "get-group-info", "check-sudo"
 - `username` (string, optional) - Username for user-specific operations
 - `groupname` (string, optional) - Group name for group-specific operations
@@ -1334,24 +1404,25 @@ Intelligent user and permission management with smart caching (86%+ token reduct
 **Token Reduction:** 86% through smart caching
 
 **Example:**
+
 ```typescript
 // List all users (excluding system users)
-smart_user({ operation: "list-users" })
+smart_user({ operation: 'list-users' });
 
 // Get detailed user information
 smart_user({
-  operation: "get-user-info",
-  username: "alice"
-})
+  operation: 'get-user-info',
+  username: 'alice',
+});
 
 // Check file permissions
 smart_user({
-  operation: "check-permissions",
-  path: "/etc/config.json"
-})
+  operation: 'check-permissions',
+  path: '/etc/config.json',
+});
 
 // Perform security audit
-smart_user({ operation: "audit-security" })
+smart_user({ operation: 'audit-security' });
 ```
 
 ---
@@ -1361,10 +1432,11 @@ smart_user({ operation: "audit-security" })
 Structural code search with 83% token reduction through AST indexing and caching.
 
 **Parameters:**
+
 - `pattern` (string, required) - AST pattern to search for (e.g., "function $NAME($ARGS) { $BODY }")
 - `projectPath` (string, required) - Root directory of the project
 - `language` (string, optional) - Programming language: "ts", "tsx", "js", "jsx", "py", "go", "rs", "java", "c", "cpp" (auto-detected if not provided)
-- `filePattern` (string, optional) - Specific directory or file pattern (e.g., "src/**/*.ts")
+- `filePattern` (string, optional) - Specific directory or file pattern (e.g., "src/\*_/_.ts")
 - `excludePatterns` (array, optional) - Patterns to exclude from search
 - `contextLines` (number, optional) - Number of context lines around matches (default: 3)
 - `maxMatches` (number, optional) - Maximum number of matches to return (default: 100)
@@ -1373,21 +1445,22 @@ Structural code search with 83% token reduction through AST indexing and caching
 **Token Reduction:** 83% through AST indexing
 
 **Example:**
+
 ```typescript
 // Find all function definitions
 smart_ast_grep({
-  pattern: "function $NAME($ARGS) { $BODY }",
-  projectPath: "/path/to/project",
-  language: "ts",
-  filePattern: "src/**/*.ts"
-})
+  pattern: 'function $NAME($ARGS) { $BODY }',
+  projectPath: '/path/to/project',
+  language: 'ts',
+  filePattern: 'src/**/*.ts',
+});
 
 // Find all class definitions with specific methods
 smart_ast_grep({
-  pattern: "class $CLASS { $METHODS }",
-  projectPath: "/path/to/project",
-  contextLines: 5
-})
+  pattern: 'class $CLASS { $METHODS }',
+  projectPath: '/path/to/project',
+  contextLines: 5,
+});
 ```
 
 ---
@@ -1397,9 +1470,11 @@ smart_ast_grep({
 Get comprehensive session-level token usage statistics.
 
 **Parameters:**
+
 - `sessionId` (string, optional) - Optional session ID to query (uses current session if not provided)
 
 **Returns:**
+
 - Session-level breakdown of token usage by tool
 - Operation counts and types
 - Token savings and reduction percentages
@@ -1407,47 +1482,51 @@ Get comprehensive session-level token usage statistics.
 - Cost estimation
 
 **Example:**
+
 ```typescript
 // Get stats for current session
-get_session_stats({})
+get_session_stats({});
 
 // Get stats for specific session
-get_session_stats({ sessionId: "session-123" })
+get_session_stats({ sessionId: 'session-123' });
 ```
 
 ---
 
 ### analyze_project_tokens
 
-Analyze token usage and estimate costs across multiple sessions within a project. Aggregates data from all operations files, provides project-level statistics, identifies top contributing sessions and tools.
+Analyze observed token usage across multiple sessions within a project. Aggregates data from all operations files, provides project-level statistics, and identifies top contributing sessions and tools. Cost is not priced unless the caller supplies an effective rate.
 
 **Parameters:**
+
 - `projectPath` (string, optional) - Path to project directory (uses hooks data directory if not provided)
 - `startDate` (string, optional) - Optional start date filter (YYYY-MM-DD format)
 - `endDate` (string, optional) - Optional end date filter (YYYY-MM-DD format)
-- `costPerMillionTokens` (number, optional) - Cost per million tokens in USD (default: 30)
+- `costPerMillionTokens` (number, optional) - Explicit effective USD cost per million input tokens. No provider rate is assumed when omitted.
 
 **Returns:**
+
 - Project-wide token usage statistics
-- Cost estimation
+- Cost equivalent when an explicit rate is supplied; otherwise `Not priced`
 - Top contributing sessions
 - Top contributing tools
 - Optimization opportunities
 
 **Example:**
+
 ```typescript
 // Analyze entire project
 analyze_project_tokens({
-  projectPath: "/path/to/project"
-})
+  projectPath: '/path/to/project',
+});
 
 // Analyze specific date range
 analyze_project_tokens({
-  projectPath: "/path/to/project",
-  startDate: "2024-01-01",
-  endDate: "2024-01-31",
-  costPerMillionTokens: 25
-})
+  projectPath: '/path/to/project',
+  startDate: '2024-01-01',
+  endDate: '2024-01-31',
+  costPerMillionTokens: 25,
+});
 ```
 
 ---
@@ -1457,30 +1536,33 @@ analyze_project_tokens({
 Compress large file operations from the current session to reduce future token usage. Analyzes operations in the current session, identifies large text blocks from file-based tools, compresses them, and stores them in cache.
 
 **Parameters:**
+
 - `sessionId` (string, optional) - Optional session ID to optimize (uses current session if not provided)
 - `min_token_threshold` (number, optional) - Minimum token count for a file operation to be considered for compression (default: 30)
 
 **Returns:**
+
 - Number of operations optimized
 - Total token savings
 - Compression statistics
 - List of compressed operations
 
 **Example:**
+
 ```typescript
 // Optimize current session
-optimize_session({})
+optimize_session({});
 
 // Optimize with custom threshold
 optimize_session({
-  min_token_threshold: 50
-})
+  min_token_threshold: 50,
+});
 
 // Optimize specific session
 optimize_session({
-  sessionId: "session-123",
-  min_token_threshold: 100
-})
+  sessionId: 'session-123',
+  min_token_threshold: 100,
+});
 ```
 
 ---
@@ -1490,36 +1572,43 @@ optimize_session({
 ### When to Use Each Tool Category
 
 **Core Caching & Optimization**
+
 - Use `optimize_text` for large content that will be referenced multiple times
 - Use `analyze_optimization` before caching to determine if compression is worthwhile
 - Use `get_cache_stats` to monitor cache performance
 
 **Smart File Operations**
+
 - Use `smart_read` instead of Read for all file operations (automatic 80% reduction)
 - Use `smart_edit` for line-based changes (90% reduction through diff-only output)
 - Use `smart_grep` when searching codebase (80% reduction through match-only output)
 
 **API & Database**
+
 - Use `smart_api_fetch` for all HTTP requests (95% reduction on cache hits)
 - Use `smart_database` for database queries (83% reduction on cached results)
 - Use `smart_cache_api` for API response caching with advanced strategies
 
 **Build & Test**
+
 - Use `smart_test` to run only changed tests (incremental test selection)
 - Use `smart_lint` for incremental linting with auto-fix suggestions
 - Use `smart_build` for TypeScript builds with diff-based change detection
 
 **Advanced Caching**
+
 - Use `smart_cache` for multi-tier caching with custom eviction strategies
 - Use `predictive_cache` for ML-based cache warming
 - Use `cache_analytics` to monitor cache performance and identify optimization opportunities
 
 **Monitoring & Dashboards**
+
 - Use `alert_manager` to set up alerting for critical metrics
 - Use `metric_collector` to aggregate metrics from multiple sources
 - Use `data_visualizer` to create interactive charts and visualizations
 
 **System Operations**
+
 - Use `smart_cron` to manage scheduled tasks
 - Use `smart_user` for user and permission management
 - Use `get_session_stats` and `analyze_project_tokens` to monitor token usage
@@ -1527,7 +1616,7 @@ optimize_session({
 ### Performance Tips
 
 1. **Enable Caching**: Most tools default to caching enabled - keep it enabled for best performance
-2. **Use Smart Tools**: Always use smart_* variants instead of standard tools (60-90% reduction)
+2. **Use Smart Tools**: Always use smart\_\* variants instead of standard tools (60-90% reduction)
 3. **Monitor Performance**: Use `get_session_stats` regularly to identify optimization opportunities
 4. **Cache Large Content**: Use `optimize_text` for content >500 characters
 5. **Use Batch Operations**: Many tools support batch operations for better performance
@@ -1535,31 +1624,34 @@ optimize_session({
 ### Common Patterns
 
 **File Reading Pattern**:
+
 ```typescript
 // First read: full content
-smart_read({ path: "/src/app.ts" })
+smart_read({ path: '/src/app.ts' });
 
 // Subsequent reads: only changes (80% reduction)
-smart_read({ path: "/src/app.ts" })
+smart_read({ path: '/src/app.ts' });
 ```
 
 **API Caching Pattern**:
+
 ```typescript
 // First request: fetch and cache
 smart_api_fetch({
-  method: "GET",
-  url: "https://api.example.com/data",
-  ttl: 300
-})
+  method: 'GET',
+  url: 'https://api.example.com/data',
+  ttl: 300,
+});
 
 // Subsequent requests: cached (95% reduction)
 smart_api_fetch({
-  method: "GET",
-  url: "https://api.example.com/data"
-})
+  method: 'GET',
+  url: 'https://api.example.com/data',
+});
 ```
 
 **Session Monitoring Pattern**:
+
 ```typescript
 // At the end of each session
 const stats = await get_session_stats({});
@@ -1577,20 +1669,25 @@ console.log(`Total project cost: $${projectStats.estimatedCost}`);
 ### Common Issues
 
 **Issue: Low cache hit rate**
+
 - Solution: Use `cache_analytics` to identify cache misses and adjust TTL values
 
 **Issue: Compression not providing expected savings**
+
 - Solution: Use `analyze_optimization` to check if content is suitable for compression
 
 **Issue: Tools returning stale data**
+
 - Solution: Use `force: true` parameter to bypass cache and fetch fresh data
 
 **Issue: Session stats not tracking operations**
+
 - Solution: Ensure global hooks are installed and enabled
 
 ### Getting Help
 
 For detailed troubleshooting and support:
+
 - Check the main [README](../README.md) for installation and configuration
 - Review [Installation Guide](./HOOKS-INSTALLATION.md) for platform-specific issues
 - File an issue on GitHub with detailed error messages and reproduction steps

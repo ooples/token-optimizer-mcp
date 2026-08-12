@@ -1,101 +1,72 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/pricing.mjs. Regenerate with `npm run sync:hooks`.
 /**
- * Tokens in the unit people actually feel.
+ * Optional cost equivalents for token measurements.
  *
- * The same data as everywhere else in this project, converted once, in one
- * place, under three rules that keep a dollar figure honest:
- *
- *   THE TABLE IS VISIBLE AND OVERRIDABLE. Prices change. A figure computed from
- *   rates buried in code goes stale silently and keeps looking authoritative,
- *   which is worse than no figure. The rates are printed next to the number and
- *   can be replaced without a release.
- *
- *   DOLLARS BESIDE TOKENS, NOT INSTEAD OF THEM. The token count is exact and
- *   never goes out of date; the dollar figure is the token count times a rate
- *   that will. Showing both means the durable number survives the perishable
- *   one.
- *
- *   NEVER A PRICE ON AN UNMEASURED SAVING. An invented number is worse in
- *   dollars than in tokens, because dollars get quoted to other people. A
- *   saving we cannot measure returns null and renders as "not yet measurable",
- *   never as "$0.00" -- which reads as "saved nothing" and is a different
- *   claim entirely.
+ * The runtime cannot infer a user's bill from a client name. A CLI may route
+ * through a subscription, direct API account, cloud marketplace, enterprise
+ * agreement, included credits, or a provider whose cache-read/write prices
+ * differ. Provider usage records are the source of truth when available.
+ * Everywhere else this module fails closed until the user supplies an
+ * effective blended input-token rate.
  */
 
-/** Cache multipliers, relative to an input token. */
-const CACHE_WRITE = 1.25;
-const CACHE_READ = 0.1;
+const RATE_ENV = 'TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION';
 
-/**
- * Dollars per million tokens, by tier.
- *
- * Approximate published list rates as of 2026-07, carried with their date so a
- * stale table is visible rather than silent. Override wholesale with
- * TOKEN_OPTIMIZER_PRICES as JSON, e.g.
- * {"asOf":"2026-09","opus":{"input":15,"output":75}}.
- */
-const DEFAULT_PRICES = {
-  asOf: '2026-07',
-  haiku: { input: 1, output: 5 },
-  sonnet: { input: 3, output: 15 },
-  opus: { input: 15, output: 75 },
-};
-
-export function prices() {
-  const raw = process.env.TOKEN_OPTIMIZER_PRICES;
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') return { ...DEFAULT_PRICES, ...parsed, overridden: true };
-    } catch { /* an unparseable override is ignored rather than fatal */ }
-  }
-  return DEFAULT_PRICES;
+/** The configured effective input rate, or null when billing is unobservable. */
+export function effectiveRate() {
+  const rate = Number(process.env[RATE_ENV]);
+  return Number.isFinite(rate) && rate > 0 ? rate : null;
 }
 
 /**
- * What a number of tokens costs.
+ * Dollars for a measured token quantity.
  *
- * Returns null for a null input and says why: this is the single place the
- * "unmeasured must not become $0.00" rule is enforced, so every caller inherits
- * it rather than each remembering.
+ * `kind` is accepted for backwards compatibility but is not multiplied by a
+ * universal cache constant. The configured rate must already reflect the
+ * user's actual provider/model/cache/tier/credit mix.
  */
-export function dollars(tokens, { tier = 'opus', kind = 'input' } = {}) {
-  if (!Number.isFinite(tokens)) return null;
-
-  const table = prices();
-  const rate = table[tier]?.[kind === 'output' ? 'output' : 'input'];
-  if (!Number.isFinite(rate)) return null;
-
-  const multiplier = kind === 'cacheWrite' ? CACHE_WRITE : kind === 'cacheRead' ? CACHE_READ : 1;
-  return (tokens / 1_000_000) * rate * multiplier;
+export function dollars(tokens, { rate = effectiveRate() } = {}) {
+  if (!Number.isFinite(tokens) || !Number.isFinite(rate) || rate <= 0) {
+    return null;
+  }
+  return (tokens / 1_000_000) * rate;
 }
 
 /** A dollar figure, or an honest absence of one. */
-export function money(amount, { unmeasured = 'not yet measurable' } = {}) {
+export function money(amount, { unmeasured = 'not priced' } = {}) {
   if (amount == null || !Number.isFinite(amount)) return unmeasured;
   if (amount === 0) return '$0.00';
   if (Math.abs(amount) < 0.01) return '<$0.01';
   return `$${amount.toFixed(2)}`;
 }
 
-/**
- * Per-session tokens expressed as a monthly cost.
- *
- * `sessionsPerMonth` is an assumption, so it is stated in the output rather
- * than folded invisibly into the number.
- */
-export function monthly(tokensPerSession, { tier = 'opus', sessionsPerMonth = 60 } = {}) {
+/** Per-session tokens expressed with a stated monthly-frequency assumption. */
+export function monthly(tokensPerSession, { sessionsPerMonth = 60 } = {}) {
   if (!Number.isFinite(tokensPerSession)) return null;
-  const amount = dollars(tokensPerSession * sessionsPerMonth, { tier });
-  return amount == null ? null : { amount, sessionsPerMonth, tier };
+  const amount = dollars(tokensPerSession * sessionsPerMonth);
+  return amount == null
+    ? null
+    : {
+        amount,
+        sessionsPerMonth,
+        effectiveInputUsdPerMillion: effectiveRate(),
+      };
 }
 
-/** The rates behind the figures, for printing beside them. */
-export function priceNote(tier = 'opus') {
-  const table = prices();
-  const rate = table[tier];
-  if (!rate) return null;
-  return `prices: ${tier} $${rate.input}/$${rate.output} per Mtok (${table.asOf}` +
-    `${table.overridden ? ', overridden' : ''}); override with TOKEN_OPTIMIZER_PRICES`;
+/** The pricing basis printed beside any cost equivalent. */
+export function priceNote() {
+  const rate = effectiveRate();
+  return rate == null
+    ? `cost not priced: set ${RATE_ENV} to your effective blended input rate after provider, model, cache, tier, plan, and credits`
+    : `cost equivalent: configured effective input rate $${rate}/M via ${RATE_ENV}`;
+}
+
+/** Compatibility surface: no built-in provider table is claimed. */
+export function prices() {
+  return {
+    source:
+      effectiveRate() == null ? 'unavailable' : 'configured-effective-rate',
+    effectiveInputUsdPerMillion: effectiveRate(),
+  };
 }

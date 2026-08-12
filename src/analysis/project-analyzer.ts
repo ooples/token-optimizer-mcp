@@ -12,7 +12,7 @@ export interface ProjectAnalysisOptions {
   projectPath: string;
   startDate?: string;
   endDate?: string;
-  costPerMillionTokens?: number; // Default: OpenAI GPT-4 pricing
+  costPerMillionTokens?: number;
 }
 
 export interface SessionSummary {
@@ -56,16 +56,16 @@ export interface ProjectAnalysisResult {
     percentOfTotal: number;
   }[];
   costEstimation: {
-    totalCost: number;
-    averageCostPerSession: number;
+    totalCost: number | null;
+    averageCostPerSession: number | null;
     currency: string;
     model: string;
-    costPerMillionTokens: number;
+    costPerMillionTokens: number | null;
+    source: 'configured-effective-rate' | 'unavailable';
+    explanation: string;
   };
   recommendations: string[];
 }
-
-const DEFAULT_COST_PER_MILLION = 30; // GPT-4 Turbo pricing (USD)
 
 /**
  * Discover session logs in the hooks data directory.
@@ -460,12 +460,7 @@ function generateProjectRecommendations(
 export async function analyzeProjectTokens(
   options: ProjectAnalysisOptions
 ): Promise<ProjectAnalysisResult> {
-  const {
-    projectPath,
-    startDate,
-    endDate,
-    costPerMillionTokens = DEFAULT_COST_PER_MILLION,
-  } = options;
+  const { projectPath, startDate, endDate, costPerMillionTokens } = options;
 
   // Discover all session files
   const hooksDataPath = path.join(
@@ -589,10 +584,23 @@ export async function analyzeProjectTokens(
   // Analyze server attribution using cached parsed data
   const serverBreakdown = analyzeServerAttribution(parsedSessions, totalTokens);
 
-  // Calculate cost estimation
-  const totalCost = (totalTokens / 1000000) * costPerMillionTokens;
+  // A project log does not identify the final provider route, model, cache mix,
+  // plan, tier, or credits. Only price the observed tokens when the caller has
+  // explicitly supplied an effective rate that already accounts for those.
+  const configuredRate =
+    typeof costPerMillionTokens === 'number' &&
+    Number.isFinite(costPerMillionTokens) &&
+    costPerMillionTokens >= 0
+      ? costPerMillionTokens
+      : null;
+  const totalCost =
+    configuredRate == null ? null : (totalTokens / 1_000_000) * configuredRate;
   const averageCostPerSession =
-    sessions.length > 0 ? totalCost / sessions.length : 0;
+    totalCost == null
+      ? null
+      : sessions.length > 0
+        ? totalCost / sessions.length
+        : 0;
 
   // Generate recommendations
   const recommendations = generateProjectRecommendations(
@@ -634,11 +642,23 @@ export async function analyzeProjectTokens(
     topTools,
     serverBreakdown,
     costEstimation: {
-      totalCost: parseFloat(totalCost.toFixed(2)),
-      averageCostPerSession: parseFloat(averageCostPerSession.toFixed(2)),
+      totalCost: totalCost == null ? null : parseFloat(totalCost.toFixed(2)),
+      averageCostPerSession:
+        averageCostPerSession == null
+          ? null
+          : parseFloat(averageCostPerSession.toFixed(2)),
       currency: 'USD',
-      model: 'GPT-4 Turbo',
-      costPerMillionTokens,
+      model:
+        configuredRate == null
+          ? 'Not priced'
+          : 'Configured effective input rate',
+      costPerMillionTokens: configuredRate,
+      source:
+        configuredRate == null ? 'unavailable' : 'configured-effective-rate',
+      explanation:
+        configuredRate == null
+          ? 'No provider price assumed; supply costPerMillionTokens to show a cost equivalent.'
+          : 'Configured cost equivalent; not a provider invoice.',
     },
     recommendations,
   };
