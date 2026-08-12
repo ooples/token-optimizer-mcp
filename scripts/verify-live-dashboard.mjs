@@ -103,6 +103,13 @@ try {
     undefined,
     { timeout: 20_000 }
   );
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('#provider-accounting-grid .accounting-card')
+        .length === 6,
+    undefined,
+    { timeout: 60_000 }
+  );
   await page.waitForSelector('#constellation canvas', { timeout: 30_000 });
   await page.waitForTimeout(1_100);
   const overviewBody = await page.locator('body').innerText();
@@ -143,6 +150,30 @@ try {
             card.querySelector('.accounting-detail')?.textContent?.trim() || '',
         }))
       ),
+    providerCards: await page
+      .locator('#provider-accounting-grid .accounting-card')
+      .evaluateAll((cards) =>
+        cards.map((card) => ({
+          label:
+            card.querySelector('.accounting-label')?.textContent?.trim() || '',
+          value:
+            card.querySelector('.accounting-value')?.textContent?.trim() || '',
+          detail:
+            card.querySelector('.accounting-detail')?.textContent?.trim() || '',
+        }))
+      ),
+    providerRows: await page
+      .locator('#provider-breakdown-body tr')
+      .evaluateAll((rows) =>
+        rows.map((row) =>
+          [...row.querySelectorAll('td')].map(
+            (cell) => cell.textContent?.trim() || ''
+          )
+        )
+      ),
+    providerCoverage: await page
+      .locator('#provider-price-coverage')
+      .innerText(),
     clientRows: await page
       .locator('#client-ledger .client-ledger-row')
       .evaluateAll((rows) => rows.map((row) => row.textContent?.trim() || '')),
@@ -357,11 +388,30 @@ try {
         label === 'Lifecycle events' && Number(value.replaceAll(',', '')) > 0
     ) &&
     /^(?:[\d,]+|—)$/.test(overview.savedTokens) &&
-    overview.savedMoney === 'Not priced' &&
+    /^(?:Not priced|\$[\d,.]+(?: · \d+\/\d+ ops)?)$/.test(
+      overview.savedMoney
+    ) &&
     overview.accessibility.savings.includes(overview.savedTokens) &&
     /Returned context/i.test(overview.accessibility.accounting) &&
     /codex|claude-code|gemini/i.test(overview.accessibility.agents) &&
     overview.accountingCards.length === 7 &&
+    overview.providerCards.length === 6 &&
+    overview.providerCards.some(
+      ({ label, value }) =>
+        label === 'Cache reads' && value !== 'Not measured' && value !== '0'
+    ) &&
+    overview.providerCards.some(
+      ({ label, value, detail }) =>
+        label === 'API-price equivalent' &&
+        /^\$/.test(value) &&
+        /not necessarily your invoice/i.test(detail)
+    ) &&
+    /% price coverage/.test(overview.providerCoverage) &&
+    overview.providerRows.some(
+      (row) =>
+        row.length === 7 &&
+        /codex|claude-code|gemini|copilot|qwen|opencode/i.test(row[0])
+    ) &&
     overview.accountingCards.some(
       ({ label, value, detail }) =>
         label === 'Returned context' &&
@@ -375,7 +425,7 @@ try {
         /saved|baseline|excluded/i.test(row)
     ) &&
     overview.actionRows.some(
-      (row) => row.length === 6 && row[3] === 'Not priced'
+      (row) => row.length === 6 && /Not priced|^\$/.test(row[3])
     ) &&
     overview.cameraStability.widthSpread <= 1 &&
     overview.cameraStability.heightSpread <= 1 &&

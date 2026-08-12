@@ -24,7 +24,10 @@ import {
   summarizeMcpDiagnostics,
 } from './mcp-diagnostics.js';
 import { isValidSessionId } from '../utils/session-id.js';
-import { readDashboardAnalytics } from './dashboard-analytics.js';
+import {
+  readDashboardAnalytics,
+  readDashboardProviderUsage,
+} from './dashboard-analytics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -602,6 +605,19 @@ app.get('/api/analytics/overview', async (req, res) => {
       schemaVersion: 1,
       available: false,
       error: 'optimizer analytics could not be loaded',
+    });
+  }
+});
+
+app.get('/api/analytics/provider-usage', async (req, res) => {
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 40));
+  try {
+    res.json(await readDashboardProviderUsage(limit));
+  } catch (error) {
+    console.error('Error in /api/analytics/provider-usage:', error);
+    res.status(500).json({
+      available: false,
+      error: 'native provider usage could not be loaded',
     });
   }
 });

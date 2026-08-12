@@ -566,6 +566,19 @@ section.card {
   background: var(--surface-2);
 }
 
+.provider-table {
+  margin-top: 18px;
+}
+
+.table-note {
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+
+.table-note a {
+  color: var(--graph);
+}
+
 /* ---------------------------------------------------------------- misc -- */
 
 .footer-note {

@@ -67,16 +67,71 @@ export function episodeMeta({ client, raw = {}, payload = {}, env = process.env 
 }
 
 export function usageFrom(raw = {}) {
-  const usage = raw.usage || raw.token_usage || raw.tokenUsage || raw.metrics?.usage || {};
+  const usage = raw.usage || raw.token_usage || raw.tokenUsage || raw.usageMetadata ||
+    raw.usage_metadata || raw.metrics?.usage || raw.response?.usage ||
+    raw.response?.usageMetadata || {};
   const number = (...values) => {
     const value = first(...values);
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
   };
+  const cachedInputTokens = number(
+    usage.cached_input_tokens, usage.cachedInputTokens,
+    usage.cache_read_input_tokens, usage.cachedContentTokenCount
+  );
+  const cacheCreation = usage.cache_creation || usage.cacheCreation || {};
+  const cacheWrite5mInputTokens = number(
+    usage.cache_write_5m_input_tokens, usage.cacheWrite5mInputTokens,
+    cacheCreation.ephemeral_5m_input_tokens, cacheCreation.ephemeral5mInputTokens
+  );
+  const cacheWrite1hInputTokens = number(
+    usage.cache_write_1h_input_tokens, usage.cacheWrite1hInputTokens,
+    cacheCreation.ephemeral_1h_input_tokens, cacheCreation.ephemeral1hInputTokens
+  );
+  const detailedWrites = (cacheWrite5mInputTokens || 0) + (cacheWrite1hInputTokens || 0);
+  const reportedWrites = number(
+    usage.cache_write_input_tokens, usage.cacheWriteInputTokens,
+    usage.cache_creation_input_tokens, usage.cacheCreationInputTokens
+  );
+  const cacheWriteInputTokens = reportedWrites == null
+    ? null
+    : Math.max(0, reportedWrites - detailedWrites);
+  const explicitUncached = number(usage.uncached_input_tokens, usage.uncachedInputTokens);
+  const promptInput = number(
+    usage.promptTokenCount, usage.prompt_token_count,
+    usage.input_tokens, usage.inputTokens
+  );
+  const isAnthropic = usage.cache_creation_input_tokens !== undefined ||
+    usage.cache_read_input_tokens !== undefined;
+  const isGemini = usage.promptTokenCount !== undefined || usage.cachedContentTokenCount !== undefined;
+  const uncachedInputTokens = explicitUncached != null
+    ? explicitUncached
+    : promptInput == null
+      ? null
+      : isAnthropic
+        ? promptInput
+        : isGemini || cachedInputTokens != null || reportedWrites != null
+          ? Math.max(0, promptInput - (cachedInputTokens || 0) - (reportedWrites || 0))
+          : promptInput;
+  const candidates = number(usage.candidatesTokenCount, usage.candidates_token_count);
+  const thoughts = number(usage.thoughtsTokenCount, usage.thoughts_token_count);
+  const outputTokens = candidates != null || thoughts != null
+    ? (candidates || 0) + (thoughts || 0)
+    : number(usage.output_tokens, usage.outputTokens);
   return {
-    uncachedInputTokens: number(usage.uncached_input_tokens, usage.uncachedInputTokens),
-    cachedInputTokens: number(usage.cached_input_tokens, usage.cachedInputTokens, usage.cache_read_input_tokens),
-    outputTokens: number(usage.output_tokens, usage.outputTokens),
-    totalTokens: number(usage.total_tokens, usage.totalTokens, raw.tokens_used, raw.tokensUsed),
+    uncachedInputTokens,
+    cachedInputTokens,
+    cacheWrite5mInputTokens,
+    cacheWrite1hInputTokens,
+    cacheWriteInputTokens,
+    outputTokens,
+    totalTokens: number(
+      usage.total_tokens, usage.totalTokens, usage.totalTokenCount,
+      usage.total_token_count, raw.tokens_used, raw.tokensUsed
+    ),
+    usageMeasurementId: first(
+      raw.requestId, raw.request_id, raw.responseId, raw.response_id,
+      usage.responseId, usage.response_id
+    ) ?? null,
   };
 }

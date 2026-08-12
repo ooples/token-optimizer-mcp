@@ -72,7 +72,7 @@
             <div>
               <span class="ss-value num" id="saved-money">Loading&hellip;</span>
               <span class="ss-label">
-                cost equivalent
+                direct API-price equivalent saved
                 <button
                   class="explain"
                   type="button"
@@ -80,10 +80,12 @@
                 >
                   ?
                   <span class="tip" role="tooltip">
-                    Cost is unavailable by default because the MCP server cannot
-                    see your provider route, model, plan, cache reads/writes,
-                    processing tier, or included credits. Configure an effective
-                    blended input rate to show a cost equivalent.
+                    Each verified payload reduction is priced as one immediate
+                    uncached input reduction using that operation's exact model
+                    and billing route. Native cache reads, cache writes, and
+                    output are accounted separately below. This is an API-price
+                    equivalent, not a subscription invoice or a claim about
+                    unmeasured future cache reuse.
                   </span>
                 </button>
               </span>
@@ -146,6 +148,48 @@
           <p>Loading measured token accounting&hellip;</p>
         </div>
         <p class="accounting-note" id="accounting-note"></p>
+      </section>
+
+      <section
+        class="card provider-accounting"
+        id="provider-accounting"
+        data-state="loading"
+        aria-busy="true"
+        aria-live="polite"
+        aria-labelledby="provider-accounting-heading"
+      >
+        <div class="section-heading-row">
+          <div>
+            <p class="card-title" id="provider-accounting-heading">
+              Provider usage &amp; price
+            </p>
+            <p class="card-sub">
+              Native uncached input, cache reads, cache writes, and output from
+              local CLI transcripts, deduplicated by provider request.
+            </p>
+          </div>
+          <span class="source-chip" id="provider-price-coverage">Loading</span>
+        </div>
+        <div class="accounting-grid" id="provider-accounting-grid" role="status">
+          <p>Loading native provider usage&hellip;</p>
+        </div>
+        <div class="table-scroll">
+          <table class="table provider-table">
+            <thead>
+              <tr>
+                <th scope="col">CLI &amp; model</th>
+                <th scope="col" class="right">Requests</th>
+                <th scope="col" class="right">Uncached input</th>
+                <th scope="col" class="right">Cache read</th>
+                <th scope="col" class="right">Cache write</th>
+                <th scope="col" class="right">Output</th>
+                <th scope="col" class="right">API-price equivalent</th>
+              </tr>
+            </thead>
+            <tbody id="provider-breakdown-body"></tbody>
+          </table>
+        </div>
+        <p class="accounting-note" id="provider-accounting-note"></p>
       </section>
 
       <!-- Plain-language metrics. Every label says what it is, not what the

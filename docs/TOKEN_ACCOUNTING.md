@@ -45,46 +45,49 @@ and output fields separate when a client supplies them. Those receipt fields
 are not substituted into MCP transport measurements because they answer a
 different question.
 
-## Cost equivalents
+## Provider usage and cost
 
-There is no universal dollars-per-token conversion. The bill can depend on the
-provider, model, long-context threshold, processing tier, cache read/write mix,
-subscription or API route, enterprise agreement, included credits, and local
-taxes. A saved context token may also have zero marginal cash value under an
-included plan until an allowance boundary is crossed.
+The dashboard reads native local usage receipts from supported CLI transcripts
+and keeps their billable dimensions separate: uncached input, cached reads,
+5-minute/1-hour/generic cache writes, and output (including thinking tokens when
+the provider bills them as output).
 
-For that reason the dashboard and CLI audits render **Not priced** by default.
-To show a cost equivalent, configure a rate that already reflects your own
-effective blended input cost:
+Adapters preserve each provider's semantics. Codex/OpenAI and Gemini prompt
+totals include cached input, while Anthropic `input_tokens` excludes cache reads
+and cache creation. Claude response fragments are deduplicated by request id,
+and repeated Codex usage snapshots are deduplicated by cumulative state.
 
-```bash
-TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION=2.25 npm run dashboard
-```
+A versioned price catalog selects an exact provider, model, route, request
+timestamp, and long-context tier. Every priced result carries an official source
+link and a catalog verification date. An ambiguous id such as `claude-sonnet`,
+an unknown route, or a captured dimension without a published rate remains
+**Not priced**; the nearest model is never guessed.
 
-The displayed formula is:
+The dashboard distinguishes two money quantities:
 
-```text
-cost equivalent = net verified MCP transport avoided / 1,000,000 × configured rate
-```
+1. **API/list-price equivalent** applies published rates to native observed
+   usage. A subscription, enterprise agreement, included credits, processing
+   tier, or cloud marketplace may make the user's invoice different.
+2. **Provider-reported actual charge** appears only when the native receipt
+   contains a charge. Token Optimizer does not reconstruct an invoice from list
+   prices.
 
-It remains a cost equivalent, not a reconstructed invoice. Use the provider's
-own usage and billing export for actual spend.
+For a verified MCP payload reduction, the conservative direct saving is one
+immediate uncached-input equivalent for that operation's exact model. The ledger
+does not multiply that saving by hypothetical future cache reads or writes.
+Paired experiments can separately measure downstream effects from native usage.
 
-The contract deliberately does not ship a model price table. Prices and billing
-units change, and CLI products can route through subscriptions, direct APIs,
-cloud marketplaces, enterprise agreements, or included-credit plans. Current
-provider references are the authoritative source:
+Current provider references are the authoritative source behind catalog rows:
 
 - [OpenAI model pricing and cached-input rates](https://developers.openai.com/api/docs/models/compare)
 - [Anthropic API pricing](https://platform.claude.com/docs/en/about-claude/pricing)
 - [Anthropic prompt-cache usage and read/write multipliers](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
-- [Gemini context caching and cached-token usage](https://ai.google.dev/gemini-api/docs/caching)
-- [GitHub Copilot billing, plans, and premium requests](https://docs.github.com/en/billing/concepts/product-billing/github-copilot-billing)
+- [Gemini API model pricing](https://ai.google.dev/gemini-api/docs/pricing)
+- [GitHub Copilot models and token pricing](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing)
 
-The separate `analyze_project_tokens` report follows the same rule. Its cost
-fields are `null` unless the caller explicitly supplies
-`costPerMillionTokens`; when supplied, they are labeled as a configured cost
-equivalent rather than a provider invoice.
+The separate `analyze_project_tokens` report still accepts an explicit
+`costPerMillionTokens` because repository analysis has no model request receipt.
+That caller-supplied value remains labeled as a configured equivalent.
 
 ## Auditing an existing ledger
 

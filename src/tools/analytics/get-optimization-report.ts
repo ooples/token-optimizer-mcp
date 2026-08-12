@@ -15,11 +15,13 @@ import {
   isVerifiedSavingsEntry,
   verifiedTransportDelta,
 } from '../../analytics/savings-classification.js';
+import { priceTokenUsage } from '../../analytics/provider-pricing.js';
+import type { AnalyticsEntry } from '../../analytics/analytics-types.js';
 
 export const GET_OPTIMIZATION_REPORT_TOOL_DEFINITION = {
   name: 'get_optimization_report',
   description:
-    'Get a provenance-gated token report. Verified savings require a materialized MCP payload before and after optimization; historical and tool-reported estimates are excluded. Cost is unavailable unless TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION is configured.',
+    'Get a provenance-gated token report. Verified savings require a materialized MCP payload before and after optimization; historical and tool-reported estimates are excluded. Direct API-price equivalents use each exact captured model and route; ambiguous operations remain unpriced.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -55,22 +57,47 @@ function pct(n: number): string {
   return `${n.toFixed(1)}%`;
 }
 
-function effectivePrice(tokens: number): {
+function directPrice(entries: AnalyticsEntry[]): {
   amount: number | null;
   display: string;
-  rate: number | null;
+  pricedOperations: number;
+  eligibleOperations: number;
 } {
-  const rate = Number(
-    process.env.TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION
+  let amount = 0;
+  let pricedOperations = 0;
+  const eligible = entries.filter(
+    (entry) => verifiedTransportDelta(entry) !== 0
   );
-  if (!Number.isFinite(rate) || rate <= 0) {
-    return { amount: null, display: 'not priced', rate: null };
+  for (const entry of eligible) {
+    const tokens = verifiedTransportDelta(entry);
+    const metadata = entry.metadata || {};
+    const priced = priceTokenUsage({
+      client: entry.client || String(metadata.client || ''),
+      provider: String(metadata.provider || ''),
+      route: String(metadata.pricingRoute || metadata.route || ''),
+      model: entry.model || String(metadata.model || ''),
+      timestamp: entry.timestamp,
+      usage: { uncachedInputTokens: Math.abs(tokens) },
+    });
+    if (
+      !priced.available ||
+      priced.currency !== 'USD' ||
+      priced.amount === null
+    )
+      continue;
+    amount += Math.sign(tokens) * priced.amount;
+    pricedOperations += 1;
   }
-  const amount = (tokens / 1_000_000) * rate;
   return {
-    amount,
-    display: amount < 0.01 ? '<$0.01' : `$${amount.toFixed(2)}`,
-    rate,
+    amount: pricedOperations ? amount : null,
+    display:
+      pricedOperations === 0
+        ? 'not priced'
+        : Math.abs(amount) < 0.01
+          ? '<$0.01'
+          : `$${amount.toFixed(2)}`,
+    pricedOperations,
+    eligibleOperations: eligible.length,
   };
 }
 
@@ -118,22 +145,24 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
       const topN = args.topN && args.topN > 0 ? args.topN : 10;
       const range = { startDate: args.startDate, endDate: args.endDate };
 
-      const [hook, action, server, totalCount] = await Promise.all([
-        analyticsManager.getHookAnalytics(range),
-        analyticsManager.getActionAnalytics(range),
-        analyticsManager.getServerAnalytics(range),
-        analyticsManager.count(),
-      ]);
+      const [hook, action, server, totalCount, scopedEntries] =
+        await Promise.all([
+          analyticsManager.getHookAnalytics(range),
+          analyticsManager.getActionAnalytics(range),
+          analyticsManager.getServerAnalytics(range),
+          analyticsManager.count(),
+          analyticsManager.getEntries({
+            startDate: args.startDate,
+            endDate: args.endDate,
+            sessionId: args.sessionId,
+          }),
+        ]);
 
       // If scoped to a session, recompute the summary from filtered entries.
       let summary = action.summary;
       let byAction = action.byAction;
       if (args.sessionId) {
-        const entries = await analyticsManager.getEntries({
-          sessionId: args.sessionId,
-          startDate: args.startDate,
-          endDate: args.endDate,
-        });
+        const entries = scopedEntries;
         const verifiedEntries = entries.filter(isVerifiedSavingsEntry);
         const observedEntries = entries.filter(hasObservedReturnedContext);
         const totalOriginalTokens = verifiedEntries.reduce(
@@ -165,14 +194,14 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
         ? `session ${args.sessionId}`
         : `${args.startDate || 'all time'} → ${args.endDate || 'present'}`;
 
-      const cost = effectivePrice(summary.totalTokensSaved);
+      const cost = directPrice(scopedEntries);
 
       const formatted = [
         '╔══ Token Optimizer — Verified Savings Report ══╗',
         `  scope: ${scope}`,
         '',
         `  ✨ Verified saved     : ${num(summary.totalTokensSaved)}`,
-        `  💵 Cost equivalent   : ${cost.display}${cost.rate ? ` @ configured $${cost.rate}/1M effective input` : ' (billing plan and cache mix are not observable)'}`,
+        `  💵 Direct API price  : ${cost.display} (${num(cost.pricedOperations)}/${num(cost.eligibleOperations)} savings operations exactly modeled)`,
         `  \u{1F4E5} Original tokens    : ${num(summary.totalOriginalTokens)}`,
         `  \u{1F4E6} After optimization : ${num(summary.totalOptimizedTokens)}`,
         `  \u{1F4C9} Overall reduction  : ${pct(savingsPercentage)}  ${bar(
@@ -194,8 +223,11 @@ export function getOptimizationReportTool(analyticsManager: AnalyticsManager) {
           summary: { ...summary, savingsPercentage },
           costEquivalentUsd: cost.amount,
           pricing: {
-            effectiveInputUsdPerMillion: cost.rate,
-            source: cost.rate ? 'configured-effective-rate' : 'unavailable',
+            source: 'versioned-provider-model-catalog',
+            pricedOperations: cost.pricedOperations,
+            eligibleOperations: cost.eligibleOperations,
+            definition:
+              'one immediate uncached-input equivalent per verified transport delta; hypothetical future cache reuse is excluded',
           },
           measurement: {
             definition:

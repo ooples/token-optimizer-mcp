@@ -13,13 +13,27 @@ import {
   verifiedTransportDelta,
   type SavingsClassification,
 } from '../analytics/savings-classification.js';
+import {
+  MODEL_PRICE_CATALOG,
+  priceTokenUsage,
+} from '../analytics/provider-pricing.js';
+import {
+  readNativeProviderUsage,
+  summarizeProviderUsage,
+  type ProviderUsageSummary,
+} from '../analytics/native-provider-usage.js';
 
-const EFFECTIVE_RATE_ENV = 'TOKEN_OPTIMIZER_EFFECTIVE_INPUT_USD_PER_MILLION';
+let dashboardCache: {
+  key: string;
+  expiresAt: number;
+  report: DashboardAnalyticsReport;
+} | null = null;
 
 interface EffectivePricing {
   available: boolean;
   effectiveInputUsdPerMillion: number | null;
-  source: 'configured-effective-rate' | 'unavailable';
+  source: 'versioned-provider-model-catalog';
+  verifiedAt: string;
   explanation: string;
 }
 
@@ -38,6 +52,8 @@ export interface DashboardActionAnalytics {
   firstSeen: string;
   lastSeen: string;
   measuredSavingsOperations: number;
+  pricedReturnedContextOperations: number;
+  pricedSavingsOperations: number;
   verifiedExpansionOperations: number;
   unmeasuredSavingsOperations: number;
   observedReturnedContextOperations: number;
@@ -45,7 +61,7 @@ export interface DashboardActionAnalytics {
 }
 
 export interface DashboardAnalyticsReport {
-  schemaVersion: 2;
+  schemaVersion: 3;
   available: boolean;
   source: string;
   pricing: EffectivePricing;
@@ -64,6 +80,8 @@ export interface DashboardAnalyticsReport {
     firstSeen: string | null;
     lastSeen: string | null;
     measuredSavingsOperations: number;
+    pricedReturnedContextOperations: number;
+    pricedSavingsOperations: number;
     verifiedExpansionOperations: number;
     unmeasuredSavingsOperations: number;
     actualReturnedContextOperations: number;
@@ -85,6 +103,8 @@ export interface DashboardAnalyticsReport {
     unverifiedReportedTokensSaved: number;
     contextUsd: number | null;
     savedUsd: number | null;
+    pricedReturnedContextOperations: number;
+    pricedSavingsOperations: number;
   }>;
   recent: Array<{
     name: string;
@@ -106,6 +126,7 @@ export interface DashboardAnalyticsReport {
     legacyPolicy: string;
     priceBasis: string;
   };
+  providerUsage: ProviderUsageSummary;
 }
 
 function finite(value: unknown): number {
@@ -113,29 +134,46 @@ function finite(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function pricing(override: unknown): EffectivePricing {
-  const candidate =
-    override === undefined ? process.env[EFFECTIVE_RATE_ENV] : override;
-  const rate = Number(candidate);
-  if (candidate !== undefined && Number.isFinite(rate) && rate > 0) {
-    return {
-      available: true,
-      effectiveInputUsdPerMillion: rate,
-      source: 'configured-effective-rate',
-      explanation: `Configured by ${EFFECTIVE_RATE_ENV}. It must already reflect the user's provider, model, plan, cache mix, processing tier, and included credits.`,
-    };
-  }
+function pricing(): EffectivePricing {
   return {
-    available: false,
+    available: true,
     effectiveInputUsdPerMillion: null,
-    source: 'unavailable',
-    explanation: `No cost is claimed because the MCP server cannot observe billing. Set ${EFFECTIVE_RATE_ENV} to an effective blended input-token rate to show a cost equivalent.`,
+    source: 'versioned-provider-model-catalog',
+    verifiedAt: MODEL_PRICE_CATALOG[0]?.verifiedAt || 'unknown',
+    explanation:
+      'API/list-price equivalents use the exact captured provider, model, request-time tier, uncached input, cache reads, cache writes, and output. Actual billed cost is shown only when the CLI reports it. Subscription and included-credit usage is never mislabeled as an invoice.',
   };
 }
 
-function usd(tokens: number, contract: EffectivePricing): number | null {
-  const rate = contract.effectiveInputUsdPerMillion;
-  return rate === null ? null : (tokens / 1_000_000) * rate;
+function inputEquivalent(entry: AnalyticsEntry, tokens: number): number | null {
+  const direction = tokens < 0 ? -1 : 1;
+  const metadata = entry.metadata || {};
+  const priced = priceTokenUsage({
+    client: entry.client || String(metadata.client || ''),
+    provider: String(metadata.provider || ''),
+    route: String(metadata.pricingRoute || metadata.route || ''),
+    model: entry.model || String(metadata.model || ''),
+    timestamp: entry.timestamp,
+    usage: { uncachedInputTokens: Math.abs(tokens) },
+  });
+  return priced.available && priced.currency === 'USD' && priced.amount !== null
+    ? priced.amount * direction
+    : null;
+}
+
+function sumPriced(
+  rows: AnalyticsEntry[],
+  tokens: (entry: AnalyticsEntry) => number
+): { amount: number | null; priced: number } {
+  let amount = 0;
+  let priced = 0;
+  for (const row of rows) {
+    const value = inputEquivalent(row, tokens(row));
+    if (value === null) continue;
+    amount += value;
+    priced += 1;
+  }
+  return { amount: priced ? amount : null, priced };
 }
 
 /**
@@ -144,10 +182,11 @@ function usd(tokens: number, contract: EffectivePricing): number | null {
  */
 export function summarizeDashboardAnalytics(
   input: AnalyticsEntry[],
-  options: { limit?: number; effectiveInputUsdPerMillion?: number } = {}
+  options: { limit?: number; providerUsage?: ProviderUsageSummary } = {}
 ): DashboardAnalyticsReport {
   const limit = Math.min(100, Math.max(1, finite(options.limit) || 40));
-  const price = pricing(options.effectiveInputUsdPerMillion);
+  const price = pricing();
+  const providerUsage = options.providerUsage || summarizeProviderUsage([]);
   const entries = input
     .filter(
       (entry) =>
@@ -205,6 +244,13 @@ export function summarizeDashboardAnalytics(
         0
       );
       const timestamps = rows.map((row) => row.timestamp).sort();
+      const returnedCost = sumPriced(
+        observedRows,
+        (row) => row.optimizedTokens
+      );
+      const savedCost = sumPriced([...verifiedRows, ...expansionRows], (row) =>
+        verifiedTransportDelta(row)
+      );
       return {
         name,
         totalOperations: rows.length,
@@ -218,11 +264,13 @@ export function summarizeDashboardAnalytics(
           totalOriginalTokens > 0
             ? (totalTokensSaved / totalOriginalTokens) * 100
             : null,
-        contextUsd: usd(totalOptimizedTokens, price),
-        savedUsd: usd(totalTokensSaved, price),
+        contextUsd: returnedCost.amount,
+        savedUsd: savedCost.amount,
         firstSeen: timestamps[0],
         lastSeen: timestamps.at(-1) || timestamps[0],
         measuredSavingsOperations: verifiedRows.length,
+        pricedReturnedContextOperations: returnedCost.priced,
+        pricedSavingsOperations: savedCost.priced,
         verifiedExpansionOperations: expansionRows.length,
         unmeasuredSavingsOperations:
           rows.length - verifiedRows.length - expansionRows.length,
@@ -276,6 +324,13 @@ export function summarizeDashboardAnalytics(
         (sum, row) => sum + reportedSavings(row),
         0
       );
+      const returnedCost = sumPriced(
+        observedRows,
+        (row) => row.optimizedTokens
+      );
+      const savedCost = sumPriced([...verifiedRows, ...expansionRows], (row) =>
+        verifiedTransportDelta(row)
+      );
       return {
         name,
         attribution:
@@ -293,13 +348,10 @@ export function summarizeDashboardAnalytics(
         grossTokensSaved,
         expansionTokensReturned,
         unverifiedReportedTokensSaved,
-        contextUsd: observedRows.length
-          ? usd(totalOptimizedTokens, price)
-          : null,
-        savedUsd:
-          verifiedRows.length || expansionRows.length
-            ? usd(totalTokensSaved, price)
-            : null,
+        contextUsd: returnedCost.amount,
+        savedUsd: savedCost.amount,
+        pricedReturnedContextOperations: returnedCost.priced,
+        pricedSavingsOperations: savedCost.priced,
       };
     })
     .sort(
@@ -346,9 +398,17 @@ export function summarizeDashboardAnalytics(
     ...expansionEntries,
   ].reduce((sum, entry) => sum + entry.optimizedTokens, 0);
   const timestamps = entries.map((entry) => entry.timestamp).sort();
+  const totalReturnedCost = sumPriced(
+    observedEntries,
+    (entry) => entry.optimizedTokens
+  );
+  const totalSavedCost = sumPriced(
+    [...verifiedEntries, ...expansionEntries],
+    (entry) => verifiedTransportDelta(entry)
+  );
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     available: entries.length > 0,
     source:
       'analytics.db: verified materialized MCP before/after payloads; legacy and tool-reported estimates quarantined',
@@ -366,11 +426,13 @@ export function summarizeDashboardAnalytics(
         totalOriginalTokens > 0
           ? (totalTokensSaved / totalOriginalTokens) * 100
           : null,
-      contextUsd: usd(totalOptimizedTokens, price),
-      savedUsd: usd(totalTokensSaved, price),
+      contextUsd: totalReturnedCost.amount,
+      savedUsd: totalSavedCost.amount,
       firstSeen: timestamps[0] || null,
       lastSeen: timestamps.at(-1) || null,
       measuredSavingsOperations: verifiedEntries.length,
+      pricedReturnedContextOperations: totalReturnedCost.priced,
+      pricedSavingsOperations: totalSavedCost.priced,
       verifiedExpansionOperations: expansionEntries.length,
       unmeasuredSavingsOperations:
         entries.length - verifiedEntries.length - expansionEntries.length,
@@ -394,10 +456,12 @@ export function summarizeDashboardAnalytics(
         reportedTokensSaved: verified ? 0 : reportedSavings(entry),
         savingsMeasured: verified || expansion,
         classification,
-        contextUsd: observed ? usd(entry.optimizedTokens, price) : null,
+        contextUsd: observed
+          ? inputEquivalent(entry, entry.optimizedTokens)
+          : null,
         savedUsd:
           verified || expansion
-            ? usd(verifiedTransportDelta(entry), price)
+            ? inputEquivalent(entry, verifiedTransportDelta(entry))
             : null,
         timestamp: entry.timestamp,
         client:
@@ -414,6 +478,7 @@ export function summarizeDashboardAnalytics(
         'Rows without versioned baseline provenance remain visible as unverified reported estimates and are excluded from verified totals.',
       priceBasis: price.explanation,
     },
+    providerUsage,
   };
 }
 
@@ -423,13 +488,43 @@ export async function readDashboardAnalytics(
   const dbPath =
     process.env.TOKEN_OPTIMIZER_ANALYTICS_DB ||
     path.join(os.homedir(), '.token-optimizer-mcp', 'analytics.db');
-  if (!fs.existsSync(dbPath)) return summarizeDashboardAnalytics([], { limit });
+  let mtimeMs = 0;
+  try {
+    mtimeMs = fs.statSync(dbPath).mtimeMs;
+  } catch {
+    // An absent ledger is a valid collecting state.
+  }
+  const cacheKey = `${dbPath}\u0000${mtimeMs}\u0000${limit}`;
+  if (dashboardCache?.key === cacheKey && dashboardCache.expiresAt > Date.now())
+    return dashboardCache.report;
+  if (!fs.existsSync(dbPath)) {
+    const report = summarizeDashboardAnalytics([], {
+      limit,
+    });
+    dashboardCache = { key: cacheKey, expiresAt: Date.now() + 30_000, report };
+    return report;
+  }
 
   const storage = new SqliteAnalyticsStorage(dbPath);
   const manager = new AnalyticsManager(storage);
   try {
-    return summarizeDashboardAnalytics(await manager.getEntries(), { limit });
+    const entries = await manager.getEntries();
+    const report = summarizeDashboardAnalytics(entries, { limit });
+    dashboardCache = { key: cacheKey, expiresAt: Date.now() + 30_000, report };
+    return report;
   } finally {
     await manager.close();
   }
+}
+
+export async function readDashboardProviderUsage(
+  limit = 40
+): Promise<ProviderUsageSummary> {
+  return readNativeProviderUsage({
+    days: Math.min(
+      365,
+      Math.max(1, Number(process.env.TOKEN_OPTIMIZER_PROVIDER_USAGE_DAYS) || 7)
+    ),
+    recentLimit: limit,
+  });
 }

@@ -81,10 +81,12 @@ local data, not a design mockup. In the capture above it reports:
 - **6,332 tokens of modeled graph-substitution potential**, excluded from the
   verified headline while the causal graph-reuse study remains `Collecting`.
 
-USD is **Not priced** by default because an MCP server cannot observe provider,
-model, cache read/write mix, account route, processing tier, or included
-credits. Configure your own effective blended input rate if a cost equivalent
-is useful. See the [token accounting contract](./docs/TOKEN_ACCOUNTING.md).
+The dashboard now reads native CLI usage receipts and prices uncached input,
+cache reads, cache writes, and output with the exact captured provider, model,
+route, request-time tier, and versioned official source. Ambiguous model ids stay
+**Not priced** instead of receiving a blended guess. API/list-price equivalents
+are kept separate from provider-reported charges and are never labeled as a
+subscription invoice. See the [token accounting contract](./docs/TOKEN_ACCOUNTING.md).
 
 ## Quick start
 

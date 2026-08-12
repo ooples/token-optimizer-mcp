@@ -59,10 +59,10 @@ describe('dashboard optimizer analytics contract', () => {
           },
         }),
       ],
-      { effectiveInputUsdPerMillion: 0.5 }
+      {}
     );
 
-    expect(report.schemaVersion).toBe(2);
+    expect(report.schemaVersion).toBe(3);
     expect(report.summary).toMatchObject({
       totalOperations: 3,
       totalOriginalTokens: 1_000,
@@ -73,8 +73,8 @@ describe('dashboard optimizer analytics contract', () => {
       observedReturnedContextOperations: 2,
       unverifiedReportedOperations: 1,
       legacyReportedContextOperations: 1,
-      contextUsd: 0.000175,
-      savedUsd: 0.000375,
+      contextUsd: null,
+      savedUsd: null,
     });
     expect(
       report.byAction.find((item) => item.name === 'smart_grep')
@@ -91,17 +91,30 @@ describe('dashboard optimizer analytics contract', () => {
     });
   });
 
-  it('leaves cost unavailable until an effective billing rate is configured', () => {
+  it('leaves cost unavailable until an exact model and route are recorded', () => {
     const report = summarizeDashboardAnalytics([verified]);
 
     expect(report.pricing).toMatchObject({
-      available: false,
+      available: true,
       effectiveInputUsdPerMillion: null,
-      source: 'unavailable',
+      source: 'versioned-provider-model-catalog',
     });
     expect(report.summary.contextUsd).toBeNull();
     expect(report.summary.savedUsd).toBeNull();
-    expect(report.measurement.priceBasis).toMatch(/cannot observe billing/i);
+    expect(report.measurement.priceBasis).toMatch(/exact captured provider/i);
+  });
+
+  it('prices exact model operations without using one blended rate', () => {
+    const report = summarizeDashboardAnalytics([
+      { ...verified, model: 'gpt-5.6-sol' },
+    ]);
+
+    expect(report.summary).toMatchObject({
+      contextUsd: 0.00125,
+      savedUsd: 0.00375,
+      pricedReturnedContextOperations: 1,
+      pricedSavingsOperations: 1,
+    });
   });
 
   it('does not certify a legacy row merely because savingsMeasured is true', () => {

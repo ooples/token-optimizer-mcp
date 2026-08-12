@@ -80,6 +80,7 @@ async function load() {
   // First meaningful paint: MCP measurements do not depend on graph APIs.
   renderSavings(measuredAnalytics, null, null);
   renderAccounting(measuredAnalytics, null);
+  renderProviderAccounting(measuredAnalytics);
   renderVerdict(measuredAnalytics, null, null);
   if (measuredAnalytics) {
     const optimizerOnly = joinActivity(
@@ -94,6 +95,10 @@ async function load() {
     renderTimeline(optimizerOnly.events);
     renderBreakdown(optimizerOnly);
   }
+  const providerUsagePromise = get(
+    '/analytics/provider-usage?limit=40',
+    60_000
+  );
 
   // Do not even start the synchronous graph work until the browser has the
   // primary accounting response. Starting these requests earlier can let a
@@ -131,6 +136,12 @@ async function load() {
   renderServers(session);
   renderTimeline(session?.events);
   renderBreakdown(session);
+
+  const providerUsage = await providerUsagePromise;
+  if (generation !== loadGeneration) return;
+  if (measuredAnalytics && providerUsage.ok)
+    measuredAnalytics.providerUsage = providerUsage.body;
+  renderProviderAccounting(measuredAnalytics);
 
   // Graph data enriches the already-visible optimizer ledger when ready. Each
   // request is bounded, so a damaged graph cannot leave a refresh pending
@@ -321,7 +332,8 @@ function renderSavings(analytics, balance, status) {
     saved >= 0
       ? 'net context tokens avoided at the MCP transport'
       : 'net context tokens added at the MCP transport';
-  $('saved-money').textContent = formatUsd(analytics?.summary?.savedUsd);
+  $('saved-money').textContent =
+    `${formatUsd(analytics?.summary?.savedUsd)} · ${fmt(analytics?.summary?.pricedSavingsOperations || 0)}/${fmt((analytics?.summary?.measuredSavingsOperations || 0) + (analytics?.summary?.verifiedExpansionOperations || 0))} ops`;
   $('saved-percent').textContent = `${percent.toFixed(0)}%`;
 
   comparison($('comparison'), {
@@ -349,9 +361,117 @@ function formatUsd(value) {
 }
 
 function priceTokens(analytics, tokens) {
-  const rate = analytics?.pricing?.effectiveInputUsdPerMillion;
-  if (!Number.isFinite(Number(rate)) || Number(rate) <= 0) return null;
-  return (Number(tokens || 0) / 1e6) * Number(rate);
+  return null;
+}
+
+function currencyAmount(amounts) {
+  const entries = Object.entries(amounts || {}).filter(([, amount]) =>
+    Number.isFinite(Number(amount))
+  );
+  if (!entries.length) return 'Not priced';
+  return entries
+    .map(([currency, amount]) => {
+      const value = Number(amount);
+      return currency === 'USD'
+        ? formatUsd(value)
+        : `${currency} ${value.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`;
+    })
+    .join(' + ');
+}
+
+function renderProviderAccounting(analytics) {
+  const section = $('provider-accounting');
+  const host = $('provider-accounting-grid');
+  const body = $('provider-breakdown-body');
+  const note = $('provider-accounting-note');
+  const coverage = $('provider-price-coverage');
+  const report = analytics?.providerUsage;
+  if (!report?.available) {
+    section.dataset.state = 'not-measured';
+    section.setAttribute('aria-busy', 'false');
+    coverage.textContent = 'No native usage yet';
+    host.innerHTML = teach(
+      'No provider usage captured',
+      'Run Codex, Claude Code, or Gemini CLI. Native usage appears here without estimating omitted dimensions.'
+    );
+    body.innerHTML = '';
+    note.textContent = '';
+    return;
+  }
+  const usage = report.usage || {};
+  const writes =
+    Number(usage.cacheWrite5mInputTokens || 0) +
+    Number(usage.cacheWrite1hInputTokens || 0) +
+    Number(usage.cacheWriteInputTokens || 0);
+  const cards = [
+    [
+      'Provider requests',
+      fmt(report.requestCount),
+      `${fmt(report.pricedRequestCount)} exactly priced`,
+    ],
+    [
+      'Uncached input',
+      compact(usage.uncachedInputTokens || 0),
+      'native billable usage',
+    ],
+    [
+      'Cache reads',
+      compact(usage.cachedInputTokens || 0),
+      'native billable usage',
+    ],
+    ['Cache writes', compact(writes), '5-minute + 1-hour + generic'],
+    [
+      'Output',
+      compact(usage.outputTokens || 0),
+      'thinking included when provider bills it',
+    ],
+    [
+      'API-price equivalent',
+      currencyAmount(report.apiEquivalentCost),
+      'list price; not necessarily your invoice',
+    ],
+  ];
+  host.innerHTML = cards
+    .map(
+      ([label, value, detail]) => `
+      <div class="accounting-card">
+        <span class="accounting-label">${escapeHtml(label)}</span>
+        <strong class="accounting-value num">${escapeHtml(value)}</strong>
+        <span class="accounting-detail">${escapeHtml(detail)}</span>
+      </div>`
+    )
+    .join('');
+  coverage.textContent = `${Number(report.pricingCoveragePercent || 0).toFixed(1)}% price coverage`;
+  body.innerHTML = (report.byModel || [])
+    .map((row) => {
+      const rowWrites =
+        Number(row.usage.cacheWrite5mInputTokens || 0) +
+        Number(row.usage.cacheWrite1hInputTokens || 0) +
+        Number(row.usage.cacheWriteInputTokens || 0);
+      const source = row.priceSourceUrl
+        ? `<a href="${escapeHtml(row.priceSourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.priceSourceLabel)}</a>`
+        : escapeHtml(row.priceSourceLabel);
+      return `<tr>
+        <td><strong>${escapeHtml(row.client)} · ${escapeHtml(row.model)}</strong><br><span class="table-note">${escapeHtml(row.billingRoute)}${row.plan ? ` · ${escapeHtml(row.plan)}` : ''} · ${source}</span></td>
+        <td class="right num">${fmt(row.requestCount)}</td>
+        <td class="right num">${fmt(row.usage.uncachedInputTokens)}</td>
+        <td class="right num">${fmt(row.usage.cachedInputTokens)}</td>
+        <td class="right num">${fmt(rowWrites)}</td>
+        <td class="right num">${fmt(row.usage.outputTokens)}</td>
+        <td class="right num">${row.pricedRequestCount === row.requestCount ? currencyAmount(row.apiEquivalentCost) : `${currencyAmount(row.apiEquivalentCost)} · ${fmt(row.requestCount - row.pricedRequestCount)} unpriced`}</td>
+      </tr>`;
+    })
+    .join('');
+  const nativeCost = currencyAmount(report.nativeReportedCost);
+  note.textContent =
+    `${report.source}. Window: ${escapeHtml(report.window?.firstSeen ? new Date(report.window.firstSeen).toLocaleString() : 'no first receipt')} to ${escapeHtml(report.window?.lastSeen ? new Date(report.window.lastSeen).toLocaleString() : 'no last receipt')}. ` +
+    `API-price equivalent: ${currencyAmount(report.apiEquivalentCost)} across ${fmt(report.pricedRequestCount)}/${fmt(report.requestCount)} requests. ` +
+    `Provider-reported actual charge: ${nativeCost}. Missing exact model ids and unpublished dimensions stay unpriced instead of using a blended guess.`;
+  section.dataset.state = 'measured';
+  section.setAttribute('aria-busy', 'false');
 }
 
 function renderAccounting(analytics, balance) {
@@ -387,7 +507,7 @@ function renderAccounting(analytics, balance) {
       'Returned context',
       summary ? compact(summary.totalOptimizedTokens) : 'Not measured',
       summary
-        ? `${formatUsd(summary.contextUsd)} · ${fmt(summary.observedReturnedContextOperations || 0)} observed · ${fmt(summary.unverifiedReportedOperations || 0)} unverified rows excluded`
+        ? `${formatUsd(summary.contextUsd)} from ${fmt(summary.pricedReturnedContextOperations || 0)}/${fmt(summary.observedReturnedContextOperations || 0)} exactly modeled operations · ${fmt(summary.unverifiedReportedOperations || 0)} unverified rows excluded`
         : 'actual results returned to clients',
     ],
     [
@@ -396,7 +516,7 @@ function renderAccounting(analytics, balance) {
         ? compact(Number(summary?.totalTokensSaved || 0))
         : 'Not measured',
       hasSavingsMeasurement
-        ? `${formatUsd(summary?.savedUsd)} · ${compact(summary.grossTokensSaved)} gross − ${compact(summary.expansionTokensReturned)} expanded`
+        ? `${formatUsd(summary?.savedUsd)} from ${fmt(summary?.pricedSavingsOperations || 0)} exactly modeled operations · ${compact(summary.grossTokensSaved)} gross − ${compact(summary.expansionTokensReturned)} expanded`
         : 'No comparable payload pair yet',
     ],
     [
@@ -412,7 +532,7 @@ function renderAccounting(analytics, balance) {
       'Graph memory cost',
       balance ? compact(graphCost) : 'Not measured',
       balance
-        ? `${formatUsd(priceTokens(analytics, graphCost))} · delivery + harvest`
+        ? 'delivery + harvest; price requires model attribution'
         : 'delivery + harvest',
     ],
     [
