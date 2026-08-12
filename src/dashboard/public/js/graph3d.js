@@ -166,7 +166,8 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
       nextHeight === height &&
       canvas.width === nextCanvasWidth &&
       canvas.height === nextCanvasHeight
-    ) return;
+    )
+      return;
     width = nextWidth;
     height = nextHeight;
     canvas.width = nextCanvasWidth;
