@@ -152,7 +152,7 @@ async function loadBalance() {
       'Reading avoided',
       metricState('readingAvoided')?.status === 'not-measured'
         ? 'Not measured'
-        : balance.estimatedTokensAvoided === null
+        : balance.estimatedTokensAvoided == null
           ? `Collecting (${nf.format(balance.injections)} treated, ${nf.format(balance.holdouts)} held back)`
           : `${nf.format(balance.estimatedTokensAvoided)} tokens`,
     ],
@@ -179,9 +179,11 @@ async function loadBalance() {
 
   const coverage = measurement.sourceCoverage;
   const freshness = measurement.freshness;
-  const coverageText = coverage
-    ? `${nf.format(coverage.projectsWithTelemetry)} of ${nf.format(coverage.projects)} selected projects have telemetry`
-    : 'Telemetry coverage was not reported by this server';
+  const coverageText =
+    Number.isFinite(Number(coverage?.projects)) &&
+    Number.isFinite(Number(coverage?.projectsWithTelemetry))
+      ? `${nf.format(coverage.projectsWithTelemetry)} of ${nf.format(coverage.projects)} selected projects have telemetry`
+      : 'Telemetry coverage was not reported by this server';
   const freshnessText =
     freshness?.lastEventAt && freshness.status !== 'not-measured'
       ? `latest event ${new Date(freshness.lastEventAt).toLocaleString()}`

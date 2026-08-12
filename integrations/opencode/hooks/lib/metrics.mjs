@@ -86,6 +86,10 @@ export const BALANCE_KINDS = new Set([
   'keepwarm',
 ]);
 
+/** Latest timestamp without passing an unbounded event log as function arguments. */
+export const latestEventTimestamp = (rows) =>
+  rows.reduce((latest, event) => Math.max(latest, Number(event.at) || 0), 0);
+
 /**
  * Causal records have their own bounded log.  Tool outcomes are much rarer
  * than read/capture telemetry but more frequent than balance records; mixing
@@ -845,13 +849,23 @@ function buildReport(events, balance, sourceCoverage = {}) {
   // Below this, arm means are noise and a ratio would be theatre.
   const sufficient = treated.length >= 20 && withheld.length >= 5;
 
-  const telemetryProjects = Number(sourceCoverage.projectsWithTelemetry) || 0;
+  const coverageNumber = (value, fallback) => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, number) : fallback;
+  };
+  const projectCount = coverageNumber(sourceCoverage.projects, 1);
+  const telemetryProjects = coverageNumber(sourceCoverage.projectsWithTelemetry, 0);
+  const balanceProjects = coverageNumber(
+    sourceCoverage.projectsWithBalanceEvents,
+    balance.length ? 1 : 0
+  );
   const lastEventAt = Math.max(
-    0,
-    ...events.map((event) => Number(event.at) || 0),
-    ...balance.map((event) => Number(event.at) || 0)
+    latestEventTimestamp(events),
+    latestEventTimestamp(balance)
   );
   const measured = telemetryProjects > 0 || events.length > 0 || balance.length > 0;
+  const balanceMeasured = balanceProjects > 0 || balance.length > 0;
   const metric = (status, source, samples, extra = {}) => ({
     status,
     source,
@@ -893,14 +907,12 @@ function buildReport(events, balance, sourceCoverage = {}) {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       sourceCoverage: {
-        projects: Number(sourceCoverage.projects) || 1,
+        projects: projectCount,
         projectsWithTelemetry: telemetryProjects || (measured ? 1 : 0),
-        projectsWithBalanceEvents:
-          Number(sourceCoverage.projectsWithBalanceEvents) || (balance.length ? 1 : 0),
+        projectsWithBalanceEvents: balanceProjects,
         projectsWithoutTelemetry: Math.max(
           0,
-          (Number(sourceCoverage.projects) || 1) -
-            (telemetryProjects || (measured ? 1 : 0))
+          projectCount - (telemetryProjects || (measured ? 1 : 0))
         ),
       },
       freshness: {
@@ -914,22 +926,22 @@ function buildReport(events, balance, sourceCoverage = {}) {
       },
       metrics: {
         memoryDeliveries: metric(
-          measured ? 'measured' : 'not-measured',
+          balanceMeasured ? 'measured' : 'not-measured',
           'balance.jsonl: inject events in the treated arm',
           allInjections.filter((event) => !event.holdout).length
         ),
         memoryHoldouts: metric(
-          measured ? 'measured' : 'not-measured',
+          balanceMeasured ? 'measured' : 'not-measured',
           'balance.jsonl: inject events in the withheld arm',
           allInjections.filter((event) => event.holdout).length
         ),
         rememberingCost: metric(
-          measured ? 'measured' : 'not-measured',
+          balanceMeasured ? 'measured' : 'not-measured',
           'balance.jsonl: delivered injection tokens plus semantic harvest tokens',
           allInjections.length + balance.filter((event) => event.kind === 'harvest').length
         ),
         readingAvoided: metric(
-          !measured ? 'not-measured' : sufficient ? 'measured' : 'collecting',
+          !balanceMeasured ? 'not-measured' : sufficient ? 'measured' : 'collecting',
           'stratified file-touch holdout joined to downstream read events',
           downstreamSamples,
           {

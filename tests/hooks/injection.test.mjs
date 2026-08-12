@@ -18,7 +18,15 @@ import {
   refusalPayload,
   linkCoOccurrence,
 } from '../../hooks-core/inject.mjs';
-import { inHoldout, record, readMetrics, report, reportMany, indexBudget } from '../../hooks-core/metrics.mjs';
+import {
+  inHoldout,
+  record,
+  readMetrics,
+  report,
+  reportMany,
+  indexBudget,
+  latestEventTimestamp,
+} from '../../hooks-core/metrics.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 
@@ -350,6 +358,31 @@ describe('P5 measurement', () => {
     expect(out.measurement.metrics.rememberingCost.status).toBe('not-measured');
     expect(out.measurement.metrics.readingAvoided.status).toBe('not-measured');
     expect(out.measurement.freshness.status).toBe('not-measured');
+  });
+
+  test('an empty pooled report preserves zero project coverage', () => {
+    const out = reportMany([]);
+    expect(out.projects).toBe(0);
+    expect(out.measurement.sourceCoverage).toEqual({
+      projects: 0,
+      projectsWithTelemetry: 0,
+      projectsWithBalanceEvents: 0,
+      projectsWithoutTelemetry: 0,
+    });
+  });
+
+  test('read-only telemetry does not fabricate balance measurements', () => {
+    record(dir, { kind: 'read', anchor: '/a.ts', tokens: 100 });
+    const metrics = report(dir).measurement.metrics;
+    expect(metrics.memoryDeliveries.status).toBe('not-measured');
+    expect(metrics.memoryHoldouts.status).toBe('not-measured');
+    expect(metrics.rememberingCost.status).toBe('not-measured');
+    expect(metrics.readingAvoided.status).toBe('not-measured');
+  });
+
+  test('freshness handles event logs beyond the engine argument limit', () => {
+    const events = Array.from({ length: 150_000 }, (_, at) => ({ at }));
+    expect(latestEventTimestamp(events)).toBe(149_999);
   });
 
   test('pooled reports disclose project telemetry coverage', () => {
