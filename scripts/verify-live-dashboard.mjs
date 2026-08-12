@@ -22,6 +22,31 @@ page.on('requestfailed', (request) =>
   errors.push(`request:${request.url()}:${request.failure()?.errorText}`)
 );
 
+async function waitForCount(selector, minimum, label) {
+  try {
+    await page.waitForFunction(
+      ({ selector: query, minimum: expected }) =>
+        document.querySelectorAll(query).length >= expected,
+      { selector, minimum },
+      { timeout: 30_000 }
+    );
+  } catch (error) {
+    const diagnostic = await page.evaluate((query) => ({
+      url: location.href,
+      count: document.querySelectorAll(query).length,
+      status:
+        document.querySelector('#hook-health-status')?.textContent?.trim() ||
+        null,
+      state:
+        document.querySelector('#hook-health-status')?.dataset.state || null,
+    }), selector);
+    throw new Error(
+      `${label} did not render: ${JSON.stringify(diagnostic)}`,
+      { cause: error }
+    );
+  }
+}
+
 async function measureCameraStability(host) {
   return host.evaluate(async (element) => {
     const samples = [];
@@ -78,9 +103,7 @@ try {
 
   await page.goto(`${base}/wiki`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#wiki-list li');
-  await page.waitForFunction(
-    () => document.querySelectorAll('#hook-health-grid .stat-card').length === 6
-  );
+  await waitForCount('#hook-health-grid .stat-card', 6, 'hook health cards');
   const captureHealth = await page.evaluate(() => {
     const values = [...document.querySelectorAll('#hook-health-grid .stat-card')]
       .map((card) => ({
@@ -118,9 +141,7 @@ try {
   }));
   const detailVisible = await page.locator('#wiki-detail').isVisible();
   await page.locator('.wiki-tab[data-tab="evidence"]').click();
-  await page.waitForFunction(
-    () => document.querySelectorAll('#evidence-summary .stat-card').length === 6
-  );
+  await waitForCount('#evidence-summary .stat-card', 6, 'evidence cards');
   await page.waitForFunction(
     () => document.querySelectorAll('#ucr-missing tbody tr').length > 0
   );
@@ -170,6 +191,17 @@ try {
         value: card.querySelector('.stat-value')?.textContent?.trim() || '',
       }))
     ),
+    balanceContract: await page.evaluate(async () => {
+      const report = await fetch('/api/wiki/balance?scope=all').then((response) =>
+        response.json()
+      );
+      return {
+        coverage: report.measurement?.sourceCoverage || null,
+        freshness: report.measurement?.freshness || null,
+        metrics: report.measurement?.metrics || null,
+        method: document.querySelector('#balance-method')?.textContent?.trim() || '',
+      };
+    }),
     captureHealth,
     graph3d,
     cameraStability,
@@ -221,6 +253,12 @@ try {
     wiki.aggregateCoverage.missingProjects >= 1 &&
     wiki.balanceCards.length === 4 &&
     wiki.balanceCards.every(({ value }) => value.length > 0 && value !== '—') &&
+    wiki.balanceContract.coverage?.projects >= 1 &&
+    wiki.balanceContract.coverage?.projectsWithTelemetry >= 1 &&
+    wiki.balanceContract.freshness?.lastEventAt &&
+    ['memoryDeliveries', 'memoryHoldouts', 'rememberingCost', 'readingAvoided']
+      .every((key) => wiki.balanceContract.metrics?.[key]?.source) &&
+    /selected projects have telemetry/i.test(wiki.balanceContract.method) &&
     wiki.captureHealth.values.length === 6 &&
     wiki.captureHealth.values.some(
       ({ label, value }) => label === 'Hook runs' && Number(value.replaceAll(',', '')) > 0

@@ -736,7 +736,7 @@ function canonicalKeyish(p) {
  * arms, multiplied by treated touches. Reporting it as a measured fact would be
  * the same overclaiming this project criticises competitors for.
  */
-function buildReport(events, balance) {
+function buildReport(events, balance, sourceCoverage = {}) {
 
   // COMMAND INJECTIONS ARE COUNTED SEPARATELY, not mixed into the balance.
   //
@@ -834,8 +834,28 @@ function buildReport(events, balance) {
   const perTouchSaving = withheldCost - treatedCost;
   const estimatedAvoided = Math.max(0, Math.round(perTouchSaving * treated.length));
 
+  const downstreamSamples = injections.filter((event) => {
+    if (event.downstream != null) return true;
+    const key = `${event.sessionId || ''}|${event.anchor}`;
+    return (reads.get(key) || []).some((read) => (read.at ?? 0) >= (event.at ?? 0));
+  }).length;
+
   // Below this, arm means are noise and a ratio would be theatre.
   const sufficient = treated.length >= 20 && withheld.length >= 5;
+
+  const telemetryProjects = Number(sourceCoverage.projectsWithTelemetry) || 0;
+  const lastEventAt = Math.max(
+    0,
+    ...events.map((event) => Number(event.at) || 0),
+    ...balance.map((event) => Number(event.at) || 0)
+  );
+  const measured = telemetryProjects > 0 || events.length > 0 || balance.length > 0;
+  const metric = (status, source, samples, extra = {}) => ({
+    status,
+    source,
+    samples,
+    ...extra,
+  });
 
   return {
     memoryDeliveries: allInjections.filter((event) => !event.holdout).length,
@@ -867,11 +887,69 @@ function buildReport(events, balance) {
       : estimatedAvoided > injectedTokens + harvestTokens
         ? 'the graph is saving more than it costs'
         : 'the graph is NOT yet paying for itself',
+    measurement: {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      sourceCoverage: {
+        projects: Number(sourceCoverage.projects) || 1,
+        projectsWithTelemetry: telemetryProjects || (measured ? 1 : 0),
+        projectsWithBalanceEvents:
+          Number(sourceCoverage.projectsWithBalanceEvents) || (balance.length ? 1 : 0),
+        projectsWithoutTelemetry: Math.max(
+          0,
+          (Number(sourceCoverage.projects) || 1) -
+            (telemetryProjects || (measured ? 1 : 0))
+        ),
+      },
+      freshness: {
+        lastEventAt: lastEventAt || null,
+        ageMs: lastEventAt ? Math.max(0, Date.now() - lastEventAt) : null,
+        status: !lastEventAt
+          ? 'not-measured'
+          : Date.now() - lastEventAt <= 7 * 86_400_000
+            ? 'fresh'
+            : 'stale',
+      },
+      metrics: {
+        memoryDeliveries: metric(
+          measured ? 'measured' : 'not-measured',
+          'balance.jsonl: inject events in the treated arm',
+          allInjections.filter((event) => !event.holdout).length
+        ),
+        memoryHoldouts: metric(
+          measured ? 'measured' : 'not-measured',
+          'balance.jsonl: inject events in the withheld arm',
+          allInjections.filter((event) => event.holdout).length
+        ),
+        rememberingCost: metric(
+          measured ? 'measured' : 'not-measured',
+          'balance.jsonl: delivered injection tokens plus semantic harvest tokens',
+          allInjections.length + balance.filter((event) => event.kind === 'harvest').length
+        ),
+        readingAvoided: metric(
+          !measured ? 'not-measured' : sufficient ? 'measured' : 'collecting',
+          'stratified file-touch holdout joined to downstream read events',
+          downstreamSamples,
+          {
+            treated: treated.length,
+            holdouts: withheld.length,
+            requiredTreated: 20,
+            requiredHoldouts: 5,
+          }
+        ),
+      },
+    },
   };
 }
 
 export function report(dir) {
-  return buildReport(readAll(dir), readBalance(dir));
+  const events = readAll(dir);
+  const balance = readBalance(dir);
+  return buildReport(events, balance, {
+    projects: 1,
+    projectsWithTelemetry: events.length || balance.length ? 1 : 0,
+    projectsWithBalanceEvents: balance.length ? 1 : 0,
+  });
 }
 
 /**
@@ -884,9 +962,18 @@ export function report(dir) {
  */
 export function reportMany(dirs) {
   const unique = [...new Set((dirs || []).map((dir) => String(dir)))];
+  const eventSources = unique.map((dir) => readAll(dir));
+  const balanceSources = unique.map((dir) => readBalance(dir));
   const report = buildReport(
-    unique.flatMap((dir) => readAll(dir)),
-    unique.flatMap((dir) => readBalance(dir))
+    eventSources.flat(),
+    balanceSources.flat(),
+    {
+      projects: unique.length,
+      projectsWithTelemetry: eventSources.filter(
+        (events, index) => events.length || balanceSources[index].length
+      ).length,
+      projectsWithBalanceEvents: balanceSources.filter((events) => events.length).length,
+    }
   );
   return { ...report, projects: unique.length };
 }
