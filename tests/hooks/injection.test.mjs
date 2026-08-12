@@ -18,7 +18,7 @@ import {
   refusalPayload,
   linkCoOccurrence,
 } from '../../hooks-core/inject.mjs';
-import { inHoldout, record, readMetrics, report, indexBudget } from '../../hooks-core/metrics.mjs';
+import { inHoldout, record, readMetrics, report, reportMany, indexBudget } from '../../hooks-core/metrics.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 
@@ -334,6 +334,32 @@ describe('P5 measurement', () => {
     expect(out.sufficientData).toBe(false);
     expect(out.estimatedTokensAvoided).toBeNull();
     expect(out.verdict).toContain('insufficient data');
+    expect(out.measurement.metrics.memoryDeliveries).toMatchObject({
+      status: 'measured',
+      samples: 1,
+    });
+    expect(out.measurement.metrics.readingAvoided.status).toBe('collecting');
+    expect(out.measurement.freshness.lastEventAt).not.toBeNull();
+  });
+
+  test('missing telemetry is explicit instead of rendered as a real zero', () => {
+    const empty = join(workspace, 'empty-wiki');
+    const out = report(empty);
+    expect(out.memoryDeliveries).toBe(0);
+    expect(out.measurement.metrics.memoryDeliveries.status).toBe('not-measured');
+    expect(out.measurement.metrics.rememberingCost.status).toBe('not-measured');
+    expect(out.measurement.metrics.readingAvoided.status).toBe('not-measured');
+    expect(out.measurement.freshness.status).toBe('not-measured');
+  });
+
+  test('pooled reports disclose project telemetry coverage', () => {
+    record(dir, { kind: 'inject', holdout: false, tokens: 100 });
+    const out = reportMany([dir, join(workspace, 'empty-wiki')]);
+    expect(out.measurement.sourceCoverage).toMatchObject({
+      projects: 2,
+      projectsWithTelemetry: 1,
+      projectsWithoutTelemetry: 1,
+    });
   });
 
   test('with enough data it reports a net balance, including harvest cost', () => {

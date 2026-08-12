@@ -123,6 +123,7 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
   let moved = false;
   let previous = { x: 0, y: 0 };
   let destroyed = false;
+  let resizeFrame = 0;
 
   function prepare() {
     const nodes = (graph.nodes || []).slice(0, options.cap || 150);
@@ -156,10 +157,20 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
     // host two pixels larger. ResizeObserver observed the growth and repeated
     // it forever, which looked like a camera continuously zooming into the
     // overview graph while the entire canvas expanded without bound.
-    width = Math.max(1, Math.round(host.clientWidth));
-    height = Math.max(1, Math.round(host.clientHeight));
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
+    const nextWidth = Math.max(1, Math.round(host.clientWidth));
+    const nextHeight = Math.max(1, Math.round(host.clientHeight));
+    const nextCanvasWidth = Math.round(nextWidth * ratio);
+    const nextCanvasHeight = Math.round(nextHeight * ratio);
+    if (
+      nextWidth === width &&
+      nextHeight === height &&
+      canvas.width === nextCanvasWidth &&
+      canvas.height === nextCanvasHeight
+    ) return;
+    width = nextWidth;
+    height = nextHeight;
+    canvas.width = nextCanvasWidth;
+    canvas.height = nextCanvasHeight;
     // CSS owns the display size (100% x 100%). Setting pixel dimensions here
     // would reintroduce the child -> auto-sized parent feedback loop.
     canvas.style.removeProperty('width');
@@ -478,7 +489,10 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
 
   chrome.querySelector('.graph-3d-reset').addEventListener('click', reset);
 
-  const observer = new ResizeObserver(resize);
+  const observer = new ResizeObserver(() => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(resize);
+  });
   observer.observe(host);
   prepare();
   resize();
@@ -505,6 +519,7 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
     destroy() {
       destroyed = true;
       cancelAnimationFrame(animation);
+      cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       host.innerHTML = '';
       delete host.__knowledgeGraph3d;

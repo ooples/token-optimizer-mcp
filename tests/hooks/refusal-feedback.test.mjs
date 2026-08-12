@@ -42,10 +42,14 @@ beforeEach(() => {
   mkdirSync(join(projectB, '.token-optimizer', 'wiki'), { recursive: true });
   shared = mkdtempSync(join(tmpdir(), 'ref-shared-'));
   process.env.TOKEN_OPTIMIZER_SHARED_DIR = shared;
+  // The assertion below proves retirement stops an otherwise-deliverable
+  // lesson. A randomized control-arm silence would not exercise retirement.
+  process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
 });
 
 afterEach(() => {
   delete process.env.TOKEN_OPTIMIZER_SHARED_DIR;
+  delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
   for (const d of [projectA, projectB, shared]) {
     try {
       rmSync(d, { recursive: true, force: true });

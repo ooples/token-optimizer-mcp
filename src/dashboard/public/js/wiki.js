@@ -113,30 +113,48 @@ async function loadBalance() {
     return;
   }
 
+  const measurement = balance.measurement || {};
+  const metricState = (key) => measurement.metrics?.[key] || null;
+  const measuredValue = (key, value, suffix = '') => {
+    const state = metricState(key);
+    if (state?.status === 'not-measured') return 'Not measured';
+    return `${nf.format(Number(value) || 0)}${suffix}`;
+  };
+
   // Plain language, because someone reading this page has no reason to know
   // what "injected" means. The words describe what happened, not what the code
   // calls it.
   const tiles = [
     [
       'Memory deliveries',
-      nf.format(balance.memoryDeliveries ?? balance.injections),
+      measuredValue(
+        'memoryDeliveries',
+        balance.memoryDeliveries ?? balance.injections
+      ),
     ],
     [
       'Kept back for comparison',
-      nf.format(balance.memoryHoldouts ?? balance.holdouts),
+      measuredValue(
+        'memoryHoldouts',
+        balance.memoryHoldouts ?? balance.holdouts
+      ),
     ],
     [
       'Cost of remembering',
-      `${nf.format(
-        Number(balance.deliveryTokens ?? balance.injectedTokens) +
-          Number(balance.harvestTokens || 0)
-      )} tokens`,
+      measuredValue(
+        'rememberingCost',
+        Number(balance.deliveryTokens ?? balance.injectedTokens ?? 0) +
+          Number(balance.harvestTokens || 0),
+        ' tokens'
+      ),
     ],
     [
       'Reading avoided',
-      balance.estimatedTokensAvoided === null
-        ? 'Not enough comparisons'
-        : `${nf.format(balance.estimatedTokensAvoided)} tokens`,
+      metricState('readingAvoided')?.status === 'not-measured'
+        ? 'Not measured'
+        : balance.estimatedTokensAvoided === null
+          ? `Collecting (${nf.format(balance.injections)} treated, ${nf.format(balance.holdouts)} held back)`
+          : `${nf.format(balance.estimatedTokensAvoided)} tokens`,
     ],
   ];
 
@@ -159,14 +177,26 @@ async function loadBalance() {
       ? 'positive'
       : 'negative';
 
+  const coverage = measurement.sourceCoverage;
+  const freshness = measurement.freshness;
+  const coverageText = coverage
+    ? `${nf.format(coverage.projectsWithTelemetry)} of ${nf.format(coverage.projects)} selected projects have telemetry`
+    : 'Telemetry coverage was not reported by this server';
+  const freshnessText =
+    freshness?.lastEventAt && freshness.status !== 'not-measured'
+      ? `latest event ${new Date(freshness.lastEventAt).toLocaleString()}`
+      : 'no telemetry event has been observed';
+
   if (balance.sufficientData) {
     method.textContent =
       `Measured against ${nf.format(balance.holdouts)} withheld control touches — not estimated. ` +
-      `Net after injection and harvest cost: ${nf.format(balance.netTokens)} tokens.`;
+      `Net after injection and harvest cost: ${nf.format(balance.netTokens)} tokens. ` +
+      `${coverageText}; ${freshnessText}.`;
   } else {
     method.textContent =
       `The graph has ${nf.format(balance.injections)} measured file deliveries and ${nf.format(balance.holdouts)} file holdouts; ` +
-      'the savings estimate unlocks at 20 and 5. Command and session-start deliveries are counted above but excluded from the file-read comparison because they have no valid downstream file-read join.';
+      'the savings estimate unlocks at 20 and 5. Command and session-start deliveries are counted above but excluded from the file-read comparison because they have no valid downstream file-read join. ' +
+      `${coverageText}; ${freshnessText}.`;
   }
 }
 
