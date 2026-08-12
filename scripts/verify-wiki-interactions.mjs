@@ -23,6 +23,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const GRAPH = mkdtempSync(join(tmpdir(), 'wiki-interactions-'));
 process.env.TOKEN_OPTIMIZER_WIKI_DIR = GRAPH;
+process.env.TOKEN_OPTIMIZER_SHARED_DIR = GRAPH;
+process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(GRAPH, 'projects.jsonl');
 
 const PORT = 3600 + Math.floor(Math.random() * 300);
 const BASE = `http://localhost:${PORT}`;
@@ -494,6 +496,39 @@ async function main() {
     );
 
     /* ---- API robustness --------------------------------------------------- */
+
+    const inventoryResponse = await fetch(`${BASE}/api/wiki/projects`);
+    const inventoryText = await inventoryResponse.text();
+    const inventory = JSON.parse(inventoryText);
+    check(
+      'project inventory exposes opaque ids without filesystem paths',
+      inventoryResponse.ok &&
+        inventory.projects.length >= 1 &&
+        inventory.projects.every(
+          (project) =>
+            /^project-|^(current|shared)$/.test(project.id) &&
+            !('root' in project) &&
+            !('dir' in project) &&
+            !('graphDir' in project)
+        ) &&
+        !inventoryText.includes(GRAPH),
+      inventoryText.slice(0, 300)
+    );
+
+    const unknownScope = await fetch(
+      `${BASE}/api/wiki/status?scope=not-a-registered-project`
+    );
+    check(
+      'unknown opaque project scope is refused',
+      unknownScope.status === 400,
+      String(unknownScope.status)
+    );
+
+    check(
+      'knowledge scope selector reports capture coverage',
+      (await page.locator('#wiki-scope option').count()) >= 2 &&
+        (await page.locator('#wiki-coverage').innerText()).length > 0
+    );
 
     for (const [label, path] of [
       ['missing node', '/api/wiki/node/does-not-exist'],

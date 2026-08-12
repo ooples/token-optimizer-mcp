@@ -736,10 +736,7 @@ function canonicalKeyish(p) {
  * arms, multiplied by treated touches. Reporting it as a measured fact would be
  * the same overclaiming this project criticises competitors for.
  */
-export function report(dir) {
-  const events = readAll(dir);
-  // Injections and harvests come from the log that cannot be starved.
-  const balance = readBalance(dir);
+function buildReport(events, balance) {
 
   // COMMAND INJECTIONS ARE COUNTED SEPARATELY, not mixed into the balance.
   //
@@ -841,6 +838,15 @@ export function report(dir) {
   const sufficient = treated.length >= 20 && withheld.length >= 5;
 
   return {
+    memoryDeliveries: allInjections.filter((event) => !event.holdout).length,
+    memoryHoldouts: allInjections.filter((event) => event.holdout).length,
+    deliveryTokens: allInjections
+      .filter((event) => !event.holdout)
+      .reduce(
+        (sum, event) =>
+          sum + (event.deliveredTokens ?? event.tokens ?? 0),
+        0
+      ),
     injections: treated.length,
     sessionStartInjections: sessionStartInjections.length,
     sessionStartInjectedTokens: sessionStartInjections.reduce(
@@ -862,6 +868,27 @@ export function report(dir) {
         ? 'the graph is saving more than it costs'
         : 'the graph is NOT yet paying for itself',
   };
+}
+
+export function report(dir) {
+  return buildReport(readAll(dir), readBalance(dir));
+}
+
+/**
+ * One statistically valid machine/project-group report.
+ *
+ * Summing per-project verdicts is wrong: five projects with four treated reads
+ * each do not individually meet the threshold, but together they are twenty
+ * observations. Pooling the underlying events preserves the randomized arms
+ * and computes the means once over the selected population.
+ */
+export function reportMany(dirs) {
+  const unique = [...new Set((dirs || []).map((dir) => String(dir)))];
+  const report = buildReport(
+    unique.flatMap((dir) => readAll(dir)),
+    unique.flatMap((dir) => readBalance(dir))
+  );
+  return { ...report, projects: unique.length };
 }
 
 /**
@@ -1268,8 +1295,8 @@ function concurrencySummary(runs) {
  * live hook traces, and randomized model evals remain visibly distinct: only
  * `eval-run` records with paired arms can produce a causal effect interval.
  */
-export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
-  const evidence = readEvidence(dir).filter((event) => matchesFilters(event, filters));
+function buildEvidenceReport(evidence, { filters = {}, episodeLimit = 100 } = {}) {
+  evidence = evidence.filter((event) => matchesFilters(event, filters));
   const runs = evidence.filter((event) => event.kind === 'eval-run');
   const handoffRuns = evidence.filter((event) => event.kind === 'handoff-run');
   const concurrencyRuns = evidence.filter((event) => event.kind === 'concurrency-run');
@@ -1373,6 +1400,47 @@ export function evidenceReport(dir, { filters = {}, episodeLimit = 100 } = {}) {
       minimumPairs,
       handoffMinimumPairs: handoffMinimumPairs(),
       deterministicChecksAreCausalProof: false,
+    },
+  };
+}
+
+export function evidenceReport(dir, options = {}) {
+  const events = readEvidence(dir);
+  const report = buildEvidenceReport(events, options);
+  const hasMatchingEvidence = events.some((event) =>
+    matchesFilters(event, options.filters || {})
+  );
+  return {
+    ...report,
+    sourceCoverage: {
+      projects: 1,
+      projectsWithEvidence: hasMatchingEvidence ? 1 : 0,
+      projectsWithoutEvidence: hasMatchingEvidence ? 0 : 1,
+    },
+  };
+}
+
+/**
+ * Pools evidence across registered projects before computing cohorts.
+ *
+ * A cohort split across two worktrees is still one experiment. Summing already
+ * aggregated reports would lose pairing and produce invalid confidence
+ * intervals, so this combines the append-only source events first and runs the
+ * estimator exactly once.
+ */
+export function evidenceReportMany(dirs, options = {}) {
+  const unique = [...new Set((dirs || []).map((dir) => String(dir)))];
+  const sources = unique.map((dir) => readEvidence(dir));
+  const report = buildEvidenceReport(sources.flat(), options);
+  const projectsWithEvidence = sources.filter((events) =>
+    events.some((event) => matchesFilters(event, options.filters || {}))
+  ).length;
+  return {
+    ...report,
+    sourceCoverage: {
+      projects: unique.length,
+      projectsWithEvidence,
+      projectsWithoutEvidence: unique.length - projectsWithEvidence,
     },
   };
 }

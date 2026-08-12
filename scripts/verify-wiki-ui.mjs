@@ -58,6 +58,8 @@ const BASE = `http://localhost:${PORT}`;
  */
 const GRAPH = mkdtempSync(join(tmpdir(), 'wiki-ui-graph-'));
 process.env.TOKEN_OPTIMIZER_WIKI_DIR = GRAPH;
+process.env.TOKEN_OPTIMIZER_SHARED_DIR = GRAPH;
+process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(GRAPH, 'projects.jsonl');
 const UCR = mkdtempSync(join(tmpdir(), 'wiki-ui-ucr-'));
 process.env.TOKEN_OPTIMIZER_UCR_DIR = UCR;
 
@@ -828,6 +830,17 @@ async function main() {
           ucrState === 'insufficient',
           ucrState
         );
+        const missingMetricRows = await page
+          .locator('#ucr-missing tbody tr')
+          .count();
+        const missingMetricText = await page.textContent('#ucr-missing');
+        check(
+          'UCR dashboard maps every missing metric to its evidence producer',
+          missingMetricRows > 0 &&
+            /effectiveness/i.test(missingMetricText || '') &&
+            /powered full study/i.test(missingMetricText || ''),
+          `${missingMetricRows} missing metrics`
+        );
         await page.screenshot({
           path: join(SHOTS, 'evidence.png'),
           fullPage: true,
@@ -855,6 +868,16 @@ async function main() {
     });
     overview.on('pageerror', (error) =>
       consoleErrors.push(`overview: ${error.message}`)
+    );
+    // Force the compatibility path so this fixture continues proving that a
+    // legacy client's object-shaped token totals render correctly. The live
+    // dashboard test separately proves the preferred cross-client diagnostics
+    // path and its explicit "not measured" states.
+    await overview.route('**/api/diagnostics/hooks*', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ summary: { available: false }, events: [] }),
+      })
     );
     await overview.route('**/api/session-summary*', (route) =>
       route.fulfill({

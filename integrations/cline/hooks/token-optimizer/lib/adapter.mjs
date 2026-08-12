@@ -27,6 +27,7 @@ import {
   MODE_OFF,
   MODE_ADVISE,
   largeFileBytes,
+  readPayloadResult,
   withEscape,
 } from './policy.mjs';
 import {
@@ -83,6 +84,8 @@ import {
 } from './capabilities.mjs';
 import { episodeMeta, featuresForArm, usageFrom } from './experiment.mjs';
 import { evaluateUcrGuards } from './ucr-guard.mjs';
+import { beginHookInvocation, noteHookOutput } from './observability.mjs';
+import { registerProject } from './projects.mjs';
 
 /**
  * Per-client capability.
@@ -128,7 +131,14 @@ export function mutationSucceeded(clientName, raw) {
 
   // These lifecycle contracts fire this event only after a successful tool,
   // or are called by our in-process bridge only from its successful after hook.
-  return new Set(['claude-code', 'qwen', 'opencode', 'kilo', 'windsurf']).has(
+  return new Set([
+    'claude-code',
+    'codex',
+    'qwen',
+    'opencode',
+    'kilo',
+    'windsurf',
+  ]).has(
     clientName
   );
 }
@@ -241,37 +251,9 @@ export function sessionTaskContext(raw = {}) {
 }
 
 function emit(object) {
-  process.stdout.write(JSON.stringify(object));
-}
-
-/**
- * Bounded stdin read. See policy.readPayload for why the ceiling matters: the
- * entry points fail open on a THROW, but a host that opens the pipe and never
- * closes it produces no throw -- just a hook that waits forever with the user's
- * tool call stuck behind it.
- */
-async function readStdin({ timeoutMs = 5000 } = {}) {
-  const raw = await new Promise((resolve) => {
-    const chunks = [];
-    const timer = setTimeout(() => resolve(null), timeoutMs);
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () => {
-      clearTimeout(timer);
-      resolve(chunks.join(''));
-    });
-    process.stdin.on('error', () => {
-      clearTimeout(timer);
-      resolve(null);
-    });
-  });
-
-  if (raw === null) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  const serialized = JSON.stringify(object);
+  noteHookOutput(object, Buffer.byteLength(serialized, 'utf8'));
+  process.stdout.write(serialized);
 }
 
 /** The session-start notice, shared verbatim so no client drifts its own copy. */
@@ -502,6 +484,17 @@ function observeAndInject(payload, state, episode, features) {
  * @param {'session-start'|'pre-tool'|'post-tool'|'stop'} event
  */
 export async function run(clientName, event) {
+  const invocation = beginHookInvocation(clientName, event);
+  try {
+    await runHook(clientName, event, invocation);
+    invocation.succeed();
+  } catch (error) {
+    // The optimizer must fail open, but the failure is now reconstructable.
+    invocation.fail(error);
+  }
+}
+
+async function runHook(clientName, event, invocation) {
   const client = CLIENTS[clientName] || CLIENTS['claude-code'];
   const eventName =
     event === 'session-start'
@@ -529,7 +522,10 @@ export async function run(clientName, event) {
     // full pre-tool timeout would turn optional context into a five-second
     // startup tax; lifecycle payloads are tiny and arrive immediately when
     // the host supplies one.
-    const raw = (await readStdin({ timeoutMs: 250 })) || {};
+    const input = await readPayloadResult({ timeoutMs: 250 });
+    const raw = input.payload || {};
+    invocation.bind(raw, null, input.bytes);
+    if (input.status !== 'ok') invocation.noteInput(input.status, input.bytes);
     const toolEvidence = optimizerToolEvidence(raw);
     const sessionId = raw.session_id ?? raw.sessionId ?? raw.conversation_id;
     if (sessionId && toolEvidence.proven) {
@@ -540,10 +536,12 @@ export async function run(clientName, event) {
     const parts = [
       policyText(client.canDeny, toolEvidence.names, toolEvidence.proven),
     ];
+    const cwd = raw.cwd || raw.working_directory || process.cwd();
+    const root = projectRootFor(join(cwd, '__session__'), cwd);
+    registerProject({ root, graphDir: wikiDir(root), client: clientName });
     if (features.retrieval) {
       try {
-        const cwd = raw.cwd || raw.working_directory || process.cwd();
-        const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+        const dir = wikiDir(root);
         // SessionStart needs hashes and claims, not stored file bodies. Parsing
         // the snapshot sidecar here would make startup scale with repository
         // history even though this compact index never renders a diff.
@@ -569,14 +567,20 @@ export async function run(clientName, event) {
     process.exit(0);
   }
 
-  const raw = await readStdin();
+  const input = await readPayloadResult();
+  const raw = input.payload;
   if (!raw) {
+    invocation.noteInput(input.status, input.bytes);
     // Stop requires JSON on stdout even when it has nothing to add.
     if (event === 'stop') emit({});
     process.exit(0);
   }
 
   if (event === 'stop') {
+    // Stop has no normalized tool payload, but it is still a fully formed hook
+    // invocation. Bind its lifecycle identifiers so successful completions do
+    // not look like an input reader that never ran in cross-client telemetry.
+    invocation.bind(raw, null, input.bytes);
     const sessionId =
       raw.session_id ?? raw.sessionId ?? raw.conversation_id ?? 'default';
     const agentScope = raw.transcript_path ?? raw.transcriptPath ?? null;
@@ -632,6 +636,7 @@ export async function run(clientName, event) {
   const payload = normalizePayload(
     normalizeClientPayload(clientName, event, raw)
   );
+  invocation.bind(raw, payload, input.bytes);
   if (!payload.tool_name) process.exit(0);
   const episode = episodeMeta({ client: clientName, raw, payload });
 

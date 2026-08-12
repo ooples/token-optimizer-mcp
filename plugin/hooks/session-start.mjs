@@ -21,7 +21,7 @@
 import {
   mode,
   MODE_OFF,
-  readPayload,
+  readPayloadResult,
   loadState,
   saveState,
 } from './lib/policy.mjs';
@@ -39,8 +39,9 @@ import {
 import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
+import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 
-if (mode() === MODE_OFF) process.exit(0);
+const invocation = beginHookInvocation('claude-code', 'session-start');
 
 /**
  * The restoration block, when this session is resuming from a compaction.
@@ -56,7 +57,7 @@ if (mode() === MODE_OFF) process.exit(0);
  * harness telling us exactly this case.
  */
 async function restoration(parsed) {
-  // `readPayload` returns the PARSED object, not the raw text. Parsing it again
+  // `readPayloadResult` returns the PARSED object, not the raw text. Parsing it again
   // throws on `[object Object]`, and the throw is swallowed by the catch below,
   // so the restoration block simply never appeared -- the failure mode a
   // fail-open hook is most likely to hide.
@@ -95,7 +96,12 @@ async function restoration(parsed) {
 // clients and silently skipped Claude Code, the one client most users are on.
 // Claude Code keeps its own entry point because its PreToolUse router does more
 // than the shared one; the standing notice is not a place it needs to differ.
-const payload = (await readPayload()) || {};
+async function main() {
+if (mode() === MODE_OFF) return;
+const input = await readPayloadResult({ timeoutMs: 250 });
+const payload = input.payload || {};
+if (input.payload) invocation.bind(payload, null, input.bytes);
+else invocation.noteInput(input.status, input.bytes);
 const features = featuresForArm();
 const toolEvidence = optimizerToolEvidence(payload);
 if (payload.session_id && toolEvidence.proven) {
@@ -147,11 +153,17 @@ try {
   // The policy notice must still arrive if anything above fails.
 }
 
-process.stdout.write(
-  JSON.stringify({
+const output = {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
       additionalContext: parts.join('\n\n'),
     },
-  })
-);
+  };
+const serialized = JSON.stringify(output);
+noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
+process.stdout.write(serialized);
+}
+
+main()
+  .then(() => invocation.succeed())
+  .catch((error) => invocation.fail(error));

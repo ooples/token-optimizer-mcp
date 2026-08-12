@@ -167,7 +167,13 @@ describe('through the real SessionStart hook', () => {
       input: '{}',
       encoding: 'utf8',
       timeout: 30_000,
-      env: { ...process.env, TOKEN_OPTIMIZER_WIKI_DIR: graphDir, TOKEN_OPTIMIZER_SHARED_DIR: graphDir, CLAUDE_PROJECT_DIR: project },
+      env: {
+        ...process.env,
+        TOKEN_OPTIMIZER_WIKI_DIR: graphDir,
+        TOKEN_OPTIMIZER_SHARED_DIR: graphDir,
+        TOKEN_OPTIMIZER_PROJECT_REGISTRY: join(project, 'projects.jsonl'),
+        CLAUDE_PROJECT_DIR: project,
+      },
     });
 
     const ctx = JSON.parse(r.stdout || '{}')?.hookSpecificOutput?.additionalContext || '';
@@ -194,6 +200,7 @@ describe('through the real SessionStart hook', () => {
           ...process.env,
           TOKEN_OPTIMIZER_WIKI_DIR: graphDir,
           TOKEN_OPTIMIZER_SHARED_DIR: graphDir,
+          TOKEN_OPTIMIZER_PROJECT_REGISTRY: join(project, 'projects.jsonl'),
           CLAUDE_PROJECT_DIR: project,
         },
       });

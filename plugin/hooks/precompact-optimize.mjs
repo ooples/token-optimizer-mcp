@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * Claude Code PreCompact adapter -- optimize at the moment it matters most.
  *
@@ -21,16 +21,26 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { mode, MODE_OFF, loadState, clearSeen } from './lib/policy.mjs';
+import { mode, MODE_OFF, loadState, clearSeen, readPayloadResult } from './lib/policy.mjs';
 import { linkCoOccurrence } from './lib/inject.mjs';
 import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 import { closeForecast } from './lib/surface.mjs';
 import { compactionNudge } from './lib/recording.mjs';
 import { optimizerToolsForHook } from './lib/capabilities.mjs';
+import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
 
 /** Longest compaction may be delayed. Past this the work is abandoned. */
 const TIMEOUT_MS =
   Number(process.env.TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS) || 8000;
+const invocation = beginHookInvocation('claude-code', 'pre-compact', {
+  deadlineMs: Math.max(4200, TIMEOUT_MS + 1000),
+});
+
+function emit(output) {
+  const serialized = JSON.stringify(output);
+  noteHookOutput(output, Buffer.byteLength(serialized, 'utf8'));
+  process.stdout.write(serialized);
+}
 
 function findWrapper() {
   // Plugin installs place the plugin under .../plugin; the wrapper, when
@@ -53,16 +63,13 @@ function findWrapper() {
 async function main() {
   if (mode() === MODE_OFF) return;
 
-  const chunks = [];
-  process.stdin.setEncoding('utf8');
-  for await (const chunk of process.stdin) chunks.push(chunk);
-
-  let payload;
-  try {
-    payload = JSON.parse(chunks.join(''));
-  } catch {
+  const input = await readPayloadResult();
+  const payload = input.payload;
+  if (!payload) {
+    invocation.noteInput(input.status, input.bytes);
     return;
   }
+  invocation.bind(payload, null, input.bytes);
 
   // STATE AND CO-OCCURRENCE BEFORE THE WRAPPER CHECK, deliberately.
   //
@@ -144,7 +151,7 @@ async function main() {
       ? compactionNudge(graphDir, { edits: state.edits || 0 })
       : null;
     if (nudge) {
-      process.stdout.write(JSON.stringify({ systemMessage: nudge }));
+      emit({ systemMessage: nudge });
     }
   } catch {
     // Never delay compaction for a reminder.
@@ -209,14 +216,13 @@ async function main() {
     });
   });
 
-  process.stdout.write(
-    JSON.stringify({
+  emit({
       systemMessage: `token-optimizer: compressed ${seenCount} tracked file operation(s) before compaction.`,
-    })
-  );
+    });
 }
 
 // Compaction must proceed whatever happens here.
 main()
-  .catch(() => {})
+  .then(() => invocation.succeed())
+  .catch((error) => invocation.fail(error))
   .finally(() => process.exit(0));

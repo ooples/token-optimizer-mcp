@@ -16,7 +16,7 @@
           <a href="/wiki" aria-current="page">What it knows</a>
         </nav>
         <div class="spacer"></div>
-        <a class="btn" href="/api/wiki/export">Export</a>
+        <a class="btn" id="wiki-export" href="/api/wiki/export?scope=all">Export</a>
       </header>
 
       <!-- Says, in words, what this page is for. Someone arriving here has no
@@ -29,6 +29,13 @@
           This page keeps the knowledge, its provenance, and the causal evidence
           about whether delivering it improved later work.
         </p>
+      </section>
+
+      <section class="wiki-balance" aria-labelledby="capture-health-heading">
+        <h2 id="capture-health-heading" class="card-title">Capture health</h2>
+        <div class="stats-grid" id="hook-health-grid"></div>
+        <p class="verdict-line" id="hook-health-status"></p>
+        <p class="method-line" id="hook-health-detail"></p>
       </section>
 
       <section class="wiki-balance">
@@ -82,6 +89,12 @@
       <main>
         <section id="tab-explore" class="wiki-panel" role="tabpanel">
           <div class="wiki-controls">
+            <label class="ctl-scope">
+              <span class="ctl-label">Knowledge scope</span>
+              <select id="wiki-scope" aria-describedby="wiki-coverage">
+                <option value="all">All known projects</option>
+              </select>
+            </label>
             <label class="ctl-search">
               <span class="ctl-label">Search what it knows</span>
               <input
@@ -118,6 +131,7 @@
               </button>
             </div>
           </div>
+          <p class="wiki-muted wiki-coverage" id="wiki-coverage"></p>
 
           <div class="wiki-split">
             <div class="wiki-list-pane">
@@ -222,6 +236,15 @@
           </p>
           <div class="stats-grid" id="ucr-summary"></div>
           <p class="verdict-line" id="ucr-verdict"></p>
+          <h3>Missing evidence producers</h3>
+          <p class="wiki-muted">
+            A blank release metric is never treated as zero. This table names
+            the evidence class that must be produced before the metric can be
+            calculated.
+          </p>
+          <div class="table-scroll">
+            <table class="evidence-table" id="ucr-missing"></table>
+          </div>
           <h3>Evidence tiers</h3>
           <div class="table-scroll">
             <table class="evidence-table" id="ucr-tiers"></table>

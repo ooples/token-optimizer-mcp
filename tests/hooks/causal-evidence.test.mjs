@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   evidenceReport,
+  evidenceReportMany,
   readEvidence,
   record,
   recordFindingFeedback,
@@ -130,6 +131,39 @@ describe('causal episode tracing', () => {
 });
 
 describe('paired evidence report', () => {
+  test('pools raw events across project graphs before estimating cohorts', () => {
+    const secondWorkspace = mkdtempSync(join(tmpdir(), 'causal-evidence-second-'));
+    const secondDir = wikiDir(secondWorkspace);
+    try {
+      for (let pair = 1; pair <= 5; pair++) {
+        record(dir, {
+          kind: 'eval-run', taskId: 'cross-project', pairId: `p${pair}`,
+          arm: 'baseline', client: 'codex', model: 'model-a', correct: true,
+          totalTokens: 1000, toolCalls: 10,
+        });
+        record(secondDir, {
+          kind: 'eval-run', taskId: 'cross-project', pairId: `p${pair}`,
+          arm: 'full', client: 'codex', model: 'model-a', correct: true,
+          totalTokens: 600, toolCalls: 6,
+        });
+      }
+
+      const report = evidenceReportMany([dir, secondDir]);
+      const full = report.cohorts[0].effects.find((effect) =>
+        effect.arm === 'full' && effect.controlArm === 'baseline'
+      );
+      expect(full.pairs).toBe(5);
+      expect(full.totalTokensSaved.mean).toBe(400);
+      expect(report.sourceCoverage).toEqual({
+        projects: 2,
+        projectsWithEvidence: 2,
+        projectsWithoutEvidence: 0,
+      });
+    } finally {
+      rmSync(secondWorkspace, { recursive: true, force: true });
+    }
+  });
+
   test('keeps four arms separate and reports a bootstrap interval from matched pairs', () => {
     for (let pair = 1; pair <= 5; pair++) {
       for (const [arm, tokens, calls] of [

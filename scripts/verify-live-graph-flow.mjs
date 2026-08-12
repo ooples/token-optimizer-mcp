@@ -30,6 +30,7 @@ const claim =
 
 const originalEnv = {
   shared: process.env.TOKEN_OPTIMIZER_SHARED_DIR,
+  registry: process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY,
   state: process.env.TOKEN_OPTIMIZER_STATE_DIR,
   holdout: process.env.TOKEN_OPTIMIZER_HOLDOUT,
 };
@@ -128,6 +129,7 @@ async function main() {
   writeFileSync(anchor, 'export const configuredRunner = "npm test";\n');
 
   process.env.TOKEN_OPTIMIZER_SHARED_DIR = shared;
+  process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(temp, 'projects.jsonl');
   process.env.TOKEN_OPTIMIZER_STATE_DIR = state;
   process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
 
@@ -234,11 +236,11 @@ async function main() {
     });
     recordRead(wikiA, { anchor, sessionId, bytes: 8_000 });
   }
-  // Charge a conservative semantic-recording cost even though wiki_write does
-  // not call an external harvester, so the positive result is net of overhead.
-  record(wikiA, { kind: 'harvest', tokens: 500 });
-
   const directBalance = report(wikiA);
+  assert(
+    directBalance.harvestTokens > 0,
+    'successful production wiki_write did not record semantic persistence cost'
+  );
   assert(
     directBalance.sufficientData,
     `balance remained insufficient: ${directBalance.verdict}`
@@ -261,6 +263,7 @@ async function main() {
         ...process.env,
         PORT: String(port),
         TOKEN_OPTIMIZER_WIKI_DIR: wikiA,
+        TOKEN_OPTIMIZER_PROJECT_REGISTRY: join(temp, 'projects.jsonl'),
       },
     }
   );
@@ -285,7 +288,8 @@ async function main() {
   const dashboardFinding = search.items?.find((item) => item.claim === claim);
 
   assert(
-    status.dir === wikiA,
+    String(status.dir).replaceAll('\\', '/').toLowerCase() ===
+      String(wikiA).replaceAll('\\', '/').toLowerCase(),
     `dashboard served ${status.dir}, expected ${wikiA}`
   );
   assert(status.findings >= 1, 'dashboard did not count the harvested finding');
@@ -340,6 +344,7 @@ try {
 } finally {
   await stopDashboard();
   restoreEnv('TOKEN_OPTIMIZER_SHARED_DIR', originalEnv.shared);
+  restoreEnv('TOKEN_OPTIMIZER_PROJECT_REGISTRY', originalEnv.registry);
   restoreEnv('TOKEN_OPTIMIZER_STATE_DIR', originalEnv.state);
   restoreEnv('TOKEN_OPTIMIZER_HOLDOUT', originalEnv.holdout);
   try {

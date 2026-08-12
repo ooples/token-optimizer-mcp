@@ -182,11 +182,6 @@ export function parseLiveCliTelemetry(client, stdout) {
     'totalTokens',
     'totalTokenCount',
   ]);
-  const totalTokens =
-    reportedTotal ??
-    (inputTokens !== null && outputTokens !== null
-      ? inputTokens + outputTokens
-      : null);
   // Claude reports newly read and newly created cache tokens outside
   // input_tokens. Codex and Gemini include their cached subset in the prompt
   // total, so adding it there would double-count reconstruction context.
@@ -194,6 +189,15 @@ export function parseLiveCliTelemetry(client, stdout) {
     client === 'claude-code' && inputTokens !== null
       ? inputTokens + (cachedInputTokens || 0) + (cacheCreationInputTokens || 0)
       : inputTokens;
+  // Compare the logical context each arm consumed, regardless of whether the
+  // provider billed it as a cache read, cache creation, or uncached input.
+  // Using input_tokens + output_tokens for Claude silently dropped most of the
+  // context from the qualification gate whenever prompt caching was active.
+  const totalTokens =
+    reportedTotal ??
+    (effectiveInputTokens !== null && outputTokens !== null
+      ? effectiveInputTokens + outputTokens
+      : null);
   const toolEvents = [];
   for (const object of objects)
     visit(object, (value) => {

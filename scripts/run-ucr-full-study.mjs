@@ -426,6 +426,24 @@ try {
       model: trial.consumerModel,
       modelVersion: result?.modelVersion || null,
       modelAttestations,
+      // Privacy-safe phase accounting retained in the signed row. Without it,
+      // a token regression only reported one opaque total and could not be
+      // attributed to producer capture, consumer reconstruction, cache-backed
+      // input, output, or extra action turns.
+      invocationAccounting: (result?.invocations || []).map(
+        (invocation) => ({
+          role: invocation.role,
+          transport: invocation.transport,
+          inputTokens: invocation.inputTokens,
+          cachedInputTokens: invocation.cachedInputTokens,
+          cacheCreationInputTokens: invocation.cacheCreationInputTokens,
+          effectiveInputTokens: invocation.effectiveInputTokens,
+          outputTokens: invocation.outputTokens,
+          totalTokens: invocation.totalTokens,
+          actionEvents: invocation.actionEvents,
+          latencyMs: invocation.latencyMs,
+        })
+      ),
       consumerMcpExposed: result?.consumerMcpExposed ?? null,
       actionAuditHash: sha256(result?.actionAudit || []),
       semanticEvidenceVerification:

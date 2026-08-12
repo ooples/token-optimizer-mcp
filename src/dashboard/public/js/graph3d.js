@@ -149,14 +149,21 @@ export function createKnowledgeGraph3D(host, initial, options = {}) {
   }
 
   function resize() {
-    const box = host.getBoundingClientRect();
     const ratio = Math.min(2, window.devicePixelRatio || 1);
-    width = Math.max(280, Math.round(box.width));
-    height = Math.max(options.compact ? 190 : 420, Math.round(box.height));
+    // Size the backing buffer from the host's CONTENT box. Using
+    // getBoundingClientRect() here included the host's two border pixels, then
+    // assigning that border-box size to the child canvas made the auto-sized
+    // host two pixels larger. ResizeObserver observed the growth and repeated
+    // it forever, which looked like a camera continuously zooming into the
+    // overview graph while the entire canvas expanded without bound.
+    width = Math.max(1, Math.round(host.clientWidth));
+    height = Math.max(1, Math.round(host.clientHeight));
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
+    // CSS owns the display size (100% x 100%). Setting pixel dimensions here
+    // would reintroduce the child -> auto-sized parent feedback loop.
+    canvas.style.removeProperty('width');
+    canvas.style.removeProperty('height');
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     draw();
   }

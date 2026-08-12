@@ -55,7 +55,9 @@ function editPayload(sessionId, file) {
     tool_input: {
       command: `*** Begin Patch\n*** Update File: ${file}\n@@\n-old\n+new\n*** End Patch`,
     },
-    tool_response: { status: 'completed' },
+    // Codex documents tool_response as an opaque tool-specific value. It does
+    // not guarantee a synthetic status field for a successful apply_patch.
+    tool_response: { output: 'Done!' },
   };
 }
 

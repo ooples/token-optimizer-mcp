@@ -69,26 +69,68 @@ async function load() {
   // Every panel is independent: the graph is worth showing even when there is
   // no active session, and vice versa. One missing answer must not blank the
   // whole page.
-  const [summary, events, balance, status, constellation] = await Promise.all([
-    get('/session-summary'),
-    get('/session-events?limit=100'),
-    get('/wiki/balance'),
-    get('/wiki/status'),
-    get('/wiki/constellation?cap=90'),
+  const [diagnostics, balance, status, constellation] = await Promise.all([
+    get('/diagnostics/hooks?hours=24&limit=100'),
+    get('/wiki/balance?scope=all'),
+    get('/wiki/status?scope=all'),
+    get('/wiki/constellation?cap=90&scope=all'),
   ]);
+  let summary = { ok: false, body: null };
+  let events = { ok: false, body: null };
+  if (!diagnostics.ok || !diagnostics.body?.summary?.available) {
+    [summary, events] = await Promise.all([
+      get('/session-summary'),
+      get('/session-events?limit=100'),
+    ]);
+  }
 
   renderSavings(balance.body, status.body);
   renderVerdict(balance.body, status.body);
   renderGraph(constellation.body, status.body);
 
-  const session = summary.ok && summary.body?.success ? summary.body : null;
+  const session =
+    diagnostics.ok && diagnostics.body?.summary?.available
+      ? activityFromDiagnostics(diagnostics.body)
+      : summary.ok && summary.body?.success
+        ? summary.body
+        : null;
   renderKpis(session);
   renderCategories(session);
   renderServers(session);
-  renderTimeline(events.ok ? events.body?.events : null);
+  renderTimeline(
+    session?.activityMode === 'hooks'
+      ? session.events
+      : events.ok
+        ? events.body?.events
+        : null
+  );
   renderBreakdown(session);
 
   $('last-updated').textContent = new Date().toLocaleTimeString();
+}
+
+function activityFromDiagnostics(report) {
+  const events = report.events || [];
+  const actions = events.filter(
+    (event) => event.hookEvent === 'pre-tool' && event.toolName
+  );
+  const toolBreakdown = {};
+  for (const event of actions) {
+    const name = event.toolName || 'Unknown action';
+    toolBreakdown[name] ||= { count: 0, tokens: null };
+    toolBreakdown[name].count += 1;
+  }
+  return {
+    activityMode: 'hooks',
+    totalHooks: report.summary.total || 0,
+    totalTools: actions.length,
+    activeClients: Object.keys(report.summary.byClient || {}).length,
+    p95DurationMs: report.summary.p95DurationMs,
+    successRate: report.summary.successRate,
+    clients: report.summary.byClient || {},
+    toolBreakdown,
+    events,
+  };
 }
 
 /* ------------------------------------------------------------- the hero -- */
@@ -206,7 +248,7 @@ function renderGraph(constellation, status) {
     // files exist the honest message is that nothing has been CONCLUDED yet.
     host.innerHTML = remembered
       ? '<div class="empty is-compact"><div class="mark">◍</div>' +
-        `<h3>${fmt(remembered)} files remembered</h3>` +
+        `<h3>${fmt(remembered)} graph nodes remembered</h3>` +
         '<p>Nothing has been concluded about them yet. Findings appear here as ' +
         'your coding agents work out how the pieces fit together.</p></div>'
       : '<div class="empty is-compact"><div class="mark">◌</div>' +
@@ -233,7 +275,7 @@ function renderGraph(constellation, status) {
 
 function statRows(status) {
   const rows = [
-    ['files remembered', status?.nodes],
+    ['graph nodes', status?.nodes],
     ['connections', status?.edges],
     ['things discovered', status?.findings],
   ];
@@ -333,32 +375,59 @@ function renderKpis(s) {
     return;
   }
 
-  const cards = [
-    {
-      label: 'Context used',
-      value: compact(s.totalTokens),
-      tip:
-        'How much of the active agent’s limited workspace this session has taken up. ' +
-        'The smaller this is for the same work, the better.',
-    },
-    {
-      label: 'Messages exchanged',
-      value: fmt(s.totalTurns),
-      tip: 'How many back-and-forth turns you have had in this session.',
-    },
-    {
-      label: 'Actions taken',
-      value: fmt(s.totalTools),
-      tip:
-        'Reads, edits, searches and commands the active agent ran on your behalf. ' +
-        'Each one is a chance to save context.',
-    },
-    {
-      label: 'Session length',
-      value: s.duration || '—',
-      tip: 'How long this session has been going.',
-    },
-  ];
+  const cards =
+    s.activityMode === 'hooks'
+      ? [
+          {
+            label: 'Lifecycle events',
+            value: fmt(s.totalHooks),
+            tip: 'Hook executions observed across every installed CLI during the last 24 hours.',
+          },
+          {
+            label: 'Actions observed',
+            value: fmt(s.totalTools),
+            tip: 'Pre-tool actions observed by the cross-client hook protocol during the last 24 hours.',
+          },
+          {
+            label: 'CLI clients active',
+            value: fmt(s.activeClients),
+            tip: 'Distinct CLI clients that emitted lifecycle telemetry during the last 24 hours.',
+          },
+          {
+            label: 'Hook latency p95',
+            value:
+              s.p95DurationMs == null
+                ? 'Not measured'
+                : `${fmt(s.p95DurationMs)} ms`,
+            tip: 'Ninety-five percent of observed hook calls completed at or below this latency.',
+          },
+        ]
+      : [
+          {
+            label: 'Context used',
+            value: compact(s.totalTokens),
+            tip:
+              'How much of the active agent’s limited workspace this session has taken up. ' +
+              'The smaller this is for the same work, the better.',
+          },
+          {
+            label: 'Messages exchanged',
+            value: fmt(s.totalTurns),
+            tip: 'How many back-and-forth turns you have had in this session.',
+          },
+          {
+            label: 'Actions taken',
+            value: fmt(s.totalTools),
+            tip:
+              'Reads, edits, searches and commands the active agent ran on your behalf. ' +
+              'Each one is a chance to save context.',
+          },
+          {
+            label: 'Session length',
+            value: s.duration || '—',
+            tip: 'How long this session has been going.',
+          },
+        ];
 
   host.innerHTML = cards
     .map(
@@ -377,6 +446,18 @@ function renderKpis(s) {
 
 function renderCategories(s) {
   const host = $('category-chart');
+  if (s?.activityMode === 'hooks') {
+    const slices = Object.entries(s.clients).map(([client, values], index) => ({
+      label: client,
+      value: values.total || 0,
+      color: SERVER_COLORS[index % SERVER_COLORS.length],
+    }));
+    donut(host, slices, {
+      centerLabel: 'lifecycle events',
+      centerValue: compact(s.totalHooks),
+    });
+    return;
+  }
   if (!s?.tokensByCategory) {
     host.innerHTML = teach(
       'Nothing to break down yet',
@@ -397,6 +478,28 @@ function renderCategories(s) {
 
 function renderServers(s) {
   const host = $('server-chart');
+  if (s?.activityMode === 'hooks') {
+    const slices = toolRows(s)
+      .filter((row) => row.count > 0)
+      .map((row, index) => ({
+        label: row.name || row.tool,
+        value: row.count,
+        color: SERVER_COLORS[index % SERVER_COLORS.length],
+      }))
+      .sort((a, b) => b.value - a.value);
+    if (!slices.length) {
+      host.innerHTML = teach(
+        'No actions observed yet',
+        'Lifecycle hooks are healthy, but no pre-tool action is present in the selected 24-hour window.'
+      );
+      return;
+    }
+    donut(host, slices, {
+      centerLabel: 'actions observed',
+      centerValue: compact(slices.reduce((sum, item) => sum + item.value, 0)),
+    });
+    return;
+  }
   let entries = Object.entries(s?.tokensByServer || {}).filter(
     ([, v]) => (v?.tokens || v) > 0
   );
@@ -444,7 +547,7 @@ function renderTimeline(events) {
           <span class="ev-name">${escapeHtml(action.tool)}</span>
           <span class="ev-detail">${escapeHtml(action.detail)}</span>
         </span>
-        <span class="ev-meta num">${action.tokens ? `${compact(action.tokens)} context tokens` : 'no context recorded'}</span>
+        <span class="ev-meta num">${action.tokens ? `${compact(action.tokens)} context tokens` : action.costLabel}</span>
         <span class="ev-time">${e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : ''}</span>
       </div>`;
     })
@@ -452,8 +555,15 @@ function renderTimeline(events) {
 }
 
 function describeEvent(event) {
+  const hookEvent = String(event.hookEvent || '').trim();
+  const client = String(event.client || '').trim();
   const tool = String(
-    event.toolName || event.name || event.tool || event.type || 'agent event'
+    event.toolName ||
+      event.name ||
+      event.tool ||
+      (hookEvent && `${client || 'agent'} ${hookEvent.replaceAll('-', ' ')}`) ||
+      event.type ||
+      'agent event'
   );
   const details = {
     Edit: 'Edited project content',
@@ -468,13 +578,19 @@ function describeEvent(event) {
     BashOutput: 'Inspected terminal output',
     KillShell: 'Stopped a background command',
   };
-  const eventType = String(event.type || 'agent event').replaceAll('_', ' ');
+  const eventType = String(hookEvent || event.type || 'agent event')
+    .replaceAll('_', ' ')
+    .replaceAll('-', ' ');
+  const tokens = Number(event.estimatedTokens ?? event.tokens ?? 0);
   return {
     tool,
     detail:
       details[tool] ||
       `${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`,
-    tokens: Number(event.estimatedTokens ?? event.tokens ?? 0),
+    tokens,
+    costLabel: hookEvent
+      ? 'token cost not reported by client'
+      : 'no context recorded',
   };
 }
 
@@ -497,7 +613,7 @@ function renderBreakdown(s) {
       <tr>
         <td>${escapeHtml(t.name || t.tool)}</td>
         <td class="right num">${fmt(t.count)}</td>
-        <td class="right num">${fmt(t.tokens)}</td>
+        <td class="right num">${t.tokens == null ? 'Not measured' : fmt(t.tokens)}</td>
       </tr>`
     )
     .join('');

@@ -12,7 +12,9 @@ const CLIENTS = [
     name: 'Codex',
     root: 'integrations/codex/hooks',
     decision: 'block',
-    result: { tool_response: { status: 'completed' } },
+    // Match Codex's documented opaque tool response rather than inventing a
+    // lifecycle status field that the host does not promise.
+    result: { tool_response: { output: 'Done!' } },
   },
   {
     name: 'Copilot',

@@ -33,6 +33,7 @@ interface GraphModules {
   metrics: any;
   staleness: any;
   capabilities: any;
+  projects: any;
 }
 
 let cached: GraphModules | null = null;
@@ -40,14 +41,16 @@ let cached: GraphModules | null = null;
 async function modules(): Promise<GraphModules | null> {
   if (cached) return cached;
   try {
-    const [wiki, curate, metrics, staleness, capabilities] = await Promise.all([
-      import(coreUrl('wiki.mjs')),
-      import(coreUrl('curate.mjs')),
-      import(coreUrl('metrics.mjs')),
-      import(coreUrl('staleness.mjs')),
-      import(coreUrl('capabilities.mjs')),
-    ]);
-    cached = { wiki, curate, metrics, staleness, capabilities };
+    const [wiki, curate, metrics, staleness, capabilities, projects] =
+      await Promise.all([
+        import(coreUrl('wiki.mjs')),
+        import(coreUrl('curate.mjs')),
+        import(coreUrl('metrics.mjs')),
+        import(coreUrl('staleness.mjs')),
+        import(coreUrl('capabilities.mjs')),
+        import(coreUrl('projects.mjs')),
+      ]);
+    cached = { wiki, curate, metrics, staleness, capabilities, projects };
     return cached;
   } catch {
     return null;
@@ -65,12 +68,145 @@ async function modules(): Promise<GraphModules | null> {
  * location. With no auth on a localhost server, any page open in the user's
  * browser could drive it.
  *
- * The dashboard serves exactly one project: the one it was started in. An
- * operator who wants a different graph sets TOKEN_OPTIMIZER_WIKI_DIR, which is
- * a deliberate act on the server side rather than a request parameter.
+ * Cross-project access is restored through an opaque, server-owned registry.
+ * A request may choose a registry id, but it can never supply a filesystem path.
  */
 function graphDir(_req: Request, wiki: any): string {
   return wiki.wikiDir(process.cwd());
+}
+
+interface GraphSource {
+  id: string;
+  name: string;
+  dir: string;
+  current: boolean;
+  shared: boolean;
+  clients: string[];
+  lastSeenAt: number;
+}
+
+function pathKey(value: string): string {
+  return path.resolve(value).replaceAll('\\', '/').toLowerCase();
+}
+
+function inferredProjectName(dir: string): string {
+  const parent = path.dirname(dir);
+  return path.basename(parent) === '.token-optimizer'
+    ? path.basename(path.dirname(parent))
+    : path.basename(process.cwd());
+}
+
+function graphSources(mods: GraphModules): GraphSource[] {
+  const currentDir = graphDir({} as Request, mods.wiki);
+  const registered = mods.projects.registeredProjects();
+  const currentMatch = registered.find(
+    (project: any) => pathKey(project.graphDir) === pathKey(currentDir)
+  );
+  const current: GraphSource = currentMatch
+    ? {
+        id: currentMatch.id,
+        name: currentMatch.name,
+        dir: currentMatch.graphDir,
+        current: true,
+        shared: false,
+        clients: currentMatch.clients || [],
+        lastSeenAt: currentMatch.lastSeenAt || 0,
+      }
+    : {
+        id: 'current',
+        name: inferredProjectName(currentDir) || 'Current project',
+        dir: currentDir,
+        current: true,
+        shared: false,
+        clients: [],
+        lastSeenAt: 0,
+      };
+
+  const candidates: GraphSource[] = [
+    current,
+    ...registered.map((project: any) => ({
+      id: project.id,
+      name: project.name,
+      dir: project.graphDir,
+      current: pathKey(project.graphDir) === pathKey(currentDir),
+      shared: false,
+      clients: project.clients || [],
+      lastSeenAt: project.lastSeenAt || 0,
+    })),
+    {
+      id: 'shared',
+      name: 'Shared lessons',
+      dir: mods.wiki.sharedDir(),
+      current: pathKey(mods.wiki.sharedDir()) === pathKey(currentDir),
+      shared: true,
+      clients: [],
+      lastSeenAt: 0,
+    },
+  ];
+
+  // A worktree can be rediscovered through overlapping roots. The graph store,
+  // not the spelling of the path used to find it, is the unique source.
+  const byDirectory = new Map<string, GraphSource>();
+  for (const source of candidates) {
+    const key = pathKey(source.dir);
+    const previous = byDirectory.get(key);
+    if (!previous || source.current || source.lastSeenAt > previous.lastSeenAt)
+      byDirectory.set(key, source);
+  }
+  return [...byDirectory.values()].sort(
+    (a, b) =>
+      Number(b.current) - Number(a.current) ||
+      Number(a.shared) - Number(b.shared) ||
+      b.lastSeenAt - a.lastSeenAt ||
+      a.name.localeCompare(b.name)
+  );
+}
+
+class ScopeError extends Error {}
+
+function sourcesFor(req: Request, mods: GraphModules): GraphSource[] {
+  const sources = graphSources(mods);
+  const scope = String(req.query.scope || 'current');
+  if (scope === 'all') return sources;
+  if (scope === 'current')
+    return sources.filter((source) => source.current).slice(0, 1);
+  const source = sources.find((candidate) => candidate.id === scope);
+  if (!source) throw new ScopeError('unknown project scope');
+  return [source];
+}
+
+function sourceById(id: string, mods: GraphModules): GraphSource | null {
+  return graphSources(mods).find((source) => source.id === id) || null;
+}
+
+function selectedSource(req: Request, mods: GraphModules): GraphSource {
+  const requested = String(
+    (req.body && req.body.projectId) || req.query.scope || 'current'
+  );
+  if (requested === 'all') {
+    const current = graphSources(mods).find((source) => source.current);
+    if (current) return current;
+    throw new ScopeError('current project unavailable');
+  }
+  if (requested === 'current') {
+    const current = graphSources(mods).find((source) => source.current);
+    if (current) return current;
+  }
+  const source = sourceById(requested, mods);
+  if (!source) throw new ScopeError('unknown project scope');
+  return source;
+}
+
+function qualifiedId(source: GraphSource, nodeId: string): string {
+  return `${source.id}~${nodeId}`;
+}
+
+function splitQualifiedId(
+  value: string
+): { sourceId: string; nodeId: string } | null {
+  const split = value.indexOf('~');
+  if (split < 1) return null;
+  return { sourceId: value.slice(0, split), nodeId: value.slice(split + 1) };
 }
 
 /**
@@ -113,7 +249,7 @@ interface CachedGraph {
   graph: any;
 }
 
-let graphCache: CachedGraph | null = null;
+const graphCache = new Map<string, CachedGraph>();
 
 /**
  * Loads the graph, reusing the parse when the log has not changed.
@@ -139,15 +275,14 @@ function loadGraph(dir: string, wiki: any): any {
   }
 
   if (
-    graphCache &&
-    graphCache.mtimeMs === stamp.mtimeMs &&
-    graphCache.size === stamp.size
+    graphCache.get(pathKey(dir))?.mtimeMs === stamp.mtimeMs &&
+    graphCache.get(pathKey(dir))?.size === stamp.size
   ) {
-    return graphCache.graph;
+    return graphCache.get(pathKey(dir))!.graph;
   }
 
   const graph = wiki.load(dir);
-  graphCache = { ...stamp, graph };
+  graphCache.set(pathKey(dir), { ...stamp, graph });
   return graph;
 }
 
@@ -158,9 +293,11 @@ function loadGraph(dir: string, wiki: any): any {
  * characters and the list views never render it. Detail views fetch it
  * explicitly.
  */
-function summarise(node: any) {
+function summarise(node: any, source?: GraphSource) {
   return {
-    id: node.id,
+    id: source ? qualifiedId(source, node.id) : node.id,
+    projectId: source?.id,
+    projectName: source?.name,
     kind: node.kind,
     key: node.key,
     claim: node.claim,
@@ -184,6 +321,36 @@ function summarise(node: any) {
 }
 
 export function registerWikiRoutes(app: Express): void {
+  /** Safe project inventory. Filesystem paths intentionally stay server-side. */
+  app.get('/api/wiki/projects', async (_req: Request, res: Response) => {
+    const mods = await modules();
+    if (!mods) return res.status(503).json({ error: 'graph unavailable' });
+    try {
+      const projects = graphSources(mods).map((source) => {
+        const graph = loadGraph(source.dir, mods.wiki);
+        return {
+          id: source.id,
+          name: source.name,
+          current: source.current,
+          shared: source.shared,
+          clients: source.clients,
+          lastSeenAt: source.lastSeenAt || null,
+          captured: graph.nodes.size > 0,
+          nodes: graph.nodes.size,
+          edges: graph.edges.length,
+          findings: mods.curate.activeFindings(graph).length,
+        };
+      });
+      return res.json({
+        projects,
+        captured: projects.filter((project) => project.captured).length,
+        missing: projects.filter((project) => !project.captured).length,
+      });
+    } catch {
+      return res.status(500).json({ error: 'project inventory failed' });
+    }
+  });
+
   /** Is there a graph at all? Lets the UI hide the section rather than error. */
   app.get('/api/wiki/status', async (req: Request, res: Response) => {
     const mods = await modules();
@@ -191,16 +358,33 @@ export function registerWikiRoutes(app: Express): void {
       return res.json({ available: false, reason: 'graph modules not found' });
 
     try {
-      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
-      const findings = mods.curate.activeFindings(graph);
+      const sources = sourcesFor(req, mods);
+      const reports = sources.map((source) => {
+        const graph = loadGraph(source.dir, mods.wiki);
+        return {
+          source,
+          nodes: graph.nodes.size,
+          edges: graph.edges.length,
+          findings: mods.curate.activeFindings(graph).length,
+        };
+      });
       return res.json({
         available: true,
-        nodes: graph.nodes.size,
-        edges: graph.edges.length,
-        findings: findings.length,
-        dir: graphDir(req, mods.wiki),
+        nodes: reports.reduce((sum, report) => sum + report.nodes, 0),
+        edges: reports.reduce((sum, report) => sum + report.edges, 0),
+        findings: reports.reduce((sum, report) => sum + report.findings, 0),
+        projects: reports.length,
+        capturedProjects: reports.filter((report) => report.nodes > 0).length,
+        scope: String(req.query.scope || 'current'),
+        // Kept for current-scope compatibility with diagnostics. Aggregate
+        // responses never disclose the source directories.
+        ...(String(req.query.scope || 'current') === 'current'
+          ? { dir: reports[0]?.source.dir || graphDir(req, mods.wiki) }
+          : {}),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.json({ available: false, reason: 'graph unreadable' });
     }
   });
@@ -216,42 +400,56 @@ export function registerWikiRoutes(app: Express): void {
     const offset = Math.max(0, Number(req.query.offset) || 0);
 
     try {
-      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
-      let findings = mods.curate.activeFindings(graph);
+      let findings = sourcesFor(req, mods).flatMap((source) => {
+        const graph = loadGraph(source.dir, mods.wiki);
+        return mods.curate
+          .activeFindings(graph)
+          .map((node: any) => ({ node, source }));
+      });
 
       // Lexical filter, per the design's traversal-plus-lexical retrieval --
       // there is no embedding index to consult and deliberately so.
       if (query) {
         findings = findings.filter(
-          (f: any) =>
-            String(f.claim || '')
+          (entry: any) =>
+            String(entry.node.claim || '')
               .toLowerCase()
               .includes(query) ||
-            String(f.key || '')
+            String(entry.node.key || '')
               .toLowerCase()
               .includes(query)
         );
       }
       if (kind)
-        findings = findings.filter((f: any) => (f.type || 'finding') === kind);
+        findings = findings.filter(
+          (entry: any) => (entry.node.type || 'finding') === kind
+        );
 
       findings.sort((a: any, b: any) => {
-        const weight = (f: any) =>
-          (f.confidence ?? 0.5) *
-          // originWeight, not a human-only ternary: the `: 1` branch ranked an
-          // agent finding level with a post-hoc harvested guess, so this sort
-          // and findingsFor disagreed about provenance.
-          mods.curate.originWeight(f.origin) *
-          (f.pinned ? 2 : 1);
+        const weight = (entry: any) => {
+          const f = entry.node;
+          return (
+            (f.confidence ?? 0.5) *
+            // originWeight, not a human-only ternary: the `: 1` branch ranked an
+            // agent finding level with a post-hoc harvested guess, so this sort
+            // and findingsFor disagreed about provenance.
+            mods.curate.originWeight(f.origin) *
+            (f.pinned ? 2 : 1)
+          );
+        };
         return weight(b) - weight(a);
       });
 
       return res.json({
         total: findings.length,
         offset,
-        items: findings.slice(offset, offset + limit).map(summarise),
+        items: findings
+          .slice(offset, offset + limit)
+          .map((entry: any) => summarise(entry.node, entry.source)),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.status(500).json({ error: 'search failed' });
     }
   });
@@ -265,8 +463,19 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
-      const node = graph.nodes.get(req.params.id);
+      const qualified = splitQualifiedId(req.params.id);
+      let source: GraphSource | null;
+      let nodeId: string;
+      if (qualified) {
+        source = sourceById(qualified.sourceId, mods);
+        nodeId = qualified.nodeId;
+      } else {
+        source = sourcesFor(req, mods)[0] || null;
+        nodeId = req.params.id;
+      }
+      if (!source) return res.status(404).json({ error: 'no such project' });
+      const graph = loadGraph(source.dir, mods.wiki);
+      const node = graph.nodes.get(nodeId);
       if (!node) return res.status(404).json({ error: 'no such node' });
 
       const cap = Math.min(120, Number(req.query.cap) || 40);
@@ -278,25 +487,27 @@ export function registerWikiRoutes(app: Express): void {
       for (const edge of edges) {
         const otherId = edge.from === node.id ? edge.to : edge.from;
         const other = graph.nodes.get(otherId);
-        if (other) neighbours.set(otherId, summarise(other));
+        if (other) neighbours.set(otherId, summarise(other, source));
       }
 
       // Provenance: which task established this, and from what. "Why do you
       // believe this?" is the question a knowledge graph has to answer.
       return res.json({
         node: {
-          ...summarise(node),
+          ...summarise(node, source),
           snapshot: node.snapshot ? node.snapshot.slice(0, 4000) : undefined,
         },
         edges: edges.map((e: any) => ({
-          from: e.from,
-          to: e.to,
+          from: qualifiedId(source, e.from),
+          to: qualifiedId(source, e.to),
           edge: e.edge,
         })),
         neighbours: [...neighbours.values()],
         truncated: edges.length === cap,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.status(500).json({ error: 'node lookup failed' });
     }
   });
@@ -314,31 +525,67 @@ export function registerWikiRoutes(app: Express): void {
 
     const cap = Math.min(300, Number(req.query.cap) || 150);
     try {
-      const graph = loadGraph(graphDir(req, mods.wiki), mods.wiki);
-      const findings = mods.curate
-        .activeFindings(graph)
-        .sort((a: any, b: any) => (b.confidence ?? 0) - (a.confidence ?? 0))
+      const sources = sourcesFor(req, mods);
+      const graphs = new Map(
+        sources.map((source) => [source.id, loadGraph(source.dir, mods.wiki)])
+      );
+      const allFindings = sources.flatMap((source) =>
+        mods.curate
+          .activeFindings(graphs.get(source.id))
+          .map((node: any) => ({ node, source }))
+      );
+      const findings = allFindings
+        .sort(
+          (a: any, b: any) =>
+            (b.node.confidence ?? 0) - (a.node.confidence ?? 0)
+        )
         .slice(0, cap);
 
-      const keep = new Set(findings.map((f: any) => f.id));
+      const keep = new Map<string, Set<string>>();
+      for (const { node, source } of findings) {
+        if (!keep.has(source.id)) keep.set(source.id, new Set());
+        keep.get(source.id)!.add(node.id);
+      }
       // Pull in the anchors those findings hang from, so the picture shows
       // structure rather than a cloud of disconnected points.
-      for (const edge of graph.edges) {
-        if (edge.edge === 'derived_from' && keep.has(edge.from))
-          keep.add(edge.to);
+      for (const source of sources) {
+        const sourceKeep = keep.get(source.id);
+        if (!sourceKeep) continue;
+        for (const edge of graphs.get(source.id).edges) {
+          if (edge.edge === 'derived_from' && sourceKeep.has(edge.from))
+            sourceKeep.add(edge.to);
+        }
       }
 
       return res.json({
-        nodes: [...keep]
-          .map((id) => graph.nodes.get(id))
-          .filter(Boolean)
-          .map(summarise),
-        edges: graph.edges
-          .filter((e: any) => keep.has(e.from) && keep.has(e.to))
-          .map((e: any) => ({ from: e.from, to: e.to, edge: e.edge })),
-        capped: findings.length === cap,
+        nodes: sources.flatMap((source) =>
+          [...(keep.get(source.id) || [])]
+            .map((id) => graphs.get(source.id).nodes.get(id))
+            .filter(Boolean)
+            .map((node) => summarise(node, source))
+        ),
+        edges: sources.flatMap((source) => {
+          const sourceKeep = keep.get(source.id) || new Set();
+          return graphs
+            .get(source.id)
+            .edges.filter(
+              (edge: any) =>
+                sourceKeep.has(edge.from) && sourceKeep.has(edge.to)
+            )
+            .map((edge: any) => ({
+              from: qualifiedId(source, edge.from),
+              to: qualifiedId(source, edge.to),
+              edge: edge.edge,
+            }));
+        }),
+        projects: sources.length,
+        findings: allFindings.length,
+        renderedFindings: findings.length,
+        capped: allFindings.length > cap,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.status(500).json({ error: 'constellation failed' });
     }
   });
@@ -349,21 +596,32 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const result = mods.curate.audit(
-        loadGraph(graphDir(req, mods.wiki), mods.wiki)
-      );
+      const results = sourcesFor(req, mods).map((source) => ({
+        source,
+        result: mods.curate.audit(loadGraph(source.dir, mods.wiki)),
+      }));
+      const collect = (key: string) =>
+        results.flatMap(({ source, result }) =>
+          result[key].map((node: any) => summarise(node, source))
+        );
+      const contradicted = collect('contradicted');
+      const orphaned = collect('orphaned');
+      const lowConfidence = collect('lowConfidence');
+      const stale = collect('stale');
       return res.json({
-        contradicted: result.contradicted.map(summarise),
-        orphaned: result.orphaned.map(summarise),
-        lowConfidence: result.lowConfidence.map(summarise),
-        stale: result.stale.map(summarise),
+        contradicted,
+        orphaned,
+        lowConfidence,
+        stale,
         total:
-          result.contradicted.length +
-          result.orphaned.length +
-          result.lowConfidence.length +
-          result.stale.length,
+          contradicted.length +
+          orphaned.length +
+          lowConfidence.length +
+          stale.length,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.status(500).json({ error: 'audit failed' });
     }
   });
@@ -381,8 +639,17 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      return res.json(mods.metrics.report(graphDir(req, mods.wiki)));
-    } catch {
+      const selected = sourcesFor(req, mods);
+      return res.json(
+        selected.length > 1
+          ? mods.metrics.reportMany(selected.map((source) => source.dir))
+          : mods.metrics.report(
+              selected[0]?.dir || selectedSource(req, mods).dir
+            )
+      );
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.status(500).json({ error: 'balance failed' });
     }
   });
@@ -415,14 +682,31 @@ export function registerWikiRoutes(app: Express): void {
       : 100;
 
     try {
+      const selected = sourcesFor(req, mods);
+      const evidence =
+        selected.length > 1
+          ? mods.metrics.evidenceReportMany(
+              selected.map((source) => source.dir),
+              {
+                filters,
+                episodeLimit,
+              }
+            )
+          : mods.metrics.evidenceReport(
+              selected[0]?.dir || selectedSource(req, mods).dir,
+              {
+                filters,
+                episodeLimit,
+              }
+            );
       return res.json({
-        ...mods.metrics.evidenceReport(graphDir(req, mods.wiki), {
-          filters,
-          episodeLimit,
-        }),
+        ...evidence,
+        scope: String(req.query.scope || 'current'),
         capabilities: mods.capabilities.capabilitySummary(),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.status(500).json({ error: 'evidence report failed' });
     }
   });
@@ -445,7 +729,7 @@ export function registerWikiRoutes(app: Express): void {
           .json({ error: 'rating must be helpful, neutral, or harmful' });
 
       const recorded = mods.metrics.recordFindingFeedback(
-        graphDir(req, mods.wiki),
+        selectedSource(req, mods).dir,
         {
           findingId: findingId.trim().slice(0, 300),
           rating,
@@ -469,11 +753,19 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     try {
-      const markdown = mods.curate.exportMarkdown(
-        loadGraph(graphDir(req, mods.wiki), mods.wiki)
-      );
+      const sources = sourcesFor(req, mods);
+      const markdown = sources
+        .map(
+          (source) =>
+            `# ${source.name}\n\n${mods.curate.exportMarkdown(
+              loadGraph(source.dir, mods.wiki)
+            )}`
+        )
+        .join('\n\n---\n\n');
       return res.type('text/markdown').send(markdown);
-    } catch {
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
       return res.status(500).json({ error: 'export failed' });
     }
   });
@@ -489,11 +781,18 @@ export function registerWikiRoutes(app: Express): void {
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
     const { action, key, claim, anchors, confidence, pinned } = req.body || {};
-    const dir = graphDir(req, mods.wiki);
+    let dir: string;
+    try {
+      dir = selectedSource(req, mods).dir;
+    } catch (error) {
+      if (error instanceof ScopeError)
+        return res.status(400).json({ error: error.message });
+      throw error;
+    }
     // Any curation appends to the log, so the cached parse is stale the moment
     // it succeeds. Dropping it here is cheaper and more obviously correct than
     // trying to patch the cached graph in place.
-    graphCache = null;
+    graphCache.delete(pathKey(dir));
 
     try {
       switch (action) {
