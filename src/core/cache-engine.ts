@@ -25,6 +25,30 @@ function isCorruptDatabaseError(err: unknown): boolean {
   );
 }
 
+/** Env flags are strings; treat only the usual affirmatives as on. */
+function isTruthyEnv(value: string | undefined): boolean {
+  return value !== undefined && /^(1|true|yes|on)$/i.test(value.trim());
+}
+
+/**
+ * The cache table and its indexes. Shared by the on-disk path and the
+ * in-memory fallback so a degraded cache is schema-identical to a healthy one.
+ */
+const CACHE_SCHEMA = `
+          CREATE TABLE IF NOT EXISTS cache (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            compressed_size INTEGER NOT NULL,
+            original_size INTEGER NOT NULL,
+            hit_count INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            last_accessed_at INTEGER NOT NULL
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
+          CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
+        `;
+
 export interface CacheEntry {
   key: string;
   value: string;
@@ -60,6 +84,12 @@ export class CacheEngine {
     { content: string; compressedSize: number }
   >;
   private dbPath!: string;
+  /**
+   * Set when the on-disk database could not be opened and an in-memory
+   * database was used instead. Read by the doctor and by `cache_audit` so a
+   * degraded server says so rather than silently losing every cache write.
+   */
+  private degradedReason: string | null = null;
   private stats = {
     hits: 0,
     misses: 0,
@@ -168,20 +198,7 @@ export class CacheEngine {
         this.db.pragma('journal_mode = WAL');
 
         // Create cache table if it doesn't exist
-        this.db.exec(`
-          CREATE TABLE IF NOT EXISTS cache (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            compressed_size INTEGER NOT NULL,
-            original_size INTEGER NOT NULL,
-            hit_count INTEGER DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            last_accessed_at INTEGER NOT NULL
-          );
-
-          CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache(last_accessed_at);
-          CREATE INDEX IF NOT EXISTS idx_hit_count ON cache(hit_count);
-        `);
+        this.db.exec(CACHE_SCHEMA);
 
         // Success! Store the path we used
         this.dbPath = dbPathToUse;
@@ -210,16 +227,59 @@ export class CacheEngine {
       }
     }
 
-    // If all attempts failed, throw a comprehensive error
+    // EVERY ATTEMPT FAILED. What happens next decides whether the user has a
+    // degraded MCP server or no MCP server at all.
+    //
+    // This used to throw, and the throw ran during module evaluation of
+    // src/server/index.ts (`const cache = new CacheEngine()` at top level). An
+    // unopenable cache file therefore killed the process before
+    // `server.connect()` -- no stdout, no tools, exit code 1, and the only
+    // explanation on stderr, which the MCP client typically discards. Issue
+    // #307 is exactly that shape: "MCP server exits before registering tools",
+    // no output, exit 1.
+    //
+    // A cache is an optimization. Losing it must cost persistence, not the
+    // whole server. So the last resort is an in-memory database: every tool
+    // still works, nothing survives the process, and the reason is stated
+    // loudly on stderr (never stdout -- that is the JSON-RPC channel) and
+    // carried on the instance so the doctor and cache_audit can report it.
+    //
+    // The removed tmpdir fallback this replaces was silent and preferred, which
+    // is why it produced a 0% hit rate nobody could see. This one is last-resort
+    // and self-reporting. TOKEN_OPTIMIZER_CACHE_STRICT=1 restores the throw for
+    // callers that would rather fail than run without persistence.
     if (!dbInitialized) {
-      throw new Error(
-        `CRITICAL: Failed to initialize persistent cache database after ${maxAttempts} attempts. ` +
-          `Last error: ${lastError?.message || 'Unknown error'}. ` +
-          `Attempted path: ${finalDbPath}. ` +
-          `PHASE 1 FIX: Removed tmpdir fallback to prevent 0% cache hit rate. ` +
-          `Action required: Check disk space, file permissions, and ensure directory exists. ` +
-          `Cache WILL NOT persist without fixing this issue.`
-      );
+      const diagnosis =
+        `Failed to initialize the persistent cache database at ${finalDbPath} ` +
+        `after ${maxAttempts} attempts. Last error: ${lastError?.message || 'Unknown error'}. ` +
+        `Check disk space, file permissions, and that the directory is writable.`;
+
+      if (isTruthyEnv(process.env.TOKEN_OPTIMIZER_CACHE_STRICT)) {
+        throw new Error(
+          `CRITICAL: ${diagnosis} ` +
+            `TOKEN_OPTIMIZER_CACHE_STRICT is set, so no in-memory fallback was used.`
+        );
+      }
+
+      try {
+        this.db = new Database(':memory:');
+        this.db.exec(CACHE_SCHEMA);
+        this.dbPath = ':memory:';
+        this.degradedReason = diagnosis;
+        console.error(
+          `[token-optimizer] cache is running IN MEMORY ONLY: ${diagnosis} ` +
+            `Tools still work; nothing is cached across runs. ` +
+            `Set TOKEN_OPTIMIZER_CACHE_STRICT=1 to fail instead of degrading.`
+        );
+      } catch (memoryError) {
+        // better-sqlite3 itself is unusable (e.g. the native binding failed to
+        // load for this Node ABI). Nothing can rescue that here.
+        throw new Error(
+          `CRITICAL: ${diagnosis} The in-memory fallback also failed: ` +
+            `${memoryError instanceof Error ? memoryError.message : String(memoryError)}. ` +
+            `Reinstall @ooples/token-optimizer-mcp so better-sqlite3 rebuilds for this Node version.`
+        );
+      }
     }
 
     // Initialize in-memory LRU cache for frequently accessed items
@@ -518,6 +578,22 @@ export class CacheEngine {
         console.warn('Failed to clear vector store:', error);
       }
     }
+  }
+
+  /**
+   * Why this cache is not persisting, or null when it is healthy.
+   *
+   * A degraded cache behaves exactly like a healthy one except that nothing
+   * survives the process, so it is invisible from the outside. Anything that
+   * reports on cache health has to ask.
+   */
+  getDegradedReason(): string | null {
+    return this.degradedReason;
+  }
+
+  /** Where the database actually lives -- `:memory:` when degraded. */
+  getDbPath(): string {
+    return this.dbPath;
   }
 
   /**
