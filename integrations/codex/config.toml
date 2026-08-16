@@ -14,14 +14,15 @@
 command = "npx"
 args = ["-y", "@ooples/token-optimizer-mcp@latest"]
 
-# DO NOT DROP THESE TIMEOUTS. Codex's default startup timeout is 10 seconds, and
-# `npx -y ...@latest` spends part of that contacting the registry before node is
-# even launched; a cold first start then loads the tokenizer and opens the cache
-# database. Measured cold on Windows, the whole sequence runs past 10s, and Codex
-# responds by killing the process -- which the user sees as a server that started
-# and registered no tools (issue #307). The plugin's .mcp.json has always carried
-# these values; this file did not, so the two supported ways of installing the
-# same server behaved differently.
+# DO NOT DROP THESE TIMEOUTS. Codex kills a stdio server that has not finished
+# starting within startup_timeout_sec, and leaving it unset takes whatever short
+# default the installed Codex applies. `npx -y ...@latest` spends part of that
+# budget contacting the registry before node is even launched; a cold first start
+# then loads the tokenizer and opens the cache database. Measured cold on Windows
+# the whole sequence runs well past ten seconds, and the user sees a server that
+# started and registered no tools (issue #307). The plugin's .mcp.json has always
+# carried these values; this file did not, so the two supported ways of
+# installing the same server behaved differently.
 startup_timeout_sec = 30
 tool_timeout_sec = 120
 

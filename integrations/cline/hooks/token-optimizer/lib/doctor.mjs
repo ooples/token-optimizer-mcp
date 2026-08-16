@@ -34,9 +34,11 @@ const bad = (name, detail, remedy) => ({ name, pass: false, detail, remedy });
 const PLUGIN_ID = 'token-optimizer@token-optimizer';
 
 /**
- * The shortest startup budget any supported client gives a stdio MCP server
- * before killing it. Codex's `startup_timeout_sec` defaults to 10 seconds and is
- * the tightest of them, so it is the one worth warning against.
+ * How long a stdio MCP server may take to start before a client is entitled to
+ * give up on it. Codex applies a `startup_timeout_sec` and kills the process
+ * when it elapses; our own shipped configs set it to 30s precisely because the
+ * unset default is short. Ten seconds is the budget worth warning at -- past it,
+ * a client's default is plausibly already expired.
  */
 const CLIENT_STARTUP_BUDGET_MS = 10_000;
 
@@ -686,18 +688,18 @@ export async function probeServer({ root, timeoutMs = 20_000 }) {
   // A SERVER THAT ANSWERS TOO LATE IS A SERVER THAT NEVER ANSWERS.
   //
   // Codex kills a stdio server that has not finished starting within
-  // `startup_timeout_sec`, which defaults to 10. The user sees a server that was
-  // configured, enabled, and registered no tools -- indistinguishable from a
-  // crash, and reported as one (#307). We know the number here; nobody else
-  // does, so this is where it has to be said. Cold start is the slow one: `npx
-  // -y ...@latest` contacts the registry before node runs, then the tokenizer
-  // loads and the cache database opens.
+  // `startup_timeout_sec`. The user then sees a server that was configured,
+  // enabled, and registered no tools -- indistinguishable from a crash, and
+  // reported as one (#307). This probe holds the only stopwatch, so this is
+  // where it has to be said. Cold start is the slow one: `npx -y ...@latest`
+  // contacts the registry before node runs, then the tokenizer loads and the
+  // cache database opens.
   if (result.elapsedMs > CLIENT_STARTUP_BUDGET_MS) {
     return [bad('MCP server responds',
       `${result.tools.length} tools listed, but startup took ${seconds}s`,
-      `that is past the ${CLIENT_STARTUP_BUDGET_MS / 1000}s a client such as Codex allows by ` +
-      'default, which shows up as a server that registers no tools. Raise it -- ' +
-      '`startup_timeout_sec = 30` under [mcp_servers.token-optimizer] in ~/.codex/config.toml')];
+      `that is slow enough for a client to give up first, which shows up as a server ` +
+      'that registers no tools. Set an explicit budget -- `startup_timeout_sec = 30` ' +
+      'under [mcp_servers.token-optimizer] in ~/.codex/config.toml')];
   }
 
   return [ok('MCP server responds',
