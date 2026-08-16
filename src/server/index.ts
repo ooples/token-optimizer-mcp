@@ -2988,7 +2988,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'install_doctor') {
       return recordDirectToolResult(
         request.params.name,
-        () => installDoctor(request.params.arguments as any),
+        () =>
+          installDoctor({
+            ...(request.params.arguments as any),
+            // A runtime fact no file inspection can reach: this process may be
+            // running on an in-memory cache because the real one would not open.
+            // Nothing persists in that state and nothing outside says so.
+            cacheDegradedReason: cache.getDegradedReason(),
+          }),
         operationId
       );
     }

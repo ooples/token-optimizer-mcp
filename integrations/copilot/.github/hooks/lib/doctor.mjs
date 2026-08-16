@@ -20,11 +20,11 @@
  * complaint.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { harvestMode } from './harvest.mjs';
 import { readManifest, verifyManifest, residue } from './manifest.mjs';
 
@@ -32,6 +32,13 @@ const ok = (name, detail) => ({ name, pass: true, detail });
 const bad = (name, detail, remedy) => ({ name, pass: false, detail, remedy });
 
 const PLUGIN_ID = 'token-optimizer@token-optimizer';
+
+/**
+ * The shortest startup budget any supported client gives a stdio MCP server
+ * before killing it. Codex's `startup_timeout_sec` defaults to 10 seconds and is
+ * the tightest of them, so it is the one worth warning against.
+ */
+const CLIENT_STARTUP_BUDGET_MS = 10_000;
 
 /** Reads JSON, or null. Never throws: this module must diagnose, not crash. */
 function readJson(path) {
@@ -88,12 +95,31 @@ export function detectInstall({ pluginsDir, root } = {}) {
   const availableVersion = marketplace?.version ?? null;
   const pluginHooks = record?.installPath ? join(record.installPath, 'hooks') : null;
 
+  // WHICH BUILD IS ACTUALLY BEING DIAGNOSED?
+  //
+  // `root` is this package -- the copy npx/npm resolved and whose dist/ the
+  // server probe will run. It has a version of its own, and it is NOT
+  // necessarily Claude Code's plugin cache. Issue #307 caught the consequence:
+  // a user diagnosing the 5.7.0 npm package under Codex was told "plugin 5.5.0"
+  // and "plugin is up to date", because the only version this function looked at
+  // was a stale Claude Code record on the same machine. Read the package's own
+  // version so every report can name the build it examined.
+  const packageVersion = readJson(join(root || '.', 'package.json'))?.version ?? null;
+
+  // Is the plugin record describing THIS tree, or another client's copy? Path
+  // comparison, because a plugin install and an npm install can hold the same
+  // version number and still be two different directories.
+  const sameTree = Boolean(record?.installPath && root &&
+    resolve(record.installPath) === resolve(root));
+
   // A record whose installPath has gone missing is a broken plugin install, not
   // a script install -- saying "script" there would send the user to the wrong
   // remedy entirely.
   if (record) {
     return {
       method: 'plugin',
+      packageVersion,
+      sameTree,
       // AND IT MUST NOT FALL BACK TO THE PACKAGE COPY. plugin/hooks ships with
       // every npm install (it is in package.json `files`), so substituting it
       // here makes the checklist and the enforcement probe pass against a build
@@ -110,6 +136,8 @@ export function detectInstall({ pluginsDir, root } = {}) {
 
   return {
     method: verifyManifest(readManifest()) ? 'script' : 'unknown',
+    packageVersion,
+    sameTree: false,
     hooksDir: packageHooks,
     installPath: null,
     installedVersion,
@@ -189,20 +217,53 @@ export function probeHarvest() {
 }
 
 export function probeVersion({ install }) {
-  const { method, installedVersion, availableVersion } = install || {};
+  const { method, installedVersion, availableVersion, packageVersion, sameTree } = install || {};
 
-  if (method !== 'plugin' || !installedVersion || !availableVersion) {
-    return [];
+  const checks = [];
+
+  // ALWAYS NAME THE BUILD UNDER EXAMINATION, FIRST.
+  //
+  // Everything else in this report -- the server probe, the hook probes, the
+  // file checks -- ran against the package at `root`. Reporting only a Claude
+  // Code plugin version, discovered by scanning the home directory, told a
+  // Codex user their 5.7.0 package was "5.5.0 and up to date" (#307). The two
+  // numbers are both true and they are about different installs, so both are
+  // printed and each says whose it is.
+  if (packageVersion) {
+    checks.push(ok('package under examination', `@ooples/token-optimizer-mcp ${packageVersion}`));
+  }
+
+  if (method !== 'plugin' || !installedVersion) {
+    return checks;
+  }
+
+  // A Claude Code plugin record exists but points somewhere else: it belongs to
+  // a different client than the one being diagnosed. Say so instead of silently
+  // adopting its version, and flag it when it is behind -- a stale plugin cache
+  // beside a fresh package is a real split-brain, and it is what the reporter
+  // was looking at.
+  if (!sameTree && packageVersion) {
+    const label = 'other clients agree with this package';
+    return checks.concat(compareVersions(installedVersion, packageVersion) < 0
+      ? [bad(label,
+        `the Claude Code plugin cache holds ${installedVersion}, but this package is ${packageVersion}`,
+        'this run diagnosed the package, not the plugin. Run /plugin in Claude Code and ' +
+        'update token-optimizer so both clients run the same build')]
+      : [ok(label, `Claude Code plugin ${installedVersion}; this package ${packageVersion}`)]);
+  }
+
+  if (!availableVersion) {
+    return checks;
   }
 
   if (compareVersions(installedVersion, availableVersion) < 0) {
-    return [bad('plugin is up to date',
+    return checks.concat([bad('plugin is up to date',
       `installed ${installedVersion}, but ${availableVersion} is available`,
       'run /plugin and update token-optimizer -- updating the marketplace alone ' +
-      'does not move the installed version, and older builds shipped far weaker hooks')];
+      'does not move the installed version, and older builds shipped far weaker hooks')]);
   }
 
-  return [ok('plugin is up to date', `installed ${installedVersion}`)];
+  return checks.concat([ok('plugin is up to date', `installed ${installedVersion}`)]);
 }
 
 /** Runs a hook binary with a payload and returns its stdout, or null. */
@@ -236,8 +297,13 @@ export function checklist({ root, settingsPath, install }) {
   // SAY WHICH PATH THIS IS. Skipping the script-install checks silently would
   // leave a user unable to tell whether they passed or were never run, which is
   // the same opacity that made a 7/9 score untrustworthy in the first place.
+  // Name the client the hooks belong to, not just the method. "plugin 5.5.0"
+  // beside a 5.7.0 package reads as a version regression in the thing you are
+  // holding; "Claude Code plugin 5.5.0, hooks from <cache>" reads as what it is
+  // -- another client's install, on the same machine (#307).
+  const pluginLabel = resolved.sameTree ? 'plugin' : 'Claude Code plugin';
   checks.push(ok('install method', resolved.method === 'plugin'
-    ? `plugin${resolved.installedVersion ? ` ${resolved.installedVersion}` : ''}` +
+    ? `${pluginLabel}${resolved.installedVersion ? ` ${resolved.installedVersion}` : ''}` +
       ` -- hooks from ${hooksDir}`
     : `${resolved.method} -- hooks from ${hooksDir}`));
 
@@ -459,40 +525,227 @@ export function probeGraph({ dir }) {
 }
 
 /**
+ * Is this tree a source checkout, or an installed package?
+ *
+ * It decides the remedy, and getting it wrong is issue #307's second complaint:
+ * every server failure suggested `npm run build` -- advice that is impossible to
+ * follow inside `node_modules`, where there is no src/ and no dev toolchain. A
+ * published package that cannot start needs reinstalling, not compiling.
+ */
+function isSourceCheckout(root) {
+  return existsSync(join(root, 'src', 'server', 'index.ts')) &&
+    existsSync(join(root, 'tsconfig.json'));
+}
+
+/** The remedy for "the server did not work", phrased for the install we are in. */
+function serverRemedy(root, extra) {
+  const base = isSourceCheckout(root)
+    ? 'run `npm run build`'
+    : 'reinstall the package: `npm install -g @ooples/token-optimizer-mcp@latest` ' +
+      '(or clear the npx cache and retry)';
+  return extra ? `${base}; ${extra}` : base;
+}
+
+/**
+ * Speak the MCP handshake to the server and return its `tools/list` result.
+ *
+ * Run as a child process, not inline, so `diagnose()` callers get a plain
+ * synchronous-looking await and the probe can hold stdin OPEN. That last part is
+ * the fix: the previous probe used `execFileSync` with `input`, which closes
+ * stdin the instant the request is written. The server treats stdin closing as
+ * "my client died" (correctly -- that is the only orphan signal Windows gives
+ * it) and shuts down, racing its own reply. It also skipped `initialize`
+ * entirely, so it was asking an uninitialized server a question the protocol
+ * does not promise to answer.
+ *
+ * Returns { tools, code, signal, stderr, timedOut } and never throws.
+ */
+function speakMcp(entry, timeoutMs) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(process.execPath, [entry], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+    } catch (error) {
+      resolve({ tools: null, code: null, signal: null, timedOut: false,
+        stderr: String(error?.message || error) });
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timedOut = false;
+
+    const finish = (extra = {}) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { child.kill(); } catch { /* already gone */ }
+      resolve({ tools: readTools(stdout), stderr: stderr.trim(), timedOut,
+        elapsedMs: Date.now() - started, code: null, signal: null, ...extra });
+    };
+
+    const started = Date.now();
+    const timer = setTimeout(() => { timedOut = true; finish(); }, timeoutMs);
+
+    child.on('error', (error) => {
+      stderr += `\n${error?.message || error}`;
+      finish();
+    });
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+      // Answer in hand: stop early rather than burn the whole timeout.
+      if (readTools(stdout)) finish();
+    });
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.on('exit', (code, signal) => finish({ code, signal }));
+
+    const send = (message) => {
+      try { child.stdin.write(`${JSON.stringify(message)}\n`); } catch { /* exited */ }
+    };
+    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'token-optimizer-doctor', version: '1' },
+    } });
+    send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+    // stdin stays open until finish() kills the child.
+  });
+}
+
+/** The tools array from whichever line carries the tools/list result, or null. */
+function readTools(stdout) {
+  for (const line of stdout.split('\n')) {
+    if (!line.startsWith('{')) continue;
+    try {
+      const tools = JSON.parse(line)?.result?.tools;
+      if (Array.isArray(tools)) return tools;
+    } catch {
+      // A partial line at the buffer edge; the next chunk completes it.
+    }
+  }
+  return null;
+}
+
+/**
  * The MCP server has to start and list its tools.
  *
  * This is the check that would have caught a broken build being published: the
  * config can name a server that does not run.
+ *
+ * WHEN IT FAILS, IT MUST SAY WHY. This check used to run the server with
+ * `stdio: [..., 'ignore']` for stderr and then report `error.message`, which for
+ * `execFileSync` is the bare string "Command failed: <node> <entry>". The server
+ * had in fact printed its exception -- to the stderr that was being discarded.
+ * Issue #307 is a user staring at that sentence, with the actual cause thrown
+ * away by the tool whose entire job was to find it. Every failure below carries
+ * the child's exit status and its stderr.
  */
-export function probeServer({ root, timeoutMs = 20_000 }) {
+export async function probeServer({ root, timeoutMs = 20_000 }) {
   const entry = join(root, 'dist', 'server', 'index.js');
   if (!existsSync(entry)) {
-    return [bad('MCP server responds', `${entry} not found`, 'run `npm run build`, or reinstall the package')];
+    return [bad('MCP server responds', `${entry} not found`,
+      serverRemedy(root, 'the build output is missing entirely'))];
   }
 
-  try {
-    const out = execFileSync(process.execPath, [entry], {
-      input: `${JSON.stringify({ jsonrpc: '2.0', id: '1', method: 'tools/list' })}\n`,
-      encoding: 'utf8',
-      timeout: timeoutMs,
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'ignore'],
-    });
-    const line = out.split('\n').find((l) => l.startsWith('{'));
-    const tools = line ? JSON.parse(line)?.result?.tools : null;
-    if (!Array.isArray(tools) || !tools.length) {
-      return [bad('MCP server responds', 'started but listed no tools',
-        'run `npm run build` and try again')];
-    }
-    if (!tools.some((tool) => tool?.name === 'wiki_write')) {
-      return [bad('MCP server responds', `${tools.length} tools listed, but wiki_write is missing`,
-        'use the core or full tool profile; semantic harvesting requires wiki_write')];
-    }
-    return [ok('MCP server responds', `${tools.length} tools listed; wiki_write available`)];
-  } catch (error) {
-    return [bad('MCP server responds', String(error?.message || error).slice(0, 160),
-      'run `npm run build`; if it persists the install is incomplete')];
+  const result = await speakMcp(entry, timeoutMs);
+  const detail = (summary) => {
+    const parts = [summary];
+    if (result.code !== null && result.code !== undefined) parts.push(`exit code ${result.code}`);
+    if (result.signal) parts.push(`killed by ${result.signal}`);
+    if (result.stderr) parts.push(`stderr: ${stderrHighlights(result.stderr, 6)}`);
+    return parts.join('\n          ');
+  };
+
+  if (result.timedOut && !result.tools) {
+    return [bad('MCP server responds', detail(`no tools/list reply within ${timeoutMs}ms`),
+      serverRemedy(root, 'raise the client\'s startup timeout if the machine is slow'))];
   }
+
+  if (!result.tools) {
+    return [bad('MCP server responds', detail('the server exited without answering tools/list'),
+      serverRemedy(root))];
+  }
+
+  if (!result.tools.length) {
+    return [bad('MCP server responds', detail('started, but listed no tools'),
+      serverRemedy(root, 'check TOKEN_OPTIMIZER_TOOL_PROFILE -- an empty profile registers nothing'))];
+  }
+
+  if (!result.tools.some((tool) => tool?.name === 'wiki_write')) {
+    return [bad('MCP server responds', `${result.tools.length} tools listed, but wiki_write is missing`,
+      'use the core or full tool profile; semantic harvesting requires wiki_write')];
+  }
+
+  const seconds = (result.elapsedMs / 1000).toFixed(1);
+
+  // A SERVER THAT ANSWERS TOO LATE IS A SERVER THAT NEVER ANSWERS.
+  //
+  // Codex kills a stdio server that has not finished starting within
+  // `startup_timeout_sec`, which defaults to 10. The user sees a server that was
+  // configured, enabled, and registered no tools -- indistinguishable from a
+  // crash, and reported as one (#307). We know the number here; nobody else
+  // does, so this is where it has to be said. Cold start is the slow one: `npx
+  // -y ...@latest` contacts the registry before node runs, then the tokenizer
+  // loads and the cache database opens.
+  if (result.elapsedMs > CLIENT_STARTUP_BUDGET_MS) {
+    return [bad('MCP server responds',
+      `${result.tools.length} tools listed, but startup took ${seconds}s`,
+      `that is past the ${CLIENT_STARTUP_BUDGET_MS / 1000}s a client such as Codex allows by ` +
+      'default, which shows up as a server that registers no tools. Raise it -- ' +
+      '`startup_timeout_sec = 30` under [mcp_servers.token-optimizer] in ~/.codex/config.toml')];
+  }
+
+  return [ok('MCP server responds',
+    `${result.tools.length} tools listed in ${seconds}s; wiki_write available`)];
+}
+
+/**
+ * The part of a child's stderr worth printing.
+ *
+ * Not the tail: an uncaught exception in Node prints the offending source line,
+ * then the MESSAGE, then a stack, then the version banner. Tailing it yields six
+ * lines of `node:internal/modules/...` frames and hides the one sentence that
+ * says what went wrong. So the message line leads, and a little context follows.
+ */
+function stderrHighlights(text, count) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    // Stack frames are the noise. Dropping them BEFORE tailing is the whole
+    // trick: six raw tail lines of an uncaught exception are six
+    // `at node:internal/modules/...` frames and no message.
+    .filter((line) => !/^\s*at\s/.test(line));
+
+  return lines.slice(-count).join('\n          ');
+}
+
+/**
+ * Is the cache actually persisting?
+ *
+ * The server no longer dies when its database will not open -- it falls back to
+ * an in-memory one so every tool keeps working (#307). That is the right trade,
+ * and it has exactly one hazard: a degraded cache is invisible from outside.
+ * Every call succeeds, every write is thrown away at exit, and the hit rate is
+ * zero forever. This project has already paid for a silent cache fallback once;
+ * that one was a tmpdir, and it was removed for producing a 0% hit rate nobody
+ * could see. So the fallback is allowed to exist, on the condition that the
+ * doctor says it is there.
+ *
+ * Only the running server can answer, so the reason is passed in rather than
+ * detected here: a fresh CacheEngine opened by the doctor may well succeed while
+ * the one inside the server is still degraded.
+ */
+export function probeCache({ degradedReason }) {
+  if (!degradedReason) return [];
+  return [bad('cache is persisting', `running in memory only -- ${degradedReason}`,
+    'fix the path above, then restart the MCP server. Tools work meanwhile, but ' +
+    'nothing is cached across runs, so every read is paid for again')];
 }
 
 /* --------------------------------------------------------------- ASSEMBLY */
@@ -503,8 +756,9 @@ export function probeServer({ root, timeoutMs = 20_000 }) {
  * Structural checks first because they are fast and explain most failures;
  * probes after, because they are what actually prove it works.
  */
-export function diagnose({
+export async function diagnose({
   root, workspace, graphDir, settingsPath, pluginsDir, skipServer = false,
+  cacheDegradedReason = null,
 } = {}) {
   // Resolved ONCE and threaded through, so every check reasons about the same
   // install. Detecting per-probe is how the checklist and the enforcement probe
@@ -518,7 +772,8 @@ export function diagnose({
     ...probeEnforcement({ root, workspace, install }),
     ...probeSessionStart({ root, workspace, install }),
     ...probeGraph({ dir: graphDir }),
-    ...(skipServer ? [] : probeServer({ root })),
+    ...probeCache({ degradedReason: cacheDegradedReason }),
+    ...(skipServer ? [] : await probeServer({ root })),
   ];
 
   const failed = checks.filter((c) => !c.pass);
