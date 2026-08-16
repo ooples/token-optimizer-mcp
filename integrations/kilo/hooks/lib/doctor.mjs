@@ -34,11 +34,24 @@ const bad = (name, detail, remedy) => ({ name, pass: false, detail, remedy });
 const PLUGIN_ID = 'token-optimizer@token-optimizer';
 
 /**
- * How long a stdio MCP server may take to start before a client is entitled to
- * give up on it. Codex applies a `startup_timeout_sec` and kills the process
- * when it elapses; our own shipped configs set it to 30s precisely because the
- * unset default is short. Ten seconds is the budget worth warning at -- past it,
- * a client's default is plausibly already expired.
+ * The plugin's own name, without the marketplace it was installed from.
+ *
+ * Codex keys a plugin `<name>@<marketplace>` and the second half is wherever the
+ * user added it from -- `token-optimizer@token-optimizer` on the machine in
+ * #307, `token-optimizer@personal` on the one this was written on. Only the
+ * first half is ours to assume.
+ */
+const PLUGIN_NAME = PLUGIN_ID.split('@')[0];
+
+/**
+ * The tightest startup budget any supported client gives a stdio MCP server
+ * before killing it.
+ *
+ * Codex: "startup_timeout_sec -- Timeout (seconds) for the server to start.
+ * Default: 10." (learn.chatgpt.com/docs/extend/mcp, the Codex MCP config
+ * reference). That is the shortest of the clients we ship configs for, so it is
+ * the one worth warning against; a server slower than this is invisible to a
+ * default Codex install no matter how healthy it is.
  */
 const CLIENT_STARTUP_BUDGET_MS = 10_000;
 
@@ -687,19 +700,22 @@ export async function probeServer({ root, timeoutMs = 20_000 }) {
 
   // A SERVER THAT ANSWERS TOO LATE IS A SERVER THAT NEVER ANSWERS.
   //
-  // Codex kills a stdio server that has not finished starting within
-  // `startup_timeout_sec`. The user then sees a server that was configured,
-  // enabled, and registered no tools -- indistinguishable from a crash, and
-  // reported as one (#307). This probe holds the only stopwatch, so this is
-  // where it has to be said. Cold start is the slow one: `npx -y ...@latest`
-  // contacts the registry before node runs, then the tokenizer loads and the
-  // cache database opens.
+  // Codex kills a stdio server that has not completed its initialize handshake
+  // within `startup_timeout_sec`, which defaults to 10. The user then sees a
+  // server that was configured, enabled, and registered no tools --
+  // indistinguishable from a crash, and reported as one (#307). This probe holds
+  // the only stopwatch on the machine, so this is where it has to be said.
+  //
+  // Cold start is the slow one: `npx -y ...@latest` contacts the registry before
+  // node runs at all, then the tokenizer loads and the cache database opens.
+  // Measured on Windows, cold 12.1s against warm 1.4s -- healthy both times, and
+  // over the default budget exactly once.
   if (result.elapsedMs > CLIENT_STARTUP_BUDGET_MS) {
     return [bad('MCP server responds',
       `${result.tools.length} tools listed, but startup took ${seconds}s`,
-      `that is slow enough for a client to give up first, which shows up as a server ` +
-      'that registers no tools. Set an explicit budget -- `startup_timeout_sec = 30` ' +
-      'under [mcp_servers.token-optimizer] in ~/.codex/config.toml')];
+      `that is past the ${CLIENT_STARTUP_BUDGET_MS / 1000}s Codex allows by default, which ` +
+      'shows up as a server that registers no tools rather than as a timeout. Raise it -- ' +
+      '`startup_timeout_sec = 30` under [mcp_servers.token-optimizer] in ~/.codex/config.toml')];
   }
 
   return [ok('MCP server responds',
@@ -725,6 +741,139 @@ function stderrHighlights(text, count) {
     .filter((line) => !/^\s*at\s/.test(line));
 
   return lines.slice(-count).join('\n          ');
+}
+
+/* ------------------------------------------------------------ OTHER CLIENTS */
+
+/**
+ * The body of one TOML table, or null. Deliberately not a TOML parser.
+ *
+ * hooks-core is dependency-free by construction -- it is vendored into eleven
+ * client trees and executed from each -- so pulling in a parser to read three
+ * keys is not on offer. Reading a table header and the lines under it is enough
+ * to answer "is it declared" and "is the timeout set", and a diagnostic that
+ * guesses slightly wrong about an exotic TOML spelling is still better than one
+ * that cannot see the file at all.
+ */
+function tomlTables(text) {
+  // TOML lets one table be written [a.b], [a."b"] and [a.'b']. Splitting the
+  // dotted key into SEGMENTS, with quotes and padding stripped, treats all three
+  // as the same table -- and does it without building a regex out of text from
+  // somebody's config file.
+  const tables = [];
+  let current = null;
+
+  for (const line of text.split(/\r?\n/)) {
+    const header = /^\s*\[([^[\]]+)\]\s*(?:#.*)?$/.exec(line);
+    if (header) {
+      current = { key: splitTomlKey(header[1]), body: [] };
+      tables.push(current);
+      continue;
+    }
+    if (current) current.body.push(line);
+  }
+
+  return tables.map((table) => ({ key: table.key, body: table.body.join('\n') }));
+}
+
+/** The body of the one table with this exact dotted key, or null. */
+function tomlTable(text, name) {
+  const wanted = splitTomlKey(name);
+  const found = tomlTables(text).find((table) => sameTomlKey(table.key, wanted));
+  return found ? found.body : null;
+}
+
+/** `mcp_servers."token-optimizer"` -> ['mcp_servers', 'token-optimizer']. */
+function splitTomlKey(key) {
+  return key
+    .split('.')
+    .map((part) => part.trim().replace(/^["']|["']$/g, ''))
+    .filter(Boolean);
+}
+
+const sameTomlKey = (left, right) =>
+  left.length === right.length && left.every((part, i) => part === right[i]);
+
+/**
+ * What does Codex think it has?
+ *
+ * The doctor ships inside a package that Codex, Claude Code, Cursor and seven
+ * others all install, and until now it could only see one of them. #307 is a
+ * Codex user whose report contained the two facts this check exists to state --
+ * a server declared in BOTH the plugin manifest and ~/.codex/config.toml, and a
+ * config.toml declaration with no startup timeout on it.
+ *
+ * Silent when Codex is not installed. A diagnostic that reports on absent
+ * software is noise, and noise is how a report stops being read.
+ */
+export function probeCodex({ codexHome } = {}) {
+  const home = codexHome || join(homedir(), '.codex');
+  const configPath = join(home, 'config.toml');
+  if (!existsSync(configPath)) return [];
+
+  let config;
+  try {
+    config = readFileSync(configPath, 'utf8');
+  } catch {
+    return [bad('codex config readable', `${configPath} could not be read`,
+      'check the file permissions, or remove it to let Codex recreate it')];
+  }
+
+  const server = tomlTable(config, 'mcp_servers.token-optimizer');
+
+  // MATCH THE PLUGIN NAME, NOT THE FULL ID. A Codex plugin is keyed
+  // `<name>@<marketplace>`, and the marketplace half is wherever the user added
+  // it from. The reporter's config said `token-optimizer@token-optimizer`; the
+  // machine this was written on says `token-optimizer@personal`. Pinning the
+  // whole id would have made this check silently blind on both of them one day.
+  const pluginTable = tomlTables(config).find((table) =>
+    table.key.length === 2 &&
+    table.key[0] === 'plugins' &&
+    table.key[1].split('@')[0] === PLUGIN_NAME);
+  const pluginEnabled = Boolean(
+    pluginTable && /^\s*enabled\s*=\s*true\s*$/m.test(pluginTable.body));
+  const pluginId = pluginTable?.key[1];
+
+  if (!server && !pluginEnabled) {
+    return [ok('codex knows about this server',
+      'no token-optimizer entry in ~/.codex/config.toml -- not installed for Codex, which is ' +
+      'fine if you do not use it')];
+  }
+
+  const checks = [];
+
+  // BOTH ROUTES AT ONCE. The plugin declares the server in its own .mcp.json and
+  // the config.toml block declares it again under the same name. Which set of
+  // settings wins is then a question about Codex's merge order rather than about
+  // anything we shipped, and the answer is not written down.
+  checks.push(server && pluginEnabled
+    ? bad('codex declares this server once',
+      `declared twice: the enabled plugin ${pluginId} provides it, and ` +
+      '[mcp_servers.token-optimizer] declares it again',
+      'keep one. The plugin is self-contained and carries its own timeouts, so the usual fix ' +
+      'is `codex mcp remove token-optimizer`; keep the config.toml block instead if you are ' +
+      'not using the plugin')
+    : ok('codex declares this server once',
+      pluginEnabled
+        ? `via the enabled plugin ${pluginId}`
+        : 'via [mcp_servers.token-optimizer]'));
+
+  // A config.toml block with no budget on it inherits Codex's default of 10
+  // seconds, which a cold `npx -y ...@latest` start does not fit inside. The
+  // plugin's own .mcp.json has always carried 30; a hand-merged block did not.
+  if (server && !/^\s*startup_timeout_sec\s*=/m.test(server)) {
+    checks.push(bad('codex allows enough time to start',
+      'no startup_timeout_sec on [mcp_servers.token-optimizer], so Codex uses its default of ' +
+      `${CLIENT_STARTUP_BUDGET_MS / 1000}s`,
+      'add `startup_timeout_sec = 30` to that block. A cold start pays for an npx registry ' +
+      'lookup before node even runs, and gets killed mid-handshake -- which looks exactly ' +
+      'like a server that registered no tools'));
+  } else if (server) {
+    const budget = /^\s*startup_timeout_sec\s*=\s*(\d+)/m.exec(server);
+    checks.push(ok('codex allows enough time to start', `startup_timeout_sec = ${budget?.[1]}`));
+  }
+
+  return checks;
 }
 
 /**
@@ -760,7 +909,7 @@ export function probeCache({ degradedReason }) {
  */
 export async function diagnose({
   root, workspace, graphDir, settingsPath, pluginsDir, skipServer = false,
-  cacheDegradedReason = null,
+  cacheDegradedReason = null, codexHome,
 } = {}) {
   // Resolved ONCE and threaded through, so every check reasons about the same
   // install. Detecting per-probe is how the checklist and the enforcement probe
@@ -774,6 +923,7 @@ export async function diagnose({
     ...probeEnforcement({ root, workspace, install }),
     ...probeSessionStart({ root, workspace, install }),
     ...probeGraph({ dir: graphDir }),
+    ...probeCodex({ codexHome }),
     ...probeCache({ degradedReason: cacheDegradedReason }),
     ...(skipServer ? [] : await probeServer({ root })),
   ];

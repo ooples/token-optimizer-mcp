@@ -14,15 +14,23 @@
 command = "npx"
 args = ["-y", "@ooples/token-optimizer-mcp@latest"]
 
-# DO NOT DROP THESE TIMEOUTS. Codex kills a stdio server that has not finished
-# starting within startup_timeout_sec, and leaving it unset takes whatever short
-# default the installed Codex applies. `npx -y ...@latest` spends part of that
-# budget contacting the registry before node is even launched; a cold first start
-# then loads the tokenizer and opens the cache database. Measured cold on Windows
-# the whole sequence runs well past ten seconds, and the user sees a server that
-# started and registered no tools (issue #307). The plugin's .mcp.json has always
-# carried these values; this file did not, so the two supported ways of
-# installing the same server behaved differently.
+# DO NOT DROP THESE TIMEOUTS.
+#
+# Codex's own MCP reference (learn.chatgpt.com/docs/extend/mcp) gives the
+# defaults as:
+#
+#   startup_timeout_sec  Timeout (seconds) for the server to start.        Default: 10
+#   tool_timeout_sec     Timeout (seconds) for the server to run a tool.   Default: 60
+#
+# Ten seconds does not cover a cold start here. `npx -y ...@latest` contacts the
+# registry before node is even launched, and the first run then loads the
+# tokenizer and opens the cache database. Measured on Windows: 12.1s cold against
+# 1.4s warm -- healthy both times, over the default budget exactly once. Codex
+# kills the process at the deadline, and the user sees a server that was
+# configured and enabled and registered no tools (issue #307).
+#
+# The plugin's .mcp.json has always carried these values; this file did not, so
+# the two supported ways of installing the same server behaved differently.
 startup_timeout_sec = 30
 tool_timeout_sec = 120
 
