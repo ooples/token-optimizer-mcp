@@ -2,9 +2,28 @@
 # Merge this into ~/.codex/config.toml (Codex reads MCP servers under
 # [mcp_servers.<name>]). Then add the guidance from ../AGENTS.md to your
 # project's AGENTS.md (or ~/.codex/AGENTS.md) so Codex knows when to use them.
+#
+# USE THIS *OR* THE PLUGIN, NOT BOTH. The Codex plugin declares the same server
+# in its own .mcp.json. Enabling the plugin and also pasting the block below
+# leaves two declarations of one server under the same name, which is at best
+# redundant and at worst ambiguous about which settings win. If
+# `codex mcp get token-optimizer` already shows the server, the plugin has it
+# covered and this file is not needed.
 
 [mcp_servers.token-optimizer]
 command = "npx"
 args = ["-y", "@ooples/token-optimizer-mcp@latest"]
+
+# DO NOT DROP THESE TIMEOUTS. Codex's default startup timeout is 10 seconds, and
+# `npx -y ...@latest` spends part of that contacting the registry before node is
+# even launched; a cold first start then loads the tokenizer and opens the cache
+# database. Measured cold on Windows, the whole sequence runs past 10s, and Codex
+# responds by killing the process -- which the user sees as a server that started
+# and registered no tools (issue #307). The plugin's .mcp.json has always carried
+# these values; this file did not, so the two supported ways of installing the
+# same server behaved differently.
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+
 # Optional: point the cache somewhere stable.
 # env = { TOKEN_OPTIMIZER_CACHE_DIR = "~/.token-optimizer-cache" }
