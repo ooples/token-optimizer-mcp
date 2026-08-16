@@ -5,6 +5,12 @@
  * unit-tested in isolation, without importing (and booting) the whole server.
  */
 
+/** The bit of `process.stdout` shutdown needs: is anything still buffered? */
+export interface WritableLike {
+  writableLength?: number;
+  write: (chunk: string, callback?: () => void) => unknown;
+}
+
 export interface ShutdownDeps {
   /** Runs the actual resource cleanup. Must be safe to call once. */
   cleanup: () => Promise<void>;
@@ -12,6 +18,50 @@ export interface ShutdownDeps {
   proc?: NodeJS.EventEmitter & { exit: (code?: number) => void };
   /** stdin stream. Defaults to `process.stdin`; injectable for tests. */
   stdin?: NodeJS.EventEmitter;
+  /** JSON-RPC output stream. Defaults to `process.stdout`; injectable for tests. */
+  stdout?: WritableLike;
+  /** Longest wait for stdout to drain before exiting anyway. */
+  flushTimeoutMs?: number;
+}
+
+/**
+ * Wait for anything already written to stdout to reach the pipe.
+ *
+ * `process.exit()` does NOT flush a pending write. On Windows every stdio pipe
+ * is asynchronous, so a JSON-RPC response handed to `stdout.write()` a tick
+ * before shutdown is simply discarded -- the client sees a server that started,
+ * accepted the request and answered nothing. That is issue #307's "exits before
+ * registering tools" as seen from the client side, and it is why a probe that
+ * closes stdin immediately after writing its request (`execFileSync` with
+ * `input`, which is what the doctor does) was a coin flip.
+ *
+ * Bounded, because a client that has gone away leaves a pipe nobody drains;
+ * waiting forever there would turn a clean exit into a hang.
+ */
+function flushStdout(stdout: WritableLike, timeoutMs: number): Promise<void> {
+  if (!stdout || typeof stdout.write !== 'function') return Promise.resolve();
+  if (!stdout.writableLength) return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    // An unref'd timer must not be the only thing keeping the loop alive, but
+    // it also must not pin a process that is on its way out.
+    if (typeof timer.unref === 'function') timer.unref();
+    try {
+      // A zero-length write's callback fires once everything queued ahead of it
+      // has been handed to the OS.
+      stdout.write('', done);
+    } catch {
+      done();
+    }
+  });
 }
 
 /**
@@ -34,6 +84,8 @@ export interface ShutdownDeps {
 export function installShutdownHandlers(deps: ShutdownDeps): void {
   const proc = deps.proc ?? process;
   const stdin = deps.stdin ?? process.stdin;
+  const stdout = deps.stdout ?? (process.stdout as unknown as WritableLike);
+  const flushTimeoutMs = deps.flushTimeoutMs ?? 2000;
 
   let shuttingDown = false;
   const shutdown = (reason: string) => {
@@ -49,6 +101,10 @@ export function installShutdownHandlers(deps: ShutdownDeps): void {
       .catch((err) =>
         console.error('[token-optimizer] cleanup error during shutdown:', err)
       )
+      // Drain LAST, after cleanup, because cleanup is the slow part and a
+      // response written during it would otherwise still be in flight at exit.
+      .then(() => flushStdout(stdout, flushTimeoutMs))
+      .catch(() => undefined)
       .finally(() => proc.exit(0));
   };
 

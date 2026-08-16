@@ -113,4 +113,96 @@ describe('installShutdownHandlers', () => {
 
     expect(proc.exit).toHaveBeenCalledWith(0);
   });
+
+  /**
+   * Issue #307: a client that writes its request and closes stdin gets a server
+   * that starts, accepts, and answers nothing.
+   *
+   * `process.exit()` does not flush a pending write, and every Windows stdio
+   * pipe is asynchronous, so the JSON-RPC reply written a tick before shutdown
+   * is discarded. From the client's side that is indistinguishable from a server
+   * that exited before registering its tools.
+   */
+  describe('stdout is drained before the process exits', () => {
+    /** A stdout whose write callback fires only when we say so. */
+    function makeStdout(pending: number) {
+      const calls: Array<() => void> = [];
+      return {
+        stream: {
+          writableLength: pending,
+          write: (_chunk: string, callback?: () => void) => {
+            if (callback) calls.push(callback);
+            return true;
+          },
+        },
+        release: () => calls.splice(0).forEach((cb) => cb()),
+        pendingCallbacks: () => calls.length,
+      };
+    }
+
+    it('does not exit while a reply is still buffered', async () => {
+      const proc = makeProc();
+      const stdin = new EventEmitter();
+      const stdout = makeStdout(512);
+
+      installShutdownHandlers({
+        cleanup: async () => {},
+        proc,
+        stdin,
+        stdout: stdout.stream,
+      });
+      stdin.emit('end');
+      await flush();
+
+      expect(stdout.pendingCallbacks()).toBe(1);
+      expect(proc.exit).not.toHaveBeenCalled();
+
+      stdout.release();
+      await flush();
+
+      expect(proc.exit).toHaveBeenCalledWith(0);
+    });
+
+    it('exits anyway when the pipe never drains, rather than hanging forever', async () => {
+      const proc = makeProc();
+      const stdin = new EventEmitter();
+      const stdout = makeStdout(512);
+
+      installShutdownHandlers({
+        cleanup: async () => {},
+        proc,
+        stdin,
+        stdout: stdout.stream,
+        // Real, and short: the point is that the wait is bounded, and a fake
+        // clock would prove only that a timer was scheduled.
+        flushTimeoutMs: 20,
+      });
+      stdin.emit('end');
+      await flush();
+
+      expect(proc.exit).not.toHaveBeenCalled();
+
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      expect(proc.exit).toHaveBeenCalledWith(0);
+    });
+
+    it('exits immediately when nothing is buffered', async () => {
+      const proc = makeProc();
+      const stdin = new EventEmitter();
+      const stdout = makeStdout(0);
+
+      installShutdownHandlers({
+        cleanup: async () => {},
+        proc,
+        stdin,
+        stdout: stdout.stream,
+      });
+      stdin.emit('end');
+      await flush();
+
+      expect(stdout.pendingCallbacks()).toBe(0);
+      expect(proc.exit).toHaveBeenCalledWith(0);
+    });
+  });
 });
