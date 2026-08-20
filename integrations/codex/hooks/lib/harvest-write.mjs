@@ -25,11 +25,13 @@
 
 import {
   putNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode, putEdge,
+  unrootedRoot,
 } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
 import { randomBytes } from 'node:crypto';
+import { homedir } from 'node:os';
 import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
 
 /**
@@ -312,6 +314,22 @@ function withinProject(path, projectRoot) {
   return path.startsWith(prefix);
 }
 
+/**
+ * True when a canonical path IS a filesystem root rather than a directory
+ * inside one -- "/", a bare drive letter ("C:"), or a UNC share ("//host/share").
+ *
+ * canonicalPath() already reduces every spelling to one of these forms
+ * (drive letters upper-cased, backslashes turned to slashes, MSYS paths
+ * rewritten), so this is a plain string test, true on every host regardless
+ * of which platform produced the path. Needed because withinProject() is a
+ * prefix test: root itself is always its own prefix, so using a root as a
+ * containment boundary accepts every absolute path under it, on any OS.
+ */
+const FS_ROOT = /^(\/|[A-Z]:|\/\/[^/]+\/[^/]+)$/;
+function isFilesystemRoot(canonical) {
+  return !canonical || FS_ROOT.test(canonical);
+}
+
 function resolveAnchor(dir, anchor, projectRoot) {
   const [rawPath, symbol] = String(anchor).split('#');
   if (!rawPath) return null;
@@ -324,7 +342,24 @@ function resolveAnchor(dir, anchor, projectRoot) {
   // that file into .token-optimizer and serve it back on the next touch. The
   // findings come from a model reading a transcript, so the paths are not
   // trusted input.
-  if (projectRoot && !withinProject(path, projectRoot)) return null;
+  //
+  // The unrooted bucket is a storage location, not a project: nothing on disk
+  // lives inside ~/.token-optimizer/unrooted, so using it as the containment
+  // root refused every anchor with no VCS ancestor -- dotfiles and machine-wide
+  // configs included. Home directory is the boundary that actually matches
+  // what an unrooted anchor looks like, and keeps the same protection --
+  // EXCEPT when home itself resolves to a filesystem root ("/", a bare
+  // drive letter, root user, minimal containers, an unset HOME): a prefix
+  // check against a root is true for every absolute path on that root, so
+  // that would accept precisely the ../../.ssh/id_rsa-style anchor, or its
+  // C:/Windows/... or //share/... equivalents, the check exists to refuse.
+  // Stay on the unrooted bucket in that case, which nothing resolves inside
+  // -- fails closed instead of open.
+  const home = homedir();
+  const homeIsRoot = isFilesystemRoot(home && canonicalPath(home));
+  const containmentRoot =
+    projectRoot === unrootedRoot() && !homeIsRoot ? home : projectRoot;
+  if (containmentRoot && !withinProject(path, containmentRoot)) return null;
 
   // Indexing creates the file node and its symbols with hashes and spans, which
   // is what makes the claim checkable later.
