@@ -710,6 +710,28 @@ TOKEN_OPTIMIZER_MODE=off      # disable the hooks entirely
 TOKEN_OPTIMIZER_LARGE_READ_BYTES=51200   # raise the "large file" threshold
 ```
 
+#### If enforcement never fires
+
+Symptom: the tools work fine when called directly, but native `Read`/`Grep`/`Edit`/`Bash`
+calls are never refused — the deny rate in `~/.token-optimizer/logs/hook-events-*.jsonl`
+sits near zero.
+
+Cause: `PreToolUse` only enforces once the hook can prove the MCP tools are registered
+in the current session. Claude Code's hook payload carries no tool-inventory field for
+it to check, so that proof never arrives on a stock install, and enforcement silently
+degrades to observation only.
+
+Fix: state the tool list explicitly via `settings.json`'s `env` key (any scope; takes
+effect for sessions started after the change):
+
+```json
+{
+  "env": {
+    "TOKEN_OPTIMIZER_MCP_CAPABILITIES": "smart_read,smart_write,smart_edit,smart_glob,smart_grep,optimize_session,get_optimization_report,wiki_write"
+  }
+}
+```
+
 #### MCP server only (not recommended)
 
 If you want the tools without the enforcement:

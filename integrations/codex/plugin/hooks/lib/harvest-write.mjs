@@ -25,11 +25,13 @@
 
 import {
   putNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode, putEdge,
+  unrootedRoot,
 } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
 import { randomBytes } from 'node:crypto';
+import { homedir } from 'node:os';
 import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
 
 /**
@@ -324,7 +326,15 @@ function resolveAnchor(dir, anchor, projectRoot) {
   // that file into .token-optimizer and serve it back on the next touch. The
   // findings come from a model reading a transcript, so the paths are not
   // trusted input.
-  if (projectRoot && !withinProject(path, projectRoot)) return null;
+  //
+  // The unrooted bucket is a storage location, not a project: nothing on disk
+  // lives inside ~/.token-optimizer/unrooted, so using it as the containment
+  // root refused every anchor with no VCS ancestor -- dotfiles and machine-wide
+  // configs included. Home directory is the boundary that actually matches
+  // what an unrooted anchor looks like, and keeps the same protection.
+  const containmentRoot =
+    projectRoot === unrootedRoot() ? homedir() : projectRoot;
+  if (containmentRoot && !withinProject(path, containmentRoot)) return null;
 
   // Indexing creates the file node and its symbols with hashes and spans, which
   // is what makes the claim checkable later.
