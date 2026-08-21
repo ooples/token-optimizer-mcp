@@ -41,8 +41,15 @@ function givenServer(body: string, { asSourceCheckout = false } = {}) {
   return root;
 }
 
-/** A server that answers the handshake and lists the tools it is given. */
-const respondingServer = (tools: string[]) => `
+/** A static server that reads fixture data instead of constructing code from it. */
+const respondingServer = `
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
+const config = JSON.parse(
+  readFileSync(join(__dirname, 'fixture-config.json'), 'utf8')
+);
+
+function start() {
 let buffered = '';
 process.stdin.on('data', (chunk) => {
   buffered += chunk.toString();
@@ -61,12 +68,25 @@ process.stdin.on('data', (chunk) => {
       process.stdout.write(JSON.stringify({
         jsonrpc: '2.0',
         id: message.id,
-        result: { tools: ${JSON.stringify(tools)}.map((name) => ({ name })) },
+        result: { tools: config.tools.map((name) => ({ name })) },
       }) + '\\n');
     }
   }
 });
+}
+
+if (config.startupDelayMs > 0) setTimeout(start, config.startupDelayMs);
+else start();
 `;
+
+function givenRespondingServer(tools: string[], { startupDelayMs = 0 } = {}) {
+  const root = givenServer(respondingServer);
+  writeFileSync(
+    join(root, 'dist', 'server', 'fixture-config.json'),
+    JSON.stringify({ tools, startupDelayMs })
+  );
+  return root;
+}
 
 beforeEach(() => {
   fixture = mkdtempSync(join(tmpdir(), 'doctor-server-'));
@@ -107,7 +127,9 @@ describe('probeServer on a server that dies at startup', () => {
 
     const [check] = await probeServer({ root, timeoutMs: 15_000 });
 
-    expect(check.detail).toContain('compiled against a different Node.js version');
+    expect(check.detail).toContain(
+      'compiled against a different Node.js version'
+    );
     expect(check.detail).not.toMatch(/^\s*at\s/m);
   });
 });
@@ -150,7 +172,7 @@ describe('probeServer on a healthy server', () => {
    * open long enough to hear the answer.
    */
   it('completes the handshake and reads the tool list', async () => {
-    const root = givenServer(respondingServer(['smart_read', 'wiki_write']));
+    const root = givenRespondingServer(['smart_read', 'wiki_write']);
 
     const [check] = await probeServer({ root, timeoutMs: 15_000 });
 
@@ -159,7 +181,7 @@ describe('probeServer on a healthy server', () => {
   });
 
   it('fails when the profile registered nothing', async () => {
-    const root = givenServer(respondingServer([]));
+    const root = givenRespondingServer([]);
 
     const [check] = await probeServer({ root, timeoutMs: 15_000 });
 
@@ -168,12 +190,25 @@ describe('probeServer on a healthy server', () => {
   });
 
   it('fails when wiki_write is missing, because harvesting needs it', async () => {
-    const root = givenServer(respondingServer(['smart_read']));
+    const root = givenRespondingServer(['smart_read']);
 
     const [check] = await probeServer({ root, timeoutMs: 15_000 });
 
     expect(check.pass).toBe(false);
     expect(check.detail).toContain('wiki_write is missing');
+  });
+
+  it('treats hostile tool names as data instead of executable fixture code', async () => {
+    const root = givenRespondingServer([
+      'wiki_write',
+      "x'); process.exit(1); //",
+      '</script><script>throw new Error(\"injected\")</script>',
+    ]);
+
+    const [check] = await probeServer({ root, timeoutMs: 15_000 });
+
+    expect(check.pass).toBe(true);
+    expect(check.detail).toContain('3 tools listed');
   });
 
   /**
@@ -184,9 +219,9 @@ describe('probeServer on a healthy server', () => {
    * runs at all. The doctor holds the only stopwatch, so it has to report.
    */
   it('flags a start slow enough for a client to kill it', async () => {
-    const root = givenServer(
-      `setTimeout(() => {${respondingServer(['smart_read', 'wiki_write'])}}, 10500);\n`
-    );
+    const root = givenRespondingServer(['smart_read', 'wiki_write'], {
+      startupDelayMs: 10_500,
+    });
 
     const [check] = await probeServer({ root, timeoutMs: 20_000 });
 
@@ -196,7 +231,7 @@ describe('probeServer on a healthy server', () => {
   }, 30_000);
 
   it('reports how long a healthy start took, so the margin is visible', async () => {
-    const root = givenServer(respondingServer(['smart_read', 'wiki_write']));
+    const root = givenRespondingServer(['smart_read', 'wiki_write']);
 
     const [check] = await probeServer({ root, timeoutMs: 15_000 });
 

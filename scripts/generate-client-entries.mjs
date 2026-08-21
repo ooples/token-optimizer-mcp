@@ -14,11 +14,13 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contentMatches, readIfExists, writeIfChanged } from './lib/text.mjs';
+import { HOOK_MCP_TOOLS } from '../hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGE_VERSION = JSON.parse(
   readFileSync(join(ROOT, 'package.json'), 'utf8')
 ).version;
+const BUNDLED_MCP_CAPABILITIES = HOOK_MCP_TOOLS.join(',');
 
 /** [directory, client key, event, filename] */
 const ENTRIES = [
@@ -79,6 +81,10 @@ for (const [dir, client, event, name] of ENTRIES) {
 // Fail open: a defect in the optimizer must never cost the user a tool call.
 // Bootstrap failures are still recorded so fail-open does not become fail-silent.
 process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';
+// These entry points ship beside an MCP declaration for this same package. Hosts
+// do not expose their registered tool inventory to hook payloads, so make that
+// bundled contract explicit. An explicit empty value still wins and fails open.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= '${BUNDLED_MCP_CAPABILITIES}';
 try {
   const { run } = await import('./lib/adapter.mjs');
   await run('${client}', '${event}');

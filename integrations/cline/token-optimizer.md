@@ -6,8 +6,10 @@ is not proof that the server started successfully. If a named optimizer tool is
 absent, keep the native tool available and use a bounded native operation; never
 retry or redirect to an unregistered schema.
 
-When registered, prefer the token-optimizer MCP tools over built-in file and
-search tools. They cache, diff, and bound output. Cline's packaged native hook enforces the pre-tool routes below and injects graph findings when its lifecycle permits.
+When registered, you MUST use the token-optimizer MCP tools for every route
+listed below instead of the corresponding built-in file, search, or shell tool.
+This is mandatory routing policy, not a preference: the optimized tools cache,
+diff, and bound output. Cline's packaged native hook enforces the pre-tool routes below and injects graph findings when its lifecycle permits.
 
 ALWAYS:
 - Reading a file over ~25 KB, or ANY file already read this session

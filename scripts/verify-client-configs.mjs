@@ -250,6 +250,11 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
       rules.includes('smart_read') && rules.includes('smart_grep')
     );
     check(
+      `${key}: rules make optimized routing mandatory`,
+      /\bMUST use\b/.test(rules) &&
+        /mandatory routing policy, not a preference/i.test(rules)
+    );
+    check(
       `${key}: rules fail open when an MCP schema is not registered`,
       /only when[\s\S]{0,120}(?:visible|registered)/i.test(rules) &&
         /bounded native operation/i.test(rules)
@@ -522,6 +527,12 @@ readJsonHookManifest(
   'plugin/hooks/hooks.json',
   ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
   'plugin/hooks'
+);
+readJsonHookManifest(
+  'gemini extension',
+  'hooks/hooks.json',
+  ['SessionStart', 'BeforeTool', 'AfterTool', 'AfterAgent'],
+  'integrations/gemini/hooks'
 );
 
 for (const event of ['TaskStart', 'TaskResume', 'PreToolUse', 'PostToolUse']) {

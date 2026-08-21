@@ -409,12 +409,9 @@ export function probeEnforcement({ root, workspace, hooksDir, install }) {
   writeFileSync(small, 'export const y = 2;\n');
 
   try {
-    // The router is deliberately fail-open without positive runtime MCP
-    // inventory evidence. This probe tests the enforcement path, so it must
-    // attest the exact replacement whose routing it is trying to verify.
-    const probeOptions = {
-      env: { TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read' },
-    };
+    // Do not inject capability evidence here. The shipped hook must establish
+    // its bundled MCP contract by itself or this check would pass while real
+    // Claude/Codex sessions continue to leave native large reads unrestricted.
     const denied = probe(
       binary,
       {
@@ -422,8 +419,7 @@ export function probeEnforcement({ root, workspace, hooksDir, install }) {
         tool_input: { file_path: big },
         cwd: workspace,
         session_id: probeId,
-      },
-      probeOptions
+      }
     );
     const deniedOk = typeof denied === 'string' && denied.includes('deny');
     checks.push(deniedOk
@@ -438,8 +434,7 @@ export function probeEnforcement({ root, workspace, hooksDir, install }) {
         tool_input: { file_path: small },
         cwd: workspace,
         session_id: probeId,
-      },
-      probeOptions
+      }
     );
     // `allowed === null` is "the probe never ran", NOT "the hook allowed it".
     // allow() writes nothing and exits 0, so '' is a legitimate allow -- but null

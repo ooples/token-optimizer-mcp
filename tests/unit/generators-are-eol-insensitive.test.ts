@@ -188,6 +188,7 @@ describe('a generator run against a CRLF working tree', () => {
   function sandbox() {
     const root = mkdtempSync(join(tmpdir(), 'gen-eol-'));
     mkdirSync(join(root, 'scripts', 'lib'), { recursive: true });
+    mkdirSync(join(root, 'hooks-core'), { recursive: true });
     copyFileSync(
       join(process.cwd(), 'scripts', GEN),
       join(root, 'scripts', GEN)
@@ -195,6 +196,10 @@ describe('a generator run against a CRLF working tree', () => {
     copyFileSync(
       join(process.cwd(), 'scripts', 'lib', 'text.mjs'),
       join(root, 'scripts', 'lib', 'text.mjs')
+    );
+    copyFileSync(
+      join(process.cwd(), 'hooks-core', 'capabilities.mjs'),
+      join(root, 'hooks-core', 'capabilities.mjs')
     );
     // Generated hook entries stamp the package version into lifecycle telemetry,
     // making package.json an explicit generator input alongside the script and

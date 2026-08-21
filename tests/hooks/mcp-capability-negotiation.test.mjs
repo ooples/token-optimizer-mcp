@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -95,6 +95,15 @@ describe('inventory evidence', () => {
     expect(restored.proven).toBe(true);
     expect([...restored.names]).toEqual([]);
   });
+
+  test('a host-reported empty inventory overrides bundled defaults', () => {
+    const evidence = optimizerToolEvidence(
+      { available_tools: [] },
+      { TOKEN_OPTIMIZER_MCP_CAPABILITIES: 'smart_read,smart_grep' }
+    );
+    expect(evidence.proven).toBe(true);
+    expect([...evidence.names]).toEqual([]);
+  });
 });
 
 describe('fail-open routing', () => {
@@ -116,15 +125,75 @@ describe('fail-open routing', () => {
   ])(
     '%s leaves native search available with no registered replacement',
     (_name, entry) => {
+      const noServerEnv = {
+        ...cleanEnv,
+        // Explicit empty inventory overrides the bundled default and models a
+        // host that positively reports the MCP server unavailable.
+        TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+      };
       const output = run(entry, {
         session_id: `absent-${_name}`,
         cwd: workspace,
         tool_name: 'Grep',
         tool_input: { pattern: 'needle', path: '.' },
-      });
+      }, noServerEnv);
       expect(output).toBeNull();
     }
   );
+
+  test.each([
+    ['Claude Code plugin', CLAUDE_ROUTER],
+    ['Codex plugin', CODEX_ROUTER],
+  ])('%s enforces its bundled MCP tools without host inventory', (_name, entry) => {
+    const output = run(entry, {
+      session_id: `bundled-${_name}`,
+      cwd: workspace,
+      tool_name: 'Grep',
+      tool_input: { pattern: 'needle', path: '.' },
+    });
+    expect(output.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(output.hookSpecificOutput.permissionDecisionReason).toContain(
+      'smart_grep'
+    );
+  });
+
+  test('Codex denies one unambiguous large read inside a code-mode envelope', () => {
+    const large = join(workspace, 'large-code-mode.ts');
+    writeFileSync(large, 'export const value = 1;\n'.repeat(2_000));
+    const command = `Get-Content -Raw "${large}"`;
+    const output = run(CODEX_ROUTER, {
+      session_id: 'codex-single-code-mode-read',
+      cwd: workspace,
+      tool_name: 'functions.exec',
+      tool_input: {
+        code: `await tools.exec_command({ cmd: ${JSON.stringify(command)} });`,
+      },
+    });
+
+    expect(output.hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(output.hookSpecificOutput.permissionDecisionReason).toContain(
+      'smart_read'
+    );
+  });
+
+  test('Codex keeps multi-operation code-mode orchestration advisory', () => {
+    const large = join(workspace, 'large-multi-operation.ts');
+    writeFileSync(large, 'export const value = 1;\n'.repeat(2_000));
+    const read = `Get-Content -Raw "${large}"`;
+    const output = run(CODEX_ROUTER, {
+      session_id: 'codex-multi-code-mode-read',
+      cwd: workspace,
+      tool_name: 'functions.exec',
+      tool_input: {
+        code:
+          `await tools.exec_command({ cmd: ${JSON.stringify(read)} });` +
+          `await tools.exec_command({ cmd: 'git status --short' });`,
+      },
+    });
+
+    expect(output?.hookSpecificOutput?.permissionDecision).not.toBe('deny');
+    expect(output?.hookSpecificOutput?.additionalContext).toContain('smart_read');
+  });
 
   test('positive inventory evidence re-enables the exact replacement only', () => {
     const output = run(CODEX_ROUTER, {
