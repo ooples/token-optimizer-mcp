@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [master]
   push:
-    branches: [ master ]
+    branches: [master]
 
 # Least-privilege default for every job; jobs that comment on PRs elevate
 # explicitly (CodeQL actions/missing-workflow-permissions).
@@ -329,10 +329,49 @@ jobs:
             logs/
           retention-days: 7
 
+  windows-path-security:
+    name: Windows Path Security
+    runs-on: windows-latest
+    if: "${{ !startsWith(github.head_ref, 'release-please') && !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        # --ignore-scripts because this job needs no native module and the runner
+        # has no C++ toolchain. better-sqlite3 falls back from its prebuilt binary to
+        # `node-gyp rebuild`, which then fails looking for Visual Studio, so `npm ci`
+        # never completes and the two path-security tests below never run.
+        #
+        # Nothing here needs it: the anchor tests import hooks-core and wiki-write.ts,
+        # which pull only node built-ins. The repository's own postinstall already
+        # no-ops under CI, so skipping scripts costs this job nothing -- every other
+        # job still installs normally and exercises the full path.
+        run: npm ci --ignore-scripts
+
+      - name: Verify Windows anchor boundaries
+        run: npm test -- --runInBand tests/hooks/wiki-write-unrooted-anchor.test.mjs tests/unit/wiki-write-contract.test.ts
+
   status-check:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [lint-and-format, build, test, performance-benchmarks, integration-test]
+    needs:
+      [
+        lint-and-format,
+        build,
+        test,
+        performance-benchmarks,
+        integration-test,
+        windows-path-security,
+      ]
     # always() so a real failure is still reported, but skip entirely on
     # release-please PRs (its deps are skipped there, which would otherwise fail
     # the != "success" checks below).
@@ -359,6 +398,10 @@ jobs:
           fi
           if [ "${{ needs.integration-test.result }}" != "success" ]; then
             echo "Integration tests failed"
+            exit 1
+          fi
+          if [ "${{ needs['windows-path-security'].result }}" != "success" ]; then
+            echo "Windows path security tests failed"
             exit 1
           fi
           echo "All checks passed!"
