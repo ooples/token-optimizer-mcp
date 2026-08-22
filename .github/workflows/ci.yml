@@ -346,7 +346,16 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # --ignore-scripts because this job needs no native module and the runner
+        # has no C++ toolchain. better-sqlite3 falls back from its prebuilt binary to
+        # `node-gyp rebuild`, which then fails looking for Visual Studio, so `npm ci`
+        # never completes and the two path-security tests below never run.
+        #
+        # Nothing here needs it: the anchor tests import hooks-core and wiki-write.ts,
+        # which pull only node built-ins. The repository's own postinstall already
+        # no-ops under CI, so skipping scripts costs this job nothing -- every other
+        # job still installs normally and exercises the full path.
+        run: npm ci --ignore-scripts
 
       - name: Verify Windows anchor boundaries
         run: npm test -- --runInBand tests/hooks/wiki-write-unrooted-anchor.test.mjs tests/unit/wiki-write-contract.test.ts
