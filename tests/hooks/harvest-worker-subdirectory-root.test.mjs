@@ -83,10 +83,24 @@ afterEach(async () => {
 });
 
 function runWorker(args, env) {
+  // TOKEN_OPTIMIZER_WIKI_DIR IS REMOVED, NOT MERELY LEFT UNSET. `wikiDir`
+  // returns that variable verbatim when it is present, so an ambient value --
+  // a developer shell, or another suite that exported one -- would be inherited
+  // through process.env and the worker would use the configured graph instead
+  // of resolving the repository root. The assertions below would then be
+  // reporting on a path this test never chose, which is the one outcome a
+  // regression test for graph SELECTION cannot afford.
+  //
+  // Cleared before the caller's overrides are applied, so a test that wants to
+  // set it deliberately still can.
+  const childEnv = { ...process.env };
+  delete childEnv.TOKEN_OPTIMIZER_WIKI_DIR;
+  Object.assign(childEnv, env);
+
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [WORKER, ...args], {
       encoding: 'utf8',
-      env: { ...process.env, ...env },
+      env: childEnv,
     });
     let stderr = '';
     child.stderr.on('data', (c) => (stderr += c));
