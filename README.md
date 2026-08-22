@@ -413,13 +413,16 @@ That is a bigger ask than a normal dependency makes, so:
 signatures` ties the artifact to the workflow run and the commit, without
 trusting us. `CHECKSUMS.sha256` ships alongside for offline checking.
 
-**If nothing seems to be happening, the hooks are probably not wired.** npm 11
-gates lifecycle scripts behind `allow-scripts`, so on a default global install
-our postinstall never runs. Recovery is one line:
+**If nothing seems to be happening, the lifecycle bundle is probably not
+installed.** An MCP server process cannot modify the host that launched it, and
+npm 11 gates lifecycle scripts behind `allow-scripts`. Install the native
+plugin/hook bundle listed for your client below; adding only the MCP server gives
+the model tools but no pre-execution veto. For a legacy global Claude Code
+installation, recovery is one line:
 
 ```bash
-npx token-optimizer-install     # wire the hooks
-npx token-optimizer-doctor      # prove they work
+npx token-optimizer-install     # wire Claude Code hooks
+npx token-optimizer-doctor      # prove the Claude hooks work
 ```
 
 **Check that it works — not that files exist.**
@@ -506,8 +509,8 @@ npm run verify:all
 
 | Suite            | Checks | What it proves                                                                                                          |
 | ---------------- | ------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `test`           | 2,340  | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
-| `verify:clients` | 129    | Every client config matches its documented schema                                                                       |
+| `test`           | 2,437  | Enforcement, staleness, injection, consolidation, disclosure, cache, routing, trust — driving the real hooks over stdin |
+| `verify:clients` | 253    | Every client config, lifecycle manifest, and enforcement surface matches its documented schema                          |
 | `verify:harvest` | 26     | Request shape, response parsing, and that **no secret from a tool result crosses the wire**                             |
 | `verify:ui`      | 22     | Real headless Chromium: layout, label collisions, legibility                                                            |
 | `doctor`         | 10     | The installed hooks actually refuse, and the server actually answers                                                    |
@@ -546,35 +549,40 @@ Ready-made configuration for all sixteen lives in
 [`integrations/`](./integrations), generated from one source and validated by
 `npm run verify:clients`. Full matrix: [`docs/CLIENT_SUPPORT.md`](./docs/CLIENT_SUPPORT.md).
 
+Every MCP connection also receives capability-aware mandatory routing
+instructions in its `initialize` response. That gives all clients a universal
+always-on policy, but only the ten clients with native pre-tool surfaces can
+hard-veto a wasteful built-in call; install their lifecycle bundle for actual
+enforcement.
+
 ### Enforcing tier — the wasteful call is refused
 
-| Client          | Install                                                                                                     | What runs                                                                                           |
-| --------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Claude Code** | `/plugin marketplace add ooples/token-optimizer-mcp` then `/plugin install token-optimizer@token-optimizer` | SessionStart policy, PreToolUse router over Read/Grep/Glob/Edit/Write/Bash, PreCompact optimization |
-| **Codex**       | Copy [`integrations/codex`](./integrations/codex) to `~/.codex`                                             | SessionStart policy + PreToolUse router                                                             |
-| **OpenCode**    | Copy [`integrations/opencode`](./integrations/opencode)                                                     | Pre-tool router                                                                                     |
+These ten clients expose a pre-execution hook. Their packaged lifecycle bundle
+defaults to enforcement and shares one capability-aware decision engine; set
+`TOKEN_OPTIMIZER_MODE=advise` or `off` only when you deliberately want the
+escape hatch.
 
-### Directive tier — MCP plus an always-applied rules file
+| Client                 | Installable lifecycle surface                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Claude Code**        | Native plugin: `/plugin marketplace add ooples/token-optimizer-mcp`, then `/plugin install token-optimizer@token-optimizer`                      |
+| **Codex**              | Native plugin in [`integrations/codex/plugin`](./integrations/codex/plugin), or standalone hooks in [`integrations/codex`](./integrations/codex) |
+| **GitHub Copilot CLI** | Project hooks in [`integrations/copilot`](./integrations/copilot)                                                                                |
+| **Gemini CLI**         | Gemini extension at the repository root, backed by [`integrations/gemini`](./integrations/gemini)                                                |
+| **Qwen Code**          | Extension bundle in [`integrations/qwen`](./integrations/qwen)                                                                                   |
+| **Cursor**             | Project hooks and always-applied rule in [`integrations/cursor`](./integrations/cursor)                                                          |
+| **Cline**              | Project hooks and rule in [`integrations/cline`](./integrations/cline)                                                                           |
+| **OpenCode**           | In-process plugin and hooks in [`integrations/opencode`](./integrations/opencode)                                                                |
+| **Kilo**               | In-process plugin and hooks in [`integrations/kilo`](./integrations/kilo)                                                                        |
+| **Windsurf**           | Project hooks and rule in [`integrations/windsurf`](./integrations/windsurf)                                                                     |
 
-No pre-execution veto exists on these, so the optimizer states the policy on
-every request instead of enforcing it. Each directory holds the MCP config and
-the rules file, both at the paths that client's own documentation specifies.
+### Rules tier — mandatory routing where the host has no veto API
 
-| Client             | Config                                                                                  | Rules                                                     |
-| ------------------ | --------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Cursor             | `.cursor/mcp.json`                                                                      | `.cursor/rules/token-optimizer.mdc` (`alwaysApply: true`) |
-| Windsurf           | `mcp_config.json`                                                                       | `.windsurf/rules/token-optimizer.md`                      |
-| Cline              | `~/.cline/mcp.json`                                                                     | `.clinerules/token-optimizer.md`                          |
-| Roo Code           | `.roo/mcp.json`                                                                         | `.roo/rules/token-optimizer.md`                           |
-| Kilo               | `.kilo/kilo.jsonc` (`mcp` key)                                                          | `.kilo/rules/token-optimizer.md`                          |
-| Zed                | `settings.json` (`context_servers`)                                                     | `AGENTS.md`                                               |
-| Amp                | `settings.json` (`amp.mcpServers`)                                                      | `AGENTS.md`                                               |
-| Continue           | `config.yaml` (`mcpServers` **list**)                                                   | `.continue/rules/token-optimizer.md`                      |
-| Crush              | `crush.json` (`mcp` key)                                                                | `AGENTS.md`                                               |
-| Droid (Factory)    | `~/.factory/mcp.json`                                                                   | `AGENTS.md`                                               |
-| GitHub Copilot CLI | `copilot mcp add token-optimizer -- npx -y @ooples/token-optimizer-mcp@latest`          | `.github/copilot-instructions.md`                         |
-| Gemini CLI         | `gemini mcp add --scope user token-optimizer npx -y @ooples/token-optimizer-mcp@latest` | Gemini extension context                                  |
-| Qwen Code          | Extension config                                                                        | Extension context                                         |
+Roo Code, Zed, Amp, Continue, Crush, and Droid do not expose a packaged
+pre-execution bridge that can safely veto built-in calls. Their generated,
+always-on rules make optimized routing mandatory whenever the exact MCP schema
+is visible, and fail open to a bounded native operation when it is not. The
+integration directories contain both the MCP config and the rules file at the
+paths documented by each host.
 
 > **These paths are checked, not assumed.** Verifying them against each client's
 > published docs found six configs that would have installed cleanly and never
@@ -621,7 +629,7 @@ Start a new Codex conversation after installation so the new tools are discovere
 
 The plugin supplies both automatically. For an MCP-only installation, add the guidance from [`integrations/AGENTS.md`](./integrations/AGENTS.md) to a project or global `AGENTS.md`. A ready-made standalone hook is also available under [`integrations/codex/hooks`](./integrations/codex/hooks); merge its `hooks.json` into `~/.codex/hooks.json`, copy the script to `~/.codex/hooks/`, and review it once with `/hooks`.
 
-The Codex hook injects guidance at `SessionStart`, advises on large first-class read calls, and can block those reads when `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true`. Shell commands such as `cat` or `Get-Content` are exposed to hooks as `Bash`, so the hook does not try to parse and rewrite arbitrary shell syntax. The `AGENTS.md`/skill guidance remains important.
+The Codex hook injects guidance at `SessionStart` and blocks expensive native operations by default when the bundled MCP has an exact replacement. That includes a single unambiguous code-mode shell call such as `cat` or `Get-Content`; multi-operation orchestration remains advisory so unrelated work is not discarded. A second attempt at the same target passes through if the MCP is unavailable. Set `TOKEN_OPTIMIZER_MODE=advise` for guidance without vetoes or `TOKEN_OPTIMIZER_MODE=off` to disable the hooks. The `AGENTS.md`/skill guidance remains important.
 
 If you prefer a smaller instruction block:
 
@@ -791,7 +799,7 @@ New-Item -ItemType Directory -Force .github/hooks | Out-Null
 Copy-Item integrations/copilot/.github/hooks/token-optimizer* .github/hooks/
 ```
 
-The hooks inject optimization guidance at `sessionStart`, add a model-visible suggestion after a large `view`, and—when `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true`—deny a large built-in read so Copilot retries with `smart_read`. Partial reads and files below 25 KB pass through unchanged. Repository hooks work without overwriting user-level files; global hooks can instead be placed in `~/.copilot/hooks/` with their script paths adjusted for that directory.
+The hooks inject optimization guidance at `sessionStart` and deny a large built-in `view` by default so Copilot retries with `smart_read`. Partial reads and files below 25 KB pass through unchanged, and `TOKEN_OPTIMIZER_MODE=advise` restores non-blocking guidance. Repository hooks work without overwriting user-level files; global hooks can instead be placed in `~/.copilot/hooks/` with their script paths adjusted for that directory.
 
 Restart Copilot CLI after changing hook files. See GitHub's official [MCP setup guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) and [hooks reference](https://docs.github.com/en/copilot/reference/hooks-reference).
 
@@ -876,7 +884,7 @@ New-Item -ItemType Directory -Force .opencode/plugins | Out-Null
 Copy-Item integrations/opencode/.opencode/plugins/token-optimizer.js .opencode/plugins/
 ```
 
-The plugin preserves Token Optimizer usage state in OpenCode's compaction prompt. Set `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true` to make its `tool.execute.before` hook reject full-file reads over 25 KB and steer the agent to `smart_read`; small and partial reads pass normally. Restart OpenCode after adding the plugin. See the official [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) and [plugin hook guide](https://opencode.ai/docs/plugins/).
+The plugin preserves Token Optimizer usage state in OpenCode's compaction prompt. Its `tool.execute.before` hook rejects full-file reads over 25 KB by default and steers the agent to `smart_read`; small and partial reads pass normally. Set `TOKEN_OPTIMIZER_MODE=advise` for non-blocking guidance. Restart OpenCode after adding the plugin. See the official [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) and [plugin hook guide](https://opencode.ai/docs/plugins/).
 
 ### Generic MCP configuration
 
@@ -1315,15 +1323,15 @@ get_session_stats({});
 
 The MCP server is identical in every client, but lifecycle APIs are not. The repository ships client-native adapters instead of copying Claude event names into tools that would silently ignore them.
 
-| Client             | Native integration events                   | Default behavior                                   | Optional strict behavior                                   |
-| ------------------ | ------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------- |
-| Codex              | `SessionStart`, `PreToolUse`                | Inject guidance; advise on large first-class reads | Deny large reads and steer to `smart_read`                 |
-| Claude Code        | `PreToolUse` plus optional global pipeline  | Advise on large reads                              | Deny and steer; global install adds the seven phases below |
-| GitHub Copilot CLI | `sessionStart`, `preToolUse`, `postToolUse` | Inject guidance; advise after large `view` calls   | Deny large `view` calls and steer to `smart_read`          |
-| Gemini CLI         | `SessionStart`, `AfterTool`                 | Inject guidance; advise after large `read_file`    | Tail-call `smart_read` and replace the built-in result     |
-| OpenCode           | `tool.execute.before`, compaction hook      | Preserve optimization guidance during compaction   | Reject large full-file reads and steer to `smart_read`     |
+| Client             | Native integration events                   | Default enforcement                                    | Non-blocking mode             |
+| ------------------ | ------------------------------------------- | ------------------------------------------------------ | ----------------------------- |
+| Codex              | `SessionStart`, `PreToolUse`                | Deny replaceable large reads and single shell dumps    | `TOKEN_OPTIMIZER_MODE=advise` |
+| Claude Code        | `PreToolUse` plus optional global pipeline  | Deny replaceable large reads and noisy searches        | `TOKEN_OPTIMIZER_MODE=advise` |
+| GitHub Copilot CLI | `sessionStart`, `preToolUse`, `postToolUse` | Deny large `view` calls and steer to `smart_read`      | `TOKEN_OPTIMIZER_MODE=advise` |
+| Gemini CLI         | `SessionStart`, `BeforeTool`, `AfterTool`   | Deny replaceable large reads before they enter context | `TOKEN_OPTIMIZER_MODE=advise` |
+| OpenCode           | `tool.execute.before`, compaction hook      | Reject large full-file reads and steer to `smart_read` | `TOKEN_OPTIMIZER_MODE=advise` |
 
-Strict behavior is enabled with `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true` and uses a 25,600-byte threshold by default. Override the threshold with `TOKEN_OPTIMIZER_LARGE_READ_BYTES`. Partial reads pass through because they may already be more efficient than a full cached read.
+Enforcement is the default and uses a 25,600-byte threshold. Override the threshold with `TOKEN_OPTIMIZER_LARGE_READ_BYTES`, use `TOKEN_OPTIMIZER_MODE=advise` to keep recommendations without vetoes, or use `TOKEN_OPTIMIZER_MODE=off` to disable the lifecycle integration. Partial reads pass through because they may already be more efficient than a full cached read, and one repeated attempt is allowed so a failed MCP server cannot permanently block work.
 
 #### Analytics workflow and storage
 

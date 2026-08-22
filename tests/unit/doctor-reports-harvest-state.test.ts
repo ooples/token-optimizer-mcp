@@ -117,14 +117,14 @@ describe('probeHarvest', () => {
 });
 
 describe('the diagnosis as a whole', () => {
-  it('includes the harvest state, so a clean bill cannot hide an inert graph', () => {
+  it('includes the harvest state, so a clean bill cannot hide an inert graph', async () => {
     envOnly({});
     // workspace and graphDir are required by the enforcement and graph probes;
     // skipServer because the MCP probe spawns a server, which is not what this
     // test is about.
     const scratch = mkdtempSync(join(tmpdir(), 'doctor-harvest-'));
     try {
-      const result = diagnose({
+      const result = await diagnose({
         root: process.cwd(),
         workspace: join(scratch, 'workspace'),
         graphDir: join(scratch, 'graph'),

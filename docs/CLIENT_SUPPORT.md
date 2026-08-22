@@ -21,6 +21,12 @@ The executable registry in `hooks-core/capabilities.mjs` contains the exact
 per-client surfaces and prevents the adapter, generator, verifier, dashboard,
 and certification report from inventing different matrices.
 
+The MCP server also sends mandatory, capability-aware routing instructions in
+every `initialize` response. That is the universal floor for all clients: use an
+optimizer only when its exact schema is present, otherwise keep a bounded native
+operation available. It improves model routing but is not mislabeled as a veto;
+only the ten native integrations can refuse a built-in call before execution.
+
 “Active-model semantic harvest” always means the model doing the work decides
 whether a durable, non-obvious conclusion exists and calls `wiki_write` itself.
 No supported path delegates that judgment to a detached harvesting model.
@@ -93,15 +99,15 @@ needs the complete 102-tool specialist catalog. Use the four-operation
 `cognitive` profile for UCR/live-graph sessions; its measured static schema is
 1,162 `cl100k_base` tokens versus 30,593 for the full catalog.
 
-| Variable                                | Default   | Effect                                   |
-| --------------------------------------- | --------- | ---------------------------------------- |
-| `TOKEN_OPTIMIZER_MODE`                  | `enforce` | `advise` = never refuse; `off` = disable |
-| `TOKEN_OPTIMIZER_LARGE_READ_BYTES`      | `25600`   | Size at which a read stops being cheap   |
-| `TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS` | `8000`    | Cap on pre-compaction work               |
+| Variable                                | Default    | Effect                                   |
+| --------------------------------------- | ---------- | ---------------------------------------- |
+| `TOKEN_OPTIMIZER_MODE`                  | `enforce`  | `advise` = never refuse; `off` = disable |
+| `TOKEN_OPTIMIZER_LARGE_READ_BYTES`      | `25600`    | Size at which a read stops being cheap   |
+| `TOKEN_OPTIMIZER_PRECOMPACT_TIMEOUT_MS` | `8000`     | Cap on pre-compaction work               |
 | `TOKEN_OPTIMIZER_LOG_DIR`               | state logs | Structured lifecycle JSONL directory     |
-| `TOKEN_OPTIMIZER_LOG_MAX_BYTES`         | `5242880` | Rotate an active lifecycle log at size   |
-| `TOKEN_OPTIMIZER_LOG_RETENTION_DAYS`    | `14`      | Maximum lifecycle log age                |
-| `TOKEN_OPTIMIZER_LOG_MAX_FILES`         | `40`      | Maximum retained lifecycle log files     |
+| `TOKEN_OPTIMIZER_LOG_MAX_BYTES`         | `5242880`  | Rotate an active lifecycle log at size   |
+| `TOKEN_OPTIMIZER_LOG_RETENTION_DAYS`    | `14`       | Maximum lifecycle log age                |
+| `TOKEN_OPTIMIZER_LOG_MAX_FILES`         | `40`       | Maximum retained lifecycle log files     |
 
 An unrecognised `TOKEN_OPTIMIZER_MODE` falls back to `enforce`, so a typo cannot
 quietly turn the product off.

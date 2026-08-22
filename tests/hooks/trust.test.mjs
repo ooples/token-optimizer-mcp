@@ -184,8 +184,8 @@ describe('the doctor runs the thing rather than inspecting it', () => {
     for (const check of checks.filter((c) => !c.pass)) expect(check.remedy).toBeTruthy();
   });
 
-  test('the rendered report states the off switch', () => {
-    const result = diagnose({
+  test('the rendered report states the off switch', async () => {
+    const result = await diagnose({
       root: ROOT, workspace, graphDir: join(workspace, 'wiki'),
       settingsPath: join(workspace, 'nope.json'), skipServer: true,
     });

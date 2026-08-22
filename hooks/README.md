@@ -46,11 +46,10 @@ these rules before expecting "every Read is automatically compressed":
 - **`smart_read` MCP tool — always available.** Call `smart_read` directly for a
   token-optimized read of any file; it returns compressed content regardless of
   the hook limitations above.
-- **Opt-in large-`Read` redirect (off by default).** Set
-  `TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true` to have the hook deny built-in
-  `Read` for files at/over `TOKEN_OPTIMIZER_LARGE_READ_BYTES` (default 50 KB) and
-  steer the model to `smart_read`. Off by default so it never disrupts edit
-  workflows.
+- **Large-`Read` redirect (on by default).** The hook denies built-in `Read` for
+  files at/over `TOKEN_OPTIMIZER_LARGE_READ_BYTES` (default 50 KB) and steers the
+  model to `smart_read`. Set `TOKEN_OPTIMIZER_MODE=advise` for non-blocking
+  guidance or `TOKEN_OPTIMIZER_MODE=off` to disable the lifecycle hooks.
 
 ## How It Works
 

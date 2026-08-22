@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import {
+  cpSync,
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -25,13 +27,27 @@ const geminiSessionStart = join(
   repoRoot,
   'integrations/gemini/hooks/session-start.mjs'
 );
+const geminiPreTool = join(repoRoot, 'integrations/gemini/hooks/pre-tool.mjs');
 const geminiPostTool = join(
   repoRoot,
   'integrations/gemini/hooks/post-tool.mjs'
 );
-const copilotHook = join(
+const copilotSessionStart = join(
   repoRoot,
-  'integrations/copilot/.github/hooks/token-optimizer-advisor.mjs'
+  'integrations/copilot/.github/hooks/session-start.mjs'
+);
+const copilotPreTool = join(
+  repoRoot,
+  'integrations/copilot/.github/hooks/pre-tool.mjs'
+);
+const legacyPowerShellDispatcher = join(repoRoot, 'hooks/dispatcher.ps1');
+const openCodePlugin = join(
+  repoRoot,
+  'integrations/opencode/.opencode/plugins/token-optimizer.js'
+);
+const kiloPlugin = join(
+  repoRoot,
+  'integrations/kilo/.kilo/plugin/token-optimizer.js'
 );
 
 function runHook(
@@ -70,6 +86,20 @@ describe('native CLI hook integrations', () => {
     smallFile = join(fixtureDir, 'small.txt');
     writeFileSync(largeFile, 'x'.repeat(30_000));
     writeFileSync(smallFile, 'small');
+
+    for (const [client, source] of [
+      ['opencode', join(repoRoot, 'integrations/opencode/hooks')],
+      ['kilo', join(repoRoot, 'integrations/kilo/hooks')],
+    ] as const) {
+      const destination = join(
+        fixtureDir,
+        `.${client}`,
+        'hooks',
+        'token-optimizer'
+      );
+      mkdirSync(dirname(destination), { recursive: true });
+      cpSync(source, destination, { recursive: true });
+    }
   });
 
   afterAll(() => {
@@ -81,7 +111,7 @@ describe('native CLI hook integrations', () => {
       hook_event_name: 'SessionStart',
       cwd: fixtureDir,
     });
-    const copilot = runHook(copilotHook, ['session-start'], {
+    const copilot = runHook(copilotSessionStart, [], {
       source: 'startup',
       cwd: fixtureDir,
     });
@@ -113,11 +143,7 @@ describe('native CLI hook integrations', () => {
     expect(partialGemini).toBeUndefined();
   });
 
-  it('enforces where a pre-execution veto exists and advises where it does not', () => {
-    // THE TIER DISTINCTION, which is a statement of protocol fact rather than a
-    // preference: Codex has a pre-tool hook and can refuse before the tokens are
-    // spent; Gemini's only tool hook fires after the read is already paid for,
-    // so it can advise about the next call and nothing more.
+  it('enforces every native large-read route before execution', () => {
     const codex = runHook(codexPreTool, [], {
       hook_event_name: 'PreToolUse',
       tool_name: 'Read',
@@ -125,26 +151,40 @@ describe('native CLI hook integrations', () => {
       cwd: fixtureDir,
       session_id: 'tier-check',
     });
-    const gemini = runHook(geminiPostTool, [], {
-      hook_event_name: 'PostToolUse',
-      tool_name: 'Read',
-      tool_input: { file_path: largeFile },
+    const gemini = runHook(geminiPreTool, [], {
+      session_id: 'gemini-tier-check',
       cwd: fixtureDir,
+      tool: 'read_file',
+      args: { absolute_path: largeFile },
     });
-    const copilot = runHook(copilotHook, ['after-read'], {
+    const copilot = runHook(copilotPreTool, [], {
+      sessionId: 'copilot-tier-check',
       toolName: 'view',
       toolArgs: JSON.stringify({ path: largeFile }),
       cwd: fixtureDir,
     });
+    const copilotAdvisory = runHook(
+      copilotPreTool,
+      [],
+      {
+        sessionId: 'copilot-advisory',
+        toolName: 'view',
+        toolArgs: JSON.stringify({ path: largeFile }),
+        cwd: fixtureDir,
+      },
+      { TOKEN_OPTIMIZER_MODE: 'advise' }
+    );
 
     expect(codex.hookSpecificOutput.permissionDecision).toBe('deny');
     expect(codex.hookSpecificOutput.permissionDecisionReason).toContain(
       'smart_read'
     );
 
-    expect(gemini.hookSpecificOutput.permissionDecision).toBeUndefined();
-    expect(gemini.hookSpecificOutput.additionalContext).toContain('smart_read');
-    expect(copilot.additionalContext).toContain('smart_read');
+    expect(gemini.decision).toBe('deny');
+    expect(gemini.reason).toContain('smart_read');
+    expect(copilot.permissionDecision).toBe('deny');
+    expect(copilot.permissionDecisionReason).toContain('smart_read');
+    expect(copilotAdvisory.additionalContext).toContain('smart_read');
   });
 
   it('states the escape hatch in every refusal', () => {
@@ -248,6 +288,31 @@ describe('native CLI hook integrations', () => {
       expect(existsSync(join(pluginRoot, relative!))).toBe(true);
       expect(hook.commandWindows).toContain(relative!.replaceAll('/', '\\'));
     }
+
+    const geminiExtensionManifest = JSON.parse(
+      readFileSync(join(repoRoot, 'hooks/hooks.json'), 'utf8')
+    );
+    expect(geminiExtensionManifest.hooks.BeforeTool).toBeDefined();
+    expect(geminiExtensionManifest.hooks.AfterAgent).toBeDefined();
+    const geminiCommands = Object.values(geminiExtensionManifest.hooks).flatMap(
+      (groups: any) =>
+        groups.flatMap((group: any) =>
+          group.hooks.map((hook: any) => hook.command as string)
+        )
+    );
+    expect(geminiCommands).toHaveLength(4);
+    expect(geminiCommands.join('\n')).not.toContain(
+      'gemini-token-optimizer-advisor.mjs'
+    );
+    for (const command of geminiCommands) {
+      const relative = command.match(
+        /\$\{extensionPath\}\$\{\/\}(.+\.mjs)/
+      )?.[1];
+      expect(relative).toBeTruthy();
+      expect(
+        existsSync(join(repoRoot, relative!.replaceAll('${/}', '/')))
+      ).toBe(true);
+    }
   });
 
   it('observes Claude Code PowerShell calls on Windows', () => {
@@ -256,6 +321,44 @@ describe('native CLI hook integrations', () => {
     );
     expect(manifest.hooks.PreToolUse[0].matcher).toContain('PowerShell');
     expect(manifest.hooks.PostToolUse[0].matcher).toContain('PowerShell');
+  });
+
+  const windowsIt = process.platform === 'win32' ? it : it.skip;
+  windowsIt('enforces large legacy PowerShell reads by default', () => {
+    const result = spawnSync(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        legacyPowerShellDispatcher,
+        '-Phase',
+        'PreToolUse',
+      ],
+      {
+        cwd: repoRoot,
+        input: JSON.stringify({
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Read',
+          tool_input: { file_path: largeFile },
+          cwd: fixtureDir,
+        }),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_LARGE_READ_BYTES: '1000',
+          TOKEN_OPTIMIZER_MODE: '',
+        },
+      }
+    );
+
+    expect(result.status).toBe(2);
+    expect(JSON.parse(result.stdout).hookSpecificOutput).toMatchObject({
+      permissionDecision: 'deny',
+      permissionDecisionReason: expect.stringContaining('smart_read'),
+    });
+    expect(result.stdout).toContain('TOKEN_OPTIMIZER_MODE=off');
   });
 
   it('ships a Codex plugin MCP config that Codex can discover', () => {
@@ -295,42 +398,81 @@ describe('native CLI hook integrations', () => {
     }
   });
 
-  it('preserves guidance through OpenCode compaction and supports strict routing', async () => {
-    const pluginPath = join(
-      repoRoot,
-      'integrations/opencode/.opencode/plugins/token-optimizer.js'
-    );
-    const previous = process.env.TOKEN_OPTIMIZER_REDIRECT_LARGE_READS;
-    process.env.TOKEN_OPTIMIZER_REDIRECT_LARGE_READS = 'true';
+  it('preserves guidance through OpenCode compaction', async () => {
+    const pluginModule = (await import(
+      `${pathToFileURL(openCodePlugin).href}?test=${Date.now()}`
+    )) as {
+      TokenOptimizerPlugin: (context: {
+        directory: string;
+      }) => Promise<Record<string, (...args: any[]) => Promise<void>>>;
+    };
+    const hooks = await pluginModule.TokenOptimizerPlugin({
+      directory: fixtureDir,
+    });
+    const compactionOutput = { context: [] as string[] };
 
-    try {
-      const pluginModule = (await import(
-        `${pathToFileURL(pluginPath).href}?test=${Date.now()}`
-      )) as {
-        TokenOptimizerPlugin: (context: {
-          directory: string;
-        }) => Promise<Record<string, (...args: any[]) => Promise<void>>>;
-      };
-      const hooks = await pluginModule.TokenOptimizerPlugin({
-        directory: fixtureDir,
-      });
-      const compactionOutput = { context: [] as string[] };
+    await hooks['experimental.session.compacting']({}, compactionOutput);
+    expect(compactionOutput.context.join('\n')).toContain('smart_read');
+  });
 
-      await hooks['experimental.session.compacting']({}, compactionOutput);
-      expect(compactionOutput.context.join('\n')).toContain('smart_read');
+  it.each([
+    ['OpenCode', openCodePlugin],
+    ['Kilo', kiloPlugin],
+  ])(
+    '%s executes its staged shared hook and enforces by default',
+    async (_name, pluginPath) => {
+      const previousMode = process.env.TOKEN_OPTIMIZER_MODE;
+      const previousCapabilities = process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+      delete process.env.TOKEN_OPTIMIZER_MODE;
+      delete process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
 
-      await expect(
-        hooks['tool.execute.before'](
-          { tool: 'read' },
-          { args: { filePath: largeFile } }
-        )
-      ).rejects.toThrow('Use token-optimizer smart_read');
-    } finally {
-      if (previous === undefined) {
-        delete process.env.TOKEN_OPTIMIZER_REDIRECT_LARGE_READS;
-      } else {
-        process.env.TOKEN_OPTIMIZER_REDIRECT_LARGE_READS = previous;
+      try {
+        const pluginModule = (await import(
+          `${pathToFileURL(pluginPath).href}?test=${Date.now()}`
+        )) as {
+          TokenOptimizerPlugin: (context: {
+            directory: string;
+          }) => Promise<Record<string, (...args: any[]) => Promise<void>>>;
+        };
+        const hooks = await pluginModule.TokenOptimizerPlugin({
+          directory: fixtureDir,
+        });
+
+        await expect(
+          hooks['tool.execute.before'](
+            { tool: 'read', sessionID: `default-${_name}` },
+            { args: { filePath: largeFile } }
+          )
+        ).rejects.toThrow('smart_read');
+
+        process.env.TOKEN_OPTIMIZER_MODE = 'advise';
+        await expect(
+          hooks['tool.execute.before'](
+            { tool: 'read', sessionID: `advise-${_name}` },
+            { args: { filePath: largeFile } }
+          )
+        ).resolves.toBeUndefined();
+
+        delete process.env.TOKEN_OPTIMIZER_MODE;
+        process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES = '';
+        await expect(
+          hooks['tool.execute.before'](
+            { tool: 'read', sessionID: `empty-${_name}` },
+            { args: { filePath: largeFile } }
+          )
+        ).resolves.toBeUndefined();
+      } finally {
+        if (previousMode === undefined) {
+          delete process.env.TOKEN_OPTIMIZER_MODE;
+        } else {
+          process.env.TOKEN_OPTIMIZER_MODE = previousMode;
+        }
+        if (previousCapabilities === undefined) {
+          delete process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+        } else {
+          process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES = previousCapabilities;
+        }
       }
     }
-  });
+  );
 });

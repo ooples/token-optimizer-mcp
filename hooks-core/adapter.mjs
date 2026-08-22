@@ -318,6 +318,11 @@ export function normalizeClientPayload(clientName, event, raw) {
           ...(envelope && typeof envelope === 'object' ? envelope : {}),
           command: String(patch || commands.join('\n') || source || ''),
           code_mode_envelope: true,
+          // A single nested shell call is unambiguous and safe to veto. Keep
+          // multi-operation programs advisory because rejecting their outer
+          // envelope would discard unrelated work in the same orchestration.
+          code_mode_single_shell_command:
+            !mutation && commands.length === 1,
         },
       };
     }
@@ -900,13 +905,14 @@ async function runHook(clientName, event, invocation) {
       event === 'pre-tool' &&
       !repeat &&
       mode() !== MODE_ADVISE &&
-      // Codex code mode presents an orchestration program as one outer
-      // `functions.exec` call. Refusing that envelope is rendered by the host
-      // as a failed script and can discard several otherwise-safe nested
-      // operations. Observe it, capture it and advise, but reserve a hard veto
-      // for legacy one-operation Codex tool calls where the denied operation is
-      // unambiguous.
-      !(clientName === 'codex' && payload.tool_input?.code_mode_envelope)
+      // Codex code mode presents orchestration as one outer `functions.exec`.
+      // Refuse only when it contains one shell call; a multi-operation envelope
+      // can include unrelated safe work that must not be discarded wholesale.
+      !(
+        clientName === 'codex' &&
+        payload.tool_input?.code_mode_envelope &&
+        !payload.tool_input?.code_mode_single_shell_command
+      )
   );
 
   if (canRefuse) {

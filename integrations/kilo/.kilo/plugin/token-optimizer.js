@@ -12,12 +12,19 @@ export const TokenOptimizerPlugin = async ({ directory }) => {
 
   const invoke = (entry, payload) => {
     try {
-      const result = spawnSync(process.execPath, [join(hooks, `${entry}.mjs`)], {
-        input: JSON.stringify(payload),
-        encoding: 'utf8',
-        timeout: 5_000,
-        maxBuffer: 64 * 1024,
-      });
+      const result = spawnSync(
+        process.execPath,
+        [join(hooks, `${entry}.mjs`)],
+        {
+          input: JSON.stringify(payload),
+          encoding: 'utf8',
+          // Carry explicit advise/off and capability overrides into the shared
+          // command hook rather than relying on an embedder's spawn defaults.
+          env: { ...process.env },
+          timeout: 5_000,
+          maxBuffer: 64 * 1024,
+        }
+      );
       return result.status === 0 && result.stdout.trim()
         ? JSON.parse(result.stdout)
         : null;
@@ -47,7 +54,10 @@ export const TokenOptimizerPlugin = async ({ directory }) => {
       if (hook?.permissionDecision === 'deny') {
         throw new Error(hook.permissionDecisionReason);
       }
-      pending.set(keyFor(input), { context: hook?.additionalContext || '', args: output.args });
+      pending.set(keyFor(input), {
+        context: hook?.additionalContext || '',
+        args: output.args,
+      });
     },
 
     'tool.execute.after': async (input, output) => {
@@ -63,7 +73,8 @@ export const TokenOptimizerPlugin = async ({ directory }) => {
       }
 
       if (parts.length) {
-        output.output = `${output.output || ''}\n\n[Token Optimizer graph]\n${parts.join('\n\n')}`.trim();
+        output.output =
+          `${output.output || ''}\n\n[Token Optimizer graph]\n${parts.join('\n\n')}`.trim();
       }
     },
   };
