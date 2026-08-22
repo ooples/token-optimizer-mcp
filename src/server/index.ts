@@ -598,12 +598,26 @@ const packageVersion = JSON.parse(
   fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
 ).version as string;
 
+// This reaches every conforming MCP client at initialization, including hosts
+// that expose no native lifecycle hook. It is deliberately capability-aware:
+// the model must route through optimizer schemas that tools/list actually
+// exposes, while a reduced/failed profile keeps bounded native tools usable.
+const SERVER_INSTRUCTIONS =
+  'Token optimization is mandatory routing policy, not a preference. When an ' +
+  'exact optimizer schema is present in tools/list, use smart_read for large or ' +
+  'repeated files, smart_grep for content search, smart_glob for file discovery, ' +
+  'smart_edit for large edits, optimize_session when context is tight, and ' +
+  'wiki_write for durable non-obvious conclusions. Never call or redirect to an ' +
+  'unlisted schema; use a bounded native operation when the required optimizer ' +
+  'tool is absent.';
+
 const server = new Server(
   {
     name: 'token-optimizer-mcp',
     version: packageVersion,
   },
   {
+    instructions: SERVER_INSTRUCTIONS,
     capabilities: {
       tools: {},
     },
@@ -2988,7 +3002,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) =>
     if (request.params.name === 'install_doctor') {
       return recordDirectToolResult(
         request.params.name,
-        () => installDoctor(request.params.arguments as any),
+        () =>
+          installDoctor({
+            ...(request.params.arguments as any),
+            // A runtime fact no file inspection can reach: this process may be
+            // running on an in-memory cache because the real one would not open.
+            // Nothing persists in that state and nothing outside says so.
+            cacheDegradedReason: cache.getDegradedReason(),
+          }),
         operationId
       );
     }

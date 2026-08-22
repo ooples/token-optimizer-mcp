@@ -13,9 +13,9 @@
   },
   "settings": [
     {
-      "name": "Automatic large-read routing",
-      "description": "Set to true to replace large built-in read results with token-optimizer smart_read results.",
-      "envVar": "TOKEN_OPTIMIZER_REDIRECT_LARGE_READS",
+      "name": "Enforcement mode",
+      "description": "Optional override: enforce is the default; use advise for non-blocking guidance or off to disable lifecycle hooks.",
+      "envVar": "TOKEN_OPTIMIZER_MODE",
       "sensitive": false
     },
     {

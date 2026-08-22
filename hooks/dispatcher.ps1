@@ -81,13 +81,19 @@ try {
         # (anthropics/claude-code#32105). Transparent substitution only works
         # for the MCP file-read tools (handled in PostToolUse below).
 
-        # 1. OPT-IN large-Read redirect (built-in Read only, OFF by default).
+        # 1. Default-on large-Read redirect (built-in Read only).
         #    Since we cannot compress a built-in Read's output, the next best
         #    thing is to steer big reads to the smart_read MCP tool, whose
-        #    output IS compressed (cached/diffed/truncated). Enable by setting
-        #    TOKEN_OPTIMIZER_REDIRECT_LARGE_READS=true. Off by default so it
-        #    never disrupts normal edit workflows.
-        if ($toolName -eq "Read" -and $env:TOKEN_OPTIMIZER_REDIRECT_LARGE_READS -eq 'true') {
+        #    output IS compressed (cached/diffed/truncated). Match the native
+        #    hook contract: enforce by default, with an explicit advise/off
+        #    escape hatch for users who need the built-in tool temporarily.
+        $optimizerMode = if ($env:TOKEN_OPTIMIZER_MODE) {
+            $env:TOKEN_OPTIMIZER_MODE.Trim().ToLowerInvariant()
+        } else {
+            'enforce'
+        }
+        $enforceLargeReads = $optimizerMode -notin @('advise', 'off')
+        if ($toolName -eq "Read" -and $enforceLargeReads) {
             $readPath = $data.tool_input.file_path
             if ($readPath -and (Test-Path -LiteralPath $readPath -PathType Leaf)) {
                 # Threshold in bytes (default 51200 = 50KB); configurable.
@@ -98,7 +104,7 @@ try {
                 $sizeBytes = (Get-Item -LiteralPath $readPath).Length
                 if ($sizeBytes -ge $thresholdBytes) {
                     Write-Log "[REDIRECT] Large Read ($sizeBytes bytes) -> smart_read: $readPath"
-                    Block-Tool -Reason "This file is large ($([Math]::Round($sizeBytes/1KB)) KB). Use the smart_read MCP tool (smart_read with path='$readPath') for a token-optimized, cached/diffed read instead of the built-in Read."
+                    Block-Tool -Reason "This file is large ($([Math]::Round($sizeBytes/1KB)) KB). Use the smart_read MCP tool (smart_read with path='$readPath') for a token-optimized, cached/diffed read instead of the built-in Read. Set TOKEN_OPTIMIZER_MODE=off to disable enforcement."
                 }
             }
         }
@@ -190,7 +196,7 @@ try {
         #    only `updatedMCPToolOutput` works, and only for MCP tools. So the
         #    one place we can transparently swap in compressed content is the
         #    MCP filesystem read tools. Built-in Read cannot be substituted —
-        #    it is handled (opt-in) at PreToolUse, and users can always call the
+        #    it is handled (default-on) at PreToolUse, and users can always call the
         #    smart_read MCP tool directly for compressed reads.
         if ($toolName -in @("mcp__filesystem__read_file", "mcp__filesystem__read_text_file")) {
             $smartReadOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File $ORCHESTRATOR -Phase "PostToolUse" -Action "smart-read" -InputJsonFile $tempFile

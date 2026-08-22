@@ -118,26 +118,16 @@ function addInventoryValue(value, names) {
  * exact registered names and is never inferred from TOOL_PROFILE.
  */
 export function optimizerToolEvidence(raw = {}, env = process.env) {
-  const names = new Set();
-  let proven = false;
-
-  if (
-    Object.prototype.hasOwnProperty.call(
-      env,
-      'TOKEN_OPTIMIZER_MCP_CAPABILITIES'
-    )
-  ) {
-    proven = true;
-    addInventoryValue(env.TOKEN_OPTIMIZER_MCP_CAPABILITIES, names);
-  }
+  const hostNames = new Set();
+  let hostProven = false;
 
   const visit = (value, depth = 0) => {
     if (!value || typeof value !== 'object' || depth > 3) return;
     for (const [key, child] of Object.entries(value)) {
       const normalized = key.replace(/[_-]/g, '').toLowerCase();
       if (INVENTORY_KEYS.has(normalized)) {
-        proven = true;
-        addInventoryValue(child, names);
+        hostProven = true;
+        addInventoryValue(child, hostNames);
       } else if (INVENTORY_CONTAINERS.has(normalized)) {
         visit(child, depth + 1);
       }
@@ -145,6 +135,18 @@ export function optimizerToolEvidence(raw = {}, env = process.env) {
   };
   visit(raw);
 
+  // A current host inventory is stronger than a bundled/install-time default.
+  // In particular, a proven empty inventory means the server failed or was
+  // disabled for this session and must keep native tools available.
+  if (hostProven) return { proven: true, names: hostNames };
+
+  const names = new Set();
+  const proven = Object.prototype.hasOwnProperty.call(
+    env,
+    'TOKEN_OPTIMIZER_MCP_CAPABILITIES'
+  );
+  if (proven)
+    addInventoryValue(env.TOKEN_OPTIMIZER_MCP_CAPABILITIES, names);
   return { proven, names };
 }
 

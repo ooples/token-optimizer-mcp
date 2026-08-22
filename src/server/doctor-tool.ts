@@ -47,6 +47,12 @@ const say = (body: string, isError = false) => ({
 
 export async function installDoctor(input: {
   uninstallPlan?: boolean;
+  /**
+   * Set by the server when its cache fell back to memory. Passed in rather than
+   * detected here because it is a property of THIS process, not of the files on
+   * disk -- a second CacheEngine built by the doctor might well open fine.
+   */
+  cacheDegradedReason?: string | null;
 }): Promise<{
   content: Array<{ type: string; text: string }>;
   isError?: boolean;
@@ -88,7 +94,7 @@ export async function installDoctor(input: {
     );
   }
 
-  const result = mods.doctor.diagnose({
+  const result = await mods.doctor.diagnose({
     root,
     workspace: path.join(os.tmpdir(), 'token-optimizer-doctor'),
     graphDir: mods.wiki.wikiDir(cwd),
@@ -97,6 +103,7 @@ export async function installDoctor(input: {
       path.join(os.homedir(), '.claude', 'settings.json'),
     // We ARE the server. Spawning another copy to ask it questions deadlocks.
     skipServer: true,
+    cacheDegradedReason: input?.cacheDegradedReason ?? null,
   });
 
   return say(mods.doctor.renderDiagnosis(result));

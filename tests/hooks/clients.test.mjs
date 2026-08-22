@@ -9,12 +9,16 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { normalizeTool, normalizePayload } from '../../hooks-core/decide.mjs';
 import { CLIENTS, normalizeClientPayload } from '../../hooks-core/adapter.mjs';
+import {
+  CAPABILITY_TIERS,
+  CLIENT_CAPABILITIES,
+} from '../../hooks-core/capabilities.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -30,31 +34,137 @@ beforeAll(() => {
 afterAll(() => rmSync(workspace, { recursive: true, force: true }));
 
 function runEntry(relativePath, payload, env = {}) {
+  const childEnv = { ...process.env, ...env };
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      env,
+      'TOKEN_OPTIMIZER_MCP_CAPABILITIES'
+    )
+  ) {
+    // The default-on test must prove the packaged entry establishes its own
+    // bundled contract rather than inheriting evidence from the test runner.
+    delete childEnv.TOKEN_OPTIMIZER_MCP_CAPABILITIES;
+  }
   const result = spawnSync(process.execPath, [join(ROOT, relativePath)], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
-    env: {
-      ...process.env,
-      TOKEN_OPTIMIZER_MCP_CAPABILITIES:
-        'smart_read,smart_write,smart_edit,smart_glob,smart_grep,wiki_write',
-      ...env,
-    },
+    env: childEnv,
   });
-  if (!result.stdout.trim()) return { decision: 'allow', reason: '' };
-  const parsed = JSON.parse(result.stdout);
+  if (!result.stdout.trim())
+    return {
+      decision: result.status === 2 ? 'deny' : 'allow',
+      reason: result.stderr || '',
+      status: result.status,
+    };
+  const parsed = JSON.parse(result.stdout.trim());
   const out = parsed.hookSpecificOutput || parsed;
   return {
     decision:
       parsed.decision ||
       out.permissionDecision ||
+      out.permission ||
+      (out.cancel ? 'deny' : null) ||
       (out.additionalContext ? 'advise' : 'allow'),
     reason:
       parsed.reason ||
       out.permissionDecisionReason ||
+      out.errorMessage ||
+      out.agent_message ||
       out.additionalContext ||
       '',
+    status: result.status,
   };
 }
+
+const nativeCommandClients = [
+  {
+    client: 'claude-code',
+    entry: 'plugin/hooks/pretooluse-router.mjs',
+    payload: (session) => ({
+      session_id: session,
+      cwd: workspace,
+      tool_name: 'Read',
+      tool_input: { file_path: big },
+    }),
+  },
+  {
+    client: 'codex',
+    entry: 'integrations/codex/hooks/pre-tool.mjs',
+    payload: (session) => ({
+      session_id: session,
+      cwd: workspace,
+      tool_name: 'read_file',
+      tool_input: { path: big },
+    }),
+  },
+  {
+    client: 'copilot',
+    entry: 'integrations/copilot/.github/hooks/pre-tool.mjs',
+    payload: (session) => ({
+      sessionId: session,
+      cwd: workspace,
+      toolName: 'view',
+      toolArgs: JSON.stringify({ path: big }),
+    }),
+  },
+  {
+    client: 'gemini',
+    entry: 'integrations/gemini/hooks/pre-tool.mjs',
+    payload: (session) => ({
+      session_id: session,
+      cwd: workspace,
+      tool: 'read_file',
+      args: { absolute_path: big },
+    }),
+  },
+  {
+    client: 'qwen',
+    entry: 'integrations/qwen/hooks/pre-tool.mjs',
+    payload: (session) => ({
+      session_id: session,
+      cwd: workspace,
+      tool_name: 'read_file',
+      tool_input: { file_path: big },
+    }),
+  },
+  {
+    client: 'cursor',
+    entry: 'integrations/cursor/hooks/pre-tool.mjs',
+    payload: (session) => ({
+      session_id: session,
+      cwd: workspace,
+      tool_name: 'read_file',
+      tool_input: { path: big },
+    }),
+  },
+  {
+    client: 'cline',
+    entry: 'integrations/cline/hooks/token-optimizer/pre-tool.mjs',
+    payload: (session) => ({
+      taskId: session,
+      workspaceRoots: [workspace],
+      preToolUse: { tool: 'read_file', parameters: { path: big } },
+    }),
+  },
+  {
+    client: 'windsurf',
+    entry: 'integrations/windsurf/hooks/pre-tool.mjs',
+    payload: (session) => ({
+      trajectory_id: session,
+      agent_action_name: 'pre_read_code',
+      tool_info: { file_path: big, working_directory: workspace },
+    }),
+  },
+];
+
+const rulesOnlyClients = {
+  roo: 'integrations/roo/token-optimizer.md',
+  zed: 'integrations/zed/AGENTS.md',
+  amp: 'integrations/amp/AGENTS.md',
+  continue: 'integrations/continue/token-optimizer.md',
+  crush: 'integrations/crush/AGENTS.md',
+  droid: 'integrations/droid/AGENTS.md',
+};
 
 describe('tool names normalize across clients', () => {
   test.each([
@@ -113,7 +223,23 @@ describe('payload shapes normalize across clients', () => {
 
     expect(command.tool_name).toBe('Bash');
     expect(command.tool_input.command).toBe('git status --short');
+    expect(command.tool_input.code_mode_single_shell_command).toBe(true);
     expect(web.tool_name).toBeNull();
+  });
+
+  test('Codex marks multi-command code-mode orchestration as unsafe to veto wholesale', () => {
+    const payload = normalizePayload(
+      normalizeClientPayload('codex', 'pre-tool', {
+        tool_name: 'functions.exec',
+        tool_input: {
+          code: "await tools.exec_command({ cmd: 'Get-Content -Raw large.ts' }); await tools.exec_command({ cmd: 'git status --short' });",
+        },
+      })
+    );
+
+    expect(payload.tool_name).toBe('Bash');
+    expect(payload.tool_input.code_mode_envelope).toBe(true);
+    expect(payload.tool_input.code_mode_single_shell_command).toBe(false);
   });
 
   test('Codex code mode decodes quoted Windows paths without losing backslashes', () => {
@@ -178,44 +304,59 @@ describe('payload shapes normalize across clients', () => {
 });
 
 describe('enforcement matches protocol capability, exactly', () => {
-  test('Codex has a pre-tool veto, so it denies', () => {
-    const r = runEntry('integrations/codex/hooks/pre-tool.mjs', {
-      session_id: 'codex-1',
-      tool_name: 'read_file',
-      tool_input: { path: big },
-    });
-    expect(r.decision).toBe('deny');
-    expect(r.reason).toContain('smart_read');
+  test.each(nativeCommandClients)(
+    '$client denies a large read by default through its packaged pre-tool entry',
+    ({ client, entry, payload }) => {
+      const r = runEntry(entry, payload(`fleet-default-${client}`));
+      expect(r.decision).toBe('deny');
+      expect(r.reason).toContain('smart_read');
+    }
+  );
+
+  test.each(nativeCommandClients)(
+    '$client fails open when the optimizer inventory is explicitly empty',
+    ({ client, entry, payload }) => {
+      const r = runEntry(entry, payload(`fleet-empty-${client}`), {
+        TOKEN_OPTIMIZER_MCP_CAPABILITIES: '',
+      });
+      expect(r.decision).not.toBe('deny');
+    }
+  );
+
+  test.each(nativeCommandClients)(
+    '$client honors the explicit advisory-mode escape hatch',
+    ({ client, entry, payload }) => {
+      const r = runEntry(entry, payload(`fleet-advise-${client}`), {
+        TOKEN_OPTIMIZER_MODE: 'advise',
+      });
+      expect(r.decision).not.toBe('deny');
+    }
+  );
+
+  test('every native command-hook client is exercised by the fleet probes', () => {
+    const inProcessClients = new Set(['opencode', 'kilo']);
+    const expected = Object.keys(CLIENTS)
+      .filter((client) => !inProcessClients.has(client))
+      .sort();
+    expect(nativeCommandClients.map(({ client }) => client).sort()).toEqual(
+      expected
+    );
   });
 
-  test('Gemini BeforeTool denies before execution using its top-level schema', () => {
-    const r = runEntry('integrations/gemini/hooks/pre-tool.mjs', {
-      session_id: 'gem-1',
-      tool: 'read_file',
-      args: { absolute_path: big },
-    });
-    expect(r.decision).toBe('deny');
-    expect(r.reason).toContain('smart_read');
-  });
+  test('every rules-only client ships mandatory always-on routing instructions', () => {
+    const expected = Object.entries(CLIENT_CAPABILITIES)
+      .filter(([, capability]) => capability.tier === CAPABILITY_TIERS.RULES)
+      .map(([client]) => client)
+      .sort();
+    expect(Object.keys(rulesOnlyClients).sort()).toEqual(expected);
 
-  test('Qwen PreToolUse denies before execution', () => {
-    const r = runEntry('integrations/qwen/hooks/pre-tool.mjs', {
-      session_id: 'qwen-1',
-      tool_name: 'read_file',
-      tool_input: { file_path: big },
-    });
-    expect(r.decision).toBe('deny');
-    expect(r.reason).toContain('smart_read');
-  });
-
-  test('Copilot parses string toolArgs and denies before execution', () => {
-    const r = runEntry('integrations/copilot/.github/hooks/pre-tool.mjs', {
-      sessionId: 'copilot-1',
-      toolName: 'view',
-      toolArgs: JSON.stringify({ path: big }),
-    });
-    expect(r.decision).toBe('deny');
-    expect(r.reason).toContain('smart_read');
+    for (const [client, relativePath] of Object.entries(rulesOnlyClients)) {
+      const rules = readFileSync(join(ROOT, relativePath), 'utf8');
+      expect(rules).toContain('MUST use the token-optimizer MCP tools');
+      expect(rules).toContain('mandatory routing policy');
+      expect(rules).toContain('has no packaged pre-execution bridge');
+      expect(client).toBeTruthy();
+    }
   });
 
   test('every client declares its capability explicitly', () => {
@@ -224,6 +365,18 @@ describe('enforcement matches protocol capability, exactly', () => {
       // A client that can deny must declare the protocol shape it emits.
       if (capability.canDeny) expect(capability.denyStyle).toBeTruthy();
     }
+  });
+
+  test('all registered clients are covered by native or mandatory-rule probes', () => {
+    const covered = new Set([
+      ...nativeCommandClients.map(({ client }) => client),
+      'opencode',
+      'kilo',
+      ...Object.keys(rulesOnlyClients),
+    ]);
+    expect([...covered].sort()).toEqual(
+      Object.keys(CLIENT_CAPABILITIES).sort()
+    );
   });
 });
 

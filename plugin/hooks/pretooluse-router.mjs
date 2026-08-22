@@ -56,11 +56,18 @@ import { isFsSafePath } from './lib/paths.mjs';
 import { readFileSync } from 'node:fs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import {
+  HOOK_MCP_TOOLS,
   optimizerToolsForHook,
   rememberOptimizerTools,
 } from './lib/capabilities.mjs';
 import { evaluateUcrGuards } from './lib/ucr-guard.mjs';
 import { beginHookInvocation } from './lib/observability.mjs';
+
+// The Claude plugin bundles this hook and the MCP declaration as one install.
+// Claude does not include its MCP tool inventory in hook payloads, so assert the
+// bundled contract unless the host/user explicitly supplied an inventory (an
+// empty value deliberately keeps the fail-open path available).
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 /**
  * Largest file the hook will read to index. Above this the touch is still

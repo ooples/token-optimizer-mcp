@@ -27,6 +27,7 @@ import {
 } from './lib/policy.mjs';
 import { policyText, sessionTaskContext } from './lib/adapter.mjs';
 import {
+  HOOK_MCP_TOOLS,
   optimizerToolEvidence,
   rememberOptimizerTools,
 } from './lib/capabilities.mjs';
@@ -40,6 +41,11 @@ import { wikiDir, load, projectRootFor } from './lib/wiki.mjs';
 import { episodeMeta, featuresForArm } from './lib/experiment.mjs';
 import { join } from 'node:path';
 import { beginHookInvocation, noteHookOutput } from './lib/observability.mjs';
+
+// The plugin owns both this hook and its MCP declaration. Claude does not pass
+// the registered tool inventory to SessionStart, so make the bundled schemas
+// explicit while preserving an explicitly empty host/user override.
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= HOOK_MCP_TOOLS.join(',');
 
 const invocation = beginHookInvocation('claude-code', 'session-start');
 

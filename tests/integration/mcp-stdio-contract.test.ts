@@ -217,6 +217,19 @@ describe('the server answers over stdio at all', () => {
     });
   });
 
+  it('delivers mandatory capability-aware routing instructions at initialization', () => {
+    expect(initializeResult?.instructions).toContain(
+      'mandatory routing policy, not a preference'
+    );
+    expect(initializeResult?.instructions).toContain(
+      'use smart_read for large or repeated files'
+    );
+    expect(initializeResult?.instructions).toContain(
+      'use a bounded native operation'
+    );
+    expect(initializeResult?.instructions).toContain('unlisted schema');
+  });
+
   it('lists its tools', async () => {
     // If this fails everything below is meaningless, so it is asserted first
     // rather than assumed.

@@ -16,7 +16,10 @@ import { hookHealthSummary } from '../hooks-core/observability.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-const result = diagnose({
+// Awaited: the server probe holds a child's stdin open while it speaks the MCP
+// handshake, which a synchronous spawn cannot do. See probeServer in
+// hooks-core/doctor.mjs for why closing stdin early was the bug.
+const result = await diagnose({
   root,
   workspace: join(tmpdir(), 'token-optimizer-doctor'),
   graphDir: wikiDir(process.cwd()),
