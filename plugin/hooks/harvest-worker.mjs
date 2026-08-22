@@ -73,7 +73,10 @@ async function main() {
   // transcript and carries no such list, so it gets no restriction.
   const findings = validate(raw, { knownFiles: full ? null : filesIn(digest) });
 
-  const written = writeHarvested(dir, findings, { sessionId: sessionId || null });
+  const written = writeHarvested(dir, findings, {
+    sessionId: sessionId || null,
+    projectRoot: cwd || process.cwd(),
+  });
 
   record(dir, {
     kind: 'harvest',
@@ -112,6 +115,7 @@ async function main() {
       const writtenLessons = writeHarvested(dir, anchored, {
         sessionId: sessionId || null,
         origin: ORIGIN_HARVESTED,
+        projectRoot: cwd || process.cwd(),
       });
 
       record(dir, {

@@ -25,12 +25,13 @@
 
 import {
   putNodeWithEdges, load, nodeId, sharedDir, isSharedDir, putNode, putEdge,
-  unrootedRoot,
+  unrootedRoot, projectRootFor,
 } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
 import { randomBytes } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
 
@@ -306,12 +307,22 @@ export function promoteExisting(projectDir, projectRoot, { sessionId = 'migratio
  */
 /** True when a canonical path sits inside the canonical project root. */
 function withinProject(path, projectRoot) {
-  const root = canonicalPath(projectRoot);
-  if (path === root) return true;
+  let candidate = canonicalPath(path);
+  let root = canonicalPath(projectRoot);
+
+  // Windows drive and UNC paths are case-insensitive even when a graph written
+  // on Windows is inspected from another host. Preserve the stored spelling,
+  // but compare the authorization boundary using Windows path semantics.
+  if (/^(?:[A-Z]:|\/\/)/.test(root)) {
+    candidate = candidate.toLowerCase();
+    root = root.toLowerCase();
+  }
+
+  if (candidate === root) return true;
   // Compare with a trailing separator so /repo-secrets is not read as inside
   // /repo. Both sides are already canonical, so this is a plain prefix test.
   const prefix = root.endsWith("/") ? root : root + "/";
-  return path.startsWith(prefix);
+  return candidate.startsWith(prefix);
 }
 
 /**
@@ -326,8 +337,17 @@ function withinProject(path, projectRoot) {
  * containment boundary accepts every absolute path under it, on any OS.
  */
 const FS_ROOT = /^(\/|[A-Z]:|\/\/[^/]+\/[^/]+)$/;
-function isFilesystemRoot(canonical) {
+export function isFilesystemRoot(canonical) {
   return !canonical || FS_ROOT.test(canonical);
+}
+
+/** Resolve symlinks and junctions before applying an authorization boundary. */
+function physicalPath(path) {
+  try {
+    return canonicalPath(realpathSync.native(path));
+  } catch {
+    return null;
+  }
 }
 
 function resolveAnchor(dir, anchor, projectRoot) {
@@ -335,6 +355,31 @@ function resolveAnchor(dir, anchor, projectRoot) {
   if (!rawPath) return null;
 
   const path = canonicalPath(rawPath);
+  const target = symbol
+    ? nodeId('symbol', symbolKey(path, symbol))
+    : nodeId('file', path);
+
+  // Some internal harvest paths write against nodes that structural capture
+  // already indexed and do not carry a project root. Preserve that established
+  // graph-only operation without restoring the old arbitrary read primitive:
+  // no root means an existing node may be linked, but no filesystem access.
+  if (!projectRoot) return load(dir).nodes.has(target) ? target : null;
+
+  const selectedProject = canonicalPath(projectRoot);
+  const unrootedProject = canonicalPath(unrootedRoot());
+  const isUnrooted = selectedProject === unrootedProject;
+
+  // wiki_write chooses its graph from the first anchor. Once that graph is the
+  // machine-level unrooted bucket, a home-directory containment check alone
+  // would also accept later anchors from unrelated repositories under home and
+  // copy their snapshots into the wrong graph. Every anchor must independently
+  // resolve to the same unrooted bucket before the broader home boundary applies.
+  if (
+    isUnrooted &&
+    canonicalPath(projectRootFor(path, null)) !== unrootedProject
+  ) {
+    return null;
+  }
 
   // ANCHORS STAY INSIDE THE PROJECT. indexFile READS the file and stores a
   // snapshot of it in the graph, so an anchor is a read primitive: without this,
@@ -345,29 +390,40 @@ function resolveAnchor(dir, anchor, projectRoot) {
   //
   // The unrooted bucket is a storage location, not a project: nothing on disk
   // lives inside ~/.token-optimizer/unrooted, so using it as the containment
-  // root refused every anchor with no VCS ancestor -- dotfiles and machine-wide
-  // configs included. Home directory is the boundary that actually matches
-  // what an unrooted anchor looks like, and keeps the same protection --
-  // EXCEPT when home itself resolves to a filesystem root ("/", a bare
+  // root refused every anchor with no VCS ancestor -- dotfiles and user-level
+  // configs included. User home is the deliberate boundary for unrooted,
+  // user-level files; physical-path resolution below prevents a link beneath
+  // it from widening that boundary. EXCEPT when home itself resolves to a
+  // filesystem root ("/", a bare
   // drive letter, root user, minimal containers, an unset HOME): a prefix
   // check against a root is true for every absolute path on that root, so
-  // that would accept precisely the ../../.ssh/id_rsa-style anchor, or its
-  // C:/Windows/... or //share/... equivalents, the check exists to refuse.
+  // that would accept /etc/..., C:/Windows/..., or //share/... anchors that the
+  // check exists to refuse.
   // Stay on the unrooted bucket in that case, which nothing resolves inside
   // -- fails closed instead of open.
   const home = homedir();
   const homeIsRoot = isFilesystemRoot(home && canonicalPath(home));
   const containmentRoot =
-    projectRoot === unrootedRoot() && !homeIsRoot ? home : projectRoot;
-  if (containmentRoot && !withinProject(path, containmentRoot)) return null;
+    isUnrooted && !homeIsRoot ? home : projectRoot;
+
+  // `indexFile` follows filesystem links. A lexical path under home or a
+  // project can therefore point at a file physically outside the boundary.
+  // Resolve both sides before authorizing the read and fail closed when either
+  // path does not exist or cannot be resolved.
+  const physicalAnchor = physicalPath(path);
+  const physicalRoot = physicalPath(containmentRoot);
+  if (
+    !physicalAnchor ||
+    !physicalRoot ||
+    !withinProject(physicalAnchor, physicalRoot)
+  ) {
+    return null;
+  }
 
   // Indexing creates the file node and its symbols with hashes and spans, which
   // is what makes the claim checkable later.
   indexFile(dir, path);
 
-  const target = symbol
-    ? nodeId('symbol', symbolKey(path, symbol))
-    : nodeId('file', path);
   return load(dir).nodes.has(target) ? target : null;
 }
 
