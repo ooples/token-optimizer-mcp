@@ -14,6 +14,7 @@
  */
 
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   harvestEnabled,
   buildDigest,
@@ -24,7 +25,7 @@ import {
 } from './lib/harvest.mjs';
 import { writeHarvested } from './lib/harvest-write.mjs';
 import { record } from './lib/metrics.mjs';
-import { wikiDir } from './lib/wiki.mjs';
+import { wikiDir, projectRootFor } from './lib/wiki.mjs';
 import { readArchive } from './lib/transcript.mjs';
 import { buildFeedbackDigest, validateLessons, LESSON_PROMPT } from './lib/lessons.mjs';
 import { ORIGIN_HARVESTED } from './lib/curate.mjs';
@@ -57,7 +58,25 @@ async function main() {
   const [transcript, sessionId, cwd] = process.argv.slice(2);
   if (!transcript || !existsSync(transcript) || !harvestEnabled()) return;
 
-  const dir = wikiDir(cwd || process.cwd());
+  // THE GRAPH AND THE CONTAINMENT BOUNDARY BOTH COME FROM THE REPOSITORY ROOT,
+  // NOT THE SESSION'S CWD. `wikiDir` only joins the path it is handed, so a
+  // session started in a subdirectory selected `<subdir>/.token-optimizer/wiki`
+  // -- a second graph, invisible to every other hook, which all resolve the root
+  // first. It also made the subdirectory the containment root for the write, so
+  // a finding anchored anywhere else in the same repository was refused for
+  // sitting "outside" the project.
+  //
+  // `__session__` is a synthetic leaf so the walk starts at `cwd` itself rather
+  // than its parent; `projectRootFor` takes a FILE path. This is the same idiom
+  // the adapter, the session-start hook and the Stop adapter already use.
+  //
+  // A cwd with no VCS ancestor resolves to the machine-level unrooted bucket,
+  // which `resolveAnchor` expects and handles: it swaps in home as the
+  // containment root for that case, so passing the resolved root here is what
+  // lets unrooted anchors work at all.
+  const sessionCwd = cwd || process.cwd();
+  const projectRoot = projectRootFor(join(sessionCwd, '__session__'), sessionCwd);
+  const dir = wikiDir(projectRoot);
 
   // Default sends a structured digest with no file contents. The full delta is
   // opt-in because the default has to be defensible without reading the docs.
@@ -75,7 +94,7 @@ async function main() {
 
   const written = writeHarvested(dir, findings, {
     sessionId: sessionId || null,
-    projectRoot: cwd || process.cwd(),
+    projectRoot,
   });
 
   record(dir, {
@@ -107,15 +126,20 @@ async function main() {
       // Anchors are optional on a lesson -- "always run npm test" is about no
       // file -- so each is anchored to the project root when it names nothing,
       // which keeps the store's rule that an unanchored finding is refused.
+      //
+      // The RESOLVED root, matching the containment root this write is checked
+      // against. The session's cwd would be refused outright once that root is
+      // the unrooted bucket, because `resolveAnchor` then narrows containment to
+      // home and a VCS-less working directory need not sit under it.
       const anchored = lessons.map((l) => ({
         ...l,
-        anchors: l.anchors.length ? l.anchors : [cwd || process.cwd()],
+        anchors: l.anchors.length ? l.anchors : [projectRoot],
       }));
 
       const writtenLessons = writeHarvested(dir, anchored, {
         sessionId: sessionId || null,
         origin: ORIGIN_HARVESTED,
-        projectRoot: cwd || process.cwd(),
+        projectRoot,
       });
 
       record(dir, {
