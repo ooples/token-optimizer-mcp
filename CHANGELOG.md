@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.1](https://github.com/ooples/token-optimizer-mcp/compare/v5.7.0...v5.7.1) (2026-08-23)
+
+
+### Bug Fixes
+
+* mcp server exits before registering tools on windows ([#307](https://github.com/ooples/token-optimizer-mcp/issues/307)) ([#308](https://github.com/ooples/token-optimizer-mcp/issues/308)) ([81f5d55](https://github.com/ooples/token-optimizer-mcp/commit/81f5d55953a2556bd3f872460d97ca0e40e7844e))
+
 ## [5.7.0](https://github.com/ooples/token-optimizer-mcp/compare/v5.6.1...v5.7.0) (2026-08-10)
 
 
