@@ -88,8 +88,11 @@ const ALLOWED = new Map([
   // The guard blocks anything new joining this list.
   // ------------------------------------------------------------------
 
-  // WIRED ELSEWHERE -- leaves this list when that PR merges.
-  ['forTouch', 'WIRED by the injection PR: just-in-time delivery, imported by nothing before it.'],
+  // The forTouch entry lived here and said "WIRED by the injection PR ... leaves
+  // this list when that PR merges". The PR merged -- adapter.mjs and the
+  // PreToolUse router both call it -- and the entry stayed for however long
+  // after, which is what the assertion at the bottom of this file now prevents:
+  // an excuse that outlives its defect reads as a live one.
 
   // THE FORECAST IS WIRED, so nothing from it is listed here any more.
   // logForecast and calibrate are called by forecastPanel; forecastPanel and
@@ -116,10 +119,27 @@ const ALLOWED = new Map([
   ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
   ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],
 
+  // THE contradicts EDGE, half wired. `audit()` has read this edge since the
+  // schema existed and nothing wrote it; `contradict` is now the writer, so the
+  // reader has a producer -- and the producer does not yet have a caller. Both
+  // call sites are NAMED, because "we might use it later" is the reason this
+  // list rejects: `contradict` belongs in the `/api/wiki/curate` action switch
+  // beside pin/retire/correct (src/server/wiki-routes.ts, outside the
+  // hooks-core-only scope of the change that added it), and
+  // `hasOutstandingContradiction` is the gate on Plan 2's utility-to-confidence
+  // promotion, which is the only path that can promote anything today. The
+  // assertion at the bottom of this file forces both entries out the moment
+  // those land.
+  ['contradict', 'UNWIRED: writes the contradicts edge; belongs in the /api/wiki/curate action switch, outside this change.'],
+  ['hasOutstandingContradiction', 'UNWIRED: gates confidence promotion on an open dispute; the promotion path it guards lands with Plan 2 utility.'],
+
   // ------------------------------------------------------------------
-  // GENUINE PUBLIC API.
+  // The policyText entry lived here as "GENUINE PUBLIC API", and it was stale
+  // in the same way forTouch was: adapter.mjs and the SessionStart hook both
+  // call it, so it was never an orphan needing an excuse. Being public API and
+  // having an in-repo caller are independent, and only the second is what this
+  // list is for.
   // ------------------------------------------------------------------
-  ['policyText', 'PUBLIC API: shared client briefing, consumed by every non-Claude adapter.'],
 ]);
 
 function walk(dir, out = []) {
@@ -276,11 +296,19 @@ describe('every exported function in the live hook path is reachable', () => {
   it('keeps the allowlist honest', () => {
     // An entry that no longer exists is a stale excuse, and a reason that says
     // nothing is not a reason.
-    const names = new Set(exports.map((e) => e.name));
+    const declaredAt = new Map(exports.map((e) => [e.name, e.file]));
     for (const [name, reason] of ALLOWED) {
       expect(typeof reason).toBe('string');
       expect(reason.length).toBeGreaterThan(20);
-      expect(names.has(name) || /constant|API/i.test(reason)).toBe(true);
+      expect(declaredAt.has(name) || /constant|API/i.test(reason)).toBe(true);
+
+      // AND THE LIST ONLY SHRINKS. An entry for a function that shipped code
+      // now calls is exactly as stale as one for a function that no longer
+      // exists, and nothing removed it -- so the excuse outlives the defect it
+      // described and the list grows monotonically, which is how "the guard
+      // blocks anything new joining this list" stops being true.
+      const file = declaredAt.get(name);
+      if (file) expect([name, usedInShippedCode(name, file)]).toEqual([name, false]);
     }
   });
 });
