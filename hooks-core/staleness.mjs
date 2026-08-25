@@ -52,6 +52,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { putNode, putEdge, contentHash, nodeId } from './wiki.mjs';
+import { hasOutstandingContradiction } from './curate.mjs';
 import { extractSymbols, spanText, symbolKey, extractImports } from './symbols.mjs';
 import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
 
@@ -452,6 +453,46 @@ export function diffLines(
 const CONTENT_DEPENDENT = new Set(['finding', 'map']);
 
 /**
+ * What, if anything, currently disagrees with this finding.
+ *
+ * DISCLOSED AT SERVE TIME, because that is the only moment the disagreement can
+ * do any good. `WIKI_GRAPH.md`'s whole argument for making `contradicts` an edge
+ * rather than an overwrite is that a reader "sees both claims and the
+ * disagreement between them" -- so handing a finding to a model while something
+ * in the graph disputes it, without saying so, throws away the reason the edge
+ * was recorded instead of an overwrite.
+ *
+ * `hasOutstandingContradiction` is the gate: it is the one definition of "an
+ * open dispute", shared with the confidence-promotion gate, so the two can never
+ * disagree about what counts. The loop only NAMES the other side, and it names a
+ * key rather than quoting a claim because the reader can call `wiki_query` with
+ * a key -- and because the injection path pays for every character it renders.
+ *
+ * SEPARATE FROM STALENESS on purpose. A finding can be disputed without being
+ * stale (nothing touched its anchor; another finding simply says otherwise) and
+ * stale without being disputed, so this adds its own fields rather than
+ * borrowing the stale ones, and the renderer discloses each on its own terms.
+ */
+function disputeOf(graph, finding) {
+  if (!hasOutstandingContradiction(graph, finding.key)) return {};
+
+  const keys = [];
+  for (const edge of graph.edges) {
+    if (edge.edge !== 'contradicts') continue;
+    const otherId =
+      edge.from === finding.id ? edge.to : edge.to === finding.id ? edge.from : null;
+    if (!otherId) continue;
+    const other = graph.nodes.get(otherId);
+    // An edge end that resolves to nothing names nothing. The dispute is still
+    // disclosed -- the gate above already established it -- but without a key
+    // the reader cannot be pointed anywhere, and inventing one would be worse.
+    if (other && typeof other.key === 'string' && !keys.includes(other.key)) keys.push(other.key);
+  }
+
+  return { contradicted: true, ...(keys.length ? { contradictedBy: keys.join(', ') } : {}) };
+}
+
+/**
  * Prepares findings for delivery, verifying each one lazily against disk.
  *
  * This is the only function that should ever hand a finding to a model, because
@@ -472,10 +513,17 @@ export function serve(graph, findings) {
   // quickly.
 
   for (const finding of findings.filter((f) => !f.retired)) {
+    // A DISPUTE TRAVELS WITH EVERY TYPE, which is why it is computed before the
+    // content-dependence branch below. A `command` or `rule` finding cannot be
+    // invalidated by an anchor's contents, but another finding can still
+    // disagree with it, and this early return is the path that would have
+    // quietly dropped that.
+    const dispute = disputeOf(graph, finding);
+
     // A claim that does not depend on the anchor's contents cannot be
     // invalidated by them. It is served as-is rather than discounted.
     if (!CONTENT_DEPENDENT.has(finding.type || 'finding')) {
-      served.push({ ...finding });
+      served.push({ ...finding, ...dispute });
       continue;
     }
 
@@ -560,6 +608,7 @@ export function serve(graph, findings) {
       ...finding,
       stale,
       ...(stale ? { diff, staleReason: reason, staleEvidence: Boolean(diff) } : {}),
+      ...dispute,
     });
   }
   return served;

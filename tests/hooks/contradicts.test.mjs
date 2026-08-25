@@ -9,11 +9,13 @@
  * utility while the dispute is open.
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { putNodeWithEdges, load, nodeId } from '../../hooks-core/wiki.mjs';
+import { putNode, putEdge, putNodeWithEdges, load, nodeId } from '../../hooks-core/wiki.mjs';
 import { contradict, hasOutstandingContradiction, audit } from '../../hooks-core/curate.mjs';
+import { indexFile, serve } from '../../hooks-core/staleness.mjs';
+import { forTouch, sessionIndex } from '../../hooks-core/inject.mjs';
 
 let dir;
 
@@ -121,5 +123,142 @@ describe('contradicts', () => {
     expect(graph.edges.some((e) => e.edge === 'contradicts')).toBe(false);
     // A self-edge would block promotion forever with no second claim to choose.
     expect(hasOutstandingContradiction(graph, 'old')).toBe(false);
+  });
+});
+
+/**
+ * A dispute is worthless unless the reader is told about it.
+ *
+ * `WIKI_GRAPH.md` argues for an edge rather than an overwrite so that a reader
+ * "sees both claims and the disagreement between them". Recording the edge and
+ * then serving the finding as though nothing disagreed with it throws that away,
+ * so these tests are about the serve and render path rather than the store.
+ */
+describe('disclosing a dispute when a finding is served', () => {
+  let workspace;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), 'contra-ws-'));
+    // Pin the arm: forTouch delivers nothing in the holdout, and the arm is
+    // chosen from the (random) workspace path, so this suite would otherwise be
+    // red about one run in ten for the correct reason.
+    process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+  });
+
+  afterEach(() => {
+    delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  const write = (name, text) => {
+    const path = join(workspace, name);
+    writeFileSync(path, text);
+    return path;
+  };
+
+  /** An anchored finding, which is what forTouch and staleness both need. */
+  function anchored(key, claim, path, extra = {}) {
+    const id = putNode(dir, {
+      kind: 'finding', key, claim, confidence: 0.9, type: 'finding', ...extra,
+    });
+    putEdge(dir, id, 'derived_from', nodeId('file', path));
+    return id;
+  }
+
+  const findingIn = (list, key) => list.find((f) => f.key === key);
+
+  test('serve names the other claim, at both ends of the disagreement', () => {
+    contradict(dir, { key: 'old', byKey: 'new', reason: 're-derived' });
+    const graph = load(dir);
+    const served = serve(graph, [...graph.nodes.values()].filter((n) => n.kind === 'finding'));
+
+    // A key rather than the claim, because the reader can call wiki_query with
+    // a key and the injection path pays for every character it renders.
+    expect(findingIn(served, 'old').contradicted).toBe(true);
+    expect(findingIn(served, 'old').contradictedBy).toBe('new');
+    expect(findingIn(served, 'new').contradicted).toBe(true);
+    expect(findingIn(served, 'new').contradictedBy).toBe('old');
+  });
+
+  test('serve leaves an undisputed finding unmarked', () => {
+    contradict(dir, { key: 'old', byKey: 'new', reason: 're-derived' });
+    const graph = load(dir);
+    const served = serve(graph, [...graph.nodes.values()].filter((n) => n.kind === 'finding'));
+
+    const other = findingIn(served, 'other');
+    expect(other.contradicted).toBeUndefined();
+    expect(other.contradictedBy).toBeUndefined();
+  });
+
+  test('serve discloses on a type an anchor cannot invalidate', () => {
+    // `command` findings take serve's early return: they are not content
+    // dependent, so no anchor is read and no staleness is computed. Another
+    // finding can still disagree with them, and that path is the one that would
+    // silently drop the disclosure.
+    putNodeWithEdges(dir, {
+      kind: 'finding', key: 'cmd', claim: 'run npm test', confidence: 0.9, type: 'command',
+    });
+    contradict(dir, { key: 'cmd', byKey: 'new', reason: 'npx jest does not work here' });
+
+    const graph = load(dir);
+    const served = serve(graph, [...graph.nodes.values()].filter((n) => n.kind === 'finding'));
+    expect(findingIn(served, 'cmd').contradicted).toBe(true);
+    expect(findingIn(served, 'cmd').contradictedBy).toBe('new');
+  });
+
+  test('the injected text names the disagreement and the key to query', () => {
+    const path = write('a.ts', 'export function f() { return 1; }');
+    indexFile(dir, path);
+    anchored('served', 'f returns 1', path);
+    putNodeWithEdges(dir, {
+      kind: 'finding', key: 'rebuttal', claim: 'f returns 2', confidence: 0.9,
+    });
+    contradict(dir, { key: 'served', byKey: 'rebuttal', reason: 're-derived' });
+
+    const out = forTouch(dir, load(dir), path, { sessionId: 's1' });
+    expect(out).toContain('f returns 1');
+    expect(out).toContain('DISPUTED by rebuttal');
+    // A dispute is not staleness. Nothing touched the anchor, so none of the
+    // staleness vocabulary may appear on the strength of a disagreement.
+    expect(out).not.toContain('STALE');
+    expect(out).not.toContain('recorded earlier');
+  });
+
+  test('a stale finding that is also disputed discloses both, separately', () => {
+    const path = write('b.ts', 'export function g() { return 1; }');
+    indexFile(dir, path);
+    anchored('both', 'g returns 1', path);
+    putNodeWithEdges(dir, {
+      kind: 'finding', key: 'rebuttal2', claim: 'g returns 3', confidence: 0.9,
+    });
+    contradict(dir, { key: 'both', byKey: 'rebuttal2', reason: 'read it again' });
+    // The anchor changes underneath the claim: staleness with evidence, which is
+    // the strong stale form Task 4 guards.
+    writeFileSync(path, 'export function g() { return 2; }');
+
+    // SNAPSHOTS ON. `load` leaves them out by default, and without the stored
+    // `before` there is no diff to rebuild -- which is the softened stale form,
+    // not the strong one this test is about.
+    const graph = load(dir, { snapshots: true });
+    const served = serve(graph, [...graph.nodes.values()].filter((n) => n.kind === 'finding'));
+    const finding = findingIn(served, 'both');
+    expect(finding.stale).toBe(true);
+    expect(finding.staleEvidence).toBe(true);
+    expect(finding.contradicted).toBe(true);
+
+    const out = forTouch(dir, load(dir, { snapshots: true }), path, { sessionId: 's2' });
+    expect(out).toContain('STALE (');
+    expect(out).toContain('What changed:');
+    expect(out).toContain('DISPUTED by rebuttal2');
+  });
+
+  test('the session index lists a disputed finding as disputed', () => {
+    contradict(dir, { key: 'old', byKey: 'new', reason: 're-derived' });
+    const index = sessionIndex(dir, load(dir), { relevantFindingIds: ['old'] });
+
+    // The first thing a session reads must not present a disputed claim as
+    // settled either.
+    expect(index).toContain('[DISPUTED by new]');
+    expect(index).toContain('f returns 1');
   });
 });

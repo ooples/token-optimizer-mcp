@@ -120,8 +120,29 @@ function fit(findings, budget) {
   return { kept, spent };
 }
 
+/**
+ * Discloses an open disagreement, on the same line as the claim it is about.
+ *
+ * BOTH HALVES, like the stale renderer below: the strong form names the other
+ * finding so the reader can fetch it, and the form without a key says only what
+ * is actually known. `serve` is what establishes the dispute; this only phrases
+ * it, and it phrases it in one short line because `fit` prices `render` against
+ * the injection budget -- a disagreement is worth a pointer, not both claims in
+ * full.
+ *
+ * NO DISMISSAL VOCABULARY, for the reason measured on the stale wording: an
+ * instruction to discount suppressed findings that were correct. This states
+ * that another claim exists and where to find it, and lets the reader decide.
+ */
+function disputeNote(finding) {
+  if (!finding.contradicted) return '';
+  return finding.contradictedBy
+    ? `\n  DISPUTED by ${finding.contradictedBy} -- wiki_query that key for the other claim`
+    : '\n  DISPUTED by another finding in this graph';
+}
+
 function render(finding) {
-  const head = `- [${finding.type || 'finding'}] ${finding.claim}`;
+  const head = `- [${finding.type || 'finding'}] ${finding.claim}${disputeNote(finding)}`;
   if (!finding.stale) return head;
 
   // A stale finding NEVER renders as though it were current. But the strength
@@ -995,7 +1016,15 @@ function renderSessionIndex(total, findings) {
       : finding.stale
         ? ' [possibly stale; verify before use]'
         : '';
-    return `- ${finding.key}${freshness}: ${finding.claim.slice(0, 90)}`;
+    // The session index is the first thing a session reads, so a disputed
+    // finding must not be listed there as settled either. Compressed to a
+    // marker and a key, matching the freshness markers beside it.
+    const dispute = finding.contradicted
+      ? finding.contradictedBy
+        ? ` [DISPUTED by ${finding.contradictedBy}]`
+        : ' [DISPUTED]'
+      : '';
+    return `- ${finding.key}${freshness}${dispute}: ${finding.claim.slice(0, 90)}`;
   });
   return `# Project wiki (${total} findings, ${findings.length} listed)
 
