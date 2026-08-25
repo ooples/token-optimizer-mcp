@@ -119,20 +119,6 @@ const ALLOWED = new Map([
   ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
   ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],
 
-  // THE contradicts EDGE, half wired. `audit()` has read this edge since the
-  // schema existed and nothing wrote it; `contradict` is now the writer, so the
-  // reader has a producer -- and the producer does not yet have a caller. Both
-  // call sites are NAMED, because "we might use it later" is the reason this
-  // list rejects: `contradict` belongs in the `/api/wiki/curate` action switch
-  // beside pin/retire/correct (src/server/wiki-routes.ts, outside the
-  // hooks-core-only scope of the change that added it), and
-  // `hasOutstandingContradiction` is the gate on Plan 2's utility-to-confidence
-  // promotion, which is the only path that can promote anything today. The
-  // assertion at the bottom of this file forces both entries out the moment
-  // those land.
-  ['contradict', 'UNWIRED: writes the contradicts edge; belongs in the /api/wiki/curate action switch, outside this change.'],
-  ['hasOutstandingContradiction', 'UNWIRED: gates confidence promotion on an open dispute; the promotion path it guards lands with Plan 2 utility.'],
-
   // ------------------------------------------------------------------
   // The policyText entry lived here as "GENUINE PUBLIC API", and it was stale
   // in the same way forTouch was: adapter.mjs and the SessionStart hook both

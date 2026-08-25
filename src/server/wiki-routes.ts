@@ -821,7 +821,8 @@ export function registerWikiRoutes(app: Express): void {
     const mods = await modules();
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
-    const { action, key, claim, anchors, confidence, pinned } = req.body || {};
+    const { action, key, claim, anchors, confidence, pinned, byKey, reason } =
+      req.body || {};
     let dir: string;
     try {
       dir = selectedSource(req, mods).dir;
@@ -848,6 +849,21 @@ export function registerWikiRoutes(app: Express): void {
           });
           return replacement
             ? res.json({ ok: true, key: replacement })
+            : res.status(404).json({ error: 'no such finding' });
+        }
+        case 'contradict': {
+          // AN EDGE, NOT AN OVERWRITE, and this is the only door it has: the
+          // schema declared `contradicts` from the start, `audit` read it, and
+          // nothing could write it -- so a belief change could only be recorded
+          // by `correct`, which retires the old claim and picks a winner.
+          // Recording a disagreement is the case where nobody has picked yet.
+          if (!byKey) return res.status(400).json({ error: 'byKey required' });
+          // Both ends must resolve to findings that exist, or the edge points at
+          // nothing and the disagreement is recorded against an id no reader can
+          // follow. curate returns false for that, and for a claim disagreeing
+          // with itself.
+          return mods.curate.contradict(dir, { key, byKey, reason })
+            ? res.json({ ok: true })
             : res.status(404).json({ error: 'no such finding' });
         }
         case 'create': {
