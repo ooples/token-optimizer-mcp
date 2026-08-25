@@ -32,7 +32,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const app = express();
+export const app = express();
 // Configurable because 3100 is a popular port and a collision is silent: the
 // second server fails to bind while the FIRST one keeps answering, so anything
 // probing the port gets stale results from a process it did not start. The UI
@@ -60,10 +60,18 @@ const limiter = rateLimit({
 app.use(limiter);
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'dashboard', 'public')));
+const dashboardPublicDirectory = path.join(
+  __dirname,
+  '..',
+  'dashboard',
+  'public'
+);
+app.use(express.static(dashboardPublicDirectory));
 
-// Helper function to get hooks data path
-function getHooksDataPath(): string {
+// Compatibility storage used only by the legacy Claude hook/session APIs.
+// Current plugin activity is read from the cross-client diagnostic ledger by
+// /api/diagnostics/hooks; it must never depend on this install-specific path.
+function getLegacyClaudeHooksDataPath(): string {
   return path.join(os.homedir(), '.claude-global', 'hooks', 'data');
 }
 
@@ -86,7 +94,7 @@ export { isValidSessionId } from '../utils/session-id.js';
 function resolveSessionLogPath(sessionId: string): string | null {
   if (!isValidSessionId(sessionId)) return null;
 
-  const base = path.resolve(getHooksDataPath());
+  const base = path.resolve(getLegacyClaudeHooksDataPath());
 
   // THE PATH IS BUILT FROM A DIRECTORY ENTRY, NOT FROM THE REQUEST.
   //
@@ -222,11 +230,13 @@ function splitCsvRow(line: string): string[] {
   return cells;
 }
 
-// Helper function to get current session ID
+// Legacy compatibility for callers of /api/session-summary and
+// /api/session-events. The dashboard's current activity cards use the
+// cross-client diagnostic ledger instead.
 function getCurrentSessionId(): string | null {
   try {
     const sessionFilePath = path.join(
-      getHooksDataPath(),
+      getLegacyClaudeHooksDataPath(),
       'current-session.txt'
     );
     if (!fs.existsSync(sessionFilePath)) {
@@ -638,14 +648,17 @@ app.get('/api/health', (_req, res) => {
 registerWikiRoutes(app);
 registerUcrRoutes(app);
 
-// Serve the wiki graph browser.
+// Serve the wiki graph browser through the same static middleware that already
+// serves /wiki.html reliably in globally installed packages. Express sendFile
+// returned a false 404 for this alias on the reported macOS npm installation
+// even though the resolved file existed; redirecting keeps one serving path.
 app.get('/wiki', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'dashboard', 'public', 'wiki.html'));
+  res.redirect(302, '/wiki.html');
 });
 
 // Serve index.html for root route
 app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'dashboard', 'public', 'index.html'));
+  res.sendFile(path.join(dashboardPublicDirectory, 'index.html'));
 });
 
 // Start server

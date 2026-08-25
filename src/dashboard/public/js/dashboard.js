@@ -848,10 +848,10 @@ function renderKpis(s) {
   if (!s) {
     host.innerHTML =
       '<div class="card empty-span"><div class="empty is-compact"><div class="mark">◔</div>' +
-      '<h3>No active session</h3>' +
-      '<p>These fill in while you are working in a supported coding agent. The savings above ' +
+      '<h3>No recent agent activity</h3>' +
+      '<p>These fill in from cross-client lifecycle telemetry while you are working in a supported coding agent. The savings above ' +
       'are kept per project, so they stay accurate between sessions.</p>' +
-      '<p class="next">Start a session, then refresh.</p></div></div>';
+      '<p class="next">Run an agent action, then refresh.</p></div></div>';
     return;
   }
 
@@ -869,7 +869,7 @@ function renderKpis(s) {
             tip: 'Pre-tool actions observed by the cross-client hook protocol during the last 24 hours.',
           },
           {
-            label: 'CLI clients active',
+            label: 'CLI clients observed',
             value: fmt(s.activeClients),
             tip: 'Distinct CLI clients that emitted lifecycle telemetry during the last 24 hours.',
           },
