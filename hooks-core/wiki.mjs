@@ -62,18 +62,37 @@ export const SUPPORTED_VERSIONS = [1];
  * Identity today because GRAPH_VERSION is 1 and no shape has changed. It exists
  * now so the first change that DOES need it has somewhere to go other than an
  * equality check that silently deletes user data.
+ *
+ * CONTRACT for the first non-identity step:
+ *  - It must be IDEMPOTENT. `upcast(upcast(r))` must equal `upcast(r)`, because
+ *    compaction upcasts a record to key it and `load` upcasts the same record
+ *    again on every subsequent read. A step that is not idempotent applies twice
+ *    to anything compaction has touched.
+ *  - It must NOT be relied on to restamp `v`. Nothing in this file writes an
+ *    upcast record back to disk under a version it did not come from; the
+ *    version stamp on disk is always the one that wrote the bytes. See the
+ *    per-branch comments in `compactIfWasteful`.
  */
 export function upcast(record) {
   return record;
 }
 
-/** True when this reader can interpret the record at all. */
-function readable(record) {
+/**
+ * True when this reader can interpret the record at all.
+ *
+ * `versions` is a PARAMETER so the range semantics are testable independently of
+ * today's constants. With `SUPPORTED_VERSIONS = [1]` and `GRAPH_VERSION = 1` a
+ * range check and the old equality check are extensionally identical, so a test
+ * pinned to the live constants cannot tell them apart -- and cannot fail if
+ * someone reverts this to an equality. Exercised against `[1, 2]`, it can.
+ */
+export function readable(record, versions = SUPPORTED_VERSIONS) {
   const version = record.v ?? 0;
   // Forward-incompatible records are skipped: a v-from-the-future was written by
-  // a newer client and we cannot know its shape. Ignoring the future is safe;
-  // ignoring the past is data loss.
-  return SUPPORTED_VERSIONS.includes(version);
+  // a newer client and we cannot know its shape. Ignoring the future is safe for
+  // a READER -- but see `compactIfWasteful`, where "ignore" would mean "delete",
+  // because compaction rewrites the files it reads.
+  return versions.includes(version);
 }
 
 /** Node kinds. `file` and `symbol` are first-class so staleness can propagate. */
@@ -432,9 +451,20 @@ function compactIfWasteful(dir) {
     const nodes = new Map();
     const edges = new Map();
     const snaps = new Map();
-    for (const rec of readSnapshots(dir)) {
+    // KEPT VERBATIM THROUGH THE REBUILD, exactly as the main log keeps what it
+    // cannot parse. These lines are not evictable by the snapshot budget below
+    // because their size cannot be attributed to an id we understand -- and
+    // preserving bytes we may not need is strictly better than deleting bytes a
+    // newer client does. They stop accumulating as soon as the client that
+    // wrote them compacts, since it can read and dedupe them.
+    const sidecar = readSnapshots(dir);
+    const rawSnaps = sidecar.unreadable;
+    for (const rec of sidecar.records) {
       if (typeof rec.snapshot === 'string' && rec.snapshot) {
-        snaps.set(rec.id, { at: rec.at || 0, snapshot: rec.snapshot });
+        // `v` IS CARRIED, not restamped. Writing GRAPH_VERSION over a record
+        // from another version mislabels bytes this reader did not produce, and
+        // the label is the only thing a future reader has to go on.
+        snaps.set(rec.id, { at: rec.at || 0, snapshot: rec.snapshot, v: rec.v ?? GRAPH_VERSION });
       }
     }
     for (const line of readFileSync(path, 'utf8').split('\n')) {
@@ -456,27 +486,40 @@ function compactIfWasteful(dir) {
         edges.set('raw:' + edges.size, line);
         continue;
       }
-      // Upcast IN MEMORY only, to key and classify the record. What gets written
-      // back below is the ORIGINAL `line`: compaction reclaims superseded
-      // records, it does not migrate surviving ones, so the on-disk version is
-      // whatever wrote it and `load` upcasts it again on every read.
-      record = upcast(record);
-      if (record.t === 'n') {
+      // TWO OBJECTS, ON PURPOSE. `record` is exactly what the bytes on disk say;
+      // `view` is the in-memory current-shape reading of it, used only to KEY and
+      // CLASSIFY. Nothing derived from `view` is ever serialized, because
+      // compaction reclaims superseded records -- it does not migrate surviving
+      // ones -- so every version stamp it writes is the one that wrote the bytes.
+      //
+      // An earlier revision of this comment claimed "the ORIGINAL line is written
+      // back" for the whole block. That was FALSE for the inline-snapshot branch,
+      // which re-serializes. It re-serialized the upcast object while carrying
+      // the old `v`, so the first non-identity `upcast` would have written
+      // new-shape bytes under an old label and every later `load` would have
+      // upcast them a second time. Hence: strip from `record`, never from `view`.
+      const view = upcast(record);
+      if (view.t === 'n') {
         // MIGRATION. Graphs written before snapshots were split still carry
         // them inline, and those are exactly the graphs that are slow. Moving
         // them out here means one compaction fixes an existing install.
+        //
+        // THE ONLY RE-SERIALIZING BRANCH in this loop. It writes the original
+        // record minus its snapshot, so the surviving bytes keep their own shape
+        // and their own `v`, and the snapshot moved to the sidecar carries the
+        // same `v` as the node it came out of.
         if (typeof record.snapshot === 'string' && record.snapshot) {
           const { snapshot, ...rest } = record;
-          nodes.set(record.id, JSON.stringify(rest));
-          snaps.set(record.id, { at: record.at || 0, snapshot });
+          nodes.set(view.id, JSON.stringify(rest));
+          snaps.set(view.id, { at: record.at || 0, snapshot, v: record.v ?? GRAPH_VERSION });
         } else {
-          nodes.set(record.id, line);
+          nodes.set(view.id, line);
         }
-      } else if (record.t === 's') {
+      } else if (view.t === 's') {
         if (typeof record.snapshot === 'string' && record.snapshot) {
-          snaps.set(record.id, { at: record.at || 0, snapshot: record.snapshot });
+          snaps.set(view.id, { at: record.at || 0, snapshot: record.snapshot, v: record.v ?? GRAPH_VERSION });
         }
-      } else if (record.t === 'e') edges.set(`${record.from}|${record.edge}|${record.to}`, line);
+      } else if (view.t === 'e') edges.set(`${view.from}|${view.edge}|${view.to}`, line);
       else edges.set('raw:' + edges.size, line);
     }
 
@@ -539,10 +582,20 @@ function compactIfWasteful(dir) {
     renameSync(tmp, path);
     // The surviving snapshots are rewritten to their own file, which is also
     // what migrates a graph that still had them inline.
-    const snapOut =
-      [...keep.entries()]
-        .map(([id, v]) => JSON.stringify({ t: 's', v: GRAPH_VERSION, id, snapshot: v.snapshot, at: v.at }))
-        .join('\n') + (keep.size ? '\n' : '');
+    //
+    // UNREADABLE LINES FIRST AND VERBATIM. This rebuild replaces the file, so
+    // anything omitted here is deleted permanently -- which made the missing
+    // counterpart to the main log's `raw:` bucket a real data-loss path, not a
+    // theoretical one. Each survivor also keeps ITS OWN `v` rather than being
+    // restamped to GRAPH_VERSION, so no record is relabelled as something this
+    // reader wrote.
+    const snapLines = [
+      ...rawSnaps,
+      ...[...keep.entries()].map(([id, s]) =>
+        JSON.stringify({ t: 's', v: s.v ?? GRAPH_VERSION, id, snapshot: s.snapshot, at: s.at })
+      ),
+    ];
+    const snapOut = snapLines.join('\n') + (snapLines.length ? '\n' : '');
     const snapTmp = snapshotsPath(dir) + '.compact';
     writeFileSync(snapTmp, snapOut, { mode: 0o600 });
     renameSync(snapTmp, snapshotsPath(dir));
@@ -687,9 +740,26 @@ function appendSnapshot(dir, record) {
   }
 }
 
-/** Every snapshot record, latest wins. Read only when a caller asks. */
+/**
+ * Every snapshot record, latest wins. Read only when a caller asks.
+ *
+ * `unreadable` collects the RAW LINES this reader rejected, and it is the reason
+ * this function reports them at all rather than just dropping them. `load` has
+ * no use for them -- a reader that cannot interpret a record must ignore it --
+ * but `compactIfWasteful` REBUILDS this file from what it read, so for the
+ * compactor "ignore" and "delete permanently" are the same operation. The main
+ * log already keeps what it cannot parse (the `raw:` bucket); the sidecar had no
+ * equivalent, which made it the one asymmetric, destructive path in an otherwise
+ * append-only store.
+ *
+ * This is not hypothetical here: hooks-core is vendored into eleven client
+ * directories that update independently, so a stale client compacting a graph a
+ * newer client has already written to is the expected steady state, not an edge
+ * case.
+ */
 function readSnapshots(dir) {
-  const out = [];
+  /** @type {object[]} */ const out = [];
+  /** @type {string[]} */ const unreadable = [];
   try {
     for (const line of readFileSync(snapshotsPath(dir), 'utf8').split('\n')) {
       if (!line) continue;
@@ -697,19 +767,23 @@ function readSnapshots(dir) {
         const rec = JSON.parse(line);
         // THE SAME RANGE AS THE MAIN LOG, deliberately. An equality check here
         // was the quietest of the three: a bump would have made every stored
-        // snapshot unreadable, and the very next compaction -- which rebuilds
-        // this file from what it could read -- would have deleted them for
-        // good. That is the one place in this store where a read filter turns
-        // into a permanent write.
-        if (readable(rec) && rec.id) out.push(upcast(rec));
+        // snapshot unreadable, and the very next compaction would have deleted
+        // them for good.
+        if (!readable(rec)) {
+          unreadable.push(line);
+          continue;
+        }
+        if (rec.id) out.push(upcast(rec));
       } catch {
-        /* a torn line costs one snapshot */
+        // A torn line costs one snapshot -- and it is NOT preserved, because a
+        // half-written line is not a record from another version, it is
+        // garbage. Distinguishing the two is the whole point of parsing first.
       }
     }
   } catch {
     /* no sidecar yet */
   }
-  return out;
+  return { records: out, unreadable };
 }
 
 /**
@@ -775,7 +849,9 @@ export function load(dir, { snapshots = false } = {}) {
   // Re-attached after the sweep, so a snapshot record may appear before or
   // after the node it belongs to.
   if (pending) {
-    for (const rec of readSnapshots(dir)) pending.set(rec.id, rec.snapshot);
+    // A reader has no use for the lines it could not interpret; only the
+    // compactor does, because only the compactor rewrites the file.
+    for (const rec of readSnapshots(dir).records) pending.set(rec.id, rec.snapshot);
     for (const [id, snapshot] of pending) {
       const node = nodes.get(id);
       if (node) nodes.set(id, { ...node, snapshot });
