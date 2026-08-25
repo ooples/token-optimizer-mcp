@@ -29,7 +29,6 @@ function coreUrl(name: string): string {
 export enum WikiQueryOperation {
   Get = 'get',
   Search = 'search',
-  Anchor = 'anchor',
   Node = 'node',
   Audit = 'audit',
   Balance = 'balance',
@@ -58,8 +57,6 @@ export interface WikiQueryOptions {
   query?: string;
   /** `search`: restrict to one finding type. */
   type?: string;
-  /** `anchor`: a file path or `file#symbol`. */
-  anchor?: string;
   /** `node`: a node id. */
   nodeId?: string;
   /** Max rows returned. Default 20, capped at 100. */
@@ -88,7 +85,12 @@ export interface WikiQueryResult {
 export const WIKI_QUERY_TOOL_DEFINITION = {
   name: 'wiki_query',
   description:
-    "Read the project's knowledge graph: fetch a finding by key, search findings, list what is known about a file or symbol, inspect a node, or get the graph's audit, token balance and overall shape. Use this when the session index mentions a finding you want in full, or before re-deriving something about a file you are about to work on.",
+    "Read the project's knowledge graph: fetch a finding by key, search findings by " +
+    "terms, inspect a node and its neighbours, or get the graph's audit, token balance " +
+    'and overall shape. Use it when the session index mentions a finding you want in ' +
+    'full, or to find out what the graph holds at all. NOT for anchored retrieval: to ' +
+    'ask what is known about a particular file or symbol, call wiki_read, which does ' +
+    'exactly that and is the tool the enforcement layer points at.',
   annotations: {
     title: 'Read project knowledge',
     readOnlyHint: true,
@@ -103,7 +105,10 @@ export const WIKI_QUERY_TOOL_DEFINITION = {
         type: 'string',
         enum: WIKI_QUERY_OPERATIONS,
         description:
-          "get = one finding by key. search = findings matching terms. anchor = everything known about a file or 'file#symbol'. node = a node and its neighbours. audit = findings needing attention. balance = what the graph has cost and saved. overview = the graph's shape.",
+          'get = one finding by key. search = findings matching terms. node = a node ' +
+          'and its neighbours. audit = findings needing attention. balance = what the ' +
+          "graph has cost and saved. overview = the graph's shape. For findings about a " +
+          'particular file or symbol, use wiki_read instead.',
       },
       key: { type: 'string', description: 'Finding key, for operation=get.' },
       query: {
@@ -114,10 +119,6 @@ export const WIKI_QUERY_TOOL_DEFINITION = {
         type: 'string',
         enum: WIKI_QUERY_FINDING_TYPES,
         description: 'Restrict search to one finding type.',
-      },
-      anchor: {
-        type: 'string',
-        description: "File path or 'file#symbol', for operation=anchor.",
       },
       nodeId: { type: 'string', description: 'Node id, for operation=node.' },
       limit: {
@@ -141,6 +142,50 @@ export const WIKI_QUERY_TOOL_DEFINITION = {
   },
 };
 
+/**
+ * A node's `snapshot` is a VERBATIM COPY OF A FILE, and it must never reach a
+ * response.
+ *
+ * The original design of this tool trimmed findings to a fixed shape for exactly
+ * this reason, then never called the function that did it -- so the invariant
+ * held only because `load()` happens to be called without `{ snapshots: true }`.
+ * That is one unrelated edit away from posting a private file into a model's
+ * context, and it is not hypothetical from the other direction either: `putNode`
+ * spreads whatever fields it is given onto the record, so a `snapshot` written
+ * inline is returned by `load()` regardless of that flag.
+ *
+ * So the guarantee lives at the boundary instead of in a comment. Every response
+ * leaves through here, and the walk is structural rather than a field list: a
+ * future field nested anywhere inside a served finding, a graph node or a
+ * neighbour is stripped without this function having to know it exists.
+ */
+const SNAPSHOT_FIELDS = new Set(['snapshot', 'snapshots', 'before', 'after']);
+
+function withoutSnapshots<T>(value: T, depth = 0): T {
+  if (depth > 8 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      withoutSnapshots(item, depth + 1)
+    ) as unknown as T;
+  }
+  if (value instanceof Map) {
+    // A Map does not survive JSON.stringify anyway, so returning one would be a
+    // silent `{}` on the wire. Refusing to carry it here makes that visible.
+    return undefined as unknown as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (SNAPSHOT_FIELDS.has(key)) continue;
+    out[key] = withoutSnapshots(item, depth + 1);
+  }
+  return out as unknown as T;
+}
+
+/** The single exit. Nothing returns from wikiQuery except through this. */
+function respond(result: WikiQueryResult): WikiQueryResult {
+  return withoutSnapshots(result);
+}
+
 export async function wikiQuery(
   options: WikiQueryOptions
 ): Promise<WikiQueryResult> {
@@ -159,11 +204,9 @@ export async function wikiQuery(
 
   // The graph belongs to the project the ANCHOR is in, not to wherever the
   // session happens to be running -- the same rule wiki_write follows.
-  const inferredRoot =
-    options.projectRoot ??
-    (options.anchor
-      ? wiki.projectRootFor(String(options.anchor).split('#')[0], process.cwd())
-      : process.cwd());
+  // No anchor to infer from any more -- anchored retrieval belongs to wiki_read.
+  // An explicit projectRoot still wins, so a caller that knows better can name it.
+  const inferredRoot = options.projectRoot ?? process.cwd();
   const dir = options.graphDir ?? wiki.wikiDir(inferredRoot);
   if (!options.graphDir) {
     projects.registerProject({
@@ -179,7 +222,7 @@ export async function wikiQuery(
   metrics.record(dir, {
     kind: 'query',
     operation,
-    key: options.key ?? options.anchor ?? null,
+    key: options.key ?? null,
     sessionId: options.sessionId ?? null,
   });
 
@@ -191,11 +234,15 @@ export async function wikiQuery(
       (f: Record<string, unknown>) => f.key === options.key
     );
     if (!match)
-      return { operation, found: false, note: 'no finding with that key' };
+      return respond({
+        operation,
+        found: false,
+        note: 'no finding with that key',
+      });
     // Served through `serve` so a stale finding arrives WITH the diff that
     // invalidated it. A stale finding served bare is worse than no graph.
     const [served] = staleness.serve(graph, [match]);
-    return { operation, found: true, finding: served };
+    return respond({ operation, found: true, finding: served });
   }
 
   if (operation === WikiQueryOperation.Search) {
@@ -210,22 +257,13 @@ export async function wikiQuery(
       graph,
       ranked.map((r: { finding: unknown }) => r.finding)
     );
-    return { operation, found: served.length > 0, findings: served };
-  }
-
-  if (operation === WikiQueryOperation.Anchor) {
-    const anchor = String(options.anchor ?? '');
-    const id = anchor.includes('#')
-      ? wiki.nodeId('symbol', anchor)
-      : wiki.nodeId('file', anchor);
-    const found = wiki.findingsFor(graph, id, { limit });
-    const served = staleness.serve(graph, found);
-    return { operation, found: served.length > 0, findings: served };
+    return respond({ operation, found: served.length > 0, findings: served });
   }
 
   if (operation === WikiQueryOperation.Node) {
     const node = graph.nodes.get(String(options.nodeId ?? ''));
-    if (!node) return { operation, found: false, note: 'no such node' };
+    if (!node)
+      return respond({ operation, found: false, note: 'no such node' });
     const edges = graph.edges
       .filter(
         (e: { from: string; to: string }) =>
@@ -237,15 +275,15 @@ export async function wikiQuery(
         graph.nodes.get(e.from === node.id ? e.to : e.from)
       )
       .filter(Boolean);
-    return { operation, found: true, node, neighbours };
+    return respond({ operation, found: true, node, neighbours });
   }
 
   if (operation === WikiQueryOperation.Audit) {
-    return { operation, found: true, audit: curate.audit(graph) };
+    return respond({ operation, found: true, audit: curate.audit(graph) });
   }
 
   if (operation === WikiQueryOperation.Balance) {
-    return { operation, found: true, balance: metrics.report(dir) };
+    return respond({ operation, found: true, balance: metrics.report(dir) });
   }
 
   if (operation === WikiQueryOperation.Overview) {
@@ -267,7 +305,7 @@ export async function wikiQuery(
       .slice(0, 10)
       .map(([key, findings]) => ({ key, findings }));
     const findings = curate.activeFindings(graph);
-    return {
+    return respond({
       operation,
       found: true,
       overview: {
@@ -276,8 +314,12 @@ export async function wikiQuery(
         stale: findings.filter((f: Record<string, unknown>) => f.stale).length,
         total: findings.length,
       },
-    };
+    });
   }
 
-  return { operation, found: false, note: `unknown operation: ${operation}` };
+  return respond({
+    operation,
+    found: false,
+    note: `unknown operation: ${operation}`,
+  });
 }
