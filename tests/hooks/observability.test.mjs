@@ -12,6 +12,9 @@ import {
 } from '../../hooks-core/observability.mjs';
 
 const ROOT = process.cwd();
+const PACKAGE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, 'package.json'), 'utf8')
+).version;
 let workspace;
 let previous;
 
@@ -229,7 +232,7 @@ describe('cross-client hook observability', () => {
     const [event] = readEventsFrom(join(workspace, 'claude-logs'));
     expect(event).toMatchObject({
       schemaVersion: 2,
-      serviceVersion: '5.7.0',
+      serviceVersion: PACKAGE_VERSION,
       client: 'claude-code',
       hookEvent: 'pre-tool',
       outcome: 'timeout',
@@ -287,7 +290,7 @@ describe('cross-client hook observability', () => {
       expect(event).toMatchObject({
       schemaVersion: 2,
         service: 'token-optimizer',
-        serviceVersion: '5.7.0',
+        serviceVersion: PACKAGE_VERSION,
         client,
         hookEvent: 'pre-tool',
         outcome: 'success',
