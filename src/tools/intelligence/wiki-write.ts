@@ -60,7 +60,13 @@ export interface WikiWriteOptions {
   scope?: 'project' | 'organization' | 'global';
   /** Conditions that should cause a later reader to distrust or re-check it. */
   invalidators?: string[];
-  /** Recorded for provenance so a claim can be traced to the session. */
+  /**
+   * Recorded for provenance so a claim can be traced to the session, and used
+   * to link the finding back to the task that produced it (the `answers`
+   * edge) when a task node with this same id already exists. Nothing
+   * populates this automatically today -- the caller must supply the real
+   * session id for either to hold.
+   */
   sessionId?: string;
   /** Overrides the project the finding belongs to. Defaults to the anchor's repo. */
   projectRoot?: string;
@@ -226,6 +232,14 @@ export async function wikiWrite(
         // stores a snapshot, so an unconstrained path would copy any readable
         // file on the machine into the graph.
         projectRoot: project,
+        // Task nodes are keyed by session id (structural capture creates one
+        // the first time this session's hooks touch a file), so the same
+        // identity that provenance is already recorded under is what
+        // `writeHarvested` needs to point the `answers` edge at the task this
+        // finding came from. Same discipline as everywhere else: a sessionId
+        // that names no existing task node resolves to no edge, not a
+        // dangling one.
+        taskId: options.sessionId ?? null,
       }
     );
 
