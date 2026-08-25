@@ -8,7 +8,7 @@ process.env.TOKEN_OPTIMIZER_VERSION = '5.7.1';
 // These entry points ship beside an MCP declaration for this same package. Hosts
 // do not expose their registered tool inventory to hook payloads, so make that
 // bundled contract explicit. An explicit empty value still wins and fails open.
-process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= 'smart_read,smart_write,smart_edit,smart_glob,smart_grep,optimize_session,get_optimization_report,wiki_write';
+process.env.TOKEN_OPTIMIZER_MCP_CAPABILITIES ??= 'smart_read,smart_write,smart_edit,smart_glob,smart_grep,optimize_session,get_optimization_report,wiki_write,wiki_query';
 try {
   const { run } = await import('./lib/adapter.mjs');
   await run('windsurf', 'pre-tool');

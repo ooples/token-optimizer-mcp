@@ -38,6 +38,10 @@ export const HOOK_MCP_TOOLS = Object.freeze([
   'optimize_session',
   'get_optimization_report',
   'wiki_write',
+  // The read side of the graph. The session index tells the model to "call
+  // wiki_query with a key for detail", so the hook needs positive evidence that
+  // the name it is advertising is actually registered in this host.
+  'wiki_query',
 ]);
 
 const HOOK_MCP_TOOL_SET = new Set(HOOK_MCP_TOOLS);

@@ -217,7 +217,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
     );
   });
 
-  it('keeps the complete 103-tool catalog behind the full profile', async () => {
+  it('keeps the complete 104-tool catalog behind the full profile', async () => {
     const [core, full] = await Promise.all([runServer(), runServer('full')]);
     expect(full.status).toBe(0);
 
@@ -225,7 +225,7 @@ describe('MCP tool profiles over the real stdio transport', () => {
       ?.tools as ListedTool[];
     const fullTools = full.responses.find((message) => message.id === 2)?.result
       ?.tools as ListedTool[];
-    expect(fullTools).toHaveLength(103);
+    expect(fullTools).toHaveLength(104);
     expect(fullTools.map((tool) => tool.name)).toContain('cache_benchmark');
     expect(JSON.stringify(coreTools).length).toBeLessThan(
       JSON.stringify(fullTools).length * 0.35
