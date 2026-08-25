@@ -297,11 +297,34 @@ export async function wikiQuery(
         (f: Record<string, unknown>) => (f.type ?? 'finding') === options.type
       );
     }
-    const ranked = lexical.rank(String(options.query ?? ''), pool, { limit });
-    const served = staleness.serve(
-      graph,
-      ranked.map((r: { finding: unknown }) => r.finding)
-    );
+
+    const rawQuery = String(options.query ?? '');
+    // Mirrors the dashboard's /api/wiki/search route (src/server/wiki-routes.ts):
+    // `tokenize` strips everything but alphanumeric runs, so a blank,
+    // whitespace-only, or punctuation-only query yields no terms for `rank`
+    // to score against -- and `rank` returns [] when there is nothing to
+    // score, not "the whole pool." `query` is optional in this tool's
+    // schema, so a model can omit it or send '' the same way a user can
+    // leave the dashboard search box blank; both surfaces must agree that
+    // "no usable query" means "return the pool," not "return nothing,"
+    // otherwise the same input means opposite things depending on which
+    // surface asked.
+    const hasQueryTerms = lexical.tokenize(rawQuery).length > 0;
+    const matches = hasQueryTerms
+      ? lexical
+          .rank(rawQuery, pool, { limit })
+          .map((r: { finding: unknown }) => r.finding)
+      : [...pool]
+          .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+            const weight = (f: Record<string, unknown>) =>
+              (typeof f.confidence === 'number' ? f.confidence : 0.5) *
+              curate.originWeight(f.origin) *
+              (f.pinned ? 2 : 1);
+            return weight(b) - weight(a);
+          })
+          .slice(0, limit);
+
+    const served = staleness.serve(graph, matches);
     return respond({ operation, found: served.length > 0, findings: served });
   }
 

@@ -63,6 +63,43 @@ export function tokenize(text) {
 }
 
 /**
+ * Effective term-frequency credit for a document that has NO exact token
+ * match for a query term but DOES have a token that starts with it (e.g.
+ * query `custom` against a document containing `customer`). Deliberately
+ * less than one exact occurrence (`1`), and it is a flat credit rather than
+ * one that grows with the number of prefix-matching tokens in the document,
+ * so a prefix hit can never outscore an exact hit of the same term:
+ *
+ *   BM25's per-term contribution is `idf * tf * (k1 + 1) / (tf + K)`, where
+ *   `K = k1 * (1 - b + b * L / avgL)` depends only on document length, not
+ *   on which term or how it matched. As a function of `tf` alone, with `K`
+ *   fixed, `f(tf) = tf / (tf + K)` is non-decreasing for every `tf >= 0` and
+ *   `k1 >= 0` (its derivative `K / (tf + K)^2` is never negative). So for
+ *   ANY document length, and any number of prefix-only occurrences, using
+ *   `PREFIX_TF < 1` in place of `tf` scores no higher than an actual exact
+ *   occurrence (`tf = 1`) would in that same document -- there is no
+ *   PREFIX_TF-independent way to accumulate more evidence than one real hit
+ *   by matching only a prefix. This is also why the count of prefix matches
+ *   is otherwise irrelevant here: it never feeds back into the score.
+ *
+ * PREFIX MATCHING IS NOT SUBSTRING MATCHING. It restores recall for a
+ * fragment typed at the START of a word -- `custom` now finds `customer` --
+ * which is the common case (a user typing the first few letters of a term
+ * they remember). It does NOT restore the old `.includes()` filter's ability
+ * to find a term in the MIDDLE of a word: a query for `tomer` still will not
+ * find `customer`. That recall gap is accepted, not silently reintroduced.
+ */
+const PREFIX_TF = 0.5;
+
+/**
+ * Below this length, a query term is not eligible for prefix matching: a
+ * one- or two-character prefix (`a`, `re`) is a substring of a large
+ * fraction of any real vocabulary, so it would match nearly every document
+ * and IDF alone would not discount it enough to keep the results relevant.
+ */
+const PREFIX_MIN_TERM_LENGTH = 3;
+
+/**
  * Classic BM25. `k1` controls term-frequency saturation, `b` length normalisation.
  * Defaults are the standard ones and are exposed so the recall probe can sweep them.
  */
@@ -94,7 +131,21 @@ export function rank(query, findings, { limit = 20, k1 = 1.2, b = 0.75 } = {}) {
 
     let score = 0;
     for (const term of terms) {
-      const tf = counts.get(term);
+      let tf = counts.get(term) || 0;
+
+      // No exact occurrence: fall back to a prefix match, which is weaker
+      // evidence and so credited at a flat PREFIX_TF rather than a real
+      // count (see PREFIX_TF's comment for why that ordering is safe). Only
+      // considered when nothing already matched exactly and the term is
+      // long enough that "starts with" is a meaningful signal.
+      if (tf === 0 && term.length >= PREFIX_MIN_TERM_LENGTH) {
+        for (const token of counts.keys()) {
+          if (token !== term && token.startsWith(term)) {
+            tf = PREFIX_TF;
+            break;
+          }
+        }
+      }
       if (!tf) continue;
       const df = docFreq.get(term) || 0;
       // Smoothed BM25 idf: log(1 + (N - df + 0.5) / (df + 0.5)). Unlike the

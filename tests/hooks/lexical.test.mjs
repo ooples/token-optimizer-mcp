@@ -151,5 +151,53 @@ describe('lexical', () => {
       expect(rank('handlerequesttimeout', findings).map((r) => r.finding.key)).toEqual(['handler']);
       expect(rank('handle request timeout', findings).map((r) => r.finding.key)).toEqual(['handler']);
     });
+
+    describe('prefix matching (fragment recall)', () => {
+      // The exact demonstrated regression: `.includes('custom')` used to
+      // match a claim containing "customer"; pure token-exact BM25 does
+      // not, because "custom" and "customer" are different tokens and share
+      // no camelCase/letter-digit sub-token either. This is the case fixed.
+      it('finds a claim containing a longer word starting with the query term', () => {
+        const findings = [
+          { key: 'target', claim: 'customer data leak in the export pipeline' },
+          { key: 'unrelated', claim: 'the retry backoff is capped at thirty seconds' },
+        ];
+        expect(rank('custom', findings).map((r) => r.finding.key)).toEqual(['target']);
+      });
+
+      it('never lets a prefix-only match outscore an exact match of the same term, no matter how many prefix hits exist', () => {
+        // "exact" has one real occurrence of "custom". "prefix-only" has
+        // five occurrences of "customer" and none of "custom" itself -- if
+        // prefix credit scaled with count instead of being a flat, sub-one
+        // credit, five prefix hits could outweigh one real hit. It must not:
+        // "exact" ranks first.
+        const findings = [
+          { key: 'prefix-only', claim: 'customer customer customer customer customer' },
+          { key: 'exact', claim: 'custom configuration is required' },
+        ];
+        const ranked = rank('custom', findings);
+        expect(ranked.map((r) => r.finding.key)).toEqual(['exact', 'prefix-only']);
+      });
+
+      it('does not prefix-match a query term shorter than three characters', () => {
+        // "cu" is a real prefix of "customer" too, but a two-character
+        // fragment is a substring of most vocabularies -- eligible terms
+        // start at three characters.
+        const findings = [{ key: 'target', claim: 'customer data leak' }];
+        expect(rank('cu', findings)).toEqual([]);
+      });
+
+      it('composes with sub-token emission: a fragment of the whole run-together identifier still prefix-matches', () => {
+        // "skipl" is not one of the emitted sub-tokens ("skiplibcheck",
+        // "skip", "lib", "check") for skipLibCheck, but it IS a prefix of
+        // the whole run-together token "skiplibcheck" that tokenize()
+        // always keeps alongside the split parts.
+        const findings = [
+          { key: 'ci', claim: 'CI fails because tsc reports skipLibCheck is required for the build to pass' },
+          { key: 'unrelated', claim: 'the retry backoff is capped at thirty seconds' },
+        ];
+        expect(rank('skipl', findings).map((r) => r.finding.key)).toEqual(['ci']);
+      });
+    });
   });
 });
