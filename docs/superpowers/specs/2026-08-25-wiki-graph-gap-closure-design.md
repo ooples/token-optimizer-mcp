@@ -68,7 +68,7 @@ the rest parked reproduces round 1 exactly.
 The detector also cannot see three whole sub-classes: readers with no producer
 (`kind:'query'`), producers with no reader (`kind:'lessons'`, written at
 `harvest-worker.mjs:113`), and referents with no target (`wiki_query`, named in
-seven shipped copies of injected prompt text).
+twelve shipped copies of injected prompt text).
 
 The allowlist has also already rotted: `forTouch` is listed as pending-wiring but
 now has 2 real call sites, so a regression there would be masked.
@@ -448,7 +448,7 @@ capability gets a test that drives the **product path**, not the function:
 - BM25 ranking asserted to order better than substring on a fixture
 
 `npm run sync:hooks` after every `hooks-core` change; CI's `sync:hooks:check`
-enforces the seven vendored copies. `tests/hooks/injection.test.mjs:145` becomes a
+enforces the eleven vendored copies. `tests/hooks/injection.test.mjs:145` becomes a
 real assertion instead of one that locks in a dangling reference.
 
 ---

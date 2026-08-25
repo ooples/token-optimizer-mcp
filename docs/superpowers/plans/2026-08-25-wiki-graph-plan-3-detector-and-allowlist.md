@@ -32,7 +32,7 @@ The disease is not blindness. **An accurate written description of a defect felt
 | `usedInShippedCode` bare-word-matches **raw text**, so a comment counts as a call site | `invalidateOnWrite`: 1 raw reference, 0 code references. The reference is prose at `pretooluse-router.mjs:153`. Remove the allowlist entry and the test still passes. |
 | Only `export function` is collected — 38 exported consts are invisible | `contradicts` and `answers` sat in `EDGE_KINDS` with zero write sites |
 
-And three sub-classes are outside its model entirely: readers with no producer (`kind:'query'`), producers with no reader (`kind:'lessons'`), and referents with no target (`wiki_query`, named in seven shipped copies of injected prompt text).
+And three sub-classes are outside its model entirely: readers with no producer (`kind:'query'`), producers with no reader (`kind:'lessons'`), and referents with no target (`wiki_query`, named in twelve shipped copies of injected prompt text).
 
 ---
 

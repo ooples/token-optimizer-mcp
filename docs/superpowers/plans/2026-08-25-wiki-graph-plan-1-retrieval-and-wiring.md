@@ -4,7 +4,7 @@
 
 **Goal:** Make the graph readable and its declared wiring live — ship `wiki_query`, real BM25, and connect the five capabilities that are declared, tested, and called by nothing.
 
-**Architecture:** All graph logic lives in `hooks-core/*.mjs` and is vendored into seven client copies by `npm run sync:hooks`; never edit a copy. MCP tools in `src/tools/**` reach hooks-core through dynamic `import(coreUrl('x.mjs'))`, following `src/tools/intelligence/wiki-write.ts`. Retrieval is traversal plus lexical, no embeddings.
+**Architecture:** All graph logic lives in `hooks-core/*.mjs` and is vendored into eleven client copies by `npm run sync:hooks`; never edit a copy. MCP tools in `src/tools/**` reach hooks-core through dynamic `import(coreUrl('x.mjs'))`, following `src/tools/intelligence/wiki-write.ts`. Retrieval is traversal plus lexical, no embeddings.
 
 **Tech Stack:** Node 22 ESM (`.mjs`) for hooks-core, TypeScript for `src/`, Jest (`tests/hooks/*.test.mjs`, `tests/unit/*.test.ts`), Express for the dashboard.
 
@@ -221,7 +221,7 @@ what matched best."
   - `wikiQuery(options: WikiQueryOptions) => Promise<WikiQueryResult>`
   - `WikiQueryOperation` — enum, **not** a bare string union of magic strings
 
-**Why this task matters:** `wiki_query` is named in injected prompt text in seven shipped copies and in `docs/WIKI_GRAPH.md`, and it does not exist. The SessionStart index tells the model to call a tool that is not there, and the hard per-touch budget has no escape hatch. Recording a `query` event also resurrects `indexBudget`, which is currently pinned to its 150-token floor for every project once five index injections have occurred.
+**Why this task matters:** `wiki_query` is named in injected prompt text in twelve shipped copies and in `docs/WIKI_GRAPH.md`, and it does not exist. The SessionStart index tells the model to call a tool that is not there, and the hard per-touch budget has no escape hatch. Recording a `query` event also resurrects `indexBudget`, which is currently pinned to its 150-token floor for every project once five index injections have occurred.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -291,7 +291,7 @@ Expected: FAIL — cannot find `dist/tools/intelligence/wiki-query.js`
  * wiki_query — reading the graph, which nothing could do.
  *
  * The SessionStart index has told the model to "call wiki_query with a key for
- * detail" in seven shipped copies of the injected text since injection landed.
+ * detail" in twelve shipped copies of the injected text since injection landed.
  * The tool did not exist. So the design's escape hatch for the hard per-touch
  * budget -- "everything else reachable through wiki_query" -- was not reachable
  * at all, and anything the 500-token cap dropped was simply gone.
@@ -600,7 +600,7 @@ git add src/tools/intelligence/wiki-query.ts src/validation/tool-schemas.ts src/
 git commit -m "feat(wiki): wiki_query, the tool the injected text already promised
 
 The SessionStart index has told the model to 'call wiki_query with a key for
-detail' in seven shipped copies since injection landed, and the tool did not
+detail' in twelve shipped copies since injection landed, and the tool did not
 exist -- so the hard per-touch budget had no escape hatch and anything it
 dropped was unreachable.
 
