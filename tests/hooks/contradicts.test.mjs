@@ -396,7 +396,7 @@ describe('answers inferred by anchor traversal', () => {
     writeHarvested(
       dir3,
       [{ type: 'finding', claim: 'a1 and a2 both default to 1', anchors: [fileA, fileB], confidence: 0.8 }],
-      { sessionId: 'session-a', projectRoot: dir3 }
+      { sessionId: 'session-a', authoritativeSessionId: 'session-a', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -422,7 +422,7 @@ describe('answers inferred by anchor traversal', () => {
     writeHarvested(
       dir3,
       [{ type: 'finding', claim: 'b1 and b2 both default to 1', anchors: [fileA, fileB], confidence: 0.8 }],
-      { sessionId: 'session-b', projectRoot: dir3 }
+      { sessionId: 'session-b', authoritativeSessionId: 'session-b', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -446,7 +446,7 @@ describe('answers inferred by anchor traversal', () => {
     writeHarvested(
       dir3,
       [{ type: 'finding', claim: 'c is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 'new-session', projectRoot: dir3 }
+      { sessionId: 'new-session', authoritativeSessionId: 'new-session', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -470,7 +470,7 @@ describe('answers inferred by anchor traversal', () => {
     writeHarvested(
       dir3,
       [{ type: 'finding', claim: 'd is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 'this-window', projectRoot: dir3 }
+      { sessionId: 'this-window', authoritativeSessionId: 'this-window', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -493,7 +493,7 @@ describe('answers inferred by anchor traversal', () => {
     writeHarvested(
       dir3,
       [{ type: 'finding', claim: 'e is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 'session-e', projectRoot: dir3 }
+      { sessionId: 'session-e', authoritativeSessionId: 'session-e', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -517,7 +517,7 @@ describe('answers inferred by anchor traversal', () => {
     writeHarvested(
       dir3,
       [{ type: 'finding', claim: 'g is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 'inferred-task', taskId: 'explicit-task', projectRoot: dir3 }
+      { sessionId: 'inferred-task', authoritativeSessionId: 'inferred-task', taskId: 'explicit-task', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -546,7 +546,39 @@ describe('answers inferred by anchor traversal', () => {
     writeHarvested(
       dir3,
       [{ type: 'finding', claim: 'h is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 'prior-finding', projectRoot: dir3 }
+      { sessionId: 'prior-finding', authoritativeSessionId: 'prior-finding', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('writes no edge from a plain sessionId alone, even when a real FOREIGN session fully covers the anchor', () => {
+    // Round 3's fix closed "unrelated or invented sessionId" and "a
+    // concurrent session's task wins a timing race". It did NOT close this:
+    // a caller (`wiki_write`) can supply a REAL, foreign session's id --
+    // named by mistake, or copied from a stale value -- and coverage cannot
+    // tell that session apart from the current one, because that OTHER
+    // session genuinely did touch these files. `sessionId` alone is not
+    // evidence; only `authoritativeSessionId` (never supplied by an
+    // unverified caller) may gate the traversal.
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'i.ts');
+    writeFileSync(file, 'export const i = 1;');
+    indexFile(dir3, file, 'export const i = 1;');
+
+    // A genuinely real PRIOR session whose task actually covers the anchor.
+    putNode(dir3, { kind: 'task', key: 'foreign-real-session' });
+    putEdge(dir3, nodeId('task', 'foreign-real-session'), 'derived_from', nodeId('file', file));
+
+    // The caller names that session as `sessionId` -- exactly the shape an
+    // unverified MCP tool argument would take -- but supplies no
+    // `authoritativeSessionId`.
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'i is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 'foreign-real-session', projectRoot: dir3 }
     );
 
     const graph = load(dir3);

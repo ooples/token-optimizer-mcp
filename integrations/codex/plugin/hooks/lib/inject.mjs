@@ -156,9 +156,9 @@ function disputeNote(finding) {
 function derivationNote(finding) {
   if (finding.derivationHolds !== false) return '';
   const changed = Array.isArray(finding.derivationChanged) ? finding.derivationChanged : [];
-  return changed.length
-    ? `\n  DERIVATION CHANGED -- ${changed.join(', ')} no longer match what this claim was derived from`
-    : '\n  DERIVATION CHANGED since this claim was recorded';
+  if (!changed.length) return '\n  DERIVATION CHANGED since this claim was recorded';
+  const verb = changed.length === 1 ? 'no longer matches' : 'no longer match';
+  return `\n  DERIVATION CHANGED -- ${changed.join(', ')} ${verb} what this claim was derived from`;
 }
 
 function render(finding) {

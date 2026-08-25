@@ -102,6 +102,11 @@ async function main() {
     // through PreToolUse/PostToolUse has no such node yet; `writeHarvested`
     // resolves that case to no edge rather than a dangling one.
     taskId: sessionId || null,
+    // AUTHORITATIVE, not just present: this `sessionId` came from Claude
+    // Code's own Stop-hook payload (see stop-harvest.mjs), not a model-typed
+    // tool argument, so it is safe to use for the traversal fallback if the
+    // explicit `taskId` above does not resolve.
+    authoritativeSessionId: sessionId || null,
   });
 
   record(dir, {
@@ -148,6 +153,8 @@ async function main() {
         origin: ORIGIN_HARVESTED,
         projectRoot,
         taskId: sessionId || null,
+        // Same hook-payload identity as above, same reason.
+        authoritativeSessionId: sessionId || null,
       });
 
       record(dir, {

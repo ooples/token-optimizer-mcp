@@ -451,6 +451,44 @@ describe('derivationCheck -- whether a claim-time derivation still holds', () =>
     const [out] = serve(graph, [graph.nodes.get(finding)]);
     expect(out.derivationHolds).toBe(false);
   });
+
+  it('declares what it checked against, on both branches, so a wiki_query consumer is not left to infer it', () => {
+    // `derivationHolds: true` means "matches the anchor's last-INDEXED
+    // hash", not "matches disk right now" -- `stale` already owns that
+    // comparison. A consumer reading raw JSON has no way to know which
+    // unless the record says so itself.
+    const holdsPath = write('q1.ts', 'export const q1 = 1;');
+    indexFile(dir, holdsPath);
+    const holdsId = nodeId('file', holdsPath);
+    const holdsHash = load(dir).nodes.get(holdsId).hash;
+    const holdsFinding = putNode(dir, {
+      kind: 'finding', key: 'q1', claim: 'q1 is 1', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { [holdsId]: holdsHash }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+    putEdge(dir, holdsFinding, 'derived_from', holdsId);
+
+    const changedPath = write('q2.ts', 'export const q2 = 1;');
+    indexFile(dir, changedPath);
+    const changedId = nodeId('file', changedPath);
+    const changedHash = load(dir).nodes.get(changedId).hash;
+    const changedFinding = putNode(dir, {
+      kind: 'finding', key: 'q2', claim: 'q2 is 1', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { [changedId]: changedHash }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+    putEdge(dir, changedFinding, 'derived_from', changedId);
+    writeFileSync(changedPath, 'export const q2 = 2;');
+    indexFile(dir, changedPath);
+
+    const graph = load(dir);
+    const [holdsOut, changedOut] = serve(graph, [
+      graph.nodes.get(holdsFinding),
+      graph.nodes.get(changedFinding),
+    ]);
+    expect(holdsOut.derivationHolds).toBe(true);
+    expect(holdsOut.derivationCheckedAgainst).toBe('index');
+    expect(changedOut.derivationHolds).toBe(false);
+    expect(changedOut.derivationCheckedAgainst).toBe('index');
+  });
 });
 
 /**
@@ -480,9 +518,39 @@ describe('the derivation-changed disclosure in forTouch', () => {
     const out = forTouch(dir, load(dir), path, { sessionId: 's-deriv' });
     expect(out).toContain('q is 1 by default');
     expect(out).toContain('DERIVATION CHANGED');
+    // Singular grammar for exactly one changed anchor -- "a.ts no longer
+    // match" read ungrammatically before this was fixed.
+    expect(out).toContain('no longer matches');
     // Not the staleness vocabulary -- checkAnchor calls this anchor fresh,
     // and the disclosure must not borrow words that assert something else.
     expect(out).not.toContain('STALE (');
+  });
+
+  it('pluralises correctly when MORE THAN ONE anchor no longer matches', () => {
+    const pathA = write('s1.ts', 'export const s1 = 1;');
+    const pathB = write('s2.ts', 'export const s2 = 1;');
+    indexFile(dir, pathA);
+    indexFile(dir, pathB);
+    const idA = nodeId('file', pathA);
+    const idB = nodeId('file', pathB);
+    const hashA = load(dir).nodes.get(idA).hash;
+    const hashB = load(dir).nodes.get(idB).hash;
+
+    const finding = putNode(dir, {
+      kind: 'finding', key: 's1s2', claim: 's1 and s2 both default to 1', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { [idA]: hashA, [idB]: hashB }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+    putEdge(dir, finding, 'derived_from', idA);
+    putEdge(dir, finding, 'derived_from', idB);
+
+    writeFileSync(pathA, 'export const s1 = 2;');
+    indexFile(dir, pathA);
+    writeFileSync(pathB, 'export const s2 = 2;');
+    indexFile(dir, pathB);
+
+    const out = forTouch(dir, load(dir), pathA, { sessionId: 's-deriv3' });
+    expect(out).toContain('no longer match ');
+    expect(out).not.toContain('no longer matches');
   });
 
   it('says nothing when the derivation still holds', () => {
