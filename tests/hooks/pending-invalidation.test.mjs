@@ -15,13 +15,22 @@
  * Code PostToolUse payload and then `plugin/hooks/pretooluse-router.mjs` with a
  * real Read, and check that the finding comes back MARKED.
  *
- * WHY THE SESSION'S OWN WRITES ARE THE HARD CASE. Lazy staleness compares the
- * anchor's stored hash against disk -- and both hooks call `indexFile` on every
- * file they observe, which re-points that hash at the bytes just written. So a
- * write the agent performed itself is invisible to the lazy check by the time
- * the next retrieval happens, and the finding derived from the OLD content is
- * served clean. That is the gap eager invalidation exists to close, and it is
- * what the last test in the first block measures.
+ * WHY THE SESSION'S OWN WRITES WERE NOT MERELY DEGRADED BUT UNCOVERED. Lazy
+ * staleness compares the anchor's stored hash against disk -- and both hooks
+ * call `indexFile` on every file they observe, which re-points that hash at the
+ * bytes just written (pretooluse-router.mjs twice, adapter.mjs once). So the
+ * lazy check compares a refreshed hash against the disk it came from and finds
+ * them equal: a write the agent performed ITSELF cannot be detected at all, and
+ * the finding derived from the pre-edit content is served CLEAN.
+ *
+ * So before the eager path was connected, staleness for a file the agent edited
+ * did not work AT ALL -- eager was dead code and lazy was defeated by
+ * re-indexing. Not "lazy-only, therefore degraded". Blind.
+ *
+ * TWO GRADES OF EVIDENCE ARE TESTED. A reconstructable edit yields a real diff;
+ * a whole-file write yields a hash comparison and no diff, and the ordering that
+ * makes that comparison meaningful -- drain before re-index -- is asserted end
+ * to end rather than argued from reading the call sites.
  */
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
@@ -38,13 +47,14 @@ import { load, nodeId, putNodeWithEdges } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import {
   drainInvalidations,
-  observedWrite,
+  observedWrites,
   queueInvalidation,
 } from '../../hooks-core/pending.mjs';
 
 const ROOT = process.cwd();
 const POST_TOOL = join(ROOT, 'plugin', 'hooks', 'post-tool.mjs');
 const PRE_TOOL = join(ROOT, 'plugin', 'hooks', 'pretooluse-router.mjs');
+const SESSION_START = join(ROOT, 'plugin', 'hooks', 'session-start.mjs');
 
 const BEFORE = 'export function parse(x) {\n  return x.trim();\n}\n';
 const AFTER = 'export function parse(x) {\n  return JSON.parse(x);\n}\n';
@@ -150,6 +160,18 @@ const readPayload = () => ({
   tool_input: { file_path: file },
 });
 
+/** A whole-file write: the after side is on disk, the before side is nowhere. */
+const writePayload = () => ({
+  hook_event_name: 'PostToolUse',
+  tool_name: 'Write',
+  tool_input: { file_path: file, content: AFTER },
+  tool_response: { filePath: file, type: 'update' },
+});
+
+/** An apply_patch program, which names its targets and carries no file_path. */
+const PATCH = () =>
+  ['*** Begin Patch', `*** Update File: ${file}`, '-a', '+b', '*** End Patch'].join('\n');
+
 const finding = () => load(wiki).nodes.get(nodeId('finding', 'parse-trims'));
 
 describe('a write the hooks observed', () => {
@@ -237,45 +259,135 @@ describe('the queue defers the graph load rather than paying for it', () => {
   });
 });
 
-describe('what is deliberately NOT queued', () => {
-  test('a write whose before side cannot be established', () => {
+describe('the grade of evidence a payload can actually support', () => {
+  test('a whole-file write yields a path-only record, never a fabricated before', () => {
     // Passing an unknown before side as '' would make invalidateOnWrite see
     // every symbol in the file as changed and mark every finding anchored
-    // anywhere in it -- the over-marking its own comments call worse than the
-    // file-level staleness symbols were introduced to avoid.
+    // anywhere in it -- and the eager mark is a stored flag nothing clears.
     writeFileSync(file, AFTER);
     expect(
-      observedWrite(
-        { tool_input: { file_path: file, content: AFTER } },
+      observedWrites(
+        { tool_name: 'Write', tool_input: { file_path: file, content: AFTER } },
         { tool_response: { filePath: file, type: 'update' } }
       )
-    ).toBeNull();
+    ).toEqual([{ path: file }]);
   });
 
-  test('an edit whose new text now appears more than once', () => {
+  test('an edit whose new text now appears more than once falls back to hashes', () => {
     // Ambiguous: reverting the wrong occurrence fabricates a before side that
-    // never existed on disk.
-    // `retries = 1;` is now on both lines, so nothing in the payload says which
-    // of them this edit produced.
+    // never existed on disk. The path is still worth queueing.
     writeFileSync(file, 'retries = 1;\nretries = 1;\n');
     expect(
-      observedWrite(
+      observedWrites(
         {
+          tool_name: 'Edit',
           tool_input: { file_path: file, old_string: 'retries = 2;', new_string: 'retries = 1;' },
         },
         {}
       )
-    ).toBeNull();
+    ).toEqual([{ path: file }]);
   });
 
-  test('a rewrite that changed nothing', () => {
+  test('a rewrite that changed nothing yields no record at all', () => {
     writeFileSync(file, BEFORE);
     expect(
-      observedWrite(
-        { tool_input: { file_path: file, old_string: 'x', new_string: 'x' } },
+      observedWrites(
+        { tool_name: 'Edit', tool_input: { file_path: file, old_string: 'x', new_string: 'x' } },
         { tool_response: { originalFile: BEFORE } }
       )
-    ).toBeNull();
+    ).toEqual([]);
+  });
+
+  test('a read yields nothing, however readable the file is', () => {
+    expect(
+      observedWrites({ tool_name: 'Read', tool_input: { file_path: file } }, {})
+    ).toEqual([]);
+  });
+
+  test('a patch program with no file_path still yields its targets', () => {
+    // Codex and code-mode clients carry the whole patch as program text. The
+    // hash grade needs only the path, so those clients are covered too.
+    expect(
+      observedWrites(
+        {
+          tool_name: 'Edit',
+          tool_input: { command: PATCH() },
+        },
+        {}
+      )
+    ).toEqual([{ path: file }]);
+  });
+});
+
+describe('a whole-file write, which has no before side anywhere', () => {
+  test('the anchor is still PRE-write when the drain runs -- verified, not reasoned', () => {
+    // THE ORDERING THIS GRADE DEPENDS ON, asserted end to end rather than
+    // argued from reading the call sites. If `indexFile` ran before the drain,
+    // the stored hash would already agree with disk and nothing below would be
+    // marked -- which is exactly how the lazy path fails on the session's own
+    // writes.
+    //
+    // 1. a read, which refreshes the anchor to the PRE-write bytes
+    hook(PRE_TOOL, readPayload(), { session: 'order' });
+    // 2. the write lands
+    writeFileSync(file, AFTER);
+    // 3. the write hook, with a payload that carries no before side at all
+    hook(POST_TOOL, writePayload(), { session: 'order' });
+
+    const marked = finding();
+    expect(marked.stale).toBe(true);
+    expect(marked.staleReason).toMatch(/content hash changed/);
+    // NO DIFF, and that is honest rather than a shortfall: none is derivable.
+    expect(marked.diff).toBe('');
+  });
+
+  test('is served as changed-with-no-diff, distinguishable from a real diff', () => {
+    hook(PRE_TOOL, readPayload(), { session: 'order-serve' });
+    writeFileSync(file, AFTER);
+    hook(POST_TOOL, writePayload(), { session: 'order-serve' });
+
+    const context = hook(PRE_TOOL, readPayload(), {
+      session: 'order-serve-read',
+    });
+
+    expect(context).toContain(CLAIM);
+    // The reader can tell "changed, diff unknown" from "changed, here it is".
+    expect(context).toContain('no diff could be rebuilt');
+    expect(context).toContain('content hash changed');
+    expect(context).not.toContain('What changed:');
+  });
+
+  test('marks nothing when the bytes did not actually change', () => {
+    // The negative control. A path-only record is a QUESTION, not an
+    // assertion -- if the hash still matches, the finding stays clean. Without
+    // this, coverage would have been bought with false-stale, and the eager
+    // mark is permanent until the finding is re-recorded.
+    hook(PRE_TOOL, readPayload(), { session: 'unchanged' });
+    hook(POST_TOOL, writePayload(), { session: 'unchanged' });
+
+    expect(finding().stale).toBeUndefined();
+    const context = hook(PRE_TOOL, readPayload(), { session: 'unchanged-read' });
+    expect(context).toContain(CLAIM);
+    expect(context).not.toContain('recorded earlier');
+  });
+});
+
+describe('SessionStart drains before it advertises anything', () => {
+  test('a queue left by the last session is applied before the index is built', () => {
+    // The worst moment to be wrong: the session index is the first thing a
+    // session sees and nothing follows it that could qualify the claim.
+    writeFileSync(file, AFTER);
+    hook(POST_TOOL, editPayload({ originalFile: BEFORE }), {
+      session: 'ss-write',
+      arm: 'optimizer',
+    });
+    expect(finding().stale).toBeUndefined();
+
+    hook(SESSION_START, { hook_event_name: 'SessionStart' }, {
+      session: 'ss-start',
+    });
+
+    expect(finding().stale).toBe(true);
   });
 });
 

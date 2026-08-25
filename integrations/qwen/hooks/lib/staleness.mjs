@@ -31,6 +31,23 @@
  * Eager alone would silently serve stale findings as fresh whenever a change
  * came from outside the agent, which is the single failure mode the design
  * calls worse than no graph.
+ *
+ * AND LAZY ALONE IS BLIND TO THE AGENT'S OWN WRITES -- not degraded, BLIND.
+ * `indexFile` re-points an anchor's stored hash at the bytes it was just handed,
+ * and it is called on every file either hook observes: pretooluse-router.mjs
+ * (two call sites) and adapter.mjs (one). The lazy check then compares that
+ * refreshed hash against the same disk it came from and finds them equal. So
+ * for a file the session edited ITSELF, the lazy path cannot detect the change
+ * at all, and the finding derived from the pre-edit content is served CLEAN.
+ *
+ * Which means that until the eager path was connected, staleness for a file the
+ * agent edited did not work AT ALL: eager was dead code and lazy was defeated
+ * by re-indexing. Every account of this defect, including the one in this
+ * module's own git history, called it "lazy-only, therefore degraded". It was
+ * not degraded. `stale-before-reindex.test.mjs` states in its header that this
+ * case is covered by `invalidateOnWrite`, and `invalidateOnWrite` had never run
+ * once in production. The two paths are not redundant and never were: each is
+ * the ONLY cover for a whole class of change.
  */
 
 import { readFileSync, statSync } from 'node:fs';
@@ -622,6 +639,119 @@ export function invalidateOnWrite(dir, graph, rawPath, beforeText, afterText) {
   // Re-index so the anchors carry the new hashes; otherwise the lazy path would
   // report the same change again on every future retrieval.
   indexFile(dir, path, afterText);
+  return marked;
+}
+
+/**
+ * The eager path for a write with NO before/after pair: compare stored hashes
+ * against disk, and mark what actually moved.
+ *
+ * WHY THIS EXISTS AS A SECOND SHAPE. A whole-file `Write` replaces the file, so
+ * the payload carries the after side and nothing at all of the before -- and a
+ * whole-file write is the commonest write shape there is. `invalidateOnWrite`
+ * cannot serve it: passing '' as the before side makes every symbol in the file
+ * look changed, marks every finding anchored anywhere in it, and the eager mark
+ * is a stored flag no later check ever clears. False-stale is expensive and
+ * permanent, so it is not an acceptable price for coverage.
+ *
+ * But the hash comparison is available, and it is exactly the comparison the
+ * lazy path makes. The difference is WHEN: this runs at the top of injection,
+ * before `indexFile` refreshes the anchor, so the stored hash is still the
+ * pre-write one and the comparison is meaningful. That is the whole trick --
+ * lazy is not wrong, it is merely too late.
+ *
+ * SYMBOL-LEVEL, and from ONE read. Re-locating each symbol by name and
+ * comparing its own span hash is what keeps this from degenerating into
+ * file-level marking: editing one function must not stale a finding about
+ * another, which is the property symbol nodes exist to provide.
+ *
+ * WEAKER EVIDENCE, STATED AS SUCH. There is no before text, so no diff can be
+ * built -- the finding is marked with the two hashes and `serve` reports the
+ * evidence gap through `staleEvidence: false`, which the renderer turns into
+ * "no diff could be rebuilt" rather than promising a diff and showing nothing.
+ * A stale finding with weak evidence is far better than one served as fresh,
+ * but the reader has to be able to tell which one they are holding.
+ */
+export function invalidateChangedAnchors(dir, graph, rawPath) {
+  const path = canonicalPath(rawPath);
+  const marked = [];
+
+  // ONE read for the file and every symbol in it. checkAnchor would have been
+  // the obvious reuse and it reads per anchor, which on a file with fifty
+  // symbols is fifty-one reads of the same bytes on a hook path.
+  let source = null;
+  try {
+    source = readAnySpelling(path);
+  } catch {
+    // Deleted, or unreadable from this checkout. Handled below as a change,
+    // because a finding about a file that is no longer there is exactly the
+    // kind that must not be served as fresh.
+  }
+
+  const changed = [];
+  const fileNode = graph.nodes.get(nodeId('file', path));
+  const fileDigest = source === null ? null : hash(source);
+  if (fileNode && fileDigest !== fileNode.hash) {
+    changed.push({ node: fileNode, from: fileNode.hash, to: fileDigest });
+  }
+
+  const current = new Map(
+    source === null
+      ? []
+      : extractSymbols(path, source).map((s) => [s.name, hash(spanText(source, s))])
+  );
+  for (const node of graph.nodes.values()) {
+    if (node.kind !== 'symbol' || node.file !== path) continue;
+    const digest = current.has(node.name) ? current.get(node.name) : null;
+    if (digest !== node.hash) changed.push({ node, from: node.hash, to: digest });
+  }
+
+  if (changed.length) {
+    // Indexed once by target, for the reason invalidateOnWrite indexes: the
+    // nested alternative is O(nodes x edges) inside a hook.
+    const byTarget = new Map();
+    for (const edge of graph.edges) {
+      if (edge.edge !== 'derived_from') continue;
+      if (!byTarget.has(edge.to)) byTarget.set(edge.to, []);
+      byTarget.get(edge.to).push(edge);
+    }
+
+    for (const { node, from, to } of changed) {
+      for (const edge of byTarget.get(node.id) || []) {
+        const finding = graph.nodes.get(edge.from);
+        if (!finding || finding.kind !== 'finding') continue;
+        // The same type gate serve() applies, for the same reason it is applied
+        // in invalidateOnWrite: the flag is STORED, and disclose.mjs skips a
+        // stale finding while utility.mjs penalises one by 160.
+        if (!CONTENT_DEPENDENT.has(finding.type || 'finding')) continue;
+        // ALREADY MARKED IS LEFT ALONE. Whatever marked it first had a diff or
+        // a more specific reason; overwriting that with a hash pair trades real
+        // evidence for less.
+        if (finding.stale) continue;
+
+        putNode(dir, {
+          ...finding,
+          kind: 'finding',
+          key: finding.key,
+          stale: true,
+          staleReason:
+            to === null
+              ? `the ${node.kind} it depends on is no longer present (was ${from})`
+              : `content hash changed during this session (${from} -> ${to}), observed without a before/after pair`,
+          // EXPLICITLY EMPTY, not absent. serve() reports `staleEvidence` from
+          // whether a diff survived, and the renderer says "no diff could be
+          // rebuilt" -- so the reader can tell "changed, diff unknown" from
+          // "changed, here is what changed".
+          diff: '',
+        });
+        marked.push(finding.key);
+      }
+    }
+  }
+
+  // Re-index for the same reason the diff path does: otherwise every future
+  // retrieval re-reports a change that has already been accounted for.
+  if (source !== null) indexFile(dir, path, source);
   return marked;
 }
 
