@@ -339,6 +339,27 @@ describe('diff output is bounded', () => {
     expect(diff).toContain('more');
   });
 
+  test('one enormous line cannot blow the budget', () => {
+    // MEASURED BEFORE THE FIX: this exact call returned 2 lines and 400,005
+    // bytes. `maxLines` is a LINE bound with no byte bound, and a minified
+    // bundle, a generated file or a single long JSON line all have that shape --
+    // so the "capped" diff put hundreds of kilobytes of verbatim file content
+    // straight into model context through inject.mjs's zero-turn refusal.
+    const diff = diffLines('X'.repeat(200_000), 'Y'.repeat(200_000));
+    expect(Buffer.byteLength(diff, 'utf8')).toBeLessThan(5_000);
+    // AND THE TRUNCATION IS VISIBLE. A silently shortened diff is worse than a
+    // visibly shortened one: a reader who cannot tell content was elided
+    // believes they saw the whole change.
+    expect(diff).toMatch(/chars cut/);
+  });
+
+  test('the total stays bounded even across many long lines', () => {
+    const before = Array.from({ length: 40 }, (_, i) => `a${i}`.repeat(5_000)).join('\n');
+    const after = Array.from({ length: 40 }, (_, i) => `b${i}`.repeat(5_000)).join('\n');
+    const diff = diffLines(before, after);
+    expect(Buffer.byteLength(diff, 'utf8')).toBeLessThan(5_000);
+  });
+
   test('only the changed region is shown', () => {
     const diff = diffLines('a\nb\nc', 'a\nB\nc');
     expect(diff).toContain('- b');

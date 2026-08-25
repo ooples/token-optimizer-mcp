@@ -26,6 +26,7 @@ import {
 } from './wiki.mjs';
 import { basename } from 'node:path';
 import { serve, diffLines } from './staleness.mjs';
+import { drainInvalidations } from './pending.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { annotatedSkeleton } from './skeleton.mjs';
@@ -142,6 +143,31 @@ function render(finding) {
 }
 
 /**
+ * Applies anything the post-tool hook queued, BEFORE anything is served.
+ *
+ * THIS IS WHERE EAGER STALENESS LANDS. `invalidateOnWrite` needs a graph, and
+ * loading one on the return path of every write is what pending.mjs exists to
+ * avoid -- so the hook queues and the next graph read applies. These two
+ * functions are that read: they already hold a freshly loaded graph, and they
+ * are the last thing to run before a finding reaches a model.
+ *
+ * RE-READ ONLY WHEN SOMETHING WAS ACTUALLY MARKED. The drain writes the stale
+ * flag to disk; it cannot mutate the caller's already-parsed graph, so serving
+ * from that copy would deliver the very "stale finding as fresh" this exists to
+ * prevent. A second load costs a parse, and it is paid once per observed write
+ * rather than once per tool call -- when nothing is queued this is one stat.
+ */
+function withPendingApplied(dir, graph) {
+  try {
+    return drainInvalidations(dir, graph) > 0 ? load(dir) : graph;
+  } catch {
+    // The lazy path still covers everything this would have caught early, and
+    // a hook must never fail because bookkeeping did.
+    return graph;
+  }
+}
+
+/**
  * What the model sees when it touches a file.
  *
  * Returns null when there is nothing to say, or when this touch fell into the
@@ -154,6 +180,7 @@ export function forTouch(
   rawPath,
   { budget = touchBudget(), sessionId, alreadyInjected = new Set(), episode = {} } = {}
 ) {
+  graph = withPendingApplied(dir, graph);
   // Canonical, so a touch finds findings anchored under any other spelling.
   const filePath = canonicalPath(rawPath);
   const anchorId = nodeId('file', filePath);
@@ -322,6 +349,7 @@ export function forCommand(
   { budget = touchBudget(), sessionId, alreadyInjected = new Set(), episode = {} } = {}
 ) {
   if (!command) return null;
+  graph = withPendingApplied(dir, graph);
 
   const candidates = [];
   for (const node of graph.nodes.values()) {
