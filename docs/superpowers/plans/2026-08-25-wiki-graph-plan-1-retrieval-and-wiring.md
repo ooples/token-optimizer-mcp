@@ -1508,3 +1508,171 @@ Measured, not asserted — run against a real project graph after one working se
 | Eager invalidation live | `grep -rn "queueInvalidation" hooks-core/adapter.mjs` | a call, not a comment |
 | Allowlist shrunk | `grep -c "^  \['" tests/hooks/reachability.test.mjs` | 9 (from 11) |
 | No drift | `npm run sync:hooks:check` | clean |
+
+---
+
+## Task 11: Nothing clears a stale flag
+
+**Added mid-plan.** Task 4 turned eager invalidation from dead code into a live
+mechanism. Nothing in the codebase ever clears a `stale` flag, so every finding on
+an edited file now becomes permanently stale and the graph degrades toward
+all-stale. That was harmless while the mechanism never fired; it is a rot path now.
+
+**Files:**
+- Modify: `hooks-core/staleness.mjs`, `hooks-core/curate.mjs`
+- Test: `tests/hooks/stale-clearing.test.mjs` **(new)**
+
+**Interfaces:**
+- Consumes: `putNode`, `load` (`wiki.mjs`); `checkAnchor` (`staleness.mjs`).
+- Produces:
+  - `clearStale(dir, key) => boolean` — rewrites the finding without `stale`, `staleReason` or `diff`
+  - `reverify(dir, key) => 'cleared' | 'still-stale' | 'unknown'` — clears the flag when the evidence for it is gone
+
+**The mechanics, already established — do not re-derive them.** `putNode` does NOT
+merge: it writes a full record from what the caller passes, and `load` replaces the
+node wholesale, last write wins. The stale write at `staleness.mjs:629` spreads
+`...finding` and adds `stale: true`, `staleReason` and `diff`. So clearing is
+writing the node back with those three fields destructured away — no deletion
+primitive is needed, and the append-only rule is respected.
+
+- [ ] **Step 1: Write the failing tests**
+
+```javascript
+// tests/hooks/stale-clearing.test.mjs
+it('clears the flag when the anchor returns to its recorded content', () => {
+  // A revert, or a change elsewhere in the file that leaves the anchored symbol
+  // untouched. The finding was never actually invalidated by this edit.
+  writeFileSync(file, ORIGINAL);
+  indexFile(dir, file, ORIGINAL);
+  const key = seedFinding(dir, file);
+  markStale(dir, file, ORIGINAL, CHANGED);
+  expect(findingByKey(dir, key).stale).toBe(true);
+
+  writeFileSync(file, ORIGINAL);            // reverted
+  expect(reverify(dir, key)).toBe('cleared');
+  const after = findingByKey(dir, key);
+  expect(after.stale).toBeFalsy();
+  expect(after.diff).toBeFalsy();
+  expect(after.staleReason).toBeFalsy();
+});
+
+it('leaves the flag set when the content genuinely still differs', () => {
+  // reverify must not be a way to launder a stale finding back to fresh.
+  writeFileSync(file, CHANGED);
+  expect(reverify(dir, key)).toBe('still-stale');
+  expect(findingByKey(dir, key).stale).toBe(true);
+});
+
+it('does not let a correction inherit its predecessor stale flag', () => {
+  // curate.correct spreads the original node, which carries stale: true, so a
+  // correction would be born stale -- asserting the fix, not the current bug.
+  markStale(dir, file, ORIGINAL, CHANGED);
+  const corrected = correct(dir, { key, claim: 're-derived against the new code' });
+  expect(findingByKey(dir, corrected).stale).toBeFalsy();
+});
+
+it('preserves every other field when clearing', () => {
+  // The clear path rewrites the whole node, so a dropped claim or confidence
+  // would be silent data loss.
+  const before = findingByKey(dir, key);
+  clearStale(dir, key);
+  const after = findingByKey(dir, key);
+  expect(after.claim).toBe(before.claim);
+  expect(after.confidence).toBe(before.confidence);
+  expect(after.origin).toBe(before.origin);
+});
+```
+
+- [ ] **Step 2: Run to verify they fail** — `npm test -- tests/hooks/stale-clearing.test.mjs`
+
+- [ ] **Step 3: Implement `clearStale` and `reverify`**
+
+`clearStale` destructures `stale`, `staleReason` and `diff` off the node and calls
+`putNode` with the remainder. `reverify` compares every anchor against disk via
+`checkAnchor`: if all match the hashes recorded at claim time, clear; otherwise
+report `still-stale` and change nothing.
+
+**`reverify` must not be a laundering route.** It clears only on evidence that the
+content matches what the claim was made against. A finding whose anchor genuinely
+changed stays stale until someone re-records the claim against the new content.
+
+- [ ] **Step 4: Fix the correction-inherits-stale bug** in `curate.mjs`, where
+`correct()` spreads the original node (see the comment at `curate.mjs:125` — the
+correction inherits anchors, and currently the flag too).
+
+- [ ] **Step 5: Run the suite** — `npm test -- tests/hooks` and `npm run sync:hooks:check`
+
+- [ ] **Step 6: Commit** with a message stating that nothing ever cleared one, that
+it was harmless while eager invalidation was dead code, and that `reverify` clears
+only on evidence so it is not a laundering route.
+
+---
+
+## Task 12: The post-tool matcher advertises tools the normaliser discards
+
+**Added mid-plan.** `plugin/hooks/hooks.json`'s PostToolUse matcher explicitly lists
+`mcp__.*__(?:smart_edit|smart_write)`, but `normalizeTool` (`decide.mjs:547`)
+returns a name only for seven built-ins or a `TOOL_ALIASES` hit, so an MCP-prefixed
+name maps to `null` and `runHook` exits before any logic runs. `NotebookEdit` is
+dropped the same way. The consequence: when enforcement successfully redirects an
+edit to the project's OWN tool, the post-tool accounting for that edit is discarded
+— staleness, mutation accounting and harvest pressure all blind, on the exact path
+the optimizer pushes the model toward.
+
+This is the same declared-but-not-wired shape as the rest of this plan: a matcher
+advertising coverage a normaliser drops.
+
+**Files:**
+- Modify: `hooks-core/decide.mjs`
+- Test: `tests/hooks/tool-normalisation.test.mjs` **(new)**
+
+**Interfaces:**
+- Produces: `normalizeTool` resolves MCP-prefixed names by their trailing segment; `TOOL_ALIASES` gains the `smart_*` family and `notebookedit`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```javascript
+it('resolves an MCP-prefixed tool name by its trailing segment', () => {
+  expect(normalizeTool('mcp__plugin_token-optimizer_token-optimizer__smart_edit')).toBe('Edit');
+  expect(normalizeTool('mcp__whatever__smart_write')).toBe('Write');
+  expect(normalizeTool('NotebookEdit')).toBe('Edit');
+});
+
+it('still returns null for a tool it genuinely does not know', () => {
+  // The permissive direction matters: an unknown tool must stay unknown rather
+  // than being coerced into a built-in that changes a routing verdict.
+  expect(normalizeTool('mcp__vendor__deploy_to_prod')).toBeNull();
+});
+
+it('does not make the router redirect a tool that is already the replacement', () => {
+  // THE LOOP HAZARD. smart_edit normalising to Edit must not cause the router to
+  // deny smart_edit and redirect it to smart_edit.
+  const verdict = decide(payloadFor('mcp__x__smart_edit', { file_path: file }), state);
+  expect(verdict.deny).toBeFalsy();
+});
+```
+
+- [ ] **Step 2: Run to verify they fail**
+
+- [ ] **Step 3: Implement.** Strip an `mcp__<server>__` prefix before the alias
+lookup, and add `smart_edit`, `smart_write`, `smart_read`, `smart_grep`,
+`smart_glob` and `notebookedit`.
+
+- [ ] **Step 4: Prove the routing verdicts did not regress — this is the whole risk.**
+
+The reason this was not folded into Task 4 is that it changes what the router
+decides, for all eleven clients. So measure it rather than assert it:
+
+```bash
+npm test -- tests/hooks/enforcement.test.mjs tests/hooks/clients.test.mjs tests/hooks/routing.test.mjs tests/hooks/policy-asks-for-findings.test.mjs
+```
+
+Report, per client, whether any verdict changed. A changed verdict is not
+automatically wrong — but it must be named and justified, not discovered later.
+If any `smart_*` call now gets denied, that is the loop hazard and it blocks.
+
+- [ ] **Step 5: Full suite and sync check**
+
+- [ ] **Step 6: Commit** with a message stating that the matcher advertised names
+the normaliser mapped to null, so the optimizer was blind to its own preferred
+tools on the path enforcement pushes the model toward.
