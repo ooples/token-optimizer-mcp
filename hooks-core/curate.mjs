@@ -20,7 +20,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { putNode, putNodeWithEdges, load, nodeId } from './wiki.mjs';
+import { putNode, putEdge, putNodeWithEdges, load, nodeId } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
@@ -176,6 +176,79 @@ export function retire(dir, key) {
   if (!existing) return false;
   putNode(dir, { ...existing, kind: 'finding', key, retired: true });
   return true;
+}
+
+/**
+ * Records that one finding disagrees with another.
+ *
+ * AN EDGE, NOT AN OVERWRITE -- the design is explicit about why: "when a belief
+ * changes, the graph should record THAT it changed and why, not quietly present
+ * the new one as though it had always been true." `contradicts` has been in
+ * EDGE_KINDS since the schema existed and was written by nothing, while
+ * `audit()` already READ it.
+ *
+ * The contradicted finding is deliberately NOT retired, and its claim is
+ * deliberately preserved. A reader needs to see both claims and the
+ * disagreement between them; retiring one silently picks a winner, and putNode
+ * does not merge -- it writes the whole record from what it is handed, so
+ * annotating the target without spreading it back in would blank the very claim
+ * this edge exists to keep visible. That is the overwrite by another name.
+ *
+ * THE EDGE IS WRITTEN FIRST, and the order is the guarantee. These are two
+ * appends and `append` fails open, so either can be the one that lands. Edge
+ * without annotation is a complete, readable disagreement missing only its
+ * reason. Annotation without edge is a finding that says "something contradicts
+ * me" with no contradictor -- a claim of proof with no proof, and invisible to
+ * `audit()` and to `hasOutstandingContradiction`, both of which read the edge.
+ */
+export function contradict(dir, { key, byKey, reason }) {
+  const graph = load(dir);
+  const target = findingByKey(graph, key);
+  const source = findingByKey(graph, byKey);
+  // Both ends must exist, or the edge is unresolvable and the disagreement is
+  // recorded against nothing -- the same un-invalidatable shape anchors prevent.
+  if (!target || !source) return false;
+  // A finding cannot disagree with itself. The self-edge resolves, so the guard
+  // above waves it through, and the result is a node permanently blocked from
+  // confidence promotion by a dispute no person can ever resolve: there is no
+  // second claim to choose between.
+  if (target.id === source.id) return false;
+
+  putEdge(dir, source.id, 'contradicts', target.id);
+  putNode(dir, {
+    ...target,
+    kind: 'finding',
+    key,
+    contradictedAt: Date.now(),
+    contradictionReason: String(reason || '').slice(0, 400),
+  });
+  return true;
+}
+
+/**
+ * Whether anything currently disagrees with this finding.
+ *
+ * Gates confidence promotion. Plan 2's per-finding utility measures whether a
+ * finding SUPPRESSES READS, and a confidently wrong finding suppresses reads
+ * better than a hedged true one -- so utility must never raise confidence on
+ * its own, and this is the check that stops it.
+ *
+ * SYMMETRIC, deliberately: BOTH ends of a `contradicts` edge are outstanding
+ * until a person resolves the disagreement. The named hazard in the design is
+ * presenting "the new one as though it had always been true", so gating only
+ * the older claim would leave the newer one -- which is just as likely to be
+ * the wrong one, since nothing here adjudicates -- free to be promoted on
+ * measured utility alone. That is the exact failure this gate exists to stop.
+ * It also matches `audit()`, the reader that has always been here: it puts both
+ * `from` and `to` in its `contradicted` bucket, because "until one looks, BOTH
+ * are being served".
+ */
+export function hasOutstandingContradiction(graph, key) {
+  const node = findingByKey(graph, key);
+  if (!node) return false;
+  return graph.edges.some(
+    (e) => e.edge === 'contradicts' && (e.to === node.id || e.from === node.id)
+  );
 }
 
 /**
