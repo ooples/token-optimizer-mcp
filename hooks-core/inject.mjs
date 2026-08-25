@@ -141,6 +141,40 @@ function render(finding) {
 }
 
 /**
+ * Graph directories where a drain has already marked something in THIS process.
+ *
+ * THE SECOND CALLER IS WHY THIS EXISTS. SessionStart calls `standingRules` and
+ * then `sessionIndex` with the SAME graph object it loaded once. Without this,
+ * the first call drains, marks, and re-reads privately -- and the second call
+ * finds an empty queue, marks nothing, and therefore serves from the caller's
+ * pre-drain copy, advertising as current the very finding the first call had
+ * just marked. Draining is idempotent; its EFFECT on a caller's parsed graph is
+ * not, so what is remembered here is "a re-read is owed", nothing else.
+ *
+ * ONLY THE POSITIVE CASE IS REMEMBERED, and that is a correctness decision
+ * rather than a tuning one. Remembering "nothing was queued" would mean a queue
+ * arriving LATER in the same process is silently skipped and deferred to some
+ * future session. That cannot happen today, because `queueInvalidation` runs in
+ * the post-tool branch before any injection -- but that is an unguarded
+ * ordering dependency, and it stops being true the moment someone adds a call
+ * site. A repeated empty drain costs one `existsSync` on a file that is not
+ * there, which is a price worth paying to not have an invariant that depends on
+ * nobody reordering anything.
+ *
+ * KEYED CANONICALLY. Two spellings of one directory -- a trailing separator, a
+ * `..` segment, a lower-cased drive letter -- would otherwise be two entries,
+ * which reintroduces exactly the pre-drain-copy bug above. This is the same
+ * defect shape Task 2 on this branch shipped for real, where a tool resolved its
+ * graph from a raw cwd while the hooks resolved theirs through `projectRootFor`
+ * and the two halves of a metric landed in different directories. Path identity
+ * is why `canonicalKey` lives inside `nodeId` rather than at its call sites.
+ *
+ * A hook process handles one lifecycle event, so this set holds one or two
+ * entries and dies with the process.
+ */
+const drainedDirs = new Set();
+
+/**
  * Applies anything the post-tool hook queued, BEFORE anything is served.
  *
  * THIS IS WHERE EAGER STALENESS LANDS. `invalidateOnWrite` needs a graph, and
@@ -155,28 +189,14 @@ function render(finding) {
  * prevent. A second load costs a parse, and it is paid once per observed write
  * rather than once per tool call -- when nothing is queued this is one stat.
  */
-/**
- * Per process, per graph directory: did the drain change anything?
- *
- * THE SECOND CALLER IS WHY THIS EXISTS. SessionStart calls `standingRules` and
- * then `sessionIndex` with the SAME graph object it loaded once. Without this
- * memo the first call drains, marks, and re-reads privately -- and the second
- * call finds an empty queue, marks nothing, and therefore serves from the
- * caller's pre-drain copy, advertising as current the very finding the first
- * call had just marked. Draining is not idempotent from the caller's point of
- * view; remembering the ANSWER is what makes it so.
- *
- * A hook process handles one lifecycle event, so this map holds one or two
- * entries and dies with the process.
- */
-const drainedDirs = new Map();
-
 function withPendingApplied(dir, graph) {
   try {
-    if (drainedDirs.has(dir)) return drainedDirs.get(dir) ? load(dir) : graph;
-    const marked = drainInvalidations(dir, graph) > 0;
-    drainedDirs.set(dir, marked);
-    return marked ? load(dir) : graph;
+    const key = canonicalPath(dir);
+    // The drain runs EVERY time. It is one stat when there is nothing to do,
+    // and running it unconditionally is what keeps the memo from encoding an
+    // assumption about which hook branch ran first.
+    if (drainInvalidations(dir, graph) > 0) drainedDirs.add(key);
+    return drainedDirs.has(key) ? load(dir) : graph;
   } catch {
     // The lazy path still covers everything this would have caught early, and
     // a hook must never fail because bookkeeping did.
