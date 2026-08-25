@@ -26,17 +26,55 @@ import { canonicalPath, isFsSafePath } from './paths.mjs';
 /**
  * Schema version stamped on every record.
  *
- * There is exactly ONE version and no migration code, because nothing has been
- * released: a graph written by an older commit of an unreleased branch is a
- * development artifact, not user data, and carrying migration paths for it costs
- * real complexity to protect something nobody has. A record from any other
- * version is skipped rather than interpreted, so a stale dev graph degrades to
- * "rebuilds from use" instead of silently mixing incompatible identities.
+ * THIS PACKAGE IS RELEASED. It ships on npm, so every graph on disk is user
+ * data. An earlier version of this comment claimed nothing had been released
+ * and used that to justify having no migration path at all -- and the reader
+ * below compared for EQUALITY, so the first bump would have discarded every
+ * existing graph in silence. That justification is gone and so is the equality:
+ * `SUPPORTED_VERSIONS` is the range this reader accepts, and `upcast` is where a
+ * shape change is absorbed in memory.
  *
- * When this does ship, a bump here is where migration would be added -- with
- * users to protect, that trade reverses.
+ * A bump here is taken only when a record's SHAPE actually changes, and it comes
+ * with a new `upcast` step and an entry in `SUPPORTED_VERSIONS` in the same
+ * change. Adding a field that older readers can ignore is not a shape change.
  */
 export const GRAPH_VERSION = 1;
+
+/**
+ * Versions this reader accepts, oldest first.
+ *
+ * A RANGE, NOT AN EQUALITY. The equality check this replaces would have
+ * discarded every existing graph the moment anyone bumped the version -- and the
+ * header once justified that with "nothing has been released", which stopped
+ * being true at v5.7.0 on npm.
+ *
+ * Nothing on disk is ever rewritten to migrate: `upcast` runs in memory during
+ * the fold, so there is no migration pass to fail halfway and no race with the
+ * concurrent sessions this store is designed for. A mixed-version log is safe
+ * precisely because the original records are never mutated, and the existing
+ * compaction retires old ones naturally as it rewrites snapshots.
+ */
+export const SUPPORTED_VERSIONS = [1];
+
+/**
+ * Brings one record up to the current version. Pure, and one step per version.
+ *
+ * Identity today because GRAPH_VERSION is 1 and no shape has changed. It exists
+ * now so the first change that DOES need it has somewhere to go other than an
+ * equality check that silently deletes user data.
+ */
+export function upcast(record) {
+  return record;
+}
+
+/** True when this reader can interpret the record at all. */
+function readable(record) {
+  const version = record.v ?? 0;
+  // Forward-incompatible records are skipped: a v-from-the-future was written by
+  // a newer client and we cannot know its shape. Ignoring the future is safe;
+  // ignoring the past is data loss.
+  return SUPPORTED_VERSIONS.includes(version);
+}
 
 /** Node kinds. `file` and `symbol` are first-class so staleness can propagate. */
 export const NODE_KINDS = ['file', 'symbol', 'task', 'finding'];
@@ -407,13 +445,22 @@ function compactIfWasteful(dir) {
       } catch {
         continue;
       }
-      // A record from another schema is KEPT VERBATIM rather than reinterpreted.
-      // load() skips it, but discarding it here would make compaction a silent
-      // migration that deletes data a future version might understand.
-      if ((record.v ?? 0) !== GRAPH_VERSION) {
+      // A record this reader cannot interpret is KEPT VERBATIM rather than
+      // reinterpreted. load() skips it, but discarding it here would make
+      // compaction a silent migration that deletes data a future version might
+      // understand. THE RANGE MATTERS HERE TOO: with an equality check, a bump
+      // would have parked every existing v1 record in `raw`, undeduplicated, so
+      // compaction would stop reclaiming anything and inline snapshots would
+      // never migrate out -- the same loss by a second route.
+      if (!readable(record)) {
         edges.set('raw:' + edges.size, line);
         continue;
       }
+      // Upcast IN MEMORY only, to key and classify the record. What gets written
+      // back below is the ORIGINAL `line`: compaction reclaims superseded
+      // records, it does not migrate surviving ones, so the on-disk version is
+      // whatever wrote it and `load` upcasts it again on every read.
+      record = upcast(record);
       if (record.t === 'n') {
         // MIGRATION. Graphs written before snapshots were split still carry
         // them inline, and those are exactly the graphs that are slow. Moving
@@ -648,7 +695,13 @@ function readSnapshots(dir) {
       if (!line) continue;
       try {
         const rec = JSON.parse(line);
-        if ((rec.v ?? 0) === GRAPH_VERSION && rec.id) out.push(rec);
+        // THE SAME RANGE AS THE MAIN LOG, deliberately. An equality check here
+        // was the quietest of the three: a bump would have made every stored
+        // snapshot unreadable, and the very next compaction -- which rebuilds
+        // this file from what it could read -- would have deleted them for
+        // good. That is the one place in this store where a read filter turns
+        // into a permanent write.
+        if (readable(rec) && rec.id) out.push(upcast(rec));
       } catch {
         /* a torn line costs one snapshot */
       }
@@ -689,7 +742,12 @@ export function load(dir, { snapshots = false } = {}) {
       if (!snapshots) continue;
       try {
         const rec = JSON.parse(line);
-        if ((rec.v ?? 0) === GRAPH_VERSION) pending.set(rec.id, rec.snapshot);
+        // Inline snapshots from an older graph: same range, same reason. These
+        // are precisely the records most likely to predate a bump.
+        if (readable(rec)) {
+          const snap = upcast(rec);
+          pending.set(snap.id, snap.snapshot);
+        }
       } catch {
         /* a torn line costs one snapshot, not the graph */
       }
@@ -701,10 +759,14 @@ export function load(dir, { snapshots = false } = {}) {
     } catch {
       continue;
     }
-    // A record from another schema is skipped, not interpreted: its ids and
-    // hashes were derived differently, so honouring it produces confident
-    // nonsense rather than a visible error.
-    if ((record.v ?? 0) !== GRAPH_VERSION) continue;
+    // A record this reader cannot interpret is skipped, not guessed at: a
+    // version from the FUTURE derived its ids and hashes in a way we do not
+    // know, so honouring it produces confident nonsense rather than a visible
+    // error. A record from the PAST is upcast, never skipped -- skipping it is
+    // data loss, and this comparison used to be an equality, which made the
+    // first version bump a silent delete of every graph on disk.
+    if (!readable(record)) continue;
+    record = upcast(record);
     if (record.t === 'n') nodes.set(record.id, record);
     else if (record.t === 'e') edges.push(record);
   }
