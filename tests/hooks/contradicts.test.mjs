@@ -17,6 +17,7 @@ import { contradict, hasOutstandingContradiction, audit } from '../../hooks-core
 import { indexFile, serve } from '../../hooks-core/staleness.mjs';
 import { forTouch, sessionIndex } from '../../hooks-core/inject.mjs';
 import { restorationPlan } from '../../hooks-core/restore.mjs';
+import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
 
 let dir;
 
@@ -283,5 +284,79 @@ describe('disclosing a dispute when a finding is served', () => {
     // settled either.
     expect(index).toContain('[DISPUTED by new]');
     expect(index).toContain('f returns 1');
+  });
+});
+
+/**
+ * The `answers` edge: a finding back to the task that produced it.
+ *
+ * The last of `EDGE_KINDS` with no write site. Its whole point is provenance
+ * traversal -- "which session established this, and from what" -- so what is
+ * under test is that the edge appears when a real task node exists, and is
+ * refused rather than left dangling when it does not.
+ */
+describe('answers', () => {
+  it('links a finding to the task that produced it', () => {
+    const dir2 = mkdtempSync(join(tmpdir(), 'ans-'));
+    const file = join(dir2, 'x.ts');
+    writeFileSync(file, 'export const x = 1;');
+    indexFile(dir2, file, 'export const x = 1;');
+    putNodeWithEdges(dir2, { kind: 'task', key: 'task-1', prompt: 'why is x 1' });
+
+    writeHarvested(
+      dir2,
+      [{ type: 'finding', claim: 'x is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', taskId: 'task-1', projectRoot: dir2 }
+    );
+
+    const graph = load(dir2);
+    const edge = graph.edges.find((e) => e.edge === 'answers');
+    expect(edge).toBeDefined();
+    expect(edge.to).toBe(nodeId('task', 'task-1'));
+    rmSync(dir2, { recursive: true, force: true });
+  });
+
+  it('writes no edge when the supplied taskId resolves to no existing task node', () => {
+    // A taskId that names nothing must not become a dangling edge -- the same
+    // discipline `resolveAnchor` already holds anchors to above.
+    const dir2 = mkdtempSync(join(tmpdir(), 'ans-'));
+    const file = join(dir2, 'y.ts');
+    writeFileSync(file, 'export const y = 1;');
+    indexFile(dir2, file, 'export const y = 1;');
+    // Deliberately no task node created for 'ghost-task'.
+
+    writeHarvested(
+      dir2,
+      [{ type: 'finding', claim: 'y is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', taskId: 'ghost-task', projectRoot: dir2 }
+    );
+
+    const graph = load(dir2);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
+    // The finding itself must still be written -- an unresolved taskId refuses
+    // only the edge, not the whole write.
+    expect([...graph.nodes.values()].some((n) => n.kind === 'finding')).toBe(true);
+    rmSync(dir2, { recursive: true, force: true });
+  });
+
+  it('writes no answers edge when no taskId is supplied at all', () => {
+    const dir2 = mkdtempSync(join(tmpdir(), 'ans-'));
+    const file = join(dir2, 'z.ts');
+    writeFileSync(file, 'export const z = 1;');
+    indexFile(dir2, file, 'export const z = 1;');
+    // A task node keyed by the SESSION id, present on purpose: omitting
+    // `taskId` must not silently fall back to `sessionId` and resolve against
+    // it anyway.
+    putNodeWithEdges(dir2, { kind: 'task', key: 's1' });
+
+    writeHarvested(
+      dir2,
+      [{ type: 'finding', claim: 'z is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir2 }
+    );
+
+    const graph = load(dir2);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
+    rmSync(dir2, { recursive: true, force: true });
   });
 });

@@ -434,7 +434,7 @@ function resolveAnchor(dir, anchor, projectRoot) {
 export function writeHarvested(
   dir,
   findings,
-  { sessionId = null, origin = ORIGIN_HARVESTED, projectRoot = null } = {}
+  { sessionId = null, origin = ORIGIN_HARVESTED, projectRoot = null, taskId = null } = {}
 ) {
   if (!Array.isArray(findings) || !findings.length) return [];
 
@@ -514,6 +514,21 @@ export function writeHarvested(
     // collision vanishingly unlikely while keeping the timestamp readable.
     const provenance = provenanceFor(finding);
     const key = `${prefixFor(provenance)}-${Date.now().toString(36)}-${written.length}-${randomBytes(4).toString("hex")}`;
+
+    const edges = resolved.map((target) => ({ edge: 'derived_from', to: target }));
+    // `answers` closes the loop back to the task that produced the finding, so
+    // provenance can be traversed rather than inferred: "which session
+    // established this, and from what". Declared in EDGE_KINDS and written by
+    // nothing until now. Held to the same discipline as the anchors above: a
+    // taskId that does not resolve to an existing task node produces no edge
+    // rather than a dangling one.
+    if (taskId) {
+      const taskTarget = nodeId('task', taskId);
+      if (currentGraph.nodes.has(taskTarget)) {
+        edges.push({ edge: 'answers', to: taskTarget });
+      }
+    }
+
     // ONE APPEND for the finding and every anchor it resolved. This runs in a
     // detached worker, so "the process survives to finish the loop" is not a
     // safe assumption: a node written without its edges is an active finding
@@ -555,7 +570,7 @@ export function writeHarvested(
           : undefined,
         sessionId,
       },
-      resolved.map((target) => ({ edge: 'derived_from', to: target }))
+      edges
     );
     // A failed write returns null. Reporting the key anyway would tell the
     // caller a claim was stored that no later session can retrieve.
