@@ -66,6 +66,7 @@ import {
   standingRules,
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
+import { observedWrite, queueInvalidation } from './pending.mjs';
 import { isArchived } from './transcript.mjs';
 import { isFsSafePath } from './paths.mjs';
 import {
@@ -879,6 +880,35 @@ async function runHook(clientName, event, invocation) {
       });
     } catch {
       // Causal tracing is fail-open like every other hook optimization.
+    }
+
+    // EAGER INVALIDATION, finally connected. `invalidateOnWrite` has existed,
+    // been tested and been described in staleness.mjs's own header since
+    // staleness landed, and its only reference in shipped code was a COMMENT in
+    // the PreToolUse router -- so the path that header calls load-bearing had
+    // never run once in production. It matters most for exactly this event: the
+    // lazy check compares the anchor's stored hash against disk, and the
+    // capture below re-points that hash at the bytes this write just produced,
+    // so a write the session performed ITSELF is invisible to lazy staleness.
+    //
+    // QUEUED, NOT APPLIED. Applying needs the graph, and loading a megabyte of
+    // JSONL on the return path of every write is what this shape exists to
+    // avoid. The next graph read drains it before serving anything.
+    try {
+      if (mutationSucceeded(clientName, raw)) {
+        const evidence = observedWrite(payload, raw);
+        if (evidence) {
+          // THE SAME DIRECTORY THE GRAPH ITSELF USES. `observeAndInject` keys
+          // every write on `wikiDir(projectRootFor(path, payload.cwd))`, and a
+          // queue written anywhere else is a queue nothing ever drains.
+          queueInvalidation(
+            wikiDir(projectRootFor(evidence.path, payload.cwd)),
+            evidence
+          );
+        }
+      }
+    } catch {
+      // Bookkeeping for a call that already completed. Never let it cost one.
     }
   }
 

@@ -17,7 +17,13 @@
  * TWO INVALIDATION PATHS, and each covers what the other cannot see:
  *
  *   EAGER  -- our PostToolUse hook saw a write, so the finding is marked at the
- *             moment it went stale, with the exact before/after in hand.
+ *             moment it went stale, with the exact before/after in hand. The
+ *             hook does not call `invalidateOnWrite` directly: it queues the
+ *             evidence through pending.mjs, and the next graph read -- which
+ *             loads the graph anyway -- applies it before serving anything.
+ *             That path is also the only one that catches a write the SESSION
+ *             made, because the lazy check below compares the stored hash
+ *             against disk and `indexFile` has already refreshed it.
  *   LAZY   -- at retrieval, the anchor's stored hash is compared against disk.
  *             This is what catches `git pull`, another editor, a teammate, or a
  *             build step: every change our hooks never observed.
@@ -291,14 +297,69 @@ export function checkAnchor(anchor) {
 }
 
 /**
+ * Characters kept from any single diff line.
+ *
+ * A LINE CAP IS NOT A SIZE CAP, and the gap was measured: with only `maxLines`
+ * in force, `diffLines('X'.repeat(200000), 'Y'.repeat(200000))` returned 2 lines
+ * and 400,005 bytes. Minified bundles, generated sources and single-line JSON
+ * all have that shape, and this output goes STRAIGHT INTO MODEL CONTEXT from
+ * inject.mjs's zero-turn refusal -- so a line bound alone let one pathological
+ * file spend hundreds of thousands of tokens.
+ *
+ * 200 characters is chosen because it is past the width at which a line is read
+ * as a line by anybody, human or model: a hand-written source line is under
+ * ~120 columns, so the cap cannot truncate a diff a reader was going to use,
+ * while the cases it does truncate are ones where the interesting change is not
+ * legible from the raw text anyway.
+ */
+const DIFF_MAX_LINE_CHARS = () => {
+  const raw = Number(process.env.TOKEN_OPTIMIZER_DIFF_MAX_LINE_CHARS);
+  return Number.isFinite(raw) && raw > 0 ? raw : 200;
+};
+
+/**
+ * Total UTF-8 bytes of diff body.
+ *
+ * 4,000 bytes is roughly 1,000 tokens. It is deliberately larger than the
+ * per-file injection budget (`TOKEN_OPTIMIZER_TOUCH_BUDGET`, 500 tokens) and
+ * far smaller than a file, because the two consumers want different things: the
+ * injection surface fits the diff inside its own budget and drops it if it does
+ * not fit, while the zero-turn refusal is replacing a whole file read and can
+ * afford more. One cap that neither consumer has to think about is worth more
+ * than two tuned ones.
+ *
+ * WHAT IT COSTS, PLAINLY: a legitimately large diff now arrives truncated, so a
+ * model looking at a 300-line refactor sees the head of it and a count of what
+ * was elided rather than the whole change. That is the correct direction to
+ * fail -- the alternative was a bounded-looking function that could emit 400 KB.
+ */
+const DIFF_MAX_BYTES = () => {
+  const raw = Number(process.env.TOKEN_OPTIMIZER_DIFF_MAX_BYTES);
+  return Number.isFinite(raw) && raw > 0 ? raw : 4_000;
+};
+
+/**
  * A compact line diff.
  *
  * Deliberately not a full unified diff with hunks and context: the consumer is
  * a model deciding whether an existing conclusion still holds, and for that the
  * changed lines are the signal. Output is capped because an unbounded diff
  * injected alongside a finding would spend more tokens than re-deriving it.
+ *
+ * BOUNDED IN THREE WAYS, and each one is load-bearing: lines, characters per
+ * line, and total bytes. Every truncation is announced in the output, because a
+ * silently shortened diff is worse than a visibly shortened one -- a reader who
+ * cannot tell content was elided believes they saw the whole change.
  */
-export function diffLines(before, after, { maxLines = 40 } = {}) {
+export function diffLines(
+  before,
+  after,
+  {
+    maxLines = 40,
+    maxLineChars = DIFF_MAX_LINE_CHARS(),
+    maxBytes = DIFF_MAX_BYTES(),
+  } = {}
+) {
   const a = String(before).split('\n');
   const b = String(after).split('\n');
 
@@ -314,33 +375,44 @@ export function diffLines(before, after, { maxLines = 40 } = {}) {
   const added = b.slice(head, b.length - tail);
 
   const out = [];
-  for (const line of removed.slice(0, maxLines / 2)) out.push('- ' + line);
-  if (removed.length > maxLines / 2) out.push(`  ... ${removed.length - maxLines / 2} more removed`);
-  for (const line of added.slice(0, maxLines / 2)) out.push('+ ' + line);
-  if (added.length > maxLines / 2) out.push(`  ... ${added.length - maxLines / 2} more added`);
+  let bytes = 0;
+  let dropped = 0;
+
+  // Per line first, so ONE enormous line cannot consume the whole budget and
+  // leave every other changed line unrepresented.
+  const clamp = (line) => {
+    const text = String(line);
+    if (text.length <= maxLineChars) return text;
+    return `${text.slice(0, maxLineChars)} [+${text.length - maxLineChars} chars cut]`;
+  };
+
+  // Bytes, not characters: the cap exists to bound what is sent, and a
+  // multi-byte source file would otherwise pass a character check while
+  // emitting several times the budget.
+  const push = (line) => {
+    const text = clamp(line);
+    const size = Buffer.byteLength(text, 'utf8') + 1;
+    if (bytes + size > maxBytes) {
+      dropped++;
+      return;
+    }
+    out.push(text);
+    bytes += size;
+  };
+
+  for (const line of removed.slice(0, maxLines / 2)) push('- ' + line);
+  if (removed.length > maxLines / 2) push(`  ... ${removed.length - maxLines / 2} more removed`);
+  for (const line of added.slice(0, maxLines / 2)) push('+ ' + line);
+  if (added.length > maxLines / 2) push(`  ... ${added.length - maxLines / 2} more added`);
+
+  // Announced OUTSIDE the budget, deliberately: the one line a reader most
+  // needs is the one saying the rest is missing, and dropping it to stay under
+  // a self-imposed cap would hand back a diff that lies about being complete.
+  if (dropped) out.push(`  ... ${dropped} more changed line(s) cut at the size limit`);
 
   return out.join('\n');
 }
 
-/**
- * Prepares findings for delivery, verifying each one lazily against disk.
- *
- * This is the only function that should ever hand a finding to a model, because
- * it is the one that enforces the rule: a stale finding leaves here carrying
- * `stale: true` AND a diff, or it does not leave at all.
- */
-export function serve(graph, findings) {
-  const served = [];
-
-  // RETIRED FINDINGS STOP HERE, unconditionally.
-  //
-  // findingsFor and sessionIndex already filter them, so this is redundant on
-  // every current path -- deliberately. This function's own contract is that it
-  // is the only thing that hands a finding to a model, which makes it the right
-  // place for the guarantee to live: a future caller that reaches into the
-  // graph directly cannot accidentally serve a claim a human explicitly
-  // withdrew. A withheld claim reappearing is not a bug anyone would notice
-  // quickly.
 /**
  * Types whose truth is a claim ABOUT the anchor's contents.
  *
@@ -363,6 +435,26 @@ export function serve(graph, findings) {
  * to ignore -- taking the rare true positive with it.
  */
 const CONTENT_DEPENDENT = new Set(['finding', 'map']);
+
+/**
+ * Prepares findings for delivery, verifying each one lazily against disk.
+ *
+ * This is the only function that should ever hand a finding to a model, because
+ * it is the one that enforces the rule: a stale finding leaves here carrying
+ * `stale: true` AND a diff, or it does not leave at all.
+ */
+export function serve(graph, findings) {
+  const served = [];
+
+  // RETIRED FINDINGS STOP HERE, unconditionally.
+  //
+  // findingsFor and sessionIndex already filter them, so this is redundant on
+  // every current path -- deliberately. This function's own contract is that it
+  // is the only thing that hands a finding to a model, which makes it the right
+  // place for the guarantee to live: a future caller that reaches into the
+  // graph directly cannot accidentally serve a claim a human explicitly
+  // withdrew. A withheld claim reappearing is not a bug anyone would notice
+  // quickly.
 
   for (const finding of findings.filter((f) => !f.retired)) {
     // A claim that does not depend on the anchor's contents cannot be
@@ -505,6 +597,15 @@ export function invalidateOnWrite(dir, graph, rawPath, beforeText, afterText) {
     for (const edge of byTarget.get(node.id) || []) {
       const finding = graph.nodes.get(edge.from);
       if (!finding || finding.kind !== 'finding') continue;
+      // THE SAME TYPE GATE `serve` APPLIES, and it has to be here too now that
+      // this path actually runs. `serve` ignores a stale flag on a type whose
+      // truth is not a claim about the anchor's contents -- but the flag is
+      // STORED, and disclose.mjs skips a stale finding outright while
+      // utility.mjs penalises one by 160. So writing it onto a `failure` or a
+      // `command` would suppress that claim everywhere except the one reader
+      // that knows to ignore it, which is exactly the harm measured in the
+      // comment on CONTENT_DEPENDENT above.
+      if (!CONTENT_DEPENDENT.has(finding.type || 'finding')) continue;
 
       putNode(dir, {
         ...finding,
