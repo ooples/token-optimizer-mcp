@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { app } from '../../src/server/web-server.js';
-import { putNodeWithEdges } from '../../hooks-core/wiki.mjs';
+import { putNodeWithEdges, load, nodeId } from '../../hooks-core/wiki.mjs';
 import { registerProject } from '../../hooks-core/projects.mjs';
 
 const lexical = await import(
@@ -32,6 +32,77 @@ describe('lexical.rank (the primitive the route now calls)', () => {
 });
 
 /**
+ * ONE SERVER AND ONE ISOLATED PROJECT FOR THE WHOLE FILE.
+ *
+ * Hoisted out of the search describe when the curate tests below arrived: they
+ * need exactly this harness -- a real Express app on a real port, and a project
+ * whose graph is a temp directory rather than this repo's own -- and standing up
+ * a second copy of it in a second file is how two harnesses drift apart.
+ */
+
+let server: Server;
+let baseUrl: string;
+let originalRegistry: string | undefined;
+let tempRoot: string | null = null;
+let tempGraphDir: string | null = null;
+
+beforeAll(async () => {
+  await new Promise<void>((resolve) => {
+    server = app.listen(0, '127.0.0.1', () => {
+      const address = server.address() as AddressInfo;
+      baseUrl = `http://127.0.0.1:${address.port}`;
+      resolve();
+    });
+  });
+});
+
+afterEach(() => {
+  if (originalRegistry === undefined)
+    delete process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
+  else process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = originalRegistry;
+  if (tempRoot) {
+    rmSync(tempRoot, { recursive: true, force: true });
+    tempRoot = null;
+  }
+  if (tempGraphDir) {
+    rmSync(tempGraphDir, { recursive: true, force: true });
+    tempGraphDir = null;
+  }
+});
+
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+});
+
+/**
+ * Registers an isolated project (its own fake ".git" root, its own graph
+ * directory, and its own project registry file) so the request never reads
+ * or writes the real machine-wide registry or the real "current project"
+ * graph rooted at this process's cwd.
+ */
+function registerIsolatedProject(): string {
+  tempRoot = mkdtempSync(join(tmpdir(), 'wiki-routes-search-root-'));
+  mkdirSync(join(tempRoot, '.git'));
+  tempGraphDir = mkdtempSync(join(tmpdir(), 'wiki-routes-search-graph-'));
+
+  originalRegistry = process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
+  process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(
+    mkdtempSync(join(tmpdir(), 'wiki-routes-search-registry-')),
+    'projects.jsonl'
+  );
+
+  const project = registerProject({
+    root: tempRoot,
+    graphDir: tempGraphDir,
+    client: 'test',
+  });
+  if (!project) throw new Error('registerProject failed to register the fixture');
+  return project.id;
+}
+
+/**
  * The test above only proves Task 1's `rank` primitive works -- it never
  * touches `src/server/wiki-routes.ts`. A route that still filtered with
  * `.includes()` under the hood would pass it just as well. These tests drive
@@ -39,68 +110,6 @@ describe('lexical.rank (the primitive the route now calls)', () => {
  * here specifically.
  */
 describe('/api/wiki/search (the route itself)', () => {
-  let server: Server;
-  let baseUrl: string;
-  let originalRegistry: string | undefined;
-  let tempRoot: string | null = null;
-  let tempGraphDir: string | null = null;
-
-  beforeAll(async () => {
-    await new Promise<void>((resolve) => {
-      server = app.listen(0, '127.0.0.1', () => {
-        const address = server.address() as AddressInfo;
-        baseUrl = `http://127.0.0.1:${address.port}`;
-        resolve();
-      });
-    });
-  });
-
-  afterEach(() => {
-    if (originalRegistry === undefined)
-      delete process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
-    else process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = originalRegistry;
-    if (tempRoot) {
-      rmSync(tempRoot, { recursive: true, force: true });
-      tempRoot = null;
-    }
-    if (tempGraphDir) {
-      rmSync(tempGraphDir, { recursive: true, force: true });
-      tempGraphDir = null;
-    }
-  });
-
-  afterAll(async () => {
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
-  });
-
-  /**
-   * Registers an isolated project (its own fake ".git" root, its own graph
-   * directory, and its own project registry file) so the request never reads
-   * or writes the real machine-wide registry or the real "current project"
-   * graph rooted at this process's cwd.
-   */
-  function registerIsolatedProject(): string {
-    tempRoot = mkdtempSync(join(tmpdir(), 'wiki-routes-search-root-'));
-    mkdirSync(join(tempRoot, '.git'));
-    tempGraphDir = mkdtempSync(join(tmpdir(), 'wiki-routes-search-graph-'));
-
-    originalRegistry = process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
-    process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(
-      mkdtempSync(join(tmpdir(), 'wiki-routes-search-registry-')),
-      'projects.jsonl'
-    );
-
-    const project = registerProject({
-      root: tempRoot,
-      graphDir: tempGraphDir,
-      client: 'test',
-    });
-    if (!project) throw new Error('registerProject failed to register the fixture');
-    return project.id;
-  }
-
   it('ranks by BM25, not substring order, and orders results by relevance not confidence', async () => {
     const scope = registerIsolatedProject();
     if (!tempGraphDir) throw new Error('fixture graph directory missing');
@@ -237,5 +246,99 @@ describe('/api/wiki/search (the route itself)', () => {
       'low-confidence',
     ]);
     expect(blankBody).toEqual(noQueryBody);
+  });
+});
+
+/**
+ * The curate route's contradict action.
+ *
+ * `contradict` writes the one edge kind the schema declared and nothing could
+ * write, and this switch case is its only door: without it the function is
+ * correct, tested, and reachable by nothing -- the defect shape this branch
+ * exists to close, arriving from the other side. The reachability guard proves
+ * the case EXISTS; only a request proves it works.
+ */
+describe('/api/wiki/curate (contradict)', () => {
+  /** The dashboard's own header, which rejectsCrossSite requires of any POST. */
+  const curate = (body: Record<string, unknown>, scope: string) =>
+    fetch(`${baseUrl}/api/wiki/curate`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-token-optimizer': 'dashboard',
+      },
+      body: JSON.stringify({ ...body, projectId: scope }),
+    });
+
+  function seedPair(graphDir: string) {
+    putNodeWithEdges(graphDir, {
+      kind: 'finding',
+      key: 'old',
+      claim: 'f returns 1',
+      confidence: 0.9,
+    });
+    putNodeWithEdges(graphDir, {
+      kind: 'finding',
+      key: 'new',
+      claim: 'f returns 2',
+      confidence: 0.9,
+    });
+  }
+
+  it('records the disagreement as an edge in the graph', async () => {
+    const scope = registerIsolatedProject();
+    if (!tempGraphDir) throw new Error('fixture graph directory missing');
+    seedPair(tempGraphDir);
+
+    const response = await curate(
+      { action: 'contradict', key: 'old', byKey: 'new', reason: 're-derived' },
+      scope
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+
+    // THE GRAPH, not the response body. A route that answered ok and wrote
+    // nothing would pass on the status alone, and the direction matters: the
+    // contradictOR is the source, so a route that swapped key and byKey would
+    // record the established claim disputing the new one.
+    const graph = load(tempGraphDir);
+    const edges = graph.edges.filter((e: { edge: string }) => e.edge === 'contradicts');
+    expect(edges).toHaveLength(1);
+    expect(edges[0].from).toBe(nodeId('finding', 'new'));
+    expect(edges[0].to).toBe(nodeId('finding', 'old'));
+    // Neither claim is retired: the whole point of an edge over an overwrite.
+    expect(graph.nodes.get(nodeId('finding', 'old')).retired).toBeFalsy();
+    expect(graph.nodes.get(nodeId('finding', 'old')).claim).toBe('f returns 1');
+  });
+
+  it('refuses a request with no byKey, and writes nothing', async () => {
+    const scope = registerIsolatedProject();
+    if (!tempGraphDir) throw new Error('fixture graph directory missing');
+    seedPair(tempGraphDir);
+
+    const response = await curate({ action: 'contradict', key: 'old' }, scope);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'byKey required' });
+    expect(
+      load(tempGraphDir).edges.some((e: { edge: string }) => e.edge === 'contradicts')
+    ).toBe(false);
+  });
+
+  it('reports 404 when an end of the disagreement does not resolve', async () => {
+    const scope = registerIsolatedProject();
+    if (!tempGraphDir) throw new Error('fixture graph directory missing');
+    seedPair(tempGraphDir);
+
+    const response = await curate(
+      { action: 'contradict', key: 'nope', byKey: 'new', reason: 'x' },
+      scope
+    );
+    // An edge to an id nothing created is an un-invalidatable claim, so curate
+    // refuses it and the route must not report success for a write it did not do.
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'no such finding' });
+    expect(
+      load(tempGraphDir).edges.some((e: { edge: string }) => e.edge === 'contradicts')
+    ).toBe(false);
   });
 });

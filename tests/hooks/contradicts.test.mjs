@@ -16,6 +16,7 @@ import { putNode, putEdge, putNodeWithEdges, load, nodeId } from '../../hooks-co
 import { contradict, hasOutstandingContradiction, audit } from '../../hooks-core/curate.mjs';
 import { indexFile, serve } from '../../hooks-core/staleness.mjs';
 import { forTouch, sessionIndex } from '../../hooks-core/inject.mjs';
+import { restorationPlan } from '../../hooks-core/restore.mjs';
 
 let dir;
 
@@ -250,6 +251,28 @@ describe('disclosing a dispute when a finding is served', () => {
     expect(out).toContain('STALE (');
     expect(out).toContain('What changed:');
     expect(out).toContain('DISPUTED by rebuttal2');
+  });
+
+  test('the restore brief marks a disputed finding disputed too', () => {
+    // A dispute disclosed on the injection path and silent in a restore reads
+    // as "the dispute went away", so the restore brief goes through the same
+    // fields. `Likely next` is reached through a `related` edge, which is how
+    // co-occurrence recommends a file the session never opened.
+    const touched = write('touched.ts', 'export const a = 1;');
+    const predicted = write('predicted.ts', 'export function h() { return 1; }');
+    indexFile(dir, touched);
+    indexFile(dir, predicted);
+    putEdge(dir, nodeId('file', touched), 'related', nodeId('file', predicted));
+    anchored('restored', 'h returns 1', predicted);
+    putNodeWithEdges(dir, {
+      kind: 'finding', key: 'rebuttal3', claim: 'h returns 4', confidence: 0.9,
+    });
+    contradict(dir, { key: 'restored', byKey: 'rebuttal3', reason: 'read it again' });
+
+    const brief = restorationPlan(dir, load(dir), { recentAnchors: [touched] }).text;
+    expect(brief).toContain('## Likely next');
+    expect(brief).toContain('h returns 1');
+    expect(brief).toContain('(disputed by rebuttal3)');
   });
 
   test('the session index lists a disputed finding as disputed', () => {
