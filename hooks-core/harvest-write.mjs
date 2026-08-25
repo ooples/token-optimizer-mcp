@@ -32,6 +32,7 @@ import { randomBytes } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
+import { readEvidence } from './metrics.mjs';
 
 /**
  * The types that may cross a project boundary.
@@ -426,6 +427,121 @@ function resolveAnchor(dir, anchor, projectRoot) {
 }
 
 /**
+ * Which task actually produced this finding, when nothing said so directly.
+ *
+ * Session id was the only signal `answers` had, and a session id is exactly
+ * what a caller may not have (`wiki_write`'s `sessionId` is optional and
+ * nothing populates it today; the detached harvest worker's is gated behind
+ * an opt-in). But the graph does not need to be TOLD which task this is: the
+ * structural harvest already writes `task -[derived_from]-> file` for every
+ * tool call, unconditionally, on every install. So the task is DERIVABLE --
+ * it is whichever task node has a `derived_from` edge to one of the SAME
+ * anchors this finding resolved to.
+ *
+ * "Most recent task, full stop" was rejected on purpose: a task that never
+ * touched these files could still be the newest node in the graph (a
+ * different file, a different concern, in a later session), and attaching
+ * provenance to it would be a WRONG edge, not a missing one -- worse than no
+ * edge, because a reader trusts it. So candidates are filtered to tasks that
+ * touched at least one of these anchors FIRST, and only ties among THOSE are
+ * broken by recency.
+ *
+ * The tie-break is the edge's own `at`, not the task node's `at`. A task that
+ * touched this file once, long ago, and then stayed active on unrelated files
+ * for hours has a late node timestamp that says nothing about this anchor;
+ * the edge timestamp says exactly when THIS task touched THIS anchor, which
+ * is the question being asked. Among tasks sharing an anchor, the one whose
+ * most recent touch to any shared anchor is latest wins -- recency of the
+ * relevant work, not recency of the task in general.
+ */
+function taskForAnchors(graph, anchorIds) {
+  if (!anchorIds || !anchorIds.length) return null;
+  const anchors = new Set(anchorIds);
+  let best = null;
+  for (const edge of graph.edges) {
+    if (edge.edge !== 'derived_from' || !anchors.has(edge.to)) continue;
+    const from = graph.nodes.get(edge.from);
+    // `derived_from` is also how a FINDING cites its own anchors, so without
+    // this a finding that already cited the same file would be mistaken for
+    // the task that produced it.
+    if (!from || from.kind !== 'task') continue;
+    const at = Number(edge.at) || 0;
+    if (!best || at > best.at) best = { taskId: edge.from, at };
+  }
+  return best ? best.taskId : null;
+}
+
+/**
+ * A file path the way `recordToolOutcome` (metrics.mjs) already truncates and
+ * stores it on a `tool-outcome` event's `anchor` field, so a derivation record
+ * can join against that log without a second, divergent notion of "the same
+ * anchor".
+ */
+function anchorLabel(rawAnchor) {
+  const path = String(rawAnchor).split('#')[0];
+  return canonicalPath(path).slice(0, 120);
+}
+
+/** How many recorded operations a single finding's derivation may cite. */
+const MAX_DERIVATION_OPERATIONS = 5;
+
+/**
+ * The checkable half of provenance: not just where a finding came from, but
+ * whether that derivation still holds.
+ *
+ * Citation-style provenance (a session or task id) answers "where". It never
+ * answers "does this still apply" -- that is what staleness already computes,
+ * by comparing an anchor's STORED hash against disk. This record is what lets
+ * that comparison be reconstructed for a specific claim rather than only for
+ * the anchor in general: the hash each anchor carried at the moment this
+ * finding was derived from it, plus what evidence exists that any work
+ * actually happened against it.
+ *
+ * DELIBERATELY NOT DUPLICATING THE EDGES. `derived_from` already records
+ * WHICH anchors this finding cites; restating that here would be a second,
+ * driftable copy of the same fact. What is new here, and only here, is the
+ * HASH each anchor carried at claim time -- edges carry no such thing.
+ *
+ * DELIBERATELY NOT A REPLAY LOG. Recording enough to mechanically re-run a
+ * derivation is a separate subsystem with real storage cost. This stores only
+ * what the evidence log already has: `tool-outcome` events matching these
+ * anchors, each reduced to the fields that were actually captured. An event
+ * that carries no exit code or output contributes none -- nothing here is
+ * invented to fill a shape the pipeline does not evidence yet. If a future
+ * capture pass adds `exit`/`output` to those events, this starts carrying them
+ * with no change to this function.
+ */
+function derivationFor(graph, resolvedAnchors, evidence, anchorSpecs) {
+  const anchorHashes = {};
+  for (const id of resolvedAnchors) {
+    const node = graph.nodes.get(id);
+    if (node && typeof node.hash === 'string') anchorHashes[id] = node.hash;
+  }
+
+  const labels = new Set((anchorSpecs || []).map(anchorLabel));
+  const operations = evidence
+    .filter((event) => event.kind === 'tool-outcome' && labels.has(event.anchor))
+    .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+    .slice(0, MAX_DERIVATION_OPERATIONS)
+    .map((event) => {
+      const op = {};
+      if (typeof event.toolName === 'string' && event.toolName)
+        op.tool = event.toolName.slice(0, 60);
+      if (typeof event.success === 'boolean') op.success = event.success;
+      if (typeof event.at === 'number') op.at = event.at;
+      // Forward-compatible, not fabricated: neither field exists on a
+      // `tool-outcome` event in this pipeline today, so every operation
+      // omits them until a capture pass actually evidences one.
+      if (typeof event.exit === 'number') op.exit = event.exit;
+      if (typeof event.output === 'string' && event.output)
+        op.output = event.output.slice(0, 200);
+      return op;
+    });
+
+  return { at: Date.now(), anchors: anchorHashes, operations };
+}
+
+/**
  * Writes validated findings, returning the keys actually stored.
  *
  * `findings` is the output of `harvest.validate()`, so type/claim/confidence
@@ -465,6 +581,11 @@ export function writeHarvested(
       : batch;
   const prefixFor = (p) =>
     p === ORIGIN_AGENT ? 'agent' : p === ORIGIN_HUMAN ? 'human' : 'harvested';
+
+  // Read once: every finding in this batch shares the same evidence log, and
+  // it can hold thousands of lines, so re-reading it per finding would turn a
+  // batch of N findings into N passes over the same bytes.
+  const evidence = readEvidence(dir);
 
   const written = [];
   for (const finding of findings) {
@@ -519,14 +640,21 @@ export function writeHarvested(
     // `answers` closes the loop back to the task that produced the finding, so
     // provenance can be traversed rather than inferred: "which session
     // established this, and from what". Declared in EDGE_KINDS and written by
-    // nothing until now. Held to the same discipline as the anchors above: a
-    // taskId that does not resolve to an existing task node produces no edge
-    // rather than a dangling one.
-    if (taskId) {
-      const taskTarget = nodeId('task', taskId);
-      if (currentGraph.nodes.has(taskTarget)) {
-        edges.push({ edge: 'answers', to: taskTarget });
-      }
+    // nothing until now.
+    //
+    // An explicit `taskId` is authoritative when a caller supplies one --
+    // it OVERRIDES traversal rather than merely seeding it, so a caller that
+    // knows better is never second-guessed by inference. Absent one, the task
+    // is DERIVED from the graph itself: `taskForAnchors` finds the task that
+    // actually touched these anchors, which needs no session id from anyone.
+    // Either way, held to the same discipline as the anchors above: a target
+    // that does not resolve to an existing task node produces no edge rather
+    // than a dangling one.
+    const answersTarget = taskId
+      ? nodeId('task', taskId)
+      : taskForAnchors(currentGraph, resolved);
+    if (answersTarget && currentGraph.nodes.has(answersTarget)) {
+      edges.push({ edge: 'answers', to: answersTarget });
     }
 
     // ONE APPEND for the finding and every anchor it resolved. This runs in a
@@ -569,6 +697,15 @@ export function writeHarvested(
           ? finding.quote
           : undefined,
         sessionId,
+        // THE CHECKABLE HALF OF PROVENANCE. Citation-style (this `sessionId`,
+        // the `answers` edge above) says WHERE a claim came from; it never
+        // says whether that derivation still applies. `derivationFor` reaches
+        // through `wiki_query`'s `node`/`get`/`search` operations only (those
+        // return a finding's stored fields wholesale) -- never through
+        // `render()`/`renderSessionIndex()` in inject.mjs or `wiki_read`'s
+        // `toFinding()` projection, neither of which reads this field, so it
+        // is not part of the automatic per-touch injection `fit()` prices.
+        derivation: derivationFor(currentGraph, resolved, evidence, finding.anchors || []),
       },
       edges
     );
