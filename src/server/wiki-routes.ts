@@ -34,6 +34,7 @@ interface GraphModules {
   staleness: any;
   capabilities: any;
   projects: any;
+  lexical: any;
 }
 
 let cached: GraphModules | null = null;
@@ -41,7 +42,7 @@ let cached: GraphModules | null = null;
 async function modules(): Promise<GraphModules | null> {
   if (cached) return cached;
   try {
-    const [wiki, curate, metrics, staleness, capabilities, projects] =
+    const [wiki, curate, metrics, staleness, capabilities, projects, lexical] =
       await Promise.all([
         import(coreUrl('wiki.mjs')),
         import(coreUrl('curate.mjs')),
@@ -49,8 +50,17 @@ async function modules(): Promise<GraphModules | null> {
         import(coreUrl('staleness.mjs')),
         import(coreUrl('capabilities.mjs')),
         import(coreUrl('projects.mjs')),
+        import(coreUrl('lexical.mjs')),
       ]);
-    cached = { wiki, curate, metrics, staleness, capabilities, projects };
+    cached = {
+      wiki,
+      curate,
+      metrics,
+      staleness,
+      capabilities,
+      projects,
+      lexical,
+    };
     return cached;
   } catch {
     return null;
@@ -407,38 +417,54 @@ export function registerWikiRoutes(app: Express): void {
           .map((node: any) => ({ node, source }));
       });
 
-      // Lexical filter, per the design's traversal-plus-lexical retrieval --
-      // there is no embedding index to consult and deliberately so.
-      if (query) {
-        findings = findings.filter(
-          (entry: any) =>
-            String(entry.node.claim || '')
-              .toLowerCase()
-              .includes(query) ||
-            String(entry.node.key || '')
-              .toLowerCase()
-              .includes(query)
-        );
-      }
       if (kind)
         findings = findings.filter(
           (entry: any) => (entry.node.type || 'finding') === kind
         );
 
-      findings.sort((a: any, b: any) => {
-        const weight = (entry: any) => {
-          const f = entry.node;
-          return (
-            (f.confidence ?? 0.5) *
-            // originWeight, not a human-only ternary: the `: 1` branch ranked an
-            // agent finding level with a post-hoc harvested guess, so this sort
-            // and findingsFor disagreed about provenance.
-            mods.curate.originWeight(f.origin) *
-            (f.pinned ? 2 : 1)
-          );
-        };
-        return weight(b) - weight(a);
-      });
+      // Lexical retrieval per the design -- now actually ranked by BM25
+      // (hooks-core/lexical.mjs), the same primitive the wiki_query tool
+      // uses for its `search` operation. The previous substring filter
+      // could not order results, so the caller kept whatever matched rather
+      // than what matched best.
+      //
+      // `rank` scores plain objects by their own `key`/`claim` fields, but
+      // this route's pool is `{ node, source }` wrappers (findings are
+      // aggregated across every source directory), so each entry is exposed
+      // under `key`/`claim` for scoring and unwrapped back to its original
+      // `{ node, source }` shape afterward. The limit is the whole
+      // (kind-filtered) pool, not `offset + limit`, so `total` and the
+      // dashboard's `?offset=` pagination keep behaving exactly as they did
+      // under the old unbounded filter -- only the ordering changes.
+      if (query) {
+        const scored = mods.lexical.rank(
+          query,
+          findings.map((entry: any) => ({
+            key: entry.node.key,
+            claim: entry.node.claim,
+            entry,
+          })),
+          { limit: findings.length }
+        );
+        findings = scored.map(
+          (row: { finding: { entry: unknown } }) => row.finding.entry
+        );
+      } else {
+        findings.sort((a: any, b: any) => {
+          const weight = (entry: any) => {
+            const f = entry.node;
+            return (
+              (f.confidence ?? 0.5) *
+              // originWeight, not a human-only ternary: the `: 1` branch ranked an
+              // agent finding level with a post-hoc harvested guess, so this sort
+              // and findingsFor disagreed about provenance.
+              mods.curate.originWeight(f.origin) *
+              (f.pinned ? 2 : 1)
+            );
+          };
+          return weight(b) - weight(a);
+        });
+      }
 
       return res.json({
         total: findings.length,
