@@ -63,7 +63,9 @@ export interface WikiWriteOptions {
   /**
    * Recorded for provenance so a claim can be traced to the session, and used
    * to link the finding back to the task that produced it (the `answers`
-   * edge) when a task node with this same id already exists. Nothing
+   * edge) -- but only when the SAME session's task actually has a
+   * `derived_from` edge to every one of this claim's anchors; a session id
+   * with no such coverage yields no edge rather than a guessed one. Nothing
    * populates this automatically today -- the caller must supply the real
    * session id for either to hold.
    */
@@ -232,14 +234,22 @@ export async function wikiWrite(
         // stores a snapshot, so an unconstrained path would copy any readable
         // file on the machine into the graph.
         projectRoot: project,
-        // Task nodes are keyed by session id (structural capture creates one
-        // the first time this session's hooks touch a file), so the same
-        // identity that provenance is already recorded under is what
-        // `writeHarvested` needs to point the `answers` edge at the task this
-        // finding came from. Same discipline as everywhere else: a sessionId
-        // that names no existing task node resolves to no edge, not a
-        // dangling one.
-        taskId: options.sessionId ?? null,
+        // NO explicit `taskId` HERE, DELIBERATELY. An earlier version passed
+        // `taskId: options.sessionId`, treating the model's claimed session id
+        // as an AUTHORITATIVE override -- but `writeHarvested`'s explicit-taskId
+        // path resolves it directly with no coverage check, on the theory that
+        // an explicit caller knows better than the graph. That is true of
+        // `plugin/hooks/harvest-worker.mjs`'s `sessionId`, which comes from
+        // Claude Code's own hook payload, but it is NOT true here: `sessionId`
+        // is an optional MCP tool argument the model supplies, unverified,
+        // exactly the kind of caller-asserted value this codebase otherwise
+        // never trusts blindly (anchors are resolved against the graph rather
+        // than accepted as typed). Leaving `taskId` unset routes this through
+        // `writeHarvested`'s traversal fallback instead, which uses the SAME
+        // `sessionId` only to SCOPE which task to check, then still requires
+        // that task to have a `derived_from` edge to EVERY one of this
+        // finding's anchors before an `answers` edge is written. A wrong or
+        // unrelated `sessionId` therefore yields no edge, never a wrong one.
       }
     );
 

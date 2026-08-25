@@ -7,7 +7,7 @@ import {
   WIKI_WRITE_TOOL_DEFINITION,
   wikiWrite,
 } from '../../src/tools/intelligence/wiki-write.js';
-import { putNodeWithEdges, load, nodeId } from '../../hooks-core/wiki.mjs';
+import { putNode, putNodeWithEdges, putEdge, load, nodeId } from '../../hooks-core/wiki.mjs';
 
 let workspace: string;
 let anchor: string;
@@ -73,16 +73,22 @@ describe('active-model semantic finding contract', () => {
  * The `answers` edge, on the default install path.
  *
  * `wiki_write` runs on every install with no opt-in gate, unlike the detached
- * harvest. So this is the path where the edge is most likely to be observed
- * in practice -- provided the caller actually supplies the real session id,
- * which nothing here does automatically. These tests exercise the wiring
- * itself: a real sessionId resolves, an unresolvable one does not dangle, and
- * omitting it does not fall back to some other identity.
+ * harvest. `wikiWrite` passes NO explicit `taskId` (round 3 removed the
+ * earlier `taskId: options.sessionId` synthesis -- a model-supplied
+ * `sessionId` is an unverified claim, unlike the harvest worker's, which
+ * comes from trusted hook infrastructure, so it should be checked against
+ * the graph rather than trusted outright). That routes every call through
+ * `writeHarvested`'s traversal fallback, which requires the SAME session's
+ * task to have a `derived_from` edge to EVERY one of the finding's anchors
+ * before writing an edge -- these tests exercise that: full coverage
+ * resolves, no task at all does not dangle, and omitting `sessionId`
+ * supplies no identity to check against, so there is no candidate.
  */
 describe('wiki_write links a finding to the task that produced it', () => {
-  it('writes the answers edge when sessionId names an existing task node', async () => {
+  it('writes the answers edge when the session’s task fully covers the finding’s anchor', async () => {
     const dir = process.env.TOKEN_OPTIMIZER_WIKI_DIR as string;
-    putNodeWithEdges(dir, { kind: 'task', key: 'session-1' });
+    putNode(dir, { kind: 'task', key: 'session-1' });
+    putEdge(dir, nodeId('task', 'session-1'), 'derived_from', nodeId('file', anchor));
 
     const result = await wikiWrite({
       claim: 'The verifier requires the project runner.',
@@ -99,6 +105,27 @@ describe('wiki_write links a finding to the task that produced it', () => {
     const edge = graph.edges.find((e) => e.edge === 'answers');
     expect(edge).toBeDefined();
     expect(edge?.to).toBe(nodeId('task', 'session-1'));
+  });
+
+  it('writes no answers edge when the session’s task exists but never touched the anchor', async () => {
+    const dir = process.env.TOKEN_OPTIMIZER_WIKI_DIR as string;
+    // The task node exists, matching the sessionId, but has no coverage --
+    // existence alone is not attribution.
+    putNodeWithEdges(dir, { kind: 'task', key: 'session-2' });
+
+    const result = await wikiWrite({
+      claim: 'The verifier requires the project runner.',
+      anchors: [anchor],
+      evidence: 'Ran the suite directly and it failed with a clear error.',
+      applicability: 'When running project verification.',
+      confidenceLabel: 'probable',
+      projectRoot: workspace,
+      sessionId: 'session-2',
+    } as never);
+    expect(result.success).toBe(true);
+
+    const graph = load(dir);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
   });
 
   it('writes no answers edge when sessionId names no existing task node', async () => {
@@ -122,9 +149,9 @@ describe('wiki_write links a finding to the task that produced it', () => {
 
   it('writes no answers edge when no sessionId is supplied at all', async () => {
     const dir = process.env.TOKEN_OPTIMIZER_WIKI_DIR as string;
-    // A sentinel task node that a wrong fallback (e.g. defaulting to some
-    // other identity instead of leaving taskId unset) could accidentally
-    // resolve against.
+    // A sentinel task node -- present to prove the absence of `sessionId`
+    // supplies no identity to check against, not merely that this one
+    // particular node fails to match.
     putNodeWithEdges(dir, { kind: 'task', key: 'sentinel-task' });
 
     const result = await wikiWrite({

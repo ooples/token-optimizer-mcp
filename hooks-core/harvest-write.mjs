@@ -32,7 +32,7 @@ import { randomBytes } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { ORIGIN_HARVESTED, ORIGIN_AGENT, ORIGIN_HUMAN } from './curate.mjs';
-import { readEvidence } from './metrics.mjs';
+import { readEvidence, evidenceTruncated } from './metrics.mjs';
 
 /**
  * The types that may cross a project boundary.
@@ -429,53 +429,84 @@ function resolveAnchor(dir, anchor, projectRoot) {
 /**
  * Which task actually produced this finding, when nothing said so directly.
  *
- * Session id was the only signal `answers` had, and a session id is exactly
- * what a caller may not have (`wiki_write`'s `sessionId` is optional and
- * nothing populates it today; the detached harvest worker's is gated behind
- * an opt-in). But the graph does not need to be TOLD which task this is: the
- * structural harvest already writes `task -[derived_from]-> file` for every
- * tool call, unconditionally, on every install. So the task is DERIVABLE --
- * it is whichever task node has a `derived_from` edge to one of the SAME
- * anchors this finding resolved to.
+ * ROUND 2's version scanned the WHOLE graph for any task sharing any anchor,
+ * broken by recency. An adversarial review constructed four cases where that
+ * attributes a finding to the WRONG task:
  *
- * "Most recent task, full stop" was rejected on purpose: a task that never
- * touched these files could still be the newest node in the graph (a
- * different file, a different concern, in a later session), and attaching
- * provenance to it would be a WRONG edge, not a missing one -- worse than no
- * edge, because a reader trusts it. So candidates are filtered to tasks that
- * touched at least one of these anchors FIRST, and only ties among THOSE are
- * broken by recency.
+ *   1. STALE PRIOR SESSION -- a session that reasons from injected memory and
+ *      writes a finding about `foo.ts` without touching it this session gets
+ *      attributed to whatever task last touched `foo.ts`, possibly days old,
+ *      possibly someone else's work.
+ *   2. CONCURRENT SESSION -- two windows on one repository; the other
+ *      session's task wins if its touch is a millisecond later.
+ *   3. OVERLAP, NOT COVERAGE -- a finding anchored to [a, b]; a task that
+ *      touched only `b` could still win over one that touched both.
+ *   4. THE TIE-BREAK CONTRADICTED ITS OWN COMMENT -- `Number(edge.at) || 0`
+ *      with strict `>` means the FIRST edge in log order wins on a tie,
+ *      which is the OLDER task, not "more recently" as documented.
  *
- * The tie-break is the edge's own `at`, not the task node's `at`. A task that
- * touched this file once, long ago, and then stayed active on unrelated files
- * for hours has a late node timestamp that says nothing about this anchor;
- * the edge timestamp says exactly when THIS task touched THIS anchor, which
- * is the question being asked. Among tasks sharing an anchor, the one whose
- * most recent touch to any shared anchor is latest wins -- recency of the
- * relevant work, not recency of the task in general.
+ * THE FIX IS NARROWER THAN A BETTER RANKING: SCOPE, THEN REQUIRE COVERAGE.
+ * A task only ever belongs to the session that created it -- `harvest()` and
+ * `linkCoOccurrence()` (wiki.mjs, inject.mjs) both key a task node by
+ * `sessionId`, always, so there is exactly ONE task node for "the current
+ * session" and it is `nodeId('task', sessionId)`. Restricting to that ONE
+ * node structurally eliminates cases 1 and 2 -- a prior or concurrent
+ * session's task has a DIFFERENT sessionId and therefore a different node
+ * id, so it is never even looked at, regardless of timing. No caller can
+ * supply a wrong sessionId and get someone ELSE's task; they can only fail
+ * to get a match.
+ *
+ * COVERAGE, NOT OVERLAP, fixes case 3: the session's task must have a
+ * `derived_from` edge to EVERY one of this finding's anchors, not merely one.
+ * A partial touch is not attribution.
+ *
+ * With the candidate set reduced to at most one node, there is nothing left
+ * to break a tie between -- case 4's comparator is not "fixed", it is
+ * deleted, because the scenario it was written for (two DIFFERENT tasks both
+ * legitimately eligible) cannot occur under this scoping: two task nodes can
+ * never share a key, and only the current session's key is ever considered.
+ * An edge's `at` therefore plays NO role here: presence of a `derived_from`
+ * edge from the session's task to an anchor is what "touched it" means, with
+ * or without a timestamp on that edge -- there is no ranking left for a
+ * missing timestamp to lose.
+ *
+ * `sessionId` absent means there is no identity to scope by, which means no
+ * candidate -- not "fall back to guessing". Absence is the correct answer
+ * when the graph cannot support attribution.
  */
-function taskForAnchors(graph, anchorIds) {
-  if (!anchorIds || !anchorIds.length) return null;
-  const anchors = new Set(anchorIds);
-  let best = null;
-  for (const edge of graph.edges) {
-    if (edge.edge !== 'derived_from' || !anchors.has(edge.to)) continue;
-    const from = graph.nodes.get(edge.from);
-    // `derived_from` is also how a FINDING cites its own anchors, so without
-    // this a finding that already cited the same file would be mistaken for
-    // the task that produced it.
-    if (!from || from.kind !== 'task') continue;
-    const at = Number(edge.at) || 0;
-    if (!best || at > best.at) best = { taskId: edge.from, at };
+function taskForAnchors(graph, anchorIds, sessionId) {
+  if (!sessionId || !anchorIds || !anchorIds.length) return null;
+  const taskTarget = nodeId('task', sessionId);
+  const task = graph.nodes.get(taskTarget);
+  if (!task || task.kind !== 'task') return null;
+
+  for (const anchor of anchorIds) {
+    const covered = graph.edges.some((edge) =>
+      edge.edge === 'derived_from' && edge.from === taskTarget && edge.to === anchor
+    );
+    // ONE missing anchor refuses the whole attribution. A finding cited three
+    // files; this session's task touched two of them -- that is evidence the
+    // task did SOME related work, not evidence it produced THIS finding.
+    if (!covered) return null;
   }
-  return best ? best.taskId : null;
+  return taskTarget;
 }
 
 /**
  * A file path the way `recordToolOutcome` (metrics.mjs) already truncates and
- * stores it on a `tool-outcome` event's `anchor` field, so a derivation record
- * can join against that log without a second, divergent notion of "the same
- * anchor".
+ * stores it on a FILE-surface `tool-outcome` event's `anchor` field, so a
+ * derivation record can join against that log without a second, divergent
+ * notion of "the same anchor".
+ *
+ * COMMAND-surface events are DECLARED OUT OF SCOPE, not silently missed:
+ * `adapter.mjs` stores the COMMAND TEXT in `anchor` for those
+ * (`String(command).slice(0, 120)`), so a build or test run can never share
+ * an anchor string with a canonical file path -- there is no join key in
+ * common, and inventing a command-to-file heuristic (which files did a given
+ * `npm test` invocation cover?) is not something this record can answer
+ * honestly. `operationsScope` on the returned record says so explicitly,
+ * rather than letting an empty `operations` array look like "no build or
+ * test ever ran" when the truth is "this join cannot see it".
  */
 function anchorLabel(rawAnchor) {
   const path = String(rawAnchor).split('#')[0];
@@ -495,7 +526,8 @@ const MAX_DERIVATION_OPERATIONS = 5;
  * that comparison be reconstructed for a specific claim rather than only for
  * the anchor in general: the hash each anchor carried at the moment this
  * finding was derived from it, plus what evidence exists that any work
- * actually happened against it.
+ * actually happened against it. `derivationCheck` (staleness.mjs) is the
+ * reader that actually performs that comparison at serve time.
  *
  * DELIBERATELY NOT DUPLICATING THE EDGES. `derived_from` already records
  * WHICH anchors this finding cites; restating that here would be a second,
@@ -504,14 +536,23 @@ const MAX_DERIVATION_OPERATIONS = 5;
  *
  * DELIBERATELY NOT A REPLAY LOG. Recording enough to mechanically re-run a
  * derivation is a separate subsystem with real storage cost. This stores only
- * what the evidence log already has: `tool-outcome` events matching these
- * anchors, each reduced to the fields that were actually captured. An event
- * that carries no exit code or output contributes none -- nothing here is
- * invented to fill a shape the pipeline does not evidence yet. If a future
- * capture pass adds `exit`/`output` to those events, this starts carrying them
- * with no change to this function.
+ * what the evidence log already has: FILE-surface `tool-outcome` events
+ * matching these anchors, each reduced to the fields that were actually
+ * captured. An event that carries no exit code or output contributes none --
+ * nothing here is invented to fill a shape the pipeline does not evidence
+ * yet. If a future capture pass adds `exit`/`output` to those events, this
+ * starts carrying them with no change to this function.
+ *
+ * INCOMPLETENESS IS MARKED, NOT IMPLIED. An empty `operations` array is
+ * genuinely ambiguous on its own -- it is the same shape whether nothing
+ * happened, or something happened but fell outside what this join can see.
+ * `operationsComplete` distinguishes them: false when the evidence log itself
+ * may have dropped older matches (`evidenceIncomplete`, from
+ * `metrics.evidenceTruncated`) OR when more matches existed than the cap
+ * kept. A reader can then tell "no operations happened" from "operations
+ * existed but are not recorded here" instead of guessing.
  */
-function derivationFor(graph, resolvedAnchors, evidence, anchorSpecs) {
+function derivationFor(graph, resolvedAnchors, evidence, evidenceIncomplete, anchorSpecs) {
   const anchorHashes = {};
   for (const id of resolvedAnchors) {
     const node = graph.nodes.get(id);
@@ -519,8 +560,10 @@ function derivationFor(graph, resolvedAnchors, evidence, anchorSpecs) {
   }
 
   const labels = new Set((anchorSpecs || []).map(anchorLabel));
-  const operations = evidence
-    .filter((event) => event.kind === 'tool-outcome' && labels.has(event.anchor))
+  const matching = evidence.filter(
+    (event) => event.kind === 'tool-outcome' && labels.has(event.anchor)
+  );
+  const operations = [...matching]
     .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
     .slice(0, MAX_DERIVATION_OPERATIONS)
     .map((event) => {
@@ -538,7 +581,16 @@ function derivationFor(graph, resolvedAnchors, evidence, anchorSpecs) {
       return op;
     });
 
-  return { at: Date.now(), anchors: anchorHashes, operations };
+  return {
+    at: Date.now(),
+    anchors: anchorHashes,
+    operations,
+    // FILE touches only -- see `anchorLabel`. Declared here, in the record
+    // itself, not only in this function's comment, so a reader who never
+    // opens this source file still learns builds and test runs are excluded.
+    operationsScope: 'file',
+    operationsComplete: !evidenceIncomplete && matching.length <= operations.length,
+  };
 }
 
 /**
@@ -586,6 +638,9 @@ export function writeHarvested(
   // it can hold thousands of lines, so re-reading it per finding would turn a
   // batch of N findings into N passes over the same bytes.
   const evidence = readEvidence(dir);
+  // Cheap: one stat call, checked once per batch rather than once per
+  // finding's derivation record.
+  const evidenceIncomplete = evidenceTruncated(dir);
 
   const written = [];
   for (const finding of findings) {
@@ -645,14 +700,16 @@ export function writeHarvested(
     // An explicit `taskId` is authoritative when a caller supplies one --
     // it OVERRIDES traversal rather than merely seeding it, so a caller that
     // knows better is never second-guessed by inference. Absent one, the task
-    // is DERIVED from the graph itself: `taskForAnchors` finds the task that
-    // actually touched these anchors, which needs no session id from anyone.
-    // Either way, held to the same discipline as the anchors above: a target
-    // that does not resolve to an existing task node produces no edge rather
-    // than a dangling one.
+    // is DERIVED from the graph itself: `taskForAnchors` finds the CURRENT
+    // session's task (scoped by `sessionId`, the same identity this write
+    // already carries for provenance) and requires it to have touched EVERY
+    // one of this finding's anchors, not merely one -- see that function's
+    // own comment for the four attacks this closes. Either way, held to the
+    // same discipline as the anchors above: a target that does not resolve to
+    // an existing task node produces no edge rather than a dangling one.
     const answersTarget = taskId
       ? nodeId('task', taskId)
-      : taskForAnchors(currentGraph, resolved);
+      : taskForAnchors(currentGraph, resolved, sessionId);
     if (answersTarget && currentGraph.nodes.has(answersTarget)) {
       edges.push({ edge: 'answers', to: answersTarget });
     }
@@ -705,7 +762,7 @@ export function writeHarvested(
         // `render()`/`renderSessionIndex()` in inject.mjs or `wiki_read`'s
         // `toFinding()` projection, neither of which reads this field, so it
         // is not part of the automatic per-touch injection `fit()` prices.
-        derivation: derivationFor(currentGraph, resolved, evidence, finding.anchors || []),
+        derivation: derivationFor(currentGraph, resolved, evidence, evidenceIncomplete, finding.anchors || []),
       },
       edges
     );

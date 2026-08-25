@@ -367,3 +367,138 @@ describe('diff output is bounded', () => {
     expect(diff).not.toContain('a');
   });
 });
+
+/**
+ * `derivationCheck`: the checker `derivation` (harvest-write.mjs) was written
+ * for. A grep found no reader before this -- only the writer and its own
+ * tests -- so "checkable rather than merely attributed" was a claim with no
+ * code behind it. This verifies the comparison it performs, and specifically
+ * the case it exists FOR: a claim's OWN frozen, claim-time hash can stop
+ * matching an anchor even while `checkAnchor`/`stale` -- which compares disk
+ * against the anchor NODE's CURRENT hash, refreshed by every re-index -- still
+ * calls the anchor fresh.
+ */
+describe('derivationCheck -- whether a claim-time derivation still holds', () => {
+  it('reports derivationHolds true when the anchor’s current hash still matches the claim-time hash', () => {
+    const path = write('m.ts', 'export const m = 1;');
+    indexFile(dir, path);
+    const fileId = nodeId('file', path);
+    const claimTimeHash = load(dir).nodes.get(fileId).hash;
+
+    const finding = putNode(dir, {
+      kind: 'finding', key: 'm1', claim: 'm is 1', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { [fileId]: claimTimeHash }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+    putEdge(dir, finding, 'derived_from', fileId);
+
+    const graph = load(dir);
+    const [out] = serve(graph, [graph.nodes.get(finding)]);
+    expect(out.derivationHolds).toBe(true);
+    expect(out.derivationChanged).toBeUndefined();
+  });
+
+  it('reports derivationHolds false, naming the anchor, when the CURRENT hash no longer matches the claim-time one -- even though checkAnchor calls the anchor fresh', () => {
+    const path = write('n.ts', 'export const n = 1;');
+    indexFile(dir, path);
+    const fileId = nodeId('file', path);
+    const claimTimeHash = load(dir).nodes.get(fileId).hash;
+
+    const finding = putNode(dir, {
+      kind: 'finding', key: 'n1', claim: 'n is 1', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { [fileId]: claimTimeHash }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+    putEdge(dir, finding, 'derived_from', fileId);
+
+    // Someone ELSE re-indexes the file after it changed -- a different
+    // session, a different finding, anything that calls `indexFile` on it
+    // again. The file node's stored hash is refreshed to match disk, so
+    // node-level staleness reports "fresh": disk equals the node's CURRENT
+    // hash. This finding's OWN claim-time snapshot was never updated.
+    writeFileSync(path, 'export const n = 2;');
+    indexFile(dir, path);
+
+    const graph = load(dir);
+    const [out] = serve(graph, [graph.nodes.get(finding)]);
+    // The existing mechanism sees nothing wrong -- this is the exact gap
+    // `derivationCheck` closes, not a case it duplicates.
+    expect(out.stale).toBe(false);
+    expect(out.derivationHolds).toBe(false);
+    // Named by the anchor's stored (canonical) key, not the raw path spelling.
+    expect(out.derivationChanged).toEqual([canonicalPath(path)]);
+  });
+
+  it('is absent (not false) on a finding with no derivation record at all', () => {
+    // Every finding written before this feature existed has no `derivation`
+    // field. `derivationHolds` must be ABSENT for those, not `false` --
+    // `false` would assert a check that never happened.
+    const path = write('o.ts', 'export const o = 1;');
+    indexFile(dir, path);
+    const finding = putNode(dir, { kind: 'finding', key: 'o1', claim: 'o is 1', confidence: 0.9, type: 'finding' });
+    putEdge(dir, finding, 'derived_from', nodeId('file', path));
+
+    const graph = load(dir);
+    const [out] = serve(graph, [graph.nodes.get(finding)]);
+    expect('derivationHolds' in out).toBe(false);
+  });
+
+  it('treats an anchor that no longer resolves at all as changed, not as holding', () => {
+    const finding = putNode(dir, {
+      kind: 'finding', key: 'p1', claim: 'p is 1', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { 'file:doesnotexist': 'some-hash' }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+
+    const graph = load(dir);
+    const [out] = serve(graph, [graph.nodes.get(finding)]);
+    expect(out.derivationHolds).toBe(false);
+  });
+});
+
+/**
+ * `derivationNote` (inject.mjs): where `derivationCheck`'s verdict actually
+ * reaches a model. Distinguishable from `disputeNote` (another finding
+ * disagrees) and from the STALE block (the anchor node's current hash does
+ * not match disk) -- silent in the common case, and priced against the
+ * injection budget the same way both of those already are, because it lives
+ * inside `render()`, which `fit()` measures.
+ */
+describe('the derivation-changed disclosure in forTouch', () => {
+  it('names the changed anchor in the injected text when a touched finding’s derivation no longer holds', () => {
+    const path = write('q.ts', 'export const q = 1;');
+    indexFile(dir, path);
+    const fileId = nodeId('file', path);
+    const claimTimeHash = load(dir).nodes.get(fileId).hash;
+
+    const finding = putNode(dir, {
+      kind: 'finding', key: 'q1', claim: 'q is 1 by default', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { [fileId]: claimTimeHash }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+    putEdge(dir, finding, 'derived_from', fileId);
+
+    writeFileSync(path, 'export const q = 2;');
+    indexFile(dir, path);
+
+    const out = forTouch(dir, load(dir), path, { sessionId: 's-deriv' });
+    expect(out).toContain('q is 1 by default');
+    expect(out).toContain('DERIVATION CHANGED');
+    // Not the staleness vocabulary -- checkAnchor calls this anchor fresh,
+    // and the disclosure must not borrow words that assert something else.
+    expect(out).not.toContain('STALE (');
+  });
+
+  it('says nothing when the derivation still holds', () => {
+    const path = write('r.ts', 'export const r = 1;');
+    indexFile(dir, path);
+    const fileId = nodeId('file', path);
+    const claimTimeHash = load(dir).nodes.get(fileId).hash;
+
+    putNode(dir, {
+      kind: 'finding', key: 'r1', claim: 'r is 1 by default', confidence: 0.9, type: 'finding',
+      derivation: { anchors: { [fileId]: claimTimeHash }, operations: [], operationsScope: 'file', operationsComplete: true },
+    });
+    putEdge(dir, nodeId('finding', 'r1'), 'derived_from', fileId);
+
+    const out = forTouch(dir, load(dir), path, { sessionId: 's-deriv2' });
+    expect(out).toContain('r is 1 by default');
+    expect(out).not.toContain('DERIVATION CHANGED');
+  });
+});
