@@ -68,7 +68,7 @@ import {
   standingRules,
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
-import { observedWrite, queueInvalidation } from './pending.mjs';
+import { observedWrites, queueInvalidation } from './pending.mjs';
 import { isArchived } from './transcript.mjs';
 import { isFsSafePath } from './paths.mjs';
 import {
@@ -898,8 +898,7 @@ async function runHook(clientName, event, invocation) {
     // avoid. The next graph read drains it before serving anything.
     try {
       if (mutationSucceeded(clientName, raw)) {
-        const evidence = observedWrite(payload, raw);
-        if (evidence) {
+        for (const evidence of observedWrites(payload, raw)) {
           // THE SAME DIRECTORY THE GRAPH ITSELF USES. `observeAndInject` keys
           // every write on `wikiDir(projectRootFor(path, payload.cwd))`, and a
           // queue written anywhere else is a queue nothing ever drains.

@@ -155,9 +155,28 @@ function render(finding) {
  * prevent. A second load costs a parse, and it is paid once per observed write
  * rather than once per tool call -- when nothing is queued this is one stat.
  */
+/**
+ * Per process, per graph directory: did the drain change anything?
+ *
+ * THE SECOND CALLER IS WHY THIS EXISTS. SessionStart calls `standingRules` and
+ * then `sessionIndex` with the SAME graph object it loaded once. Without this
+ * memo the first call drains, marks, and re-reads privately -- and the second
+ * call finds an empty queue, marks nothing, and therefore serves from the
+ * caller's pre-drain copy, advertising as current the very finding the first
+ * call had just marked. Draining is not idempotent from the caller's point of
+ * view; remembering the ANSWER is what makes it so.
+ *
+ * A hook process handles one lifecycle event, so this map holds one or two
+ * entries and dies with the process.
+ */
+const drainedDirs = new Map();
+
 function withPendingApplied(dir, graph) {
   try {
-    return drainInvalidations(dir, graph) > 0 ? load(dir) : graph;
+    if (drainedDirs.has(dir)) return drainedDirs.get(dir) ? load(dir) : graph;
+    const marked = drainInvalidations(dir, graph) > 0;
+    drainedDirs.set(dir, marked);
+    return marked ? load(dir) : graph;
   } catch {
     // The lazy path still covers everything this would have caught early, and
     // a hook must never fail because bookkeeping did.
@@ -860,6 +879,12 @@ export function relevantFindingIdsForContext(graph, context, { limit = 8 } = {})
  * shrinks toward the floor. See metrics.indexBudget.
  */
 export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = [] } = {}) {
+  // DRAINED HERE TOO, and this is the worst place to be wrong. The session index
+  // is the FIRST thing a session sees and it arrives with no other context to
+  // correct it, so advertising a finding the graph already knows is stale is a
+  // false claim made at maximum leverage. The graph is loaded either way, so the
+  // only cost is the stat that finds no queue.
+  graph = withPendingApplied(dir, graph);
   const budget = indexBudget(dir);
   const relevant = new Set(relevantFindingIds);
   // Some SessionStart payloads have no task signal. Fail closed for situational
@@ -986,6 +1011,9 @@ ${lines.join('\n')}`;
  * is wallpaper, and the model stops reading the thing it always sees.
  */
 export function standingRules(dir, graph, { budget = standingBudget(), episode = {} } = {}) {
+  // Same reason as sessionIndex: always-on text, delivered before the first
+  // tool call, with nothing following it that could qualify what it said.
+  graph = withPendingApplied(dir, graph);
   const rules = [...graph.nodes.values()].filter(
     (n) =>
       n.kind === 'finding' &&

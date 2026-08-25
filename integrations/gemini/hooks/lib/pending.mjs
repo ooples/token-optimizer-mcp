@@ -39,7 +39,7 @@ import {
   statSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { invalidateOnWrite } from './staleness.mjs';
+import { invalidateChangedAnchors, invalidateOnWrite } from './staleness.mjs';
 import { canonicalPath, isFsSafePath, resolvableCandidates } from './paths.mjs';
 
 const queuePath = (dir) => join(dir, 'pending-invalidation.jsonl');
@@ -190,31 +190,85 @@ function hasEditEvidence(payload, raw) {
 }
 
 /**
- * The evidence a completed mutation left behind, or null when there is none.
+ * Canonical tool names that mean bytes on disk changed.
  *
- * Separate from `queueInvalidation` so the caller can be a hook branch that
- * knows nothing about diffs, and so the reconstruction above is testable
- * without a filesystem queue.
+ * THE NORMALISED SET, not any client's own vocabulary. `normalizePayload` has
+ * already mapped `replace`, `write_file`, `apply_patch`, `str_replace`,
+ * `search_replace` and the rest onto these three through decide.mjs's alias
+ * table -- and a tool that table cannot map arrives as null and exits the hook
+ * before this module is reached at all. So matching here is both complete for
+ * every client the adapter serves and impossible to spell wrong.
+ *
+ * `NotebookEdit` is absent because `normalizeTool` maps it to null, and the MCP
+ * `smart_edit`/`smart_write` tools are absent for the same reason. Both are gaps
+ * in that alias table rather than in this file, and widening it changes routing
+ * verdicts for every client -- so they are reported, not papered over here.
  */
-export function observedWrite(payload, raw) {
-  // CHEAP CHECK FIRST, because this runs after every tool call on every client.
-  // Reading the file is the expensive part, and there is no point paying for it
-  // on a Read, a Bash or a write whose before side cannot be reconstructed.
-  if (!hasEditEvidence(payload, raw)) return null;
+const MUTATING = new Set(['Edit', 'MultiEdit', 'Write']);
+
+/** Files an apply_patch-style program declares it is about to change. */
+function patchTargets(payload) {
+  const command = payload?.tool_input?.command;
+  if (typeof command !== 'string') return [];
+  const out = [];
+  for (const match of command.matchAll(
+    /^\*\*\* (?:Add|Update|Delete) File:\s*(.+)$/gm
+  )) {
+    const candidate = match[1].trim().replace(/^['"]|['"]$/g, '');
+    // Bounded: one patch naming a thousand files must not append a thousand
+    // queue records on a hook path.
+    if (candidate && out.length < 20) out.push(candidate);
+  }
+  return out;
+}
+
+/**
+ * Everything a completed mutation left behind that is worth queueing.
+ *
+ * TWO GRADES OF EVIDENCE, and the distinction is the point:
+ *
+ *   { path, before, after }  a reconstructable edit. The drain builds a real
+ *                            diff and marks only the symbols that moved.
+ *   { path }                 a whole-file write, or a patch program. No before
+ *                            side exists anywhere in the payload, so the drain
+ *                            compares stored hashes against disk instead.
+ *
+ * The second grade is what closes the biggest hole. A whole-file write is the
+ * commonest write shape there is, and before it was added those writes fell
+ * through to a lazy path that CANNOT see the session's own writes at all --
+ * `indexFile` refreshes the anchor before the lazy check ever looks at it. They
+ * were uncovered, not degraded.
+ *
+ * Returns an array, because one apply_patch program changes several files.
+ */
+export function observedWrites(payload, raw) {
+  if (!MUTATING.has(String(payload?.tool_name || ''))) return [];
 
   const path = writtenPath(payload, raw);
-  if (!path) return null;
+  if (path) {
+    // The expensive branch is guarded: reading the file only pays off when the
+    // payload can actually yield a before side.
+    if (hasEditEvidence(payload, raw)) {
+      const after = afterText(path);
+      if (after !== null && after.length <= MAX_SIDE_CHARS) {
+        const before = beforeText(payload, raw, after);
+        // Identical bytes: a formatter no-op, or a rewrite of the same content.
+        // Nothing changed, so nothing is stale.
+        if (before === after) return [];
+        if (before !== null && before.length <= MAX_SIDE_CHARS)
+          return [{ path, before, after }];
+      }
+    }
+    // Hash grade. Deliberately NOT `{ path, before: '', after }`: an empty
+    // before side makes every symbol in the file look changed, and the eager
+    // mark is a stored flag no later check ever clears.
+    return [{ path }];
+  }
 
-  const after = afterText(path);
-  if (after === null || after.length > MAX_SIDE_CHARS) return null;
-
-  const before = beforeText(payload, raw, after);
-  if (before === null || before.length > MAX_SIDE_CHARS) return null;
-  // Nothing changed: a formatter no-op, or a write of identical bytes. Queuing
-  // it would mark findings stale against an empty diff.
-  if (before === after) return null;
-
-  return { path, before, after };
+  // Codex and code-mode clients carry the whole patch as program text with no
+  // file_path field at all, which is why this recorded nothing for them. The
+  // hash grade needs only the path, so the patch headers are enough.
+  return patchTargets(payload).map((target) => ({ path: target }));
 }
 
 /**
@@ -226,9 +280,14 @@ export function observedWrite(payload, raw) {
 export function queueInvalidation(dir, { path, before, after, at } = {}) {
   try {
     if (typeof path !== 'string' || !path.trim()) return false;
-    if (typeof before !== 'string' || typeof after !== 'string') return false;
-    if (before.length > MAX_SIDE_CHARS || after.length > MAX_SIDE_CHARS)
-      return false;
+    // BOTH SIDES OR NEITHER. A record carrying only one of them cannot produce
+    // a diff and must not pretend to, so it is written as a path-only record
+    // and the drain resolves it by comparing hashes.
+    const diffable =
+      typeof before === 'string' &&
+      typeof after === 'string' &&
+      before.length <= MAX_SIDE_CHARS &&
+      after.length <= MAX_SIDE_CHARS;
 
     const file = queuePath(dir);
     try {
@@ -240,7 +299,11 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
     mkdirSync(dir, { recursive: true });
     appendFileSync(
       file,
-      `${JSON.stringify({ path: canonicalPath(path), before, after, at: at ?? Date.now() })}\n`,
+      `${JSON.stringify({
+        path: canonicalPath(path),
+        ...(diffable ? { before, after } : {}),
+        at: at ?? Date.now(),
+      })}\n`,
       'utf8'
     );
     return true;
@@ -284,16 +347,16 @@ export function drainInvalidations(dir, graph) {
   let marked = 0;
   for (const record of records) {
     if (!record || typeof record.path !== 'string' || !record.path) continue;
-    if (typeof record.before !== 'string' || typeof record.after !== 'string')
-      continue;
+    const diffable =
+      typeof record.before === 'string' && typeof record.after === 'string';
     try {
-      const result = invalidateOnWrite(
-        dir,
-        graph,
-        record.path,
-        record.before,
-        record.after
-      );
+      // TWO GRADES, ONE QUEUE. A record carrying both sides gets a real diff and
+      // symbol-precise marking; one carrying only a path gets the hash
+      // comparison -- the same comparison the lazy path makes, and one that is
+      // only meaningful HERE, before `indexFile` refreshes the anchor.
+      const result = diffable
+        ? invalidateOnWrite(dir, graph, record.path, record.before, record.after)
+        : invalidateChangedAnchors(dir, graph, record.path);
       marked += Array.isArray(result) ? result.length : 0;
     } catch {
       // One bad record must not stop the rest, and must not stop the tool call.
