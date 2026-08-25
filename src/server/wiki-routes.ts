@@ -432,11 +432,26 @@ export function registerWikiRoutes(app: Express): void {
       // this route's pool is `{ node, source }` wrappers (findings are
       // aggregated across every source directory), so each entry is exposed
       // under `key`/`claim` for scoring and unwrapped back to its original
-      // `{ node, source }` shape afterward. The limit is the whole
-      // (kind-filtered) pool, not `offset + limit`, so `total` and the
-      // dashboard's `?offset=` pagination keep behaving exactly as they did
-      // under the old unbounded filter -- only the ordering changes.
-      if (query) {
+      // `{ node, source }` shape afterward. The limit passed to `rank` is
+      // the whole (kind-filtered) pool, not `offset + limit`, so pagination
+      // over the RANKED set is exact -- `?offset=` and `?limit=` slice the
+      // same full ranking on every page, not a truncated one.
+      //
+      // `total` is NOT the old filter's match count, and does not claim to
+      // be: `rank` omits zero-score findings (a query term must actually
+      // match, exactly or by prefix -- see lexical.mjs), so `total` here is
+      // the count of findings BM25 considers relevant, which can be smaller
+      // than what `.includes()` would have counted for the same query.
+      //
+      // Only reached when the query actually tokenizes to at least one term
+      // (`hasQueryTerms` below) -- `tokenize` strips everything but
+      // alphanumeric runs, so a blank, whitespace-only, or punctuation-only
+      // `q=` yields no terms and falls through to the no-query branch below
+      // instead of asking `rank` to score against nothing (which would
+      // return zero results, not "everything," for what a user typing a
+      // stray space in the search box expects to behave like no filter).
+      const hasQueryTerms = query.length > 0 && mods.lexical.tokenize(query).length > 0;
+      if (hasQueryTerms) {
         const scored = mods.lexical.rank(
           query,
           findings.map((entry: any) => ({

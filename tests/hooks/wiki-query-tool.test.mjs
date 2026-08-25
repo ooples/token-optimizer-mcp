@@ -82,6 +82,23 @@ describe('wiki_query', () => {
     expect(result.findings.map((f) => f.key)).toContain('retry-cap');
   });
 
+  it('returns the pool rather than nothing when query is omitted, blank, or punctuation-only', async () => {
+    // `query` is optional in the schema (a model can call search without
+    // one, same as a user leaving the dashboard search box blank). `rank`
+    // itself returns [] when tokenize(query) has nothing to score --
+    // correct for `rank` alone, but wrong for this tool's contract if left
+    // unguarded: a model omitting `query` would get `found: false` for a
+    // pool that is not actually empty. This mirrors the same guard added to
+    // /api/wiki/search in src/server/wiki-routes.ts, so both search surfaces
+    // agree that "no usable query" means "return the pool," not "return
+    // nothing."
+    for (const query of [undefined, '', '   ', '!!! ,,, ???']) {
+      const result = await wikiQuery({ operation: 'search', query, graphDir: dir });
+      expect(result.found).toBe(true);
+      expect(result.findings.map((f) => f.key)).toContain('retry-cap');
+    }
+  });
+
   it('refuses the anchored retrieval that belongs to wiki_read', async () => {
     // Deliberately NOT supported here. wiki_read already answers "what does the
     // graph know about this file", and two tools with an identical operation

@@ -184,4 +184,58 @@ describe('/api/wiki/search (the route itself)', () => {
       'low-confidence',
     ]);
   });
+
+  /**
+   * Demonstrated regression: `q=%20` is truthy, so `if (query)` alone sent
+   * it into the BM25 branch, `tokenize(' ')` produced no terms, and `rank`
+   * returned nothing -- a blank search box went from showing (nearly)
+   * everything, under the old `.includes(' ')` filter, to showing nothing.
+   * A query that tokenizes to zero terms must fall through to the same
+   * no-query branch as an actually-empty `q=`, not a distinct "search that
+   * matches nothing" branch.
+   */
+  it.each([
+    ['a single space', ' '],
+    ['punctuation only', '!!! ,,, ???'],
+  ])('treats a query that tokenizes to nothing (%s) the same as no query at all', async (_label, q) => {
+    const scope = registerIsolatedProject();
+    if (!tempGraphDir) throw new Error('fixture graph directory missing');
+
+    putNodeWithEdges(tempGraphDir, {
+      kind: 'finding',
+      key: 'low-confidence',
+      claim: 'an unrelated finding about caching',
+      confidence: 0.3,
+    });
+    putNodeWithEdges(tempGraphDir, {
+      kind: 'finding',
+      key: 'high-confidence',
+      claim: 'a different finding about retries',
+      confidence: 0.95,
+    });
+
+    const blankResponse = await fetch(
+      `${baseUrl}/api/wiki/search?${new URLSearchParams({ q, scope, limit: '50' })}`
+    );
+    const noQueryResponse = await fetch(
+      `${baseUrl}/api/wiki/search?${new URLSearchParams({ scope, limit: '50' })}`
+    );
+    expect(blankResponse.status).toBe(200);
+    const blankBody = (await blankResponse.json()) as {
+      total: number;
+      items: Array<{ key: string }>;
+    };
+    const noQueryBody = (await noQueryResponse.json()) as {
+      total: number;
+      items: Array<{ key: string }>;
+    };
+
+    // Not empty, and identical to the no-query response: both surfaces of
+    // "nothing meaningful to search for" must agree.
+    expect(blankBody.items.map((item) => item.key)).toEqual([
+      'high-confidence',
+      'low-confidence',
+    ]);
+    expect(blankBody).toEqual(noQueryBody);
+  });
 });
