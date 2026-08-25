@@ -161,8 +161,25 @@ export const WIKI_QUERY_TOOL_DEFINITION = {
  */
 const SNAPSHOT_FIELDS = new Set(['snapshot', 'snapshots', 'before', 'after']);
 
+/**
+ * How deep the walk goes before it refuses to carry the subtree.
+ *
+ * Bounded so a cycle cannot hang the response. The bound must FAIL CLOSED: the
+ * first version returned `value` at the cap, which handed back a raw, unstripped
+ * subtree through the one exit this guard exists to seal. Today's responses are
+ * two to four deep so it was unreachable -- but "unreachable in practice" is
+ * exactly the incidental guarantee this function was written to replace.
+ */
+const MAX_DEPTH = 8;
+
+/** What a subtree past the cap is replaced BY. Never the subtree. */
+const DEPTH_LIMIT_MARKER = '[depth limit]';
+
 function withoutSnapshots<T>(value: T, depth = 0): T {
-  if (depth > 8 || value === null || typeof value !== 'object') return value;
+  // FAIL CLOSED, not open: past the cap nothing is carried, because at this
+  // point the walk can no longer promise anything about what is below.
+  if (depth > MAX_DEPTH) return DEPTH_LIMIT_MARKER as unknown as T;
+  if (value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) {
     return value.map((item) =>
       withoutSnapshots(item, depth + 1)
@@ -192,7 +209,7 @@ export async function wikiQuery(
   const operation = String(options?.operation ?? '');
   const limit = Math.min(100, Math.max(1, Number(options?.limit) || 20));
 
-  const [wiki, curate, metrics, staleness, lexical, projects] =
+  const [wiki, curate, metrics, staleness, lexical, projects, paths] =
     await Promise.all([
       import(coreUrl('wiki.mjs')),
       import(coreUrl('curate.mjs')),
@@ -200,13 +217,41 @@ export async function wikiQuery(
       import(coreUrl('staleness.mjs')),
       import(coreUrl('lexical.mjs')),
       import(coreUrl('projects.mjs')),
+      import(coreUrl('paths.mjs')),
     ]);
 
-  // The graph belongs to the project the ANCHOR is in, not to wherever the
-  // session happens to be running -- the same rule wiki_write follows.
-  // No anchor to infer from any more -- anchored retrieval belongs to wiki_read.
-  // An explicit projectRoot still wins, so a caller that knows better can name it.
-  const inferredRoot = options.projectRoot ?? process.cwd();
+  // THE GRAPH LIVES AT THE REPOSITORY ROOT, and `wikiDir` does no upward walk.
+  //
+  // The raw cwd was wrong, and wrong in the one way that would have made this
+  // whole tool a no-op while looking finished. `indexBudget` divides `queries`
+  // by `listed` PER GRAPH DIRECTORY, and the `index` events that form the
+  // denominator are written by the hooks to
+  // `wikiDir(projectRootFor(join(cwd, '__session__'), cwd))` -- which walks up
+  // for a .git/.hg/.svn marker. So from any cwd below the repository root -- a
+  // monorepo package, a host that spawns the server in a subdirectory, a user
+  // who started it from src/ -- the numerator would land in one graph and the
+  // denominator in another, each zero where the other was counted, and the
+  // budget would stay pinned at its 150-token floor exactly as before.
+  //
+  // Same resolution as the hooks, and the same sentinel filename: the walk wants
+  // a path INSIDE the tree rather than the tree itself. An explicit projectRoot
+  // still wins, so a caller that knows better can name it.
+  //
+  // CANONICAL ON EVERY PATH, including the caller-supplied one. `projectRootFor`
+  // canonicalises what it returns; `wikiDir` does not canonicalise what it is
+  // given. So a caller passing a lower-case drive letter while a hook resolves an
+  // upper-case one would write to two directories for one repository, and the
+  // same for an 8.3 short path or a symlinked spelling. That is the identity bug
+  // this codebase already answered once, by putting `canonicalKey` INSIDE
+  // `nodeId`
+  // rather than trusting each call site to remember.
+  const inferredRoot = paths.canonicalPath(
+    options.projectRoot ??
+      wiki.projectRootFor(
+        path.join(process.cwd(), '__session__'),
+        process.cwd()
+      )
+  );
   const dir = options.graphDir ?? wiki.wikiDir(inferredRoot);
   if (!options.graphDir) {
     projects.registerProject({

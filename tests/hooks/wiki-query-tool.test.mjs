@@ -1,9 +1,8 @@
 /**
  * wiki_query — and, more importantly, whether anything can CALL it.
  *
- * The in-process cases below are the ordinary contract: get, search, anchor, the
- * missing key, and the `query` metric event that earns the session index its
- * budget. They are necessary and they are not sufficient. This repository's
+ * The in-process cases below are the ordinary contract: get, search, the missing
+ * key, and the `query` metric event that earns the session index its budget. They are necessary and they are not sufficient. This repository's
  * defining defect is correct code nothing calls, and every one of those cases
  * would pass on a tool that no MCP client could reach.
  *
@@ -23,14 +22,20 @@ import {
   beforeAll,
   afterAll,
 } from '@jest/globals';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { putNodeWithEdges, nodeId } from '../../hooks-core/wiki.mjs';
+import {
+  putNodeWithEdges,
+  nodeId,
+  wikiDir,
+  projectRootFor,
+} from '../../hooks-core/wiki.mjs';
 // `readAll` is private to metrics.mjs; `readMetrics` is the exported reader over
 // the same bounded log.
 import { readMetrics } from '../../hooks-core/metrics.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
 import {
   wikiQuery,
   WIKI_QUERY_TOOL_DEFINITION,
@@ -198,6 +203,158 @@ describe('wiki_query', () => {
     expect(result.finding.stale).toBe(true);
     expect(result.finding).toHaveProperty('staleReason');
     expect(result.finding).toHaveProperty('staleEvidence');
+  });
+
+  it('writes the query event to the REPOSITORY ROOT graph, not to the cwd', async () => {
+    // THIS IS THE WHOLE POINT OF THE TASK, and it is the assertion that would
+    // have passed on a broken tool.
+    //
+    // `indexBudget` divides `queries` by `listed` PER GRAPH DIRECTORY. The
+    // `index` events forming the denominator are written by the hooks to
+    // `wikiDir(projectRootFor(join(cwd, '__session__'), cwd))`, which WALKS UP
+    // for a VCS marker. A tool that used the raw cwd would file its numerator in
+    // a subdirectory's graph where the denominator is zero, and the denominator
+    // would sit in the root's graph where the numerator is zero -- so the budget
+    // would stay pinned at its floor and this task would have changed nothing
+    // while looking finished.
+    //
+    // So this asserts agreement with the HOOKS' OWN FORMULA rather than
+    // restating a path, and resolves from a SUBDIRECTORY, where raw cwd differs
+    // from the repository root.
+    const repo = mkdtempSync(join(tmpdir(), 'wq-repo-'));
+    const nested = join(repo, 'packages', 'thing');
+    mkdirSync(join(repo, '.git'), { recursive: true });
+    mkdirSync(nested, { recursive: true });
+
+    const cwdBefore = process.cwd();
+    const wikiOverride = process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+    const registryBefore = process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
+    // An override would resolve every root to one directory and make this test
+    // vacuous; the registry is redirected so the run cannot touch the real one.
+    delete process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+    process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(repo, 'projects.jsonl');
+    try {
+      process.chdir(nested);
+
+      // Exactly what plugin/hooks/session-start.mjs and hooks-core/adapter.mjs
+      // compute for the index events.
+      const hookDir = wikiDir(
+        projectRootFor(join(process.cwd(), '__session__'), process.cwd())
+      );
+      const rawCwdDir = wikiDir(process.cwd());
+      // If these were equal the test could not tell the two behaviours apart.
+      expect(hookDir).not.toBe(rawCwdDir);
+
+      await wikiQuery({ operation: 'get', key: 'nothing-here' });
+
+      const atRoot = readMetrics(hookDir).filter((e) => e.kind === 'query');
+      expect(atRoot).toHaveLength(1);
+      expect(atRoot[0].operation).toBe('get');
+      // ...and nothing in the subdirectory, which is where the raw cwd pointed.
+      expect(readMetrics(rawCwdDir).filter((e) => e.kind === 'query')).toEqual(
+        []
+      );
+    } finally {
+      process.chdir(cwdBefore);
+      if (wikiOverride === undefined)
+        delete process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+      else process.env.TOKEN_OPTIMIZER_WIKI_DIR = wikiOverride;
+      if (registryBefore === undefined)
+        delete process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
+      else process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = registryBefore;
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('canonicalises a caller-supplied root, so two spellings are one graph', async () => {
+    // `projectRootFor` canonicalises what it returns, but `wikiDir` does NOT
+    // canonicalise what it is given -- so an explicit `projectRoot` was the one
+    // path into this function that could still fork a repository into two
+    // graphs. A caller spelling the root differently from the hooks (mixed
+    // separators, a redundant segment, a lower-case drive letter on Windows)
+    // must still land where the hooks' index events go, or `indexBudget` splits
+    // again for a second reason.
+    const repo = mkdtempSync(join(tmpdir(), 'wq-spell-'));
+    mkdirSync(join(repo, '.git'), { recursive: true });
+    mkdirSync(join(repo, 'packages'), { recursive: true });
+    const registryBefore = process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
+    const wikiOverride = process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+    delete process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+    process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = join(repo, 'projects.jsonl');
+    try {
+      // Where the hooks write the denominator.
+      const hookDir = wikiDir(projectRootFor(join(repo, '__session__'), repo));
+
+      // The same root, spelled the way a caller might hand it over.
+      const SEP = String.fromCharCode(92); // a backslash, unambiguously
+      let odd = join(repo, 'packages', '..').split(SEP).join('/');
+      if (process.platform === 'win32')
+        odd = odd.charAt(0).toLowerCase() + odd.slice(1);
+      // The two spellings are different STRINGS, which is the whole problem:
+      // `indexBudget`, the project registry and the dashboards all key on the
+      // graph directory, so two strings for one repository double-count it.
+      expect(wikiDir(odd)).not.toBe(hookDir);
+      // Canonicalised, they are one key. This is the guarantee the fix adds.
+      expect(wikiDir(canonicalPath(odd))).toBe(hookDir);
+
+      await wikiQuery({ operation: 'get', key: 'nothing', projectRoot: odd });
+
+      // And the event is where the hooks write the denominator -- exactly one,
+      // so the odd spelling did not open a second graph beside it.
+      expect(
+        readMetrics(hookDir).filter((e) => e.kind === 'query')
+      ).toHaveLength(1);
+      // HONEST LIMIT, stated rather than asserted around: a stronger check
+      // ("nothing at wikiDir(odd)") cannot fail on this filesystem, because a
+      // case- or separator-variant spelling names the SAME physical directory.
+      // The divergence this fix prevents is in the directory used as a KEY, and
+      // on a case-sensitive filesystem it is a divergence on disk as well.
+    } finally {
+      if (wikiOverride === undefined)
+        delete process.env.TOKEN_OPTIMIZER_WIKI_DIR;
+      else process.env.TOKEN_OPTIMIZER_WIKI_DIR = wikiOverride;
+      if (registryBefore === undefined)
+        delete process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY;
+      else process.env.TOKEN_OPTIMIZER_PROJECT_REGISTRY = registryBefore;
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed at the walk depth cap instead of returning the subtree', async () => {
+    // The cap exists so a cycle cannot hang the response, and its first version
+    // returned the raw subtree there -- a leak through the single exit the guard
+    // was written to seal. Nesting past the cap proves it now fails closed.
+    const deep = mkdtempSync(join(tmpdir(), 'wq-deep-'));
+    try {
+      putNodeWithEdges(deep, {
+        kind: 'finding',
+        key: 'buried',
+        claim: 'a claim with something buried far below it',
+        confidence: 0.9,
+        type: 'decision', // not content-dependent, so `serve` passes it through
+        nest: {
+          a: {
+            b: {
+              c: { d: { e: { f: { g: { snapshot: 'DEEP PRIVATE BODY' } } } } },
+            },
+          },
+        },
+      });
+
+      const result = await wikiQuery({
+        operation: 'get',
+        key: 'buried',
+        graphDir: deep,
+      });
+      expect(result.found).toBe(true);
+      const rendered = JSON.stringify(result);
+      // Proves the cap was actually REACHED -- without this the test could pass
+      // on a response that was simply shallower than intended.
+      expect(rendered).toContain('[depth limit]');
+      expect(rendered).not.toContain('DEEP PRIVATE BODY');
+    } finally {
+      rmSync(deep, { recursive: true, force: true });
+    }
   });
 });
 
