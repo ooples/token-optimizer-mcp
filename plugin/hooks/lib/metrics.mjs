@@ -455,6 +455,23 @@ export function readBalance(dir) {
   return out;
 }
 
+/**
+ * True when `readEvidence` could not have read the whole log -- the file
+ * exceeds the byte cap, so anything written before the tail it kept is
+ * silently absent from what it returned. A caller that builds a per-claim
+ * record from `readEvidence` (the wiki graph's derivation record) needs this
+ * to say "operations existed but are not recorded here" rather than let an
+ * empty result read as "nothing happened".
+ */
+export function evidenceTruncated(dir) {
+  const path = evidencePath(dir);
+  try {
+    return statSync(path).size > MAX_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 /** Every causal evidence record inside the byte cap, deduplicated by id. */
 export function readEvidence(dir) {
   const path = evidencePath(dir);

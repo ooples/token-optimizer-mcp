@@ -493,6 +493,54 @@ function disputeOf(graph, finding) {
 }
 
 /**
+ * Whether THIS finding's own claim-time evidence still matches its anchors --
+ * the reader `harvest-write.mjs`'s `derivation` record was written for.
+ * Nothing consumed that record until now: a grep for it found only the writer
+ * and its own tests, which made "checkable rather than merely attributed" a
+ * claim with no code behind it.
+ *
+ * DISTINCT FROM `stale`/`checkAnchor`, DELIBERATELY, not a duplicate of it.
+ * `checkAnchor` compares disk against the anchor NODE's CURRENT stored hash,
+ * which is refreshed by `indexFile` every time ANYTHING touches that file --
+ * so it answers "has this file changed since the last time anyone indexed
+ * it", not "has it changed since THIS finding was derived from it". Those
+ * differ in a real case: file F changes, and a LATER, unrelated write
+ * (another finding, another session) re-indexes F, updating the node's
+ * stored hash to match the new content again. `checkAnchor` now reports
+ * "fresh" -- disk matches the node's current hash -- while this finding's own
+ * frozen `derivation.anchors[id]` snapshot, taken when IT was written, no
+ * longer matches. The bytes this claim was actually derived from are gone,
+ * and `stale` alone would never say so.
+ *
+ * Returns `{}` when there is nothing to check (no `derivation.anchors`
+ * recorded -- true of every finding written before this existed), so a
+ * caller can tell "not checked" from "checked and holds" by whether
+ * `derivationHolds` is present at all.
+ */
+function derivationCheck(graph, finding) {
+  const recorded = finding.derivation && finding.derivation.anchors;
+  if (!recorded || typeof recorded !== 'object') return {};
+  const ids = Object.keys(recorded);
+  if (!ids.length) return {};
+
+  const changed = [];
+  for (const id of ids) {
+    const node = graph.nodes.get(id);
+    const currentHash = node && typeof node.hash === 'string' ? node.hash : null;
+    // An anchor that no longer resolves at all cannot be confirmed either --
+    // treated the same as a changed hash, never as "still holds" by default.
+    if (currentHash === null || currentHash !== recorded[id]) {
+      changed.push(node && typeof node.key === 'string' ? node.key : id);
+    }
+  }
+
+  if (!changed.length) return { derivationHolds: true };
+  // Bounded: a finding with many anchors should not spend unbounded budget
+  // naming every one that moved.
+  return { derivationHolds: false, derivationChanged: changed.slice(0, 5) };
+}
+
+/**
  * Prepares findings for delivery, verifying each one lazily against disk.
  *
  * This is the only function that should ever hand a finding to a model, because
@@ -609,6 +657,9 @@ export function serve(graph, findings) {
       stale,
       ...(stale ? { diff, staleReason: reason, staleEvidence: Boolean(diff) } : {}),
       ...dispute,
+      // Independent of `stale` above: see `derivationCheck`'s own comment for
+      // the case it catches that node-level staleness can miss.
+      ...derivationCheck(graph, finding),
     });
   }
   return served;

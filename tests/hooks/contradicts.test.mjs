@@ -364,67 +364,136 @@ describe('answers', () => {
 });
 
 /**
- * `answers` inferred from the graph itself, with no session id anywhere.
+ * `answers` inferred from the graph itself, session-scoped and requiring
+ * full coverage.
  *
- * Neither real caller (`plugin/hooks/harvest-worker.mjs`, `wiki_write`) can be
- * relied on to supply a session id that resolves to a task node -- one is
- * opt-in gated, the other's `sessionId` is optional and nothing populates it.
- * But the structural harvest writes `task -[derived_from]-> file` on every
- * tool call, unconditionally, so the task is DERIVABLE: it is whichever task
- * actually touched the SAME anchors this finding resolved to, not simply the
- * newest task node in the graph.
+ * An adversarial review of an earlier version (scanning the whole graph for
+ * ANY task sharing ANY anchor, tie broken by recency) constructed four cases
+ * where that attributes a finding to the WRONG task: a stale prior session, a
+ * concurrent session that touched the anchor a millisecond later, a task that
+ * covered only SOME of the finding's anchors, and a tie-break comparator that
+ * contradicted its own documented direction. The fix scopes candidates to
+ * `nodeId('task', sessionId)` -- the ONE task node this session's own
+ * structural harvest could have written -- and requires it to cover EVERY
+ * anchor. That is at most one candidate, so there is nothing left to break a
+ * tie between; see `taskForAnchors`'s own comment in harvest-write.mjs for why
+ * the old tie-break machinery was deleted rather than "fixed".
  */
 describe('answers inferred by anchor traversal', () => {
-  /** Forces the next Date.now() to differ, so edge `at` order is not a coin flip. */
-  function tick() {
-    const start = Date.now();
-    while (Date.now() === start) { /* spin until the clock moves */ }
-  }
-
-  it('picks the task that touched the anchor over a more recently active task that did not', () => {
+  it('attributes to the current session’s task when it covers every one of the finding’s anchors', () => {
     const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
-    const file = join(dir3, 'a.ts');
-    writeFileSync(file, 'export const a = 1;');
-    indexFile(dir3, file, 'export const a = 1;');
+    const fileA = join(dir3, 'a1.ts');
+    const fileB = join(dir3, 'a2.ts');
+    writeFileSync(fileA, 'export const a1 = 1;');
+    writeFileSync(fileB, 'export const a2 = 1;');
+    indexFile(dir3, fileA, 'export const a1 = 1;');
+    indexFile(dir3, fileB, 'export const a2 = 1;');
 
-    putNode(dir3, { kind: 'task', key: 'right-task' });
-    putEdge(dir3, nodeId('task', 'right-task'), 'derived_from', nodeId('file', file));
-
-    tick();
-    // Created and touched something LATER, but never this anchor. A "most
-    // recent task" rule would pick this one, which is exactly the wrong
-    // provenance the traversal exists to avoid.
-    putNode(dir3, { kind: 'task', key: 'decoy-task' });
+    putNode(dir3, { kind: 'task', key: 'session-a' });
+    putEdge(dir3, nodeId('task', 'session-a'), 'derived_from', nodeId('file', fileA));
+    putEdge(dir3, nodeId('task', 'session-a'), 'derived_from', nodeId('file', fileB));
 
     writeHarvested(
       dir3,
-      [{ type: 'finding', claim: 'a is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 's1', projectRoot: dir3 }
+      [{ type: 'finding', claim: 'a1 and a2 both default to 1', anchors: [fileA, fileB], confidence: 0.8 }],
+      { sessionId: 'session-a', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
     const edge = graph.edges.find((e) => e.edge === 'answers');
     expect(edge).toBeDefined();
-    expect(edge.to).toBe(nodeId('task', 'right-task'));
+    expect(edge.to).toBe(nodeId('task', 'session-a'));
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('writes no edge when the current session’s task covers only some of the anchors (overlap, not coverage)', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const fileA = join(dir3, 'b1.ts');
+    const fileB = join(dir3, 'b2.ts');
+    writeFileSync(fileA, 'export const b1 = 1;');
+    writeFileSync(fileB, 'export const b2 = 1;');
+    indexFile(dir3, fileA, 'export const b1 = 1;');
+    indexFile(dir3, fileB, 'export const b2 = 1;');
+
+    putNode(dir3, { kind: 'task', key: 'session-b' });
+    // Touched ONLY fileA. A finding about both files is not this task's work.
+    putEdge(dir3, nodeId('task', 'session-b'), 'derived_from', nodeId('file', fileA));
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'b1 and b2 both default to 1', anchors: [fileA, fileB], confidence: 0.8 }],
+      { sessionId: 'session-b', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('ignores a DIFFERENT (stale, prior) session’s task even when it fully covers the anchor', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'c.ts');
+    writeFileSync(file, 'export const c = 1;');
+    indexFile(dir3, file, 'export const c = 1;');
+
+    // An OLDER session that genuinely touched this file, days or weeks ago in
+    // spirit -- nothing about it is wrong except that it is not THIS session.
+    putNode(dir3, { kind: 'task', key: 'old-session' });
+    putEdge(dir3, nodeId('task', 'old-session'), 'derived_from', nodeId('file', file));
+
+    // THIS session never touched the file at all -- it reasoned from injected
+    // memory and wrote a finding about it anyway.
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'c is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 'new-session', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('ignores a CONCURRENT session’s task, even one that touched the anchor a moment later', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'd.ts');
+    writeFileSync(file, 'export const d = 1;');
+    indexFile(dir3, file, 'export const d = 1;');
+
+    // A second window on the same repository, touching the SAME file at
+    // whatever moment `putEdge` happens to run -- no `tick()` here on
+    // purpose: the point is that timing must not matter at all, not that this
+    // session loses a race.
+    putNode(dir3, { kind: 'task', key: 'other-window' });
+    putEdge(dir3, nodeId('task', 'other-window'), 'derived_from', nodeId('file', file));
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'd is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 'this-window', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
     rmSync(dir3, { recursive: true, force: true });
   });
 
   it('writes no edge when no task shares an anchor with the finding', () => {
     const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
-    const file = join(dir3, 'b.ts');
+    const file = join(dir3, 'e.ts');
     const other = join(dir3, 'unrelated.ts');
-    writeFileSync(file, 'export const b = 1;');
-    writeFileSync(other, 'export const c = 1;');
-    indexFile(dir3, file, 'export const b = 1;');
-    indexFile(dir3, other, 'export const c = 1;');
+    writeFileSync(file, 'export const e = 1;');
+    writeFileSync(other, 'export const f = 1;');
+    indexFile(dir3, file, 'export const e = 1;');
+    indexFile(dir3, other, 'export const f = 1;');
 
-    putNode(dir3, { kind: 'task', key: 'unrelated-task' });
-    putEdge(dir3, nodeId('task', 'unrelated-task'), 'derived_from', nodeId('file', other));
+    putNode(dir3, { kind: 'task', key: 'session-e' });
+    putEdge(dir3, nodeId('task', 'session-e'), 'derived_from', nodeId('file', other));
 
     writeHarvested(
       dir3,
-      [{ type: 'finding', claim: 'b is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 's1', projectRoot: dir3 }
+      [{ type: 'finding', claim: 'e is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 'session-e', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -434,11 +503,12 @@ describe('answers inferred by anchor traversal', () => {
 
   it('lets an explicit taskId override traversal entirely', () => {
     const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
-    const file = join(dir3, 'c.ts');
-    writeFileSync(file, 'export const c = 1;');
-    indexFile(dir3, file, 'export const c = 1;');
+    const file = join(dir3, 'g.ts');
+    writeFileSync(file, 'export const g = 1;');
+    indexFile(dir3, file, 'export const g = 1;');
 
-    // Traversal would find THIS one -- it actually touched the anchor.
+    // Traversal would find THIS one -- it is this session's task and it
+    // covers the anchor.
     putNode(dir3, { kind: 'task', key: 'inferred-task' });
     putEdge(dir3, nodeId('task', 'inferred-task'), 'derived_from', nodeId('file', file));
     // The caller supplies THIS one instead, and never touched the anchor.
@@ -446,8 +516,8 @@ describe('answers inferred by anchor traversal', () => {
 
     writeHarvested(
       dir3,
-      [{ type: 'finding', claim: 'c is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 's1', taskId: 'explicit-task', projectRoot: dir3 }
+      [{ type: 'finding', claim: 'g is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 'inferred-task', taskId: 'explicit-task', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -457,54 +527,26 @@ describe('answers inferred by anchor traversal', () => {
     rmSync(dir3, { recursive: true, force: true });
   });
 
-  it('breaks a tie between two tasks that both touched the anchor by which touched it more recently', () => {
-    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
-    const file = join(dir3, 'd.ts');
-    writeFileSync(file, 'export const d = 1;');
-    indexFile(dir3, file, 'export const d = 1;');
-
-    putNode(dir3, { kind: 'task', key: 'older-task' });
-    putEdge(dir3, nodeId('task', 'older-task'), 'derived_from', nodeId('file', file));
-
-    tick();
-
-    putNode(dir3, { kind: 'task', key: 'newer-task' });
-    putEdge(dir3, nodeId('task', 'newer-task'), 'derived_from', nodeId('file', file));
-
-    writeHarvested(
-      dir3,
-      [{ type: 'finding', claim: 'd is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 's1', projectRoot: dir3 }
-    );
-
-    const graph = load(dir3);
-    const edge = graph.edges.find((e) => e.edge === 'answers');
-    expect(edge).toBeDefined();
-    expect(edge.to).toBe(nodeId('task', 'newer-task'));
-    rmSync(dir3, { recursive: true, force: true });
-  });
-
   it('does not mistake a prior finding’s own derived_from edge to the anchor for a task', () => {
-    // `derived_from` is also how a FINDING cites its anchors (the edges the
-    // main writeHarvested path always adds). Without a kind check, traversal
-    // would find this edge, see it points at the same anchor, and hand back
-    // the PRIOR FINDING's own node id as though it were the task -- a node
-    // that does exist, so the no-dangling check alone would not catch it.
+    // `derived_from` is also how a FINDING cites its anchors. The lookup is
+    // now a direct `nodeId('task', sessionId)` read, not a scan of every edge
+    // in the graph, so a finding's own edge is never even visited -- covered
+    // here as a construction guarantee, not a runtime filter.
     const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
-    const file = join(dir3, 'i.ts');
-    writeFileSync(file, 'export const i = 1;');
-    indexFile(dir3, file, 'export const i = 1;');
+    const file = join(dir3, 'h.ts');
+    writeFileSync(file, 'export const h = 1;');
+    indexFile(dir3, file, 'export const h = 1;');
 
     putNodeWithEdges(
       dir3,
-      { kind: 'finding', key: 'prior-finding', claim: 'i was 1 once', confidence: 0.9, type: 'finding' },
+      { kind: 'finding', key: 'prior-finding', claim: 'h was 1 once', confidence: 0.9, type: 'finding' },
       [{ edge: 'derived_from', to: nodeId('file', file) }]
     );
 
     writeHarvested(
       dir3,
-      [{ type: 'finding', claim: 'i is 1 by default', anchors: [file], confidence: 0.8 }],
-      { sessionId: 's1', projectRoot: dir3 }
+      [{ type: 'finding', claim: 'h is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 'prior-finding', projectRoot: dir3 }
     );
 
     const graph = load(dir3);
@@ -632,6 +674,84 @@ describe('the derivation record', () => {
     expect(finding.derivation.operations).toHaveLength(5);
     expect(finding.derivation.operations[0].tool).toBe('tool-7');
     expect(finding.derivation.operations[4].tool).toBe('tool-3');
+    // An empty `operations` array is ambiguous by itself; the completeness
+    // flag is what says "more existed than the cap kept" here, versus
+    // "genuinely nothing happened" in the test below.
+    expect(finding.derivation.operationsComplete).toBe(false);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('declares its scope as file-surface only, and never joins a command-surface tool-outcome', () => {
+    // `adapter.mjs` stores the COMMAND TEXT in `anchor` for a command-surface
+    // event; `anchorLabel` produces a canonical FILE PATH. There is no join
+    // key in common, so a build or test run can never appear here -- this
+    // asserts that gap is declared, not silently absent.
+    const dir3 = mkdtempSync(join(tmpdir(), 'deriv-'));
+    const file = join(dir3, 'j.ts');
+    writeFileSync(file, 'export const j = 1;');
+
+    record(dir3, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor: 'npm test',
+      toolName: 'Bash',
+      success: true,
+      at: Date.now(),
+    });
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'j is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const finding = [...graph.nodes.values()].find((n) => n.kind === 'finding');
+    expect(finding.derivation.operationsScope).toBe('file');
+    expect(finding.derivation.operations).toHaveLength(0);
+    // Confirmed empty, not merely absent-looking: nothing was capped and the
+    // log was not truncated, so this IS "no file-surface operations matched".
+    expect(finding.derivation.operationsComplete).toBe(true);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('marks operationsComplete false when the evidence log itself may have dropped older matches', () => {
+    // `MAX_BYTES` (metrics.mjs) is read from its env var ONCE, at module
+    // load -- already evaluated for this whole test run -- so overriding the
+    // env var per-test has no effect. Cross the real 2,000,000-byte default
+    // instead, with a single padded event, rather than fight the constant.
+    const dir3 = mkdtempSync(join(tmpdir(), 'deriv-'));
+    const file = join(dir3, 'k.ts');
+    writeFileSync(file, 'export const k = 1;');
+
+    // None of these match this finding's anchor at all -- the point is that
+    // TRUNCATION ALONE, independent of any match, must still mark the record
+    // incomplete: an older matching event could have been evicted before
+    // this join ever saw it.
+    record(dir3, {
+      kind: 'tool-outcome',
+      anchor: canonicalPath(join(dir3, 'padding.ts')).slice(0, 120),
+      toolName: 'Read',
+      success: true,
+      padding: 'x'.repeat(2_100_000),
+    });
+    record(dir3, {
+      kind: 'tool-outcome',
+      anchor: canonicalPath(join(dir3, 'other.ts')).slice(0, 120),
+      toolName: 'Read',
+      success: true,
+    });
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'k is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const finding = [...graph.nodes.values()].find((n) => n.kind === 'finding');
+    expect(finding.derivation.operations).toHaveLength(0);
+    expect(finding.derivation.operationsComplete).toBe(false);
     rmSync(dir3, { recursive: true, force: true });
   });
 });

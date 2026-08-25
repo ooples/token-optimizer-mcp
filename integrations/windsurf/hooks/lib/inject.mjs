@@ -143,8 +143,26 @@ function disputeNote(finding) {
     : '\n  DISPUTED by another finding in this graph';
 }
 
+/**
+ * Discloses `derivationCheck`'s verdict (staleness.mjs) -- distinct from
+ * `disputeNote` (another finding disagrees) and from the STALE block below
+ * (the anchor NODE's current hash does not match disk). This is about
+ * whether the bytes THIS claim was actually derived from are still the bytes
+ * an anchor holds; see `derivationCheck`'s comment for the case that catches
+ * that the other two can miss. Silent when it holds -- the common case pays
+ * nothing -- and silent when it was never checked at all (an older finding
+ * with no `derivation` record).
+ */
+function derivationNote(finding) {
+  if (finding.derivationHolds !== false) return '';
+  const changed = Array.isArray(finding.derivationChanged) ? finding.derivationChanged : [];
+  return changed.length
+    ? `\n  DERIVATION CHANGED -- ${changed.join(', ')} no longer match what this claim was derived from`
+    : '\n  DERIVATION CHANGED since this claim was recorded';
+}
+
 function render(finding) {
-  const head = `- [${finding.type || 'finding'}] ${finding.claim}${disputeNote(finding)}`;
+  const head = `- [${finding.type || 'finding'}] ${finding.claim}${disputeNote(finding)}${derivationNote(finding)}`;
   if (!finding.stale) return head;
 
   // A stale finding NEVER renders as though it were current. But the strength
