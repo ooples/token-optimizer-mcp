@@ -12,12 +12,54 @@
  * rather than assuming it away.
  */
 
-/** Non-word split, lowercased. Short tokens are kept: `fs`, `id`, `os` matter here. */
-export function tokenize(text) {
-  return String(text || '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
+/**
+ * Splits an identifier's alphanumeric run into its camelCase / letter-digit
+ * parts, e.g. `skipLibCheck` -> ['skip', 'Lib', 'Check'], `TS2345` ->
+ * ['TS', '2345']. Returns a single-element array when there is no internal
+ * boundary (e.g. `retry` -> ['retry']) so callers can skip emitting a
+ * redundant duplicate of the whole token.
+ */
+function splitIdentifierParts(word) {
+  return word
+    .replace(/([a-z])([A-Z])/g, '$1\0$2')
+    .replace(/([A-Za-z])([0-9])/g, '$1\0$2')
+    .replace(/([0-9])([A-Za-z])/g, '$1\0$2')
+    .split('\0')
     .filter(Boolean);
+}
+
+/**
+ * Non-word split, lowercased. Short tokens are kept: `fs`, `id`, `os` matter
+ * here.
+ *
+ * Emits sub-tokens for compound identifiers, in addition to the whole token.
+ * Delimited identifiers (`smart_read`, `wiki.mjs`, the flag in
+ * `--skipLibCheck`) already round-trip fine: the delimiter splits them, and
+ * because query and claim pass through this same function, a query typed
+ * with the same delimiters matches. The silent gap was CONCATENATED
+ * identifiers with no delimiter at all -- `skipLibCheck` collapsed to the
+ * single token `skiplibcheck`, so a query for "skip lib check" (or "TS 2345"
+ * against `TS2345`) never intersected it. No error, just an absent result --
+ * and findings are about code, where run-together identifiers are the
+ * common case. So every alphanumeric run keeps its whole-token form (a query
+ * for the concatenated form still matches) and ALSO contributes its
+ * camelCase / letter-digit parts (a query for the separated form now
+ * matches too). A lone incidental character -- e.g. the `c` split out of a
+ * Windows path `C:\Users\...` -- needs no special-casing: it is a real
+ * token like any other, and BM25's IDF already discounts a term that shows
+ * up in nearly every finding.
+ */
+export function tokenize(text) {
+  const words = String(text || '').match(/[A-Za-z0-9]+/g) || [];
+  const tokens = [];
+  for (const word of words) {
+    tokens.push(word.toLowerCase());
+    const parts = splitIdentifierParts(word);
+    if (parts.length > 1) {
+      for (const part of parts) tokens.push(part.toLowerCase());
+    }
+  }
+  return tokens;
 }
 
 /**
@@ -55,9 +97,15 @@ export function rank(query, findings, { limit = 20, k1 = 1.2, b = 0.75 } = {}) {
       const tf = counts.get(term);
       if (!tf) continue;
       const df = docFreq.get(term) || 0;
-      // Standard BM25 IDF, floored at zero so a term present in every document
-      // contributes nothing rather than a negative score.
-      const idf = Math.max(0, Math.log(1 + (N - df + 0.5) / (df + 0.5)));
+      // Smoothed BM25 idf: log(1 + (N - df + 0.5) / (df + 0.5)). Unlike the
+      // classic unsmoothed idf (log((N - df + 0.5) / (df + 0.5))), which goes
+      // negative once a term appears in most documents, this smoothed form
+      // is strictly positive for every df in [1, N]: even at df === N the
+      // ratio inside the log is (N + 1) / (N + 0.5), which is always
+      // strictly greater than 1, so log(1 + that) is always > 0. No floor
+      // is needed here, and none is applied -- there is no negative case
+      // for this formula to guard against.
+      const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
       const norm = tf + k1 * (1 - b + (b * tokens.length) / (avgLen || 1));
       score += idf * ((tf * (k1 + 1)) / (norm || 1));
     }
