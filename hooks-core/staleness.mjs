@@ -516,6 +516,21 @@ function disputeOf(graph, finding) {
  * recorded -- true of every finding written before this existed), so a
  * caller can tell "not checked" from "checked and holds" by whether
  * `derivationHolds` is present at all.
+ *
+ * `derivationHolds: true` MEANS "MATCHES THE ANCHOR NODE'S LAST-INDEXED
+ * HASH", NOT "MATCHES DISK RIGHT NOW" -- and that distinction is stored in
+ * `derivationCheckedAgainst: 'index'` rather than left for a `wiki_query`
+ * consumer to infer from a field name alone. Two ways to close this gap were
+ * considered: recompute a live hash from disk here, or document precisely
+ * what is actually compared. `stale` (via `checkAnchor`, above) ALREADY owns
+ * the disk comparison -- re-reading the same file a second time on the same
+ * serve path, for the same anchor, from a second mechanism, is worse than
+ * one honest name. So: documented, not duplicated. A file changed on disk
+ * but never re-indexed by anything is still caught, correctly, by `stale`;
+ * `derivationHolds` answers a narrower, complementary question -- whether
+ * the LAST INDEXED state agrees with what this specific finding recorded --
+ * which is exactly the re-indexed-by-something-else case above that `stale`
+ * cannot see.
  */
 function derivationCheck(graph, finding) {
   const recorded = finding.derivation && finding.derivation.anchors;
@@ -534,10 +549,12 @@ function derivationCheck(graph, finding) {
     }
   }
 
-  if (!changed.length) return { derivationHolds: true };
+  // Declared on BOTH branches, not only the ambiguous one: a consumer should
+  // not have to already know the answer to know what was checked.
+  if (!changed.length) return { derivationHolds: true, derivationCheckedAgainst: 'index' };
   // Bounded: a finding with many anchors should not spend unbounded budget
   // naming every one that moved.
-  return { derivationHolds: false, derivationChanged: changed.slice(0, 5) };
+  return { derivationHolds: false, derivationChanged: changed.slice(0, 5), derivationCheckedAgainst: 'index' };
 }
 
 /**

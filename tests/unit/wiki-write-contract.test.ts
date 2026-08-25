@@ -70,23 +70,36 @@ describe('active-model semantic finding contract', () => {
 });
 
 /**
- * The `answers` edge, on the default install path.
+ * `wiki_write` never writes an `answers` edge, and that is a deliberate,
+ * documented consequence rather than a gap.
  *
- * `wiki_write` runs on every install with no opt-in gate, unlike the detached
- * harvest. `wikiWrite` passes NO explicit `taskId` (round 3 removed the
- * earlier `taskId: options.sessionId` synthesis -- a model-supplied
- * `sessionId` is an unverified claim, unlike the harvest worker's, which
- * comes from trusted hook infrastructure, so it should be checked against
- * the graph rather than trusted outright). That routes every call through
- * `writeHarvested`'s traversal fallback, which requires the SAME session's
- * task to have a `derived_from` edge to EVERY one of the finding's anchors
- * before writing an edge -- these tests exercise that: full coverage
- * resolves, no task at all does not dangle, and omitting `sessionId`
- * supplies no identity to check against, so there is no candidate.
+ * ROUND 3 removed `wikiWrite`'s `taskId: options.sessionId` synthesis and
+ * routed it through `writeHarvested`'s traversal fallback instead, keyed by
+ * `sessionId`. ROUND 4's adversarial review found that was still not enough:
+ * `sessionId` is a plain MCP tool argument the calling model supplies,
+ * unverified, so a model naming a REAL foreign session -- one whose task
+ * genuinely covered these anchors -- would still get a confidently wrong
+ * `answers` edge, because coverage cannot distinguish "this session" from
+ * "some other session that really did touch these files". `writeHarvested`
+ * now takes a separate `authoritativeSessionId` parameter that gates the
+ * traversal fallback, and `wikiWrite` supplies NEITHER `taskId` NOR
+ * `authoritativeSessionId` -- only `sessionId`, stored for provenance and
+ * never used for attribution. So every `wiki_write` call takes the "no
+ * candidate" path regardless of what the graph holds, on purpose: a wrong
+ * provenance edge is worse than none, and `sessionId` here is not evidence.
+ *
+ * These tests assert the CONSEQUENCE directly: even a task that fully covers
+ * the anchor, keyed by exactly the `sessionId` supplied, produces no edge.
+ * `plugin/hooks/harvest-worker.mjs` is where `authoritativeSessionId` is
+ * actually supplied (Claude Code's own hook payload) and where `answers` can
+ * fire -- covered in `tests/hooks/contradicts.test.mjs`, not here.
  */
-describe('wiki_write links a finding to the task that produced it', () => {
-  it('writes the answers edge when the session’s task fully covers the finding’s anchor', async () => {
+describe('wiki_write never attributes an answers edge to an unverified sessionId', () => {
+  it('writes no answers edge even when the named session’s task fully covers the anchor', async () => {
     const dir = process.env.TOKEN_OPTIMIZER_WIKI_DIR as string;
+    // A REAL task, fully covering the anchor -- traversal alone (round 3)
+    // would have matched this. The point is that it must not, because
+    // `wiki_write` supplies no `authoritativeSessionId`.
     putNode(dir, { kind: 'task', key: 'session-1' });
     putEdge(dir, nodeId('task', 'session-1'), 'derived_from', nodeId('file', anchor));
 
@@ -102,15 +115,11 @@ describe('wiki_write links a finding to the task that produced it', () => {
     expect(result.success).toBe(true);
 
     const graph = load(dir);
-    const edge = graph.edges.find((e) => e.edge === 'answers');
-    expect(edge).toBeDefined();
-    expect(edge?.to).toBe(nodeId('task', 'session-1'));
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
   });
 
   it('writes no answers edge when the session’s task exists but never touched the anchor', async () => {
     const dir = process.env.TOKEN_OPTIMIZER_WIKI_DIR as string;
-    // The task node exists, matching the sessionId, but has no coverage --
-    // existence alone is not attribution.
     putNodeWithEdges(dir, { kind: 'task', key: 'session-2' });
 
     const result = await wikiWrite({
@@ -149,9 +158,6 @@ describe('wiki_write links a finding to the task that produced it', () => {
 
   it('writes no answers edge when no sessionId is supplied at all', async () => {
     const dir = process.env.TOKEN_OPTIMIZER_WIKI_DIR as string;
-    // A sentinel task node -- present to prove the absence of `sessionId`
-    // supplies no identity to check against, not merely that this one
-    // particular node fails to match.
     putNodeWithEdges(dir, { kind: 'task', key: 'sentinel-task' });
 
     const result = await wikiWrite({

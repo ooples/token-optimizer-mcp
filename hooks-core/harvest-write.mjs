@@ -450,11 +450,13 @@ function resolveAnchor(dir, anchor, projectRoot) {
  * `linkCoOccurrence()` (wiki.mjs, inject.mjs) both key a task node by
  * `sessionId`, always, so there is exactly ONE task node for "the current
  * session" and it is `nodeId('task', sessionId)`. Restricting to that ONE
- * node structurally eliminates cases 1 and 2 -- a prior or concurrent
- * session's task has a DIFFERENT sessionId and therefore a different node
- * id, so it is never even looked at, regardless of timing. No caller can
- * supply a wrong sessionId and get someone ELSE's task; they can only fail
- * to get a match.
+ * node structurally eliminates cases 1 and 2 PROVIDED the identity itself is
+ * trustworthy: an UNRELATED sessionId (typo'd, invented, or simply absent)
+ * cannot resolve to someone else's task, because a different key is a
+ * different node id, full stop, regardless of timing. That is NOT the same
+ * guarantee as "no caller can get someone else's task" -- see the note on
+ * `authoritativeSessionId` below for the residual this leaves when the
+ * identity is real but comes from an untrusted caller.
  *
  * COVERAGE, NOT OVERLAP, fixes case 3: the session's task must have a
  * `derived_from` edge to EVERY one of this finding's anchors, not merely one.
@@ -470,17 +472,41 @@ function resolveAnchor(dir, anchor, projectRoot) {
  * or without a timestamp on that edge -- there is no ranking left for a
  * missing timestamp to lose.
  *
- * `sessionId` absent means there is no identity to scope by, which means no
- * candidate -- not "fall back to guessing". Absence is the correct answer
- * when the graph cannot support attribution.
+ * NO IDENTITY MEANS NO CANDIDATE -- not "fall back to guessing". Absence is
+ * the correct answer when the graph cannot support attribution.
+ *
+ * ROUND 4: THE IDENTITY ITSELF MUST BE AUTHORITATIVE, not merely present.
+ * Scoping to `nodeId('task', sessionId)` only refuses an UNRELATED session;
+ * it does nothing against a FOREIGN BUT REAL one. `wiki_write`'s `sessionId`
+ * is a plain MCP tool argument the calling model supplies, unverified -- a
+ * model that names some OTHER, prior session whose task genuinely covered
+ * these anchors gets an `answers` edge to that stale task, because coverage
+ * cannot tell "this session" from "a session that really did touch these
+ * files, named by a string nothing cross-checked". Session id is not
+ * evidence unless the CALLER'S OWN CHANNEL is trustworthy, which is true of
+ * `plugin/hooks/harvest-worker.mjs` (Claude Code's own hook payload) and not
+ * true of a tool-call argument. So this parameter is named for what it must
+ * be, `authoritativeSessionId`, and every caller is a promise: pass this only
+ * when you did not just read it out of untrusted input. `wiki_write` passes
+ * NONE, which means its calls never traverse -- see `writeHarvested`'s own
+ * comment at the call site for what that costs and why it is accepted rather
+ * than worked around.
+ *
+ * COVERAGE IS CHECKED AGAINST RESOLVED ANCHORS, not the caller's original
+ * list. `writeHarvested` already drops any anchor `resolveAnchor` could not
+ * resolve before this function ever runs, so "every anchor" here means every
+ * anchor that survived that filter -- self-consistent with the
+ * `derived_from` edges the same resolved list produces, but worth stating:
+ * an anchor that failed to resolve cannot raise or lower the bar for the
+ * anchors that did.
  */
-function taskForAnchors(graph, anchorIds, sessionId) {
-  if (!sessionId || !anchorIds || !anchorIds.length) return null;
-  const taskTarget = nodeId('task', sessionId);
+function taskForAnchors(graph, resolvedAnchorIds, authoritativeSessionId) {
+  if (!authoritativeSessionId || !resolvedAnchorIds || !resolvedAnchorIds.length) return null;
+  const taskTarget = nodeId('task', authoritativeSessionId);
   const task = graph.nodes.get(taskTarget);
   if (!task || task.kind !== 'task') return null;
 
-  for (const anchor of anchorIds) {
+  for (const anchor of resolvedAnchorIds) {
     const covered = graph.edges.some((edge) =>
       edge.edge === 'derived_from' && edge.from === taskTarget && edge.to === anchor
     );
@@ -602,7 +628,19 @@ function derivationFor(graph, resolvedAnchors, evidence, evidenceIncomplete, anc
 export function writeHarvested(
   dir,
   findings,
-  { sessionId = null, origin = ORIGIN_HARVESTED, projectRoot = null, taskId = null } = {}
+  {
+    sessionId = null,
+    origin = ORIGIN_HARVESTED,
+    projectRoot = null,
+    taskId = null,
+    // Distinct from `sessionId`, which is stored on every finding for
+    // provenance/display regardless of trust. This one gates the `answers`
+    // traversal fallback specifically, and every caller passing it is
+    // asserting the identity came from a channel it does not control --
+    // Claude Code's own hook payload, not a tool-call argument a model
+    // typed. See `taskForAnchors`'s comment for the attack this closes.
+    authoritativeSessionId = null,
+  } = {}
 ) {
   if (!Array.isArray(findings) || !findings.length) return [];
 
@@ -700,16 +738,29 @@ export function writeHarvested(
     // An explicit `taskId` is authoritative when a caller supplies one --
     // it OVERRIDES traversal rather than merely seeding it, so a caller that
     // knows better is never second-guessed by inference. Absent one, the task
-    // is DERIVED from the graph itself: `taskForAnchors` finds the CURRENT
-    // session's task (scoped by `sessionId`, the same identity this write
-    // already carries for provenance) and requires it to have touched EVERY
-    // one of this finding's anchors, not merely one -- see that function's
-    // own comment for the four attacks this closes. Either way, held to the
-    // same discipline as the anchors above: a target that does not resolve to
-    // an existing task node produces no edge rather than a dangling one.
+    // is DERIVED from the graph itself, but ONLY when `authoritativeSessionId`
+    // is present: `taskForAnchors` scopes to that exact session's task and
+    // requires it to have touched EVERY one of this finding's anchors, not
+    // merely one -- see that function's own comment for why the identity
+    // itself must be trustworthy, not merely present.
+    //
+    // THE CONSEQUENCE, STATED PLAINLY: `wiki_write` never supplies
+    // `authoritativeSessionId` (its `sessionId` is a model-typed MCP
+    // argument nothing cross-checks), so its calls never traverse and
+    // `answers` never fires on that path. `plugin/hooks/harvest-worker.mjs`
+    // does supply it (Claude Code's own hook payload), so `answers` fires
+    // there -- opt-in gated. `answers` therefore does NOT fire on a default
+    // install today. Recovering default liveness needs an authoritative
+    // identity on a default-install path, which is what Plan 2's
+    // `hooks-core/derive.mjs` (running in the Stop hook, where the session id
+    // is real) is for -- not a weaker check here.
+    //
+    // Either way, held to the same discipline as the anchors above: a target
+    // that does not resolve to an existing task node produces no edge rather
+    // than a dangling one.
     const answersTarget = taskId
       ? nodeId('task', taskId)
-      : taskForAnchors(currentGraph, resolved, sessionId);
+      : taskForAnchors(currentGraph, resolved, authoritativeSessionId);
     if (answersTarget && currentGraph.nodes.has(answersTarget)) {
       edges.push({ edge: 'answers', to: answersTarget });
     }

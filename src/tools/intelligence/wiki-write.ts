@@ -61,13 +61,14 @@ export interface WikiWriteOptions {
   /** Conditions that should cause a later reader to distrust or re-check it. */
   invalidators?: string[];
   /**
-   * Recorded for provenance so a claim can be traced to the session, and used
-   * to link the finding back to the task that produced it (the `answers`
-   * edge) -- but only when the SAME session's task actually has a
-   * `derived_from` edge to every one of this claim's anchors; a session id
-   * with no such coverage yields no edge rather than a guessed one. Nothing
-   * populates this automatically today -- the caller must supply the real
-   * session id for either to hold.
+   * Recorded for provenance so a claim can be traced to the session --
+   * stored on the finding, nothing more. It does NOT produce an `answers`
+   * edge: this value is a model-supplied tool argument nothing verifies, so
+   * `writeHarvested` never treats it as authoritative for attribution
+   * (see its `authoritativeSessionId` parameter, which this call omits).
+   * `plugin/hooks/harvest-worker.mjs` is the caller whose session id comes
+   * from a trusted channel (Claude Code's own hook payload) and can supply
+   * that; a tool argument cannot.
    */
   sessionId?: string;
   /** Overrides the project the finding belongs to. Defaults to the anchor's repo. */
@@ -234,22 +235,27 @@ export async function wikiWrite(
         // stores a snapshot, so an unconstrained path would copy any readable
         // file on the machine into the graph.
         projectRoot: project,
-        // NO explicit `taskId` HERE, DELIBERATELY. An earlier version passed
-        // `taskId: options.sessionId`, treating the model's claimed session id
-        // as an AUTHORITATIVE override -- but `writeHarvested`'s explicit-taskId
-        // path resolves it directly with no coverage check, on the theory that
-        // an explicit caller knows better than the graph. That is true of
-        // `plugin/hooks/harvest-worker.mjs`'s `sessionId`, which comes from
-        // Claude Code's own hook payload, but it is NOT true here: `sessionId`
-        // is an optional MCP tool argument the model supplies, unverified,
-        // exactly the kind of caller-asserted value this codebase otherwise
-        // never trusts blindly (anchors are resolved against the graph rather
-        // than accepted as typed). Leaving `taskId` unset routes this through
-        // `writeHarvested`'s traversal fallback instead, which uses the SAME
-        // `sessionId` only to SCOPE which task to check, then still requires
-        // that task to have a `derived_from` edge to EVERY one of this
-        // finding's anchors before an `answers` edge is written. A wrong or
-        // unrelated `sessionId` therefore yields no edge, never a wrong one.
+        // NO explicit `taskId`, AND NO `authoritativeSessionId`, HERE,
+        // DELIBERATELY. An earlier version of this comment claimed that
+        // routing through `writeHarvested`'s session-scoped traversal made a
+        // "wrong or unrelated sessionId yield no edge, never a wrong one" --
+        // that claim was FALSE for a FOREIGN BUT REAL session id. `sessionId`
+        // here is a plain MCP tool argument the model supplies, unverified;
+        // coverage cannot tell "this session" from "some OTHER, real session
+        // whose task genuinely touched these files", so a model naming a
+        // prior session by mistake or by copying a stale value would still
+        // get an `answers` edge -- a confidently wrong one, to the wrong task.
+        //
+        // `writeHarvested` now takes a SEPARATE `authoritativeSessionId`
+        // parameter that gates its traversal fallback, and this call does not
+        // supply it: `sessionId` is stored for provenance/display only, never
+        // used to attribute an `answers` edge. The consequence is real and
+        // accepted, not an oversight: `wiki_write` calls never write an
+        // `answers` edge. `plugin/hooks/harvest-worker.mjs` supplies
+        // `authoritativeSessionId` because ITS `sessionId` comes from Claude
+        // Code's own hook payload, not a tool-call argument -- that is the
+        // difference that makes an identity authoritative, and this function
+        // has no channel that meets it.
       }
     );
 
