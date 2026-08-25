@@ -95,6 +95,13 @@ async function main() {
   const written = writeHarvested(dir, findings, {
     sessionId: sessionId || null,
     projectRoot,
+    // Task nodes are keyed by session id (structural capture creates one on
+    // the first touched file, `harvest()` in lib/wiki.mjs) so this is the
+    // shape `writeHarvested` needs to point the `answers` edge back at the
+    // task this harvest belongs to. A session that never touched a file
+    // through PreToolUse/PostToolUse has no such node yet; `writeHarvested`
+    // resolves that case to no edge rather than a dangling one.
+    taskId: sessionId || null,
   });
 
   record(dir, {
@@ -140,6 +147,7 @@ async function main() {
         sessionId: sessionId || null,
         origin: ORIGIN_HARVESTED,
         projectRoot,
+        taskId: sessionId || null,
       });
 
       record(dir, {
