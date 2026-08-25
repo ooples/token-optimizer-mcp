@@ -27,19 +27,23 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  putNodeWithEdges,
-  nodeId,
-} from '../../hooks-core/wiki.mjs';
+import { putNodeWithEdges, nodeId } from '../../hooks-core/wiki.mjs';
 // `readAll` is private to metrics.mjs; `readMetrics` is the exported reader over
 // the same bounded log.
 import { readMetrics } from '../../hooks-core/metrics.mjs';
-import { wikiQuery } from '../../dist/tools/intelligence/wiki-query.js';
+import {
+  wikiQuery,
+  WIKI_QUERY_TOOL_DEFINITION,
+} from '../../dist/tools/intelligence/wiki-query.js';
 
 let dir;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'wq-'));
-  putNodeWithEdges(dir, { kind: 'file', key: join(dir, 'auth.ts'), hash: 'abc' });
+  putNodeWithEdges(dir, {
+    kind: 'file',
+    key: join(dir, 'auth.ts'),
+    hash: 'abc',
+  });
   putNodeWithEdges(
     dir,
     {
@@ -73,13 +77,20 @@ describe('wiki_query', () => {
     expect(result.findings.map((f) => f.key)).toContain('retry-cap');
   });
 
-  it('traverses from a file anchor to its findings', async () => {
-    const result = await wikiQuery({
-      operation: 'anchor',
-      anchor: join(dir, 'auth.ts'),
-      graphDir: dir,
-    });
-    expect(result.findings.map((f) => f.key)).toContain('retry-cap');
+  it('refuses the anchored retrieval that belongs to wiki_read', async () => {
+    // Deliberately NOT supported here. wiki_read already answers "what does the
+    // graph know about this file", and two tools with an identical operation
+    // cost the model tokens choosing between them. If anchored retrieval ever
+    // reappears in this tool, this fails and the duplication is visible.
+    const result = await wikiQuery({ operation: 'anchor', graphDir: dir });
+    expect(result.found).toBe(false);
+    expect(result.note).toMatch(/unknown operation/);
+    expect(
+      WIKI_QUERY_TOOL_DEFINITION.inputSchema.properties
+    ).not.toHaveProperty('anchor');
+    expect(
+      WIKI_QUERY_TOOL_DEFINITION.inputSchema.properties.operation.enum
+    ).not.toContain('anchor');
   });
 
   it('records a query event, which is what earns the session index its budget', async () => {
@@ -96,6 +107,84 @@ describe('wiki_query', () => {
       graphDir: dir,
     });
     expect(result.found).toBe(false);
+  });
+
+  it('never lets a file snapshot reach the response', async () => {
+    // A `snapshot` is a verbatim copy of a file. `putNode` spreads whatever
+    // fields it is handed onto the record, so one written inline comes back from
+    // `load()` whether or not snapshots were requested -- which is why the guard
+    // is at the response boundary and not a comment about how load is called.
+    const leaky = mkdtempSync(join(tmpdir(), 'wq-leak-'));
+    try {
+      putNodeWithEdges(leaky, {
+        kind: 'file',
+        key: join(leaky, 'secret.ts'),
+        hash: 'abc',
+        snapshot: 'PRIVATE FILE CONTENTS THAT MUST NOT BE SERVED',
+      });
+      putNodeWithEdges(
+        leaky,
+        {
+          kind: 'finding',
+          key: 'leaky',
+          claim: 'a claim carrying a snapshot it should not carry',
+          confidence: 0.9,
+          snapshot: 'PRIVATE FILE CONTENTS THAT MUST NOT BE SERVED',
+        },
+        [
+          {
+            edge: 'derived_from',
+            to: nodeId('file', join(leaky, 'secret.ts')),
+          },
+        ]
+      );
+
+      const got = await wikiQuery({
+        operation: 'get',
+        key: 'leaky',
+        graphDir: leaky,
+      });
+      expect(got.found).toBe(true);
+      expect(got.finding).not.toHaveProperty('snapshot');
+      // WHAT THIS TEST FOUND, and it is worth stating rather than asserting
+      // around: the snapshot does not only escape as a `snapshot` field. When a
+      // finding is stale, `staleness.serve` renders the snapshot into `diff`.
+      // That one is DELIBERATE and required -- a stale finding must arrive with
+      // the change that invalidated it -- and it is bounded to 40 lines by
+      // `diffLines`, which a raw snapshot is not. So the invariant is: the only
+      // snapshot-derived text a response may carry is that bounded diff.
+      const { diff, ...rest } = got.finding;
+      expect(JSON.stringify(rest)).not.toContain('PRIVATE FILE CONTENTS');
+      expect(String(diff).split('\n').length).toBeLessThanOrEqual(41);
+
+      // The `node` operation returns a raw graph node and its neighbours, which
+      // is the widest exposure of the two.
+      const node = await wikiQuery({
+        operation: 'node',
+        nodeId: nodeId('file', join(leaky, 'secret.ts')),
+        graphDir: leaky,
+      });
+      expect(node.found).toBe(true);
+      expect(node.node).not.toHaveProperty('snapshot');
+      for (const neighbour of node.neighbours)
+        expect(neighbour).not.toHaveProperty('snapshot');
+      expect(JSON.stringify(node)).not.toContain('PRIVATE FILE CONTENTS');
+
+      const searched = await wikiQuery({
+        operation: 'search',
+        query: 'claim carrying snapshot',
+        graphDir: leaky,
+      });
+      for (const finding of searched.findings) {
+        expect(finding).not.toHaveProperty('snapshot');
+        const { diff: served, ...body } = finding;
+        expect(JSON.stringify(body)).not.toContain('PRIVATE FILE CONTENTS');
+        if (served !== undefined)
+          expect(String(served).split('\n').length).toBeLessThanOrEqual(41);
+      }
+    } finally {
+      rmSync(leaky, { recursive: true, force: true });
+    }
   });
 
   it('never serves a stale finding bare', async () => {
@@ -208,7 +297,6 @@ describe('wiki_query over the MCP transport a client actually uses', () => {
     expect(tool).toBeDefined();
     expect(Object.keys(tool.inputSchema.properties).sort()).toEqual(
       [
-        'anchor',
         'graphDir',
         'key',
         'limit',
