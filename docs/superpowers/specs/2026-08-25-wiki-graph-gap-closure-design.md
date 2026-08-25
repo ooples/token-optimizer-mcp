@@ -1,7 +1,7 @@
-# Closing the wiki-graph gaps (#204, #311)
+# Closing the wiki-graph gaps (#204)
 
 **Date:** 2026-08-25
-**Issues:** #204 (living wiki graph), #311 (dashboard `/wiki` 404 + session widget)
+**Issues:** #204 (living wiki graph). #311 was in scope at authoring time and is now closed by #313.
 **Branch:** `feat/close-wiki-graph-gaps`
 
 ---
@@ -37,13 +37,26 @@ The important part is that **round 1 already built the detector.**
 cannot see it. It found ~21 instances. Four were wired. **Sixteen were moved to
 an allowlist labelled "TRIAGE BACKLOG".**
 
+> **Revised 2026-08-25 against HEAD `d6fcc24`.** The audit behind this spec ran
+> against `315e620`; master has since advanced by 21,705 insertions across 115
+> files, so every claim was re-verified. Three things changed: **#311 is fully
+> closed by #313** (Component H is dropped); the **`PostToolUse` hook now
+> exists** (`plugin/hooks/post-tool.mjs`, handled in `adapter.mjs`), reducing
+> Component B to the two things still missing; and the **calibration loop was
+> wired**, removing four allowlist entries. The list now holds 11 entries, of
+> which **9 are real backlog** — `forTouch` is stale (2 live call sites) and
+> `policyText` is genuine public API. Everything else was re-confirmed open, and
+> one got worse: `contradicts` is now *read* by `curate.mjs:264` while still
+> written by nothing, making it a reader-with-no-producer as well as an unwritten
+> edge kind.
+
 That allowlist's own documentation says: *"If the reason is 'we might use it
 later', the honest action is to delete the function and write it again when that
-day comes."* It then violates that rule sixteen times.
+day comes."* It violated that rule sixteen times at authoring; nine entries remain.
 
 So the disease is not blindness. It is that **an accurate written description of
 a defect felt like resolution.** Any fix that closes three instances and leaves
-thirteen parked reproduces round 1 exactly.
+the rest parked reproduces round 1 exactly.
 
 ### 1.2 Two structural holes in the existing detector
 
@@ -89,7 +102,7 @@ now has 2 real call sites, so a regression there would be masked.
 | 10 | The reachability detector's two holes are fixed and its allowlist is emptied to zero backlog entries |
 | 11 | `contradicts` is wired, and confidence promotion requires no outstanding contradiction |
 | 12 | Held-out retrieval probe measures recall; no embedding baseline |
-| 13 | #311 both bugs fixed here |
+| 13 | ~~#311 both bugs fixed here~~ — superseded: closed by #313 |
 | 14 | One PR, ordered commits |
 
 ---
@@ -138,7 +151,23 @@ option declared, or the argument is silently dropped.
 
 ## 5. Component B — Capture
 
-### `plugin/hooks/posttooluse-capture.mjs` (new)
+### The hook already exists — two things are missing
+
+**Revised.** `plugin/hooks/post-tool.mjs` ships with matcher
+`Edit|MultiEdit|Write|Bash|PowerShell|mcp__.*__(?:smart_edit|smart_write)` and is
+handled in `adapter.mjs`, which is materially the design below. So this component
+is no longer "add a hook". What remains:
+
+1. **Wire `invalidateOnWrite` into the existing post-tool path.** It is still
+   prose-only (1 raw reference, 0 code references, verified by probe) and still
+   allowlisted, so staleness is lazy-only in production.
+2. **Capture exit codes and test results**, which `derive.mjs` (§6) needs and
+   which nothing records today — `buildDigest` takes command text from
+   `tool_use` and deliberately skips `tool_result`.
+
+The original design, retained because the reasoning still governs both items:
+
+### ~~`plugin/hooks/posttooluse-capture.mjs` (new)~~
 
 `hooks.json` gains `PostToolUse` with matcher
 `Bash|Edit|Write|MultiEdit|NotebookEdit`. Read, Grep, Glob and every MCP tool
@@ -360,7 +389,20 @@ alone.
 
 ---
 
-## 11. Component H — Dashboard (#311)
+## 11. Component H — Dashboard (#311) — **CLOSED, not in scope**
+
+**Superseded by #313** (merged 2026-08-25T15:29:48Z), verified at HEAD:
+
+- Bug 1: `/wiki` now `res.redirect(302, '/wiki.html')` at `web-server.ts:655`,
+  served by the `express.static` path that always worked, with
+  `tests/unit/dashboard-web-server.test.ts` asserting the 302 and the 200.
+- Bug 2: the `.claude-global` path is now `getLegacyClaudeHooksDataPath()`,
+  explicitly marked compatibility-only, with current activity read from the
+  cross-client diagnostic ledger via `/api/diagnostics/hooks`.
+
+No work remains here. The original analysis follows for the record.
+
+### ~~Original plan~~
 
 **Bug 1** — `/wiki` 404s. The reporter confirmed the file exists and
 `express.static` serves it at `/wiki.html`, so this is a `res.sendFile`
@@ -424,9 +466,9 @@ After the PR merges and one working session on this repository:
 | `kind:'index'` events > 0 | 0 |
 | declared edge kinds with zero write sites | 2 (`contradicts`, `answers`) |
 | findings on a default install (no harvest opt-in) > 0 | 1 total, ever |
-| reachability allowlist backlog entries | 16 |
+| reachability allowlist backlog entries | 9 (11 listed; `forTouch` stale, `policyText` legitimate) |
 | dead event kinds (read-no-writer or writer-no-reader) | 2 |
-| `/wiki` returns 200 | 404 |
+| `/wiki` returns 200 | ~~404~~ closed by #313 |
 | `get_optimization_report` shows the graph balance | absent |
 
 A census script reports these, so the state is checkable at any time rather than
@@ -436,7 +478,20 @@ re-derived by audit.
 
 ## 15. Delivery
 
-One PR on `feat/close-wiki-graph-gaps`, closing #204 and #311. Ordered commits:
+One PR on `feat/close-wiki-graph-gaps`, closing #204. (#311 needs nothing — #313
+closed it.) The work is split across **three plan documents** so each produces
+working, testable software on its own, all landing on the one branch:
+
+- **Plan 1 — Retrieval and wiring:** `lexical.mjs` BM25, `wiki_query`, the `query`
+  event, `invalidateOnWrite` wired, `contradicts` and `answers` written, `lessons`
+  resolved.
+- **Plan 2 — Production and measurement:** `derive.mjs` extractors, the
+  cold-graph measures, Layer 1, Layer 2, calibration, report routing, pricing,
+  recall probe. Depends on Plan 1 for the query signal.
+- **Plan 3 — The detector and its allowlist:** comment stripping, the four
+  declaration classes, and the nine wire-or-delete decisions.
+
+Ordered commits:
 
 1. Schema safety net (range reader, upcast, compaction fix, regression test)
 2. Detector fixes (comment stripping, four declaration classes)
@@ -447,7 +502,7 @@ One PR on `feat/close-wiki-graph-gaps`, closing #204 and #311. Ordered commits:
 7. Measurement (Layer 1, Layer 2, calibration, report routing, pricing)
 8. Recall probe
 9. Allowlist emptied
-10. Dashboard (#311)
+10. ~~Dashboard (#311)~~ -- closed by #313, nothing to do
 11. Docs, issue updates, census script
 
 Honest note: this is a large diff spanning MCP tools, hooks, metrics, docs and
@@ -479,5 +534,5 @@ dashboard. The commit order is what keeps it reviewable.
   substitution shipped.
 - `HOOKS-PERFORMANCE-OPTIMIZATION.md` — the capture hook's budget.
 - `#204` — phases ticked with evidence from the census, not assertions.
-- `#311` — closed.
+- `#311` — already closed by #313; nothing to do.
 - `#201` — out of scope; handled by the doc status pass, then closed as answered.
