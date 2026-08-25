@@ -18,6 +18,8 @@ import { indexFile, serve } from '../../hooks-core/staleness.mjs';
 import { forTouch, sessionIndex } from '../../hooks-core/inject.mjs';
 import { restorationPlan } from '../../hooks-core/restore.mjs';
 import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { record } from '../../hooks-core/metrics.mjs';
 
 let dir;
 
@@ -358,5 +360,278 @@ describe('answers', () => {
     const graph = load(dir2);
     expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
     rmSync(dir2, { recursive: true, force: true });
+  });
+});
+
+/**
+ * `answers` inferred from the graph itself, with no session id anywhere.
+ *
+ * Neither real caller (`plugin/hooks/harvest-worker.mjs`, `wiki_write`) can be
+ * relied on to supply a session id that resolves to a task node -- one is
+ * opt-in gated, the other's `sessionId` is optional and nothing populates it.
+ * But the structural harvest writes `task -[derived_from]-> file` on every
+ * tool call, unconditionally, so the task is DERIVABLE: it is whichever task
+ * actually touched the SAME anchors this finding resolved to, not simply the
+ * newest task node in the graph.
+ */
+describe('answers inferred by anchor traversal', () => {
+  /** Forces the next Date.now() to differ, so edge `at` order is not a coin flip. */
+  function tick() {
+    const start = Date.now();
+    while (Date.now() === start) { /* spin until the clock moves */ }
+  }
+
+  it('picks the task that touched the anchor over a more recently active task that did not', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'a.ts');
+    writeFileSync(file, 'export const a = 1;');
+    indexFile(dir3, file, 'export const a = 1;');
+
+    putNode(dir3, { kind: 'task', key: 'right-task' });
+    putEdge(dir3, nodeId('task', 'right-task'), 'derived_from', nodeId('file', file));
+
+    tick();
+    // Created and touched something LATER, but never this anchor. A "most
+    // recent task" rule would pick this one, which is exactly the wrong
+    // provenance the traversal exists to avoid.
+    putNode(dir3, { kind: 'task', key: 'decoy-task' });
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'a is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const edge = graph.edges.find((e) => e.edge === 'answers');
+    expect(edge).toBeDefined();
+    expect(edge.to).toBe(nodeId('task', 'right-task'));
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('writes no edge when no task shares an anchor with the finding', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'b.ts');
+    const other = join(dir3, 'unrelated.ts');
+    writeFileSync(file, 'export const b = 1;');
+    writeFileSync(other, 'export const c = 1;');
+    indexFile(dir3, file, 'export const b = 1;');
+    indexFile(dir3, other, 'export const c = 1;');
+
+    putNode(dir3, { kind: 'task', key: 'unrelated-task' });
+    putEdge(dir3, nodeId('task', 'unrelated-task'), 'derived_from', nodeId('file', other));
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'b is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('lets an explicit taskId override traversal entirely', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'c.ts');
+    writeFileSync(file, 'export const c = 1;');
+    indexFile(dir3, file, 'export const c = 1;');
+
+    // Traversal would find THIS one -- it actually touched the anchor.
+    putNode(dir3, { kind: 'task', key: 'inferred-task' });
+    putEdge(dir3, nodeId('task', 'inferred-task'), 'derived_from', nodeId('file', file));
+    // The caller supplies THIS one instead, and never touched the anchor.
+    putNode(dir3, { kind: 'task', key: 'explicit-task' });
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'c is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', taskId: 'explicit-task', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const edge = graph.edges.find((e) => e.edge === 'answers');
+    expect(edge).toBeDefined();
+    expect(edge.to).toBe(nodeId('task', 'explicit-task'));
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('breaks a tie between two tasks that both touched the anchor by which touched it more recently', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'd.ts');
+    writeFileSync(file, 'export const d = 1;');
+    indexFile(dir3, file, 'export const d = 1;');
+
+    putNode(dir3, { kind: 'task', key: 'older-task' });
+    putEdge(dir3, nodeId('task', 'older-task'), 'derived_from', nodeId('file', file));
+
+    tick();
+
+    putNode(dir3, { kind: 'task', key: 'newer-task' });
+    putEdge(dir3, nodeId('task', 'newer-task'), 'derived_from', nodeId('file', file));
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'd is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const edge = graph.edges.find((e) => e.edge === 'answers');
+    expect(edge).toBeDefined();
+    expect(edge.to).toBe(nodeId('task', 'newer-task'));
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('does not mistake a prior finding’s own derived_from edge to the anchor for a task', () => {
+    // `derived_from` is also how a FINDING cites its anchors (the edges the
+    // main writeHarvested path always adds). Without a kind check, traversal
+    // would find this edge, see it points at the same anchor, and hand back
+    // the PRIOR FINDING's own node id as though it were the task -- a node
+    // that does exist, so the no-dangling check alone would not catch it.
+    const dir3 = mkdtempSync(join(tmpdir(), 'ans-trav-'));
+    const file = join(dir3, 'i.ts');
+    writeFileSync(file, 'export const i = 1;');
+    indexFile(dir3, file, 'export const i = 1;');
+
+    putNodeWithEdges(
+      dir3,
+      { kind: 'finding', key: 'prior-finding', claim: 'i was 1 once', confidence: 0.9, type: 'finding' },
+      [{ edge: 'derived_from', to: nodeId('file', file) }]
+    );
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'i is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    expect(graph.edges.some((e) => e.edge === 'answers')).toBe(false);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+});
+
+/**
+ * The derivation record: the checkable half of provenance.
+ *
+ * A session or task id says WHERE a claim came from. It never says whether
+ * that derivation still applies -- so alongside `answers`, every newly
+ * written finding also gets a small, bounded `derivation` record: the hash
+ * each anchor carried at claim time (new information; the `derived_from`
+ * edges already say WHICH anchors, so this does not restate that), and
+ * whatever matching `tool-outcome` evidence exists, reduced to only the
+ * fields that evidence actually carries.
+ */
+describe('the derivation record', () => {
+  it('records the hash each anchor carried at claim time', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'deriv-'));
+    const file = join(dir3, 'e.ts');
+    writeFileSync(file, 'export const e = 1;');
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'e is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const fileNode = graph.nodes.get(nodeId('file', file));
+    const finding = [...graph.nodes.values()].find((n) => n.kind === 'finding');
+    expect(finding.derivation).toBeDefined();
+    expect(finding.derivation.anchors[nodeId('file', file)]).toBe(fileNode.hash);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('includes only the fields a matching tool-outcome event actually evidences', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'deriv-'));
+    const file = join(dir3, 'f.ts');
+    writeFileSync(file, 'export const f = 1;');
+
+    record(dir3, {
+      kind: 'tool-outcome',
+      anchor: canonicalPath(file).slice(0, 120),
+      toolName: 'Read',
+      success: true,
+      at: Date.now(),
+    });
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'f is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const finding = [...graph.nodes.values()].find((n) => n.kind === 'finding');
+    expect(finding.derivation.operations).toHaveLength(1);
+    const op = finding.derivation.operations[0];
+    expect(op.tool).toBe('Read');
+    expect(op.success).toBe(true);
+    // Not fabricated: this pipeline's tool-outcome events carry no exit code
+    // or output today, so neither key is present rather than invented.
+    expect(op.exit).toBeUndefined();
+    expect(op.output).toBeUndefined();
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('ignores a tool-outcome event anchored to a different file', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'deriv-'));
+    const file = join(dir3, 'g.ts');
+    const other = join(dir3, 'other.ts');
+    writeFileSync(file, 'export const g = 1;');
+
+    record(dir3, {
+      kind: 'tool-outcome',
+      anchor: canonicalPath(other).slice(0, 120),
+      toolName: 'Read',
+      success: true,
+      at: Date.now(),
+    });
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'g is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const finding = [...graph.nodes.values()].find((n) => n.kind === 'finding');
+    expect(finding.derivation.operations).toHaveLength(0);
+    rmSync(dir3, { recursive: true, force: true });
+  });
+
+  it('bounds the number of operations recorded, keeping the most recent', () => {
+    const dir3 = mkdtempSync(join(tmpdir(), 'deriv-'));
+    const file = join(dir3, 'h.ts');
+    writeFileSync(file, 'export const h = 1;');
+    const label = canonicalPath(file).slice(0, 120);
+
+    const base = Date.now() - 1000;
+    for (let i = 0; i < 8; i++) {
+      record(dir3, {
+        kind: 'tool-outcome',
+        anchor: label,
+        toolName: `tool-${i}`,
+        success: true,
+        at: base + i,
+      });
+    }
+
+    writeHarvested(
+      dir3,
+      [{ type: 'finding', claim: 'h is 1 by default', anchors: [file], confidence: 0.8 }],
+      { sessionId: 's1', projectRoot: dir3 }
+    );
+
+    const graph = load(dir3);
+    const finding = [...graph.nodes.values()].find((n) => n.kind === 'finding');
+    // Capped -- this is not a replay log -- and the most RECENT of the 8,
+    // not the first 5 written.
+    expect(finding.derivation.operations).toHaveLength(5);
+    expect(finding.derivation.operations[0].tool).toBe('tool-7');
+    expect(finding.derivation.operations[4].tool).toBe('tool-3');
+    rmSync(dir3, { recursive: true, force: true });
   });
 });
