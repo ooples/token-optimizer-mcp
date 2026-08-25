@@ -1,6 +1,6 @@
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/observability.mjs. Regenerate with `npm run sync:hooks`.
-process.env.TOKEN_OPTIMIZER_VERSION = '5.7.0';
+process.env.TOKEN_OPTIMIZER_VERSION = '5.7.1';
 /**
  * Privacy-safe, cross-client lifecycle diagnostics.
  *
