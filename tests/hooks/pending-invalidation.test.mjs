@@ -41,10 +41,11 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { load, nodeId, putNodeWithEdges } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
+import { forTouch } from '../../hooks-core/inject.mjs';
 import {
   drainInvalidations,
   observedWrites,
@@ -387,6 +388,81 @@ describe('SessionStart drains before it advertises anything', () => {
       session: 'ss-start',
     });
 
+    expect(finding().stale).toBe(true);
+  });
+});
+
+describe('the in-process drain memo, which no spawned hook can exercise', () => {
+  // WHY THESE CALL forTouch DIRECTLY. The memo is per PROCESS: it exists so a
+  // SECOND caller inside one hook invocation does not serve from a graph copy
+  // parsed before the drain. A spawned hook is one caller by construction, so
+  // the hazard is invisible from outside the process. forTouch is still the real
+  // product function the routers call -- what is skipped here is the spawn, not
+  // the code under test. The end-to-end proofs live in the blocks above.
+  //
+  // The holdout is pinned off per call: forTouch takes part in a 10% withheld
+  // arm, which would otherwise fail this roughly one run in ten.
+  const PRIOR = process.env.TOKEN_OPTIMIZER_HOLDOUT;
+  beforeEach(() => {
+    process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+  });
+  afterEach(() => {
+    if (PRIOR === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+    else process.env.TOKEN_OPTIMIZER_HOLDOUT = PRIOR;
+  });
+
+  // ONE GRAPH OBJECT, SHARED, which is the whole point: SessionStart parses the
+  // graph once and hands the SAME object to standingRules and then sessionIndex.
+  // Handing each caller a fresh load would hide the hazard entirely, because a
+  // fresh load is already post-drain.
+  const touch = (dir, graph) =>
+    forTouch(dir, graph, file, {
+      sessionId: `memo-${Math.random()}`,
+      alreadyInjected: new Set(),
+    }) || '';
+
+  test('two spellings of one directory share the memo', () => {
+    // A raw-string key would make these two directories, so the second caller
+    // would find an empty queue, mark nothing, and serve from the pre-drain copy
+    // it was handed -- the exact bug the memo exists to prevent.
+    const parsedBeforeAnyDrain = load(wiki);
+    queueInvalidation(wiki, { path: file, before: BEFORE, after: AFTER });
+    writeFileSync(file, AFTER);
+
+    const first = touch(wiki, parsedBeforeAnyDrain);
+    expect(first).toContain(CLAIM);
+    expect(first).toContain('STALE');
+
+    // The same directory, spelled three other ways: a trailing separator, a
+    // redundant `..` segment, and forward slashes where the platform uses
+    // backslashes. Each is handed the SAME pre-drain graph as the first caller.
+    for (const spelling of [
+      `${wiki}${sep}`,
+      `${wiki}${sep}sub${sep}..`,
+      wiki.split(sep).join('/'),
+    ]) {
+      const again = touch(spelling, parsedBeforeAnyDrain);
+      expect(again).toContain(CLAIM);
+      // Re-read because the memo was found, not served from the stale copy.
+      expect(again).toContain('STALE');
+    }
+  });
+
+  test('a queue arriving after an empty drain is still applied', () => {
+    // Memoising the NEGATIVE result would defer this invalidation to a future
+    // session. Nothing enforces that queueing precedes injection except the
+    // current shape of one hook branch.
+    const clean = touch(wiki, load(wiki));
+    expect(clean).toContain(CLAIM);
+    expect(clean).not.toContain('STALE');
+    expect(finding().stale).toBeUndefined();
+
+    queueInvalidation(wiki, { path: file, before: BEFORE, after: AFTER });
+    writeFileSync(file, AFTER);
+
+    const marked = touch(wiki, load(wiki));
+    expect(marked).toContain('STALE');
+    // The drain RAN, rather than being skipped by a remembered negative.
     expect(finding().stale).toBe(true);
   });
 });
