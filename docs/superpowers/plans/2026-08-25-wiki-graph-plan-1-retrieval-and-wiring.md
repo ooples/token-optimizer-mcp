@@ -1239,27 +1239,37 @@ import { cacheOrdered } from '../../hooks-core/cache.mjs';
 
 describe('cache ordering is applied to injection', () => {
   it('puts stable blocks before volatile ones', () => {
+    // VERIFIED CONTRACT (hooks-core/cache.mjs:430): `volatility` is a NUMBER,
+    // sorted ascending so lower is more stable, falling back to `fresh ? 1 : 0`.
+    // An earlier draft of this plan used 'high'/'low' strings, which subtract to
+    // NaN -- the sort would have been a no-op and the test would have passed by
+    // accident on insertion order.
     const ordered = cacheOrdered([
-      { id: 'findings', volatility: 'high', text: 'a' },
-      { id: 'standing', volatility: 'low', text: 'b' },
+      { id: 'findings', volatility: 2, text: 'a' },
+      { id: 'standing', volatility: 0, text: 'b' },
     ]);
     expect(ordered.map((o) => o.id)).toEqual(['standing', 'findings']);
   });
 });
 ```
 
-Confirm the parameter shape `cacheOrdered` actually expects before writing the assertion:
+The contract is already verified, so no guessing is required:
 
-```bash
-sed -n '430,470p' hooks-core/cache.mjs
+```javascript
+export function cacheOrdered(items) {
+  return [...items].sort((a, b) => {
+    const stability = (item) => item.volatility ?? (item.fresh ? 1 : 0);
+    return stability(a) - stability(b);
+  });
+}
 ```
 
-Adjust the test to the real shape — do not change `cacheOrdered` to fit a guessed one.
-
-- [ ] **Step 2: Run test to verify it fails or reveals the real shape**
+- [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx jest tests/hooks/cache.test.mjs -t "cache ordering"`
-Expected: FAIL, and the failure names the real contract.
+Expected: PASS for the helper itself (it already sorts correctly) — the point of
+this task is that **nothing calls it**. The failing assertion is the reachability
+one in Step 5; treat that as the red test for this task.
 
 - [ ] **Step 3: Route assembly through it**
 
@@ -1270,10 +1280,11 @@ In `hooks-core/inject.mjs`, where the injected blocks are concatenated for a ses
   // one changed line invalidates the prompt cache from that line onward, so the
   // parts that rarely change belong at the top and the freshest at the bottom.
   // `cacheOrdered` has existed for exactly this and had no caller.
+  // Numeric volatility, ascending: standing rules change least, findings most.
   const blocks = cacheOrdered([
-    { id: 'standing', volatility: 'low', text: standingBlock },
-    { id: 'index', volatility: 'medium', text: indexBlock },
-    { id: 'findings', volatility: 'high', text: findingsBlock },
+    { id: 'standing', volatility: 0, text: standingBlock },
+    { id: 'index', volatility: 1, text: indexBlock },
+    { id: 'findings', volatility: 2, text: findingsBlock },
   ].filter((b) => b.text));
 ```
 

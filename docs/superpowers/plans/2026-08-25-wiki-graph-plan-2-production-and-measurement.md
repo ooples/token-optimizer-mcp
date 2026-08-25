@@ -131,14 +131,29 @@ git commit -m "feat(derive): mandatory redaction for claims derived from capture
 
 ---
 
-## Task 2: Capture exit codes and output at post-tool
+## Task 2: Extend `tool-outcome` with output and exit code
 
 **Files:** Modify `hooks-core/adapter.mjs`; Test `tests/hooks/capture-results.test.mjs` **(new)**
 
-**Interfaces:**
-- Produces: a `kind: 'result'` event per observed command: `{ kind: 'result', command, exit, output, at, sessionId }` where `output` is redacted and capped at 4 KB.
+**VERIFIED CONTRACT — this task is far smaller than first planned.** The
+post-tool branch of `adapter.mjs` (~line 855) already computes the command, the
+touched files, the anchor and the project root, and calls
+`recordToolOutcome(wikiDir(root), { ...episode, surface, anchor, toolName,
+success: toolSucceeded(raw), durationMs, ...usageFrom(raw) })`.
+`recordToolOutcome` (`metrics.mjs:505`) writes `kind: 'tool-outcome'` and — the
+part that matters most — **already joins the outcome back to its injection**,
+recording `injectionId`, `findingIds` and a `joinMethod` of `tool-call-id`,
+`episode-anchor` or `none`. This repository holds **234 live `tool-outcome`
+events**, so the pipeline runs.
 
-**Why:** `WIKI_GRAPH.md` and #204 both list "commands run and their exit codes, tests and their results" as free structural harvest. Nothing records them — `buildDigest` takes command text from `tool_use` and deliberately skips `tool_result`. The extractors in Task 3 have no data source until this exists.
+There is therefore **no new event kind**. Add two *optional* fields to what
+post-tool already passes: `output` (redacted per Task 1, capped at 4 KB) and
+`exit` (the numeric code where a client supplies one, `null` otherwise).
+
+**Interfaces:**
+- Produces: `kind: 'tool-outcome'` gains optional `output` and `exit`. Additive only, so no `GRAPH_VERSION` question.
+
+**Why:** `toolSucceeded(raw)` returns a **boolean**, normalised across clients from error and status fields. A boolean cannot distinguish a compile error from a test failure from a denied permission, and the failure findings that carry the most value need the text. The exit code is opportunistic — many clients never report one.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -148,79 +163,98 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readAll } from '../../hooks-core/metrics.mjs';
-import { recordResult } from '../../hooks-core/adapter.mjs';
+import { readAll, recordToolOutcome } from '../../hooks-core/metrics.mjs';
 
 let dir;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'res-')); });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-describe('result capture', () => {
-  it('records the command, its exit code and its output', () => {
-    recordResult(dir, { command: 'npm test', exit: 1, output: 'FAIL x.test.ts', sessionId: 's' });
-    const [event] = readAll(dir).filter((e) => e.kind === 'result');
-    expect(event.exit).toBe(1);
-    expect(event.command).toBe('npm test');
-    expect(event.output).toContain('FAIL');
+const outcome = (extra) => recordToolOutcome(dir, {
+  surface: 'command', anchor: 'npm test', toolName: 'Bash', success: false, ...extra,
+});
+const latest = () => readAll(dir).filter((e) => e.kind === 'tool-outcome').pop();
+
+describe('tool-outcome carries output and exit', () => {
+  it('records the output and the exit code alongside success', () => {
+    outcome({ output: 'FAIL x.test.ts', exit: 1 });
+    expect(latest().success).toBe(false);
+    expect(latest().exit).toBe(1);
+    expect(latest().output).toContain('FAIL');
   });
 
   it('redacts secrets out of captured output', () => {
-    recordResult(dir, { command: 'deploy', exit: 1, output: 'API_TOKEN=abcdef123456 failed' });
-    const [event] = readAll(dir).filter((e) => e.kind === 'result');
-    expect(event.output).not.toContain('abcdef123456');
+    outcome({ output: 'API_TOKEN=abcdef123456 failed', exit: 1 });
+    expect(latest().output).not.toContain('abcdef123456');
   });
 
   it('caps output so a huge log is never stored whole', () => {
-    recordResult(dir, { command: 'build', exit: 0, output: 'x'.repeat(100_000) });
-    const [event] = readAll(dir).filter((e) => e.kind === 'result');
-    expect(event.output.length).toBeLessThanOrEqual(4096);
+    outcome({ output: 'x'.repeat(100000), exit: 0 });
+    expect(latest().output.length).toBeLessThanOrEqual(4096);
+  });
+
+  it('leaves exit null when the client reports no code, rather than guessing 0', () => {
+    outcome({ output: 'denied' });
+    expect(latest().exit).toBeNull();
+  });
+
+  it('does not disturb the injection join the pipeline already performs', () => {
+    outcome({ output: 'x', exit: 1 });
+    expect(latest().joinMethod).toBeDefined();
   });
 });
 ```
 
-- [ ] **Step 2: Run to verify it fails** → `recordResult is not a function`
+- [ ] **Step 2: Run to verify it fails** → `event.exit` and `event.output` are `undefined`
 
-- [ ] **Step 3: Implement `recordResult` in `adapter.mjs` and call it from the post-tool branch**
+- [ ] **Step 3: Normalise the two fields in `metrics.mjs`, and pass them from `adapter.mjs`**
+
+In `recordToolOutcome`, normalise at the boundary so no caller can store raw text:
 
 ```javascript
-/**
- * Records one observed command result.
- *
- * The structural layer promised "commands run and their exit codes, tests and
- * their results" and recorded none of them: buildDigest reads command TEXT from
- * tool_use and deliberately skips tool_result. derive.mjs cannot detect a
- * failed-then-succeeded pair without this.
- *
- * Capped at 4 KB and redacted at the boundary, so a 10 MB test log never lands
- * in the log and a secret in stderr never becomes a stored claim.
- */
-export function recordResult(dir, { command, exit, output, sessionId } = {}) {
-  try {
-    record(dir, {
-      kind: 'result',
-      command: String(command ?? '').slice(0, 400),
-      exit: Number.isInteger(exit) ? exit : null,
-      output: redact(String(output ?? ''), { max: 4096 }),
-      sessionId: sessionId ?? null,
-    });
-  } catch {
-    /* bookkeeping must never break a completed call */
-  }
-}
+  // REDACTED AND CAPPED HERE, not at the call site. A claim built from this text
+  // is injected into model context AND exported to markdown, so the boundary is
+  // the only place that can guarantee it.
+  const output = outcome.output === undefined
+    ? undefined
+    : redact(String(outcome.output), { max: 4096 });
+  // Null rather than 0 when nothing is reported: most clients supply no numeric
+  // code, and defaulting to 0 would claim every unreported call succeeded.
+  const exit = Number.isInteger(outcome.exit) ? outcome.exit : null;
 ```
 
-Import `redact` from `./redact.mjs` and call `recordResult` in the `event === 'post-tool'` branch, reading exit code and output from the client's post-tool payload. **Client payload shapes differ** — `adapter.mjs:332` already normalises `raw.postToolUse`; extend that normaliser rather than reading raw fields at the call site.
+Include both in the recorded event and import `redact` from `./redact.mjs`.
+
+In `adapter.mjs`'s post-tool branch, add two fields to the **existing**
+`recordToolOutcome` call — do not add a second call:
+
+```javascript
+        output: outputFrom(raw),
+        exit: exitFrom(raw),
+```
+
+`outputFrom` and `exitFrom` belong beside `toolSucceeded` (`adapter.mjs:145`),
+which is where per-client response shapes are already normalised — the same
+`raw.tool_response` / `raw.toolResponse` / `raw.tool_result` / `raw.postToolUse`
+family it reads today. Do not read raw fields at the call site; that is precisely
+what `toolSucceeded` exists to prevent.
+
 
 - [ ] **Step 4: Run to verify it passes** → PASS (3)
 - [ ] **Step 5: Commit**
 
 ```bash
 npm run sync:hooks
-git add hooks-core/adapter.mjs tests/hooks/capture-results.test.mjs plugin integrations
-git commit -m "feat(capture): record command exit codes and output, promised since P1
+git add hooks-core/adapter.mjs hooks-core/metrics.mjs tests/hooks/capture-results.test.mjs plugin integrations
+git commit -m "feat(capture): carry output and exit code on tool-outcome
 
-WIKI_GRAPH.md lists exit codes and test results as free structural harvest.
-Nothing recorded them, so the extractors had no data source."
+Only a success boolean was recorded, which cannot distinguish a compile error
+from a test failure from a denied permission.
+
+Extends the existing tool-outcome event rather than adding a parallel kind:
+that pipeline already runs (234 live events in this repo) and already joins
+each outcome to its injection, so a second event describing the same thing
+would have duplicated the join and given the overloaded kind field a fifth
+meaning."
 ```
 
 ---
@@ -258,8 +292,10 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('derive', () => {
   it('turns a failed-then-succeeded command into a command and a failure finding', () => {
-    record(dir, { kind: 'result', command: 'npm run build', exit: 1, output: 'TS2345 error' });
-    record(dir, { kind: 'result', command: 'npm run build -- --skipLibCheck', exit: 0, output: 'ok' });
+    // VERIFIED: the event kind is 'tool-outcome' with a `success` boolean, and
+    // optional `output`/`exit` added in Task 2. There is no 'result' kind.
+    record(dir, { kind: 'tool-outcome', surface: 'command', anchor: 'npm run build', success: false, output: 'TS2345 error', exit: 1, at: 1 });
+    record(dir, { kind: 'tool-outcome', surface: 'command', anchor: 'npm run build -- --skipLibCheck', success: true, output: 'ok', exit: 0, at: 2 });
 
     const { candidates } = derive(dir, { sessionId: 's', projectRoot: dir });
     const types = candidates.map((c) => c.type);
@@ -273,8 +309,8 @@ describe('derive', () => {
   });
 
   it('redacts secrets out of a derived claim', () => {
-    record(dir, { kind: 'result', command: 'deploy', exit: 1, output: 'API_TOKEN=abcdef123456' });
-    record(dir, { kind: 'result', command: 'deploy --retry', exit: 0, output: 'ok' });
+    record(dir, { kind: 'tool-outcome', surface: 'command', anchor: 'deploy', success: false, output: 'API_TOKEN=abcdef123456', at: 1 });
+    record(dir, { kind: 'tool-outcome', surface: 'command', anchor: 'deploy --retry', success: true, output: 'ok', at: 2 });
     const { candidates } = derive(dir, { sessionId: 's', projectRoot: dir });
     expect(JSON.stringify(candidates)).not.toContain('abcdef123456');
   });
@@ -284,7 +320,7 @@ describe('derive', () => {
   });
 
   it('never throws, because it runs at session end', () => {
-    record(dir, { kind: 'result', command: null, exit: null, output: null });
+    record(dir, { kind: 'tool-outcome', surface: 'command', anchor: null, success: null, output: null, at: 1 });
     expect(() => derive(dir, { sessionId: 's', projectRoot: dir })).not.toThrow();
   });
 });
@@ -314,7 +350,7 @@ describe('derive', () => {
  * Plan 2's per-finding utility prunes what turns out not to help.
  */
 
-import { readAll, rereadWaste } from './metrics.mjs';
+import { readAll, rereadsByAnchor } from './metrics.mjs';
 import { redact } from './redact.mjs';
 
 /** Ceilings, ordered by how much the evidence actually supports. */
@@ -335,7 +371,12 @@ export function derive(dir, { sessionId, projectRoot } = {}) {
     return { candidates: [], written: [] };
   }
 
-  const results = events.filter((e) => e.kind === 'result' && e.command);
+  // 'tool-outcome' with surface 'command'. The anchor holds the command text --
+  // adapter.mjs sets `anchor` to the command for a command surface, which is why
+  // there is no separate `command` field to read.
+  const results = events
+    .filter((e) => e.kind === 'tool-outcome' && e.surface === 'command' && e.anchor)
+    .map((e) => ({ ...e, command: e.anchor, failed: e.success === false || (Number.isInteger(e.exit) && e.exit !== 0) }));
   const candidates = [];
 
   // ---- 1 & 2: a failed attempt followed by a succeeding one -------------
@@ -350,9 +391,11 @@ export function derive(dir, { sessionId, projectRoot } = {}) {
   }
 
   for (const [, run] of byAttempt) {
-    const failed = run.find((e) => Number.isInteger(e.exit) && e.exit !== 0);
+    // `failed` uses the success boolean first and the exit code only as a
+    // refinement, because most clients never report a numeric code.
+    const failed = run.find((e) => e.failed);
     if (!failed) continue;
-    const fixed = run.find((e) => e.exit === 0 && (e.at ?? 0) > (failed.at ?? 0));
+    const fixed = run.find((e) => !e.failed && (e.at ?? 0) > (failed.at ?? 0));
     if (!fixed) continue;
 
     const isTest = TEST_COMMAND.test(fixed.command);
@@ -363,7 +406,7 @@ export function derive(dir, { sessionId, projectRoot } = {}) {
       claim: redact(`\`${fixed.command}\` works where \`${failed.command}\` failed`),
       confidence: cap,
       anchors: [projectRoot],
-      evidence: redact(`exit ${failed.exit} then exit 0`),
+      evidence: redact(`failed${Number.isInteger(failed.exit) ? ` (exit ${failed.exit})` : ''} then succeeded`),
       derivedBy: isTest ? 'test-transition' : 'command-transition',
       at: fixed.at ?? Date.now(),
     });
@@ -399,34 +442,37 @@ export function derive(dir, { sessionId, projectRoot } = {}) {
   // Describes our own behaviour rather than the code, so it gets the lowest cap
   // and will be starved by the injection budget's confidence ranking unless it
   // earns its place through measured utility.
+  // VERIFIED: rereadWaste returns a single AGGREGATE -- { repeats, wasteful,
+  // wastefulTokens, legitimate, legitimateTokens, undecidable,
+  // undecidableTokens, coverage } -- with no per-anchor rows. An earlier draft
+  // of this plan iterated `waste.worst`, which does not exist, so the detector
+  // would have produced nothing silently inside this try/catch.
+  //
+  // Both consumers now share `rereadsByAnchor` (Task 3b) rather than each
+  // implementing "what counts as a wasteful re-read".
   try {
-    const waste = rereadWaste(dir, { events });
-    for (const row of waste?.worst?.slice(0, 3) ?? []) {
+    for (const row of rereadsByAnchor(events).slice(0, 3)) {
+      if (!row.anchor || row.repeats < 2) continue;
       candidates.push({
         type: 'map',
         claim: `${row.anchor} is a recurring reference point in this project`,
         confidence: CONFIDENCE.churn,
         anchors: [row.anchor],
-        evidence: `re-read ${row.rereads ?? 0} times`,
+        evidence: `re-read ${row.repeats} times, ${row.wasteful} without changing`,
         derivedBy: 'churn',
         at: Date.now(),
       });
     }
   } catch {
-    // rereadWaste has its own log window; a failure here costs one detector.
+    // A failure here costs one detector, never the session.
   }
 
   return { candidates, written: [] };
 }
 ```
 
-Verify `rereadWaste`'s real return shape before relying on `worst`:
-
-```bash
-sed -n '451,505p' hooks-core/metrics.mjs
-```
-
-Adjust the churn detector to the real shape rather than changing `rereadWaste`.
+No verification step is needed — `rereadWaste`'s shape is recorded above, and
+Task 3b supplies the per-anchor helper this detector consumes.
 
 - [ ] **Step 4: Run to verify it passes** → PASS (5)
 - [ ] **Step 5: Commit**
@@ -440,6 +486,67 @@ This repository's own graph held 1,446 symbol nodes and ONE finding after three
 weeks, because the only path to a verdict was an opt-in model call. These four
 derive findings from exit codes, test transitions, corrections and churn --
 locally, with no model and nothing leaving the machine."
+```
+
+---
+
+## Task 3b: `rereadsByAnchor` — one implementation, two consumers
+
+**Files:** Modify `hooks-core/metrics.mjs`; Test `tests/hooks/reread-waste.test.mjs`
+
+**Interfaces:**
+- Produces: `rereadsByAnchor(events) => Array<{ anchor, repeats, wasteful, tokens }>`, descending by `wasteful` then `repeats`.
+- `rereadWaste` keeps **every existing field unchanged** and gains `worst: rereadsByAnchor(events).slice(0, 10)`.
+
+**Why:** the churn detector needs per-anchor rows and `rereadWaste` returns only an aggregate. Implementing the grouping a second time inside `derive.mjs` would put two definitions of "what counts as a wasteful re-read" in the codebase, free to drift — the exact divergence `npm run sync:hooks` exists to prevent elsewhere. So the grouping moves into one shared function that both consume.
+
+The existing aggregate fields must not change: `balanceSheet` reads them, and `worst` is purely additive.
+
+- [ ] **Step 1: Write the failing test**
+
+```javascript
+it('groups re-reads by anchor, worst first', () => {
+  const events = [
+    { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 1 },
+    { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 2 },
+    { kind: 'read', anchor: 'a.ts', fp: 'x', tokens: 100, at: 3 },
+    { kind: 'read', anchor: 'b.ts', fp: 'y', tokens: 50, at: 4 },
+    { kind: 'read', anchor: 'b.ts', fp: 'z', tokens: 50, at: 5 },
+  ];
+  const rows = rereadsByAnchor(events);
+  expect(rows[0].anchor).toBe('a.ts');
+  // Two repeats with an unchanged fingerprint are wasteful; b.ts changed, so it is not.
+  expect(rows[0].wasteful).toBe(2);
+  expect(rows.find((r) => r.anchor === 'b.ts').wasteful).toBe(0);
+});
+
+it('leaves every existing rereadWaste field untouched', () => {
+  const before = rereadWaste(dir, { events, includeFixtures: true });
+  expect(before).toHaveProperty('repeats');
+  expect(before).toHaveProperty('wastefulTokens');
+  expect(before).toHaveProperty('coverage');
+  expect(Array.isArray(before.worst)).toBe(true);
+});
+```
+
+- [ ] **Step 2: Run to verify it fails** → `rereadsByAnchor is not a function`
+
+- [ ] **Step 3: Extract the grouping**
+
+Lift the per-anchor loop already inside `rereadWaste` into `rereadsByAnchor`, have `rereadWaste` call it and fold its rows into the existing counters, then append `worst`. The judgement of wasteful-versus-legitimate (`prev.fp === cur.fp`) moves with it and must not be reimplemented.
+
+- [ ] **Step 4: Run to verify it passes** → `npx jest tests/hooks/reread-waste.test.mjs`
+
+- [ ] **Step 5: Commit**
+
+```bash
+npm run sync:hooks
+git add hooks-core/metrics.mjs tests/hooks/reread-waste.test.mjs plugin integrations
+git commit -m "refactor(metrics): share re-read grouping between rereadWaste and derive
+
+The churn detector needs per-anchor rows; rereadWaste returned only an
+aggregate. One shared helper rather than two definitions of what counts as a
+wasteful re-read. Existing aggregate fields are unchanged -- worst is additive."
 ```
 
 ---
@@ -569,13 +676,27 @@ git commit -m "feat(derive): run at Stop; surface local harvest; state the defau
 
 **Files:** Create `hooks-core/usage.mjs`; Test `tests/hooks/usage.test.mjs`
 
-**Interfaces:**
-- Consumes: `readAll`, `readBalance` from `metrics.mjs`. Depends on Plan 1's `query` event.
-- Produces:
-  - `classify(dir) => Array<{ findingKey, sessionId, label: 'referenced'|'not-referenced'|'unknown' }>`
-  - `referenceRate(dir) => { referenced: number, denominator: number, rate: number|null }`
+**VERIFIED CONTRACT — do not invent a join.** `inject` events already record
+`findingIds` (the finding keys) at five call sites in `inject.mjs`, and
+`recordToolOutcome` already joins each outcome back to its injection, recording
+`injectionId`, `findingIds` and a `joinMethod` of `tool-call-id`,
+`episode-anchor` or `none`. That join prefers an exact `tool-call-id` match,
+which is strictly better evidence than the `(sessionId, findingKey)`
+approximation an earlier draft of this plan proposed — and it already reports
+`joinMethod: 'none'` when it cannot attribute, so unattributable observations can
+be excluded honestly instead of silently mis-joined.
 
-**Why Layer 1 uses references and not read-suppression:** read-suppression is Layer 2's estimand. Using it in both would make the calibration loop compare two spellings of one quantity — a strong correlation that means nothing. `unknown` is excluded from the denominator rather than counted as a miss.
+**So Layer 1 requires no change to `inject.mjs` at all.** It reads
+`kind: 'tool-outcome'` events, uses their `findingIds`, and drops rows whose
+`joinMethod` is `none`.
+
+**Interfaces:**
+- Consumes: `readAll` from `metrics.mjs`; `tool-outcome` events with `findingIds`, `injectionId`, `joinMethod`. Depends on Plan 1's `query` event for the numerator.
+- Produces:
+  - `classify(dir) => Array<{ findingKey, injectionId, label: 'referenced'|'not-referenced'|'unknown' }>`
+  - `referenceRate(dir) => { referenced: number, denominator: number, rate: number|null, unattributable: number }`
+
+**Why Layer 1 uses references and not read-suppression:** read-suppression is Layer 2's estimand. Using it in both would make the calibration loop compare two spellings of one quantity — a strong correlation that means nothing. `unknown` is excluded from the denominator rather than counted as a miss, and `unattributable` is reported separately rather than folded into either.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -620,19 +741,24 @@ describe('Layer 1', () => {
 ```
 
 - [ ] **Step 2: Run to verify it fails** → module not found
-- [ ] **Step 3: Implement `usage.mjs`.** Join `inject` events to later `query`/`expand` events on `(sessionId, findingKey)` with `at` ordering. A session with no subsequent tool activity yields `unknown`.
+- [ ] **Step 3: Implement `usage.mjs`.** For each `tool-outcome` with `joinMethod !== 'none'`, take its `findingIds` and look for a later `query` or `expand` event naming one of them, ordered by `at`. A session with no subsequent tool activity yields `unknown`; a `joinMethod` of `none` increments `unattributable` and enters neither arm.
 - [ ] **Step 4: Run to verify it passes** → PASS (4)
-- [ ] **Step 5: Ensure `inject` records `findingKeys`.** If it does not, add it in `inject.mjs` — Layer 1 cannot attribute without it.
+- [ ] **Step 5: Measure how much of the join is usable.** Run against this repository's 234 live `tool-outcome` events and report the share with `joinMethod: 'none'`. If most cannot attribute, say so in the report rather than publishing a rate computed from a handful of rows — the same discipline `sufficientData` already applies.
 - [ ] **Step 6: Commit**
 
 ```bash
 npm run sync:hooks
-git add hooks-core/usage.mjs hooks-core/inject.mjs tests/hooks/usage.test.mjs plugin integrations
+git add hooks-core/usage.mjs tests/hooks/usage.test.mjs plugin integrations
 git commit -m "feat(metrics): Layer 1, explicit-reference classification
 
 Deliberately independent of read-suppression: that is Layer 2's estimand, and
 using it in both would make the calibration loop compare two spellings of one
-quantity. unknown is excluded from the denominator, never counted as a miss."
+quantity. unknown is excluded from the denominator, never counted as a miss.
+
+Built on the injection-to-outcome join recordToolOutcome already performs --
+which prefers an exact tool-call-id match and already reports when it cannot
+attribute -- rather than a weaker (sessionId, findingKey) join of its own. No
+change to inject.mjs was needed: it has recorded findingIds all along."
 ```
 
 ---
@@ -698,7 +824,7 @@ describe('Layer 2 guards', () => {
 Write the `graphWith` / `dirWithHistory` / `dirWithFewObservations` / `dirWithMixedObservations` helpers at the top of the file as real fixture builders using `record()` — not mocks.
 
 - [ ] **Step 2: Run to verify it fails** → module not found
-- [ ] **Step 3: Implement `loo.mjs`** with:
+- [ ] **Step 3: Implement `loo.mjs`**, reading downstream cost through the same `tool-outcome` join Layer 1 uses (never a fresh `(sessionId, findingKey)` join), with:
   - arm from `hash(findingKey + sessionId)`, stable for the session;
   - guards: skip `pinned` and `origin === 'human'`; require `MIN_PRIOR_INJECTIONS`; return at most one key;
   - `effects()`: per-key mean downstream read cost served vs withheld, shrunk by empirical Bayes `(n·observed + k·prior) / (n + k)` toward the population mean;
