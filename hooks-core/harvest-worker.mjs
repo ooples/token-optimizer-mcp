@@ -22,14 +22,14 @@ import {
   extract,
   validate,
   estimateTokens,
-} from './lib/harvest.mjs';
-import { writeHarvested } from './lib/harvest-write.mjs';
-import { record } from './lib/metrics.mjs';
-import { wikiDir, projectRootFor, load } from './lib/wiki.mjs';
-import { readArchive } from './lib/transcript.mjs';
-import { buildFeedbackDigest, validateLessons, LESSON_PROMPT } from './lib/lessons.mjs';
-import { ORIGIN_HARVESTED } from './lib/curate.mjs';
-import { selectForConsolidation } from './lib/consolidate.mjs';
+} from './harvest.mjs';
+import { writeHarvested } from './harvest-write.mjs';
+import { record } from './metrics.mjs';
+import { wikiDir, projectRootFor, load } from './wiki.mjs';
+import { readArchive } from './transcript.mjs';
+import { buildFeedbackDigest, validateLessons, LESSON_PROMPT } from './lessons.mjs';
+import { ORIGIN_HARVESTED } from './curate.mjs';
+import { selectForConsolidation } from './consolidate.mjs';
 
 /**
  * The token budget one session's harvest may add to the graph.

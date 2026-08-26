@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Claude Code Stop adapter -- run the semantic harvest the design specifies.
  *
@@ -38,11 +37,11 @@ import {
 import { dirname, join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { mode, MODE_OFF } from './lib/policy.mjs';
-import { harvestEnabled, harvestMode } from './lib/harvest.mjs';
-import { archive } from './lib/transcript.mjs';
-import { wikiDir, projectRootFor, sharedDir, load } from './lib/wiki.mjs';
-import { detectRefusals, recordRefusal } from './lib/harvest-write.mjs';
+import { mode, MODE_OFF } from './policy.mjs';
+import { harvestEnabled, harvestMode } from './harvest.mjs';
+import { archive } from './transcript.mjs';
+import { wikiDir, projectRootFor, sharedDir, load } from './wiki.mjs';
+import { detectRefusals, recordRefusal } from './harvest-write.mjs';
 
 /** What to tell the user, per reason the harvest is not running. */
 const OFF_REASON = {
@@ -229,22 +228,35 @@ function dueForHarvest(sessionId) {
   return true;
 }
 
-async function main() {
-  if (mode() === MODE_OFF) return;
+/**
+ * The Stop-time harvest, for every client rather than one.
+ *
+ * WHY THIS IS A FUNCTION AND NOT A HOOK. It was a hook -- a Claude Code entry
+ * point named `stop-harvest.mjs` -- and #300 unregistered it. Nothing replaced
+ * it, so four capabilities went silently: the transcript archive, the harvest
+ * worker spawn, refusal detection, and the notice that says why no findings
+ * exist. Every client routes Stop through the shared adapter, and the adapter
+ * did none of these, so on a full session with a valid credential
+ * `harvestMode()` reported `remote` and nothing happened.
+ *
+ * NOTHING OBSERVED THAT IT DID NOT RUN, which is why it survived a year. There
+ * is no `kind:'harvest'` event to be absent from a report, no error, and a
+ * harvest that ran and found nothing looks exactly like one that never
+ * started. The reachability guard could not see it either: this file's own
+ * imports gave `archive`, `detectRefusals` and `recordRefusal` call sites, and
+ * a name-based scan proves a reference exists, never that it runs.
+ *
+ * Returns a notice for the caller to emit, or null. It does NOT write to
+ * stdout: the adapter emits exactly one JSON object per hook invocation, and a
+ * second writer racing it is how a Stop payload gets corrupted.
+ *
+ * @returns {Promise<string|null>} a once-per-session message, or null.
+ */
+export async function runStopHarvest(payload = {}) {
+  if (mode() === MODE_OFF) return null;
 
-  const chunks = [];
-  process.stdin.setEncoding('utf8');
-  for await (const chunk of process.stdin) chunks.push(chunk);
-
-  let payload;
-  try {
-    payload = JSON.parse(chunks.join(''));
-  } catch {
-    return;
-  }
-
-  const transcript = payload.transcript_path;
-  if (!transcript || !existsSync(transcript)) return;
+  const transcript = payload.transcript_path ?? payload.transcriptPath ?? null;
+  if (!transcript || !existsSync(transcript)) return null;
 
   // ARCHIVE FIRST, AND UNCONDITIONALLY. This is a local file copy: it costs no
   // model call, spends no money, and sends nothing anywhere, so it must not sit
@@ -298,32 +310,29 @@ async function main() {
     // what still works. A user who reads this should know exactly what they are
     // and are not getting, and what to do about it.
     const message = OFF_REASON[harvestMode()];
-    if (message && !alreadyNotified(payload.session_id)) {
-      // AWAIT THE WRITE. The finally below used to call process.exit(0), which
-      // discards anything still buffered -- so on a pipe that had filled, the
-      // one notice explaining why no findings exist was the thing most likely
-      // to be dropped. Resolve on the callback, or on drain when the write is
-      // buffered, before returning.
-      await new Promise((resolve) => {
-        const flushed = process.stdout.write(
-          JSON.stringify({ systemMessage: message }),
-          () => resolve()
-        );
-        if (!flushed) process.stdout.once('drain', resolve);
-      });
-    }
-    return;
+    // RETURNED, NOT WRITTEN. This used to write its own JSON to stdout and
+    // race whatever the hook emitted; the adapter now folds this into the one
+    // object it sends, so the notice cannot be dropped by a full pipe or
+    // truncated by an exit -- which is what used to happen to the single line
+    // explaining why no findings exist.
+    if (message && !alreadyNotified(payload.session_id)) return message;
+    return null;
   }
 
+  // SIBLING IN THE SHARED CORE. The worker used to live beside the hook entry
+  // in `plugin/hooks/`, which is why only Claude Code could ever have spawned
+  // it -- it was vendored to no other client. It now sits in the core that
+  // every client receives an identical copy of, so this resolves in all
+  // eleven.
   const worker = join(HERE, 'harvest-worker.mjs');
-  if (!existsSync(worker)) return;
+  if (!existsSync(worker)) return null;
 
   // DEBOUNCE. Stop fires at the end of every assistant turn, so a talkative
   // session would spawn a model call per turn -- each re-reading an overlapping
   // transcript and re-extracting most of the same findings. The marker is
   // touched only when a harvest is actually started, so a skipped turn does not
   // push the next one further away.
-  if (!dueForHarvest(payload.session_id)) return;
+  if (!dueForHarvest(payload.session_id)) return null;
 
   // Detached and fully released: the harvest must outlive this hook without
   // holding Stop open for a model round-trip.
@@ -342,15 +351,11 @@ async function main() {
       env: { ...process.env },
     }
   );
+  // AN 'error' EVENT WITH NO LISTENER IS A THROW. `spawn` reports a failed
+  // start asynchronously, so an unlistened error does not return a code -- Node
+  // raises it, and here that would abort the Stop response itself. A harvest
+  // that cannot start must degrade to no harvest, never to a broken Stop.
+  child.on('error', () => {});
   child.unref();
+  return null;
 }
-
-// Stop must complete whatever happens here -- but exitCode rather than exit(),
-// so a buffered stdout notice is flushed on natural termination instead of being
-// truncated. The detached worker is already unref'd, so nothing holds the loop
-// open once main resolves.
-main()
-  .catch(() => {})
-  .finally(() => {
-    process.exitCode = 0;
-  });

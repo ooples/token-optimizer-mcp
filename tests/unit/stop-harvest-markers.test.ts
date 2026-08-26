@@ -24,7 +24,14 @@ import {
 } from 'fs';
 import { tmpdir } from 'os';
 
-const HOOK = join(process.cwd(), 'plugin', 'hooks', 'stop-harvest.mjs');
+// THE REGISTERED STOP ENTRY, not the module behind it.
+//
+// This used to spawn `plugin/hooks/stop-harvest.mjs` directly -- a file that
+// #300 removed from hooks.json, so the suite went on passing against a hook
+// nothing invoked. Driving the entry that Stop is actually wired to is what
+// makes these assertions mean anything: if the harvest stops being reachable
+// again, they fail.
+const HOOK = join(process.cwd(), 'plugin', 'hooks', 'stop.mjs');
 
 /** The env var this platform actually reads for per-user state. */
 const STATE_VAR =

@@ -25,7 +25,7 @@ import { join } from 'path';
 import { load, nodeId } from '../../hooks-core/wiki.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 
-const WORKER = join(process.cwd(), 'plugin', 'hooks', 'harvest-worker.mjs');
+const WORKER = join(process.cwd(), 'hooks-core', 'harvest-worker.mjs');
 const SESSION = 's-subdir-root';
 
 let project;

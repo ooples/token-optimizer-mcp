@@ -88,6 +88,7 @@ import { episodeMeta, featuresForArm, usageFrom } from './experiment.mjs';
 import { evaluateUcrGuards } from './ucr-guard.mjs';
 import { beginHookInvocation, noteHookOutput } from './observability.mjs';
 import { registerProject } from './projects.mjs';
+import { runStopHarvest } from './stop-harvest.mjs';
 
 /**
  * Per-client capability.
@@ -761,8 +762,11 @@ async function runHook(clientName, event, invocation) {
     const toolEvidence = optimizerToolsForHook(raw, state);
     rememberOptimizerTools(state, toolEvidence);
     const episode = episodeMeta({ client: clientName, raw });
+    // Hoisted out of the try below, because the harvest needs the same resolved
+    // directory and resolving it twice is how two halves of one hook end up
+    // reasoning about different projects.
+    const cwd = raw.cwd || raw.working_directory || process.cwd();
     try {
-      const cwd = raw.cwd || raw.working_directory || process.cwd();
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       recordEpisodeOutcome(dir, {
         ...episode,
@@ -792,10 +796,47 @@ async function runHook(clientName, event, invocation) {
       state.harvestedEdits = Number(state.edits || 0);
       saveState(sessionId, state, agentScope);
     }
+    // THE OUT-OF-BAND HARVEST, which no client was running.
+    //
+    // The in-band `prompt` above asks the MODEL to call `wiki_write`, and the
+    // session pays for summarising itself -- the exact cost the design says the
+    // harvest exists to avoid ("out-of-band, so the session doing the work never
+    // pays for the harvest"). The out-of-band half lived in a Claude Code hook
+    // that #300 unregistered, and nothing replaced it, so on every client the
+    // transcript was never archived, the worker never spawned, refusals were
+    // never detected, and the notice explaining why no findings exist was never
+    // shown. Awaited because it must finish before the exit below; it spawns a
+    // DETACHED worker and returns immediately, so Stop is not delayed by a model
+    // call.
+    let harvestNotice = null;
+    try {
+      // NORMALIZED, NOT RAW. The identifiers were resolved a few lines up
+      // through every alias a host might use -- `sessionId`,
+      // `conversation_id`, `working_directory` -- and handing `raw` straight
+      // over threw that away: runStopHarvest reads `session_id` and `cwd`
+      // only, so on a client that sends an alias the session id came back
+      // undefined and the archive root fell back to `process.cwd()`. That
+      // shares the once-per-session notice and the debounce marker across
+      // every session, and files the transcript under whatever directory the
+      // hook happened to start in.
+      harvestNotice = await runStopHarvest({
+        ...raw,
+        session_id: sessionId,
+        cwd,
+        transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
+      });
+    } catch {
+      // The harvest is a side effect of ending a session. It must never stop
+      // one from ending.
+    }
+
     if (prompt && client.stopStyle === 'followup') {
-      emit({ followup_message: prompt });
+      emit({ followup_message: prompt, ...(harvestNotice ? { systemMessage: harvestNotice } : {}) });
     } else {
-      emit(prompt ? { decision: client.stopDecision, reason: prompt } : {});
+      emit({
+        ...(prompt ? { decision: client.stopDecision, reason: prompt } : {}),
+        ...(harvestNotice ? { systemMessage: harvestNotice } : {}),
+      });
     }
     process.exit(0);
   }
