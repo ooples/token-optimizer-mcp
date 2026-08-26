@@ -1132,10 +1132,25 @@ export function standingRules(dir, graph, { budget = standingBudget(), episode =
   // injected more than the budget allowed and recorded fewer tokens than it
   // spent -- in a block whose entire justification is that it is tightly
   // bounded and measured against the control arm.
+  // THE LAST LINE IS HOW THE NEXT RULE GETS HERE, and it is one line because
+  // this block is charged on every session forever. A rule reaches this list
+  // only by being pinned or by being a person's verified correction, and both
+  // start as a `wiki_write` -- so a model reading a set of standing rules with
+  // no idea how they were produced has no way to add to it. Stated at the point
+  // of the evidence rather than as a separate always-on block: the reader is
+  // already looking at the output of the mechanism being described.
+  //
+  // THE COLD GRAPH IS COVERED ELSEWHERE, deliberately. Nothing here renders
+  // until at least one rule qualifies, which is the property the always-on
+  // budget depends on, so this line cannot be the first-session nudge --
+  // `policyText`'s "Record what you work out" section is, and it is emitted at
+  // SessionStart whether or not the graph holds anything.
   const HEADING =
     '# Standing rules for this project' +
     '\n\nEstablished in previous sessions and expected to hold. ' +
-    'These are not suggestions.\n\n';
+    'These are not suggestions.\n\n' +
+    'Record what you work out with wiki_write and a real file anchor; ' +
+    'that is how a rule reaches this list.\n\n';
   const noticeFor = (n) =>
     n
       ? `\n(${n} further standing rule${n === 1 ? '' : 's'} did not fit this budget; ` +

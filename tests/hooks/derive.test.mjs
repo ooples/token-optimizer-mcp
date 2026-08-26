@@ -16,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { record, recordToolOutcome } from '../../hooks-core/metrics.mjs';
-import { transcriptDir, safeName } from '../../hooks-core/transcript.mjs';
+import { readArchive, transcriptDir, safeName } from '../../hooks-core/transcript.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
@@ -575,6 +575,147 @@ describe('wired at session end', () => {
       // The count, not the candidates: whether a session's own evidence
       // supports any finding at all is the number that says this is working.
       expect(derived[0].candidates).toBeGreaterThan(0);
+    } finally {
+      try {
+        rmSync(workspace, { recursive: true, force: true });
+      } catch {
+        /* windows */
+      }
+    }
+  });
+});
+
+/**
+ * The Claude Code Stop path, end to end, asserted on STORAGE.
+ *
+ * A CANDIDATE COUNT IS NOT A FINDING. The test above proves `derive` is reached
+ * from a generated client entry and records a count; it deliberately does not
+ * prove anything landed, and its own workspace has no project marker, so the
+ * anchor falls back to the directory, `indexFile` returns null, and nothing is
+ * stored. That is exactly the failure mode Task 4 found by measuring: healthy
+ * counts, empty graph. So this asserts the node in the graph.
+ *
+ * AND IT USES CLAUDE CODE'S OWN ENTRY. Claude Code is the client most users are
+ * on, and its Stop hook is a separate file from the generated ones -- so a
+ * regression that unregisters or rewrites it is invisible to a test that spawns
+ * cursor's. That is not hypothetical here: #300 replaced `stop-harvest.mjs` with
+ * `stop.mjs` in `hooks.json` and the archive call inside the old entry was lost
+ * with it, silently, for every Claude Code user.
+ */
+describe('through the Claude Code Stop hook', () => {
+  const stopHook = (workspace, wiki, payload) =>
+    spawnSync(
+      process.execPath,
+      [join(process.cwd(), 'plugin', 'hooks', 'stop.mjs')],
+      {
+        cwd: workspace,
+        env: {
+          ...process.env,
+          TOKEN_OPTIMIZER_STATE_DIR: join(workspace, '.state'),
+          TOKEN_OPTIMIZER_WIKI_DIR: wiki,
+          TOKEN_OPTIMIZER_SHARED_DIR: join(workspace, '.shared'),
+        },
+        input: JSON.stringify(payload),
+        encoding: 'utf8',
+        timeout: 60_000,
+      }
+    );
+
+  /**
+   * A workspace shaped like a real project, because every discipline in the
+   * pipeline is a real check: a VCS root (`writeHarvested` refuses an anchor
+   * with no ancestor), and a manifest (`projectAnchor` needs a FILE).
+   */
+  const project = () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'der-cc-'));
+    mkdirSync(join(workspace, '.git'), { recursive: true });
+    writeFileSync(join(workspace, 'package.json'), '{"name":"fixture"}');
+    const wiki = join(workspace, '.wiki');
+    mkdirSync(wiki, { recursive: true });
+    return { workspace, wiki };
+  };
+
+  const evidence = (wiki) =>
+    writeFileSync(
+      join(wiki, 'metrics.jsonl'),
+      [
+        { kind: 'tool-outcome', surface: 'command', anchor: 'deploy', success: false, output: 'connection refused by host', at: 1 },
+        { kind: 'tool-outcome', surface: 'command', anchor: 'deploy --retry', success: true, at: 2 },
+      ]
+        .map((event) => JSON.stringify(event))
+        .join('\n') + '\n'
+    );
+
+  it('leaves findings in the graph, not just a count in the log', () => {
+    const { workspace, wiki } = project();
+    try {
+      evidence(wiki);
+
+      const result = stopHook(workspace, wiki, {
+        session_id: 'cc-session',
+        cwd: workspace,
+      });
+      expect(result.status).toBe(0);
+
+      const findings = [...load(wiki).nodes.values()].filter(
+        (node) => node.kind === 'finding'
+      );
+      expect(findings.length).toBeGreaterThan(0);
+      // Anchored to the manifest, which is what makes them invalidatable --
+      // and what distinguishes a stored finding from one refused for having an
+      // anchor nothing can ever re-check.
+      expect(
+        load(wiki).edges.some(
+          (edge) =>
+            edge.edge === 'derived_from' &&
+            edge.to === nodeId('file', canonicalPath(join(workspace, 'package.json')))
+        )
+      ).toBe(true);
+    } finally {
+      try {
+        rmSync(workspace, { recursive: true, force: true });
+      } catch {
+        /* windows */
+      }
+    }
+  });
+
+  it('archives the session transcript, which #300 stopped doing', () => {
+    // THE ARCHIVE IS WHAT SURVIVES THE SESSION. `derive`'s correction detector
+    // reads it first and falls back to the live transcript; `lessons.mjs` can
+    // verify a verbatim quote against nothing else, and that verification is
+    // the only route to a human-origin finding. Losing it failed silently,
+    // because an empty archive and an unarchived session are the same value.
+    const { workspace, wiki } = project();
+    const transcript = join(workspace, 'session.jsonl');
+    try {
+      writeFileSync(
+        transcript,
+        [
+          { type: 'user', message: { role: 'user', content: 'add a test for the parser' } },
+          { type: 'user', message: { role: 'user', content: 'no, use npm test rather than npx jest' } },
+        ]
+          .map((row) => JSON.stringify(row))
+          .join('\n') + '\n'
+      );
+
+      const result = stopHook(workspace, wiki, {
+        session_id: 'cc-archive',
+        cwd: workspace,
+        transcript_path: transcript,
+      });
+      expect(result.status).toBe(0);
+
+      const archived = readArchive(wiki, 'cc-archive');
+      expect(archived.map((turn) => turn.text)).toContain(
+        'no, use npm test rather than npx jest'
+      );
+      // And the archive is immediately useful: the correction detector reads it
+      // in the same hook run, so the turn becomes a finding without a model.
+      const feedback = [...load(wiki).nodes.values()].filter(
+        (node) => node.kind === 'finding' && node.type === 'feedback'
+      );
+      expect(feedback.length).toBeGreaterThan(0);
     } finally {
       try {
         rmSync(workspace, { recursive: true, force: true });

@@ -195,7 +195,8 @@ function hooksDirFor({ hooksDir, install, root }) {
  * identical from outside: a graph that fills with structural nodes either way.
  *
  * Measured on a real 5.4.0 install: 484 symbol, 286 file and 122 task nodes and
- * ZERO findings, because harvestMode() was 'off:not-opted-in'. Fifteen checks
+ * ZERO findings, because harvestMode() then returned an opt-in refusal (the mode has
+ * since been renamed: it is 'off:no-key' now, and opting in is no longer the gate). Fifteen checks
  * passed and none mentioned harvest. stop-harvest.mjs names this exact gap --
  * "nothing in doctor, audit or waste mentions harvest, so a user sees a graph
  * filling with structural nodes and no findings and has no way to learn why" --
@@ -219,9 +220,15 @@ export function probeHarvest() {
   // optimizer is off" is noise, which is why stop-harvest maps it to no notice.
   if (mode === 'off:mode') return [];
 
+  // SAID PLAINLY, because this is the configuration a user would choose if they
+  // knew it existed and the previous wording buried it in machinery. A local
+  // endpoint is the only setting under which the semantic harvest runs with no
+  // credential, no billing and no digest leaving the machine -- so the two facts
+  // that decide whether someone wants it are the two facts stated first.
   if (mode === 'local') {
     return [ok('finding extraction is available',
-      'active-model wiki_write is primary; local endpoint also enables fallback extraction')];
+      'local model found -- semantic harvest is on, free and private: no credential, no billing, ' +
+      'and nothing leaves this machine. Active-model wiki_write remains the primary path')];
   }
   if (mode === 'remote') {
     return [ok('finding extraction is available',
@@ -231,10 +238,19 @@ export function probeHarvest() {
 
   // No second-model credential is required for the primary path. The Codex/agent session that
   // already paid to derive the conclusion is the extractor and wiki_write is local.
+  // NAME THE TRADE, not just the missing variable. This is the default state on
+  // every machine without a credential, so it is the text most users will read,
+  // and "unavailable" alone tells them neither what they are missing nor that
+  // the free option exists. Local findings still accumulate: derive.mjs reads
+  // exit codes, red-to-green transitions, corrections and churn out of evidence
+  // already on disk and sends nothing anywhere.
   if (mode === 'off:no-key') {
     return [ok('finding extraction is available',
-      'active model records durable conclusions through local wiki_write; no separate-model ' +
-      'credential is configured, so fallback transcript extraction is unavailable')];
+      'active model records durable conclusions through local wiki_write, and derive runs at ' +
+      'session end with no credential. No separate-model credential is configured, so fallback ' +
+      'transcript extraction is unavailable: point TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local ' +
+      'model to run it free and private, or set TOKEN_OPTIMIZER_API_KEY to run it from a bounded ' +
+      'digest of paths, commands, prompts and conclusions -- never file contents')];
   }
 
   // off:opted-out -- a deliberate choice, reported as one. Nagging about a setting somebody chose

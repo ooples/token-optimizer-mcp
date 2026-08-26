@@ -70,7 +70,8 @@ import {
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
 import { observedWrites, queueInvalidation } from './pending.mjs';
-import { isArchived } from './transcript.mjs';
+import { archive, isArchived } from './transcript.mjs';
+import { harvestMode } from './harvest.mjs';
 import { isFsSafePath } from './paths.mjs';
 import {
   isSubstantive,
@@ -575,6 +576,65 @@ function emit(object) {
   process.stdout.write(serialized);
 }
 
+/**
+ * What will and will not extract findings after this session, in one sentence.
+ *
+ * THE STATE WAS ONLY EVER LEGIBLE FROM THE DOCTOR, and the doctor is a place
+ * someone visits after they already suspect something is wrong. A user watching
+ * a graph fill with structural nodes and no verdicts has no reason to suspect
+ * anything, which is the failure this project has now measured twice.
+ *
+ * IT IS ADDRESSED TO THE MODEL, NOT ONLY TO THE READER, which is why it earns a
+ * place in the prefix rather than a systemMessage. "Nothing else will write this
+ * down in words" changes what the model does with a conclusion it is holding;
+ * "here is a configuration variable" would not.
+ *
+ * CACHE-SAFE: derived from configuration, so it differs between sessions only
+ * when the configuration does -- the same standard the rest of this block is
+ * held to, and it carries no digits for `stableText` to reject.
+ *
+ * A local endpoint is named FIRST in the off case on purpose. It is the option
+ * that costs nothing and sends nothing, and it was the one buried deepest.
+ */
+function extractionNotice() {
+  switch (harvestMode()) {
+    case 'local':
+      return (
+        '\n\nA local model endpoint is configured, so semantic extraction also runs after this ' +
+        'session -- free and private, with nothing leaving this machine.'
+      );
+    case 'remote':
+      return (
+        '\n\nA credential is configured, so fallback extraction also runs after this session from ' +
+        'a bounded digest: paths, commands, prompts and conclusions, never file contents.'
+      );
+    case 'off:mode':
+      // The whole optimizer is off and this text is not emitted anyway. Saying
+      // anything here would be noise stacked on an explicit choice.
+      return '';
+    case 'off:opted-out':
+      // A DELIBERATE CHOICE, SO NO PITCH. The consequence is stated because the
+      // model needs it; the setting that would reverse it is not, because
+      // arguing with a configured decision on every session is how a notice
+      // stops being read. doctor.mjs draws the same line for the same reason.
+      return (
+        '\n\nFallback extraction is off by configuration, so a conclusion you do not record is ' +
+        'not written down in words anywhere. Findings are still derived locally from exit codes, ' +
+        'red-to-green transitions and corrections.'
+      );
+    default:
+      // off:no-key, and any mode a future harvest adds: no extractor is running
+      // and nobody chose that, so the free option is worth naming.
+      return (
+        '\n\nNo separate extractor will run after this session, so a conclusion you do not record ' +
+        'is not written down in words anywhere. Findings are still derived locally from exit ' +
+        'codes, red-to-green transitions and corrections. Pointing ' +
+        'TOKEN_OPTIMIZER_HARVEST_ENDPOINT at a local model adds semantic extraction, free and ' +
+        'private.'
+      );
+  }
+}
+
 /** The session-start notice, shared verbatim so no client drifts its own copy. */
 export function policyText(
   canDeny,
@@ -633,7 +693,7 @@ export function policyText(
     .filter(Boolean)
     .join(' ');
   const recording = tools.has('wiki_write')
-    ? `\n\n## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.`
+    ? `\n\n## Record what you work out\n\nCall wiki_write when you establish something durable about this project, while\nyou still hold the context. Every claim needs at least one anchor -- a real file\npath, or path#symbol -- because an unanchored claim can never be checked against\nthe code again and would be served as current forever; unanchored writes are\nrefused.\n\nWorth recording: a decision and why the alternative was rejected, a failure and\nwhat actually caused it, a command that turned out to be the one that works.\nNot worth recording: what the code plainly says. Every wiki_write must include\nthe concrete evidence, when it applies, a calibrated confidence label, its\nscope, and what would invalidate it. Prefer the thing someone had to work out,\nbecause that exists nowhere in the source tree.${extractionNotice()}`
     : '\n\nStructural graph capture remains active through lifecycle hooks. Durable semantic MCP writes are not requested because the writer schema is not proven available.';
 
   return `# Token optimization is active\n\nLive graph capture is active through the lifecycle adapter.\n\n${connection}${routing}${enforcement}${utilities ? `\n\n${utilities}` : ''}${recording}${projectBriefing()}`;
@@ -948,6 +1008,27 @@ async function runHook(clientName, event, invocation) {
       });
     } catch {
       // Evidence is best effort and must never stop a session from finishing.
+    }
+    try {
+      // THE ARCHIVE, WRITTEN BEFORE ANYTHING READS IT.
+      //
+      // This was lost rather than retired. `plugin/hooks/stop-harvest.mjs` called
+      // `archive()` at Stop, and #300 replaced that entry in `hooks.json` with the
+      // generated `stop.mjs`, which routes here -- so on Claude Code no session has
+      // been archived since. Nothing failed loudly: `readArchive` simply returns an
+      // empty list, so `derive`'s correction detector fell through to the live
+      // transcript (present only for a client that reports one) and `lessons.mjs`
+      // lost the only corpus it can verify a verbatim quote against, which is the
+      // single test that grants a feedback finding human origin.
+      //
+      // BEFORE `derive`, deliberately: the correction detector reads the archive
+      // first and treats the live transcript as the fallback, and the archive is
+      // the copy that survives into later sessions.
+      const cwd = raw.cwd || raw.working_directory || process.cwd();
+      const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
+      if (agentScope) archive(dir, agentScope, { sessionId });
+    } catch {
+      // The archive is a record, not a result. A session still ends.
     }
     try {
       // ZERO-COST DERIVATION, on every client, with no credential. The semantic
