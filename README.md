@@ -137,6 +137,22 @@ None of that is in your repository. It exists only because an agent once burned
 tokens finding it out — and every other tool throws it away at the end of the
 session.
 
+**What a default install actually produces.** The structural graph — files,
+symbols, tasks, and the edges between them — is captured from ordinary tool
+traffic with no configuration at all. Findings are produced two ways. At session
+end, `derive` reads evidence already on disk (command outcomes and exit codes,
+red-to-green transitions, corrections, re-read churn) and writes findings from
+it: no model call, no credential, nothing sent anywhere. And the active model
+records durable conclusions itself through `wiki_write`.
+
+The **model-based semantic harvest** is the third path, and the only one that
+needs something you do not already have. It is **not opt-in** —
+`TOKEN_OPTIMIZER_HARVEST=0` turns it *off* — but its real gate is a credential:
+with none it reports `off:no-key`, which is the state on CI, corporate machines,
+and subscription-only logins. Point `TOKEN_OPTIMIZER_HARVEST_ENDPOINT` at a
+local model and it runs **free and private, with nothing leaving the machine**.
+`npx token-optimizer-doctor` states which of these is live.
+
 ### Why this is not RAG
 
 | Classic RAG                                                    | This                                                                          |

@@ -96,6 +96,38 @@ describe('probeHarvest', () => {
     expect(check.detail).toMatch(/local/i);
   });
 
+  it('says plainly what a local endpoint buys, because it is the buried option', () => {
+    // This is the configuration a user would pick if they knew it existed: the
+    // only one under which the semantic harvest runs with no credential, no
+    // billing and no digest leaving the machine. The previous wording named it
+    // as "also enables fallback extraction", which states the mechanism and
+    // none of the three facts that decide whether somebody wants it.
+    envOnly({
+      TOKEN_OPTIMIZER_HARVEST_ENDPOINT:
+        'http://127.0.0.1:11434/v1/chat/completions',
+    });
+    const [check] = probeHarvest();
+
+    expect(check.detail).toMatch(/local model found/i);
+    expect(check.detail).toMatch(/free and private/i);
+    expect(check.detail).toMatch(/nothing leaves this machine/i);
+  });
+
+  it('names the trade on a machine with no credential, not just the absence', () => {
+    // The default state, so the text most users read. "Unavailable" alone tells
+    // them neither what they are missing, nor that local findings still
+    // accumulate, nor that the free option exists.
+    envOnly({});
+    const [check] = probeHarvest();
+
+    expect(check.detail).toMatch(/derive/i);
+    expect(check.detail).toMatch(/TOKEN_OPTIMIZER_HARVEST_ENDPOINT/);
+    expect(check.detail).toMatch(/free and private/i);
+    // What a credentialed harvest would send, stated where the user is deciding
+    // whether to configure one.
+    expect(check.detail).toMatch(/never file contents/i);
+  });
+
   it('passes when opted in with a credential', () => {
     envOnly({
       TOKEN_OPTIMIZER_HARVEST: 'true',
