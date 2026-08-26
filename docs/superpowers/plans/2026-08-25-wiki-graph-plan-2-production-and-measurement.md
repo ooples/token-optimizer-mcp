@@ -1180,9 +1180,18 @@ rather than 0%. The 2 MB read window, not the join, is the binding constraint: b
 have aged out, so the windowed denominator is 0. A measurement-bias defect was found in the
 first draft and is recorded -- keying "the join failed" on `episodeId` (which IS the session
 id) scored 2,559 tool calls of one session as failed joins where the truth is 0. Wired to a
-real reader (`renderAudit` -> `referenceNote`) so the allowlist stays at 5. Also outstanding:
-`wiki_query`'s `sessionId` is an optional input the model must volunteer, so the numerator is
-structurally weak until it records the ambient session. See `task-6-report.md`. |
+real reader (`renderAudit` -> `referenceNote`) so the allowlist stays at 5. **Fix round 1:**
+attribution no longer scopes by session -- `wiki_query`'s `sessionId` is an optional input the
+model must volunteer, and an unverifiable model-supplied id is not evidence, so a `query`
+naming key K credits any earlier injection of K and **time order is the only remaining
+guard**. The cost (two concurrent sessions on one repo can cross-attribute) is disclosed in
+`referenceNote` beside the figure, not just in the report; `unscopedReferences` was removed
+rather than zeroed. `referenceRate` now returns **`windowed`** and the note says the
+denominator can understate: unwindowing only the injection arm (which already has
+`BALANCE_KINDS`/`EVIDENCE_KINDS` access, unlike `query`) would make the arms cover different
+time spans and manufacture a pessimistic rate from the asymmetry, and unwindowing the query
+arm means widening `EVIDENCE_KINDS`, which two consumers read and which needs its own
+per-consumer comparison. 28 tests, 25/25 mutations killed. See `task-6-report.md`. |
 | 7 — Layer 2 | Not started. The heaviest task in the plan. |
 | 8 | Not started. Depends on 6 and 7. |
 | 9, 10 | Not started. |
