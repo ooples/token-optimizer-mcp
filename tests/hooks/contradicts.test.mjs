@@ -806,8 +806,23 @@ describe('the contradiction reason reaches a reader', () => {
   let dir4;
   let workspace;
   let anchorPath;
+  let priorHoldout;
 
   beforeEach(() => {
+    // PIN THE ARM, the same way `disclosing a dispute when a finding is served`
+    // above does. `forTouch` returns null for an anchor in the measurement
+    // holdout -- a withheld baseline is the point of the holdout, not a failure
+    // -- and the arm is drawn from a hash of the (random) workspace path, so a
+    // suite asserting on injected text without pinning is red a fraction of runs
+    // for the CORRECT reason. Observed: two failures in four full-suite runs,
+    // `expect(null).toContain('DISPUTED by claim-b')`.
+    //
+    // THE PRIOR VALUE IS RESTORED RATHER THAN DELETED, matching
+    // command-injection.test.mjs: another suite in the same worker may have set
+    // it, and `afterEach` runs even when the test threw, which is the `finally`
+    // this needs.
+    priorHoldout = process.env.TOKEN_OPTIMIZER_HOLDOUT;
+    process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
     dir4 = mkdtempSync(join(tmpdir(), 'contra-reason-'));
     workspace = mkdtempSync(join(tmpdir(), 'contra-reason-ws-'));
     anchorPath = canonicalPath(join(workspace, 'k.ts'));
@@ -823,6 +838,8 @@ describe('the contradiction reason reaches a reader', () => {
   });
 
   afterEach(() => {
+    if (priorHoldout === undefined) delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+    else process.env.TOKEN_OPTIMIZER_HOLDOUT = priorHoldout;
     rmSync(dir4, { recursive: true, force: true });
     rmSync(workspace, { recursive: true, force: true });
   });
