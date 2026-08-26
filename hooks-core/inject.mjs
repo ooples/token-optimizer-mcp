@@ -27,6 +27,7 @@ import { serve, diffLines } from './staleness.mjs';
 import { drainInvalidations } from './pending.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
+import { safeLine } from './safe-text.mjs';
 import { annotatedSkeleton } from './skeleton.mjs';
 import { substitutionBudget } from './metrics.mjs';
 import { assessFindings } from './utility.mjs';
@@ -732,7 +733,11 @@ export function forRepeatedAct(
       // The count is the whole message. "You have done this three times" is a
       // fact about this session that the model cannot see for itself, and it is
       // what makes a repeated claim land differently from the first delivery.
-      return `You have run ${REPEAT_THRESHOLD} ${cls} steps this session. Worth re-reading:\n- [${node.type || 'finding'}] ${node.claim}`;
+      // FLATTENED HERE, because the shared tier reads graph nodes directly
+      // rather than through serve(). This is the surface where it matters most:
+      // the claim was harvested in ANOTHER repository and is being injected into
+      // this one, so a forged line crosses a project boundary.
+      return `You have run ${REPEAT_THRESHOLD} ${cls} steps this session. Worth re-reading:\n- [${safeLine(node.type) || 'finding'}] ${safeLine(node.claim)}`;
     }
     return null;
   } catch {
@@ -890,7 +895,9 @@ export function forSharedCommand(
     return `From other projects on this machine:\n${kept
       .map((f) => {
         const from = f.sourceProject ? basename(f.sourceProject) : 'another project';
-        return `- [${f.type || 'finding'}] ${f.claim} (learned in ${from})`;
+        // Same bypass, same reason: assessFindings filters raw nodes, it does
+        // not serve them, so the convention is applied at the render site.
+        return `- [${safeLine(f.type) || 'finding'}] ${safeLine(f.claim)} (learned in ${safeLine(from)})`;
       })
       .join('\n')}`;
   } catch {

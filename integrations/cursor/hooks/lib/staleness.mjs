@@ -57,6 +57,7 @@ import { putNode, putEdge, contentHash, nodeId, load } from './wiki.mjs';
 import { hasOutstandingContradiction } from './curate.mjs';
 import { extractSymbols, spanText, symbolKey, extractImports } from './symbols.mjs';
 import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
+import { safeRecord } from './safe-text.mjs';
 
 /** Reads a path in whichever spelling resolves, or throws if none do. */
 function readAnySpelling(path) {
@@ -883,7 +884,15 @@ export function serve(graph, findings, { dir = null } = {}) {
       ...derivationCheck(graph, record),
     });
   }
-  return served;
+  // FLATTENED ON THE WAY OUT, once, for both push sites and any added later.
+  //
+  // This function's contract, stated at the top, is that it is the only thing
+  // that hands a finding to a model -- so it is the only place that has to hold
+  // the line about what those findings may contain. A stored claim or dispute
+  // reason carrying a newline writes its own lines inside the injected block,
+  // and the model cannot tell a forged line from one the renderer wrote. See
+  // safe-text.mjs for what is flattened, and for why `diff` is not.
+  return served.map(safeRecord);
 }
 
 /**

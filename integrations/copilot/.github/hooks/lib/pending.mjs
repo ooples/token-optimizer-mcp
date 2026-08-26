@@ -34,6 +34,7 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -53,6 +54,126 @@ const queuePath = (dir) => join(dir, 'pending-invalidation.jsonl');
  * claim private to the drainer that won the rename.
  */
 const claimPath = (dir) => join(dir, `pending-invalidation.claim.${process.pid}.jsonl`);
+
+/** Matches any drainer's claim file and captures the pid that owns it. */
+const CLAIM_NAME = /^pending-invalidation\.claim\.(\d+)\.jsonl$/;
+
+/**
+ * After this long, a claim is treated as stranded whatever its pid says.
+ *
+ * PID REUSE IS THE REASON. A drainer killed mid-claim leaves a file named after
+ * a pid the operating system is free to hand to something else, and once it
+ * does, a liveness check answers "alive" forever and the records inside are
+ * never recovered. An hour is several orders of magnitude longer than a drain,
+ * which takes milliseconds, so nothing legitimate is still holding one.
+ */
+const STRANDED_AFTER_MS = 60 * 60 * 1000;
+
+/**
+ * Claim files adopted in a single drain.
+ *
+ * A hook runs on the critical path of a tool call. If a directory has somehow
+ * accumulated hundreds of strays, recovering them all at once would turn one
+ * tool call into a long job -- and the rest are still there for the next drain,
+ * because adoption deletes only what it has read.
+ */
+const MAX_ADOPTED = 20;
+
+/** Is this pid a live process? */
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    // Signal 0 performs the permission and existence checks without delivering
+    // anything.
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists and belongs to somebody else, which is
+    // still alive. Anything else -- ESRCH above all -- means it is gone.
+    return error?.code === 'EPERM';
+  }
+}
+
+/** Parses a queue or claim file into records, tolerating a torn last line. */
+function readRecords(path) {
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        // A torn append costs one record, not the queue.
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Recovers claim files whose drainer died before it could read them.
+ *
+ * THE RESIDUAL THIS CLOSES. Claiming the queue by renaming it to a per-pid file
+ * fixed the original defect -- a concurrent append deleted unread -- but a
+ * drainer killed BETWEEN the rename and the read strands its claim, and the
+ * records inside are lost. The lazy staleness path cannot find them later
+ * either: `indexFile` refreshes an anchor's hash to the bytes just read, so for
+ * a file the session itself edited there is nothing left to compare against.
+ * Those invalidations were permanently missed, and the stray files accumulated
+ * with nothing reading them.
+ *
+ * SAFE BECAUSE RE-APPLICATION IS IDEMPOTENT. Marking a finding stale twice is
+ * marking it stale, so the cost of adopting a claim whose owner turns out to be
+ * alive is a repeated write, while the cost of not adopting is a permanently
+ * missed invalidation. The asymmetry is why the age fallback above is allowed
+ * to be wrong in the permissive direction.
+ *
+ * OUR OWN PID IS ALWAYS ADOPTED. A file under this process's own name can only
+ * be a previous drain in this process that died, and the old behaviour was to
+ * overwrite it with the next rename -- losing exactly the records this function
+ * exists to recover.
+ */
+function adoptStrandedClaims(dir) {
+  const records = [];
+  let entries;
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return records;
+  }
+
+  let adopted = 0;
+  for (const entry of entries) {
+    if (adopted >= MAX_ADOPTED) break;
+    const match = CLAIM_NAME.exec(entry);
+    if (!match) continue;
+
+    const pid = Number(match[1]);
+    const path = join(dir, entry);
+    if (pid !== process.pid && isPidAlive(pid)) {
+      let age = 0;
+      try {
+        age = Date.now() - statSync(path).mtimeMs;
+      } catch {
+        continue;
+      }
+      if (age < STRANDED_AFTER_MS) continue;
+    }
+
+    try {
+      records.push(...readRecords(path));
+      adopted += 1;
+      // DELETED ONLY AFTER READING, which is the same rule the drain below
+      // follows: nothing is removed until its contents are in hand.
+      rmSync(path, { force: true });
+    } catch {
+      // Unreadable or held open. Left in place for the next drain rather than
+      // deleted, because a file nobody reads again is the lost record this
+      // whole mechanism exists to prevent.
+    }
+  }
+  return records;
+}
 
 /**
  * Largest before/after side kept in a queue record.
@@ -324,6 +445,37 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
 }
 
 /**
+ * Applies queued invalidations to the graph, returning how many were marked.
+ *
+ * EXTRACTED so the three exits from `drainInvalidations` share one path. Two of
+ * them now carry adopted records -- the empty-queue exit and the failed-rename
+ * exit -- and both previously returned 0. Returning early with records already
+ * read out of a file that has since been deleted would lose them for good,
+ * which is the exact defect adoption exists to close.
+ */
+function applyRecords(dir, graph, records) {
+  let marked = 0;
+  for (const record of records) {
+    if (!record || typeof record.path !== 'string' || !record.path) continue;
+    const diffable =
+      typeof record.before === 'string' && typeof record.after === 'string';
+    try {
+      // TWO GRADES, ONE QUEUE. A record carrying both sides gets a real diff and
+      // symbol-precise marking; one carrying only a path gets the hash
+      // comparison -- the same comparison the lazy path makes, and one that is
+      // only meaningful HERE, before `indexFile` refreshes the anchor.
+      const result = diffable
+        ? invalidateOnWrite(dir, graph, record.path, record.before, record.after)
+        : invalidateChangedAnchors(dir, graph, record.path);
+      marked += Array.isArray(result) ? result.length : 0;
+    } catch {
+      // One bad record must not stop the rest, and must not stop the tool call.
+    }
+  }
+  return marked;
+}
+
+/**
  * Applies every queued invalidation and clears the queue.
  *
  * Returns the number of findings marked, so the caller knows whether its
@@ -351,36 +503,39 @@ export function queueInvalidation(dir, { path, before, after, at } = {}) {
  * for the rest of the session costs more than it can ever recover, and the claim
  * file is deleted whether the loop marked anything or threw.
  *
+ * AND A DRAINER KILLED BETWEEN THE RENAME AND THE READ STRANDS ITS CLAIM, which
+ * the rename alone does not solve. That was the residual left by the fix above:
+ * the records inside such a file are lost unread, the lazy path is structurally
+ * blind to them for the reason stated three paragraphs up, and the stray files
+ * accumulate with nothing reading them. `adoptStrandedClaims` recovers them at
+ * the head of every drain, before the queue is even checked -- because a
+ * stranded claim has nothing to do with whether there is new work now.
+ *
  * FAIL-OPEN THROUGHOUT. A rename that loses a race, or fails for any other
- * reason, returns 0 and leaves the queue for the next drain; it never throws
- * into a hook.
+ * reason, applies whatever was adopted, leaves the queue for the next drain,
+ * and never throws into a hook.
  */
 export function drainInvalidations(dir, graph) {
-  let records;
+  // ADOPTED FIRST, AND UNCONDITIONALLY. A claim left by a drainer that died
+  // between its rename and its read is recovered here -- including one under
+  // this process's own pid, which the rename below used to overwrite.
+  //
+  // BEFORE THE QUEUE IS EVEN CHECKED, because a stranded claim has nothing to
+  // do with whether a queue exists now. Recovering it only when there happened
+  // to be new work would leave it stranded for as long as the project stayed
+  // quiet, which is exactly the state a killed drain tends to leave behind.
+  let records = adoptStrandedClaims(dir);
+
   let claim;
   try {
     const file = queuePath(dir);
-    if (!existsSync(file)) return 0;
+    if (!existsSync(file)) return applyRecords(dir, graph, records);
     claim = claimPath(dir);
-    // A LEFTOVER CLAIM FROM A KILLED DRAIN IS OVERWRITTEN, not merged: rename
-    // onto an existing path replaces it. The pid in the name means the only way
-    // to hit that is this same pid having died mid-drain, whose records were
-    // already being applied when it went -- and re-applying is idempotent, so
-    // losing them is the cheaper of the two errors. Not doing the rename at all
-    // would strand the live queue forever.
+    // The rename can no longer clobber a leftover claim: adoption above has
+    // already read and removed any file under this pid's name, so the only
+    // thing this can replace is a file that no longer exists.
     renameSync(file, claim);
-    records = readFileSync(claim, 'utf8')
-      .split('\n')
-      .filter((line) => line.trim())
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          // A torn append costs one record, not the queue.
-          return null;
-        }
-      })
-      .filter(Boolean);
+    records = records.concat(readRecords(claim));
   } catch {
     // The rename lost a race, or the claim could not be read. Nothing is deleted
     // unread and the hook proceeds. If the claim was taken and then could not be
@@ -394,27 +549,13 @@ export function drainInvalidations(dir, graph) {
     } catch {
       // Best effort only. A hook must not fail because bookkeeping did.
     }
-    return 0;
+    // Anything already ADOPTED is still applied. Those records came out of a
+    // file that has already been deleted, so returning here would lose them
+    // for good -- which is the defect this whole function is being fixed for.
+    return applyRecords(dir, graph, records);
   }
 
-  let marked = 0;
-  for (const record of records) {
-    if (!record || typeof record.path !== 'string' || !record.path) continue;
-    const diffable =
-      typeof record.before === 'string' && typeof record.after === 'string';
-    try {
-      // TWO GRADES, ONE QUEUE. A record carrying both sides gets a real diff and
-      // symbol-precise marking; one carrying only a path gets the hash
-      // comparison -- the same comparison the lazy path makes, and one that is
-      // only meaningful HERE, before `indexFile` refreshes the anchor.
-      const result = diffable
-        ? invalidateOnWrite(dir, graph, record.path, record.before, record.after)
-        : invalidateChangedAnchors(dir, graph, record.path);
-      marked += Array.isArray(result) ? result.length : 0;
-    } catch {
-      // One bad record must not stop the rest, and must not stop the tool call.
-    }
-  }
+  const marked = applyRecords(dir, graph, records);
 
   try {
     // THE CLAIM, NOT THE QUEUE. Deleting `queuePath` here is what dropped a
