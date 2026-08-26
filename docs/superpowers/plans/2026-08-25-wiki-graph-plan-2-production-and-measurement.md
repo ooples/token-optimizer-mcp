@@ -1038,3 +1038,124 @@ nothing measured recall. Now it does."
 | No price on an estimate | the estimated line in `get_optimization_report` | no `$` |
 | Recall measured | `recallProbe(dir).rate` | a number, or null with a reason |
 | Allowlist shrunk | `grep -c "^  \['" tests/hooks/reachability.test.mjs` | 4 (from 9) |
+
+---
+
+# Execution state and corrections
+
+**Read this before starting or resuming. It is authoritative over the task text above,
+which was written before Plan 1 was executed and is wrong in the places named here.**
+
+Plan 1 shipped as **PR #315** (36 commits). Plan 2 runs on `feat/close-wiki-graph-gaps-plan2`,
+stacked on Plan 1 because it imports `hooks-core/lexical.mjs`, `hooks-core/pending.mjs` and the
+injection join — it cannot compile against `master` until #315 merges.
+
+## Where execution stopped
+
+| Task | State |
+|---|---|
+| 1 — Redaction | **Complete.** `hooks-core/redact.mjs`, 10 tests. |
+| 2 — Extend `tool-outcome` | **Complete through fix round 2.** `output` + `exit` on the event, `isError` read by `toolSucceeded` and `mutationSucceeded`. |
+| 3b — `rereadsByAnchor` | Not started. **Run before Task 3** (see ruling). |
+| 3 — The four extractors | Not started. Depends on 2 and 3b. |
+| 4, 5 | Not started. |
+| 6 — Layer 1 | Not started. |
+| 7 — Layer 2 | Not started. The heaviest task in the plan. |
+| 8 | Not started. Depends on 6 and 7. |
+| 9, 10 | Not started. |
+
+## Corrections to the task text above
+
+1. **The harvest is OPT-OUT, not opt-in.** `harvestMode()` in `hooks-core/harvest.mjs` was
+   flipped by #296. `TOKEN_OPTIMIZER_HARVEST` now turns it *off*; the real default gate is
+   credential availability (`off:no-key`). So this plan's framing of `derive.mjs` as
+   necessary "because the harvest is opt-in" is wrong. The correct framing: **`derive.mjs`
+   needs no credential and sends nothing off the machine**, so it is the only finding
+   producer on a machine without an API key — CI, corporate machines, subscription-only
+   auth. Evidence it still matters: after Plan 1 this repository's own graph held 2,965
+   symbol / 904 file / 128 task nodes and **one** finding, because this machine has no key.
+
+2. **`exit` and `output` now exist on `tool-outcome`** (Task 2). They did not when this plan
+   was written. `output` is captured **only on failure**, gated on `outcome.success !== true`
+   so an unclassified outcome keeps its text; it is redacted and capped at 4 KB at the
+   boundary inside `recordToolOutcome`. `exit` is `null` unless the client reports an integer.
+   MCP tools return no exit code, so `exitFrom` returns null for them by design.
+
+3. **`derive.mjs` must pass an authoritative `taskId`.** The `answers` edge fires nowhere on a
+   default install because its only producer is credential-gated. `derive.mjs` runs in the
+   Stop hook where a real session id exists, so it is the producer that finally makes
+   `answers` live by default. `taskForAnchors` **requires** an authoritative id and returns
+   null without one — an unverified string will not work.
+
+4. **Task 3's churn detector consumes `rereadsByAnchor`** (Task 3b), not `rereadWaste().worst`,
+   which does not exist.
+
+5. **Task 2 extends the existing `tool-outcome` event** rather than adding a `kind:'result'`.
+
+## Plan 1 surfaces this plan will collide with
+
+Plan 1 modified every file Plan 2 touches. Read before editing:
+
+- **`hooks-core/staleness.mjs`** — `serve()` emits three disclosures (staleness, dispute,
+  derivation), clears stale flags automatically, and **writes to the graph** on a verified
+  match (`reindexVerifiedAnchors`). `claimTimeVerdict` is the single shared evidence test;
+  do not duplicate it.
+- **`hooks-core/inject.mjs`** — `withPendingApplied` drains at four entry points; `disputeNote`
+  and `derivationNote` render into the head; `sessionContext` orders blocks via `cacheOrdered`.
+  Layer 2 must decide what to withhold *inside* this machinery.
+- **`hooks-core/metrics.mjs`** — `recordToolOutcome` already joins each outcome to its
+  injection with `injectionId` / `findingIds` / `joinMethod` (preferring an exact
+  tool-call-id match). **Layers 1 and 2 build on that join; do not invent another.**
+  Also gained `evidenceTruncated`.
+- **`hooks-core/decide.mjs`** — `normalizeTool` resolves MCP-prefixed names, so this project's
+  own tools now reach the post-tool path; `isReplacementTool` gates the loop hazard;
+  `readCostBytes` returns 0 for a replacement.
+- **New modules:** `hooks-core/pending.mjs`, `hooks-core/lexical.mjs`, `hooks-core/redact.mjs`.
+
+## Rulings that bind future tasks
+
+- **Run Task 3b before Task 3.** Task 3's churn detector consumes what 3b creates, so the
+  plan's numbering would have Task 3 importing something that does not exist. *Cost if wrong:
+  none; only the execution order changes.*
+- **If Task 9 finds no turn-arrival signal, record observations without letting them change
+  the keep-warm decision, and say so.** Do not invent a signal. *Cost if wrong: keep-warm
+  still decides on expected value, with the data visible for a later fix.*
+- **Every task brief restates the corrections above rather than assuming they were read.**
+  Fresh agents per task cannot know them, and Plan 1 lost a round to exactly this. *Cost if
+  wrong: a few extra lines per dispatch.*
+- **Capture `output` only on failure** (overrides the Task 2 text). A successful `smart_read`
+  would otherwise deposit up to 4 KB of file content into the evidence log on every call —
+  megabytes per session, and a privacy surface, for a consumer that does not exist. *Cost if
+  wrong: a future detector wanting success output must re-add it.*
+- **`outputFrom` deliberately still runs on successful calls** with its result discarded by
+  the boundary gate. One gate at the boundary beats a defensive second one that can drift.
+
+## The measurement-bias class — check every task against it
+
+Three defects of one shape were found across these plans, and all three would have inflated
+this project's own numbers **in its own favour**:
+
+- `readCostBytes` would have charged the A/B holdout a whole file for a call returning a diff.
+- `toolSucceeded` ignored MCP `isError`, so every failed `smart_edit` recorded as a success.
+- `mutationSucceeded` did the same, inflating edit counts and harvest pressure on six clients.
+
+None was the kind of defect a test suite notices: the code works and the *number* lies. Tasks
+6, 7 and 8 are entirely measurement, so this is the class to hunt there.
+
+**A fourth instance is known and unfixed**, found while closing the third: `mutationSucceeded`'s
+status read omits the `postToolUse` envelope, so `postToolUse: { status: 'error' }` falls through
+to the allowlist and counts as a success. It changes no verdict today — which is why it was not
+folded into Task 2 rather than widening a shared classifier silently — but it is the same class
+one envelope out, and it wants its own change with its own per-client comparison.
+
+## The verification bar established on Plan 1
+
+Every task on Plan 1 produced at least one test that passed for the wrong reason, and **every
+one was found by mutating rather than reading**. So for each test: mutate what it targets,
+confirm that test *and only that test* fails, restore, and record the matrix. Also confirm no
+pre-existing kill set *shrank* — adding tests to an existing mechanism can silently stop an
+older one discriminating.
+
+A shared-classification change needs a **per-client verdict comparison**, not an assertion
+that nothing changed. Task 2 set the standard: 1,088 verdicts across 16 clients, with every
+change accounted for.

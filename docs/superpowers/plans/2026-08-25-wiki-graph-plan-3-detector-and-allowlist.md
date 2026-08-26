@@ -608,3 +608,88 @@ Never `gh pr create` directly — it bypasses the validation pipeline.
 | Allowlist has no backlog | `grep -c "^  \['" tests/hooks/reachability.test.mjs` | 1 (`policyText`) |
 | Census runs | `npm run wiki:census` | every row non-zero after a session |
 | Full suite green | `npm run build && npx jest && npm run sync:hooks:check` | PASS |
+
+---
+
+# Execution state and corrections
+
+**Read this before starting. It is authoritative over the task text above.**
+
+Plan 3 has **not started**. It runs last: its allowlist-emptying task is incomplete by
+construction until Plans 1 and 2 have removed their entries.
+
+## The allowlist, and who owns what
+
+Plan 1 took it from **16 to 7**. The remaining seven:
+
+| Entry | Owner |
+|---|---|
+| `selectForConsolidation` | Plan 2 Task 4 (wire) |
+| `consolidationRatio` | Plan 2 Task 8 (wire into the balance sheet) |
+| `contentAnchor` | Plan 2 Task 4 (delete — the idea is preserved as issue #319) |
+| `recordRefresh` | Plan 2 Task 9 (wire) |
+| `recordRefreshOutcome` | Plan 2 Task 9 (wire) |
+| `renderStanding` | **Plan 3** (wire into the audit surface) |
+| `manifestSize` | **Plan 3** (wire into doctor output) |
+
+So Plan 3 inherits two entries and must finish at **zero backlog entries**. `policyText` was
+removed during Plan 1 — the ratchet built there found it was genuinely wired, along with
+`forTouch`, so neither needs an exemption any more.
+
+## Five holes in the guard, all found by USING it during Plan 1
+
+The plan text above describes the first two. All five are required work:
+
+1. **Comments count as call sites.** `usedInShippedCode` word-matches over text.
+   `invalidateOnWrite` had 1 raw reference and 0 code references — the reference was prose.
+2. **Exported consts are invisible.** Only `export function` is collected, so 38 declarations
+   go unchecked. `contradicts` and `answers` sat in `EDGE_KINDS` with zero write sites.
+3. **An `import` specifier counts as a use.** Proven by mutation: dropping the `cacheOrdered`
+   *call* while keeping its import left the guard green; only dropping the import too failed
+   it. "Imported" is not "called".
+4. **Unread record *fields* are invisible.** The scan checks exports, not fields.
+   `contradictionReason` — up to 400 characters of human explanation — was written on every
+   `contradict` call and read by nothing, with the guard green throughout. Needs a
+   written-fields-versus-read-fields census. Filed as issue #318 for the instance;
+   the *class* is Plan 3's.
+5. **Tests asserting on holdout-consulting entry points must pin the arm.** `forTouch`,
+   `forCommand`, `forSharedCommand` and `substitutionFor` consult `inHoldout`, so a test
+   asserting on their output fails intermittently when the anchor lands in the withheld arm.
+   The convention is copy-pasted per suite in three variants and nothing enforces it — one
+   newly-added test on Plan 1 omitted it and produced exactly that flake. A guard asserting
+   every such suite pins the arm would close it.
+
+Holes 3, 4 and 5 are additions to the plan text above; treat them as required, not optional.
+
+## Why this plan is load-bearing
+
+Round 1 of this effort built the detector, it found ~21 instances of correct-but-uncalled code,
+four were wired, and **sixteen were moved to an allowlist labelled `TRIAGE BACKLOG`** — in a
+file whose own documentation says a capability with no consumer should be deleted and written
+again the day it is needed. An accurate written description of a defect felt like resolution.
+
+That is the disease this plan treats. Every hole above was found by *using* the guard during
+Plan 1 rather than by reading it, which is the strongest argument for finishing it: the guard
+is the only thing that makes the other two plans' work stay wired.
+
+## The measurement-bias class
+
+Four defects of one shape were found across Plans 1 and 2, all of which would have inflated
+this project's own numbers **in its own favour**: `readCostBytes` charging the A/B holdout a
+whole file for a call returning a diff; `toolSucceeded` and `mutationSucceeded` each ignoring
+MCP `isError` so failed optimizer-tool calls recorded as successes; and `mutationSucceeded`'s
+status read omitting the `postToolUse` envelope (known, unfixed, changes no verdict today).
+
+None is the kind of defect a test suite notices — the code works and the *number* lies. A
+census of written-versus-read fields (hole 4) is the closest mechanical guard against it.
+
+## The verification bar
+
+Every task across Plans 1 and 2 produced at least one test that passed for the wrong reason,
+and **every one was found by mutating rather than reading**. For each test: mutate what it
+targets, confirm that test *and only that test* fails, restore, record the matrix. Also confirm
+no pre-existing kill set *shrank* — adding tests to an existing mechanism can silently stop an
+older one discriminating.
+
+This plan's own tests are the guard itself, so a vacuous test here disables the thing that
+catches everything else. Mutation-check them hardest.
