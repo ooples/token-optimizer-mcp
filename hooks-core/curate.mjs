@@ -122,7 +122,17 @@ export function correct(
   const replacementKey = `${key}-c${Date.now().toString(36)}`;
 
   const edges = [{ edge: 'supersedes', to: originalId }];
-  // The correction inherits the original's anchors, so it can go stale too.
+  // The correction inherits the original's anchors, so it can go stale too --
+  // but it inherits NOTHING ELSE, and that is deliberate rather than incidental.
+  // The node written below is built field by field from `existing` instead of
+  // spreading it, which is what keeps the staleness fields (`stale`,
+  // `staleReason`, `diff`) off the successor: a correction is re-derived
+  // against the current code by definition, so being born carrying its
+  // predecessor's invalidation would discount it the moment it existed --
+  // `disclose.mjs` skips a stale finding outright and `utility.mjs` penalises
+  // one by 160. Any future edit here that reaches for `...existing` to pick up
+  // one more field re-introduces that, since `putNode` writes what it is handed
+  // wholesale; `tests/hooks/stale-clearing.test.mjs` is the guard.
   for (const edge of graph.edges) {
     if (edge.edge === 'derived_from' && edge.from === originalId) {
       edges.push({ edge: 'derived_from', to: edge.to });
@@ -242,13 +252,38 @@ export function contradict(dir, { key, byKey, reason }) {
  * It also matches `audit()`, the reader that has always been here: it puts both
  * `from` and `to` in its `contradicted` bucket, because "until one looks, BOTH
  * are being served".
+ *
+ * A RETIRED COUNTERPART DOES NOT COUNT, and that sentence quoted just above is
+ * the reason. This read edges ONLY, so retiring one end of a contradiction left
+ * the survivor gated against confidence promotion forever and served with a
+ * DISPUTED note naming a key `serve` refuses to hand anybody -- `serve`,
+ * `activeFindings`, `findingsFor` and `sessionIndex` all drop a retired
+ * finding. A retired claim is served to NOBODY, so "BOTH are being served" is
+ * false and the premise of the gate is gone: only one claim is in play, and
+ * there is nothing left to choose between. Retiring one end IS the person
+ * looking that this gate was waiting for -- so the edge counts as open only
+ * while NEITHER end is retired, answered the same way from both directions.
+ *
+ * AN UNRESOLVABLE END STILL COUNTS. An edge whose other side names no node
+ * proves nothing about whether that claim was withdrawn, and the conservative
+ * reading -- still disputed -- is the one that cannot promote a claim nobody
+ * adjudicated.
  */
 export function hasOutstandingContradiction(graph, key) {
   const node = findingByKey(graph, key);
-  if (!node) return false;
-  return graph.edges.some(
-    (e) => e.edge === 'contradicts' && (e.to === node.id || e.from === node.id)
-  );
+  // A withdrawn claim is not in a dispute either: a dispute needs two claims in
+  // play, and this one has been taken out of play. Without this the RETIRED end
+  // still reported an open disagreement, which is the same defect from the other
+  // side -- and the answer has to agree from both directions, since the gate is
+  // symmetric on purpose.
+  if (!node || node.retired) return false;
+  return graph.edges.some((e) => {
+    if (e.edge !== 'contradicts') return false;
+    const otherId = e.from === node.id ? e.to : e.to === node.id ? e.from : null;
+    if (!otherId) return false;
+    const other = graph.nodes.get(otherId);
+    return !other || !other.retired;
+  });
 }
 
 /**
@@ -332,11 +367,24 @@ export function audit(graph) {
       .map((e) => e.from)
   );
 
+  // THE SAME DEFINITION OF AN OPEN DISPUTE as hasOutstandingContradiction, and
+  // it has to be: that function's own comment claims it "matches audit()", and
+  // two rankings that disagree about what needs a human is worse than one that
+  // is wrong. A retired counterpart is a resolved dispute -- the retired claim
+  // is served to nobody -- so the survivor is not one of two claims in play and
+  // does not belong in the bucket of things needing a person to look.
+  //
+  // One pass, not a call per finding: this is a dashboard read over the whole
+  // graph, and the obvious rewrite is O(findings x edges).
   const contradicted = new Set();
   for (const edge of graph.edges) {
     if (edge.edge !== 'contradicts') continue;
-    contradicted.add(edge.from);
-    contradicted.add(edge.to);
+    const from = graph.nodes.get(edge.from);
+    const to = graph.nodes.get(edge.to);
+    // An end that resolves to nothing cannot be shown retired, so it still
+    // counts against the other end.
+    if (!to || !to.retired) contradicted.add(edge.from);
+    if (!from || !from.retired) contradicted.add(edge.to);
   }
 
   return {

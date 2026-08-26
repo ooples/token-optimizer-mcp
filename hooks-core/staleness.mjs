@@ -51,7 +51,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import { putNode, putEdge, contentHash, nodeId } from './wiki.mjs';
+import { putNode, putEdge, contentHash, nodeId, load } from './wiki.mjs';
 import { hasOutstandingContradiction } from './curate.mjs';
 import { extractSymbols, spanText, symbolKey, extractImports } from './symbols.mjs';
 import { canonicalPath, resolvableCandidates, isFsSafePath } from './paths.mjs';
@@ -486,7 +486,16 @@ function disputeOf(graph, finding) {
     // An edge end that resolves to nothing names nothing. The dispute is still
     // disclosed -- the gate above already established it -- but without a key
     // the reader cannot be pointed anywhere, and inventing one would be worse.
-    if (other && typeof other.key === 'string' && !keys.includes(other.key)) keys.push(other.key);
+    //
+    // A RETIRED END IS NOT NAMED EITHER, for a sharper reason: the disclosure
+    // tells the reader to `wiki_query` that key, and `serve` refuses to return
+    // a retired finding at all. Naming it points them at a claim they cannot
+    // fetch. `hasOutstandingContradiction` above already declines to open the
+    // gate when EVERY disputant is retired; this is the same rule applied to
+    // each name, so a live disputant is still reported alongside a withdrawn one.
+    if (other && !other.retired && typeof other.key === 'string' && !keys.includes(other.key)) {
+      keys.push(other.key);
+    }
   }
 
   return { contradicted: true, ...(keys.length ? { contradictedBy: keys.join(', ') } : {}) };
@@ -868,6 +877,151 @@ export function invalidateChangedAnchors(dir, graph, rawPath) {
   // retrieval re-reports a change that has already been accounted for.
   if (source !== null) indexFile(dir, path, source);
   return marked;
+}
+
+/**
+ * The current content hash of an anchor, read from disk.
+ *
+ * DELIBERATELY NOT `checkAnchor`, and the difference is the whole of this
+ * clearing rule. `checkAnchor` compares disk against the anchor NODE's stored
+ * hash, and both eager paths call `indexFile` immediately after marking --
+ * which re-points that hash at the very bytes that caused the mark. So
+ * `checkAnchor` answers "fresh" for exactly the finding it just marked stale,
+ * and a clearing rule built on it would clear every flag it was handed,
+ * unconditionally. This returns a bare hash instead, so the caller can compare
+ * it against the FROZEN claim-time hash rather than against a value the marking
+ * path itself moved.
+ *
+ * Returns null when no content can be read at all -- a deleted file, or a
+ * symbol that no longer exists. A caller must treat that as "changed", never as
+ * "unknown": a claim about content that is gone certainly does not match the
+ * content it was made against.
+ */
+function anchorHashNow(anchor) {
+  const path = anchor.kind === 'symbol' ? anchor.file : anchor.key;
+  let source;
+  try {
+    source = readAnySpelling(path);
+  } catch {
+    return null;
+  }
+  if (anchor.kind !== 'symbol') return hash(source);
+
+  // By NAME, like checkAnchor: line numbers shift whenever anything above is
+  // edited, and re-locating by line would report a symbol as moved when only an
+  // unrelated insert happened above it.
+  const current = extractSymbols(path, source).find((s) => s.name === anchor.name);
+  if (!current) return null;
+  return hash(spanText(source, current));
+}
+
+/**
+ * Removes the staleness fields from a finding. Returns whether one was found.
+ *
+ * THE WHOLE NODE IS REWRITTEN, because `putNode` does not merge: it writes a
+ * full record from what it is handed and `load` replaces the node wholesale.
+ * Writing `{ kind, key, stale: false }` would blank the claim, the confidence
+ * and the provenance -- an overwrite by another name, and the same trap
+ * `contradict` documents. So the fields are destructured AWAY and everything
+ * else is spread back: no deletion primitive is needed, and the append-only rule
+ * is respected.
+ *
+ * `staleEvidence` is stripped as well, even though no writer stores it. It is
+ * added by `serve` to the object it hands out, so anything that ever writes a
+ * served finding back would carry it in -- at which point a cleared finding
+ * would still be advertising the quality of the evidence for a flag it no longer
+ * has.
+ *
+ * A PRIMITIVE, NOT A ROUTE. Nothing outside this module calls it: the only
+ * shipping caller is `reverify` below, which establishes the evidence first.
+ * Exposing it to a hook, a tool argument or an HTTP action would be a way to
+ * turn a stale finding fresh on request, which is exactly what must not exist.
+ */
+export function clearStale(dir, key) {
+  const node = load(dir).nodes.get(nodeId('finding', key));
+  if (!node || node.kind !== 'finding') return false;
+  const { stale, staleReason, diff, staleEvidence, ...rest } = node;
+  // Nothing to clear is a success, not a write: an unconditional putNode here
+  // would append a duplicate record to the log on every no-op call.
+  if (stale === undefined && staleReason === undefined
+    && diff === undefined && staleEvidence === undefined) return true;
+  putNode(dir, { ...rest, kind: 'finding', key: node.key });
+  return true;
+}
+
+/**
+ * Clears a stale flag when, and only when, the evidence for it is gone.
+ *
+ * WHY THIS HAS TO EXIST. Nothing in this codebase ever cleared a `stale` flag.
+ * That was harmless while eager invalidation was dead code; it fires now, so
+ * every finding on an edited file becomes permanently stale -- and permanently
+ * discounted, since `disclose.mjs` skips a stale finding outright and
+ * `utility.mjs` penalises one by 160. The graph degrades toward all-stale, and
+ * the eager path is over-eager on top of that: `invalidateOnWrite` marks every
+ * finding anchored to a FILE node on any observed write to that file, whether or
+ * not the bytes moved.
+ *
+ * WHAT COUNTS AS EVIDENCE, AND WHY IT IS NOT NEGOTIABLE. The only trustworthy
+ * record of what a claim was made against is `derivation.anchors` -- the hash
+ * each anchor carried at the moment the finding was written, frozen into the
+ * finding itself by `harvest-write.mjs`. Disk is re-hashed here and compared
+ * against that. If every anchor matches, the content IS what the claim was
+ * derived from: a revert, or a write that never moved the anchored bytes. The
+ * flag comes off. Anything else leaves it exactly as it was.
+ *
+ * IT IS NOT A LAUNDERING ROUTE, and that is a property of the comparison rather
+ * than of who is allowed to call it. A caller cannot make a finding fresh by
+ * asking; they can only make it fresh by putting the content back. There is no
+ * argument, no force flag and no second path -- and `clearStale` above, the one
+ * function that clears without checking, has no caller but this one.
+ *
+ * NO RECORD MEANS UNKNOWN, NEVER CLEAR. A finding with no `derivation.anchors`
+ * -- every one written before that record existed, and every hand-curated one --
+ * has nothing to compare disk against. That is an absence of evidence, and
+ * resolving it to "clear it" would hand back the laundering route through the
+ * side door. It reports `unknown` and changes nothing; re-recording the claim
+ * against the current code (`curate.correct`) is the way forward for those.
+ *
+ * DELIBERATELY NOT AUTOMATIC. This reads every anchor off disk, so running it on
+ * the serve path would put N file reads inside injection -- and, worse, it would
+ * silently un-mark findings nobody asked about. Staleness is disclosed to a
+ * reader who then decides; clearing is an explicit act.
+ */
+export function reverify(dir, key) {
+  const graph = load(dir);
+  const finding = graph.nodes.get(nodeId('finding', key));
+  if (!finding || finding.kind !== 'finding') return 'unknown';
+  // Idempotent: the postcondition -- no stale flag on this finding -- already
+  // holds, and reporting anything else would make a caller retry forever.
+  if (!finding.stale) return 'cleared';
+
+  const recorded = finding.derivation && finding.derivation.anchors;
+  if (!recorded || typeof recorded !== 'object') return 'unknown';
+
+  const anchorIds = new Set(
+    graph.edges
+      .filter((e) => e.edge === 'derived_from' && e.from === finding.id)
+      .map((e) => e.to)
+  );
+  // An unanchored finding cannot be checked against anything, which is the
+  // un-invalidatable shape the anchor discipline exists to refuse. It is equally
+  // un-VERIFIABLE, so it is reported as such rather than cleared.
+  if (!anchorIds.size) return 'unknown';
+
+  for (const id of anchorIds) {
+    const expected = recorded[id];
+    const node = graph.nodes.get(id);
+    // An anchor this finding never recorded a hash for, or one that no longer
+    // resolves to a node: nothing to compare, so nothing is concluded.
+    if (typeof expected !== 'string' || !expected || !node) return 'unknown';
+    if (node.kind !== 'file' && node.kind !== 'symbol') return 'unknown';
+    // null means the content is gone -- deleted file, vanished symbol. That is a
+    // difference, not an absence of evidence.
+    if (anchorHashNow(node) !== expected) return 'still-stale';
+  }
+
+  clearStale(dir, key);
+  return 'cleared';
 }
 
 export { contentHash };
