@@ -9,9 +9,10 @@
  * the prefix is stable by construction rather than by hope.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import {
   readCacheUsage,
   cacheHealth,
@@ -35,6 +36,8 @@ import {
 } from '../../hooks-core/keepwarm.mjs';
 import { record, readMetrics } from '../../hooks-core/metrics.mjs';
 import { policyText } from '../../hooks-core/adapter.mjs';
+import { sessionContext } from '../../hooks-core/inject.mjs';
+import { putNode } from '../../hooks-core/wiki.mjs';
 
 let workspace;
 let dir;
@@ -568,5 +571,158 @@ describe('a gap between two sessions is not a gap between turns', () => {
     const gaps = gapDistribution(dir);
     expect(gaps.median).toBeGreaterThan(60 * 60_000);
     expect(ttlTier({ prefixTokens: 47_000, gaps })).toBeNull(); // and it correctly declines
+  });
+});
+
+/**
+ * The ordering that makes the economics bite.
+ *
+ * `cacheOrdered` was correct and had zero call sites, so the SessionStart
+ * assembly was ordered by whatever sequence its call sites happened to push in.
+ * These tests are about the ASSEMBLY, not the sort: a unit test of the sort
+ * passed before this was wired and would pass again if the call were deleted.
+ *
+ * The property that actually costs money is the last one -- a change confined to
+ * a volatile block must leave every byte ahead of it identical, because a prefix
+ * cache invalidates from the first difference onward.
+ */
+describe('SessionStart context is assembled in cache order', () => {
+  // The numbers are the contract. An earlier draft of this work used 'high' and
+  // 'low' strings; those subtract to NaN, every comparison returns false, and
+  // Array.prototype.sort leaves the input untouched -- a silent no-op that a
+  // test written against an already-sorted input would have passed.
+  test('volatility is numeric, and a non-numeric taxonomy would be a silent no-op', () => {
+    const numeric = cacheOrdered([
+      { id: 'volatile', volatility: 2 },
+      { id: 'stable', volatility: 0 },
+    ]);
+    expect(numeric.map((b) => b.id)).toEqual(['stable', 'volatile']);
+
+    // Documented, not endorsed: this is what the string version would have done.
+    const strings = cacheOrdered([
+      { id: 'volatile', volatility: 'high' },
+      { id: 'stable', volatility: 'low' },
+    ]);
+    expect(Number('high') - Number('low')).toBeNaN();
+    expect(strings.map((b) => b.id)).toEqual(['volatile', 'stable']);
+  });
+
+  test('sorts the assembled blocks, so insertion order cannot decide the prefix', () => {
+    // Pushed WORST FIRST on purpose. If the assembly merely joined its inputs
+    // this would emit the freshest block at the very front of the prefix, which
+    // is the expensive arrangement.
+    const text = sessionContext([
+      { id: 'restoration', volatility: 3, text: 'RESTORATION' },
+      { id: 'index', volatility: 2, text: 'INDEX' },
+      { id: 'standing', volatility: 1, text: 'STANDING' },
+      { id: 'policy', volatility: 0, text: 'POLICY' },
+    ]);
+    expect(text).toBe('POLICY\n\nSTANDING\n\nINDEX\n\nRESTORATION');
+  });
+
+  test('drops empty blocks instead of opening the prefix with a blank line', () => {
+    // Fail open: an unreadable graph yields no standing block and no index, and
+    // the policy notice must still arrive as the first byte of the prefix.
+    expect(
+      sessionContext([
+        { id: 'index', volatility: 2, text: '' },
+        { id: 'policy', volatility: 0, text: 'POLICY' },
+        { id: 'standing', volatility: 1, text: '   ' },
+        null,
+      ])
+    ).toBe('POLICY');
+    expect(sessionContext([])).toBe('');
+  });
+
+  test('a change to a volatile block leaves the stable prefix byte-identical', () => {
+    // THIS IS THE CLAIM, tested on the bytes the hook actually emits rather than
+    // on the sort. Two sessions over the same graph, differing only in the task
+    // text, select different findings for the wiki index. If the ordering works,
+    // everything ahead of that index -- policy notice, project briefing and
+    // standing rules -- is the same bytes both times, so the cache keeps it.
+    const project = mkdtempSync(join(tmpdir(), 'cache-order-'));
+    const graphDir = join(project, '.token-optimizer', 'wiki');
+    mkdirSync(graphDir, { recursive: true });
+
+    putNode(graphDir, {
+      kind: 'finding',
+      key: 'p1',
+      pinned: true,
+      confidence: 0.9,
+      claim: 'Build against an isolated worktree, never live WIP.',
+    });
+    putNode(graphDir, {
+      kind: 'finding',
+      key: 'runner',
+      type: 'command',
+      trigger: 'jest',
+      confidence: 0.95,
+      claim: 'Run npm test, not npx jest; the jest binary ignores our runner settings.',
+    });
+    putNode(graphDir, {
+      kind: 'finding',
+      key: 'bundler',
+      type: 'command',
+      trigger: 'webpack',
+      confidence: 0.95,
+      claim: 'The webpack bundler emits everything below tools/bundle.',
+    });
+
+    const run = (userPrompt) => {
+      const r = spawnSync(
+        process.execPath,
+        [join(process.cwd(), 'plugin', 'hooks', 'session-start.mjs')],
+        {
+          input: JSON.stringify({ cwd: project, userPrompt }),
+          encoding: 'utf8',
+          timeout: 30_000,
+          env: {
+            ...process.env,
+            TOKEN_OPTIMIZER_WIKI_DIR: graphDir,
+            TOKEN_OPTIMIZER_SHARED_DIR: graphDir,
+            TOKEN_OPTIMIZER_PROJECT_REGISTRY: join(project, 'projects.jsonl'),
+            CLAUDE_PROJECT_DIR: project,
+          },
+        }
+      );
+      expect(r.status).toBe(0);
+      return (
+        JSON.parse(r.stdout || '{}')?.hookSpecificOutput?.additionalContext || ''
+      );
+    };
+
+    // Two prompts with NO overlapping terms, so each selects exactly one of the
+    // two situational findings and the wiki index genuinely differs between them.
+    const first = run('The npx jest runner ignores our settings; fix jest.');
+    const second = run('The webpack bundler emits below the wrong bundle root.');
+
+    const MARKER = '# Project wiki';
+    for (const out of [first, second]) {
+      // Stable-first is an ORDER claim, so assert the order on real output.
+      expect(out.indexOf('# Token optimization is active')).toBe(0);
+      expect(out.indexOf('# Standing rules')).toBeGreaterThan(0);
+      expect(out.indexOf(MARKER)).toBeGreaterThan(out.indexOf('# Standing rules'));
+    }
+
+    // The volatile block genuinely differs, or the prefix claim is vacuous.
+    expect(first.slice(first.indexOf(MARKER))).not.toBe(
+      second.slice(second.indexOf(MARKER))
+    );
+    expect(first).toContain('npx jest');
+    expect(first).not.toContain('webpack bundler');
+    expect(second).toContain('webpack bundler');
+    expect(second).not.toContain('npx jest');
+
+    // And everything ahead of it is the same bytes, which is what the cache
+    // charges for.
+    expect(first.slice(0, first.indexOf(MARKER))).toBe(
+      second.slice(0, second.indexOf(MARKER))
+    );
+
+    try {
+      rmSync(project, { recursive: true, force: true });
+    } catch {
+      /* windows keeps handles open briefly */
+    }
   });
 });

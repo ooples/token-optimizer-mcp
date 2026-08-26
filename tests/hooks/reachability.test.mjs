@@ -114,7 +114,6 @@ const ALLOWED = new Map([
   ['recordRefreshOutcome', 'UNWIRED: records whether a keep-warm refresh was worth it; the deciding half runs without it.'],
 
   // SINGLETONS still to be traced.
-  ['cacheOrdered', 'UNWIRED: confines cache invalidation to the tail. A real optimisation with no caller.'],
   ['renderStanding', 'UNWIRED: renders the standing-context audit. auditStanding IS reachable, so only the report is orphaned.'],
   ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
   ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],

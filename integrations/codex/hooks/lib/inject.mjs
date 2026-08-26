@@ -33,6 +33,7 @@ import { annotatedSkeleton } from './skeleton.mjs';
 import { substitutionBudget } from './metrics.mjs';
 import { assessFindings } from './utility.mjs';
 import { quarantineSharedSource } from './harvest-write.mjs';
+import { cacheOrdered } from './cache.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
@@ -1152,6 +1153,53 @@ export function standingRules(dir, graph, { budget = standingBudget(), episode =
   // which is worse than saying there are more: a model that knows the list is
   // truncated can ask, one that does not will assume it is complete.
   return `${HEADING}${lines.join('\n')}${truncated}`;
+}
+
+/**
+ * SessionStart context, assembled in cache order: stable first, volatile last.
+ *
+ * WHY THE ORDER IS A CORRECTNESS PROPERTY AND NOT A STYLE CHOICE. Everything
+ * here lands near the FRONT of the prompt prefix, and a prefix cache is
+ * invalidated from the first differing byte onward. A block whose text changes
+ * between sessions therefore prices everything positioned after it: put the
+ * freshest block first and the whole remainder of the prefix is re-written
+ * every session; put it last and the invalidation is confined to its own tail.
+ * cache.mjs measures exactly this cost in the user's files -- this is the same
+ * discipline applied to our own output, which is the half nobody else has to
+ * think about because nobody else writes into the prefix.
+ *
+ * `cacheOrdered` existed for precisely this and had no caller, so the order was
+ * whatever order the call sites happened to push in. It was accidentally right;
+ * it is now enforced, which is the difference that matters the next time a
+ * block is added.
+ *
+ * VOLATILITY IS ASSIGNED FROM HOW OFTEN THE TEXT ACTUALLY DIFFERS BETWEEN
+ * SESSIONS, not from how important the block is:
+ *
+ *   0  policy -- the optimization notice and project briefing. Deliberately
+ *      cache-safe by construction: the routing facts are number-free and the
+ *      briefing passes through `stableText`, which DROPS any line that would
+ *      vary. It changes when the tool inventory or configuration changes.
+ *   1  standing -- pinned facts and human-verified corrections, rendered in
+ *      full. Changes only when a person pins, retires or corrects something.
+ *   2  index -- the bounded wiki index, selected per session from the task
+ *      text, and carrying [STALE]/[DISPUTED] markers that flip as the code
+ *      moves. Different on most sessions.
+ *   3  restoration -- present only when resuming from a compaction, and derived
+ *      from the anchors of the session that was just discarded. Never twice the
+ *      same.
+ *
+ * A block with no text is dropped rather than joined, so an absent block cannot
+ * open the assembly with a blank line.
+ */
+export function sessionContext(blocks) {
+  return cacheOrdered(
+    (Array.isArray(blocks) ? blocks : []).filter(
+      (block) => block && typeof block.text === 'string' && block.text.trim()
+    )
+  )
+    .map((block) => block.text)
+    .join('\n\n');
 }
 
 /**
