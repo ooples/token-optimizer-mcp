@@ -15,8 +15,13 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'nod
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { record, recordToolOutcome } from '../../hooks-core/metrics.mjs';
-import { readArchive, transcriptDir, safeName } from '../../hooks-core/transcript.mjs';
+import { record, recordToolOutcome, readMetrics } from '../../hooks-core/metrics.mjs';
+import {
+  readArchive,
+  transcriptDir,
+  safeName,
+  failedResultsFromTranscript,
+} from '../../hooks-core/transcript.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
@@ -734,5 +739,328 @@ describe('what counts as the same attempt', () => {
 
   it('keeps two scripts behind one runner apart', () => {
     expect(attemptKey('npm run build')).not.toBe(attemptKey('npm run test'));
+  });
+});
+
+/**
+ * FAILED TOOL RESULTS, WHICH ARRIVE ONLY IN THE TRANSCRIPT.
+ *
+ * Claude Code never fires PostToolUse for a failed tool call -- 2,238 of 2,238
+ * live `tool-outcome` events on the measuring machine carry `success: true` --
+ * so the two strongest detectors above had NO INPUT AT ALL on the primary
+ * client. These fixtures are transcribed from real transcript lines rather than
+ * invented: `type: 'assistant'` with a `tool_use` block carrying
+ * `input.command`, then `type: 'user'` with a `tool_result` block carrying
+ * `is_error: true` and a STRING `content` beginning `Exit code N`. Three
+ * consecutive tasks on these plans shipped extractors whose fixtures did not
+ * match production, which is the specific mistake these shapes exist to avoid.
+ */
+const transcriptFile = (lines) => {
+  const path = join(dir, 'transcript.jsonl');
+  writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  return path;
+};
+
+/** An assistant turn issuing a tool call, exactly as Claude Code records one. */
+const toolUse = (id, command, at) => ({
+  type: 'assistant',
+  message: {
+    role: 'assistant',
+    content: [{ type: 'tool_use', id, name: 'Bash', input: { command, description: 'x' } }],
+  },
+  timestamp: at,
+});
+
+/** The result turn. `content` is a bare string; the error flag is `is_error`. */
+const toolResult = (id, content, at) => ({
+  type: 'user',
+  message: {
+    role: 'user',
+    content: [{ type: 'tool_result', content, is_error: true, tool_use_id: id }],
+  },
+  timestamp: at,
+  toolUseResult: `Error: ${content}`,
+});
+
+describe('a failure that exists only in the transcript', () => {
+  it('reads a failed Bash result the way Claude Code actually writes one', () => {
+    const path = transcriptFile([
+      toolUse('toolu_1', 'npm test', '2026-08-26T10:00:00.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nFAIL src/a.test.ts', '2026-08-26T10:00:01.000Z'),
+    ]);
+
+    const failures = failedResultsFromTranscript(path);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].command).toBe('npm test');
+    expect(failures[0].exit).toBe(1);
+    expect(failures[0].toolCallId).toBe('toolu_1');
+    // The exit line is stripped: `exit` carries it structurally, and leaving it
+    // in makes every failure claim read "failed with: Exit code 1".
+    expect(failures[0].output).toBe('FAIL src/a.test.ts');
+  });
+
+  it('refuses every is_error shape where the command never RAN', () => {
+    // MEASURED, NOT ASSUMED. Across three real transcripts 214 results carried
+    // `is_error: true` and only 83 were a command exiting non-zero. The other
+    // 131 are hook denials, protocol errors and human refusals -- and the
+    // largest group by far is THIS optimizer's own PreToolUse text. Ingesting
+    // those would have the tool derive 0.9-confidence findings from its own
+    // advice and serve them back as observations about the project.
+    const path = transcriptFile([
+      toolUse('a', 'grep -rn foo .', '2026-08-26T10:00:00.000Z'),
+      toolResult(
+        'a',
+        'Recursive shell searches return unbounded output. Call the token-optimizer MCP tool smart_grep instead',
+        '2026-08-26T10:00:01.000Z'
+      ),
+      toolUse('b', 'rm -rf build', '2026-08-26T10:01:00.000Z'),
+      toolResult('b', '<tool_use_error>Blocked: rm -rf build</tool_use_error>', '2026-08-26T10:01:01.000Z'),
+      toolUse('c', 'git push --force', '2026-08-26T10:02:00.000Z'),
+      toolResult(
+        'c',
+        "The user doesn't want to proceed with this tool use. The tool use was rejected",
+        '2026-08-26T10:02:01.000Z'
+      ),
+    ]);
+
+    expect(failedResultsFromTranscript(path)).toEqual([]);
+  });
+
+  it('redacts the failure output, which no capture boundary ever saw', () => {
+    // `recordToolOutcome` redacts `output` at its boundary. Transcript text has
+    // never passed one -- that boundary never saw it -- and this text is bound
+    // for a claim that is injected into model context and exported to markdown.
+    const path = transcriptFile([
+      toolUse('toolu_1', 'npm publish', '2026-08-26T10:00:00.000Z'),
+      toolResult(
+        'toolu_1',
+        'Exit code 1\nunauthorized: token ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789',
+        '2026-08-26T10:00:01.000Z'
+      ),
+    ]);
+
+    const [failure] = failedResultsFromTranscript(path);
+    expect(failure.output).not.toContain('ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789');
+    expect(failure.output).toContain('[redacted]');
+  });
+
+  it('produces the SAME attempt key as the event for one command', () => {
+    // THE JOIN, AND THE ONE THING THAT MAKES PAIRING POSSIBLE AT ALL. An event
+    // stores the command truncated to 120 characters; `attemptKey` reads three
+    // non-flag tokens off whatever it is handed. A long token cut by that cap
+    // yields a DIFFERENT key from the untruncated transcript copy, so the
+    // failure would land in a group of its own and never meet a success.
+    // Measured on one real session: truncating here made 266 of 266 keys agree
+    // where the untruncated text agreed on only 240.
+    const long = `node ${'x'.repeat(200)}.mjs --flag`;
+    outcome(long, { success: true, at: 2 });
+    const stored = readMetrics(dir).find((e) => e.kind === 'tool-outcome').anchor;
+    const path = transcriptFile([
+      toolUse('toolu_1', long, '2026-08-26T10:00:00.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nboom', '2026-08-26T10:00:01.000Z'),
+    ]);
+
+    const [failure] = failedResultsFromTranscript(path);
+    expect(attemptKey(failure.command)).toBe(attemptKey(stored));
+  });
+
+  it('pairs a transcript failure with an event success, which is the whole point', () => {
+    withManifest();
+    outcome('deploy --retry', { success: true, at: 2000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', 'deploy', '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nconnection refused by host', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const candidates = run({ transcriptPath: path }).candidates;
+    const command = candidates.find((c) => c.type === 'command');
+    const failure = candidates.find((c) => c.type === 'failure');
+    expect(command.claim).toContain('`deploy --retry` succeeded in this project where `deploy` failed');
+    expect(command.confidence).toBe(CONFIDENCE.command);
+    expect(failure.claim).toContain('connection refused by host');
+  });
+
+  it('deduplicates one failure reported twice on the CALL ID alone', () => {
+    // On the ten clients that DO report failures, the same failure arrives from
+    // both sources. `toolCallId` is the SAME STRING in both -- `episodeMeta`
+    // reads the transcript's `tool_use_id` into it -- so the event copy wins
+    // and the transcript copy is dropped before grouping. Without that, the two
+    // copies sit in one run and the second is paired against the first as a
+    // failed-then-succeeded story about itself.
+    //
+    // THE TIMESTAMPS ARE HOURS APART ON PURPOSE. With them equal the text-and-
+    // time fallback below ALSO dedupes the pair, so disabling the id check
+    // changed nothing and this test passed while asserting nothing about the id.
+    // That is the two-mechanisms-in-one-fixture defect this plan has hit on
+    // three consecutive tasks.
+    // AND THE TWO COPIES SAY DIFFERENT THINGS, which is what makes this
+    // observable at all. A duplicated failure never produces a second PAIR --
+    // the nearest-preceding-failure rule just overwrites one with the other --
+    // so a count assertion alone passes with the deduplication removed. What
+    // changes is WHICH copy gets quoted, and the event copy is the one that
+    // passed `recordToolOutcome`'s redaction and 4 KB cap.
+    withManifest();
+    recordToolOutcome(dir, {
+      kind: 'tool-outcome',
+      surface: 'command',
+      anchor: 'deploy',
+      toolCallId: 'toolu_1',
+      success: false,
+      output: 'connection refused by host',
+      at: 1000,
+    });
+    outcome('deploy --retry', { success: true, at: 9_000_000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', 'deploy', '1970-01-01T02:00:00.000Z'),
+      toolResult('toolu_1', 'Exit code 7\nDNS lookup failed', '1970-01-01T02:00:00.000Z'),
+    ]);
+
+    const candidates = run({ transcriptPath: path }).candidates;
+    const commands = candidates.filter((c) => c.type === 'command');
+    expect(commands).toHaveLength(1);
+    expect(commands[0].claim).not.toContain('`deploy` succeeded');
+    const failures = candidates.filter((c) => c.type === 'failure');
+    expect(failures).toHaveLength(1);
+    expect(failures[0].claim).toContain('connection refused by host');
+    expect(failures[0].claim).not.toContain('DNS lookup failed');
+  });
+
+  it('deduplicates on text and time when the client reported no call id', () => {
+    // The fallback, isolated the same way: no `toolCallId` on either side, so
+    // only identical command text within two seconds can collapse the pair.
+    // Nothing re-runs a command that fast, so one text at one instant is one
+    // failure recorded twice rather than two failures.
+    withManifest();
+    outcome('deploy', { success: false, output: 'connection refused by host', at: 1000 });
+    outcome('deploy --retry', { success: true, at: 9_000_000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', 'deploy', '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nconnection refused by host', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const commands = run({ transcriptPath: path }).candidates.filter((c) => c.type === 'command');
+    expect(commands).toHaveLength(1);
+    expect(commands[0].claim).not.toContain('`deploy` succeeded');
+  });
+
+  it('claims nothing about a command that spans lines, which is a script', () => {
+    // THE MEASUREMENT THAT FORCED THIS REFUSAL. Wiring the reader produced four
+    // candidates at 0.9 confidence on this session, every one of them quoting a
+    // truncated multi-line shell script -- and then 0 of 83 captured command
+    // failures across three real transcripts turned out to be single-line and
+    // inside the 120-character cap (29 of 30 in one transcript were multi-line).
+    // A claim whose subject is a fragment of a program is not a weaker claim, it
+    // is not a claim, so this sits beside the identical-text guard rather than
+    // taking a lower ceiling.
+    //
+    // SHORT ON PURPOSE. Both commands are well inside 120 characters, so the
+    // length half of the rule cannot be what refuses them -- otherwise removing
+    // either half leaves the other and this passes having tested neither.
+    withManifest();
+    outcome('cd sub\nnpm run ship', { success: true, at: 2000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', 'cd sub\nnpm run build', '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nSyntaxError: missing )', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const derived = run({ transcriptPath: path }).candidates;
+    expect(derived.filter((c) => c.type === 'command' || c.type === 'failure')).toEqual([]);
+  });
+
+  it('claims nothing about a command the 120-char anchor cap already cut', () => {
+    // The other half, isolated: one line each, both long enough that the anchor
+    // truncation reached them. A reader cannot act on a command whose text stops
+    // mid-argument, and a bigger cap would not help -- the whole script is no
+    // more actionable than its first 120 characters.
+    // THE TWO COMMANDS SHARE AN ATTEMPT KEY ON PURPOSE. Written as
+    // `node scripts/build.mjs ...` against `node scripts/ship.mjs ...` they
+    // differ in their SECOND token, so they never met in the first place and the
+    // refusal under test was never reached -- the test passed on a key mismatch
+    // and survived removing the length rule entirely.
+    withManifest();
+    const long = (reporter) =>
+      `npm run build -- --reporter=${reporter} ${'--pad=x '.repeat(20)}`.trim();
+    expect(long('json').length).toBeGreaterThan(120);
+    expect(attemptKey(long('json'))).toBe(attemptKey(long('verbose')));
+    outcome(long('json'), { success: true, at: 2000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', long('verbose'), '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nENOENT', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const derived = run({ transcriptPath: path }).candidates;
+    expect(derived.filter((c) => c.type === 'command' || c.type === 'failure')).toEqual([]);
+  });
+
+  it('claims nothing when the attempt key never reached a command', () => {
+    // `attemptKey` spends three non-flag tokens on identity, and the habit here
+    // is `cd <absolute path> && <the real command>` -- which spends all three on
+    // `cd`, the path and `&&`. This project's own evidence: the single key
+    // `cd c:/users/.../token-optimizer-mcp &&` covers 539 DISTINCT command
+    // lines, so a pair drawn from that group compares two unrelated commands and
+    // is false about both. Both sides here are single-line and well inside 120
+    // characters, so `quotable` cannot be what refuses them.
+    withManifest();
+    const failing = 'cd repo && git merge origin/master';
+    const succeeding = 'cd repo && grep -n foo lib.mjs';
+    expect(attemptKey(failing)).toBe(attemptKey(succeeding));
+    outcome(succeeding, { success: true, at: 2000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', failing, '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nCONFLICT', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const derived = run({ transcriptPath: path }).candidates;
+    expect(derived.filter((c) => c.type === 'command' || c.type === 'failure')).toEqual([]);
+  });
+
+  it('scans a bounded tail, so session end cannot be turned into real work', () => {
+    // A transcript is the largest file this project reads -- 45 MB on this
+    // machine -- and `archive()` already reads the whole thing at Stop.
+    const lines = [];
+    for (let i = 0; i < 400; i++) {
+      lines.push(toolUse(`old${i}`, `cmd${i} ${'p'.repeat(200)}`, '2026-08-26T09:00:00.000Z'));
+      lines.push(toolResult(`old${i}`, 'Exit code 1\nold failure', '2026-08-26T09:00:01.000Z'));
+    }
+    lines.push(toolUse('recent', 'npm test', '2026-08-26T10:00:00.000Z'));
+    lines.push(toolResult('recent', 'Exit code 1\nrecent failure', '2026-08-26T10:00:01.000Z'));
+    const path = transcriptFile(lines);
+
+    // `max` is raised beyond anything the file holds so the COUNT cap cannot be
+    // what bounds this: only the byte cap can. Left at its default of 50 the
+    // count cap alone kept the result under 400 and removing the byte bound
+    // changed nothing, which is the test-passes-for-the-wrong-reason shape.
+    const bounded = failedResultsFromTranscript(path, { scanBytes: 4096, max: 10_000 });
+    expect(bounded.length).toBeGreaterThan(0);
+    expect(bounded.length).toBeLessThan(20);
+    expect(bounded[bounded.length - 1].output).toBe('recent failure');
+    // The whole file, for contrast: the bound is doing the work, not the fixture.
+    expect(
+      failedResultsFromTranscript(path, { scanBytes: 50_000_000, max: 10_000 }).length
+    ).toBeGreaterThan(300);
+    // And the count cap holds independently of the byte cap.
+    expect(failedResultsFromTranscript(path, { max: 5 })).toHaveLength(5);
+  });
+
+  it('says nothing about a failure whose tool call it never saw', () => {
+    // The command is recoverable ONLY by joining `tool_use_id` back to the
+    // assistant block that issued it, and a bounded tail read routinely cuts
+    // that block off. With no command there is no subject for a claim, so the
+    // result is dropped -- a placeholder would put "`unknown` failed with: ..."
+    // into the graph at 0.9 confidence.
+    const path = transcriptFile([
+      toolResult('toolu_orphan', 'Exit code 1\nboom', '2026-08-26T10:00:01.000Z'),
+    ]);
+
+    expect(failedResultsFromTranscript(path)).toEqual([]);
+  });
+
+  it('returns nothing rather than throwing when there is no transcript to read', () => {
+    // Session end must cost nothing, and a client that reports no transcript
+    // path is the common case rather than an error.
+    expect(failedResultsFromTranscript(null)).toEqual([]);
+    expect(failedResultsFromTranscript(join(dir, 'missing.jsonl'))).toEqual([]);
+    writeFileSync(join(dir, 'junk.jsonl'), 'not json\n{"half":\n');
+    expect(failedResultsFromTranscript(join(dir, 'junk.jsonl'))).toEqual([]);
   });
 });

@@ -14,6 +14,13 @@
  * there is nothing to consent to and this runs by default. It is the only
  * finding producer on a machine without a key.
  *
+ * THREE SOURCES, NOT TWO. `tool-outcome` events, the transcript archive, and --
+ * since the transition detectors were measured to have no input at all on the
+ * primary client -- the raw transcript's FAILED tool results, which is the only
+ * place a Claude Code failure is recorded (`failedResultsFromTranscript` in
+ * transcript.mjs, and the note above `quotable` for what that measurement
+ * actually yielded).
+ *
  * PRECISION IS CAPPED, NOT CLAIMED. "Failed then succeeded" does not prove the
  * second command fixed the first -- an intervening edit, a dependency install or
  * a flaky test explains it just as well. So each detector carries a confidence
@@ -30,7 +37,11 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { readMetrics, rereadsByAnchor } from './metrics.mjs';
-import { readArchive, readTurns } from './transcript.mjs';
+import {
+  readArchive,
+  readTurns,
+  failedResultsFromTranscript,
+} from './transcript.mjs';
 import { redact } from './redact.mjs';
 import { selectForConsolidation } from './consolidate.mjs';
 import { writeHarvested } from './harvest-write.mjs';
@@ -54,6 +65,96 @@ const EVIDENCE_MAX = 400;
 
 /** Bounded so a pathological log cannot turn session end into real work. */
 const MAX_CANDIDATES = 200;
+
+/**
+ * The anchor cap a command surface is stored under, restated here as a TEST.
+ *
+ * `recordToolOutcome` truncates `anchor` to 120 characters, so a command at or
+ * over that length reached this module already cut -- and `quotable` below
+ * refuses to build a claim out of the fragment.
+ */
+const COMMAND_ANCHOR_MAX = 120;
+
+/**
+ * Can this command text be QUOTED in a claim a reader could act on?
+ *
+ * THE SECOND REFUSAL OF ITS KIND, and it exists because measurement forced it.
+ * Wiring the transcript reader gave the transition detectors their first real
+ * input on this client and immediately produced four candidates at 0.9
+ * confidence whose claim text read:
+ *
+ *   `cd /c/Users/.../token-optimizer-mcp\ncat >> docs/superpowers/plans/2026-` succeeded
+ *   in this project where `cd /c/Users/.../token-optimizer-mcp\ncat > /tmp/probe3.mjs
+ *   <<'EOF'\nimport { readdirSync, readFileSync, sta` failed
+ *
+ * -- two truncated fragments of throwaway shell scripts, grouped together only
+ * because `attemptKey`'s three tokens were spent on `cd`, the absolute path, and
+ * the verb. Then measured properly across three real transcripts: **0 of 83**
+ * captured command failures are single-line and inside the cap. 65% of this
+ * project's 2,178 successful command outcomes are not either. On this client a
+ * "command" is usually a whole shell script, so the attempt identity the
+ * transition detectors are built on does not fit most of the traffic.
+ *
+ * This is the same judgement as the identical-text guard below rather than a
+ * confidence question: a claim whose subject is a truncated fragment of a
+ * program is not a weaker claim, it is not a claim. A raised cap would not
+ * rescue it -- quoting the whole 500-character heredoc is no more actionable.
+ *
+ * What survives is exactly what the detector was designed for: `npm test`,
+ * `dotnet build X`, `deploy --retry` -- a repeatable command someone could run
+ * again. This machine captured none failing, which is why the honest yield here
+ * is zero and why that is reported rather than dressed up.
+ *
+ * Applied to BOTH sources. Where the evidence arrived from has no bearing on
+ * whether the resulting sentence says anything, and a rule that let events
+ * through would ship the junk on the ten clients that do report failures.
+ */
+const quotable = (command) => {
+  const text = String(command || '');
+  return (
+    text.trim().length > 0 &&
+    !/[\r\n]/.test(text) &&
+    text.length < COMMAND_ANCHOR_MAX
+  );
+};
+
+/**
+ * Tokens that separate one command from the next rather than naming one.
+ *
+ * MEASURED, LIKE EVERY OTHER REFUSAL HERE. `attemptKey` spends up to three
+ * non-flag tokens on identity, and the habit on this machine is
+ * `cd <absolute path> && <the real command>` -- which spends all three on `cd`,
+ * the path and `&&`, so the real command never enters the key. This project's
+ * own evidence: the single key `cd c:/users/.../token-optimizer-mcp &&` covers
+ * **539 distinct command lines**. One quotable failure in that group would pair
+ * with an arbitrary unrelated success and claim "`cd repo && grep -n ...`
+ * succeeded where `cd repo && git merge ...` failed", which is false about both.
+ *
+ * A KEY THAT REACHED A SEPARATOR NEVER REACHED A COMMAND, so there is no attempt
+ * to compare and nothing to claim -- the same judgement as the identical-text
+ * guard rather than a lower ceiling. Narrow on purpose: `2>&1` and `/F` are not
+ * separators and do not trip this, so `cat commitlint.config.mjs 2>&1` and
+ * `taskkill /F /PID 1 2>&1` keep their identity. Of the 8 quotable failures
+ * found across 163 transcripts on this machine it refuses 2 and keeps 6.
+ *
+ * The fix that would RECOVER those two is to skip a leading `cd <path> &&` when
+ * building the key, so the claim is about `npm test` rather than about the `cd`.
+ * That changes `attemptKey` for every client and every finding already derived
+ * from it, so it belongs in its own change with its own comparison.
+ */
+const COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&']);
+
+/**
+ * Did `attemptKey` actually capture a command, or only how one was chained?
+ *
+ * Read off the SAME key `attemptKey` produces, so the two cannot drift apart.
+ * One check per pair is enough: both halves share the key by construction.
+ */
+const hasAttemptIdentity = (command) =>
+  attemptKey(command)
+    .split(' ')
+    .filter(Boolean)
+    .every((token) => !COMMAND_SEPARATORS.has(token));
 
 /**
  * Commands whose red-to-green transition is usually explained by the CODE
@@ -272,6 +373,17 @@ export function derive(dir, options = {}) {
   // separate command field, because the anchor of a command surface IS the
   // command. It is capped at 120 characters at the boundary, so a very long
   // command line is compared and quoted truncated.
+  //
+  // TWO SOURCES OF FAILURE, ONE PAIRING LOOP. Claude Code never fires
+  // PostToolUse for a failed tool call -- 2,238 of 2,238 live `tool-outcome`
+  // events on the measuring machine carry `success: true`, and a deliberately
+  // failing command produced no event at all -- so on the primary client these
+  // two detectors had NO INPUT WHATSOEVER while working normally on the ten
+  // adapter clients. `failedResultsFromTranscript` supplies the missing half
+  // from the only place it exists. The successes still come from events only:
+  // a transcript failure that pairs with nothing stays unclaimed, which is also
+  // what keeps a failure from ANOTHER project's directory out of this project's
+  // graph -- a candidate cannot be emitted without a success recorded HERE.
   try {
     if (projectRoot) {
       const outcomes = events
@@ -288,6 +400,9 @@ export function derive(dir, options = {}) {
           output: typeof e.output === 'string' ? e.output : '',
           exit: Number.isInteger(e.exit) ? e.exit : null,
           at: e.at ?? 0,
+          // Carried purely so the transcript merge below can recognise the same
+          // tool call arriving from the other source.
+          toolCallId: e.toolCallId ? String(e.toolCallId) : null,
           // `success` FIRST, `exit` only as a refinement. MCP tools report no
           // numeric code at all, so a classifier keyed on `exit !== 0` would be
           // inert for most clients -- and `exit` is null rather than 0 precisely
@@ -295,6 +410,53 @@ export function derive(dir, options = {}) {
           failed: e.success === false || (Number.isInteger(e.exit) && e.exit !== 0),
         }))
         .sort((a, b) => a.at - b.at);
+
+      // DEDUPLICATED ON `toolCallId`, which is the SAME STRING in both sources:
+      // `episodeMeta` reads `raw.tool_use_id` into `toolCallId`, and that is the
+      // transcript's `tool_use_id` verbatim -- verified against live evidence
+      // (`toolu_01L4Nwr...` in metrics.jsonl, the same ids in the transcript).
+      // So on the ten clients that DO report failures, the event copy wins and
+      // the transcript copy is dropped before grouping. Without this the two
+      // copies of one failure would sit in the same run and the second of them
+      // would be paired against the first as a failed-then-succeeded story about
+      // itself.
+      //
+      // The fallback covers a client that reports a failure with no call id:
+      // identical command text within two seconds is one failure recorded twice,
+      // not two failures, because nothing re-runs a command that fast.
+      const eventIds = new Set(
+        outcomes.map((o) => o.toolCallId).filter(Boolean)
+      );
+      const eventFailures = outcomes.filter((o) => o.failed);
+      const alreadyRecorded = (failure) => {
+        if (failure.toolCallId && eventIds.has(failure.toolCallId)) return true;
+        return eventFailures.some(
+          (o) =>
+            o.command === failure.command &&
+            Math.abs((o.at || 0) - (failure.at || 0)) <= 2000
+        );
+      };
+
+      let transcriptFailures = [];
+      try {
+        transcriptFailures = failedResultsFromTranscript(transcriptPath).filter(
+          (failure) => failure.command.trim() && !alreadyRecorded(failure)
+        );
+      } catch {
+        // The reader is an extra source, never a reason the detector stops.
+      }
+      for (const failure of transcriptFailures) {
+        outcomes.push({
+          command: failure.command.trim(),
+          output: failure.output,
+          exit: failure.exit,
+          at: failure.at,
+          toolCallId: failure.toolCallId,
+          // Read from `Exit code N`, which is the only shape the reader admits.
+          failed: true,
+        });
+      }
+      if (transcriptFailures.length) outcomes.sort((a, b) => a.at - b.at);
 
       const byAttempt = new Map();
       for (const outcome of outcomes) {
@@ -331,6 +493,18 @@ export function derive(dir, options = {}) {
           // not a confidence question; a ceiling cannot rescue a claim whose
           // content is wrong.
           if (failed.command === outcome.command) continue;
+
+          // NOTHING QUOTABLE, NOTHING CLAIMED. See `quotable` above: on this
+          // client both sides of almost every pair are truncated multi-line
+          // shell scripts, and a claim quoting a fragment of one is noise
+          // spending the retrieval budget of every later session.
+          if (!quotable(failed.command) || !quotable(outcome.command)) continue;
+
+          // AND THE KEY HAS TO NAME A COMMAND. See `hasAttemptIdentity`: a key
+          // that ran out of tokens on `cd <path> &&` groups 539 unrelated
+          // command lines in this repository alone, and any pair drawn from that
+          // group is a false claim about both halves.
+          if (!hasAttemptIdentity(outcome.command)) continue;
 
           const codeSensitive =
             CODE_SENSITIVE.test(outcome.command) || CODE_SENSITIVE.test(failed.command);
