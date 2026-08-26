@@ -1041,6 +1041,69 @@ nothing measured recall. Now it does."
 
 ---
 
+## Task 11: A transcript reader for failed tool results
+
+**Added mid-plan, after Task 5 measured why the detectors produced nothing.**
+
+Claude Code **never fires PostToolUse for a failed tool call.** Proved with a deliberately
+failing command that produced no event at all, and 2,238 of 2,238 live outcomes on the
+measuring machine were `success: true`. So the two highest-confidence detectors — command
+failed-then-succeeded (0.90) and test/build red-to-green (0.85) — have **no input on the
+primary client**, while working normally on the ten adapter clients.
+
+This task gives them input from the one place the failures do exist: the local transcript
+archive, which the correction detector already reads.
+
+**Files:**
+- Modify: `hooks-core/derive.mjs`
+- Test: `tests/hooks/derive.test.mjs`
+
+**Interfaces:**
+- Produces: `failedResultsFromArchive(turns) => Array<{ command, output, at }>`, fed to the
+  existing command and test detectors alongside `tool-outcome` events.
+
+**Requirements**
+
+- **Read-only, and reuse the archive already in use.** No new capture path, no new hook, no
+  new event kind. The correction detector reads this archive; so does this.
+- **The confidence ceilings do not change.** A failure observed in a transcript is the same
+  evidence as one observed in an event — the ceilings encode how much the evidence supports,
+  not how it arrived. Do not raise or lower them for this source.
+- **Deduplicate against `tool-outcome`.** On the ten clients that *do* report failures, a
+  failure may appear in both sources. The same failure must not produce two candidates, and
+  the pairing must not treat the transcript copy and the event copy as a failed-then-
+  succeeded pair with itself.
+- **Redact.** Transcript text is not redacted upstream — `recordToolOutcome`'s boundary never
+  saw it. Everything derived from it goes through `redact` before storage.
+- **The refusals from Task 3 still hold.** Identical command text either side of a failure
+  emits nothing, and pairing uses the nearest preceding failure. A transcript source does not
+  license a weaker causal claim.
+- **Bound the read.** A long session's archive is large; cap what is scanned the way the
+  correction detector does, and say what the cap is.
+
+**Two things to determine rather than assume**
+
+1. **Does the archive actually contain failed tool results, and in what shape?** Task 5
+   established the archive exists and carries 723 turns on a real session. Confirm that a
+   *failed* result is present and identifiable — a tool result block with an error, a
+   non-zero exit rendered as text, or a refusal — and report the shape you found. **If failed
+   results are not recoverable from the archive, say so plainly and stop**: that would mean
+   this task cannot work, and reporting it is worth more than an extractor that finds nothing.
+2. **How is a command identified?** `tool-outcome` puts the command text in `anchor`. A
+   transcript turn may render it differently. The `attemptKey` grouping (up to three non-flag
+   tokens) must produce the same key from both sources, or a failure from the transcript will
+   never pair with a success from an event.
+
+**Verification — the deliverable is a measurement, not a claim.** After wiring, run a real
+transcript through the Stop path and report how many command and test candidates it yields,
+against the zero it yields today. If the answer is still zero, that is the finding.
+
+**Mutation bar as elsewhere**, plus the harness defect Task 5 recorded: mutating `hooks-core/`
+without `npm run sync:hooks` leaves spawn-based E2E tests running the old synced copy, so a
+mutation reads as survived when it was never applied. Sync between mutation and test.
+
+---
+
 # Execution state and corrections
 
 **Read this before starting or resuming. It is authoritative over the task text above,
