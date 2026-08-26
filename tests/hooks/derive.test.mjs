@@ -26,7 +26,13 @@ import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
 import { indexFile } from '../../hooks-core/staleness.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
-import { derive, CONFIDENCE, attemptKey, projectAnchor } from '../../hooks-core/derive.mjs';
+import {
+  derive,
+  CONFIDENCE,
+  attemptKey,
+  commandBody,
+  projectAnchor,
+} from '../../hooks-core/derive.mjs';
 
 let dir;
 
@@ -740,6 +746,70 @@ describe('what counts as the same attempt', () => {
   it('keeps two scripts behind one runner apart', () => {
     expect(attemptKey('npm run build')).not.toBe(attemptKey('npm run test'));
   });
+
+  it('skips a leading directory change, which says where and not what', () => {
+    // THE BUG THIS FIXES, measured on this repository's own 2,243 command
+    // outcomes: 1,400 of them open with a `cd`, and the single key
+    // `cd c:/users/.../token-optimizer-mcp &&` covered 547 distinct command
+    // lines. Every one of the three tokens went to the directory change, so the
+    // key named no command at all.
+    expect(attemptKey('cd /repo && npm test')).toBe('npm test');
+    expect(attemptKey('cd /repo && npm test')).toBe(attemptKey('npm test'));
+    // And the distinctions the key is FOR still hold across the prefix: two
+    // scripts behind one runner must not merge just because both were cd'd to.
+    expect(attemptKey('cd /repo && npm run build')).not.toBe(
+      attemptKey('cd /repo && npm run test')
+    );
+  });
+
+  it('skips the three separators that were observed, and repeats', () => {
+    // `&&` (1,147), a newline (204) and `;` (38) are the separators that follow
+    // a leading `cd` in this corpus. All three mean "then run this".
+    expect(attemptKey('cd /repo && npm test')).toBe('npm test');
+    expect(attemptKey('cd /repo; npm test')).toBe('npm test');
+    expect(attemptKey('cd /repo\nnpm test')).toBe('npm test');
+    // Repeated, so a nested change still reaches the command.
+    expect(attemptKey('cd /repo && cd sub && npm test')).toBe('npm test');
+  });
+
+  it('runs to the separator rather than counting tokens', () => {
+    // A quoted path containing spaces and a `cd /d` flag would each defeat a
+    // rule that skipped a fixed number of tokens. Neither needs its own case.
+    expect(attemptKey('cd "C:/Program Files/repo" && npm test')).toBe('npm test');
+    expect(attemptKey('cd /d C:/repo && npm test')).toBe('npm test');
+  });
+
+  it('leaves a directory change with no separator alone', () => {
+    // `cd <path>` on its own ran no command, so there is nothing to recover and
+    // nothing to claim. Stripping it would leave an empty key, which would
+    // silently drop the outcome from grouping on a rule nothing measured.
+    expect(commandBody('cd /repo')).toBe('cd /repo');
+    expect(attemptKey('cd /repo')).toBe('cd /repo');
+  });
+
+  it('refuses to skip any prefix wider than the measured one', () => {
+    // OVER-STRIPPING IS THE SAME BUG IN THE OTHER DIRECTION. Each of these was
+    // considered and rejected against this corpus.
+    //
+    // An environment assignment DOES say something about what ran: the one true
+    // instance here is `TOKEN_OPTIMIZER_HOLDOUT=1 node ... jest.js ...`, and the
+    // holdout arm is a genuinely different attempt from the same command
+    // without it.
+    expect(attemptKey('TOKEN_OPTIMIZER_HOLDOUT=1 npm test')).not.toBe(attemptKey('npm test'));
+    // `time`, `env` and `bash -c` occurred ZERO times in 2,243 commands, so
+    // code for them would be an unmeasured way to over-strip.
+    expect(attemptKey('time npm test')).not.toBe(attemptKey('npm test'));
+    expect(attemptKey('bash -c "npm test"')).not.toBe(attemptKey('npm test'));
+    // `||` puts an error BRANCH after the separator, not the next step, so
+    // stripping there would key the attempt on a failure handler. Zero
+    // occurrences.
+    expect(commandBody('cd /repo || echo failed')).toBe('cd /repo || echo failed');
+    // And only a LEADING change is a preamble. A `cd` in the middle is part of
+    // what ran.
+    expect(commandBody('npm test && cd /repo && ls')).toBe('npm test && cd /repo && ls');
+    // `cdk` is not `cd`.
+    expect(attemptKey('cdk deploy --all')).toBe('cdk deploy');
+  });
 });
 
 /**
@@ -956,8 +1026,17 @@ describe('a failure that exists only in the transcript', () => {
     // SHORT ON PURPOSE. Both commands are well inside 120 characters, so the
     // length half of the rule cannot be what refuses them -- otherwise removing
     // either half leaves the other and this passes having tested neither.
+    //
+    // AND THEY STILL SHARE A KEY AFTER `commandBody`, which is why both tails
+    // are `npm run build` rather than `build` against `ship`: the leading
+    // `cd sub` is now stripped, so `build` against `ship` would land in
+    // separate groups and this would pass on a key mismatch, testing neither
+    // half.
     withManifest();
-    outcome('cd sub\nnpm run ship', { success: true, at: 2000 });
+    expect(attemptKey('cd sub\nnpm run build --json')).toBe(
+      attemptKey('cd sub\nnpm run build')
+    );
+    outcome('cd sub\nnpm run build --json', { success: true, at: 2000 });
     const path = transcriptFile([
       toolUse('toolu_1', 'cd sub\nnpm run build', '1970-01-01T00:00:01.000Z'),
       toolResult('toolu_1', 'Exit code 1\nSyntaxError: missing )', '1970-01-01T00:00:01.000Z'),
@@ -993,17 +1072,24 @@ describe('a failure that exists only in the transcript', () => {
   });
 
   it('claims nothing when the attempt key never reached a command', () => {
-    // `attemptKey` spends three non-flag tokens on identity, and the habit here
-    // is `cd <absolute path> && <the real command>` -- which spends all three on
-    // `cd`, the path and `&&`. This project's own evidence: the single key
-    // `cd c:/users/.../token-optimizer-mcp &&` covers 539 DISTINCT command
-    // lines, so a pair drawn from that group compares two unrelated commands and
-    // is false about both. Both sides here are single-line and well inside 120
-    // characters, so `quotable` cannot be what refuses them.
+    // `attemptKey` spends three non-flag tokens on identity, and a key that runs
+    // out of them on a separator names no command: the two sides are then two
+    // unrelated things that happen to be chained the same way, and any pair
+    // drawn from that group is false about both halves.
+    //
+    // THE PREFIX IS NOT A `cd` ON PURPOSE. `commandBody` now strips a leading
+    // directory change, so written as `cd repo && git merge ...` against
+    // `cd repo && grep ...` the two sides get DIFFERENT keys, never meet, and
+    // this would pass on a key mismatch with the identity rule deleted -- the
+    // one-fixture-two-mechanisms defect these plans keep hitting. `git fetch &&`
+    // is a separator-terminated key that `commandBody` deliberately leaves
+    // alone. Both sides are single-line and well inside 120 characters, so
+    // `quotable` cannot be what refuses them either.
     withManifest();
-    const failing = 'cd repo && git merge origin/master';
-    const succeeding = 'cd repo && grep -n foo lib.mjs';
+    const failing = 'git fetch && git merge origin/master';
+    const succeeding = 'git fetch && grep -n foo lib.mjs';
     expect(attemptKey(failing)).toBe(attemptKey(succeeding));
+    expect(attemptKey(failing)).toBe('git fetch &&');
     outcome(succeeding, { success: true, at: 2000 });
     const path = transcriptFile([
       toolUse('toolu_1', failing, '1970-01-01T00:00:01.000Z'),
@@ -1012,6 +1098,72 @@ describe('a failure that exists only in the transcript', () => {
 
     const derived = run({ transcriptPath: path }).candidates;
     expect(derived.filter((c) => c.type === 'command' || c.type === 'failure')).toEqual([]);
+  });
+
+  it('pairs across a leading directory change, which it could not before', () => {
+    // THE PAIR THE OLD KEY THREW AWAY. `cd <path> && <command>` is the habit on
+    // this machine -- 1,400 of 2,243 command outcomes -- and it spent all three
+    // key tokens on `cd`, the path and the separator. The failure therefore
+    // landed in a group of 547 unrelated command lines instead of beside the
+    // success of the same command, and `hasAttemptIdentity` then (correctly)
+    // refused every pair drawn from it. Measured on 164 real transcripts: of the
+    // 8 quotable command failures this machine holds, one was refused for
+    // exactly this reason and is recovered here.
+    withManifest();
+    expect(attemptKey('cd repo && deploy')).toBe(attemptKey('deploy --retry'));
+    outcome('deploy --retry', { success: true, at: 2000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', 'cd repo && deploy', '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nconnection refused by host', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const candidates = run({ transcriptPath: path }).candidates;
+    const command = candidates.find((c) => c.type === 'command');
+    // THE CLAIM QUOTES WHAT RAN, `cd` and all. The prefix is dropped from the
+    // KEY, not from the record: a reader retrying this needs the line as it was.
+    expect(command.claim).toContain(
+      '`deploy --retry` succeeded in this project where `cd repo && deploy` failed'
+    );
+    expect(command.confidence).toBe(CONFIDENCE.command);
+  });
+
+  it('claims nothing when the two sides differ only by the directory change', () => {
+    // THE REFUSAL THAT KEEPS THE BETTER KEY FROM BECOMING A LICENCE TO PAIR
+    // LOOSELY. `cd repo && npm test` and `npm test` are one attempt spelled two
+    // ways. Before `commandBody` they never met; letting them meet without
+    // widening the identical-text guard to the STRIPPED text would emit
+    // "`npm test` succeeded where `cd repo && npm test` failed" at 0.85 -- a
+    // difference in the claim that is not a difference in what ran.
+    //
+    // BOTH SIDES ARE SHORT AND SINGLE-LINE, so `quotable` cannot be what refuses
+    // them, and they share a key by construction so `hasAttemptIdentity` cannot
+    // be either.
+    withManifest();
+    expect(attemptKey('cd repo && npm test')).toBe(attemptKey('npm test'));
+    outcome('npm test', { success: true, at: 2000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', 'cd repo && npm test', '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\n2 failing', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const derived = run({ transcriptPath: path }).candidates;
+    expect(derived.filter((c) => c.type === 'command')).toEqual([]);
+  });
+
+  it('claims nothing when one command was run in two different directories', () => {
+    // The same refusal from the other side: `cd a && deploy` against
+    // `cd b && deploy` is one command tried in two places, not two commands.
+    // Claiming that one directory works where the other fails is a claim about
+    // the directories, which nothing here observed.
+    withManifest();
+    outcome('cd b && deploy', { success: true, at: 2000 });
+    const path = transcriptFile([
+      toolUse('toolu_1', 'cd a && deploy', '1970-01-01T00:00:01.000Z'),
+      toolResult('toolu_1', 'Exit code 1\nconnection refused by host', '1970-01-01T00:00:01.000Z'),
+    ]);
+
+    const derived = run({ transcriptPath: path }).candidates;
+    expect(derived.filter((c) => c.type === 'command')).toEqual([]);
   });
 
   it('scans a bounded tail, so session end cannot be turned into real work', () => {

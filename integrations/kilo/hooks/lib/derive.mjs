@@ -139,17 +139,19 @@ const quotable = (command) => {
  * `taskkill /F /PID 1 2>&1` keep their identity. Of the 8 quotable failures
  * found across 163 transcripts on this machine it refuses 2 and keeps 6.
  *
- * The fix that would RECOVER those two is to skip a leading `cd <path> &&` when
- * building the key, so the claim is about `npm test` rather than about the `cd`.
- * That changes `attemptKey` for every client and every finding already derived
- * from it, so it belongs in its own change with its own comparison.
+ * `commandBody` below now skips a leading `cd <path> &&`, so those two are
+ * recovered and this guard is left holding only the keys that reached a
+ * separator which is NOT a directory change -- `git fetch && <anything>`, a
+ * pipeline, a `;`-joined pair. Those still name no single attempt.
  */
 const COMMAND_SEPARATORS = new Set(['&&', '||', ';', '|', '&']);
 
 /**
  * Did `attemptKey` actually capture a command, or only how one was chained?
  *
- * Read off the SAME key `attemptKey` produces, so the two cannot drift apart.
+ * Read off the SAME key `attemptKey` produces, so the two cannot drift apart --
+ * which now means AFTER `commandBody` has removed any leading `cd`, so this no
+ * longer fires on the directory-change case it was written for.
  * One check per pair is enough: both halves share the key by construction.
  */
 const hasAttemptIdentity = (command) =>
@@ -177,6 +179,81 @@ const CORRECTION_OPENER =
   /^\s*(?:no+[,.!\s]|nope\b|wrong\b|stop\b|don'?t\b|do not\b|never\b|revert\b|undo\b|that'?s (?:not|wrong)\b|you (?:broke|were told|didn'?t|did not|ignored)\b|i (?:said|told you|already said)\b|as i said\b|why did you\b)/i;
 
 /**
+ * A leading directory change, stripped before the key is built.
+ *
+ * THE MEASURED CASE, AND ONLY THE MEASURED CASE. `attemptKey` spends up to
+ * three non-flag tokens on identity and the habit on this machine is
+ * `cd <absolute path> && <the real command>`, which spends all three on `cd`,
+ * the path and the separator. This repository's own corpus: 1,400 of 2,243
+ * command outcomes open with a `cd`, and the single key
+ * `cd c:/users/.../token-optimizer-mcp &&` covered 547 distinct command lines.
+ * A `cd` says WHERE a command ran; it says nothing about WHAT ran, so it cannot
+ * be part of the identity of an attempt.
+ *
+ * THE SEPARATOR SET IS THE ONE THAT WAS OBSERVED: `&&` (1,147), a newline (204)
+ * and `;` (38) after a leading `cd`. All three mean "then run this". `||` is
+ * DELIBERATELY EXCLUDED even though it costs one line to add: `cd x || echo
+ * failed` puts an error branch after the separator, not the next step, so
+ * stripping there would key the attempt on a failure handler. It occurred zero
+ * times.
+ *
+ * AND NOTHING WIDER, each refusal for a reason from the same corpus:
+ *
+ *   Environment assignments (`FOO=bar cmd`) DO carry information about what
+ *   ran. The one true instance here is
+ *   `TOKEN_OPTIMIZER_HOLDOUT=1 node ... jest.js ...`, and the holdout arm is a
+ *   genuinely different attempt from the same command without it. The other 20
+ *   are shell variable assignments joined by `;` -- statements, not prefixes --
+ *   whose value is usually a 120-character path that would be stripped down to
+ *   nothing useful.
+ *
+ *   `time`, `env`, `nice`, `sudo`, `bash -c`, `pushd`, `Set-Location`: ZERO
+ *   occurrences in 2,243 commands. Code for an unmeasured prefix is a way to
+ *   over-strip that no evidence asked for, and over-stripping merges commands
+ *   that genuinely differ -- the same bug in the other direction. `bash -c` is
+ *   worse than unmeasured: the command sits inside a quoted string, so stripping
+ *   the wrapper leaves a key beginning with a quote character.
+ *
+ *   `cd /d C:\path &&` and `cd "C:/a b" &&` need no extra rule -- the match runs
+ *   to the separator rather than counting tokens, so flags and quoted paths
+ *   containing spaces are consumed for free. Neither appears here, so neither is
+ *   claimed as tested behaviour beyond its unit test.
+ *
+ * A `cd` with NO separator is left alone: `cd <path>` on its own ran no command,
+ * and its key is as meaningless afterwards as before -- there is nothing to
+ * recover. Stripping is repeated up to `MAX_DIR_PREFIXES` times so
+ * `cd a && cd b && cmd` reaches `cmd`; the bound exists only so a pathological
+ * line cannot loop, since each pass must consume a whole `cd ... <sep>`.
+ *
+ * APPLIED IDENTICALLY TO BOTH SOURCES because it is applied INSIDE `attemptKey`,
+ * which is the single function both the event path and the transcript reader's
+ * output pass through. The 120-character anchor cap that makes the two agree on
+ * 266 of 266 keys is untouched and still applied on both sides before this runs.
+ */
+const DIR_PREFIX = /^\s*cd\s[^\r\n;&|]*?(?:&&|;|\r?\n)\s*/i;
+const MAX_DIR_PREFIXES = 4;
+
+/**
+ * The command text with any leading directory change removed.
+ *
+ * Used for the key AND for the identical-text refusal, which is the half that
+ * keeps this from becoming a licence to pair more loosely: without it,
+ * `cd repo && npm test` failing and `npm test` succeeding would emit
+ * "`npm test` succeeded where `cd repo && npm test` failed" at 0.90 -- two
+ * spellings of one attempt, dressed up as a difference that mattered. The
+ * claim itself still quotes the RAW command, because that is what ran.
+ */
+export function commandBody(command) {
+  let text = String(command || '');
+  for (let i = 0; i < MAX_DIR_PREFIXES; i++) {
+    const stripped = text.replace(DIR_PREFIX, '');
+    if (stripped === text) break;
+    text = stripped;
+  }
+  return text;
+}
+
+/**
  * The prefix that makes two invocations "the same attempt".
  *
  * UP TO THREE NON-FLAG TOKENS, and both halves of that were found by working
@@ -194,7 +271,7 @@ const CORRECTION_OPENER =
  * ships a false claim into model context.
  */
 export function attemptKey(command) {
-  return String(command || '')
+  return commandBody(command)
     .trim()
     .split(/\s+/)
     .filter((token) => token && !token.startsWith('-'))
@@ -494,7 +571,14 @@ export function derive(dir, options = {}) {
           // is real and supports NEITHER claim, so nothing is emitted. This is
           // not a confidence question; a ceiling cannot rescue a claim whose
           // content is wrong.
-          if (failed.command === outcome.command) continue;
+          // COMPARED WITH THE DIRECTORY CHANGE REMOVED, for the same reason
+          // the key is. `cd repo && npm test` and `npm test` are one attempt
+          // spelled two ways; before `commandBody` they landed in different
+          // groups and never met, and letting them meet without widening this
+          // guard would emit "`npm test` succeeded where `cd repo && npm test`
+          // failed" at 0.90 -- a difference in the claim that is not a
+          // difference in what ran. Same for two `cd`s to different paths.
+          if (commandBody(failed.command) === commandBody(outcome.command)) continue;
 
           // NOTHING QUOTABLE, NOTHING CLAIMED. See `quotable` above: on this
           // client both sides of almost every pair are truncated multi-line
@@ -502,10 +586,12 @@ export function derive(dir, options = {}) {
           // spending the retrieval budget of every later session.
           if (!quotable(failed.command) || !quotable(outcome.command)) continue;
 
-          // AND THE KEY HAS TO NAME A COMMAND. See `hasAttemptIdentity`: a key
-          // that ran out of tokens on `cd <path> &&` groups 539 unrelated
-          // command lines in this repository alone, and any pair drawn from that
-          // group is a false claim about both halves.
+          // AND THE KEY HAS TO NAME A COMMAND. See `hasAttemptIdentity`. The
+          // `cd <path> &&` case that grouped 547 unrelated command lines in this
+          // repository is now handled earlier by `commandBody`; what is left
+          // here is every OTHER separator -- `git fetch && <anything>`, a
+          // pipeline, a `;`-joined pair -- where the key still names no single
+          // attempt and any pair drawn from it is false about both halves.
           if (!hasAttemptIdentity(outcome.command)) continue;
 
           const codeSensitive =
