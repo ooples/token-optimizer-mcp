@@ -18,9 +18,18 @@ They ship active compression that changes operation cost directly:
 
 Delta-on-re-read is the exact mechanism I called our headline differentiator.
 They have it, and theirs is **transparent** — it happens in hooks without the
-model choosing to cooperate. Ours requires the model to reissue the call against
-`smart_read`. That is a worse interaction, not a better one, and the comment on
-#201 should be corrected.
+model choosing to cooperate. The comment on #201 should be corrected.
+
+**And the second half of that concession is now itself out of date, which is
+worth saying rather than quietly deleting.** It said ours "requires the model to
+reissue the call against `smart_read`", making it a worse interaction. Zero-turn
+substitution removed that: `substitutionFor` in `hooks-core/inject.mjs` returns
+the answer inside the refusal itself — "unchanged since your last read" when
+nothing moved, the diff when we hold a snapshot, and otherwise an annotated
+skeleton carrying the structure plus every finding anchored to it. There is no
+second call. The remaining honest difference is narrower than the original
+concession: theirs rewrites the response of a tool the model already called,
+ours refuses and answers in the refusal. Both are zero-turn.
 
 ## Where we are genuinely ahead
 
@@ -120,13 +129,29 @@ truth for actual spend.
 ### 9. Skills and configuration health
 
 Unused-skill detection, per-skill context cost, CLAUDE.md bloat and
-cache-pattern auditing. Zero for us.
+cache-pattern auditing.
+
+**Status: built, and now visible.** "Zero for us" was wrong when it was written
+and wrong in an instructive way. `auditStanding` and `verdictFor` in
+`hooks-core/standing.mjs` already computed all four — which standing-context
+files are stale, oversized or never invoked, priced per session — and
+`renderStanding` already rendered the report. Nothing called `renderStanding`.
+The capability existed, was tested, and reached no reader, so the gap was real
+from a user's seat and closed from the code's, which is the disease this
+project's reachability guard exists to catch.
+
+It is wired now: the panel appears in `token_audit`, carrying the two things the
+finding queue cannot — the total prefix cost, and the files with nothing wrong,
+which produce no finding and were therefore invisible.
 
 ### 10. Memory health
 
 An eight-auditor MEMORY.md review with stale-entry detection. Our wiki staleness
 is conceptually the same machinery pointed at a different file; we have not
 pointed it there.
+
+**Status: unchanged.** Gap 9's machinery covers standing context, not MEMORY.md
+specifically.
 
 ### 11. Distribution and trust
 

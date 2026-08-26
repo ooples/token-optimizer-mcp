@@ -3,6 +3,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  declinedAtBudget,
+  mcpClientsSeen,
+  balanceSheet,
+  shadowDelivery,
   evidenceReport,
   evidenceReportMany,
   readEvidence,
@@ -346,5 +350,180 @@ describe('paired evidence report', () => {
       deliveryCoverage: 1,
     });
     expect(report.concurrency.effect.executedMistakesPrevented.mean).toBe(1);
+  });
+});
+
+describe('what the budget turned away', () => {
+  // `retrieval-decision` records were written from four call sites in
+  // inject.mjs and read by nothing -- a producer with no reader, which is one
+  // of the three sub-classes tests/hooks/census.test.mjs exists to catch, and
+  // the one it caught on its first run. These assertions drive the REAL
+  // rejection path rather than hand-writing records, so they fail if the
+  // reasons or the record shape drift.
+  //
+  // HOLDOUT PINNED at the top of this file. forTouch consults the stratified
+  // holdout, so without `TOKEN_OPTIMIZER_HOLDOUT=0` these fail intermittently
+  // when the anchor lands in the withheld arm and nothing is assessed at all.
+
+  test('counts nothing on a graph where retrieval never declined anything', () => {
+    // The honest zero. A budget that has turned nothing away must not be
+    // indistinguishable from one that was never consulted.
+    const declined = declinedAtBudget(dir);
+    expect(declined).toMatchObject({ decisions: 0, declined: 0, distinctFindings: 0 });
+    expect(declined.byReason).toEqual([]);
+  });
+
+  test('counts a cooldown rejection and names the reason', () => {
+    seed('finding', null);
+    expect(
+      forTouch(dir, load(dir), anchor, {
+        sessionId: 's1', episode: { episodeId: 'e1', arm: 'full' },
+      })
+    ).toMatch(/Known about/);
+    // A concurrent hook process with no in-memory gate: durable evidence still
+    // enforces the cooldown, and that rejection is what gets recorded.
+    expect(
+      forTouch(dir, load(dir), anchor, {
+        sessionId: 's1', alreadyInjected: new Set(), episode: { episodeId: 'e1', arm: 'full' },
+      })
+    ).toBeNull();
+
+    const declined = declinedAtBudget(dir);
+    expect(declined.declined).toBeGreaterThan(0);
+    expect(declined.distinctFindings).toBe(1);
+    expect(declined.byReason.map((r) => r.reason)).toContain('cooldown');
+  });
+
+  test('separates a quarantined finding from a cooled-down one', () => {
+    const key = seed('finding', null);
+    forTouch(dir, load(dir), anchor, {
+      sessionId: 's1', episode: { episodeId: 'e1', arm: 'full' },
+    });
+    forTouch(dir, load(dir), anchor, {
+      sessionId: 's1', alreadyInjected: new Set(), episode: { episodeId: 'e1', arm: 'full' },
+    });
+    recordFindingFeedback(dir, { findingId: key, rating: 'harmful', episodeId: 'review-1' });
+    recordFindingFeedback(dir, { findingId: key, rating: 'harmful', episodeId: 'review-2' });
+    forTouch(dir, load(dir), anchor, {
+      sessionId: 's2', episode: { episodeId: 'e2', arm: 'full' },
+    });
+
+    const reasons = declinedAtBudget(dir).byReason.map((r) => r.reason);
+    expect(reasons).toEqual(expect.arrayContaining(['cooldown', 'quarantined-harm']));
+    // Ranked, so the audit's "top 3" is the top 3 rather than the first 3.
+    const counts = declinedAtBudget(dir).byReason.map((r) => r.count);
+    expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+  });
+
+  test('counts an unlabelled rejection rather than dropping it', () => {
+    // An unknown reason is still a finding the model did not get. Reporting a
+    // smaller number than the truth would understate exactly the cost this
+    // reader exists to surface.
+    record(dir, {
+      kind: 'retrieval-decision',
+      surface: 'file',
+      anchor,
+      rejected: [{ key: 'no-reason-given' }],
+    });
+    const declined = declinedAtBudget(dir);
+    expect(declined.declined).toBe(1);
+    expect(declined.byReason).toEqual([{ reason: 'unspecified', count: 1 }]);
+  });
+});
+
+describe('the shadow arm, and the fields nothing read', () => {
+  // Five fields were written onto records and consumed nowhere:
+  // candidateCount and shadowFindingIds (the injection holdout's shadow),
+  // staleCount (index staleness as a rate), contradictedAt (when a claim was
+  // disputed) and clientTitle (on the mcp-client handshake). The first three
+  // are asserted here, driving the real record shapes rather than hand-written
+  // ones where possible.
+  //
+  // HOLDOUT PINNED at the top of this file, because forTouch consults it.
+
+  test('reports what the holdout withheld, not just how many touches it withheld', () => {
+    // THE GAP controlArmTokens WAS CREATED TO CLOSE, one arm over: `count` and
+    // `findingIds` go to zero in the holdout while `candidateCount` and
+    // `shadowFindingIds` carry what WOULD have been delivered. Nothing read the
+    // shadow pair, so the report could count the arms and never say what was
+    // in them.
+    record(dir, {
+      kind: 'inject', surface: 'file', anchor, holdout: false,
+      tokens: 120, count: 2, candidateCount: 2,
+      findingIds: ['a', 'b'], shadowFindingIds: ['a', 'b'],
+    });
+    record(dir, {
+      kind: 'inject', surface: 'file', anchor, holdout: true,
+      tokens: 0, count: 0, candidateCount: 3,
+      findingIds: [], shadowFindingIds: ['c', 'd', 'e'],
+    });
+
+    const shadow = shadowDelivery(dir);
+    expect(shadow.injections).toBe(2);
+    expect(shadow.selected).toBe(5);
+    expect(shadow.delivered).toBe(2);
+    // The control arm's content: chosen, deliberately not delivered.
+    expect(shadow.withheldSelected).toBe(3);
+    expect(shadow.withheldFindings).toBe(3);
+  });
+
+  test('counts index staleness as a rate rather than a boolean', () => {
+    // `stale` had a reader and `staleCount` did not, so an index with one
+    // rotten entry in forty was indistinguishable from one rotten throughout.
+    record(dir, {
+      kind: 'inject', surface: 'session-start', anchor: 'session-index',
+      holdout: false, tokens: 90, count: 40, candidateCount: 40,
+      stale: true, staleCount: 1,
+    });
+    const shadow = shadowDelivery(dir);
+    expect(shadow.indexRecords).toBe(1);
+    expect(shadow.staleEntries).toBe(1);
+  });
+
+  test('the balance sheet carries the control arm content, beside the control arm tokens', () => {
+    record(dir, {
+      kind: 'inject', surface: 'file', anchor, holdout: true,
+      tokens: 0, count: 0, candidateCount: 2, findingIds: [], shadowFindingIds: ['x', 'y'],
+    });
+    const causal = balanceSheet(dir).estimatedCausal;
+    expect(causal.controlArmSelected).toBe(2);
+    expect(causal.controlArmFindings).toBe(2);
+    expect(causal.selected).toBe(2);
+    expect(causal.delivered).toBe(0);
+  });
+
+  test('an empty graph reports honest zeroes rather than throwing', () => {
+    const shadow = shadowDelivery(dir);
+    expect(shadow).toMatchObject({
+      injections: 0, selected: 0, delivered: 0,
+      withheldSelected: 0, withheldFindings: 0, staleEntries: 0,
+    });
+  });
+
+  test('names the MCP clients that handshaked, with the title they report', () => {
+    // `mcp-client` was written on every handshake and read by nothing. Deleting
+    // it was the other option and would have been wrong: `mcp-tool` records a
+    // client only once it CALLS something, so a client that connected and then
+    // called nothing appeared nowhere at all.
+    record(dir, {
+      kind: 'mcp-client', client: 'claude-code', clientVersion: '2.1.0',
+      clientTitle: 'Claude Code',
+    });
+    record(dir, {
+      kind: 'mcp-client', client: 'codex', clientVersion: '0.9.0', clientTitle: null,
+    });
+    const clients = mcpClientsSeen(dir);
+    expect(clients).toHaveLength(2);
+    const claude = clients.find((c) => c.client === 'claude-code');
+    expect(claude).toMatchObject({ title: 'Claude Code', version: '2.1.0' });
+  });
+
+  test('reports a client at the version it is now, not the one it first connected on', () => {
+    record(dir, { kind: 'mcp-client', client: 'claude-code', clientVersion: '2.0.0', at: 1 });
+    record(dir, { kind: 'mcp-client', client: 'claude-code', clientVersion: '2.1.0', at: 2 });
+    const clients = mcpClientsSeen(dir);
+    expect(clients).toHaveLength(1);
+    expect(clients[0].version).toBe('2.1.0');
+    expect(clients[0].connections).toBe(2);
   });
 });

@@ -28,9 +28,10 @@
  * cost at the bottom.
  */
 
-import { record, readMetrics } from './metrics.mjs';
+import { record, readMetrics, declinedAtBudget } from './metrics.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
+import { renderStanding } from './standing.mjs';
 
 const estimate = (text) => Math.ceil(String(text || '').length / 4);
 
@@ -181,7 +182,7 @@ export function buildQueue(
 export function renderAudit(
   dir,
   findings = [],
-  { tier = 'opus', full = false, sessionsPerMonth = 60 } = {}
+  { tier = 'opus', full = false, sessionsPerMonth = 60, standing = null } = {}
 ) {
   const { queue, suppressed, done } = buildQueue(dir, findings);
   const lines = [];
@@ -314,6 +315,76 @@ export function renderAudit(
       body.push(
         `  ${trend.detector}: ${trend.before.toLocaleString()} -> ${trend.after.toLocaleString()} tokens/session ` +
           `(${trend.improved ? 'improved' : 'worse'})`
+      );
+    }
+  }
+
+  // WHAT THE BUDGET TURNED AWAY.
+  //
+  // The per-touch token budget is load-bearing by design (#204): without it the
+  // most heavily-worked files accumulate the most findings and become the most
+  // expensive to touch. But a budget that silently drops what it cannot afford
+  // looks, from outside, exactly like a graph that had nothing to say -- and
+  // those are the two states a reader most needs told apart. inject.mjs was
+  // already recording every rejection and its reason, from four call sites, and
+  // nothing read them.
+  //
+  // ONE LINE, not a panel. This is context for the queue above rather than
+  // another thing to do, and the report is held to its own cost.
+  try {
+    const declined = declinedAtBudget(dir);
+    if (declined.declined > 0) {
+      const reasons = declined.byReason
+        .slice(0, 3)
+        .map(({ reason, count }) => `${reason} ${count}`)
+        .join(', ');
+      body.push(
+        '',
+        `Retrieval declined ${declined.declined.toLocaleString()} finding(s) ` +
+          `(${declined.distinctFindings} distinct) across ${declined.decisions.toLocaleString()} decision(s): ${reasons}.`
+      );
+    }
+  } catch {
+    /* the rejection log is context, never a reason to fail the audit */
+  }
+
+  // STANDING CONTEXT, as a panel rather than only as queue rows.
+  //
+  // auditStanding and verdictFor were both reachable, so this project already
+  // computed which CLAUDE.md rules and skills are stale, oversized or never
+  // used -- and threw the report away. renderStanding existed, was tested, and
+  // had no caller: the forTouch shape exactly, in the subsystem #203 claimed
+  // closed the skills-and-memory gap. Hard to defend a gap as closed while the
+  // report that would show it is unreachable.
+  //
+  // WHAT THE QUEUE ABOVE CANNOT SAY, which is why this is not duplication. The
+  // queue carries one row per ACTION, so a standing file with nothing wrong
+  // contributes no row and is invisible -- and the total cost of the prefix,
+  // the number that says what standing context is worth arguing about at all,
+  // is carried by no row either. Both are in the panel.
+  //
+  // Costed like everything else here: it is pushed BEFORE the closing line is
+  // measured, so the report's self-cost includes its own newest panel rather
+  // than understating it.
+  if (standing?.length) {
+    body.push('', 'Standing context -- charged every session:', '');
+    const panel = renderStanding(standing, { sessionsPerMonth });
+    // Indented to sit under its heading, blank lines left blank rather than
+    // turned into trailing whitespace.
+    for (const line of panel.split('\n')) body.push(line ? `  ${line}` : '');
+    // ONLY IF THEY ACTUALLY DID. This pointed the reader at "the queue at the
+    // top" whenever any verdict carried an action -- including when the queue
+    // printed "Nothing addressable found", because a caller can render the
+    // panel with no findings at all, and the withholding rule can drop a
+    // standing row even when findings were passed. Telling someone to look at
+    // a row that is not there is worse than saying nothing.
+    const shownStandingIds = new Set(
+      shown.map((item) => item.id).filter((id) => typeof id === 'string' && id.startsWith('standing-'))
+    );
+    if (shownStandingIds.size) {
+      body.push(
+        '',
+        '  The actions above also appear in the queue at the top, where they are priced and applyable.'
       );
     }
   }

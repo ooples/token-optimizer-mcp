@@ -369,3 +369,97 @@ describe('the report does not misstate its own numbers', () => {
     }
   });
 });
+
+describe('the standing-context panel', () => {
+  // WHY THIS IS HERE AT ALL. renderStanding was implemented, tested and called
+  // by nothing -- the same shape as forTouch, in the subsystem #203 claimed
+  // closed the skills-and-memory gap. These assertions are what make it stay
+  // wired: the reachability guard can only tell that SOMETHING references the
+  // name, not that the report reaches a reader.
+  const verdicts = [
+    {
+      entry: 'CLAUDE.md',
+      tokens: 4200,
+      invocations: null,
+      termsApplied: 2,
+      sessions: 12,
+      stale: [{ line: 31, why: 'names a script that no longer exists' }],
+      neverUsed: false,
+      bloated: true,
+      evidence: 'measured',
+      actions: [{ action: 'fix', kind: 'yours', why: 'the claim is provably stale' }],
+    },
+    {
+      entry: '.claude/skills/quiet.md',
+      tokens: 900,
+      invocations: 3,
+      termsApplied: null,
+      sessions: 12,
+      stale: [],
+      neverUsed: false,
+      bloated: false,
+      evidence: 'measured',
+      actions: [],
+    },
+  ];
+
+  test('renders the panel when verdicts are supplied', () => {
+    const out = renderAudit(dir, [], { standing: verdicts });
+    expect(out.text).toMatch(/Standing context -- charged every session/);
+    expect(out.text).toContain('CLAUDE.md');
+    expect(out.text).toMatch(/PROVABLY STALE/);
+  });
+
+  test('carries the two things the queue cannot say', () => {
+    const out = renderAudit(dir, [], { standing: verdicts });
+    // The prefix total: no single finding row carries it.
+    expect(out.text).toContain('5,100 tokens total');
+    // A file with NOTHING wrong produces no finding, so the queue cannot
+    // mention it -- and "we looked and it is fine" is the answer that stops
+    // this being re-litigated every session.
+    expect(out.text).toContain('.claude/skills/quiet.md');
+    expect(out.text).toMatch(/nothing to do/);
+  });
+
+  test('claims the actions are in the queue ONLY when they are', () => {
+    // THIS TEST USED TO REQUIRE THE FALSE CLAIM, which review caught. Rendered
+    // with no findings, the queue prints "Nothing addressable found" -- and the
+    // panel still told the reader the actions "also appear in the queue at the
+    // top". Pointing somebody at a row that is not there is worse than silence.
+    const withoutQueue = renderAudit(dir, [], { standing: verdicts });
+    expect(withoutQueue.text).toMatch(/Nothing addressable found/);
+    expect(withoutQueue.text).not.toMatch(/also appear in the queue/);
+
+    // With the matching standing rows actually in the queue, the pointer is
+    // true and worth printing: the panel and the queue would otherwise read as
+    // two unrelated lists saying the same thing.
+    const withQueue = renderAudit(
+      dir,
+      [{ id: 'standing-fix', title: 'CLAUDE.md: the claim is provably stale', costPerSession: 4200 }],
+      { standing: verdicts, full: true }
+    );
+    expect(withQueue.text).toMatch(/also appear in the queue/);
+  });
+
+  test('omits the panel entirely when there is no standing context', () => {
+    // Silence rather than an empty heading: a panel that always prints costs
+    // tokens in every audit on a project with no CLAUDE.md.
+    for (const empty of [null, undefined, []]) {
+      const out = renderAudit(dir, [], { standing: empty });
+      expect(out.text).not.toMatch(/Standing context -- charged/);
+    }
+  });
+
+  test('the panel is inside the report self-cost, not outside it', () => {
+    // The report exists to prove it is not a net loss. A panel excluded from
+    // its own cost figure biases exactly that comparison.
+    const bare = renderAudit(dir, [], { standing: null });
+    const withPanel = renderAudit(dir, [], { standing: verdicts });
+    const stated = (out) =>
+      Number(/cost about ([\d,]+) tokens/.exec(out.text)[1].replace(/,/g, ''));
+    expect(stated(withPanel)).toBeGreaterThan(stated(bare));
+    expect(stated(withPanel)).toBeGreaterThanOrEqual(
+      Math.ceil(withPanel.text.length / 4) * 0.9
+    );
+  });
+});

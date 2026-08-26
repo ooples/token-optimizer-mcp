@@ -317,3 +317,112 @@ a knowledge-graph costume. The metrics ship with the feature, not after it.
 4. **Cold start.** The graph is empty on a fresh clone and value ramps over the
    first few sessions. Accepted deliberately: the alternative is indexing code
    nobody will touch, which is the exact waste RAG ingestion is criticised for.
+
+## Verifying it is connected
+
+Every capability in this document can be implemented correctly, tested
+thoroughly, and connected to nothing. That is not a hypothetical: it has
+happened here repeatedly, and each time the whole test suite was green while the
+feature delivered nothing.
+
+- `forTouch` — the just-in-time injection this design calls "where the win
+  lands" — had 27 passing tests and zero production call sites.
+- `wiki_query` was named in twelve shipped copies of the injected prompt text.
+  There was no such tool.
+- `kind: 'query'` was read by the index budget and written by nothing except the
+  test suite, so the ratio was zero on every project and the budget sat pinned
+  at its 150-token floor for the life of the feature.
+- `contradicts` and `answers` sat in `EDGE_KINDS` with no write site: the graph
+  declared it could record a disputed belief and an answered question, and could
+  do neither.
+- `contradictionReason`, up to 400 characters explaining why one finding
+  disputes another, was written on every `contradict` call and read by nothing.
+
+Unit tests cannot see this, because they call the function directly. **Mutation
+testing is actively misleading here:** break an unreachable function and its own
+tests fail, so the mutation is scored as caught while the feature still delivers
+nothing. Measured on this repository, the suite scored 100% on ten realistic
+mutations during a period when two whole features were unreachable.
+
+Three things answer it instead.
+
+**`tests/hooks/reachability.test.mjs`** asks whether an exported name is
+referenced by anything that ships, as opposed to only by its own tests. It scans
+`hooks-core` and `plugin/hooks` for declarations — functions *and* consts — and
+searches all of `hooks-core`, `plugin`, `src` and `scripts` for uses. Comments
+are stripped, because prose is not a caller, and import specifiers are
+discounted, because an import is not a call. **String literals are deliberately
+NOT stripped**: `src/server` dispatches into `hooks-core` through dynamic
+`mods.<module>.<fn>` handles, and a scanner that skips strings desynchronises on
+the first regex literal containing a quote — measured at 63% of `adapter.mjs`
+consumed and eleven live exports reported as orphans. Over-counting a name that
+appears in a string is the permissive direction, and permissive is merely
+useless where strict fails CI on working code and gets switched off.
+
+**`tests/hooks/census.test.mjs`** counts producers against consumers in four
+namespaces the name-based scan cannot model: event kinds, edge kinds, tool names
+appearing in injected prompt text, and record fields. It is what would have
+caught every example in the list above.
+
+**`npm run wiki:census`** prints what the graph is doing on a real machine —
+findings, nodes, edges by kind, and index, query, inject, substitute and
+retrieval-decision events. This is not a test and never fails a build. Every
+defect listed above passed CI, so a green suite is not evidence that a
+capability runs; events in a real log are. A fresh clone is expected to read
+zero everywhere, which is the cold start this design accepts deliberately.
+
+**What the guards cannot prove.** A name-based scan shows that a REFERENCE
+exists, never that it RUNS. This work produced its own example: `manifestSize`
+left the allowlist by acquiring a caller in the doctor's install section, and
+that call sits inside `if (resolved.method !== 'plugin')` — so on a plugin
+install, which is how this product is actually distributed, it still never
+executes. That is correct here, because only the install script writes a
+manifest and a plugin install has none to size, but the guard could not have
+told the difference. A reference inside a branch that never runs, or behind a
+flag nobody sets, satisfies it exactly as well as a live call. That is precisely
+why `npm run wiki:census` reads real logs rather than source text, and why a
+capability is not considered proven until its events appear in one.
+
+Every assertion in `census.test.mjs` is mutation-tested, and that is not
+ceremony. Two of its first drafts could not fail at all: the read side of "read
+but never written" was filtered by the write side, so the `query` case it
+advertises would have slipped straight through, and "declares every edge kind it
+writes" compared a set against a superset it had already been filtered into.
+Both were found by deliberately breaking the thing each claimed to detect and
+watching the suite stay green. A guard that cannot fail is worse than no guard,
+because it is counted.
+
+The census's own lists are **empty**. They did not start that way: it shipped
+one orphan event writer and six unread record fields, each described accurately
+and attributed to a plan that had not reached those tasks — which is the same
+list Round 1 produced, with a different excuse on it. Every one now has a
+reader, or is deleted:
+
+| | Resolution |
+|---|---|
+| `candidateCount`, `shadowFindingIds` | the injection holdout's shadow — what retrieval selected against what was served, reported by `shadowDelivery` |
+| `staleCount` | index staleness as a rate, not a boolean |
+| `contradictedAt` | disclosed beside the reason a claim was disputed |
+| `lastAction` | names the tool in the stale reason: "file changed (last touched by Edit)" |
+| `clientTitle`, `kind: 'mcp-client'` | the doctor reports which clients actually handshaked |
+| `contentAnchor` | **deleted**, per this project's own rule about capabilities kept for later |
+
+**The reachability allowlist is empty.** It held twenty-one entries when the
+detector was built, sixteen after the first round parked them with accurate
+descriptions, seven after Plan 1, and zero now. The last four were the hard
+ones, and each was held back for a while on a true statement — "the producing
+action does not exist" — until the producing action was built:
+
+| | Resolution |
+|---|---|
+| `selectForConsolidation` | Runs in the semantic harvest, so a session stores what a token budget admits instead of everything extracted. Fixing it first required fixing `consolidate.mjs`, whose halves disagreed about the field name: the selector read `entry.summary`, which no producer here emits, so wiring it naively would have priced every candidate at zero and dropped nothing. Live, green and inert is the same defect wearing a call site. |
+| `consolidationRatio` | Reported per finding by `/api/wiki/node` and shown in the dashboard detail view — the number this document opens on, previously computed for no finding anyone could look at. |
+| `recordRefresh` | The keep-warm decision is written to the ledger when `cache_audit` issues it. |
+| `recordRefreshOutcome` | Scored by `scoreOutstandingRefreshes`, which reads the event log to see whether a turn actually arrived inside the window the advice predicted. A refresh whose window is still open records **nothing** rather than guessing a miss — the signal needed no new instrumentation, it was in the log the whole time. |
+
+That last one closed a loop that could never turn. `tripwire` demands ten
+outcomes before it may have an opinion and no call site ever produced one, so it
+answered "only 0/10 refreshes observed" for the life of the project, and
+`keepWarmDecision` could not learn that its modelled hit rate was wrong. Between
+"the model says refresh" and "stop the feature entirely" there was nothing at
+all.

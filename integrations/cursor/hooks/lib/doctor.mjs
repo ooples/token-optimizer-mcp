@@ -26,7 +26,22 @@ import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSyn
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { harvestMode } from './harvest.mjs';
-import { readManifest, verifyManifest, residue } from './manifest.mjs';
+import { readManifest, verifyManifest, residue, manifestSize } from './manifest.mjs';
+import { mcpClientsSeen } from './metrics.mjs';
+
+/**
+ * Bytes as a person reads them.
+ *
+ * Local because it exists for one line of one check, and because the alternative
+ * -- printing a raw byte count next to a file count -- is the kind of detail
+ * that gets skimmed past rather than read.
+ */
+function describeBytes(bytes) {
+  if (!bytes) return 'size unknown';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const ok = (name, detail) => ({ name, pass: true, detail });
 const bad = (name, detail, remedy) => ({ name, pass: false, detail, remedy });
@@ -362,12 +377,32 @@ export function checklist({ root, settingsPath, install }) {
     }
 
     // What we recorded putting on the machine, and whether it is still that.
-    const verified = verifyManifest(readManifest());
+    const manifest = readManifest();
+    const verified = verifyManifest(manifest);
     if (verified) {
-      checks.push(verified.modified === 0
-        ? ok('installed files intact', `${verified.intact} file(s) match the install manifest`)
-        : ok('installed files intact', `${verified.modified} file(s) edited since install -- ` +
+      // HOW MUCH, not just how many. manifestSize computed exactly this and had
+      // no caller, so the one number that says what uninstall will actually
+      // remove -- and the only cross-check on a manifest that lists files which
+      // no longer exist, since a missing file contributes zero bytes -- was
+      // computed nowhere and shown to no one.
+      const footprint = describeBytes(manifestSize(manifest));
+      // MISSING IS NOT INTACT, and branching on `modified` alone said it was.
+      // verifyManifest reports three states and this read two of them: a
+      // recorded file DELETED rather than edited left `modified === 0`, so a
+      // half-removed install passed as healthy. The footprint above is what
+      // makes it visible -- a missing file contributes zero bytes -- but a
+      // visible detail beside a PASS is still a PASS.
+      if (verified.missing > 0) {
+        checks.push(bad('installed files intact',
+          `${verified.missing} of ${verified.files.length} recorded file(s) are gone (${footprint} still on disk)`,
+          'reinstall the package to restore them, or run the uninstaller to clear the manifest'));
+      } else if (verified.modified === 0) {
+        checks.push(ok('installed files intact', `${verified.intact} file(s), ${footprint}, match the install manifest`));
+      } else {
+        checks.push(ok('installed files intact', `${verified.modified} of ${verified.intact + verified.modified} file(s) ` +
+          `(${footprint} recorded) edited since install -- ` +
           'uninstall will leave those alone rather than destroy your changes'));
+      }
     } else {
       checks.push(bad('install manifest present', 'no record of what was installed',
         'harmless if you installed manually; reinstall to get a removable, verifiable record'));
@@ -515,9 +550,16 @@ export function probeGraph({ dir }) {
   // the bits read back as world-readable regardless, so failing there would be
   // reporting a platform property as a broken install: a false alarm that
   // teaches people to ignore the doctor.
+  // BEFORE THE PLATFORM RETURN, and this is exactly the defect this branch
+  // exists to close: the client probe was appended after `probeGraph`'s
+  // Windows early-return, so on Windows it had a call site and never ran. A
+  // reference that cannot execute is what the reachability guard cannot see.
+  const clients = probeClients({ dir });
+
   if (process.platform === 'win32') {
     checks.push(ok('graph directory is private',
       'POSIX modes are not enforced on Windows; the directory inherits its parent ACL'));
+    checks.push(...clients);
     return checks;
   }
 
@@ -531,7 +573,39 @@ export function probeGraph({ dir }) {
     checks.push(ok('graph directory is private', 'mode could not be read on this filesystem'));
   }
 
+  checks.push(...clients);
   return checks;
+}
+
+/**
+ * Which MCP clients have actually handshaked with this server.
+ *
+ * THE QUESTION THE REST OF THE DOCTOR CANNOT ANSWER. Every other check here
+ * reasons about files on disk: is the hook present, is it wired, does it refuse
+ * a large read. None of them can tell you whether the editor in front of you
+ * ever actually connected -- which is the single most common way this product
+ * is installed and silently does nothing.
+ *
+ * `mcp-client` records exactly that on every `initialize`, and nothing read it
+ * until now. NEVER A FAILURE: a fresh install has no handshakes yet, and a
+ * doctor that reports red on a correct install teaches people to ignore it.
+ */
+export function probeClients({ dir }) {
+  let clients = [];
+  try {
+    clients = mcpClientsSeen(dir);
+  } catch {
+    return [ok('MCP clients seen', 'no evidence log yet')];
+  }
+  if (!clients.length) {
+    return [ok('MCP clients seen', 'none yet -- the server has had no MCP handshake in this project')];
+  }
+  const described = clients
+    .slice(0, 5)
+    .map((c) => `${c.title || c.client}${c.version ? ` ${c.version}` : ''}`)
+    .join(', ');
+  return [ok('MCP clients seen', `${clients.length}: ${described}` +
+    (clients.length > 5 ? `, and ${clients.length - 5} more` : ''))];
 }
 
 /**

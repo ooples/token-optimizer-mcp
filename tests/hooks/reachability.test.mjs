@@ -25,39 +25,18 @@
  * gets disabled within a week.
  */
 import { describe, it, expect } from '@jest/globals';
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, relative } from 'path';
+import {
+  DECLARE_DIRS,
+  USAGE_DIRS,
+  walk,
+  stripComments,
+  stripSpecifiers,
+} from '../fixtures/source-scan.mjs';
 
 const REPO = process.cwd();
 
-/**
- * Where DECLARATIONS are collected: the live hook path only.
- *
- * `src/tools` is not scanned for declarations because its tools are dispatched
- * by NAME through a registry, so a name-based scan reports false positives
- * there, and a blocking check built on false positives gets disabled within a
- * week.
- */
-const DECLARE_DIRS = ['hooks-core', 'plugin/hooks'];
-
-/**
- * Where USAGES are searched: everything that ships.
- *
- * THIS MUST BE WIDER THAN THE DECLARATION SET. `src/server/*` reaches into
- * hooks-core through a dynamic `mods.<module>.<fn>` handle rather than a static
- * import, so scanning only the hook path reported `diagnose`, `renderFleet`,
- * `renderAudit` and `exportMarkdown` as unreachable while four MCP tools were
- * calling them. That first draft would have failed CI on working code -- the
- * fastest possible way to get a guard like this switched off.
- *
- * `scripts` is here for the same reason and was missed on the first pass:
- * wire-hooks and uninstall consume hooks-core/wire.mjs, so wirePlan and unwire
- * were reported dead while the installer and the uninstaller both called them.
- * Eleven files under scripts/ reference hooks-core. A check that scans only
- * where its author expected the callers to be measures the author, not the
- * code.
- */
-const USAGE_DIRS = ['hooks-core', 'plugin', 'src', 'scripts'];
 const TEST_DIRS = ['tests'];
 
 /**
@@ -101,23 +80,43 @@ const ALLOWED = new Map([
   // entries left this list at once, which is what wiring a whole feature looks
   // like -- and is why it was worth doing rather than annotating.
 
-  // CONSOLIDATION. forecast.mjs imports aggregateConsolidation from this module,
-  // so it is partly live -- but the selection, the ratio and the content anchor
-  // are not reached, meaning nothing ever decides WHAT to consolidate.
-  ['selectForConsolidation', 'UNWIRED: chooses what to promote into the graph; no caller decides when consolidation runs.'],
-  ['consolidationRatio', 'UNWIRED: reports what consolidation bought, and cannot report on a selection that never happens.'],
-  ['contentAnchor', 'UNWIRED: content-based anchoring, additive to path anchoring; no caller.'],
+  // WHAT IS LEFT IS PLAN 2'S, AND ONLY PLAN 2'S.
+  //
+  // renderStanding and manifestSize left this list by being WIRED, not by being
+  // re-described: renderStanding renders the standing-context panel inside
+  // renderAudit, and manifestSize reports the install footprint in the doctor's
+  // manifest check. Both have tests asserting a reader reaches the output,
+  // because this guard can only see that the NAME is referenced.
+  //
+  // The five below are owned by Plan 2 (production and measurement), in
+  // progress in parallel, and are attributed rather than triaged again. The
+  // assertion at the bottom of this file holds the count to a ceiling that can
+  // only fall, and refuses any entry that is neither one of these five nor
+  // genuine public API.
 
-  // HALF A FEEDBACK LOOP. shouldKeepWarm and keepWarmDecision are reachable;
-  // the outcome half that would tell them whether a refresh ever paid off is
-  // not, so the decision can never learn.
-  ['recordRefreshOutcome', 'UNWIRED: records whether a keep-warm refresh was worth it; the deciding half runs without it.'],
-
-  // SINGLETONS still to be traced.
-  ['renderStanding', 'UNWIRED: renders the standing-context audit. auditStanding IS reachable, so only the report is orphaned.'],
-  ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
-  ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],
-
+  // NOTHING IS LEFT, and the last four did not leave by being re-described.
+  //
+  // They were held here for a stated reason -- "the producing action does not
+  // exist" -- which was true and was still an excuse, because the producing
+  // action was the work. All four now have one:
+  //
+  //   selectForConsolidation  runs in the semantic harvest, so what a session
+  //     stores is chosen under a token budget instead of stored wholesale.
+  //     Fixing it also required fixing consolidate.mjs, whose two halves
+  //     disagreed about the field name: the selector read `entry.summary`,
+  //     which NO producer in this repository emits, so wiring it naively would
+  //     have priced every candidate at zero tokens and dropped nothing. Live,
+  //     green and inert is the same defect wearing a call site.
+  //   consolidationRatio      reported per finding by /api/wiki/node and shown
+  //     in the dashboard detail view -- the number #204 opens on, which was
+  //     computed for no finding anybody could look at.
+  //   recordRefresh           the keep-warm decision is written to the ledger
+  //     when cache_audit issues it.
+  //   recordRefreshOutcome    scored from the event log by
+  //     scoreOutstandingRefreshes, which resolves whether a turn actually
+  //     arrived inside the window the advice predicted. The signal needed no
+  //     new instrumentation; it was in the log the whole time.
+  //
   // ------------------------------------------------------------------
   // The policyText entry lived here as "GENUINE PUBLIC API", and it was stale
   // in the same way forTouch was: adapter.mjs and the SessionStart hook both
@@ -127,32 +126,6 @@ const ALLOWED = new Map([
   // ------------------------------------------------------------------
 ]);
 
-function walk(dir, out = []) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return out;
-  }
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    let st;
-    try {
-      st = statSync(full);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) {
-      // `lib` holds the GENERATED copies of hooks-core; scanning them would
-      // make every function look used by its own duplicate.
-      if (['node_modules', 'dist', 'lib', '.git'].includes(entry)) continue;
-      walk(full, out);
-    } else if (/\.(mjs|js|ts)$/.test(entry) && !/\.d\.ts$/.test(entry)) {
-      out.push(full);
-    }
-  }
-  return out;
-}
 
 const declareFiles = DECLARE_DIRS.flatMap((d) => walk(join(REPO, d)));
 const usageFiles = USAGE_DIRS.flatMap((d) => walk(join(REPO, d)));
@@ -162,50 +135,33 @@ const declarations = declareFiles.map((f) => ({ file: f, text: readFileSync(f, '
 const usages = usageFiles.map((f) => ({ file: f, text: readFileSync(f, 'utf8') }));
 const testText = testFiles.map((f) => readFileSync(f, 'utf8')).join('\n');
 
-/** Every `export function NAME` / `export async function NAME` in the live path. */
-function exportedFunctions() {
+/**
+ * Every `export function` / `export async function` / `export const` in the live path.
+ *
+ * CONSTS WERE INVISIBLE, and that is where the second-worst instance hid. The
+ * collector matched only `export function`, so 56 exported consts went
+ * unchecked -- among them `EDGE_KINDS` in hooks-core/wiki.mjs, which declared
+ * `contradicts` and `answers` as edge kinds of this graph while nothing in the
+ * repository ever wrote either one. A declaration nothing writes is the same
+ * defect as a function nothing calls, and it was outside the scan's model.
+ *
+ * MEASURED FALLOUT of adding them: zero new orphans. The 56 that were never
+ * checked are, as it happens, all reachable -- but they were not KNOWN to be,
+ * and now a new one cannot arrive unnoticed.
+ */
+function exportedNames() {
   const found = [];
   for (const { file, text } of declarations) {
-    const re = /export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g;
+    // Stripped, so a name written only in prose cannot be collected as a
+    // declaration either -- the same rule the usage side already follows.
+    const code = stripComments(text);
     let m;
-    while ((m = re.exec(text)) !== null) found.push({ name: m[1], file });
+    const fnRe = /export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g;
+    while ((m = fnRe.exec(code)) !== null) found.push({ name: m[1], file });
+    const constRe = /export\s+const\s+([A-Za-z_$][\w$]*)/g;
+    while ((m = constRe.exec(code)) !== null) found.push({ name: m[1], file });
   }
   return found;
-}
-
-/**
- * Strips comments, so prose cannot be mistaken for a call.
- *
- * THIS IS WHAT LET A DEAD PUBLIC ENTRY POINT THROUGH. `calibrate` counted as
- * reachable because curate.mjs:13 contains the English phrase "the reader's
- * ability to calibrate trust", and `reliability` counted because the word
- * appears in its own file's prose. calibration.mjs had ZERO importers -- no
- * forecast was ever logged, no outcome observed, and the shipped panel printed
- * precisely the uncalibrated number that module's docstring calls "a vibe with
- * a typeface" -- while the check that exists to catch exactly this reported it
- * as wired, on a coincidence of comment wording.
- *
- * A guard that reads documentation as code is worse than none: it is a clean
- * bill of health nobody re-examines. This module's files are heavily commented
- * by design, which makes the false-positive rate high rather than incidental.
- *
- * COMMENTS ONLY, NOT STRING LITERALS -- and that boundary was found the hard
- * way. Stripping quotes as well made `routingReport` and `modelSwitchCost` look
- * orphaned when routing-tool.ts calls both: three independent global passes
- * cannot nest, so an apostrophe inside a DOUBLE-quoted sentence opened a
- * "single-quoted string" that ran to the next apostrophe further down the file
- * and swallowed the real call sites in between.
- *
- * Getting that right needs a scanner, and this guard's own rule says why not to
- * build one: a check wrong in the permissive direction is merely useless, while
- * one wrong in the strict direction fails CI on working code and gets deleted.
- * The observed defect was comment prose, comments nest predictably, and that is
- * where the line belongs.
- */
-function stripComments(text) {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')     // block comments, including docblocks
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 '); // line comments, sparing the // in a URL
 }
 
 /**
@@ -216,11 +172,17 @@ function stripComments(text) {
  * check that is wrong in the permissive direction is merely useless -- one that
  * is wrong in the strict direction fails CI on working code and gets deleted.
  * COMMENTS are removed first, because prose is not a caller. Strings are NOT --
- * see stripComments above for the measurement that settled that boundary.
+ * see stripComments in tests/fixtures/source-scan.mjs for the two measurements
+ * IMPORT SPECIFIERS are removed too, because an import is not a call site --
+ * see stripSpecifiers there.
+ *
+ * STRIPPED ONCE PER FILE, not once per name: this runs over ~300 files times
+ * ~350 exported names, and re-stripping per name is the difference between a
+ * suite that runs in under a second and one nobody waits for.
  */
 const codeOnly = new Map();
 function shippedCode(file, text) {
-  if (!codeOnly.has(file)) codeOnly.set(file, stripComments(text));
+  if (!codeOnly.has(file)) codeOnly.set(file, stripSpecifiers(stripComments(text)));
   return codeOnly.get(file);
 }
 
@@ -233,7 +195,14 @@ function shippedCode(file, text) {
 // this function cannot answer and should not try to.
 function usedInShippedCode(name, declaringFile) {
   const word = new RegExp(`\\b${name}\\b`, 'g');
-  const decl = new RegExp(`export\\s+(?:async\\s+)?function\\s+${name}\\b`, 'g');
+  // Subtracts the declaration itself, in BOTH forms -- a const that discounted
+  // only `export function NAME` would be credited with a use by its own
+  // declaration line and could never be reported, which would make collecting
+  // consts at all a no-op dressed as coverage.
+  const decl = new RegExp(
+    `export\\s+(?:(?:async\\s+)?function|const)\\s+${name}\\b`,
+    'g'
+  );
   for (const { file, text } of usages) {
     const code = shippedCode(file, text);
     const uses = (code.match(word) || []).length;
@@ -244,7 +213,7 @@ function usedInShippedCode(name, declaringFile) {
 }
 
 describe('every exported function in the live hook path is reachable', () => {
-  const exports = exportedFunctions();
+  const exports = exportedNames();
 
   it('found something to check, so a broken scan cannot pass silently', () => {
     // A scan that matches nothing would report a clean bill of health forever.
@@ -295,5 +264,144 @@ describe('every exported function in the live hook path is reachable', () => {
       const file = declaredAt.get(name);
       if (file) expect([name, usedInShippedCode(name, file)]).toEqual([name, false]);
     }
+  });
+
+  it('keeps the allowlist empty, and refuses a new backlog entry', () => {
+    // THE LIST IS NOT A BACKLOG, and it is now nothing at all.
+    //
+    // Round 1 built this detector, it found ~21 unreachable capabilities, four
+    // were wired and sixteen were parked here with accurate descriptions of
+    // what was wrong with them -- and an accurate description of a defect felt
+    // like resolution. Plan 1 took it to seven. This plan took it to zero, and
+    // the last four went the hard way: each was held back on the true statement
+    // that its producing action did not exist, until it was built.
+    //
+    // Every future entry must be genuine public API and say so. Anything else
+    // is the backlog re-forming under a new name.
+    expect([...ALLOWED.keys()]).toEqual([]);
+
+    const unattributed = [...ALLOWED.entries()]
+      .filter(([, reason]) => !/^PUBLIC API/.test(reason))
+      .map(([name]) => name);
+    expect(unattributed).toEqual([]);
+  });
+});
+
+describe('the scan does not mistake prose for a call site', () => {
+  // PINNED, not newly fixed. stripComments already did this -- these assertions
+  // exist because the boundary is load-bearing and was moved twice, each time
+  // by someone reasonable who had not seen the measurement. A guard that reads
+  // documentation as code is worse than no guard: it is a clean bill of health
+  // nobody re-examines.
+  it('ignores a name that appears only in a line comment', () => {
+    const text = [
+      '// A write the hook observes is invalidated eagerly by someOrphanFn, so',
+      'export function other() { return 1; }',
+    ].join('\n');
+    expect(stripComments(text)).not.toContain('someOrphanFn');
+  });
+
+  it('ignores a name inside a block comment', () => {
+    expect(stripComments('/* calls someOrphanFn */ const x = 1;')).not.toContain(
+      'someOrphanFn'
+    );
+  });
+
+  it('keeps real code intact, including a URL that contains a double slash', () => {
+    // THE TRAP. A naive line-comment regex truncates at the `//` inside
+    // `https://`, blinding the scan to everything after any URL in the file --
+    // a silent permissive failure, which is exactly the class this guard exists
+    // to prevent.
+    const code = "const url = 'https://example.com/x'; realCall();";
+    const stripped = stripComments(code);
+    expect(stripped).toContain('realCall');
+    expect(stripped).toContain('example.com');
+  });
+
+  it('does not eat the rest of the line for a comment opener inside a string', () => {
+    // FOUND IN REVIEW, and it was the one direction this guard must never be
+    // wrong in. The regex line-comment pass had no idea it was inside a string,
+    // so a quoted `//` truncated the line and took the real call after it --
+    // reporting a live function as an orphan and failing CI on working code.
+    const line = 'const label = "a // b"; realCall();';
+    expect(stripComments(line)).toContain('realCall');
+
+    // Same shape with a block-comment opener: two strings, one holding `/*`
+    // and a later one holding `*/`, swallowed every call between them.
+    const block = 'const a = "/*"; realCall(); const b = "*/";';
+    expect(stripComments(block)).toContain('realCall');
+  });
+
+  it('still strips a real comment that follows a string on the same line', () => {
+    // The fix must not overshoot into keeping prose, which is the failure the
+    // whole file was built against.
+    expect(stripComments("const u = 'x'; // someOrphanFn")).not.toContain('someOrphanFn');
+  });
+
+  it('recovers on the next line when a regex literal confuses the tracker', () => {
+    // The second attempt at this failed because a regex containing a quote
+    // desynchronised the scanner for the rest of the FILE. Bounded to a line,
+    // the same input costs one line and the next is scanned correctly.
+    const quoteClass = '/[' + String.fromCharCode(34) + '/;';
+    const text = [quoteClass, 'realCall();'].join(String.fromCharCode(10));
+    expect(stripComments(text)).toContain('realCall');
+  });
+
+  it('still sees a name written inside a string literal', () => {
+    // THE OTHER SIDE OF THE SAME BOUNDARY, asserted so it cannot drift. Strings
+    // are NOT stripped, because src/server dispatches hooks-core through
+    // dynamic `mods.<module>.<fn>` handles and a scanner that skips strings
+    // desynchronises on the first regex literal containing a quote -- see
+    // stripComments for the measurement. Over-counting a name in a string is
+    // the permissive direction, and that is the safe one here.
+    expect(stripComments("const h = 'realCall';")).toContain('realCall');
+  });
+});
+
+describe('an import is not a call site', () => {
+  it('discounts an import specifier', () => {
+    const code = "import { cacheOrdered } from './cache.mjs';\nconst x = 1;";
+    expect(stripSpecifiers(code)).not.toContain('cacheOrdered');
+  });
+
+  it('discounts a re-export specifier', () => {
+    expect(stripSpecifiers("export { cacheOrdered } from './cache.mjs';")).not.toContain(
+      'cacheOrdered'
+    );
+  });
+
+  it('leaves a real call intact, and the module path alone', () => {
+    const code = "import { cacheOrdered } from './cache.mjs';\nreturn cacheOrdered(items);";
+    const stripped = stripSpecifiers(code);
+    expect(stripped).toContain('cacheOrdered(items)');
+    // Exactly one survivor: the call. The specifier is gone.
+    expect((stripped.match(/\bcacheOrdered\b/g) || []).length).toBe(1);
+  });
+
+  it('leaves a default and a namespace import alone', () => {
+    // Not the specifier case: both bind a name that ordinary code must then
+    // call, so blanking them would move the guard in the strict direction for
+    // no measured defect.
+    const code = "import os from 'os';\nimport * as wiki from './wiki.mjs';";
+    const stripped = stripSpecifiers(code);
+    expect(stripped).toContain('os');
+    expect(stripped).toContain('wiki');
+  });
+});
+
+describe('exported consts are checked, not just functions', () => {
+  it('collects an exported const', () => {
+    const names = exportedNames().map((e) => e.name);
+    // EDGE_KINDS is an exported const in hooks-core/wiki.mjs. While the
+    // collector saw only `export function`, 56 declarations went unchecked --
+    // and that is where `contradicts` and `answers` sat, declared as edge kinds
+    // of this graph with zero write sites anywhere in the repository.
+    expect(names).toContain('EDGE_KINDS');
+  });
+
+  it('collects enough of them that a broken const pattern cannot pass silently', () => {
+    const wiki = exportedNames().filter(({ file }) => /wiki\.mjs$/.test(file));
+    expect(wiki.length).toBeGreaterThan(1);
+    expect(exportedNames().length).toBeGreaterThan(300);
   });
 });

@@ -94,3 +94,39 @@ describe('the reason given for an unreadable anchor', () => {
     expect(reason).toMatch(/changed/i);
   });
 });
+
+describe('the reason given for a changed file names what changed it', () => {
+  // `lastAction` -- the tool name that last touched a file -- has been stamped
+  // on every file node by the structural harvest since #203 and read by
+  // nothing. It belongs precisely in this sentence: "file changed" tells a
+  // reader their finding may be wrong, "file changed (last touched by Edit)"
+  // tells them a targeted edit did it, which is cheap to re-verify, and "by
+  // Write" says the file was replaced wholesale, which usually is not.
+  const changed = (extra = {}) => {
+    const key = join(dir, 'src', 'changed.ts');
+    writeFileSync(key, 'export const x = 2;\n');
+    return { kind: 'file', key, hash: 'not-the-current-hash', snapshot: 'export const x = 1;\n', ...extra };
+  };
+
+  it('names the tool when the graph recorded one', () => {
+    const { reason } = checkAnchor(changed({ lastAction: 'Edit' }));
+    expect(reason).toBe('file changed (last touched by Edit)');
+  });
+
+  it('falls back to the bare reason when nothing was recorded', () => {
+    // A node written before the field existed, or by a path that does not set
+    // it. Inventing a tool name would be asserting a cause that was never
+    // observed -- the exact error the rest of this file exists to prevent.
+    const { reason } = checkAnchor(changed());
+    expect(reason).toBe('file changed');
+  });
+
+  it('bounds the tool name, because it reaches injected text', () => {
+    const { reason } = checkAnchor(changed({ lastAction: 'x'.repeat(400) }));
+    expect(reason.length).toBeLessThan(90);
+  });
+
+  it('still reports the anchor as stale', () => {
+    expect(checkAnchor(changed({ lastAction: 'Write' })).fresh).toBe(false);
+  });
+});

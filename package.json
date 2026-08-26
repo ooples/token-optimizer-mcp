@@ -102,6 +102,7 @@
     "eval:handoff:concurrent": "node scripts/run-concurrent-handoff-eval.mjs",
     "verify:all": "npm run sync:hooks:check && npm run eval:ucr:qualification:verify && npm run verify:clients && npm run verify:certification && npm run verify:harvest && npm run verify:ucr && npm run verify:ucr:study-design && npm run verify:live-graph && npm run verify:ui && npm run verify:interactions",
     "verify:interactions": "node scripts/verify-wiki-interactions.mjs",
+    "wiki:census": "node scripts/wiki-census.mjs",
     "dashboard:verify-live": "node scripts/verify-live-dashboard.mjs",
     "dashboard:attribution-smoke": "node scripts/run-dashboard-attribution-smoke.mjs",
     "dashboard:audit-savings": "node scripts/audit-token-savings.mjs",

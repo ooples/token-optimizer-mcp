@@ -184,6 +184,25 @@ describe('disclosing a dispute when a finding is served', () => {
     expect(findingIn(served, 'new').contradictedBy).toBe('old');
   });
 
+  test('serve discloses WHEN the dispute was raised, not only why', () => {
+    // `contradict` writes contradictedAt and contradictionReason on the same
+    // line of the same putNode call. Round 1 gave the reason a reader and left
+    // the timestamp unread, so a disclosure could say a claim was disputed and
+    // why, and not whether that happened this morning or a year ago -- which
+    // for a reader deciding whether to trust it is most of the signal.
+    const before = Date.now();
+    contradict(dir, { key: 'old', byKey: 'new', reason: 're-derived' });
+    const graph = load(dir);
+    const served = serve(graph, [...graph.nodes.values()].filter((n) => n.kind === 'finding'));
+
+    for (const key of ['old', 'new']) {
+      const at = findingIn(served, key).contradictedAt;
+      expect(typeof at).toBe('number');
+      expect(at).toBeGreaterThanOrEqual(before);
+      expect(at).toBeLessThanOrEqual(Date.now());
+    }
+  });
+
   test('serve leaves an undisputed finding unmarked', () => {
     contradict(dir, { key: 'old', byKey: 'new', reason: 're-derived' });
     const graph = load(dir);
@@ -192,6 +211,7 @@ describe('disclosing a dispute when a finding is served', () => {
     const other = findingIn(served, 'other');
     expect(other.contradicted).toBeUndefined();
     expect(other.contradictedBy).toBeUndefined();
+    expect(other.contradictedAt).toBeUndefined();
   });
 
   test('serve discloses on a type an anchor cannot invalidate', () => {

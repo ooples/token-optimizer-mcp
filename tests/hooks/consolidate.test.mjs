@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   selectForConsolidation, irrecoverability, reuseProbability,
-  consolidationRatio, aggregateConsolidation, contentAnchor, costToRederive,
+  consolidationRatio, aggregateConsolidation, costToRederive,
 } from '../../hooks-core/consolidate.mjs';
 import { classifySituation, restorationPlan } from '../../hooks-core/restore.mjs';
 import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
@@ -137,31 +137,6 @@ describe('the consolidation ratio -- the metric that needs session instrumentati
   });
 });
 
-describe('content anchors reach across projects', () => {
-  test('identical content yields the same anchor from different paths', () => {
-    // A vendored library file is the same file in every repo that holds it.
-    const a = join(workspace, 'a.ts');
-    const b = join(workspace, 'b.ts');
-    writeFileSync(a, 'export const x = 1;');
-    writeFileSync(b, 'export const x = 1;');
-
-    expect(contentAnchor(a, 'samehash')).toBe(contentAnchor(b, 'samehash'));
-  });
-
-  test('size is part of the identity, so a truncated digest cannot collide', () => {
-    const a = join(workspace, 'a.ts');
-    const b = join(workspace, 'b.ts');
-    writeFileSync(a, 'short');
-    writeFileSync(b, 'considerably longer content here');
-
-    expect(contentAnchor(a, 'samehash')).not.toBe(contentAnchor(b, 'samehash'));
-  });
-
-  test('an unreadable path yields no anchor rather than a wrong one', () => {
-    expect(contentAnchor(join(workspace, 'missing.ts'), 'hash')).toBeNull();
-  });
-});
-
 describe('restoration adapts to the situation', () => {
   test('an unresolved question makes it mid-problem', () => {
     expect(classifySituation({ openQuestion: 'is the skew fix correct?' })).toBe('mid-problem');
@@ -280,5 +255,73 @@ describe('scoring inputs are the ones the module claims to use', () => {
 
   test('an explicitly measured spend still wins over the evidence-size fallback', () => {
     expect(costToRederive({ summary: 'x', evidence: 'y', tokensSpent: 4242 })).toBe(4242);
+  });
+});
+
+describe('the selector reads the field producers actually emit', () => {
+  // THE REASON THIS WAS NEVER GOING TO WORK, even once it had a caller.
+  // `irrecoverability`, `costToRederive` and `selectForConsolidation` read
+  // `entry.summary`; `consolidationRatio` and `aggregateConsolidation` read
+  // `finding.claim`. No producer in this repository emits `summary` -- the
+  // semantic harvest, wiki_write and the eval harnesses all emit `claim`, and
+  // `validate()` rejects anything without one.
+  //
+  // Wired naively, every candidate would have scored `tokens: 0`, the budget
+  // could never bind, nothing would ever be dropped, and the selector would
+  // have been live, green and inert.
+  const candidate = (i, type = 'finding') => ({
+    type,
+    claim: `a finding whose claim is long enough to cost real tokens, number ${i}, ` +
+      'padded so that a handful of these exceed a small budget',
+    evidence: 'observed directly in the session transcript',
+    anchors: [`src/file-${i}.ts`],
+  });
+
+  test('a budget actually binds, so something is dropped', () => {
+    const graph = { nodes: new Map(), edges: [] };
+    const many = Array.from({ length: 40 }, (_, i) => candidate(i));
+    const selection = selectForConsolidation(graph, many, { budget: 200 });
+
+    expect(selection.kept.length).toBeGreaterThan(0);
+    expect(selection.kept.length).toBeLessThan(many.length);
+    expect(selection.dropped).toBe(many.length - selection.kept.length);
+    expect(selection.tokens).toBeGreaterThan(0);
+    expect(selection.tokens).toBeLessThanOrEqual(200);
+  });
+
+  test('a claim costs tokens, where an absent summary costs none', () => {
+    // The direct statement of the defect: with the old reader every one of
+    // these was free and the budget was unreachable.
+    const graph = { nodes: new Map(), edges: [] };
+    const one = selectForConsolidation(graph, [candidate(1)], { budget: 4000 });
+    expect(one.tokens).toBeGreaterThan(0);
+  });
+
+  test('failures and decisions survive the floor when the budget is tight', () => {
+    const graph = { nodes: new Map(), edges: [] };
+    const mixed = [
+      ...Array.from({ length: 20 }, (_, i) => candidate(i)),
+      candidate(99, 'failure'),
+      candidate(98, 'decision'),
+    ];
+    const selection = selectForConsolidation(graph, mixed, { budget: 120 });
+    const types = selection.kept.map((k) => k.type);
+    expect(types).toContain('failure');
+    expect(types).toContain('decision');
+  });
+
+  test('summary is still accepted from an external caller', () => {
+    const graph = { nodes: new Map(), edges: [] };
+    const legacy = { type: 'finding', summary: 'x'.repeat(400), evidence: 'e', anchors: [] };
+    expect(selectForConsolidation(graph, [legacy], { budget: 4000 }).tokens).toBeGreaterThan(0);
+  });
+
+  test('the ratio and the selector agree about which field is the claim', () => {
+    const entry = { type: 'finding', claim: 'y'.repeat(200), evidence: 'e', anchors: [] };
+    const graph = { nodes: new Map(), edges: [] };
+    const kept = selectForConsolidation(graph, [entry], { budget: 4000 }).kept[0];
+    // derivedCost is stamped by the selector; the ratio reads it against the
+    // same text the selector priced.
+    expect(consolidationRatio(kept)).toBeGreaterThan(0);
   });
 });
