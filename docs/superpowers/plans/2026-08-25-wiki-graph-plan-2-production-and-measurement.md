@@ -1172,6 +1172,19 @@ injection join — it cannot compile against `master` until #315 merges.
 | 7 — Layer 2 | Not started. The heaviest task in the plan. |
 | 8 | Not started. Depends on 6 and 7. |
 | 9, 10 | Not started. |
+| 11 -- transcript reader | **Complete.** `failedResultsFromTranscript` in
+`hooks-core/transcript.mjs`, read-only, tail-bounded, redacted at the boundary. Yield on
+this machine is **0** and that is measured, not shrugged at: 8 of 571 command failures
+across 163 transcripts are quotable. Two refusals shipped with it -- `quotable` and
+`hasAttemptIdentity`. See `task-11-report.md`. |
+| 12 -- `attemptKey` | **Complete.** `commandBody` skips a leading `cd <path>` up to `&&`,
+`;` or a newline, applied inside `attemptKey` so both sources get it identically. The
+most-populated key fell from **547 distinct commands to 76**; the false-pair exposure a real
+quotable failure sat in fell from **222 to 0**. Candidates 0 -> 0, because the binding
+constraint is `quotable`, not the key. The identical-text refusal was WIDENED to compare
+`commandBody` both sides, or the better key would have claimed `npm test` succeeded where
+`cd repo && npm test` failed. Environment assignments, `time`, `bash -c` and `||` are
+deliberately NOT stripped, each for a measured reason. See `task-12-report.md`. |
 
 ## Corrections to the task text above
 
