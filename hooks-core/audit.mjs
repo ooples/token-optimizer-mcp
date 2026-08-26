@@ -29,6 +29,7 @@
  */
 
 import { record, readMetrics } from './metrics.mjs';
+import { referenceNote } from './usage.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
 
@@ -317,6 +318,16 @@ export function renderAudit(
       );
     }
   }
+
+  // WHETHER THE FINDINGS WE INJECTED GOT USED (Layer 1).
+  //
+  // Printed here because this is the report that already asks "did the advice
+  // change anything", and because a measurement with no reader is how this
+  // project shipped two metrics whose only consumer was their own test suite.
+  // `referenceNote` returns null when it has nothing honest to say, so a
+  // project with no injections and no queries gains no line at all.
+  const reference = referenceNote(dir);
+  if (reference) body.push('', reference);
 
   const addressable = queue.reduce(
     (sum, item) => sum + (item.costPerSession || 0),
