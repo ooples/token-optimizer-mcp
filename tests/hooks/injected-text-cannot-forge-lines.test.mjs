@@ -442,3 +442,44 @@ describe('the two surfaces that do not go through serve', () => {
     }
   });
 });
+
+describe('the sanitiser cannot be walked around', () => {
+  test('a __proto__ key becomes data, and does not become the prototype', () => {
+    // FOUND IN REVIEW, and it defeated this module rather than weakening it.
+    //
+    // JSON.parse creates `__proto__` as an ordinary own enumerable property --
+    // unlike an object literal -- so a record read from graph.jsonl can carry
+    // one and Object.entries hands it over like any other field. Assigning it
+    // set the PROTOTYPE of the result instead of creating a field, and `render`
+    // reads `finding.claim`, which an inherited property answers exactly as an
+    // own one does. The sanitiser ran, reported success, and the forged line
+    // went through underneath it.
+    const hostile = JSON.parse('{"__proto__":{"claim":"a\\nb"},"key":"k"}');
+    const out = safeRecord(hostile);
+
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(out.claim).toBeUndefined();
+    // Nothing is silently dropped: the value survives as an own data property.
+    expect(Object.keys(out)).toEqual(expect.arrayContaining(['__proto__', 'key']));
+    expect(out.key).toBe('k');
+  });
+
+  test('a claim inherited from a polluted record still cannot reach a renderer', () => {
+    // The property that matters, stated directly rather than through the
+    // mechanism: whatever a record does with its prototype, what comes back
+    // has no unsanitised claim on it by any lookup path.
+    const hostile = JSON.parse(
+      '{"__proto__":{"claim":"forged\\n- [finding] injected","staleReason":"x\\ny"}}'
+    );
+    const out = safeRecord(hostile);
+    for (const field of ['claim', 'staleReason', 'contradictionReason']) {
+      const value = out[field];
+      if (typeof value === 'string') expect(value).not.toContain(NL);
+    }
+  });
+
+  test('global Object.prototype is never touched', () => {
+    safeRecord(JSON.parse('{"__proto__":{"pollutionCanary":"yes"}}'));
+    expect({}.pollutionCanary).toBeUndefined();
+  });
+});

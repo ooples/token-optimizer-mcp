@@ -112,15 +112,41 @@ export function safeRecord(record) {
 
   const out = {};
   for (const [field, value] of Object.entries(record)) {
+    let safe;
     if (MULTILINE_FIELDS.has(field)) {
-      out[field] = value;
+      safe = value;
     } else if (typeof value === 'string') {
-      out[field] = safeLine(value);
+      safe = safeLine(value);
     } else if (Array.isArray(value)) {
-      out[field] = value.map((item) => (typeof item === 'string' ? safeLine(item) : item));
+      safe = value.map((item) => (typeof item === 'string' ? safeLine(item) : item));
     } else {
-      out[field] = value;
+      safe = value;
     }
+    // DEFINED, NOT ASSIGNED, and this is not a style preference.
+    //
+    // `JSON.parse` creates `__proto__` as an ordinary own enumerable property
+    // -- unlike an object literal -- so a record read from graph.jsonl can
+    // carry one, and `Object.entries` above hands it over like any other field.
+    // `out.__proto__ = value` then sets the PROTOTYPE of `out` instead of
+    // creating a field on it, and everything on that value is inherited by the
+    // served record.
+    //
+    // MEASURED, because it defeats this entire module rather than weakening it:
+    // `safeRecord(JSON.parse('{"__proto__":{"claim":"a\nb"}}')).claim` returned
+    // the claim back with its newline intact, because `render` reads
+    // `finding.claim` and an inherited property answers exactly as an own one
+    // does. The sanitiser ran, reported success, and the forged line went
+    // through underneath it.
+    //
+    // `defineProperty` creates an own data property for every name including
+    // `__proto__`, so the value survives as DATA -- nothing is silently dropped
+    // -- and no prototype is touched.
+    Object.defineProperty(out, field, {
+      value: safe,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   }
   return out;
 }
