@@ -36,9 +36,12 @@ import {
   MIN_PRIOR_INJECTIONS,
   MIN_SERVED,
   MIN_WITHHELD,
+  FDR_Q,
+  permutationP,
 } from '../../hooks-core/loo.mjs';
 import {
   calibration,
+  calibrationP,
   calibrationNote,
   consolidation,
   graphBalanceSheet,
@@ -195,7 +198,25 @@ describe('the calibration loop', () => {
     const result = calibration(dir);
     expect(result.publishable).toBe(true);
     expect(result.gap).toBeGreaterThan(0);
+    expect(result.p).toBeCloseTo(FDR_Q, 12);
     expect(result.verdict).toMatch(/calibrated: referenced findings suppress/);
+    expect(result.verdict).toMatch(/two-sided permutation p=0\.100/);
+  });
+
+  it('refuses a positive gap that does not survive a two-sided permutation test', () => {
+    // Three individually real effects, but split 2:1 and 1:2 between the two
+    // label arms. Their means differ in the favourable direction purely because
+    // six findings admit a noisy partition; the cross-layer headline must not
+    // promote that positive gap into a calibration claim.
+    findings(6, { effectFor: (i) => ([4900, 0, 4900, 0, 4900, 0][i]) });
+    referenceFirstThree();
+    const result = calibration(dir);
+    expect(result.layer2.published).toBeGreaterThan(0);
+    expect(result.gap).toBeGreaterThan(MIN_GAP_TOKENS);
+    expect(result.p).toBeCloseTo(1, 12);
+    expect(result.publishable).toBe(false);
+    expect(result.verdict).toMatch(/two-sided permutation/i);
+    expect(result.verdict).toMatch(/not statistically resolved/i);
   });
 
   it('refuses with NO gap field when Layer 1 has published no rate', () => {
@@ -214,6 +235,7 @@ describe('the calibration loop', () => {
     // A PERMANENT ZERO WOULD READ AS "measured, and they agree". Task 7 removed
     // a field rather than zero it for exactly this reason.
     expect('gap' in result).toBe(false);
+    expect('p' in result).toBe(false);
     expect(result.verdict).toMatch(/not the same as a gap of zero/);
   });
 
@@ -227,6 +249,7 @@ describe('the calibration loop', () => {
     expect(result.publishable).toBe(false);
     expect(result.verdict).toMatch(/Layer 2 has 0 observation/);
     expect('gap' in result).toBe(false);
+    expect('p' in result).toBe(false);
   });
 
   it('names BOTH sides when both are silent, and reports no gap', () => {
@@ -288,6 +311,30 @@ describe('the calibration loop', () => {
     expect(result.layer2.inPolicy).toBe(0);
     expect(result.verdict).toMatch(/different serving policy/);
     expect('gap' in result).toBe(false);
+  });
+});
+
+describe('the cross-layer permutation statistic', () => {
+  it('is invariant to event order and to swapping the semantic labels on the sampled path', () => {
+    const referenced = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const notReferenced = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    const expected = calibrationP(referenced, notReferenced);
+    expect(calibrationP([...referenced].reverse(), [...notReferenced].reverse())).toBe(expected);
+    expect(calibrationP(notReferenced, referenced)).toBe(expected);
+
+    // Independent oracle for the caller contract: canonicalise both arms,
+    // derive FNV-1a from the data, and prove the result is not the shared fixed
+    // sequence Layer 2 keeps for backward compatibility.
+    const arms = [referenced, notReferenced]
+      .map((values) => [...values].sort((a, b) => a - b))
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    let seed = 2166136261;
+    for (const char of JSON.stringify(arms)) {
+      seed ^= char.charCodeAt(0);
+      seed = Math.imul(seed, 16777619);
+    }
+    expect(expected).toBe(permutationP(arms[0], arms[1], { seed: seed >>> 0 }));
+    expect(expected).not.toBe(permutationP(arms[0], arms[1]));
   });
 });
 

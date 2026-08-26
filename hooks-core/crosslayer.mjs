@@ -52,7 +52,13 @@
 
 import { readMetrics, readTruncation, balanceSheet } from './metrics.mjs';
 import { classify, referenceRate } from './usage.mjs';
-import { effects, observations, servingPolicyVersion } from './loo.mjs';
+import {
+  effects,
+  observations,
+  servingPolicyVersion,
+  permutationP,
+  FDR_Q,
+} from './loo.mjs';
 import { consolidationRatio, aggregateConsolidation } from './consolidate.mjs';
 import { recallProbe } from './recall.mjs';
 import { load } from './wiki.mjs';
@@ -104,6 +110,32 @@ export function labelsByFinding(rows) {
 }
 
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+
+/**
+ * A deterministic, label-symmetric permutation test for the headline gap.
+ *
+ * Layer 2 only publishes a per-finding row after a two-sided permutation test.
+ * The calibration headline summarises those rows, so a positive difference of
+ * arm means must clear the same evidential bar rather than being promoted just
+ * because it points in this project's favour.
+ *
+ * Sorting within each arm and then sorting the two arms makes the sampled path
+ * invariant to event order and to swapping the labels. The seed is derived
+ * from that canonical data instead of shared globally, so two different
+ * datasets do not reuse one arbitrary sequence of sampled relabellings.
+ */
+export function calibrationP(referenced, notReferenced) {
+  const arms = [referenced, notReferenced]
+    .map((values) => [...values].sort((a, b) => a - b))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  const encoded = JSON.stringify(arms);
+  let seed = 2166136261;
+  for (const char of encoded) {
+    seed ^= char.charCodeAt(0);
+    seed = Math.imul(seed, 16777619);
+  }
+  return permutationP(arms[0], arms[1], { seed: seed >>> 0 });
+}
 
 /**
  * Does Layer 1's label predict Layer 2's effect?
@@ -242,7 +274,16 @@ export function calibration(dir, options = {}) {
     const referencedMean = mean(arms.referenced);
     const notReferencedMean = mean(arms.notReferenced);
     const gap = referencedMean - notReferencedMean;
-    const measured = { ...context, gap, referencedMean, notReferencedMean };
+    const p = calibrationP(arms.referenced, arms.notReferenced);
+    const measured = {
+      ...context,
+      gap,
+      referencedMean,
+      notReferencedMean,
+      p,
+      alpha: FDR_Q,
+      test: 'two-sided permutation',
+    };
 
     if (!(gap >= MIN_GAP_TOKENS))
       return refuse(
@@ -253,11 +294,20 @@ export function calibration(dir, options = {}) {
         measured
       );
 
+    if (p === null || p > FDR_Q)
+      return refuse(
+        `not calibrated: the positive Layer 1/Layer 2 gap is not statistically resolved by the ` +
+          `two-sided permutation test (p=${p === null ? 'unavailable' : p.toFixed(3)}, ` +
+          `alpha=${FDR_Q.toFixed(3)}). Do not quote the reference rate as a saving.${caveat}`,
+        measured
+      );
+
     return {
       publishable: true,
       verdict:
         `calibrated: referenced findings suppress ${Math.round(gap).toLocaleString()} more tokens/touch ` +
-        `than unreferenced ones (${arms.referenced.length} vs ${arms.notReferenced.length} findings, shrunk estimates). ` +
+        `than unreferenced ones (${arms.referenced.length} vs ${arms.notReferenced.length} findings, ` +
+        `shrunk estimates, two-sided permutation p=${p.toFixed(3)}). ` +
         `The reference rate is a usable proxy for causal value at this sample size.${caveat}`,
       ...measured,
     };

@@ -543,8 +543,22 @@ export function observations(dir, { events = null, evidence = null } = {}) {
   }
 }
 
-/** Enumerates or samples arm relabellings and returns a two-sided p-value. */
-function permutationP(servedCosts, withheldCosts) {
+/**
+ * Enumerates or samples arm relabellings and returns a two-sided p-value.
+ *
+ * EXPORTED so the cross-layer headline can be held to the same standard as the
+ * per-finding rows it summarises. `crosslayer.mjs` runs this over the two ARMS
+ * of shrunk effect estimates; the statistic, the enumerate-or-sample switch and the
+ * tolerance are therefore shared rather than reimplemented, and there is one
+ * place where "two-sided" is decided.
+ *
+ * `seed` exists for that caller. The default reproduces the fixed seed this
+ * function has always used, so Layer 2's own p-values are byte-identical; the
+ * cross-layer caller passes a seed DERIVED FROM ITS DATA, because a verdict
+ * printed to a human must not depend on `Math.random()` or on which module
+ * happened to call first.
+ */
+export function permutationP(servedCosts, withheldCosts, { seed = 0x9e3779b9 } = {}) {
   const pooled = [...servedCosts, ...withheldCosts];
   const n = pooled.length;
   const k = withheldCosts.length;
@@ -578,9 +592,10 @@ function permutationP(servedCosts, withheldCosts) {
     return count ? extreme / count : null;
   }
 
-  // Mulberry32 off a fixed seed: reproducible, so the same data always yields
-  // the same p-value and a verdict cannot flicker between two audit runs.
-  let state = 0x9e3779b9;
+  // Mulberry32 off the caller's seed: reproducible, so the same data always
+  // yields the same p-value and a verdict cannot flicker between two audit
+  // runs.
+  let state = seed | 0;
   const random = () => {
     state = (state + 0x6d2b79f5) | 0;
     let t = state;

@@ -1149,6 +1149,42 @@ spawn-based tests run the old copy and a mutation reads as survived.
 
 ---
 
+## Task 13: Hold the cross-layer headline to its own causal test
+
+**Added after Task 10's final audit found one more measurement-bias instance.**
+
+`calibration()` currently publishes whenever the referenced arm's mean shrunk effect is at
+least one token larger than the not-referenced arm's and *some* Layer 2 row published. That
+does not test the cross-layer claim itself. With three findings per arm, a favourable 2:1
+split of real and null effects against an unfavourable 1:2 split produces a positive gap even
+though a two-sided permutation test reads `p = 1`. The existing code calls that partition
+"calibrated".
+
+**Files:** Modify `hooks-core/loo.mjs`, `hooks-core/crosslayer.mjs`; Test
+`tests/hooks/loo.test.mjs`, `tests/hooks/calibration-loop.test.mjs`
+
+**Requirements**
+
+- Reuse Layer 2's exact-or-sampled two-sided permutation statistic. Do not implement a second
+  statistic whose tolerance, enumeration cutoff, or sidedness can drift.
+- Preserve Layer 2's historical fixed sampled sequence when it does not supply a seed.
+- For the cross-layer caller, canonicalise both arms and derive the sampled seed from their
+  data. The result must be invariant to event order and to swapping the two semantic labels.
+- A positive gap publishes only at `p <= 0.10`. The boundary is inclusive: at the existing
+  three-per-arm floor, complete separation has exact two-sided `p = 2/20 = 0.10`; using `<`
+  would make the floor impossible to clear.
+- Carry `p`, `alpha`, and the test name in measured output and print `p` in both the published
+  and refused verdicts. Before both arms clear the floor, no `p` field exists; absence of a
+  test is not `p = 0`.
+- Fail open and preserve every pre-existing calibration refusal, independence invariant,
+  policy-version guard, and report/audit reader.
+
+**Mutation bar as elsewhere.** At minimum mutate away the gate, flip `>` to `>=`, ignore the
+caller's seed, remove canonical ordering, make the exact result one-sided, hide `p` from the
+result or verdict, and inject a permanent `p: 0` into unmeasured refusals.
+
+---
+
 # Execution state and corrections
 
 **Read this before starting or resuming. It is authoritative over the task text above,
@@ -1364,6 +1400,17 @@ constraint is `quotable`, not the key. The identical-text refusal was WIDENED to
 `commandBody` both sides, or the better key would have claimed `npm test` succeeded where
 `cd repo && npm test` failed. Environment assignments, `time`, `bash -c` and `||` are
 deliberately NOT stripped, each for a measured reason. See `task-12-report.md`. |
+| 13 -- cross-layer significance | **Complete.** The final calibration headline now reuses
+Layer 2's exact-or-sampled two-sided `permutationP`; a positive mean gap alone no longer
+publishes. Cross-layer sampling canonicalises both arms and derives its seed from their data,
+while Layer 2's omitted-seed default stays byte-identical. Publication requires `gap >= 1`
+and `p <= 0.10`; equality is deliberate because complete separation at the three-per-arm
+floor is exactly `2/20 = 0.10`. Four new tests, **9 mutations / 9 killed**, every new test
+killed by at least one mutation. Focused 69/69; cross-file regression 103/103; full suite
+225 suites / **2,896 passed**, 5 skipped, 0 failed on the clean rerun. The first full run had
+one unrelated 5-second doctor timeout; that 13-test suite passed immediately in isolation and
+inside the clean rerun. Real graph remains honestly dormant: 0/0 layer observations, with no
+`gap` and no `p`. See `task-13-report.md`. |
 
 ## Corrections to the task text above
 
@@ -1467,6 +1514,16 @@ so a mutation shrinking the RANKING corpus -- making retrieval easier, in this p
 could not move the number the test read. Fixed in the production code rather than the test, so
 the published size IS the ranking corpus. **The running total for this class across both plans is
 now twelve, and every single one flattered this project's own numbers.**
+
+**Task 13 added the thirteenth, in the cross-layer headline itself.** Task 8 required a
+positive difference between the two label-arm means but never tested that difference. A
+2-real/1-null versus 1-real/2-null split clears the one-token gap and had at least one
+published Layer 2 row, so the old code printed `calibrated`; its exact two-sided permutation
+result is **p = 1.0**. The headline now reuses Layer 2's exact-or-sampled statistic and
+publishes only at `p <= 0.10`. Sampling is canonical and data-seeded, while Layer 2's default
+seed remains byte-identical. Complete separation at the three-per-arm floor is `2/20 = 0.10`,
+so the boundary is inclusive or the declared floor would be impossible to clear. The running
+total is now **thirteen**, and all thirteen flattered this project's own numbers.
 
 **The ninth was found by Task 9 and is the first one avoided by declining to wire something.**
 `recordRefresh` has no honest call site because nothing in this repository issues a refresh —

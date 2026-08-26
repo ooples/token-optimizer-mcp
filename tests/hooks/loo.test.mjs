@@ -43,6 +43,7 @@ import {
   exploreOrder,
   observations,
   effects,
+  permutationP,
   looNote,
   servingPolicyVersion,
   LOO_ENABLED,
@@ -82,6 +83,31 @@ afterEach(() => {
 });
 
 const trialsFloor = (n) => Math.floor(n * 0.7);
+
+describe('the shared permutation statistic', () => {
+  it('is two-sided on the smallest cross-layer design', () => {
+    // Of the 20 ways to split six values 3:3, both complete separations are as
+    // extreme as the observed one. A one-sided implementation would return
+    // 1/20 and make this project's own evidence twice as strong.
+    expect(permutationP([0, 0, 0], [1, 1, 1])).toBeCloseTo(2 / 20, 12);
+  });
+
+  it('is reproducible for one seed and actually uses a caller-supplied seed when sampling', () => {
+    // C(22, 11) is above the exact-enumeration budget, so this exercises the
+    // sampled path. Two seeds must select different relabellings, while the
+    // same seed must reproduce the same verdict byte-for-byte.
+    const served = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const withheld = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    const first = permutationP(served, withheld, { seed: 1 });
+    expect(permutationP(served, withheld, { seed: 1 })).toBe(first);
+    expect(permutationP(served, withheld, { seed: 2 })).not.toBe(first);
+    // Layer 2 does not pass a seed. Its historical fixed sequence is therefore
+    // unchanged by exposing the option for the cross-layer caller.
+    expect(permutationP(served, withheld)).toBe(
+      permutationP(served, withheld, { seed: 0x9e3779b9 })
+    );
+  });
+});
 
 /** A graph shaped the way `load()` shapes one: nodes keyed by id. */
 const graphWith = (specs) => ({
