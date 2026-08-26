@@ -24,7 +24,21 @@ const PATTERNS = [
 ];
 
 export function redact(text, { max = 400 } = {}) {
+  // `?? ''` matters even though String(null)/String(undefined) never throw:
+  // without it a missing value becomes the literal 4-11 character string
+  // "null"/"undefined" -- a garbage claim that silently reaches the graph
+  // and model context instead of surfacing as an error.
   let out = String(text ?? '');
   for (const [pattern, replacement] of PATTERNS) out = out.replace(pattern, replacement);
+  // Redact BEFORE truncating, never the reverse. Several patterns above rely
+  // on a minimum-length quantifier (e.g. `{10,}`, `{12,}`) plus a prefix.
+  // Truncating first can cut a match down to fewer characters than that
+  // quantifier requires, so the shortened fragment no longer satisfies the
+  // pattern and a live partial secret would pass through in cleartext. By
+  // redacting the full, untruncated string first, every pattern always sees
+  // the complete secret and removes it before any character budget is
+  // spent; the cap below can then only ever cut into already-redacted text
+  // (a label, or the "[redacted]" placeholder itself), never into raw
+  // secret bytes.
   return out.length > max ? `${out.slice(0, Math.max(0, max - 1))}…` : out;
 }
