@@ -32,6 +32,7 @@
 
 import { record, readMetrics, declinedAtBudget } from './metrics.mjs';
 import { referenceNote } from './usage.mjs';
+import { looNote } from './loo.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
 import { renderStanding } from './standing.mjs';
@@ -401,6 +402,16 @@ export function renderAudit(
   // project with no injections and no queries gains no line at all.
   const reference = referenceNote(dir);
   if (reference) body.push('', reference);
+
+  // WHAT ONE FINDING IS CAUSALLY WORTH (Layer 2).
+  //
+  // The same reasoning as above, and the same refusal: `looNote` returns null
+  // until the leave-one-out experiment has collected an observation, and says
+  // NOT MEASURABLE YET rather than printing a mean until it clears the floor.
+  // A causal number is the most quotable thing this project can produce, so it
+  // is the one that most needs to be absent when it is not earned.
+  const causal = looNote(dir);
+  if (causal) body.push('', causal);
 
   const addressable = queue.reduce(
     (sum, item) => sum + (item.costPerSession || 0),
