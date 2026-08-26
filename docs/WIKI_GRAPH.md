@@ -392,9 +392,26 @@ Both were found by deliberately breaking the thing each claimed to detect and
 watching the suite stay green. A guard that cannot fail is worse than no guard,
 because it is counted.
 
-Two lists are maintained rather than emptied, and both are ratcheted to a
-ceiling that can only fall: the reachability allowlist, and the census's record
-of orphan writers and unread fields. Every entry names what it is and what it is
-waiting on. The distinction from a backlog is the point — an earlier round of
-this work parked sixteen findings in a list of accurate descriptions with no
-owner, and writing the description down felt like fixing the thing.
+The census's own lists are **empty**. They did not start that way: it shipped
+one orphan event writer and six unread record fields, each described accurately
+and attributed to a plan that had not reached those tasks — which is the same
+list Round 1 produced, with a different excuse on it. Every one now has a
+reader, or is deleted:
+
+| | Resolution |
+|---|---|
+| `candidateCount`, `shadowFindingIds` | the injection holdout's shadow — what retrieval selected against what was served, reported by `shadowDelivery` |
+| `staleCount` | index staleness as a rate, not a boolean |
+| `contradictedAt` | disclosed beside the reason a claim was disputed |
+| `lastAction` | names the tool in the stale reason: "file changed (last touched by Edit)" |
+| `clientTitle`, `kind: 'mcp-client'` | the doctor reports which clients actually handshaked |
+| `contentAnchor` | **deleted**, per this project's own rule about capabilities kept for later |
+
+One list remains: the reachability allowlist, at four entries, ratcheted to a
+ceiling that can only fall. All four are keep-warm and consolidation functions
+whose **producing action does not exist** — nothing in the repository performs a
+keep-warm ping, and nothing decides what to consolidate or when. That is
+verified rather than assumed, and it is why they are neither wired nor deleted:
+calling `recordRefresh` at the only site that exists would write refreshes that
+never happened into the ledger the keep-warm backstop reads, and fabricated
+evidence in a backstop is worse than a dead function.
