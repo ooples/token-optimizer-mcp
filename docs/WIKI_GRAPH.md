@@ -371,6 +371,27 @@ defect listed above passed CI, so a green suite is not evidence that a
 capability runs; events in a real log are. A fresh clone is expected to read
 zero everywhere, which is the cold start this design accepts deliberately.
 
+**What the guards cannot prove.** A name-based scan shows that a REFERENCE
+exists, never that it RUNS. This work produced its own example: `manifestSize`
+left the allowlist by acquiring a caller in the doctor's install section, and
+that call sits inside `if (resolved.method !== 'plugin')` — so on a plugin
+install, which is how this product is actually distributed, it still never
+executes. That is correct here, because only the install script writes a
+manifest and a plugin install has none to size, but the guard could not have
+told the difference. A reference inside a branch that never runs, or behind a
+flag nobody sets, satisfies it exactly as well as a live call. That is precisely
+why `npm run wiki:census` reads real logs rather than source text, and why a
+capability is not considered proven until its events appear in one.
+
+Every assertion in `census.test.mjs` is mutation-tested, and that is not
+ceremony. Two of its first drafts could not fail at all: the read side of "read
+but never written" was filtered by the write side, so the `query` case it
+advertises would have slipped straight through, and "declares every edge kind it
+writes" compared a set against a superset it had already been filtered into.
+Both were found by deliberately breaking the thing each claimed to detect and
+watching the suite stay green. A guard that cannot fail is worse than no guard,
+because it is counted.
+
 Two lists are maintained rather than emptied, and both are ratcheted to a
 ceiling that can only fall: the reachability allowlist, and the census's record
 of orphan writers and unread fields. Every entry names what it is and what it is

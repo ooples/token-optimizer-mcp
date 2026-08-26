@@ -106,3 +106,35 @@ describe('the doctor reports what the install manifest covers', () => {
     expect(manifestCheck(root)).toBeDefined();
   });
 });
+
+describe('the limit of what the reachability guard can prove', () => {
+  it('does not run the manifest check on a plugin install, and that is correct', () => {
+    // FOUND BY ADVERSARIAL REVIEW OF THIS VERY CHANGE, and worth pinning rather
+    // than quietly leaving true.
+    //
+    // `manifestSize` left the reachability allowlist by acquiring a caller. The
+    // guard is satisfied -- the name is referenced by shipped code -- but the
+    // reference sits inside `if (resolved.method !== 'plugin')`, and the plugin
+    // path is how this product is actually distributed. So for most users the
+    // function still never executes.
+    //
+    // That is CORRECT here: only install-hooks.* writes a manifest, so a plugin
+    // install has none and there is nothing to size. But it is a live
+    // demonstration that a name-based reachability scan proves a REFERENCE
+    // exists, never that it RUNS -- which is exactly why `npm run wiki:census`
+    // reads real logs instead of source text.
+    const root = join(fixture, 'install');
+    mkdirSync(join(root, 'hooks'), { recursive: true });
+    for (const f of ['pretooluse-router.mjs', 'session-start.mjs']) {
+      writeFileSync(join(root, 'hooks', f), '// hook\n');
+    }
+    const checks = checklist({
+      root,
+      settingsPath: join(fixture, 'settings.json'),
+      install: { method: 'plugin', sameTree: true, installedVersion: '5.7.1' },
+    });
+    expect(
+      checks.some((c: { name: string }) => /manifest|installed files/i.test(c.name))
+    ).toBe(false);
+  });
+});

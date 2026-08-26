@@ -2,7 +2,7 @@
  * Nothing declared is unconnected.
  *
  * `reachability.test.mjs` asks whether an exported NAME is called. That model
- * cannot see three whole sub-classes of the same defect, and all three have
+ * cannot see four whole sub-classes of the same defect, and all four have
  * shipped here:
  *
  *   1. A READER WITH NO PRODUCER. `indexBudget` divided `query` events by
@@ -14,10 +14,21 @@
  *      harvest-worker.mjs and read by nothing.
  *   3. A REFERENT WITH NO TARGET. Injected prompt text told the model to call
  *      `wiki_query` -- in twelve shipped copies -- and no such tool existed.
+ *   4. AN UNREAD RECORD FIELD. `contradictionReason`, up to 400 characters
+ *      explaining why one finding disputes another, was written on every
+ *      `contradict` call and read by nothing.
  *
  * None of those is a dead function. In each case the code is correct, the names
  * are all reachable, and the capability does nothing, because the two halves
  * were never introduced. This file counts producers against consumers.
+ *
+ * EVERY ASSERTION HERE IS MUTATION-TESTED, and that is not ceremony. Two of the
+ * first drafts could not fail at all: the read side of "read but never written"
+ * was filtered by the write side, so the indexBudget case it advertises would
+ * have slipped straight through, and "declares every edge kind it writes"
+ * compared a set against a superset it had been filtered into. A guard that
+ * cannot fail is worse than no guard, because it is counted. If you change an
+ * extractor here, break the thing it detects and watch it go red.
  *
  * ON THE OVERLOADED `kind` FIELD. It is used in at least five unrelated
  * namespaces here -- event kinds, node kinds (file/symbol/task/finding), symbol
@@ -35,6 +46,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join, relative } from 'path';
+import { putEdge } from '../../hooks-core/wiki.mjs';
 import {
   USAGE_DIRS,
   DECLARE_DIRS,
@@ -138,7 +150,35 @@ function readEventKinds(vocabulary) {
   }
   // Restricted to the event vocabulary, so the four other `kind` namespaces --
   // and run-handoff-eval.mjs's private one -- never enter this census.
+  //
+  // ONLY SAFE FOR THE "written but never read" DIRECTION, and getting that
+  // wrong is the sharpest mistake this file has made. The vocabulary is
+  // `declared ∪ written`, so a kind that is neither declared nor written drops
+  // out of the read set entirely -- which is EXACTLY the indexBudget shape, and
+  // it made the assertion that exists to catch it vacuous. Proven by mutation:
+  // renaming the single `kind: 'query'` write site left `query` read by
+  // indexBudget, written by nothing, and "has no kind that is read but never
+  // written" GREEN. Use `readsInTheEventLog` below for that direction.
   for (const key of [...out.keys()]) if (!vocabulary.has(key)) out.delete(key);
+  return out;
+}
+
+/**
+ * Kinds branched on inside `metrics.mjs`, unfiltered by what anything writes.
+ *
+ * RESTRICTED BY LOCATION RATHER THAN BY VOCABULARY, because vocabulary is
+ * circular for this question: asking "is this read kind ever written?" cannot
+ * start by discarding the kinds nothing writes. Location is the non-circular
+ * discriminator -- `metrics.mjs` owns the event log, so a comparison on `kind`
+ * there is an event kind by construction. The other five `kind` namespaces are
+ * read in curate, wiki, staleness, standing and audit, and never here.
+ */
+function readsInTheEventLog() {
+  const metrics = sourceOf(/hooks-core[\\/]metrics\.mjs$/);
+  const out = new Map();
+  for (const m of metrics.code.matchAll(new RegExp(`\\bkind\\s*[=!]==\\s*'(${KIND})'`, 'g'))) {
+    add(out, m[1], metrics.file);
+  }
   return out;
 }
 
@@ -289,11 +329,28 @@ describe('event kinds', () => {
   });
 
   it('has no kind that is read but never written', () => {
-    // THE indexBudget SHAPE. `query` was read by the budget and written only by
-    // the test suite, so the ratio was zero for every project and the budget
-    // never left its floor -- with every function reachable and every test
-    // green.
-    expect(withoutReader(read, written)).toEqual([]);
+    // THE indexBudget SHAPE, and the flagship case for this whole file. `query`
+    // was read by the budget and written only by the test suite, so the ratio
+    // was zero for every project and the budget never left its floor -- with
+    // every function reachable and every test green.
+    //
+    // READS TAKEN FROM THE EVENT LOG'S OWN MODULE, not from the
+    // vocabulary-filtered set: filtering reads by what is written would discard
+    // precisely the kinds this assertion is looking for. Verified by mutation --
+    // renaming the one `kind: 'query'` write site must turn this red.
+    expect(withoutReader(readsInTheEventLog(), written)).toEqual([]);
+  });
+
+  it('takes its reads from the event log, not from what is written', () => {
+    // THE NON-VACUITY TRIPWIRE for the assertion above, and it exists because
+    // that assertion WAS vacuous. `query` and `index` are read by indexBudget
+    // and appear in neither exported set, so if this reader were ever filtered
+    // by declarations or by writers again they would vanish -- and the check
+    // would go quiet for exactly the kinds it is there to catch.
+    const reads = [...readsInTheEventLog().keys()];
+    expect(reads).toEqual(expect.arrayContaining(['query', 'index']));
+    const declaredNames = declaredEventKinds();
+    expect(reads.some((k) => !declaredNames.has(k))).toBe(true);
   });
 
   it('has no kind that is written but never read', () => {
@@ -335,12 +392,22 @@ describe('edge kinds', () => {
     expect([...declared].filter((k) => !written.has(k)).sort()).toEqual([]);
   });
 
-  it('declares every edge kind it writes', () => {
-    // The other direction is enforced at runtime -- putEdge throws on an
-    // unknown kind -- so this asserts the guard rail rather than the outcome,
-    // and would catch a raw append that bypassed putEdge.
-    const { declared, written } = edgeKinds();
-    expect([...written.keys()].filter((k) => !declared.has(k)).sort()).toEqual([]);
+  it('refuses an undeclared edge kind at the write site', () => {
+    // THE OTHER DIRECTION, ASSERTED WHERE IT IS ACTUALLY ENFORCED.
+    //
+    // This started life as a static check that every WRITTEN kind is declared,
+    // and that check was vacuous: the extractor discards any quoted string in a
+    // putEdge window that is not already a declared kind -- it has to, or it
+    // would collect node ids and the word `file` -- so `written` is a subset of
+    // `declared` by construction and the difference is empty whatever the code
+    // does. A test that cannot fail is worse than no test, because it is
+    // counted.
+    //
+    // putEdge validates the kind before it touches the log, so this exercises
+    // the real guard rail and needs no fixture.
+    expect(() => putEdge('/nonexistent-graph-dir', 'a', 'not_a_real_edge_kind', 'b')).toThrow(
+      /unknown edge kind/
+    );
   });
 });
 
