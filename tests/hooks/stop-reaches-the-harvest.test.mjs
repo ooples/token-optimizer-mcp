@@ -23,6 +23,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import { spawnSync } from 'node:child_process';
+import vm from 'node:vm';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -53,6 +54,40 @@ afterEach(() => {
     /* windows can hold a handle briefly */
   }
 });
+
+/**
+ * Every directory holding a vendored copy of the shared core.
+ *
+ * DISCOVERED, NOT LISTED. A hand-written list covered three of the twelve and
+ * still read as coverage -- and the thirteenth client, added later, would have
+ * been missed by exactly the same silence this file exists to break. Any
+ * directory named `lib` that holds an `adapter.mjs` is a vendored core by
+ * construction, because that is what `sync-hook-core` produces.
+ */
+function vendoredLibs() {
+  const found = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === 'node_modules') continue;
+      const full = join(dir, entry.name);
+      if (entry.name === 'lib' && existsSync(join(full, 'adapter.mjs'))) found.push(full);
+      else walk(full);
+    }
+  };
+  walk(join(ROOT, 'plugin'));
+  walk(join(ROOT, 'integrations'));
+  // A discovery that finds nothing would pass every assertion below forever.
+  // Eleven is what sync-hook-core lists today; the floor guards a broken walk,
+  // not the exact roster, so a twelfth client raises it rather than breaking it.
+  expect(found.length).toBeGreaterThanOrEqual(11);
+  return found;
+}
 
 function runStop(env = {}, sessionId = null) {
   const merged = { ...process.env, [STATE_VAR]: state };
@@ -167,17 +202,9 @@ describe('the harvest worker is reachable from every client, not one', () => {
 
   test('is vendored beside the adapter in every client that has one', () => {
     // The adapter resolves the worker as a sibling, so this is the property the
-    // spawn depends on -- asserted per client rather than assumed from the
-    // sync script having run.
-    const libs = [
-      join(ROOT, 'plugin', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'codex', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'qwen', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'cursor', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'windsurf', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'cline', 'hooks', 'token-optimizer', 'lib'),
-    ];
-    for (const lib of libs) {
+    // spawn depends on -- asserted per client rather than assumed from the sync
+    // script having run.
+    for (const lib of vendoredLibs()) {
       expect([lib, existsSync(join(lib, 'adapter.mjs'))]).toEqual([lib, true]);
       expect([lib, existsSync(join(lib, 'harvest-worker.mjs'))]).toEqual([lib, true]);
     }
@@ -192,20 +219,27 @@ describe('the harvest worker is reachable from every client, not one', () => {
     // silently -- the harvest still not running, for the same reason as before,
     // with a green suite either side.
     //
-    // Existence is not executability, which is this whole pull request's point
+    // Existence is not executability, which is this whole change's point
     // applied to its own output.
-    const libs = readdirSync(join(ROOT, 'hooks-core')).filter((f) => f.endsWith('.mjs'));
-    expect(libs.length).toBeGreaterThan(20);
+    //
+    // EVERY DIRECTORY, and parsed IN PROCESS. The first version checked three
+    // of the twelve and spawned `node --check` per file: partial coverage that
+    // reads as coverage, and too slow to widen. `vm.SourceTextModule` compiles
+    // ESM without evaluating it, which is the same parse `--check` performs.
+    const core = readdirSync(join(ROOT, 'hooks-core')).filter((f) => f.endsWith('.mjs'));
+    expect(core.length).toBeGreaterThan(20);
 
-    for (const dir of [
-      join(ROOT, 'plugin', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'codex', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'qwen', 'hooks', 'lib'),
-    ]) {
-      for (const name of libs) {
-        const file = join(dir, name);
-        const check = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
-        expect([file, check.status]).toEqual([file, 0]);
+    for (const lib of vendoredLibs()) {
+      for (const name of core) {
+        const file = join(lib, name);
+        let error = null;
+        try {
+          // eslint-disable-next-line no-new
+          new vm.SourceTextModule(readFileSync(file, 'utf8'));
+        } catch (caught) {
+          error = String(caught && caught.message);
+        }
+        expect([file, error]).toEqual([file, null]);
       }
     }
   });
@@ -216,14 +250,18 @@ describe('the harvest worker is reachable from every client, not one', () => {
     // is invisible by construction.
     const source = readFileSync(join(ROOT, 'hooks-core', 'harvest-worker.mjs'), 'utf8');
     expect(source.startsWith('#!')).toBe(true);
-    for (const dir of [
-      join(ROOT, 'plugin', 'hooks', 'lib'),
-      join(ROOT, 'integrations', 'windsurf', 'hooks', 'lib'),
-    ]) {
-      const vendored = readFileSync(join(dir, 'harvest-worker.mjs'), 'utf8');
-      expect([dir, vendored.startsWith('#!')]).toEqual([dir, true]);
-      // And the banner is still there, on the line after.
-      expect(vendored).toContain('GENERATED FILE');
+
+    for (const lib of vendoredLibs()) {
+      // Trimmed per line, because the vendored copies carry CRLF on Windows and
+      // this assertion is about WHICH LINE the banner is on, not about endings.
+      const lines = readFileSync(join(lib, 'harvest-worker.mjs'), 'utf8')
+        .split(NL)
+        .map((line) => line.trim());
+      expect([lib, lines[0].startsWith('#!')]).toEqual([lib, true]);
+      // THE SECOND LINE, not merely somewhere in the file. `toContain` passed
+      // wherever the banner happened to land, which is the layout this test
+      // exists to pin.
+      expect([lib, lines[1]]).toEqual([lib, '// GENERATED FILE -- do not edit.']);
     }
   });
 });
