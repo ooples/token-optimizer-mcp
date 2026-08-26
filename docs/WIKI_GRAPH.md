@@ -317,3 +317,63 @@ a knowledge-graph costume. The metrics ship with the feature, not after it.
 4. **Cold start.** The graph is empty on a fresh clone and value ramps over the
    first few sessions. Accepted deliberately: the alternative is indexing code
    nobody will touch, which is the exact waste RAG ingestion is criticised for.
+
+## Verifying it is connected
+
+Every capability in this document can be implemented correctly, tested
+thoroughly, and connected to nothing. That is not a hypothetical: it has
+happened here repeatedly, and each time the whole test suite was green while the
+feature delivered nothing.
+
+- `forTouch` — the just-in-time injection this design calls "where the win
+  lands" — had 27 passing tests and zero production call sites.
+- `wiki_query` was named in twelve shipped copies of the injected prompt text.
+  There was no such tool.
+- `kind: 'query'` was read by the index budget and written by nothing except the
+  test suite, so the ratio was zero on every project and the budget sat pinned
+  at its 150-token floor for the life of the feature.
+- `contradicts` and `answers` sat in `EDGE_KINDS` with no write site: the graph
+  declared it could record a disputed belief and an answered question, and could
+  do neither.
+- `contradictionReason`, up to 400 characters explaining why one finding
+  disputes another, was written on every `contradict` call and read by nothing.
+
+Unit tests cannot see this, because they call the function directly. **Mutation
+testing is actively misleading here:** break an unreachable function and its own
+tests fail, so the mutation is scored as caught while the feature still delivers
+nothing. Measured on this repository, the suite scored 100% on ten realistic
+mutations during a period when two whole features were unreachable.
+
+Three things answer it instead.
+
+**`tests/hooks/reachability.test.mjs`** asks whether an exported name is
+referenced by anything that ships, as opposed to only by its own tests. It scans
+`hooks-core` and `plugin/hooks` for declarations — functions *and* consts — and
+searches all of `hooks-core`, `plugin`, `src` and `scripts` for uses. Comments
+are stripped, because prose is not a caller, and import specifiers are
+discounted, because an import is not a call. **String literals are deliberately
+NOT stripped**: `src/server` dispatches into `hooks-core` through dynamic
+`mods.<module>.<fn>` handles, and a scanner that skips strings desynchronises on
+the first regex literal containing a quote — measured at 63% of `adapter.mjs`
+consumed and eleven live exports reported as orphans. Over-counting a name that
+appears in a string is the permissive direction, and permissive is merely
+useless where strict fails CI on working code and gets switched off.
+
+**`tests/hooks/census.test.mjs`** counts producers against consumers in four
+namespaces the name-based scan cannot model: event kinds, edge kinds, tool names
+appearing in injected prompt text, and record fields. It is what would have
+caught every example in the list above.
+
+**`npm run wiki:census`** prints what the graph is doing on a real machine —
+findings, nodes, edges by kind, and index, query, inject, substitute and
+retrieval-decision events. This is not a test and never fails a build. Every
+defect listed above passed CI, so a green suite is not evidence that a
+capability runs; events in a real log are. A fresh clone is expected to read
+zero everywhere, which is the cold start this design accepts deliberately.
+
+Two lists are maintained rather than emptied, and both are ratcheted to a
+ceiling that can only fall: the reachability allowlist, and the census's record
+of orphan writers and unread fields. Every entry names what it is and what it is
+waiting on. The distinction from a backlog is the point — an earlier round of
+this work parked sixteen findings in a list of accurate descriptions with no
+owner, and writing the description down felt like fixing the thing.

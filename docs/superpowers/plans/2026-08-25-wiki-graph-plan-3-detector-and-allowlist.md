@@ -12,6 +12,47 @@
 
 **Depends on:** Plans 1 and 2 remove seven allowlist entries as a side effect of wiring their subsystems. This plan removes the remainder and makes the guard airtight. **Run it last**, or its first task will fail on work the other plans have not done yet.
 
+---
+
+## EXECUTION NOTE — read before implementing Task 1
+
+This plan was executed against master after Plan 1 merged (#315) and while Plan 2
+was still in flight. Three things in it are wrong, and correcting them here is
+cheaper than rediscovering them.
+
+**1. Task 1 Step 3's `stripComments` must NOT be implemented.** The scanner it
+proposes skips string and template literals, and a JS lexer that knows about
+quotes but not about REGEX LITERALS desynchronises on the first regex containing
+a quote. `hooks-core/adapter.mjs:255` is one. Measured: adapter.mjs 1032
+newlines in, 385 out — 63% of the file consumed; disclose.mjs 69%. Eleven
+genuinely-called exports (`toolSucceeded`, `stableText`, `recordToolOutcome`,
+`recordEpisodeOutcome`, `DISCLOSE_THRESHOLD`, `invalidateOnWrite`,
+`invalidateChangedAnchors`, `prices`, `briefing`, `semanticHarvestPrompt`,
+`cachedRoutingBriefing`) fall to their own declaration and report as orphans.
+That violates this plan's own first Global Constraint. The comments-only
+boundary already on master is correct; pin it with tests instead.
+
+**2. Task 3's extractors were wrong in two ways, both measured against grep.**
+`putEdge(dir, from, edge, to)` takes the edge kind as its THIRD argument, not
+its second, and the call writing `calls` edges spans six lines in
+`staleness.mjs` — so the proposed single-line second-argument regex reports the
+graph's own call-edge kind as having no writer. Separately, a fixed character
+window over `record(` overruns the call in `mcp-evidence.ts` and collects a
+field belonging to the next function; the field census must be brace-balanced
+and must SKIP any literal it cannot balance, because there over-reporting is the
+strict direction.
+
+**3. Task 5's target is stale.** It says the allowlist should end at one entry,
+`policyText`. `policyText` was already removed before this plan ran — it has
+callers in `adapter.mjs` and the SessionStart hook. The real target is **zero**.
+
+**4. Tasks 3 and 5 cannot go green while Plan 2 is outstanding**, and shipping a
+knowingly-red suite teaches everyone to ignore it. Five allowlist entries are
+Plan 2's (`selectForConsolidation`, `contentAnchor` — its Task 4;
+`consolidationRatio` — Task 8; `recordRefresh`, `recordRefreshOutcome` — Task
+9). Both lists are therefore ratcheted to a ceiling that can only fall, with
+every entry attributed to the task that owes it, rather than asserted at zero.
+
 ## Global Constraints
 
 - **The detector must be wrong only in the permissive direction.** A check that fails CI on working code gets deleted within a week — `reachability.test.mjs` says so itself, and it is right.
