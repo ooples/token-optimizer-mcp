@@ -1104,6 +1104,51 @@ mutation reads as survived when it was never applied. Sync between mutation and 
 
 ---
 
+## Task 12: `attemptKey` groups unrelated commands together
+
+**Added mid-plan. This is a correctness bug, not an unlock.**
+
+`attemptKey` groups by up to three non-flag tokens. A leading `cd <repo> &&` therefore
+consumes the whole key, and Task 11 measured the consequence in this repository: **539
+distinct commands share one key.**
+
+That is not only a Claude Code problem. On the ten clients where the detectors *do* receive
+failures, the command detector can pair a failure with a success from a completely unrelated
+command and emit a claim at **0.90** — the highest confidence any detector is permitted. The
+claim would be false about both halves.
+
+**Files:** Modify `hooks-core/derive.mjs`; Test `tests/hooks/derive.test.mjs`
+
+**Requirements**
+
+- Skip a leading directory-change prefix before computing the key — `cd <path> &&`, and any
+  similar shell preamble that carries no information about *what* was run. Report which
+  prefixes you chose to skip and why that set and no wider.
+- **The two existing refusals must survive.** Identical command text either side of a failure
+  still emits nothing, and pairing still uses the nearest preceding failure. A better key must
+  not become a licence to pair more loosely.
+- **Keys must still agree across sources.** Task 11 established that the transcript reader and
+  `recordToolOutcome` agree on 266/266 attempt keys only because both apply the same 120-char
+  truncation. Whatever you change must be applied identically on both paths, and verified on a
+  real session rather than a fixture.
+
+**Measure it, do not assert it.** This changes grouping for all eleven clients, which is the
+kind of shared-behaviour change that has twice needed its own per-client evidence on these
+plans. Report, from real transcripts:
+
+- the number of distinct commands sharing the most-populated key, before and after
+- how many command/test candidates are produced, before and after
+- whether any candidate produced after the change pairs two commands that a reader would
+  agree are the same attempt — inspect them, do not just count them
+
+A larger candidate count is **not** success on its own. The question is whether the pairs are
+true. If the change produces pairs that are still wrong, say so.
+
+**Mutation bar as elsewhere**, plus: sync `hooks-core/` between mutation and test, or
+spawn-based tests run the old copy and a mutation reads as survived.
+
+---
+
 # Execution state and corrections
 
 **Read this before starting or resuming. It is authoritative over the task text above,
