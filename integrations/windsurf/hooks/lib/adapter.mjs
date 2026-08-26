@@ -64,6 +64,7 @@ import {
   forTouch,
   noteActClasses,
   relevantFindingIdsForContext,
+  sessionContext,
   sessionIndex,
   standingRules,
 } from './inject.mjs';
@@ -690,8 +691,23 @@ async function runHook(clientName, event, invocation) {
       rememberOptimizerTools(state, toolEvidence);
       saveState(sessionId, state);
     }
-    const parts = [
-      policyText(client.canDeny, toolEvidence.names, toolEvidence.proven),
+    // ASSEMBLED IN CACHE ORDER, not in whatever order this function happens to
+    // discover the blocks. Everything emitted here sits near the FRONT of the
+    // prompt prefix, and a prefix cache invalidates from the first differing
+    // byte onward -- so the block that changes most often has to sit LAST, or it
+    // re-prices every block behind it on every session. `sessionContext` sorts
+    // by the declared volatility; inject.mjs records how each number was
+    // assigned and why.
+    const blocks = [
+      {
+        id: 'policy',
+        volatility: 0,
+        text: policyText(
+          client.canDeny,
+          toolEvidence.names,
+          toolEvidence.proven
+        ),
+      },
     ];
     const cwd = raw.cwd || raw.working_directory || process.cwd();
     const root = projectRootFor(join(cwd, '__session__'), cwd);
@@ -705,7 +721,7 @@ async function runHook(clientName, event, invocation) {
         const graph = load(dir);
         const episode = episodeMeta({ client: clientName, raw });
         const rules = standingRules(dir, graph, { episode });
-        if (rules) parts.push(rules);
+        if (rules) blocks.push({ id: 'standing', volatility: 1, text: rules });
         const relevantFindingIds = relevantFindingIdsForContext(
           graph,
           sessionTaskContext(raw)
@@ -714,12 +730,12 @@ async function runHook(clientName, event, invocation) {
           episode,
           relevantFindingIds,
         });
-        if (index) parts.push(index);
+        if (index) blocks.push({ id: 'index', volatility: 2, text: index });
       } catch {
         // Retrieval is optional context; the policy must still reach the model.
       }
     }
-    const output = contextOutput(client, eventName, parts.join('\n\n'));
+    const output = contextOutput(client, eventName, sessionContext(blocks));
     if (output) emit(output);
     process.exit(0);
   }

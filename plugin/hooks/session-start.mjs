@@ -34,6 +34,7 @@ import {
 import { restorationPlan } from './lib/restore.mjs';
 import {
   relevantFindingIdsForContext,
+  sessionContext,
   sessionIndex,
   standingRules,
 } from './lib/inject.mjs';
@@ -115,7 +116,19 @@ if (payload.session_id && toolEvidence.proven) {
   rememberOptimizerTools(state, toolEvidence);
   saveState(payload.session_id, state);
 }
-const parts = [policyText(true, toolEvidence.names, toolEvidence.proven)];
+// ASSEMBLED IN CACHE ORDER, not in the order the blocks are discovered below.
+// This text sits near the FRONT of the prompt prefix, which a cache invalidates
+// from the first differing byte onward, so the block that changes most often
+// belongs LAST or it re-prices everything behind it every session.
+// `sessionContext` sorts by the declared volatility; the numbers and the
+// evidence for each are recorded in inject.mjs.
+const blocks = [
+  {
+    id: 'policy',
+    volatility: 0,
+    text: policyText(true, toolEvidence.names, toolEvidence.proven),
+  },
+];
 
 // THE ALWAYS-ON HALF OF DELIVERY. Trigger-fired injection answers "this
 // situation is happening now", which cannot cover a rule about how the work is
@@ -134,7 +147,7 @@ try {
     // Skipping the sidecar keeps startup bounded on mature graphs.
     const graph = load(dir);
     const rules = standingRules(dir, graph);
-    if (rules) parts.push(rules);
+    if (rules) blocks.push({ id: 'standing', volatility: 1, text: rules });
     const relevantFindingIds = relevantFindingIdsForContext(
       graph,
       sessionTaskContext(payload)
@@ -143,18 +156,21 @@ try {
       episode: episodeMeta({ client: 'claude-code', raw: payload }),
       relevantFindingIds,
     });
-    if (index) parts.push(index);
+    if (index) blocks.push({ id: 'index', volatility: 2, text: index });
   }
 } catch {
   // The policy notice must still arrive if the graph is unreadable.
 }
 
-// THE SITUATIONAL HALF, LAST. Standing rules govern every turn; restoration
-// speaks only to a session resuming from a compaction, so it reads as the more
-// specific note after the general one.
+// THE SITUATIONAL HALF, LAST -- now stated as a volatility rather than left to
+// the order of these statements. Standing rules govern every turn; a restoration
+// block speaks only to a session resuming from a compaction and is derived from
+// the anchors of the context that was just discarded, so it is never twice the
+// same and is the most expensive thing that could sit ahead of anything else.
 try {
   const restored = await restoration(payload);
-  if (restored) parts.push(restored);
+  if (restored)
+    blocks.push({ id: 'restoration', volatility: 3, text: restored });
 } catch {
   // The policy notice must still arrive if anything above fails.
 }
@@ -162,7 +178,7 @@ try {
 const output = {
     hookSpecificOutput: {
       hookEventName: 'SessionStart',
-      additionalContext: parts.join('\n\n'),
+      additionalContext: sessionContext(blocks),
     },
   };
 const serialized = JSON.stringify(output);
