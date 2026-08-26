@@ -156,6 +156,67 @@ The known cost: a finding unreachable by any edge is invisible to traversal.
 Lexical search is the mitigation. If measurement shows real recall loss,
 embeddings can be added later as *one more edge type* — never as the mechanism.
 
+
+## Content-addressed retrieval
+
+A vendored file is the same file wherever it sits, whatever path each copy is
+given. This repository is its own example: the shared hook core is vendored into
+eleven directories, byte-identical, so a finding recorded against
+`plugin/hooks/lib/adapter.mjs` said nothing at all to a reader touching
+`integrations/qwen/hooks/lib/adapter.mjs`.
+
+**It is an index, not a second identity.** The obvious implementation mints a
+second anchor id of the form `content:<hash>:<size>` — and a second identity for
+one file is the defect this codebase has already been burned by. `canonicalKey`
+lives *inside* `nodeId` precisely because a caller that forgot produced a second
+node for a file that already existed and split its findings invisibly.
+
+So nothing new is stored and no node is created. A file node has carried the
+sha256 of its contents since staleness needed it; content identity has been in
+the graph since P2 and was simply never read that way. There is still exactly
+one node per path and one set of `derived_from` edges per finding, so there is
+no history to split.
+
+The three remaining questions fall out rather than being decided:
+
+| Question | Answer |
+|---|---|
+| Identical content at two paths in one repository | The ordinary case, not an edge one: one content group, findings shared both ways. |
+| Does staleness follow content or path? | **Path**, exactly as before. Content identity *is* the hash, so a file whose bytes change stops matching its old group without anything having to notice. There is no such thing as a stale content anchor to invalidate. |
+| What does it do to cross-project transfer? | **Nothing.** It reads one graph, so it can only ever surface findings already in the graph being read. `fleet.mjs` and the shared tier remain the only path between projects, with their gates intact. |
+
+**The hash is 64 bits**, because `staleness.mjs` slices the sha256 to sixteen
+hex characters. Equal hashes are strong evidence of equal content and not proof
+of it, and two unrelated files sharing a digest would silently share each
+other's findings — which is why the original design carried a size beside the
+digest. `indexFile` now records one, and grouping requires both to agree when
+both are known. A node written before that field existed, or minted for an
+import target and never read, has no size; grouping is permissive there, because
+refusing would make the feature quietly stop working on every graph that
+predates it.
+
+Empty files never group: every empty file in a repository shares one hash and
+they are not the same file in any sense a reader cares about. The peer set is
+capped, because a vendored core in eleven directories is the case this exists
+for and a generated asset checked in five hundred times is the case that would
+turn one retrieval into a scan.
+
+### What this deliberately does not do
+
+The issue that asked for this wanted a finding about a vendored file to reach
+**every repository** holding it. This delivers that within one graph and not
+across machines, and the gap is a storage decision rather than an oversight.
+
+The shared tier is per-machine and holds only lessons that do not depend on any
+repository's contents. A content-anchored finding is the opposite of that by
+construction: it is a claim about specific bytes. Carrying it across projects
+would need a third tier — per-machine, content-keyed, holding
+repository-dependent claims — and that tier has a privacy posture nothing here
+has yet: a claim derived inside a private repository would surface in another
+one because both vendor the same dependency. That is a decision about what
+leaves a repository, and it belongs to whoever owns the product rather than to
+the change that made the retrieval possible.
+
 ## Injection — both layers, hard budget
 
 **SessionStart** injects a compact index: titles and ids only, so the model knows
