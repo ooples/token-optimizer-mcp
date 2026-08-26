@@ -18,8 +18,16 @@ import { ORIGIN_HUMAN, ORIGIN_HARVESTED } from '../../hooks-core/curate.mjs';
 import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
 import { standingRules, safeTrigger } from '../../hooks-core/inject.mjs';
 import { wikiDir, load, putNode } from '../../hooks-core/wiki.mjs';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
-import { join } from 'path';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+} from 'fs';
+import { join, relative } from 'path';
 import { tmpdir } from 'os';
 
 const TURNS = [
@@ -367,6 +375,65 @@ describe('a lesson is only stored if its trigger can ever fire', () => {
     expect(safeTrigger(good)).toBeInstanceOf(RegExp);
     const out = validateLessons(lesson(good), []);
     expect(out.rejected.filter((r) => r.reason === 'bad-trigger-regex')).toHaveLength(0);
+  });
+});
+
+describe('the lessons metrics event that nothing read', () => {
+  // harvest-worker.mjs used to call `record(dir, { kind: 'lessons', ... })` after every feedback
+  // pass. Nothing read it: netTokens only pulls from BALANCE_KINDS, which has no 'lessons' entry,
+  // so the cost never reached harvestTokens; report()/buildReport() filter on 'inject', 'harvest',
+  // 'standing', 'index' and 'query' but never 'lessons'; and no audit render surfaced it to a
+  // human. That is the inverse of the `query` defect (a reader with no producer) and the same
+  // shape as `tokensFullFile` before it (written and unread until someone noticed) -- a
+  // produced-and-never-consumed event, which is a cost with no benefit.
+  //
+  // The lesson CONTENT was never at risk: `writeHarvested` persists each lesson into the graph
+  // directly, and that is what lessons.mjs's real consumers (standingRules, the injector) query.
+  // Only the redundant metrics counter is gone.
+  //
+  // This is a source scan rather than a run of main(), because main() is a script entry point
+  // read from argv and driven by a real model call through extract() -- not an exported function
+  // a unit test can invoke without standing up that call. The property under test does not need
+  // it: no file that ships in the live hook path may emit this event kind at all.
+  const REPO = process.cwd();
+
+  function walk(dir, out = []) {
+    let entries;
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return out;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry);
+      let st;
+      try {
+        st = statSync(full);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        // `lib` holds generated copies of hooks-core; scanning them is redundant with scanning
+        // the source they were generated from, and would double-report a single real offender.
+        if (['node_modules', 'dist', 'lib', '.git'].includes(entry)) continue;
+        walk(full, out);
+      } else if (/\.(mjs|js)$/.test(entry)) {
+        out.push(full);
+      }
+    }
+    return out;
+  }
+
+  it('is written by no file in the live hook path', () => {
+    const files = ['hooks-core', 'plugin/hooks'].flatMap((root) => walk(join(REPO, root)));
+    expect(files.length).toBeGreaterThan(10); // a scan matching nothing would pass vacuously
+
+    const offenders = files
+      .map((file) => ({ file, text: readFileSync(file, 'utf8') }))
+      .filter(({ text }) => /kind:\s*['"]lessons['"]/.test(text))
+      .map(({ file }) => relative(REPO, file));
+
+    expect(offenders).toEqual([]);
   });
 });
 
