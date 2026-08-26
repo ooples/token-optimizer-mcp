@@ -17,7 +17,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { record, recordToolOutcome } from '../../hooks-core/metrics.mjs';
 import { transcriptDir, safeName } from '../../hooks-core/transcript.mjs';
-import { derive, CONFIDENCE, attemptKey } from '../../hooks-core/derive.mjs';
+import { load, putNode, putEdge, nodeId } from '../../hooks-core/wiki.mjs';
+import { indexFile } from '../../hooks-core/staleness.mjs';
+import { canonicalPath } from '../../hooks-core/paths.mjs';
+import { ORIGIN_HARVESTED, ORIGIN_HUMAN } from '../../hooks-core/curate.mjs';
+import { derive, CONFIDENCE, attemptKey, projectAnchor } from '../../hooks-core/derive.mjs';
 
 let dir;
 
@@ -65,6 +69,29 @@ const archiveTurns = (sessionId, turns) => {
 
 const run = (options = {}) =>
   derive(dir, { sessionId: 's', projectRoot: dir, ...options });
+
+/**
+ * A project marker, so the derived anchor RESOLVES.
+ *
+ * Without one the anchor falls back to the project root, `indexFile` cannot read
+ * a directory, and `writeHarvested` correctly refuses every candidate -- which
+ * means a storage test written against a bare temp directory asserts `written`
+ * is empty and passes whether storage works or not.
+ */
+const withManifest = () => {
+  const manifest = join(dir, 'package.json');
+  writeFileSync(manifest, '{"name":"fixture"}');
+  return manifest;
+};
+
+/** One failed-then-succeeded pair, which yields a command and a failure. */
+const onePair = () => {
+  outcome('deploy', { success: false, output: 'connection refused by host', at: 1 });
+  outcome('deploy --retry', { success: true, at: 2 });
+};
+
+const storedFindings = () =>
+  [...load(dir).nodes.values()].filter((node) => node.kind === 'finding');
 
 describe('a command that failed and then succeeded', () => {
   it('turns a failed-then-succeeded command into a command and a failure finding', () => {
@@ -277,14 +304,6 @@ describe('the contract the caller relies on', () => {
     expect(JSON.stringify(candidates)).not.toContain('abcdef123456');
   });
 
-  it('writes nothing, and stores nothing, on its own', () => {
-    // Selection and storage belong to the caller, under a budget.
-    outcome('deploy', { success: false, output: 'connection refused by host', at: 1 });
-    outcome('deploy --retry', { success: true, at: 2 });
-
-    expect(run().written).toEqual([]);
-  });
-
   it('threads the authoritative session id back untouched', () => {
     // `writeHarvested` needs it to resolve the `answers` edge: `taskForAnchors`
     // returns null without one, so an unverified string produces no edge at all.
@@ -323,6 +342,189 @@ describe('the contract the caller relies on', () => {
     expect(() => run()).not.toThrow();
     expect(() => derive(null, null)).not.toThrow();
     expect(() => derive(dir)).not.toThrow();
+  });
+});
+
+describe('storage, under a budget', () => {
+  it('stores what it derives, and reports the keys', () => {
+    withManifest();
+    onePair();
+
+    const { candidates, written } = run();
+    expect(candidates.map((c) => c.type).sort()).toEqual(['command', 'failure']);
+    expect(written).toHaveLength(2);
+    expect(storedFindings().map((f) => f.type).sort()).toEqual(['command', 'failure']);
+  });
+
+  it('stamps harvested origin and never human, because these are machine guesses', () => {
+    // `curate.mjs` states the reason in its own header: a hand-written assertion
+    // and a machine guess look identical three months later, which quietly
+    // destroys a reader's ability to calibrate trust. The standing-rules layer
+    // selects on human origin to inject on EVERY turn, so this is not a
+    // labelling detail.
+    withManifest();
+    onePair();
+    run();
+
+    const stored = storedFindings();
+    expect(stored.length).toBeGreaterThan(0);
+    for (const finding of stored) {
+      expect(finding.origin).toBe(ORIGIN_HARVESTED);
+      expect(finding.origin).not.toBe(ORIGIN_HUMAN);
+      expect(finding.quote).toBeUndefined();
+    }
+  });
+
+  it('the budget bounds one session, so a long afternoon cannot fill the graph', () => {
+    // THE RISK THIS CLOSES. `selectForConsolidation` had no caller, so nothing
+    // bounded what a session added -- and everything stored competes for the
+    // 500-token per-command injection budget of every session afterwards,
+    // forever. 120 pairs is an ordinary long day of failing commands.
+    withManifest();
+    for (let i = 0; i < 120; i += 1) {
+      outcome(`cmd${i} alpha`, { success: false, output: `error number ${i} happened here`, at: i * 2 + 1 });
+      outcome(`cmd${i} alpha --fix`, { success: true, at: i * 2 + 2 });
+    }
+
+    const { candidates, written, selectedTokens } = run();
+    expect(candidates.length).toBeGreaterThan(100);
+    expect(written.length).toBeGreaterThan(0);
+    expect(written.length).toBeLessThan(candidates.length);
+    expect(selectedTokens).toBeLessThanOrEqual(1000);
+  });
+
+  it('admits dead ends on the floor when the budget is too small for ranking', () => {
+    // Cheap to find is not cheap to find AGAIN: a negative result exists nowhere
+    // else, not in the code and not in the commit log. Ranking alone would drop
+    // it, so `failure` is admitted before scoring -- which is visible only when
+    // the budget is tight enough that ranking would otherwise have decided.
+    withManifest();
+    for (let i = 0; i < 40; i += 1) {
+      outcome(`cmd${i} alpha`, { success: false, output: `error number ${i} happened here`, at: i * 2 + 1 });
+      outcome(`cmd${i} alpha --fix`, { success: true, at: i * 2 + 2 });
+    }
+
+    const previous = process.env.TOKEN_OPTIMIZER_DERIVE_BUDGET;
+    process.env.TOKEN_OPTIMIZER_DERIVE_BUDGET = '60';
+    try {
+      run();
+    } finally {
+      if (previous === undefined) delete process.env.TOKEN_OPTIMIZER_DERIVE_BUDGET;
+      else process.env.TOKEN_OPTIMIZER_DERIVE_BUDGET = previous;
+    }
+
+    const types = storedFindings().map((f) => f.type);
+    expect(types.length).toBeGreaterThan(0);
+    // Every survivor is a dead end: the floor spent the budget before ranking
+    // ever ran, which is the design's stated ordering rather than an accident.
+    expect([...new Set(types)]).toEqual(['failure']);
+  });
+
+  it('refuses a candidate whose anchor cannot be indexed, rather than weakening the rule', () => {
+    // No manifest, so the anchor falls back to the project ROOT -- and
+    // `indexFile` returns null for a directory, so nothing can ever be checked
+    // against it. An un-indexable anchor is an un-invalidatable claim, and
+    // `writeHarvested` refuses it. Deriving the candidate and storing none of it
+    // is the correct outcome, which is why the count and the storage are both
+    // asserted: `written` being empty proves nothing on its own.
+    onePair();
+
+    const { candidates, written } = run();
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(written).toEqual([]);
+    expect(storedFindings()).toEqual([]);
+  });
+
+  it('anchors to the file that declares the project commands, not to the directory', () => {
+    const manifest = withManifest();
+    onePair();
+
+    expect(projectAnchor(dir)).toBe(manifest);
+    expect(run().candidates[0].anchors).toEqual([manifest]);
+  });
+
+  it('picks the same .NET anchor on every host, so one finding is not two nodes', () => {
+    // readdir order is not stable across hosts, and an anchor that varies by host
+    // splits one claim into two graph nodes that can never merge.
+    writeFileSync(join(dir, 'Zed.sln'), '');
+    writeFileSync(join(dir, 'Alpha.sln'), '');
+    expect(projectAnchor(dir)).toBe(join(dir, 'Alpha.sln'));
+  });
+
+  it('a second session deriving the same lesson enriches one node instead of adding another', () => {
+    // THE BLOAT PATH THIS SETTLES. The commonest real case is the same command
+    // failing and being fixed the same way twice -- a graph that files one
+    // finding per session about one fact grows without bound and spends the
+    // injection budget saying the same thing N times. `writeHarvested`
+    // fingerprints the claim and returns the EXISTING key, so the second session
+    // adds edges and no node.
+    withManifest();
+    onePair();
+
+    const first = derive(dir, { sessionId: 's1', projectRoot: dir });
+    const second = derive(dir, { sessionId: 's2', projectRoot: dir });
+
+    expect(first.written.length).toBeGreaterThan(0);
+    expect(second.written).toEqual(first.written);
+    expect(storedFindings()).toHaveLength(first.written.length);
+  });
+
+  it('makes the `answers` edge fire on a default install, given an authoritative id', () => {
+    // The edge is DECLARED in EDGE_KINDS and its only other producer is
+    // credential-gated, so it fired nowhere on a machine without an API key.
+    // `taskForAnchors` needs an id from a channel the caller does not control
+    // AND a session task that covered every anchor -- both, not either.
+    const manifest = withManifest();
+    onePair();
+    indexFile(dir, manifest);
+    putEdge(
+      dir,
+      putNode(dir, { kind: 'task', key: 'hook-payload-id' }),
+      'derived_from',
+      nodeId('file', canonicalPath(manifest))
+    );
+
+    run({ authoritativeSessionId: 'hook-payload-id' });
+    expect(load(dir).edges.filter((e) => e.edge === 'answers').length).toBeGreaterThan(0);
+  });
+
+  it('writes no `answers` edge from a session id nothing cross-checked', () => {
+    // An unverified string must not buy provenance. `sessionId` alone is a
+    // model-typed argument everywhere except a hook payload.
+    const manifest = withManifest();
+    onePair();
+    indexFile(dir, manifest);
+    putEdge(
+      dir,
+      putNode(dir, { kind: 'task', key: 's' }),
+      'derived_from',
+      nodeId('file', canonicalPath(manifest))
+    );
+
+    run();
+    expect(load(dir).edges.filter((e) => e.edge === 'answers')).toEqual([]);
+  });
+
+  it('finishes the session when the storage step itself throws', () => {
+    // FAULT INJECTED WHERE IT ACTUALLY LANDS, not somewhere harmless. The first
+    // version of this passed a number as the project root, which merely failed
+    // to resolve -- nothing threw, so deleting the try/catch around storage did
+    // not fail the test. An anchor whose `String()` throws raises inside
+    // `selectForConsolidation`, which is the storage step, and storage is the
+    // last thing a finished session does: a graph write that fails must not turn
+    // a completed session into a hook error.
+    withManifest();
+    onePair();
+    const hostile = {
+      toString() {
+        throw new Error('anchor cannot be stringified');
+      },
+    };
+    let result;
+    expect(() => {
+      result = derive(dir, { sessionId: 's', projectRoot: hostile });
+    }).not.toThrow();
+    expect(result.written).toEqual([]);
   });
 });
 

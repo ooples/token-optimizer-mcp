@@ -142,7 +142,8 @@ const ALWAYS_KEEP = new Set(['failure', 'decision']);
  * Chooses what to promote into the graph, under a token budget.
  *
  * @param {object} graph      Loaded wiki graph, for reuse probability.
- * @param {Array}  candidates Extracted conclusions, each { type, summary, anchors, evidence, at }.
+ * @param {Array}  candidates Extracted conclusions, each { type, claim (or summary),
+ *                              anchors, evidence, at }.
  * @param {object} options    budget: tokens available for promoted findings.
  */
 export function selectForConsolidation(graph, candidates, { budget = 4000 } = {}) {
@@ -221,4 +222,3 @@ export function aggregateConsolidation(findings) {
   }
   return carry ? { derived, carry, ratio: derived / carry } : null;
 }
-

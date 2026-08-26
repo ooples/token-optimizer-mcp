@@ -23,13 +23,21 @@
  * the observation supports no claim at all are refused rather than downgraded
  * (see `attemptKey` and the identical-text guard below).
  *
- * THIS MODULE WRITES NOTHING. It returns candidates; storing them, under a
- * budget, belongs to the caller.
+ * WHAT IS STORED IS BOUNDED. Candidates go through `selectForConsolidation`
+ * before `writeHarvested`, so a long session cannot spend the whole retrieval
+ * budget of every later session on one afternoon's exit codes. Nothing enters
+ * the graph unbudgeted, and nothing enters it wearing a human origin.
  */
 
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { readMetrics, rereadsByAnchor } from './metrics.mjs';
 import { readArchive, readTurns } from './transcript.mjs';
 import { redact } from './redact.mjs';
+import { selectForConsolidation } from './consolidate.mjs';
+import { writeHarvested } from './harvest-write.mjs';
+import { load } from './wiki.mjs';
+import { ORIGIN_HARVESTED } from './curate.mjs';
 
 /**
  * Ceilings, ordered by how much the evidence actually supports.
@@ -106,6 +114,92 @@ const triggerFor = (command) =>
   attemptKey(command).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').slice(0, 120) || undefined;
 
 /**
+ * Literal root-level files that define how a project is BUILT, RUN and TESTED,
+ * best first. A `command` claim is a claim about this project's commands, and
+ * this is the file those commands are declared in.
+ */
+const PROJECT_MARKERS = [
+  'package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'pom.xml',
+  'build.gradle.kts', 'build.gradle', 'build.sbt', 'mix.exs', 'composer.json',
+  'Gemfile', 'Package.swift', 'CMakeLists.txt', 'Makefile', 'Taskfile.yml',
+  'requirements.txt', 'setup.py', 'deno.json', 'bun.lockb',
+];
+
+/** .NET has no single literal marker; the solution or project file is one. */
+const DOTNET_MARKER = /\.(sln|slnx|csproj|fsproj|vbproj)$/i;
+
+/**
+ * A REAL FILE to anchor a derived claim to, inside the project root.
+ *
+ * WHY NOT THE PROJECT ROOT ITSELF, which is what the extraction step reaches
+ * for and what `promoteToShared` uses in the shared tier. Because
+ * `writeHarvested` resolves every anchor through `indexFile`, `indexFile` reads
+ * the path, and reading a DIRECTORY returns null -- so a candidate anchored to
+ * `projectRoot` resolves to nothing, is refused as unanchorable, and the whole
+ * pipeline stores zero findings while reporting a healthy candidate count.
+ * Verified directly: `indexFile(dir, dir)` returns null. That refusal is
+ * correct and must not be weakened -- an anchor that cannot be indexed is an
+ * anchor that can never be invalidated -- so the anchor has to be a file.
+ *
+ * STALENESS DOES NOT MISFIRE ON THIS. `command`, `failure` and `feedback` are
+ * all outside `CONTENT_DEPENDENT` (staleness.mjs), so the anchor is a RETRIEVAL
+ * AND EXISTENCE hook rather than a contents claim: editing the manifest does
+ * not mark these findings stale. staleness.mjs names this exact case in its own
+ * comment -- "a claim about `npm test` anchored to package.json" -- and calls
+ * missing that invalidation the better error.
+ *
+ * A project with no recognisable marker gets the root back, which will not
+ * resolve, so its candidates are derived and then refused rather than stored
+ * against a fabricated anchor. That is the fail-open direction: no finding
+ * beats a finding anchored to something that is not what the claim is about.
+ */
+export function projectAnchor(projectRoot) {
+  if (!projectRoot) return null;
+  let entries;
+  try {
+    entries = readdirSync(projectRoot);
+  } catch {
+    return projectRoot;
+  }
+  const present = new Set(entries);
+  for (const marker of PROJECT_MARKERS) {
+    if (!present.has(marker)) continue;
+    const path = join(projectRoot, marker);
+    try {
+      if (statSync(path).isFile()) return path;
+    } catch {
+      // A marker that cannot be stat'ed is not a marker.
+    }
+  }
+  // Sorted so two sessions in the same repository pick the SAME solution file:
+  // readdir order is not guaranteed stable across hosts, and an anchor that
+  // varies by host splits one finding into two nodes.
+  for (const entry of [...entries].sort()) {
+    if (!DOTNET_MARKER.test(entry)) continue;
+    const path = join(projectRoot, entry);
+    try {
+      if (statSync(path).isFile()) return path;
+    } catch {
+      // Same.
+    }
+  }
+  return projectRoot;
+}
+
+/**
+ * Tokens of claim text one session may add to the graph.
+ *
+ * SCALED TO THE RETRIEVAL BUDGET IT COMPETES FOR, not picked round. A single
+ * command's injection budget is 500 tokens (`TOKEN_OPTIMIZER_TOUCH_BUDGET`),
+ * and everything stored here is competing for that budget on every later
+ * command, forever. Two touch-budgets per session is the bound: enough for a
+ * few dozen real claims, and short of one session's exit codes crowding out
+ * every finding a human or a model ever wrote.
+ */
+const storageBudget = () =>
+  Number(process.env.TOKEN_OPTIMIZER_DERIVE_BUDGET) || 1000;
+
+/**
  * Derives finding candidates from one project's local evidence.
  *
  * @param {string} dir wiki directory.
@@ -118,11 +212,18 @@ const triggerFor = (command) =>
  *   and is refused by `writeHarvested` anyway, so emitting one would only spend
  *   the caller's budget on junk.
  * @param {string|null} options.authoritativeSessionId the session id as the HOOK
- *   PAYLOAD reported it, never a value a model typed. Returned untouched for the
- *   caller to pass to `writeHarvested`, which needs it to resolve the `answers`
- *   edge -- `taskForAnchors` returns null without one, so an unverified string
- *   would silently produce no edge. Threaded rather than defaulted from
- *   `sessionId`: defaulting would promote any caller's string to trusted.
+ *   PAYLOAD reported it, never a value a model typed. Passed straight to
+ *   `writeHarvested`, which needs it to resolve the `answers` edge --
+ *   `taskForAnchors` returns null without one, so an unverified string would
+ *   silently produce no edge. Threaded rather than defaulted from `sessionId`:
+ *   defaulting would promote any caller's string to trusted. Also returned, so a
+ *   caller can see what it handed over.
+ * @returns {object} `{ candidates, observations, written, selected, dropped,
+ *   selectedTokens, sessionId, authoritativeSessionId }`. `candidates` is
+ *   everything derived; `written` is the subset of keys the graph actually
+ *   holds, which is smaller for three independent reasons -- the budget, the
+ *   anchor discipline, and the duplicate collapse that returns an EXISTING key
+ *   when a later session derives the same claim again.
  */
 export function derive(dir, options = {}) {
   // `options || {}` rather than a destructuring default. A default only fires on
@@ -152,6 +253,11 @@ export function derive(dir, options = {}) {
     return result;
   }
   if (!Array.isArray(events)) return result;
+
+  // ONE anchor for the whole run, so every candidate from this session points at
+  // the same node and the duplicate collapse in `writeHarvested` can recognise
+  // the same lesson across sessions.
+  const anchorPath = projectAnchor(projectRoot);
 
   const seen = new Set();
   const add = (candidate) => {
@@ -246,7 +352,7 @@ export function derive(dir, options = {}) {
               `observed in one session: \`${failed.command}\` failed` +
                 `${Number.isInteger(failed.exit) ? ` (exit ${failed.exit})` : ''}, then ` +
                 `\`${outcome.command}\` succeeded. The two outcomes are ordered, not proven causal: ` +
-                'an intervening edit or a flaky run explains the same pair.',
+                'an intervening edit or an unrelated environment change explains the same pair.',
               { max: EVIDENCE_MAX }
             ),
             applicability: 'when about to run this command in this project',
@@ -255,7 +361,7 @@ export function derive(dir, options = {}) {
             scope: 'project',
             invalidators: ['the failing form later succeeds unchanged'],
             trigger: triggerFor(outcome.command),
-            anchors: [projectRoot],
+            anchors: [anchorPath],
             derivedBy,
             sessionId,
             at: outcome.at || Date.now(),
@@ -280,7 +386,7 @@ export function derive(dir, options = {}) {
             scope: 'project',
             invalidators: ['the same command later succeeds unchanged'],
             trigger: triggerFor(failed.command),
-            anchors: [projectRoot],
+            anchors: [anchorPath],
             derivedBy,
             sessionId,
             at: failed.at || Date.now(),
@@ -330,7 +436,7 @@ export function derive(dir, options = {}) {
           confidenceLabel: labelFor(CONFIDENCE.correction),
           scope: 'project',
           invalidators: ['the user later asks for the corrected behaviour'],
-          anchors: [projectRoot],
+          anchors: [anchorPath],
           derivedBy: 'correction',
           sessionId,
           at: Date.parse(turn.at || '') || Date.now(),
@@ -379,6 +485,48 @@ export function derive(dir, options = {}) {
     }
   } catch {
     // One detector, never the session.
+  }
+
+  // ---- storage, under a budget -------------------------------------------
+  //
+  // NOTHING ENTERS THE GRAPH UNBUDGETED. `selectForConsolidation` existed for
+  // exactly this and had no caller, which meant that until now nothing bounded
+  // what a session could add. It admits `failure` and `decision` on a FLOOR
+  // before ranking -- a dead end exists nowhere else and is small, and cheap to
+  // find is not cheap to find again -- then fills the remainder by
+  // cost x irrecoverability x reuse-probability.
+  //
+  // ORIGIN_HARVESTED, EXPLICITLY, never ORIGIN_HUMAN. These are machine
+  // derivations; `curate.mjs` states the reason in its own header -- "a
+  // hand-written assertion and a machine guess look identical three months
+  // later, which quietly destroys the reader's ability to calibrate trust".
+  // `writeHarvested` would refuse a batch-wide human origin anyway, and a
+  // candidate here carries neither `origin` nor `quote`, so it cannot earn one
+  // per finding either. That is deliberate: whether a turn was a correction at
+  // all is a lexical guess, and the standing-rules layer selects on human
+  // origin to inject on EVERY turn.
+  try {
+    if (result.candidates.length) {
+      const selected = selectForConsolidation(load(dir), result.candidates, {
+        budget: storageBudget(),
+      });
+      result.selected = selected.kept.length;
+      result.dropped = selected.dropped;
+      result.selectedTokens = selected.tokens;
+      result.written = writeHarvested(dir, selected.kept, {
+        sessionId,
+        origin: ORIGIN_HARVESTED,
+        projectRoot,
+        // The hook payload's own identity, passed through untouched. Without it
+        // `taskForAnchors` returns null and the `answers` edge never fires --
+        // which is the state a default install has been in, because its only
+        // other producer is credential-gated.
+        authoritativeSessionId,
+      });
+    }
+  } catch {
+    // Storage is the last step and the session is already over. A graph write
+    // that fails must not turn a completed session into a hook error.
   }
 
   return result;

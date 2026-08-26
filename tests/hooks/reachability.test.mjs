@@ -93,7 +93,6 @@ const ALLOWED = new Map([
   // assertion at the bottom of this file holds the count to a ceiling that can
   // only fall, and refuses any entry that is neither one of these five nor
   // genuine public API.
-
   // NOTHING IS LEFT, and the last four did not leave by being re-described.
   //
   // They were held here for a stated reason -- "the producing action does not
