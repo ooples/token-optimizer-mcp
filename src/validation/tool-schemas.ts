@@ -403,6 +403,22 @@ export const WikiWriteSchema = z
 // so the caller gets an explanation rather than a validation rejection.
 export const WikiReadSchema = z.object({}).passthrough();
 
+// wiki_query: reading the knowledge graph. EVERY option must be declared --
+// an option missing here is spread into the handler and silently dropped.
+export const WikiQuerySchema = z.object({
+  operation: z.enum(['get', 'search', 'node', 'audit', 'balance', 'overview']),
+  key: z.string().optional(),
+  query: z.string().optional(),
+  type: z
+    .enum(['finding', 'decision', 'failure', 'command', 'map', 'feedback'])
+    .optional(),
+  nodeId: z.string().optional(),
+  limit: z.number().int().positive().max(100).optional(),
+  graphDir: z.string().optional(),
+  projectRoot: z.string().optional(),
+  sessionId: z.string().optional(),
+});
+
 export const ContextPageSchema = z
   .object({
     query: z.string(),
@@ -1000,6 +1016,7 @@ export const toolSchemaMap: Record<string, z.ZodType<any>> = {
   smart_grep: SmartGrepSchema,
   wiki_write: WikiWriteSchema,
   wiki_read: WikiReadSchema,
+  wiki_query: WikiQuerySchema,
   context_page: ContextPageSchema,
   context_receipt_verify: ContextReceiptVerifySchema,
   cognition_record: CognitionRecordSchema,

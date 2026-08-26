@@ -62,10 +62,12 @@ import {
   forTouch,
   noteActClasses,
   relevantFindingIdsForContext,
+  sessionContext,
   sessionIndex,
   standingRules,
 } from './inject.mjs';
 import { indexFile } from './staleness.mjs';
+import { observedWrites, queueInvalidation } from './pending.mjs';
 import { isArchived } from './transcript.mjs';
 import { isFsSafePath } from './paths.mjs';
 import {
@@ -687,8 +689,23 @@ async function runHook(clientName, event, invocation) {
       rememberOptimizerTools(state, toolEvidence);
       saveState(sessionId, state);
     }
-    const parts = [
-      policyText(client.canDeny, toolEvidence.names, toolEvidence.proven),
+    // ASSEMBLED IN CACHE ORDER, not in whatever order this function happens to
+    // discover the blocks. Everything emitted here sits near the FRONT of the
+    // prompt prefix, and a prefix cache invalidates from the first differing
+    // byte onward -- so the block that changes most often has to sit LAST, or it
+    // re-prices every block behind it on every session. `sessionContext` sorts
+    // by the declared volatility; inject.mjs records how each number was
+    // assigned and why.
+    const blocks = [
+      {
+        id: 'policy',
+        volatility: 0,
+        text: policyText(
+          client.canDeny,
+          toolEvidence.names,
+          toolEvidence.proven
+        ),
+      },
     ];
     const cwd = raw.cwd || raw.working_directory || process.cwd();
     const root = projectRootFor(join(cwd, '__session__'), cwd);
@@ -702,7 +719,7 @@ async function runHook(clientName, event, invocation) {
         const graph = load(dir);
         const episode = episodeMeta({ client: clientName, raw });
         const rules = standingRules(dir, graph, { episode });
-        if (rules) parts.push(rules);
+        if (rules) blocks.push({ id: 'standing', volatility: 1, text: rules });
         const relevantFindingIds = relevantFindingIdsForContext(
           graph,
           sessionTaskContext(raw)
@@ -711,12 +728,12 @@ async function runHook(clientName, event, invocation) {
           episode,
           relevantFindingIds,
         });
-        if (index) parts.push(index);
+        if (index) blocks.push({ id: 'index', volatility: 2, text: index });
       } catch {
         // Retrieval is optional context; the policy must still reach the model.
       }
     }
-    const output = contextOutput(client, eventName, parts.join('\n\n'));
+    const output = contextOutput(client, eventName, sessionContext(blocks));
     if (output) emit(output);
     process.exit(0);
   }
@@ -879,6 +896,34 @@ async function runHook(clientName, event, invocation) {
       });
     } catch {
       // Causal tracing is fail-open like every other hook optimization.
+    }
+
+    // EAGER INVALIDATION, finally connected. `invalidateOnWrite` has existed,
+    // been tested and been described in staleness.mjs's own header since
+    // staleness landed, and its only reference in shipped code was a COMMENT in
+    // the PreToolUse router -- so the path that header calls load-bearing had
+    // never run once in production. It matters most for exactly this event: the
+    // lazy check compares the anchor's stored hash against disk, and the
+    // capture below re-points that hash at the bytes this write just produced,
+    // so a write the session performed ITSELF is invisible to lazy staleness.
+    //
+    // QUEUED, NOT APPLIED. Applying needs the graph, and loading a megabyte of
+    // JSONL on the return path of every write is what this shape exists to
+    // avoid. The next graph read drains it before serving anything.
+    try {
+      if (mutationSucceeded(clientName, raw)) {
+        for (const evidence of observedWrites(payload, raw)) {
+          // THE SAME DIRECTORY THE GRAPH ITSELF USES. `observeAndInject` keys
+          // every write on `wikiDir(projectRootFor(path, payload.cwd))`, and a
+          // queue written anywhere else is a queue nothing ever drains.
+          queueInvalidation(
+            wikiDir(projectRootFor(evidence.path, payload.cwd)),
+            evidence
+          );
+        }
+      }
+    } catch {
+      // Bookkeeping for a call that already completed. Never let it cost one.
     }
   }
 

@@ -25,6 +25,11 @@ import {
   WIKI_READ_TOOL_DEFINITION,
 } from '../tools/intelligence/wiki-read.js';
 import {
+  wikiQuery,
+  WIKI_QUERY_TOOL_DEFINITION,
+  type WikiQueryOptions,
+} from '../tools/intelligence/wiki-query.js';
+import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -665,6 +670,7 @@ const TOOL_DEFINITIONS = [
   FLEET_TOOL,
   WIKI_WRITE_TOOL_DEFINITION,
   WIKI_READ_TOOL_DEFINITION,
+  WIKI_QUERY_TOOL_DEFINITION,
   ...UCR_TOOL_DEFINITIONS,
   EXPAND_TOOL,
   WASTE_TOOL,
@@ -2642,6 +2648,19 @@ async function handleToolCall(request: {
         // deliberate write path and no deliberate read path, so a subagent -- which
         // never receives the SessionStart briefing -- could not reach it at all.
         const result = await wikiRead(args as any);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+      case 'wiki_query': {
+        // The general read path: one finding by key, a ranked search over claims,
+        // a node with its neighbours, or the graph's own audit.
+        // NOT by anchor -- that operation was removed deliberately and a
+        // test asserts it now answers "unknown operation"; `wiki_read` is the
+        // path that takes files. The SessionStart index has been telling the model
+        // to call this for detail since injection landed, so a missing dispatch
+        // case here is the difference between an escape hatch and a dead end.
+        const result = await wikiQuery(args as WikiQueryOptions);
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };

@@ -95,6 +95,18 @@ async function main() {
   const written = writeHarvested(dir, findings, {
     sessionId: sessionId || null,
     projectRoot,
+    // Task nodes are keyed by session id (structural capture creates one on
+    // the first touched file, `harvest()` in lib/wiki.mjs) so this is the
+    // shape `writeHarvested` needs to point the `answers` edge back at the
+    // task this harvest belongs to. A session that never touched a file
+    // through PreToolUse/PostToolUse has no such node yet; `writeHarvested`
+    // resolves that case to no edge rather than a dangling one.
+    taskId: sessionId || null,
+    // AUTHORITATIVE, not just present: this `sessionId` came from Claude
+    // Code's own Stop-hook payload (see stop-harvest.mjs), not a model-typed
+    // tool argument, so it is safe to use for the traversal fallback if the
+    // explicit `taskId` above does not resolve.
+    authoritativeSessionId: sessionId || null,
   });
 
   record(dir, {
@@ -119,7 +131,7 @@ async function main() {
       // The same restriction the finding path above applies, for the same reason: a model that
       // invents a plausible path must not be able to anchor a lesson to it. `turns` is the
       // archived transcript for this session, so its rendered digest is the honest file list.
-      const { lessons, rejected } = validateLessons(rawLessons, turns, {
+      const { lessons } = validateLessons(rawLessons, turns, {
         knownFiles: filesIn(feedback),
       });
 
@@ -136,19 +148,24 @@ async function main() {
         anchors: l.anchors.length ? l.anchors : [projectRoot],
       }));
 
-      const writtenLessons = writeHarvested(dir, anchored, {
+      // The write itself is the durable record: writeHarvested anchors each
+      // lesson into the graph, which is what lessons.mjs's real consumers
+      // query. A metrics event of kind 'lessons' used to sit here as well,
+      // but nothing ever read it -- not netTokens (only 'harvest' feeds
+      // harvestTokens), not report()/buildReport() (no kind filter matches
+      // 'lessons'), and no audit render exists to show it to a human. That is
+      // the inverse of the `query` defect and the same shape as
+      // `tokensFullFile` before it: a produced-and-never-consumed event,
+      // which is a cost with no benefit. Deleted rather than wired, per the
+      // reachability allowlist's own rule -- write it again the day
+      // something needs to read it.
+      writeHarvested(dir, anchored, {
         sessionId: sessionId || null,
         origin: ORIGIN_HARVESTED,
         projectRoot,
-      });
-
-      record(dir, {
-        kind: 'lessons',
-        sessionId: sessionId || null,
-        tokens: estimateTokens(feedback),
-        lessons: writtenLessons.length,
-        rejected: rejected.length,
-        at: Date.now(),
+        taskId: sessionId || null,
+        // Same hook-payload identity as above, same reason.
+        authoritativeSessionId: sessionId || null,
       });
     }
   } catch {

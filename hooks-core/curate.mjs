@@ -20,7 +20,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { putNode, putNodeWithEdges, load, nodeId } from './wiki.mjs';
+import { putNode, putEdge, putNodeWithEdges, load, nodeId } from './wiki.mjs';
 import { indexFile } from './staleness.mjs';
 import { symbolKey } from './symbols.mjs';
 import { canonicalPath } from './paths.mjs';
@@ -66,6 +66,38 @@ export function originWeight(origin) {
   if (origin === ORIGIN_HUMAN) return HUMAN_WEIGHT;
   if (origin === ORIGIN_AGENT) return AGENT_WEIGHT;
   return 1;
+}
+
+/**
+ * The claim-time anchor hashes, for a finding being written right now.
+ *
+ * THE CHECKABLE HALF OF PROVENANCE, and until now only `harvest-write.mjs`
+ * wrote it -- so the asymmetry ran exactly the wrong way. `reverify` and the
+ * automatic clear in `serve` both compare disk against these frozen hashes, and
+ * a finding without them can never have a stale flag cleared by anything. That
+ * meant HUMAN-asserted findings, the ones somebody deliberately created or
+ * corrected, were the only ones condemned to stay stale forever once marked,
+ * while machine-harvested claims could recover. The hashes are simply the anchor
+ * nodes' hashes at this moment, and every writer has them in hand.
+ *
+ * DELIBERATELY NOT THE WHOLE RECORD `derivationFor` BUILDS. That one joins the
+ * evidence log to find FILE-surface operations behind the claim; curation
+ * performs no such join, so `operations` is empty and `operationsComplete` says
+ * so. An empty list declared incomplete is honest -- "nothing recorded here, and
+ * do not read that as nothing happened" -- where an empty list declared complete
+ * would assert a fact nobody established.
+ *
+ * An anchor with no stored hash contributes no entry, and a finding whose
+ * anchors all lack one gets a record with no hashes -- which `claimTimeVerdict`
+ * reads as `unknown` and refuses to clear on, which is the correct reading.
+ */
+function claimTimeDerivation(graph, resolved) {
+  const anchors = {};
+  for (const id of resolved) {
+    const node = graph.nodes.get(id);
+    if (node && typeof node.hash === 'string') anchors[id] = node.hash;
+  }
+  return { at: Date.now(), anchors, operations: [], operationsComplete: false };
 }
 
 function findingByKey(graph, key) {
@@ -122,10 +154,26 @@ export function correct(
   const replacementKey = `${key}-c${Date.now().toString(36)}`;
 
   const edges = [{ edge: 'supersedes', to: originalId }];
-  // The correction inherits the original's anchors, so it can go stale too.
+  // Collected alongside the edges so the correction carries its own claim-time
+  // hashes: it is a NEW claim, re-derived against whatever the code says now, so
+  // its evidence is the anchors' current state -- not the predecessor's, which is
+  // precisely what went stale.
+  const inherited = [];
+  // The correction inherits the original's anchors, so it can go stale too --
+  // but it inherits NOTHING ELSE, and that is deliberate rather than incidental.
+  // The node written below is built field by field from `existing` instead of
+  // spreading it, which is what keeps the staleness fields (`stale`,
+  // `staleReason`, `diff`) off the successor: a correction is re-derived
+  // against the current code by definition, so being born carrying its
+  // predecessor's invalidation would discount it the moment it existed --
+  // `disclose.mjs` skips a stale finding outright and `utility.mjs` penalises
+  // one by 160. Any future edit here that reaches for `...existing` to pick up
+  // one more field re-introduces that, since `putNode` writes what it is handed
+  // wholesale; `tests/hooks/stale-clearing.test.mjs` is the guard.
   for (const edge of graph.edges) {
     if (edge.edge === 'derived_from' && edge.from === originalId) {
       edges.push({ edge: 'derived_from', to: edge.to });
+      inherited.push(edge.to);
     }
   }
 
@@ -159,6 +207,11 @@ export function correct(
       // branches, and an unrecognised value already degrades to the neutral
       // ranking weight rather than doing damage.
       origin: typeof origin === 'string' && origin ? origin : ORIGIN_HUMAN,
+      // Without this a correction could never have a stale flag cleared: both
+      // clearing paths compare disk against these hashes, and a finding with
+      // none is `unknown` forever. A hand-written correction being the least
+      // recoverable record in the graph was the wrong way round.
+      derivation: claimTimeDerivation(graph, inherited),
     },
     edges
   );
@@ -176,6 +229,104 @@ export function retire(dir, key) {
   if (!existing) return false;
   putNode(dir, { ...existing, kind: 'finding', key, retired: true });
   return true;
+}
+
+/**
+ * Records that one finding disagrees with another.
+ *
+ * AN EDGE, NOT AN OVERWRITE -- the design is explicit about why: "when a belief
+ * changes, the graph should record THAT it changed and why, not quietly present
+ * the new one as though it had always been true." `contradicts` has been in
+ * EDGE_KINDS since the schema existed and was written by nothing, while
+ * `audit()` already READ it.
+ *
+ * The contradicted finding is deliberately NOT retired, and its claim is
+ * deliberately preserved. A reader needs to see both claims and the
+ * disagreement between them; retiring one silently picks a winner, and putNode
+ * does not merge -- it writes the whole record from what it is handed, so
+ * annotating the target without spreading it back in would blank the very claim
+ * this edge exists to keep visible. That is the overwrite by another name.
+ *
+ * THE EDGE IS WRITTEN FIRST, and the order is the guarantee. These are two
+ * appends and `append` fails open, so either can be the one that lands. Edge
+ * without annotation is a complete, readable disagreement missing only its
+ * reason. Annotation without edge is a finding that says "something contradicts
+ * me" with no contradictor -- a claim of proof with no proof, and invisible to
+ * `audit()` and to `hasOutstandingContradiction`, both of which read the edge.
+ */
+export function contradict(dir, { key, byKey, reason }) {
+  const graph = load(dir);
+  const target = findingByKey(graph, key);
+  const source = findingByKey(graph, byKey);
+  // Both ends must exist, or the edge is unresolvable and the disagreement is
+  // recorded against nothing -- the same un-invalidatable shape anchors prevent.
+  if (!target || !source) return false;
+  // A finding cannot disagree with itself. The self-edge resolves, so the guard
+  // above waves it through, and the result is a node permanently blocked from
+  // confidence promotion by a dispute no person can ever resolve: there is no
+  // second claim to choose between.
+  if (target.id === source.id) return false;
+
+  putEdge(dir, source.id, 'contradicts', target.id);
+  putNode(dir, {
+    ...target,
+    kind: 'finding',
+    key,
+    contradictedAt: Date.now(),
+    contradictionReason: String(reason || '').slice(0, 400),
+  });
+  return true;
+}
+
+/**
+ * Whether anything currently disagrees with this finding.
+ *
+ * Gates confidence promotion. Plan 2's per-finding utility measures whether a
+ * finding SUPPRESSES READS, and a confidently wrong finding suppresses reads
+ * better than a hedged true one -- so utility must never raise confidence on
+ * its own, and this is the check that stops it.
+ *
+ * SYMMETRIC, deliberately: BOTH ends of a `contradicts` edge are outstanding
+ * until a person resolves the disagreement. The named hazard in the design is
+ * presenting "the new one as though it had always been true", so gating only
+ * the older claim would leave the newer one -- which is just as likely to be
+ * the wrong one, since nothing here adjudicates -- free to be promoted on
+ * measured utility alone. That is the exact failure this gate exists to stop.
+ * It also matches `audit()`, the reader that has always been here: it puts both
+ * `from` and `to` in its `contradicted` bucket, because "until one looks, BOTH
+ * are being served".
+ *
+ * A RETIRED COUNTERPART DOES NOT COUNT, and that sentence quoted just above is
+ * the reason. This read edges ONLY, so retiring one end of a contradiction left
+ * the survivor gated against confidence promotion forever and served with a
+ * DISPUTED note naming a key `serve` refuses to hand anybody -- `serve`,
+ * `activeFindings`, `findingsFor` and `sessionIndex` all drop a retired
+ * finding. A retired claim is served to NOBODY, so "BOTH are being served" is
+ * false and the premise of the gate is gone: only one claim is in play, and
+ * there is nothing left to choose between. Retiring one end IS the person
+ * looking that this gate was waiting for -- so the edge counts as open only
+ * while NEITHER end is retired, answered the same way from both directions.
+ *
+ * AN UNRESOLVABLE END STILL COUNTS. An edge whose other side names no node
+ * proves nothing about whether that claim was withdrawn, and the conservative
+ * reading -- still disputed -- is the one that cannot promote a claim nobody
+ * adjudicated.
+ */
+export function hasOutstandingContradiction(graph, key) {
+  const node = findingByKey(graph, key);
+  // A withdrawn claim is not in a dispute either: a dispute needs two claims in
+  // play, and this one has been taken out of play. Without this the RETIRED end
+  // still reported an open disagreement, which is the same defect from the other
+  // side -- and the answer has to agree from both directions, since the gate is
+  // symmetric on purpose.
+  if (!node || node.retired) return false;
+  return graph.edges.some((e) => {
+    if (e.edge !== 'contradicts') return false;
+    const otherId = e.from === node.id ? e.to : e.to === node.id ? e.from : null;
+    if (!otherId) return false;
+    const other = graph.nodes.get(otherId);
+    return !other || !other.retired;
+  });
 }
 
 /**
@@ -229,7 +380,18 @@ export function create(dir, { claim, anchors, type = 'finding', confidence = 0.9
   // path. No process death required; one transient EBUSY is enough.
   const id = putNodeWithEdges(
     dir,
-    { kind: 'finding', key, claim, confidence, type, origin: ORIGIN_HUMAN },
+    {
+      kind: 'finding',
+      key,
+      claim,
+      confidence,
+      type,
+      origin: ORIGIN_HUMAN,
+      // Read AFTER the indexFile loop above, so the hashes are the ones the
+      // person's claim was actually made against rather than whatever the graph
+      // held before this call touched it.
+      derivation: claimTimeDerivation(loadGraph(dir), resolved),
+    },
     resolved.map((target) => ({ edge: 'derived_from', to: target }))
   );
   if (!id) return null;
@@ -259,11 +421,24 @@ export function audit(graph) {
       .map((e) => e.from)
   );
 
+  // THE SAME DEFINITION OF AN OPEN DISPUTE as hasOutstandingContradiction, and
+  // it has to be: that function's own comment claims it "matches audit()", and
+  // two rankings that disagree about what needs a human is worse than one that
+  // is wrong. A retired counterpart is a resolved dispute -- the retired claim
+  // is served to nobody -- so the survivor is not one of two claims in play and
+  // does not belong in the bucket of things needing a person to look.
+  //
+  // One pass, not a call per finding: this is a dashboard read over the whole
+  // graph, and the obvious rewrite is O(findings x edges).
   const contradicted = new Set();
   for (const edge of graph.edges) {
     if (edge.edge !== 'contradicts') continue;
-    contradicted.add(edge.from);
-    contradicted.add(edge.to);
+    const from = graph.nodes.get(edge.from);
+    const to = graph.nodes.get(edge.to);
+    // An end that resolves to nothing cannot be shown retired, so it still
+    // counts against the other end.
+    if (!to || !to.retired) contradicted.add(edge.from);
+    if (!from || !from.retired) contradicted.add(edge.to);
   }
 
   return {

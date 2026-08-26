@@ -10,6 +10,12 @@ export const CORE_TOOL_NAMES = [
   'get_optimization_report',
   'wiki_write',
   'wiki_read',
+  // Advertised in the CORE profile deliberately. An unadvertised tool is not
+  // merely undocumented here -- the CallTool handler refuses any name outside
+  // ADVERTISED_TOOL_NAMES, so leaving wiki_query out would have shipped it
+  // fully implemented, schema-checked, dispatch-wired and unreachable, which is
+  // exactly the defect the injected text has been promising around.
+  'wiki_query',
   'expand',
   'waste_audit',
   'cache_audit',
@@ -135,7 +141,7 @@ export function selectToolDefinitions<T extends { name: string }>(
   }
   if (arm === 'optimizer')
     return selected.filter(
-      (tool) => !['wiki_read', 'wiki_write'].includes(tool.name)
+      (tool) => !['wiki_read', 'wiki_write', 'wiki_query'].includes(tool.name)
     );
   if (arm === 'retrieval')
     return selected.filter((tool) => tool.name !== 'wiki_write');

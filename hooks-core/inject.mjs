@@ -24,12 +24,14 @@ import {
 } from './wiki.mjs';
 import { basename } from 'node:path';
 import { serve, diffLines } from './staleness.mjs';
+import { drainInvalidations } from './pending.mjs';
 import { inHoldout, record, indexBudget } from './metrics.mjs';
 import { canonicalPath, resolvableCandidates } from './paths.mjs';
 import { annotatedSkeleton } from './skeleton.mjs';
 import { substitutionBudget } from './metrics.mjs';
 import { assessFindings } from './utility.mjs';
 import { quarantineSharedSource } from './harvest-write.mjs';
+import { cacheOrdered } from './cache.mjs';
 
 // Read per call for the same reason as the holdout fraction in metrics.mjs.
 const touchBudget = () => Number(process.env.TOKEN_OPTIMIZER_TOUCH_BUDGET) || 500;
@@ -119,8 +121,64 @@ function fit(findings, budget) {
   return { kept, spent };
 }
 
+/**
+ * Discloses an open disagreement, on the same line as the claim it is about.
+ *
+ * BOTH HALVES, like the stale renderer below: the strong form names the other
+ * finding so the reader can fetch it, and the form without a key says only what
+ * is actually known. `serve` is what establishes the dispute; this only phrases
+ * it, and it phrases it in one short line because `fit` prices `render` against
+ * the injection budget -- a disagreement is worth a pointer, not both claims in
+ * full.
+ *
+ * NO DISMISSAL VOCABULARY, for the reason measured on the stale wording: an
+ * instruction to discount suppressed findings that were correct. This states
+ * that another claim exists and where to find it, and lets the reader decide.
+ */
+function disputeNote(finding) {
+  if (!finding.contradicted) return '';
+  const head = finding.contradictedBy
+    ? `\n  DISPUTED by ${finding.contradictedBy} -- wiki_query that key for the other claim`
+    : '\n  DISPUTED by another finding in this graph';
+  // THE REASON A PERSON TYPED, rendered here because this is the fullest of the
+  // three dispute surfaces and the only one with room for a sentence. `contradict`
+  // has always stored up to 400 characters of human explanation and, until this
+  // line, nothing read it: the pointer told a reader where to look and withheld
+  // the one thing that would tell them whether looking was worth a tool call.
+  //
+  // TRUNCATED AT 140, because `fit` prices this string against the injection
+  // budget and a 400-character paragraph beside a one-line claim inverts the
+  // proportions. The compressed surfaces -- the session index and restore.mjs's
+  // "Likely next" list -- deliberately keep marker-and-key only; they are one
+  // line per finding by design, and `wiki_query` returns the reason in full.
+  if (typeof finding.contradictionReason !== 'string' || !finding.contradictionReason.trim()) {
+    return head;
+  }
+  const reason = finding.contradictionReason.trim();
+  const shown = reason.length > 140 ? `${reason.slice(0, 140)}...` : reason;
+  return `${head}\n  Reason given: ${shown}`;
+}
+
+/**
+ * Discloses `derivationCheck`'s verdict (staleness.mjs) -- distinct from
+ * `disputeNote` (another finding disagrees) and from the STALE block below
+ * (the anchor NODE's current hash does not match disk). This is about
+ * whether the bytes THIS claim was actually derived from are still the bytes
+ * an anchor holds; see `derivationCheck`'s comment for the case that catches
+ * that the other two can miss. Silent when it holds -- the common case pays
+ * nothing -- and silent when it was never checked at all (an older finding
+ * with no `derivation` record).
+ */
+function derivationNote(finding) {
+  if (finding.derivationHolds !== false) return '';
+  const changed = Array.isArray(finding.derivationChanged) ? finding.derivationChanged : [];
+  if (!changed.length) return '\n  DERIVATION CHANGED since this claim was recorded';
+  const verb = changed.length === 1 ? 'no longer matches' : 'no longer match';
+  return `\n  DERIVATION CHANGED -- ${changed.join(', ')} ${verb} what this claim was derived from`;
+}
+
 function render(finding) {
-  const head = `- [${finding.type || 'finding'}] ${finding.claim}`;
+  const head = `- [${finding.type || 'finding'}] ${finding.claim}${disputeNote(finding)}${derivationNote(finding)}`;
   if (!finding.stale) return head;
 
   // A stale finding NEVER renders as though it were current. But the strength
@@ -140,6 +198,70 @@ function render(finding) {
 }
 
 /**
+ * Graph directories where a drain has already marked something in THIS process.
+ *
+ * THE SECOND CALLER IS WHY THIS EXISTS. SessionStart calls `standingRules` and
+ * then `sessionIndex` with the SAME graph object it loaded once. Without this,
+ * the first call drains, marks, and re-reads privately -- and the second call
+ * finds an empty queue, marks nothing, and therefore serves from the caller's
+ * pre-drain copy, advertising as current the very finding the first call had
+ * just marked. Draining is idempotent; its EFFECT on a caller's parsed graph is
+ * not, so what is remembered here is "a re-read is owed", nothing else.
+ *
+ * ONLY THE POSITIVE CASE IS REMEMBERED, and that is a correctness decision
+ * rather than a tuning one. Remembering "nothing was queued" would mean a queue
+ * arriving LATER in the same process is silently skipped and deferred to some
+ * future session. That cannot happen today, because `queueInvalidation` runs in
+ * the post-tool branch before any injection -- but that is an unguarded
+ * ordering dependency, and it stops being true the moment someone adds a call
+ * site. A repeated empty drain costs one `existsSync` on a file that is not
+ * there, which is a price worth paying to not have an invariant that depends on
+ * nobody reordering anything.
+ *
+ * KEYED CANONICALLY. Two spellings of one directory -- a trailing separator, a
+ * `..` segment, a lower-cased drive letter -- would otherwise be two entries,
+ * which reintroduces exactly the pre-drain-copy bug above. This is the same
+ * defect shape Task 2 on this branch shipped for real, where a tool resolved its
+ * graph from a raw cwd while the hooks resolved theirs through `projectRootFor`
+ * and the two halves of a metric landed in different directories. Path identity
+ * is why `canonicalKey` lives inside `nodeId` rather than at its call sites.
+ *
+ * A hook process handles one lifecycle event, so this set holds one or two
+ * entries and dies with the process.
+ */
+const drainedDirs = new Set();
+
+/**
+ * Applies anything the post-tool hook queued, BEFORE anything is served.
+ *
+ * THIS IS WHERE EAGER STALENESS LANDS. `invalidateOnWrite` needs a graph, and
+ * loading one on the return path of every write is what pending.mjs exists to
+ * avoid -- so the hook queues and the next graph read applies. These two
+ * functions are that read: they already hold a freshly loaded graph, and they
+ * are the last thing to run before a finding reaches a model.
+ *
+ * RE-READ ONLY WHEN SOMETHING WAS ACTUALLY MARKED. The drain writes the stale
+ * flag to disk; it cannot mutate the caller's already-parsed graph, so serving
+ * from that copy would deliver the very "stale finding as fresh" this exists to
+ * prevent. A second load costs a parse, and it is paid once per observed write
+ * rather than once per tool call -- when nothing is queued this is one stat.
+ */
+function withPendingApplied(dir, graph) {
+  try {
+    const key = canonicalPath(dir);
+    // The drain runs EVERY time. It is one stat when there is nothing to do,
+    // and running it unconditionally is what keeps the memo from encoding an
+    // assumption about which hook branch ran first.
+    if (drainInvalidations(dir, graph) > 0) drainedDirs.add(key);
+    return drainedDirs.has(key) ? load(dir) : graph;
+  } catch {
+    // The lazy path still covers everything this would have caught early, and
+    // a hook must never fail because bookkeeping did.
+    return graph;
+  }
+}
+
+/**
  * What the model sees when it touches a file.
  *
  * Returns null when there is nothing to say, or when this touch fell into the
@@ -152,6 +274,7 @@ export function forTouch(
   rawPath,
   { budget = touchBudget(), sessionId, alreadyInjected = new Set(), episode = {} } = {}
 ) {
+  graph = withPendingApplied(dir, graph);
   // Canonical, so a touch finds findings anchored under any other spelling.
   const filePath = canonicalPath(rawPath);
   const anchorId = nodeId('file', filePath);
@@ -168,7 +291,10 @@ export function forTouch(
   // others, so the comparison becomes within-file and the dominant source of
   // variance drops out. A session-pinned arm would destroy that.
   const holdout = inHoldout(filePath);
-  const served = serve(graph, candidates);
+  // `dir` so an eager flag whose evidence is gone is cleared here rather than
+  // waiting for somebody to open the dashboard. Same evidence test as the manual
+  // path -- see `serve`.
+  const served = serve(graph, candidates, { dir });
   const assessed = assessFindings(dir, served, {
     episodeId: episode.episodeId || sessionId,
     relevanceFor: () => 1,
@@ -320,6 +446,7 @@ export function forCommand(
   { budget = touchBudget(), sessionId, alreadyInjected = new Set(), episode = {} } = {}
 ) {
   if (!command) return null;
+  graph = withPendingApplied(dir, graph);
 
   const candidates = [];
   for (const node of graph.nodes.values()) {
@@ -354,7 +481,7 @@ export function forCommand(
   // only thing an uncapped list buys is the I/O.
   const considered = candidates.slice(0, MAX_COMMAND_CANDIDATES);
 
-  const served = serve(graph, considered);
+  const served = serve(graph, considered, { dir });
   const assessed = assessFindings(dir, served, {
     episodeId: episode.episodeId || sessionId,
     relevanceFor: (finding) => explicit(finding) ? 1 : 0.6,
@@ -832,6 +959,12 @@ export function relevantFindingIdsForContext(graph, context, { limit = 8 } = {})
  * shrinks toward the floor. See metrics.indexBudget.
  */
 export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = [] } = {}) {
+  // DRAINED HERE TOO, and this is the worst place to be wrong. The session index
+  // is the FIRST thing a session sees and it arrives with no other context to
+  // correct it, so advertising a finding the graph already knows is stale is a
+  // false claim made at maximum leverage. The graph is loaded either way, so the
+  // only cost is the stat that finds no queue.
+  graph = withPendingApplied(dir, graph);
   const budget = indexBudget(dir);
   const relevant = new Set(relevantFindingIds);
   // Some SessionStart payloads have no task signal. Fail closed for situational
@@ -875,7 +1008,7 @@ export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = []
   // `serve` is the only path allowed to hand a finding to a model. In
   // particular, activating this previously-unwired index must not create a new
   // path that labels an invalidated content claim as current.
-  const served = serve(graph, selected);
+  const served = serve(graph, selected, { dir });
   if (!served.length) return null;
   // A stale marker is longer than the fresh preview used for candidate
   // selection. Trim from the lowest-ranked end until the ACTUAL message fits.
@@ -922,7 +1055,15 @@ function renderSessionIndex(total, findings) {
       : finding.stale
         ? ' [possibly stale; verify before use]'
         : '';
-    return `- ${finding.key}${freshness}: ${finding.claim.slice(0, 90)}`;
+    // The session index is the first thing a session reads, so a disputed
+    // finding must not be listed there as settled either. Compressed to a
+    // marker and a key, matching the freshness markers beside it.
+    const dispute = finding.contradicted
+      ? finding.contradictedBy
+        ? ` [DISPUTED by ${finding.contradictedBy}]`
+        : ' [DISPUTED]'
+      : '';
+    return `- ${finding.key}${freshness}${dispute}: ${finding.claim.slice(0, 90)}`;
   });
   return `# Project wiki (${total} findings, ${findings.length} listed)
 
@@ -958,6 +1099,9 @@ ${lines.join('\n')}`;
  * is wallpaper, and the model stops reading the thing it always sees.
  */
 export function standingRules(dir, graph, { budget = standingBudget(), episode = {} } = {}) {
+  // Same reason as sessionIndex: always-on text, delivered before the first
+  // tool call, with nothing following it that could qualify what it said.
+  graph = withPendingApplied(dir, graph);
   const rules = [...graph.nodes.values()].filter(
     (n) =>
       n.kind === 'finding' &&
@@ -1027,6 +1171,53 @@ export function standingRules(dir, graph, { budget = standingBudget(), episode =
   // which is worse than saying there are more: a model that knows the list is
   // truncated can ask, one that does not will assume it is complete.
   return `${HEADING}${lines.join('\n')}${truncated}`;
+}
+
+/**
+ * SessionStart context, assembled in cache order: stable first, volatile last.
+ *
+ * WHY THE ORDER IS A CORRECTNESS PROPERTY AND NOT A STYLE CHOICE. Everything
+ * here lands near the FRONT of the prompt prefix, and a prefix cache is
+ * invalidated from the first differing byte onward. A block whose text changes
+ * between sessions therefore prices everything positioned after it: put the
+ * freshest block first and the whole remainder of the prefix is re-written
+ * every session; put it last and the invalidation is confined to its own tail.
+ * cache.mjs measures exactly this cost in the user's files -- this is the same
+ * discipline applied to our own output, which is the half nobody else has to
+ * think about because nobody else writes into the prefix.
+ *
+ * `cacheOrdered` existed for precisely this and had no caller, so the order was
+ * whatever order the call sites happened to push in. It was accidentally right;
+ * it is now enforced, which is the difference that matters the next time a
+ * block is added.
+ *
+ * VOLATILITY IS ASSIGNED FROM HOW OFTEN THE TEXT ACTUALLY DIFFERS BETWEEN
+ * SESSIONS, not from how important the block is:
+ *
+ *   0  policy -- the optimization notice and project briefing. Deliberately
+ *      cache-safe by construction: the routing facts are number-free and the
+ *      briefing passes through `stableText`, which DROPS any line that would
+ *      vary. It changes when the tool inventory or configuration changes.
+ *   1  standing -- pinned facts and human-verified corrections, rendered in
+ *      full. Changes only when a person pins, retires or corrects something.
+ *   2  index -- the bounded wiki index, selected per session from the task
+ *      text, and carrying [STALE]/[DISPUTED] markers that flip as the code
+ *      moves. Different on most sessions.
+ *   3  restoration -- present only when resuming from a compaction, and derived
+ *      from the anchors of the session that was just discarded. Never twice the
+ *      same.
+ *
+ * A block with no text is dropped rather than joined, so an absent block cannot
+ * open the assembly with a blank line.
+ */
+export function sessionContext(blocks) {
+  return cacheOrdered(
+    (Array.isArray(blocks) ? blocks : []).filter(
+      (block) => block && typeof block.text === 'string' && block.text.trim()
+    )
+  )
+    .map((block) => block.text)
+    .join('\n\n');
 }
 
 /**

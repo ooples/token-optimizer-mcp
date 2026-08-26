@@ -1,6 +1,11 @@
 # Token Optimizer MCP - Complete Tool Reference
 
-This document provides comprehensive documentation for all 61 tools available in the Token Optimizer MCP server.
+This document documents 62 tools of the Token Optimizer MCP server. It is not
+the complete advertised set: the server also exposes tools that are not covered
+here, including `wiki_read`, `wiki_write`, `expand`, `waste_audit`, `cache_audit`,
+`model_routing`, `token_audit`, `install_doctor`, `fleet_audit` and
+`get_optimization_report`. The authoritative list of what a given profile
+advertises is `CORE_TOOL_NAMES` in `src/server/tool-profile.ts`.
 
 ## Table of Contents
 
@@ -11,6 +16,7 @@ This document provides comprehensive documentation for all 61 tools available in
 - [Advanced Caching](#advanced-caching) (10 tools)
 - [Monitoring & Dashboards](#monitoring--dashboards) (7 tools)
 - [System Operations](#system-operations) (6 tools)
+- [Project Knowledge Graph](#project-knowledge-graph) (1 tool)
 
 ---
 
@@ -1563,6 +1569,78 @@ optimize_session({
   sessionId: 'session-123',
   min_token_threshold: 100,
 });
+```
+
+---
+
+## Project Knowledge Graph
+
+### wiki_query
+
+Read the project's knowledge graph — the findings, decisions and dead ends the
+graph has accumulated (see [WIKI_GRAPH.md](./WIKI_GRAPH.md)). This is the escape
+hatch from the per-touch injection budget: anything the budget dropped is still
+reachable here.
+
+**Not for anchored retrieval.** To ask what is known about a particular file or
+symbol, use `wiki_read`, which does exactly that and is the tool the enforcement
+layer points at. `wiki_query` deliberately has no `anchor` operation.
+
+**What it can return depends on what the graph holds.** A default install builds
+the *structural* graph (files, symbols, tasks). Findings accrue only where the
+semantic harvest or a local model endpoint is configured, so on a fresh install
+`search` and `overview` can legitimately return nothing.
+
+**Parameters:**
+
+- `operation` (string, required) - One of `get`, `search`, `node`, `audit`, `balance`, `overview`
+- `key` (string, optional) - Finding key, for `operation: 'get'`
+- `query` (string, optional) - Search terms, for `operation: 'search'`
+- `type` (string, optional) - Restrict a search to one finding type: `finding`, `decision`, `failure`, `command`, `map`, `feedback`
+- `nodeId` (string, optional) - Node id, for `operation: 'node'`. Ids have the form `<kind>:<16 hex chars>`; take one from the `id` of a finding or node already returned
+- `limit` (number, optional) - Max rows returned (default: 20, capped at 100). Applies to `search` and to `node`'s neighbour list; `audit`, `balance` and `overview` ignore it
+- `graphDir` (string, optional) - Explicit graph directory. Normally omitted
+- `projectRoot` (string, optional) - Explicit project root. Normally omitted
+- `sessionId` (string, optional) - Recorded with the query event, so hit rate can be attributed to a session
+
+**Notes:**
+
+- `search` ranks with BM25 (`hooks-core/lexical.mjs`), the same primitive the
+  dashboard's `/api/wiki/search` uses. Query terms of 3+ characters also match by
+  prefix (`custom` finds `customer`), but **infix does not match** (`tomer` does
+  not find `customer`). A query that tokenizes to nothing falls through to the
+  unranked pool ordered by confidence x origin x pinned.
+- `get` and `search` serve findings through the staleness path, so a stale
+  finding arrives marked and, where the evidence survives, with the diff that
+  invalidated it.
+- Responses never carry file snapshots: every response is walked and snapshot
+  fields are stripped at the boundary.
+- Every call records a `query` metrics event, which is what earns the
+  session-start index its token allowance.
+
+**Example:**
+
+```typescript
+// get - one finding by key, served with any staleness marking
+wiki_query({ operation: 'get', key: 'auth-token-refresh-race' });
+
+// search - BM25-ranked findings matching terms, optionally one type only
+wiki_query({ operation: 'search', query: 'skip lib check', limit: 10 });
+wiki_query({ operation: 'search', query: 'retry backoff', type: 'failure' });
+
+// node - a node and its immediate neighbours. Node ids are
+// `<kind>:<16 hex chars>`, e.g. from the `id` of a finding returned above.
+wiki_query({ operation: 'node', nodeId: 'file:3f2a91c04b7d1e88' });
+
+// audit - findings needing attention (returns the whole audit; `limit` does
+// not apply to this operation)
+wiki_query({ operation: 'audit' });
+
+// balance - what the graph has cost and saved
+wiki_query({ operation: 'balance' });
+
+// overview - node counts, densest anchors, stale and total findings
+wiki_query({ operation: 'overview' });
 ```
 
 ---

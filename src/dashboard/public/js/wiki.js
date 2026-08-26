@@ -1006,6 +1006,11 @@ function showDetail(node) {
         <button class="btn btn-primary" id="detail-correct">Save correction</button>
         <button class="btn" id="detail-pin">${node.pinned ? 'Unpin' : 'Pin'}</button>
         <button class="btn" id="detail-retire">Retire</button>
+        ${
+          node.stale
+            ? '<button class="btn" id="detail-reverify" title="Clears the stale mark only if the code now matches what this claim was derived from">Re-verify</button>'
+            : ''
+        }
         <button class="btn" id="detail-helpful">Helpful</button>
         <button class="btn" id="detail-harmful">Harmful</button>
       </div>
@@ -1045,6 +1050,16 @@ function showDetail(node) {
   el('detail-retire').addEventListener('click', () =>
     curate({ action: 'retire' })
   );
+  // Only rendered for a stale finding, so the listener is conditional too.
+  // Re-verify is not "mark this fresh": the server clears the flag only when the
+  // anchored content re-hashes to what the claim was derived from, and reports
+  // `still-stale` otherwise.
+  const reverifyButton = document.getElementById('detail-reverify');
+  if (reverifyButton) {
+    reverifyButton.addEventListener('click', () =>
+      curate({ action: 'reverify' })
+    );
+  }
   const feedback = async (rating) => {
     await api('/api/wiki/evidence/feedback', {
       method: 'POST',

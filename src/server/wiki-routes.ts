@@ -34,6 +34,7 @@ interface GraphModules {
   staleness: any;
   capabilities: any;
   projects: any;
+  lexical: any;
 }
 
 let cached: GraphModules | null = null;
@@ -41,7 +42,7 @@ let cached: GraphModules | null = null;
 async function modules(): Promise<GraphModules | null> {
   if (cached) return cached;
   try {
-    const [wiki, curate, metrics, staleness, capabilities, projects] =
+    const [wiki, curate, metrics, staleness, capabilities, projects, lexical] =
       await Promise.all([
         import(coreUrl('wiki.mjs')),
         import(coreUrl('curate.mjs')),
@@ -49,8 +50,17 @@ async function modules(): Promise<GraphModules | null> {
         import(coreUrl('staleness.mjs')),
         import(coreUrl('capabilities.mjs')),
         import(coreUrl('projects.mjs')),
+        import(coreUrl('lexical.mjs')),
       ]);
-    cached = { wiki, curate, metrics, staleness, capabilities, projects };
+    cached = {
+      wiki,
+      curate,
+      metrics,
+      staleness,
+      capabilities,
+      projects,
+      lexical,
+    };
     return cached;
   } catch {
     return null;
@@ -407,38 +417,70 @@ export function registerWikiRoutes(app: Express): void {
           .map((node: any) => ({ node, source }));
       });
 
-      // Lexical filter, per the design's traversal-plus-lexical retrieval --
-      // there is no embedding index to consult and deliberately so.
-      if (query) {
-        findings = findings.filter(
-          (entry: any) =>
-            String(entry.node.claim || '')
-              .toLowerCase()
-              .includes(query) ||
-            String(entry.node.key || '')
-              .toLowerCase()
-              .includes(query)
-        );
-      }
       if (kind)
         findings = findings.filter(
           (entry: any) => (entry.node.type || 'finding') === kind
         );
 
-      findings.sort((a: any, b: any) => {
-        const weight = (entry: any) => {
-          const f = entry.node;
-          return (
-            (f.confidence ?? 0.5) *
-            // originWeight, not a human-only ternary: the `: 1` branch ranked an
-            // agent finding level with a post-hoc harvested guess, so this sort
-            // and findingsFor disagreed about provenance.
-            mods.curate.originWeight(f.origin) *
-            (f.pinned ? 2 : 1)
-          );
-        };
-        return weight(b) - weight(a);
-      });
+      // Lexical retrieval per the design -- now actually ranked by BM25
+      // (hooks-core/lexical.mjs), the same primitive the wiki_query tool
+      // uses for its `search` operation. The previous substring filter
+      // could not order results, so the caller kept whatever matched rather
+      // than what matched best.
+      //
+      // `rank` scores plain objects by their own `key`/`claim` fields, but
+      // this route's pool is `{ node, source }` wrappers (findings are
+      // aggregated across every source directory), so each entry is exposed
+      // under `key`/`claim` for scoring and unwrapped back to its original
+      // `{ node, source }` shape afterward. The limit passed to `rank` is
+      // the whole (kind-filtered) pool, not `offset + limit`, so pagination
+      // over the RANKED set is exact -- `?offset=` and `?limit=` slice the
+      // same full ranking on every page, not a truncated one.
+      //
+      // `total` is NOT the old filter's match count, and does not claim to
+      // be: `rank` omits zero-score findings (a query term must actually
+      // match, exactly or by prefix -- see lexical.mjs), so `total` here is
+      // the count of findings BM25 considers relevant, which can be smaller
+      // than what `.includes()` would have counted for the same query.
+      //
+      // Only reached when the query actually tokenizes to at least one term
+      // (`hasQueryTerms` below) -- `tokenize` strips everything but
+      // alphanumeric runs, so a blank, whitespace-only, or punctuation-only
+      // `q=` yields no terms and falls through to the no-query branch below
+      // instead of asking `rank` to score against nothing (which would
+      // return zero results, not "everything," for what a user typing a
+      // stray space in the search box expects to behave like no filter).
+      const hasQueryTerms =
+        query.length > 0 && mods.lexical.tokenize(query).length > 0;
+      if (hasQueryTerms) {
+        const scored = mods.lexical.rank(
+          query,
+          findings.map((entry: any) => ({
+            key: entry.node.key,
+            claim: entry.node.claim,
+            entry,
+          })),
+          { limit: findings.length }
+        );
+        findings = scored.map(
+          (row: { finding: { entry: unknown } }) => row.finding.entry
+        );
+      } else {
+        findings.sort((a: any, b: any) => {
+          const weight = (entry: any) => {
+            const f = entry.node;
+            return (
+              (f.confidence ?? 0.5) *
+              // originWeight, not a human-only ternary: the `: 1` branch ranked an
+              // agent finding level with a post-hoc harvested guess, so this sort
+              // and findingsFor disagreed about provenance.
+              mods.curate.originWeight(f.origin) *
+              (f.pinned ? 2 : 1)
+            );
+          };
+          return weight(b) - weight(a);
+        });
+      }
 
       return res.json({
         total: findings.length,
@@ -780,7 +822,8 @@ export function registerWikiRoutes(app: Express): void {
     const mods = await modules();
     if (!mods) return res.status(503).json({ error: 'graph unavailable' });
 
-    const { action, key, claim, anchors, confidence, pinned } = req.body || {};
+    const { action, key, claim, anchors, confidence, pinned, byKey, reason } =
+      req.body || {};
     let dir: string;
     try {
       dir = selectedSource(req, mods).dir;
@@ -800,6 +843,26 @@ export function registerWikiRoutes(app: Express): void {
           return res.json({ ok: mods.curate.pin(dir, key, pinned !== false) });
         case 'retire':
           return res.json({ ok: mods.curate.retire(dir, key) });
+        case 'reverify': {
+          // THE ONLY DOOR THAT CLEARS A STALE FLAG, and it cannot be pushed
+          // open. Nothing in the codebase ever cleared one, which was harmless
+          // while eager invalidation was dead code and is a rot path now that it
+          // fires: every finding on an edited file becomes permanently stale.
+          //
+          // `reverify` clears ONLY when disk re-hashes to the frozen claim-time
+          // hashes in the finding's own `derivation` record -- a revert, or a
+          // write that never moved the anchored bytes. There is no force flag and
+          // no second action, so this endpoint cannot launder a stale finding
+          // back to fresh: a caller can only make one fresh by putting the
+          // content back. `clearStale`, the primitive that clears without
+          // checking, is deliberately not reachable from here.
+          //
+          // `unknown` is an ANSWER, not a server error -- no such finding, or
+          // nothing recorded to compare against -- so it is reported as one
+          // rather than as a status a caller would retry until it succeeded.
+          const verdict = mods.staleness.reverify(dir, key);
+          return res.json({ ok: verdict === 'cleared', result: verdict });
+        }
         case 'correct': {
           if (!claim) return res.status(400).json({ error: 'claim required' });
           const replacement = mods.curate.correct(dir, key, claim, {
@@ -807,6 +870,21 @@ export function registerWikiRoutes(app: Express): void {
           });
           return replacement
             ? res.json({ ok: true, key: replacement })
+            : res.status(404).json({ error: 'no such finding' });
+        }
+        case 'contradict': {
+          // AN EDGE, NOT AN OVERWRITE, and this is the only door it has: the
+          // schema declared `contradicts` from the start, `audit` read it, and
+          // nothing could write it -- so a belief change could only be recorded
+          // by `correct`, which retires the old claim and picks a winner.
+          // Recording a disagreement is the case where nobody has picked yet.
+          if (!byKey) return res.status(400).json({ error: 'byKey required' });
+          // Both ends must resolve to findings that exist, or the edge points at
+          // nothing and the disagreement is recorded against an id no reader can
+          // follow. curate returns false for that, and for a claim disagreeing
+          // with itself.
+          return mods.curate.contradict(dir, { key, byKey, reason })
+            ? res.json({ ok: true })
             : res.status(404).json({ error: 'no such finding' });
         }
         case 'create': {

@@ -88,8 +88,11 @@ const ALLOWED = new Map([
   // The guard blocks anything new joining this list.
   // ------------------------------------------------------------------
 
-  // WIRED ELSEWHERE -- leaves this list when that PR merges.
-  ['forTouch', 'WIRED by the injection PR: just-in-time delivery, imported by nothing before it.'],
+  // The forTouch entry lived here and said "WIRED by the injection PR ... leaves
+  // this list when that PR merges". The PR merged -- adapter.mjs and the
+  // PreToolUse router both call it -- and the entry stayed for however long
+  // after, which is what the assertion at the bottom of this file now prevents:
+  // an excuse that outlives its defect reads as a live one.
 
   // THE FORECAST IS WIRED, so nothing from it is listed here any more.
   // logForecast and calibrate are called by forecastPanel; forecastPanel and
@@ -111,16 +114,17 @@ const ALLOWED = new Map([
   ['recordRefreshOutcome', 'UNWIRED: records whether a keep-warm refresh was worth it; the deciding half runs without it.'],
 
   // SINGLETONS still to be traced.
-  ['cacheOrdered', 'UNWIRED: confines cache invalidation to the tail. A real optimisation with no caller.'],
-  ['invalidateOnWrite', 'UNWIRED: the eager staleness path; invalidation currently happens only lazily, on the next touch.'],
   ['renderStanding', 'UNWIRED: renders the standing-context audit. auditStanding IS reachable, so only the report is orphaned.'],
   ['recordRefresh', 'UNWIRED: records that a keep-warm refresh happened; pairs with recordRefreshOutcome, and neither is reached.'],
   ['manifestSize', 'UNWIRED: measures the installation manifest. Verified orphaned, and untested as well.'],
 
   // ------------------------------------------------------------------
-  // GENUINE PUBLIC API.
+  // The policyText entry lived here as "GENUINE PUBLIC API", and it was stale
+  // in the same way forTouch was: adapter.mjs and the SessionStart hook both
+  // call it, so it was never an orphan needing an excuse. Being public API and
+  // having an in-repo caller are independent, and only the second is what this
+  // list is for.
   // ------------------------------------------------------------------
-  ['policyText', 'PUBLIC API: shared client briefing, consumed by every non-Claude adapter.'],
 ]);
 
 function walk(dir, out = []) {
@@ -277,11 +281,19 @@ describe('every exported function in the live hook path is reachable', () => {
   it('keeps the allowlist honest', () => {
     // An entry that no longer exists is a stale excuse, and a reason that says
     // nothing is not a reason.
-    const names = new Set(exports.map((e) => e.name));
+    const declaredAt = new Map(exports.map((e) => [e.name, e.file]));
     for (const [name, reason] of ALLOWED) {
       expect(typeof reason).toBe('string');
       expect(reason.length).toBeGreaterThan(20);
-      expect(names.has(name) || /constant|API/i.test(reason)).toBe(true);
+      expect(declaredAt.has(name) || /constant|API/i.test(reason)).toBe(true);
+
+      // AND THE LIST ONLY SHRINKS. An entry for a function that shipped code
+      // now calls is exactly as stale as one for a function that no longer
+      // exists, and nothing removed it -- so the excuse outlives the defect it
+      // described and the list grows monotonically, which is how "the guard
+      // blocks anything new joining this list" stops being true.
+      const file = declaredAt.get(name);
+      if (file) expect([name, usedInShippedCode(name, file)]).toEqual([name, false]);
     }
   });
 });

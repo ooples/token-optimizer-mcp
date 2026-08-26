@@ -203,6 +203,10 @@ The overview answers the questions a token optimizer should answer first:
    new agent re-derives work, call `wiki_read` for the project or the files it is
    about to touch. Native clients can also deliver matching knowledge
    automatically.
+   Use `wiki_query` to read the graph directly — one finding by key, a ranked
+   BM25 search over claims, a node with its neighbours, or the graph's own audit
+   — which is how a subagent that never sees the SessionStart briefing reaches
+   what previous sessions established.
 4. Open `http://localhost:3100`. Use **Overview** for combined accounting and
    **What it knows** for capture health, graph exploration, audits, and causal
    evidence.

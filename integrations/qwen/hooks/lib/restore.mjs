@@ -142,7 +142,7 @@ export function restorationPlan(dir, graph, context = {}) {
     for (const id of predicted) {
       const node = graph.nodes.get(id);
       if (!node) continue;
-      const findings = serve(graph, findingsFor(graph, id, { limit: 2 }));
+      const findings = serve(graph, findingsFor(graph, id, { limit: 2 }), { dir });
       for (const finding of findings) {
         // `! STALE` only where a diff actually exists to back it; see the
         // renderer in inject.mjs for the measurement behind this.
@@ -158,7 +158,16 @@ export function restorationPlan(dir, graph, context = {}) {
             ? '! STALE '
             : '~ '
           : '';
-        lines.push(`${node.key}: ${mark}${finding.claim}`);
+        // A DISPUTE DISCLOSED ELSEWHERE AND SILENT HERE reads as "the dispute
+        // went away". `serve` already attached the fields; the only question is
+        // the wording, and this list is the most compressed surface in the
+        // system, so it gets the marker and the key and nothing else.
+        const disputed = finding.contradicted
+          ? finding.contradictedBy
+            ? ` (disputed by ${finding.contradictedBy})`
+            : ' (disputed)'
+          : '';
+        lines.push(`${node.key}: ${mark}${finding.claim}${disputed}`);
       }
     }
     section('Likely next', lines, total * split.forward);

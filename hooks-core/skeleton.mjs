@@ -124,6 +124,11 @@ export function annotatedSkeleton(graph, rawPath, source, { budget = 1200, git =
 
   // Findings anchored to this file or the symbols inside it, served through the
   // one function that enforces the stale-plus-diff rule.
+  // READ-ONLY serve: no `dir` is threaded here, so this cannot clear a stale
+  // flag whose evidence is gone. That is deliberate -- this function takes a
+  // graph, not the directory it came from, and widening its signature to give
+  // an analysis path a write capability buys nothing: the injection path runs
+  // on every tool call and clears the same findings.
   const served = serve(graph, findingsFor(graph, nodeId('file', path), { limit: 40 }));
 
   // Index findings by the symbol they anchor to, so each one sits beside the
