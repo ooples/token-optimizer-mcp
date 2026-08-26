@@ -25,39 +25,18 @@
  * gets disabled within a week.
  */
 import { describe, it, expect } from '@jest/globals';
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, relative } from 'path';
+import {
+  DECLARE_DIRS,
+  USAGE_DIRS,
+  walk,
+  stripComments,
+  stripSpecifiers,
+} from '../fixtures/source-scan.mjs';
 
 const REPO = process.cwd();
 
-/**
- * Where DECLARATIONS are collected: the live hook path only.
- *
- * `src/tools` is not scanned for declarations because its tools are dispatched
- * by NAME through a registry, so a name-based scan reports false positives
- * there, and a blocking check built on false positives gets disabled within a
- * week.
- */
-const DECLARE_DIRS = ['hooks-core', 'plugin/hooks'];
-
-/**
- * Where USAGES are searched: everything that ships.
- *
- * THIS MUST BE WIDER THAN THE DECLARATION SET. `src/server/*` reaches into
- * hooks-core through a dynamic `mods.<module>.<fn>` handle rather than a static
- * import, so scanning only the hook path reported `diagnose`, `renderFleet`,
- * `renderAudit` and `exportMarkdown` as unreachable while four MCP tools were
- * calling them. That first draft would have failed CI on working code -- the
- * fastest possible way to get a guard like this switched off.
- *
- * `scripts` is here for the same reason and was missed on the first pass:
- * wire-hooks and uninstall consume hooks-core/wire.mjs, so wirePlan and unwire
- * were reported dead while the installer and the uninstaller both called them.
- * Eleven files under scripts/ reference hooks-core. A check that scans only
- * where its author expected the callers to be measures the author, not the
- * code.
- */
-const USAGE_DIRS = ['hooks-core', 'plugin', 'src', 'scripts'];
 const TEST_DIRS = ['tests'];
 
 /**
@@ -139,32 +118,6 @@ const ALLOWED = new Map([
   // ------------------------------------------------------------------
 ]);
 
-function walk(dir, out = []) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return out;
-  }
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    let st;
-    try {
-      st = statSync(full);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) {
-      // `lib` holds the GENERATED copies of hooks-core; scanning them would
-      // make every function look used by its own duplicate.
-      if (['node_modules', 'dist', 'lib', '.git'].includes(entry)) continue;
-      walk(full, out);
-    } else if (/\.(mjs|js|ts)$/.test(entry) && !/\.d\.ts$/.test(entry)) {
-      out.push(full);
-    }
-  }
-  return out;
-}
 
 const declareFiles = DECLARE_DIRS.flatMap((d) => walk(join(REPO, d)));
 const usageFiles = USAGE_DIRS.flatMap((d) => walk(join(REPO, d)));
@@ -204,92 +157,6 @@ function exportedNames() {
 }
 
 /**
- * Strips comments, so prose cannot be mistaken for a call.
- *
- * THIS IS WHAT LET A DEAD PUBLIC ENTRY POINT THROUGH. `calibrate` counted as
- * reachable because curate.mjs:13 contains the English phrase "the reader's
- * ability to calibrate trust", and `reliability` counted because the word
- * appears in its own file's prose. calibration.mjs had ZERO importers -- no
- * forecast was ever logged, no outcome observed, and the shipped panel printed
- * precisely the uncalibrated number that module's docstring calls "a vibe with
- * a typeface" -- while the check that exists to catch exactly this reported it
- * as wired, on a coincidence of comment wording.
- *
- * A guard that reads documentation as code is worse than none: it is a clean
- * bill of health nobody re-examines. This module's files are heavily commented
- * by design, which makes the false-positive rate high rather than incidental.
- *
- * COMMENTS ONLY, NOT STRING LITERALS -- and that boundary was found the hard
- * way. Stripping quotes as well made `routingReport` and `modelSwitchCost` look
- * orphaned when routing-tool.ts calls both: three independent global passes
- * cannot nest, so an apostrophe inside a DOUBLE-quoted sentence opened a
- * "single-quoted string" that ran to the next apostrophe further down the file
- * and swallowed the real call sites in between.
- *
- * Getting that right needs a scanner, and this guard's own rule says why not to
- * build one: a check wrong in the permissive direction is merely useless, while
- * one wrong in the strict direction fails CI on working code and gets deleted.
- * The observed defect was comment prose, comments nest predictably, and that is
- * where the line belongs.
- *
- * AND A SCANNER WAS BUILT, MEASURED, AND REJECTED -- recorded here so the next
- * reader does not spend the afternoon rediscovering it. Plan 3 proposed
- * replacing the three regex passes with a hand-written character scanner that
- * skips string and template literals whole, on the reasoning that a scanner
- * cannot suffer the non-nesting problem described above. It cannot -- and it
- * fails worse, because a JS lexer that knows about quotes but not about REGEX
- * LITERALS desynchronises on the first regex containing a quote. This file is
- * not hypothetical about which one:
- *
- *   hooks-core/adapter.mjs:255
- *   /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*((?:"(?:\\.|[^"\\])*")|...)/gs
- *
- * The scanner sees that `"`, enters string mode, and never comes back.
- * MEASURED: adapter.mjs 1032 newlines in, 385 out -- 63% of the file consumed;
- * disclose.mjs 69%. Eleven genuinely-called exports (toolSucceeded, stableText,
- * recordToolOutcome, recordEpisodeOutcome, DISCLOSE_THRESHOLD,
- * invalidateOnWrite, invalidateChangedAnchors, prices, briefing,
- * semanticHarvestPrompt, cachedRoutingBriefing) fell to a single reference --
- * their own declaration -- and reported as orphans.
- *
- * Telling a regex literal from a division needs parse context, which means a
- * real parser, which is a dependency and a maintenance surface for a guard
- * whose entire value is that nobody switches it off. Comments only. The line
- * stays where the measurement put it.
- */
-function stripComments(text) {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')     // block comments, including docblocks
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 '); // line comments, sparing the // in a URL
-}
-
-/**
- * Blanks the specifier list of an `import {...}` / `export {...}` statement.
- *
- * IMPORTED IS NOT CALLED, and the guard could not tell the difference. Found by
- * mutation during Plan 1: dropping the `cacheOrdered` CALL from inject.mjs while
- * leaving `import { cacheOrdered } from './cache.mjs'` in place left this suite
- * GREEN. Only deleting the import as well turned it red -- so any refactor that
- * removed the last call but left a tidy-looking import would have restored the
- * exact defect this file exists to catch, silently.
- *
- * Only the braces are blanked, not the whole statement: the module path is left
- * alone, and a default or namespace import (`import x from`, `import * as x`)
- * is deliberately untouched. Those bind a name that ordinary code then has to
- * call, so they are not the specifier case, and widening this would move the
- * guard in the strict direction for no measured defect.
- *
- * MEASURED FALLOUT: zero. Every one of the 352 declarations that was reachable
- * before this discount is reachable after it -- it changes no verdict today and
- * closes the hole for tomorrow.
- */
-function stripSpecifiers(code) {
-  return code
-    .replace(/\bimport\s*\{[^}]*\}\s*from\b/g, ' importfrom ')
-    .replace(/\bexport\s*\{[^}]*\}(\s*from\b)?/g, ' exportfrom ');
-}
-
-/**
  * Referenced anywhere that ships, other than its own declaration?
  *
  * A bare word match over CODE, deliberately. Anything cleverer would need to
@@ -297,9 +164,9 @@ function stripSpecifiers(code) {
  * check that is wrong in the permissive direction is merely useless -- one that
  * is wrong in the strict direction fails CI on working code and gets deleted.
  * COMMENTS are removed first, because prose is not a caller. Strings are NOT --
- * see stripComments above for the measurement that settled that boundary.
+ * see stripComments in tests/fixtures/source-scan.mjs for the two measurements
  * IMPORT SPECIFIERS are removed too, because an import is not a call site --
- * see stripSpecifiers.
+ * see stripSpecifiers there.
  *
  * STRIPPED ONCE PER FILE, not once per name: this runs over ~300 files times
  * ~350 exported names, and re-stripping per name is the difference between a

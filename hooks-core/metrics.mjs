@@ -1229,6 +1229,60 @@ export function indexBudget(
   return Math.max(floor, Math.min(ceiling, scaled));
 }
 
+/**
+ * What retrieval decided NOT to inject, and why.
+ *
+ * THE OTHER HALF OF THE BUDGET, and it had no reader. `assessFindings` rejects a
+ * finding for one of three reasons -- it has been quarantined as harmful, it is
+ * in cooldown after being injected recently, or its expected value is negative
+ * -- and inject.mjs records every one of those decisions as a
+ * `retrieval-decision` event, from four separate call sites. Nothing read them.
+ *
+ * WHY THAT MATTERS RATHER THAN BEING TIDY. #204 makes the per-touch token budget
+ * load-bearing: "without it the most heavily-worked files accumulate the most
+ * findings and become the most expensive to touch, and the optimizer becomes
+ * its own token problem." A budget that silently drops what it cannot afford is
+ * indistinguishable, from outside, from a graph that had nothing to say. These
+ * are the two states a user most needs told apart, and the records to tell them
+ * apart were already being written.
+ *
+ * READ FROM THE EVIDENCE LOG, not the firehose. `retrieval-decision` is in
+ * EVIDENCE_KINDS precisely because it is rare relative to per-tool-call
+ * telemetry, and the windowed reader would evict it before it accumulated --
+ * the same eviction that made `report()` say "0 holdout" over a file containing
+ * nine.
+ */
+export function declinedAtBudget(dir, { limit = 500 } = {}) {
+  const decisions = readEvidence(dir)
+    .filter((event) => event.kind === 'retrieval-decision')
+    .slice(-limit);
+
+  const byReason = new Map();
+  const keys = new Set();
+  let declined = 0;
+  for (const decision of decisions) {
+    for (const item of decision.rejected || []) {
+      declined += 1;
+      if (item.key) keys.add(item.key);
+      // An unlabelled rejection is counted, not dropped: an unknown reason is
+      // still a finding the model did not get, and reporting the count as
+      // smaller than it is would understate exactly the cost this exists to
+      // surface.
+      const reason = item.reason || 'unspecified';
+      byReason.set(reason, (byReason.get(reason) || 0) + 1);
+    }
+  }
+
+  return {
+    decisions: decisions.length,
+    declined,
+    distinctFindings: keys.size,
+    byReason: [...byReason.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([reason, count]) => ({ reason, count })),
+  };
+}
+
 /* ----------------------------------------------------------------------
  * Episode-level causal evidence
  * ------------------------------------------------------------------- */

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  declinedAtBudget,
   evidenceReport,
   evidenceReportMany,
   readEvidence,
@@ -346,5 +347,83 @@ describe('paired evidence report', () => {
       deliveryCoverage: 1,
     });
     expect(report.concurrency.effect.executedMistakesPrevented.mean).toBe(1);
+  });
+});
+
+describe('what the budget turned away', () => {
+  // `retrieval-decision` records were written from four call sites in
+  // inject.mjs and read by nothing -- a producer with no reader, which is one
+  // of the three sub-classes tests/hooks/census.test.mjs exists to catch, and
+  // the one it caught on its first run. These assertions drive the REAL
+  // rejection path rather than hand-writing records, so they fail if the
+  // reasons or the record shape drift.
+  //
+  // HOLDOUT PINNED at the top of this file. forTouch consults the stratified
+  // holdout, so without `TOKEN_OPTIMIZER_HOLDOUT=0` these fail intermittently
+  // when the anchor lands in the withheld arm and nothing is assessed at all.
+
+  test('counts nothing on a graph where retrieval never declined anything', () => {
+    // The honest zero. A budget that has turned nothing away must not be
+    // indistinguishable from one that was never consulted.
+    const declined = declinedAtBudget(dir);
+    expect(declined).toMatchObject({ decisions: 0, declined: 0, distinctFindings: 0 });
+    expect(declined.byReason).toEqual([]);
+  });
+
+  test('counts a cooldown rejection and names the reason', () => {
+    seed('finding', null);
+    expect(
+      forTouch(dir, load(dir), anchor, {
+        sessionId: 's1', episode: { episodeId: 'e1', arm: 'full' },
+      })
+    ).toMatch(/Known about/);
+    // A concurrent hook process with no in-memory gate: durable evidence still
+    // enforces the cooldown, and that rejection is what gets recorded.
+    expect(
+      forTouch(dir, load(dir), anchor, {
+        sessionId: 's1', alreadyInjected: new Set(), episode: { episodeId: 'e1', arm: 'full' },
+      })
+    ).toBeNull();
+
+    const declined = declinedAtBudget(dir);
+    expect(declined.declined).toBeGreaterThan(0);
+    expect(declined.distinctFindings).toBe(1);
+    expect(declined.byReason.map((r) => r.reason)).toContain('cooldown');
+  });
+
+  test('separates a quarantined finding from a cooled-down one', () => {
+    const key = seed('finding', null);
+    forTouch(dir, load(dir), anchor, {
+      sessionId: 's1', episode: { episodeId: 'e1', arm: 'full' },
+    });
+    forTouch(dir, load(dir), anchor, {
+      sessionId: 's1', alreadyInjected: new Set(), episode: { episodeId: 'e1', arm: 'full' },
+    });
+    recordFindingFeedback(dir, { findingId: key, rating: 'harmful', episodeId: 'review-1' });
+    recordFindingFeedback(dir, { findingId: key, rating: 'harmful', episodeId: 'review-2' });
+    forTouch(dir, load(dir), anchor, {
+      sessionId: 's2', episode: { episodeId: 'e2', arm: 'full' },
+    });
+
+    const reasons = declinedAtBudget(dir).byReason.map((r) => r.reason);
+    expect(reasons).toEqual(expect.arrayContaining(['cooldown', 'quarantined-harm']));
+    // Ranked, so the audit's "top 3" is the top 3 rather than the first 3.
+    const counts = declinedAtBudget(dir).byReason.map((r) => r.count);
+    expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+  });
+
+  test('counts an unlabelled rejection rather than dropping it', () => {
+    // An unknown reason is still a finding the model did not get. Reporting a
+    // smaller number than the truth would understate exactly the cost this
+    // reader exists to surface.
+    record(dir, {
+      kind: 'retrieval-decision',
+      surface: 'file',
+      anchor,
+      rejected: [{ key: 'no-reason-given' }],
+    });
+    const declined = declinedAtBudget(dir);
+    expect(declined.declined).toBe(1);
+    expect(declined.byReason).toEqual([{ reason: 'unspecified', count: 1 }]);
   });
 });

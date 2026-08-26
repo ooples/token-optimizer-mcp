@@ -30,7 +30,7 @@
  * cost at the bottom.
  */
 
-import { record, readMetrics } from './metrics.mjs';
+import { record, readMetrics, declinedAtBudget } from './metrics.mjs';
 import { remedyLedger, applyRemedy, proposal } from './remedy.mjs';
 import { money, monthly, priceNote, dollars } from './pricing.mjs';
 import { renderStanding } from './standing.mjs';
@@ -319,6 +319,35 @@ export function renderAudit(
           `(${trend.improved ? 'improved' : 'worse'})`
       );
     }
+  }
+
+  // WHAT THE BUDGET TURNED AWAY.
+  //
+  // The per-touch token budget is load-bearing by design (#204): without it the
+  // most heavily-worked files accumulate the most findings and become the most
+  // expensive to touch. But a budget that silently drops what it cannot afford
+  // looks, from outside, exactly like a graph that had nothing to say -- and
+  // those are the two states a reader most needs told apart. inject.mjs was
+  // already recording every rejection and its reason, from four call sites, and
+  // nothing read them.
+  //
+  // ONE LINE, not a panel. This is context for the queue above rather than
+  // another thing to do, and the report is held to its own cost.
+  try {
+    const declined = declinedAtBudget(dir);
+    if (declined.declined > 0) {
+      const reasons = declined.byReason
+        .slice(0, 3)
+        .map(({ reason, count }) => `${reason} ${count}`)
+        .join(', ');
+      body.push(
+        '',
+        `Retrieval declined ${declined.declined.toLocaleString()} finding(s) ` +
+          `(${declined.distinctFindings} distinct) across ${declined.decisions.toLocaleString()} decision(s): ${reasons}.`
+      );
+    }
+  } catch {
+    /* the rejection log is context, never a reason to fail the audit */
   }
 
   // STANDING CONTEXT, as a panel rather than only as queue rows.
