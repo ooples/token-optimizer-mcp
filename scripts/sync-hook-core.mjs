@@ -52,6 +52,28 @@ const banner = (name) =>
     ? `process.env.TOKEN_OPTIMIZER_VERSION = '${PACKAGE_VERSION}';\n`
     : '');
 
+/**
+ * Banners a core file, keeping any hashbang on line one.
+ *
+ * NODE ACCEPTS A HASHBANG ONLY AT BYTE ZERO. Anywhere else it is a syntax
+ * error, so prepending the banner to an executable core file produced a
+ * vendored copy that cannot parse at all -- and harvest-worker.mjs is spawned
+ * detached with stdio ignored, which means the failure is completely silent.
+ * The harvest would have gone on not running, for exactly the reason it was
+ * not running before, with a green suite on either side of it.
+ *
+ * Handled here rather than by deleting the hashbang, because the next
+ * executable added to the core would hit this again and the failure mode is
+ * invisible by construction.
+ */
+function withBanner(name, source) {
+  const text = String(source);
+  if (!text.startsWith('#!')) return banner(name) + text;
+  const newline = text.indexOf(String.fromCharCode(10));
+  if (newline === -1) return text + String.fromCharCode(10) + banner(name);
+  return text.slice(0, newline + 1) + banner(name) + text.slice(newline + 1);
+}
+
 // The EOL-safe comparison this file used to carry locally now lives in
 // scripts/lib/text.mjs, because it was needed by the other two generators and
 // having it here only meant they went without it. See that module for why.
@@ -60,7 +82,7 @@ let drifted = 0;
 
 for (const target of TARGETS) {
   for (const name of files) {
-    const contents = banner(name) + readFileSync(join(SOURCE, name), 'utf8');
+    const contents = withBanner(name, readFileSync(join(SOURCE, name), 'utf8'));
     const destination = join(target, name);
 
     if (check) {

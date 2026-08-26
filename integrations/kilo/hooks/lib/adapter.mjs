@@ -762,8 +762,11 @@ async function runHook(clientName, event, invocation) {
     const toolEvidence = optimizerToolsForHook(raw, state);
     rememberOptimizerTools(state, toolEvidence);
     const episode = episodeMeta({ client: clientName, raw });
+    // Hoisted out of the try below, because the harvest needs the same resolved
+    // directory and resolving it twice is how two halves of one hook end up
+    // reasoning about different projects.
+    const cwd = raw.cwd || raw.working_directory || process.cwd();
     try {
-      const cwd = raw.cwd || raw.working_directory || process.cwd();
       const dir = wikiDir(projectRootFor(join(cwd, '__session__'), cwd));
       recordEpisodeOutcome(dir, {
         ...episode,
@@ -807,7 +810,21 @@ async function runHook(clientName, event, invocation) {
     // call.
     let harvestNotice = null;
     try {
-      harvestNotice = await runStopHarvest(raw);
+      // NORMALIZED, NOT RAW. The identifiers were resolved a few lines up
+      // through every alias a host might use -- `sessionId`,
+      // `conversation_id`, `working_directory` -- and handing `raw` straight
+      // over threw that away: runStopHarvest reads `session_id` and `cwd`
+      // only, so on a client that sends an alias the session id came back
+      // undefined and the archive root fell back to `process.cwd()`. That
+      // shares the once-per-session notice and the debounce marker across
+      // every session, and files the transcript under whatever directory the
+      // hook happened to start in.
+      harvestNotice = await runStopHarvest({
+        ...raw,
+        session_id: sessionId,
+        cwd,
+        transcript_path: raw.transcript_path ?? raw.transcriptPath ?? null,
+      });
     } catch {
       // The harvest is a side effect of ending a session. It must never stop
       // one from ending.

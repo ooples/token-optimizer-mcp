@@ -1,6 +1,6 @@
+#!/usr/bin/env node
 // GENERATED FILE -- do not edit.
 // Source of truth: hooks-core/harvest-worker.mjs. Regenerate with `npm run sync:hooks`.
-#!/usr/bin/env node
 /**
  * The out-of-band half of the semantic harvest.
  *

@@ -182,4 +182,48 @@ describe('the harvest worker is reachable from every client, not one', () => {
       expect([lib, existsSync(join(lib, 'harvest-worker.mjs'))]).toEqual([lib, true]);
     }
   });
+
+  test('every vendored copy actually PARSES, not merely exists', () => {
+    // THE ASSERTION WHOSE ABSENCE LET THIS SHIP BROKEN ONCE ALREADY. The check
+    // above says the worker is there; it said so while every vendored copy was
+    // a syntax error, because the sync banner had pushed the hashbang off line
+    // one and Node accepts one only at byte zero. The worker is spawned
+    // detached with stdio ignored, so it would have failed instantly and
+    // silently -- the harvest still not running, for the same reason as before,
+    // with a green suite either side.
+    //
+    // Existence is not executability, which is this whole pull request's point
+    // applied to its own output.
+    const libs = readdirSync(join(ROOT, 'hooks-core')).filter((f) => f.endsWith('.mjs'));
+    expect(libs.length).toBeGreaterThan(20);
+
+    for (const dir of [
+      join(ROOT, 'plugin', 'hooks', 'lib'),
+      join(ROOT, 'integrations', 'codex', 'hooks', 'lib'),
+      join(ROOT, 'integrations', 'qwen', 'hooks', 'lib'),
+    ]) {
+      for (const name of libs) {
+        const file = join(dir, name);
+        const check = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+        expect([file, check.status]).toEqual([file, 0]);
+      }
+    }
+  });
+
+  test('a hashbang in a core file survives vendoring on line one', () => {
+    // Pinned as a property of the generator rather than of one file, because
+    // the next executable added to hooks-core hits this again and the failure
+    // is invisible by construction.
+    const source = readFileSync(join(ROOT, 'hooks-core', 'harvest-worker.mjs'), 'utf8');
+    expect(source.startsWith('#!')).toBe(true);
+    for (const dir of [
+      join(ROOT, 'plugin', 'hooks', 'lib'),
+      join(ROOT, 'integrations', 'windsurf', 'hooks', 'lib'),
+    ]) {
+      const vendored = readFileSync(join(dir, 'harvest-worker.mjs'), 'utf8');
+      expect([dir, vendored.startsWith('#!')]).toEqual([dir, true]);
+      // And the banner is still there, on the line after.
+      expect(vendored).toContain('GENERATED FILE');
+    }
+  });
 });

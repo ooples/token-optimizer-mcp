@@ -351,6 +351,11 @@ export async function runStopHarvest(payload = {}) {
       env: { ...process.env },
     }
   );
+  // AN 'error' EVENT WITH NO LISTENER IS A THROW. `spawn` reports a failed
+  // start asynchronously, so an unlistened error does not return a code -- Node
+  // raises it, and here that would abort the Stop response itself. A harvest
+  // that cannot start must degrade to no harvest, never to a broken Stop.
+  child.on('error', () => {});
   child.unref();
   return null;
 }
