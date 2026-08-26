@@ -68,6 +68,38 @@ export function originWeight(origin) {
   return 1;
 }
 
+/**
+ * The claim-time anchor hashes, for a finding being written right now.
+ *
+ * THE CHECKABLE HALF OF PROVENANCE, and until now only `harvest-write.mjs`
+ * wrote it -- so the asymmetry ran exactly the wrong way. `reverify` and the
+ * automatic clear in `serve` both compare disk against these frozen hashes, and
+ * a finding without them can never have a stale flag cleared by anything. That
+ * meant HUMAN-asserted findings, the ones somebody deliberately created or
+ * corrected, were the only ones condemned to stay stale forever once marked,
+ * while machine-harvested claims could recover. The hashes are simply the anchor
+ * nodes' hashes at this moment, and every writer has them in hand.
+ *
+ * DELIBERATELY NOT THE WHOLE RECORD `derivationFor` BUILDS. That one joins the
+ * evidence log to find FILE-surface operations behind the claim; curation
+ * performs no such join, so `operations` is empty and `operationsComplete` says
+ * so. An empty list declared incomplete is honest -- "nothing recorded here, and
+ * do not read that as nothing happened" -- where an empty list declared complete
+ * would assert a fact nobody established.
+ *
+ * An anchor with no stored hash contributes no entry, and a finding whose
+ * anchors all lack one gets a record with no hashes -- which `claimTimeVerdict`
+ * reads as `unknown` and refuses to clear on, which is the correct reading.
+ */
+function claimTimeDerivation(graph, resolved) {
+  const anchors = {};
+  for (const id of resolved) {
+    const node = graph.nodes.get(id);
+    if (node && typeof node.hash === 'string') anchors[id] = node.hash;
+  }
+  return { at: Date.now(), anchors, operations: [], operationsComplete: false };
+}
+
 function findingByKey(graph, key) {
   return graph.nodes.get(nodeId('finding', key)) || null;
 }
@@ -122,6 +154,11 @@ export function correct(
   const replacementKey = `${key}-c${Date.now().toString(36)}`;
 
   const edges = [{ edge: 'supersedes', to: originalId }];
+  // Collected alongside the edges so the correction carries its own claim-time
+  // hashes: it is a NEW claim, re-derived against whatever the code says now, so
+  // its evidence is the anchors' current state -- not the predecessor's, which is
+  // precisely what went stale.
+  const inherited = [];
   // The correction inherits the original's anchors, so it can go stale too --
   // but it inherits NOTHING ELSE, and that is deliberate rather than incidental.
   // The node written below is built field by field from `existing` instead of
@@ -136,6 +173,7 @@ export function correct(
   for (const edge of graph.edges) {
     if (edge.edge === 'derived_from' && edge.from === originalId) {
       edges.push({ edge: 'derived_from', to: edge.to });
+      inherited.push(edge.to);
     }
   }
 
@@ -169,6 +207,11 @@ export function correct(
       // branches, and an unrecognised value already degrades to the neutral
       // ranking weight rather than doing damage.
       origin: typeof origin === 'string' && origin ? origin : ORIGIN_HUMAN,
+      // Without this a correction could never have a stale flag cleared: both
+      // clearing paths compare disk against these hashes, and a finding with
+      // none is `unknown` forever. A hand-written correction being the least
+      // recoverable record in the graph was the wrong way round.
+      derivation: claimTimeDerivation(graph, inherited),
     },
     edges
   );
@@ -337,7 +380,18 @@ export function create(dir, { claim, anchors, type = 'finding', confidence = 0.9
   // path. No process death required; one transient EBUSY is enough.
   const id = putNodeWithEdges(
     dir,
-    { kind: 'finding', key, claim, confidence, type, origin: ORIGIN_HUMAN },
+    {
+      kind: 'finding',
+      key,
+      claim,
+      confidence,
+      type,
+      origin: ORIGIN_HUMAN,
+      // Read AFTER the indexFile loop above, so the hashes are the ones the
+      // person's claim was actually made against rather than whatever the graph
+      // held before this call touched it.
+      derivation: claimTimeDerivation(loadGraph(dir), resolved),
+    },
     resolved.map((target) => ({ edge: 'derived_from', to: target }))
   );
   if (!id) return null;

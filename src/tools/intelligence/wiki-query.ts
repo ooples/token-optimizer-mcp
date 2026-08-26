@@ -286,7 +286,7 @@ export async function wikiQuery(
       });
     // Served through `serve` so a stale finding arrives WITH the diff that
     // invalidated it. A stale finding served bare is worse than no graph.
-    const [served] = staleness.serve(graph, [match]);
+    const [served] = staleness.serve(graph, [match], { dir });
     return respond({ operation, found: true, finding: served });
   }
 
@@ -324,7 +324,7 @@ export async function wikiQuery(
           })
           .slice(0, limit);
 
-    const served = staleness.serve(graph, matches);
+    const served = staleness.serve(graph, matches, { dir });
     return respond({ operation, found: served.length > 0, findings: served });
   }
 

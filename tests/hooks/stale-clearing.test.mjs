@@ -43,6 +43,8 @@ import {
   retire,
 } from '../../hooks-core/curate.mjs';
 import { writeHarvested } from '../../hooks-core/harvest-write.mjs';
+import { create } from '../../hooks-core/curate.mjs';
+import { forTouch } from '../../hooks-core/inject.mjs';
 import { canonicalPath } from '../../hooks-core/paths.mjs';
 
 const ORIGINAL = 'export function parse(x) {\n  return x.trim();\n}\n';
@@ -403,5 +405,205 @@ describe('a retired counterpart no longer counts as an open dispute', () => {
     const id = putNode(dir, { kind: 'finding', key: 'lonely', claim: 'h returns 1', confidence: 0.9 });
     putEdge(dir, nodeId('finding', 'ghost'), 'contradicts', id);
     expect(hasOutstandingContradiction(load(dir), 'lonely')).toBe(true);
+  });
+});
+
+/**
+ * AUTOMATIC CLEARING, ON THE SAME EVIDENCE.
+ *
+ * Clearing reachable only through a dashboard button leaves the rot path fully
+ * open on every install where nobody opens the dashboard -- which is most of
+ * them. The evidence test is what makes clearing safe and it does not care who
+ * triggered it, so `serve` runs the same `claimTimeVerdict` when handed a `dir`.
+ *
+ * THE ASSERTIONS THAT MATTER ARE THE NEGATIVE ONES. An automatic path that
+ * cleared more freely than the button would be a laundering route firing on
+ * every tool call, so each "clears automatically" test below is paired with a
+ * "still differs" test on the identical setup.
+ */
+describe('serve clears a stale flag automatically, on the same evidence', () => {
+  const staleFinding = () => {
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+    const key = seedFinding();
+    writeFileSync(file, CHANGED);
+    markStaleWithDiff(ORIGINAL, CHANGED);
+    expect(findingByKey(key).stale).toBe(true);
+    return key;
+  };
+
+  const serveOne = (key, opts) => {
+    const graph = load(dir);
+    return serve(graph, [graph.nodes.get(nodeId('finding', key))], opts)[0];
+  };
+
+  test('clears the STORED flag when the content is back to what was claimed', () => {
+    const key = staleFinding();
+    writeFileSync(file, ORIGINAL); // reverted
+    indexFile(dir, file, ORIGINAL); // and observed, so the lazy check agrees too
+
+    const served = serveOne(key, { dir });
+    expect(served.stale).toBe(false);
+    // Gone from the STORE, not merely from this response -- disclose.mjs and
+    // utility.mjs read the stored node, never the served copy.
+    expect(findingByKey(key).stale).toBeUndefined();
+  });
+
+  test('does NOT clear when the content genuinely still differs', () => {
+    const key = staleFinding();
+    // Not reverted. This is the mutation-facing assertion: an automatic path
+    // that cleared unconditionally would fire here on every tool call.
+    const served = serveOne(key, { dir });
+    expect(served.stale).toBe(true);
+    expect(findingByKey(key).stale).toBe(true);
+  });
+
+  test('does not render as both stale and fresh', () => {
+    const key = staleFinding();
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+
+    const served = serveOne(key, { dir });
+    // `serve` spreads the record, so a cleared flag with staleReason and diff
+    // still attached hands back a finding that reads fresh and stale at once --
+    // and different renderers key off different fields.
+    expect(served.stale).toBe(false);
+    expect(served.staleReason).toBeUndefined();
+    expect(served.diff).toBeUndefined();
+    expect(served.staleEvidence).toBeUndefined();
+  });
+
+  test('keeps the other two disclosures on a finding cleared mid-serve', () => {
+    const key = staleFinding();
+    putNodeWithEdges(dir, {
+      kind: 'finding', key: 'rebuttal', claim: 'parse does not trim', confidence: 0.9,
+    });
+    contradict(dir, { key, byKey: 'rebuttal', reason: 'read it again' });
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+
+    const served = serveOne(key, { dir });
+    expect(served.stale).toBe(false);
+    // A dispute is not staleness and must survive the clear.
+    expect(served.contradicted).toBe(true);
+    expect(served.contradictedBy).toBe('rebuttal');
+    // And so must the derivation verdict, which is what clearing was decided on.
+    expect(served.derivationHolds).toBe(true);
+    expect(served.derivationCheckedAgainst).toBe('index');
+  });
+
+  test('is read-only without a dir', () => {
+    const key = staleFinding();
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+
+    // No `dir`: the flag is still reported, and still stored.
+    const served = serveOne(key);
+    expect(served.stale).toBe(true);
+    expect(findingByKey(key).stale).toBe(true);
+  });
+
+  test('refuses to clear automatically with no claim-time record, exactly as reverify does', () => {
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+    putNodeWithEdges(
+      dir,
+      { kind: 'finding', key: 'legacy2', claim: 'parse trims', confidence: 0.9 },
+      [{ edge: 'derived_from', to: nodeId('file', file) }]
+    );
+    writeFileSync(file, CHANGED);
+    markStaleWithDiff(ORIGINAL, CHANGED);
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+
+    expect(serveOne('legacy2', { dir }).stale).toBe(true);
+    expect(findingByKey('legacy2').stale).toBe(true);
+  });
+
+  test('the lazy check can still mark a finding whose stored flag was just cleared', () => {
+    // Clearing removes only the STORED flag. The disk-against-node-hash
+    // comparison is a different question and is not overruled: here disk matches
+    // claim time while the anchor node still holds the post-edit hash.
+    const key = staleFinding();
+    writeFileSync(file, ORIGINAL); // reverted, but NOT re-indexed
+
+    const served = serveOne(key, { dir });
+    expect(findingByKey(key).stale).toBeUndefined(); // stored flag cleared
+    expect(served.stale).toBe(true);                 // lazy still disagrees
+    expect(served.staleReason).toBe('file changed');
+  });
+
+  test('the injection path clears it, so no dashboard visit is required', () => {
+    process.env.TOKEN_OPTIMIZER_HOLDOUT = '0';
+    try {
+      const key = staleFinding();
+      writeFileSync(file, ORIGINAL);
+      indexFile(dir, file, ORIGINAL);
+
+      const out = forTouch(dir, load(dir), file, { sessionId: 's1' });
+      expect(out).toContain('parse trims its argument');
+      expect(out).not.toContain('STALE');
+      expect(findingByKey(key).stale).toBeUndefined();
+    } finally {
+      delete process.env.TOKEN_OPTIMIZER_HOLDOUT;
+    }
+  });
+});
+
+/**
+ * Every writer records the claim-time hashes, not just the harvester.
+ *
+ * The asymmetry ran the wrong way: a hand-created or hand-corrected finding had
+ * no `derivation`, so it was the ONLY kind that could never have a stale flag
+ * cleared once marked. Findings that predate the record stay unclearable -- that
+ * is honest, and self-correcting as they are superseded.
+ */
+describe('curate writes claim-time anchor hashes too', () => {
+  test('create records the hashes, so its finding is re-verifiable', () => {
+    writeFileSync(file, ORIGINAL);
+    const key = create(dir, { claim: 'parse trims, asserted by hand', anchors: [file] });
+    expect(typeof key).toBe('string');
+
+    const node = findingByKey(key);
+    expect(node.derivation.anchors[nodeId('file', file)])
+      .toBe(load(dir).nodes.get(nodeId('file', file)).hash);
+    // The operations half is declared incomplete rather than asserted empty:
+    // curation performs no evidence-log join at all.
+    expect(node.derivation.operations).toEqual([]);
+    expect(node.derivation.operationsComplete).toBe(false);
+
+    writeFileSync(file, CHANGED);
+    markStaleWithDiff(ORIGINAL, CHANGED);
+    expect(findingByKey(key).stale).toBe(true);
+    expect(reverify(dir, key)).toBe('still-stale');
+
+    writeFileSync(file, ORIGINAL);
+    expect(reverify(dir, key)).toBe('cleared');
+  });
+
+  test('a correction records hashes against the code it was re-derived from', () => {
+    writeFileSync(file, ORIGINAL);
+    indexFile(dir, file, ORIGINAL);
+    const key = seedFinding();
+    writeFileSync(file, CHANGED);
+    markStaleWithDiff(ORIGINAL, CHANGED);
+
+    // The eager path re-indexed the anchor to CHANGED, which is what a person
+    // correcting the claim now reads -- so the correction's claim-time hash is
+    // CHANGED's, not its predecessor's.
+    const corrected = correct(dir, key, 'parse coerces then trims');
+    const fileHashNow = load(dir).nodes.get(nodeId('file', file)).hash;
+    expect(findingByKey(corrected).derivation.anchors[nodeId('file', file)]).toBe(fileHashNow);
+    expect(findingByKey(corrected).derivation.anchors[nodeId('file', file)])
+      .not.toBe(findingByKey(key).derivation.anchors[nodeId('file', file)]);
+
+    // Move the file away from the correction's own claim time, then back.
+    writeFileSync(file, ORIGINAL);
+    markStaleWithDiff(CHANGED, ORIGINAL);
+    expect(findingByKey(corrected).stale).toBe(true);
+    expect(reverify(dir, corrected)).toBe('still-stale');
+
+    writeFileSync(file, CHANGED);
+    expect(reverify(dir, corrected)).toBe('cleared');
   });
 });

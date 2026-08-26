@@ -274,7 +274,10 @@ export function forTouch(
   // others, so the comparison becomes within-file and the dominant source of
   // variance drops out. A session-pinned arm would destroy that.
   const holdout = inHoldout(filePath);
-  const served = serve(graph, candidates);
+  // `dir` so an eager flag whose evidence is gone is cleared here rather than
+  // waiting for somebody to open the dashboard. Same evidence test as the manual
+  // path -- see `serve`.
+  const served = serve(graph, candidates, { dir });
   const assessed = assessFindings(dir, served, {
     episodeId: episode.episodeId || sessionId,
     relevanceFor: () => 1,
@@ -461,7 +464,7 @@ export function forCommand(
   // only thing an uncapped list buys is the I/O.
   const considered = candidates.slice(0, MAX_COMMAND_CANDIDATES);
 
-  const served = serve(graph, considered);
+  const served = serve(graph, considered, { dir });
   const assessed = assessFindings(dir, served, {
     episodeId: episode.episodeId || sessionId,
     relevanceFor: (finding) => explicit(finding) ? 1 : 0.6,
@@ -988,7 +991,7 @@ export function sessionIndex(dir, graph, { episode = {}, relevantFindingIds = []
   // `serve` is the only path allowed to hand a finding to a model. In
   // particular, activating this previously-unwired index must not create a new
   // path that labels an invalidated content claim as current.
-  const served = serve(graph, selected);
+  const served = serve(graph, selected, { dir });
   if (!served.length) return null;
   // A stale marker is longer than the fresh preview used for candidate
   // selection. Trim from the lowest-ranked end until the ACTUAL message fits.

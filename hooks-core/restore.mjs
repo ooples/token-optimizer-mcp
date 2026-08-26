@@ -140,7 +140,7 @@ export function restorationPlan(dir, graph, context = {}) {
     for (const id of predicted) {
       const node = graph.nodes.get(id);
       if (!node) continue;
-      const findings = serve(graph, findingsFor(graph, id, { limit: 2 }));
+      const findings = serve(graph, findingsFor(graph, id, { limit: 2 }), { dir });
       for (const finding of findings) {
         // `! STALE` only where a diff actually exists to back it; see the
         // renderer in inject.mjs for the measurement behind this.
