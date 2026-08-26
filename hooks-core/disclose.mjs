@@ -292,6 +292,11 @@ export function verdictFor(graph, { anchors = [], question, minConfidence = 0.7 
     const id = nodeId('file', canonicalPath(anchor));
     if (!graph.nodes.has(id)) continue;
 
+    // READ-ONLY serve: no `dir` is threaded here, so this cannot clear a stale
+    // flag whose evidence is gone. That is deliberate -- this function takes a
+    // graph, not the directory it came from, and widening its signature to give
+    // an analysis path a write capability buys nothing: the injection path runs
+    // on every tool call and clears the same findings.
     const findings = serve(graph, findingsFor(graph, id, { limit: 4 }));
     for (const finding of findings) {
       if (finding.stale) continue;

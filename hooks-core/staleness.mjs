@@ -572,8 +572,20 @@ function derivationCheck(graph, finding) {
  * This is the only function that should ever hand a finding to a model, because
  * it is the one that enforces the rule: a stale finding leaves here carrying
  * `stale: true` AND a diff, or it does not leave at all.
+ *
+ * AND IT CLEARS A STORED FLAG WHOSE EVIDENCE IS GONE, when given a `dir` to
+ * write to. Clearing used to be reachable only by a person pressing Re-verify in
+ * the dashboard, which left the rot path fully open on every install where
+ * nobody opens the dashboard -- and that is most of them. The evidence test is
+ * what makes clearing safe, and it does not care who triggered it: the same
+ * `claimTimeVerdict` runs here as in `reverify`, so this cannot clear anything
+ * the button would not.
+ *
+ * `dir` IS OPTIONAL, AND OMITTING IT MAKES THIS READ-ONLY. Several callers hold
+ * a graph without the directory it came from, and a serve that silently did
+ * nothing would be worse than one that plainly cannot write.
  */
-export function serve(graph, findings) {
+export function serve(graph, findings, { dir = null } = {}) {
   const served = [];
 
   // RETIRED FINDINGS STOP HERE, unconditionally.
@@ -601,8 +613,42 @@ export function serve(graph, findings) {
       continue;
     }
 
+    // AUTOMATIC CLEARING, on the same evidence the manual path demands.
+    //
+    // ONLY THE STORED FLAG IS TOUCHED. The lazy loop below is left to run
+    // exactly as before and can independently mark this finding stale again on
+    // its own comparison -- disk against the anchor NODE's hash -- which answers
+    // a different question and is not this function's to overrule. Eager and
+    // lazy stay two mechanisms, as the module header insists.
+    //
+    // AND THE FIELDS GO WITH THE FLAG. `putNode` does not merge and neither does
+    // this spread: serving `{ ...finding, stale: false }` would hand back a
+    // finding that reads fresh while still carrying `staleReason` and `diff`
+    // from the record -- stale and fresh at once, which is worse than either.
+    // So the cleared record, not the stored one, is what the rest of this
+    // iteration reads and spreads.
+    //
+    // BOUNDED, and the bound is the point: this runs only for a finding whose
+    // flag is already STORED, only when a `derivation` record exists to check
+    // against, and it reads each of that finding's anchors at most once. A
+    // finding that is not flagged pays nothing. The lazy loop below already
+    // reads every anchor of every content-dependent finding served, so the worst
+    // case is twice the anchor reads on the already-stale subset alone.
+    //
+    // NOT ON THE NON-CONTENT-DEPENDENT EARLY RETURN ABOVE, deliberately. Both
+    // eager paths refuse to flag those types at all, so a flag there can only
+    // come from an older graph -- and reading anchors for a type whose truth
+    // does not depend on them is exactly the cost `CONTENT_DEPENDENT` exists to
+    // avoid.
+    let record = finding;
+    if (dir && finding.stale && claimTimeVerdict(graph, finding) === 'match') {
+      clearStale(dir, finding.key, { graph });
+      const { stale: _s, staleReason: _r, diff: _d, staleEvidence: _e, ...cleared } = finding;
+      record = cleared;
+    }
+
     const anchors = graph.edges
-      .filter((e) => e.edge === 'derived_from' && e.from === finding.id)
+      .filter((e) => e.edge === 'derived_from' && e.from === record.id)
       .map((e) => graph.nodes.get(e.to))
       .filter(Boolean);
 
@@ -627,10 +673,10 @@ export function serve(graph, findings) {
     // A finding already marked stale eagerly, whose diff was captured at write
     // time, keeps that diff -- the eager path saw the change we can no longer
     // reconstruct from disk alone.
-    if (!stale && finding.stale) {
+    if (!stale && record.stale) {
       stale = true;
-      diff = finding.diff || '';
-      reason = finding.staleReason || 'marked stale when the change was observed';
+      diff = record.diff || '';
+      reason = record.staleReason || 'marked stale when the change was observed';
     }
 
     if (stale && !diff) {
@@ -679,13 +725,19 @@ export function serve(graph, findings) {
     }
 
     served.push({
-      ...finding,
+      ...record,
       stale,
       ...(stale ? { diff, staleReason: reason, staleEvidence: Boolean(diff) } : {}),
+      // BOTH OTHER DISCLOSURES SURVIVE A MID-SERVE CLEAR. `dispute` was computed
+      // above the content-dependence branch and is applied here untouched, and
+      // the derivation verdict is recomputed from the record -- which still
+      // carries its `derivation`, since clearing removes only the staleness
+      // fields. A finding whose flag was just cleared is still disclosed as
+      // disputed, and still reports whether its derivation holds.
       ...dispute,
       // Independent of `stale` above: see `derivationCheck`'s own comment for
       // the case it catches that node-level staleness can miss.
-      ...derivationCheck(graph, finding),
+      ...derivationCheck(graph, record),
     });
   }
   return served;
@@ -937,8 +989,21 @@ function anchorHashNow(anchor) {
  * Exposing it to a hook, a tool argument or an HTTP action would be a way to
  * turn a stale finding fresh on request, which is exactly what must not exist.
  */
-export function clearStale(dir, key) {
-  const node = load(dir).nodes.get(nodeId('finding', key));
+export function clearStale(dir, key, { graph = null } = {}) {
+  // A CALLER THAT ALREADY HOLDS THE GRAPH PASSES IT, and this is not
+  // micro-optimisation: `load` re-parses the entire append-only log, so clearing
+  // inside `serve`'s loop re-read and re-folded the whole graph once PER cleared
+  // finding. Measured on 40 findings all stale and all revertible -- the shape a
+  // mass revert produces -- that was 185 ms against 25 ms, a 7x regression on
+  // the injection path, all of it graph loading rather than the hashing this
+  // feature is actually for. With the graph passed through it is back in line.
+  //
+  // No new race: this store is last-write-wins with no compare-and-set anywhere,
+  // and every other caller that spreads a node back -- `pin`, `retire`,
+  // `contradict`, `correct` -- writes from a graph it loaded earlier too. Both
+  // callers here already DECIDED on this snapshot, so re-reading it purely for
+  // the write narrowed no window that was ever closed.
+  const node = (graph || load(dir)).nodes.get(nodeId('finding', key));
   if (!node || node.kind !== 'finding') return false;
   const { stale, staleReason, diff, staleEvidence, ...rest } = node;
   // Nothing to clear is a success, not a write: an unconditional putNode here
@@ -987,14 +1052,33 @@ export function clearStale(dir, key) {
  * silently un-mark findings nobody asked about. Staleness is disclosed to a
  * reader who then decides; clearing is an explicit act.
  */
-export function reverify(dir, key) {
-  const graph = load(dir);
-  const finding = graph.nodes.get(nodeId('finding', key));
-  if (!finding || finding.kind !== 'finding') return 'unknown';
-  // Idempotent: the postcondition -- no stale flag on this finding -- already
-  // holds, and reporting anything else would make a caller retry forever.
-  if (!finding.stale) return 'cleared';
-
+/**
+ * THE ONE EVIDENCE TEST. Does this finding's anchored content still hash to what
+ * the claim was actually made against?
+ *
+ * `'match'` -- every anchor on disk re-hashes to the value frozen into this
+ * finding's own `derivation.anchors` at claim time. The content IS what the
+ * claim was derived from: a revert, or a write that never moved the anchored
+ * bytes.
+ * `'differs'` -- at least one anchor does not, INCLUDING an anchor whose content
+ * is gone. Deleted is a difference, not a missing measurement.
+ * `'unknown'` -- there is nothing to compare: no `derivation.anchors`, no
+ * anchors, an anchor with no recorded hash, or one that no longer resolves.
+ *
+ * SHARED BY BOTH CLEARING PATHS ON PURPOSE, and that sharing is the guarantee
+ * rather than a convenience. `reverify` (a person pressing Re-verify) and
+ * `serve` (automatic, on every retrieval) call THIS function and nothing else,
+ * so the automatic path cannot clear anything the button would not, and neither
+ * can drift from the other. Two copies of this comparison would be two policies,
+ * and the weaker one would win wherever it ran more often -- which is the
+ * automatic one.
+ *
+ * NOT `checkAnchor`, for the reason `anchorHashNow` above spells out: that
+ * compares disk against the anchor NODE's stored hash, which both eager paths
+ * re-point at the very bytes that caused the mark, so it answers "fresh" for
+ * exactly the finding it just marked stale.
+ */
+function claimTimeVerdict(graph, finding) {
   const recorded = finding.derivation && finding.derivation.anchors;
   if (!recorded || typeof recorded !== 'object') return 'unknown';
 
@@ -1017,10 +1101,23 @@ export function reverify(dir, key) {
     if (node.kind !== 'file' && node.kind !== 'symbol') return 'unknown';
     // null means the content is gone -- deleted file, vanished symbol. That is a
     // difference, not an absence of evidence.
-    if (anchorHashNow(node) !== expected) return 'still-stale';
+    if (anchorHashNow(node) !== expected) return 'differs';
   }
+  return 'match';
+}
 
-  clearStale(dir, key);
+export function reverify(dir, key) {
+  const graph = load(dir);
+  const finding = graph.nodes.get(nodeId('finding', key));
+  if (!finding || finding.kind !== 'finding') return 'unknown';
+  // Idempotent: the postcondition -- no stale flag on this finding -- already
+  // holds, and reporting anything else would make a caller retry forever.
+  if (!finding.stale) return 'cleared';
+
+  const verdict = claimTimeVerdict(graph, finding);
+  if (verdict === 'unknown') return 'unknown';
+  if (verdict === 'differs') return 'still-stale';
+  clearStale(dir, key, { graph });
   return 'cleared';
 }
 
