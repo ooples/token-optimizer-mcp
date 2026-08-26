@@ -61,6 +61,28 @@ export function declines(dir, { events = readMetrics(dir) } = {}) {
   return counts;
 }
 
+/**
+ * What the local Stop-time derivation path produced in the visible event log.
+ *
+ * The producer records all three counts because any one of them alone is
+ * ambiguous: zero stored can mean no evidence, no candidates, or a binding
+ * storage/anchor filter. This reader keeps those states distinct and prevents
+ * the telemetry itself from becoming an unobserved cost.
+ */
+export function derivationNote(dir, { events = readMetrics(dir) } = {}) {
+  const runs = events.filter((event) => event.kind === 'derive');
+  if (!runs.length) return null;
+
+  const sum = (field) =>
+    runs.reduce((total, event) => total + Math.max(0, Number(event[field]) || 0), 0);
+  const candidates = sum('candidates');
+  const observations = sum('observations');
+  const written = sum('written');
+  return `Local derivation: ${candidates.toLocaleString()} candidate(s) from ` +
+    `${observations.toLocaleString()} observation(s); ${written.toLocaleString()} stored ` +
+    `across ${runs.length.toLocaleString()} Stop run(s).`;
+}
+
 const idOf = (finding) =>
   finding.remedy
     ? `${finding.remedy.type}:${finding.remedy.anchor || finding.remedy.file || (finding.remedy.anchors || []).join(',')}`
@@ -399,6 +421,15 @@ export function renderAudit(
       );
     }
   }
+
+  // WHAT THE DEFAULT, LOCAL DERIVATION PATH ACTUALLY PRODUCED.
+  //
+  // This event used to have a producer and no reader. Keep its three states
+  // together: evidence seen, candidates derived, and findings that survived
+  // selection/storage. A lone stored count would turn every earlier refusal
+  // into an apparent "nothing found" result.
+  const derived = derivationNote(dir);
+  if (derived) body.push('', derived);
 
   // WHETHER THE FINDINGS WE INJECTED GOT USED (Layer 1).
   //

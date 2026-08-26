@@ -51,7 +51,6 @@ beforeEach(() => {
   workspace = mkdtempSync(join(tmpdir(), 'cache-'));
   dir = join(workspace, '.token-optimizer', 'wiki');
 });
-
 afterEach(() => rmSync(workspace, { recursive: true, force: true }));
 
 /** A transcript in the client's own format. */

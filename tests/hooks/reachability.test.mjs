@@ -114,8 +114,8 @@ const ALLOWED = new Map([
   //   recordRefresh           remains public and deliberately unwired: this
   //     repository recommends refreshes but never issues one, and recording at
   //     the recommendation site would score refreshes that were never bought.
-  //   recordRefreshOutcome    scored from the event log by
-  //     scoreOutstandingRefreshes, which resolves whether a turn actually
+  //   recordRefreshOutcome    scored from the event log by scoreRefreshes,
+  //     which resolves whether a turn actually
   //     arrived inside the window the advice predicted. The signal needed no
   //     new instrumentation; it was in the log the whole time.
   //
