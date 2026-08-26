@@ -269,6 +269,24 @@ function renderGraph(
   lines.push(
     `  calibration             : ${sheet.calibration?.verdict || 'unavailable'}`
   );
+
+  // AN OFFLINE PROBE, AND THE LINE SAYS SO. It observes nothing a session did:
+  // it deletes each anchor edge in memory and re-runs traversal and BM25 over
+  // the graph as it stands. `rate` is deliberately absent more often than
+  // present -- the by-construction check that always returns 1.0 is reported as
+  // `integrity` and is never printed as a recall rate.
+  const recall = sheet.recall;
+  lines.push(
+    `  recall (offline probe)  : ${
+      recall
+        ? recall.rate === null
+          ? `no rate -- ${recall.reason}`
+          : `${pct(recall.rate * 100)} of ${num(
+              recall.probed
+            )} finding(s) recovered without their own anchor edge -- offline probe over the current graph`
+        : 'unavailable'
+    }`
+  );
   lines.push(`  ${pricing.priceNote()}`);
   return lines;
 }

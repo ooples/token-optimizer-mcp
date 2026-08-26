@@ -1297,7 +1297,60 @@ exists (M8 kills the eager version). Floor is `OBSERVATION_FLOOR = TRIPWIRE_MIN 
 changes nothing, 1-in-10 still refreshes, 0-in-10 switches it off. Not a Wilson bound — its 95%
 upper limit at 0/10 is 0.28, which could not switch off a policy that missed ten times out of ten.
 See `task-9-report.md`. |
-| 10 | Not started. |
+| 10 -- the recall probe | **Complete, and the plan's own Step 1 test was the defect.**
+`hooks-core/recall.mjs` -- `recallProbe`, `MIN_PROBED`, `MAX_FINDINGS`; wired into
+`graphBalanceSheet` and rendered as one labelled line in `get_optimization_report`. 22 tests
+plus 1 in `optimization-report.test.ts`; **32 mutations, 32 killed**, every new test killed by
+at least one, and Tasks 6/7/8/9's wiring mutations plus the allowlist guard re-run and still
+killed. Allowlist stays at **3**. Full suite 225 suites / 2,892 passed.
+**THE PLAN'S STEP 3 PROBE CANNOT FAIL, and shipping it would have replaced one unfalsifiable
+claim with another.** `findingsFor(graph, A)` walks `derived_from` edges backwards into `A`,
+and the edge `F -> A` is what MAKES `A` an anchor of `F` -- so "retrieve each finding from its
+own anchor" asks whether an edge that exists exists. It is 1.0 for every graph, forever, and
+`rate: 1.0` printed in the savings report reads to a human as "retrieval is perfect,
+embeddings unnecessary". Proved two ways: a test asserts the property of the primitive
+directly, and across four fixtures whose measured rates are **0, 0.5, 1 and null** the
+by-construction check is **1.0 on every one**. It is kept as `integrity`, with its own
+`what` string saying it is NOT a recall rate, and M2 (publish it as the rate) and M14 (delete
+the disclaimer) are both killed.
+What replaced it is **leave-one-edge-out**: delete each anchor edge, then ask whether traversal
+from the anchor's `contains` NEIGHBOURHOOD or BM25 over the anchor's OWN KEY still surfaces the
+finding. Arm B is deliberately not queried with the finding's claim as Step 3 said, because
+both readings are degenerate -- against a corpus INCLUDING the finding, BM25 scores a document
+against its own text and it wins every time; against a corpus EXCLUDING it, a hit means a
+DIFFERENT finding matched, which measures redundancy of storage and rewards a graph for holding
+duplicates.
+**On this machine the probe REFUSES, and n=1 is honoured as Task 8's house style demands.**
+Project graph: `probed 1, retrieved 1, rate: null` -- both anchor edges of the one finding
+recovered by the lexical arm, and the reason ends *"which is a count and not a rate"*. Shared
+graph: **14 active findings, all 14 UNPROBEABLE** -- every one is anchored to a `file:` id with
+no node in the graph (`expand.promote` writes the edge without indexing the anchor), so there
+is no key to query BM25 with. `findingsFor` still returns them, so **integrity is 1.0 while
+every finding is unprobeable** -- which is exactly why the two are reported separately, and the
+probe declines to convert a graph-integrity defect into a recall loss.
+Four refusals, each costing this project its own good news: `MIN_PROBED = 10` (a resolution
+argument, on distinct FINDINGS not anchor edges, since two anchors of one claim are not two
+independent observations); a corpus no larger than the retrieval limit (below it nothing is
+ever cut for budget, so Arm B is more permissive than production and can only overstate);
+a dangling anchor is UNPROBEABLE rather than a miss; and strict aggregation (every probeable
+anchor edge must recover, biasing the rate DOWN).
+**Two of my own tests were vacuous and only the mutation run found them** -- the
+eighth-and-ninth instance of that class. M15 survived because the cap test read `all.length`
+while BM25 ranked over a separate `corpus` variable, so a mutation shrinking the RANKING corpus
+(easier retrieval, in this project's favour) could not move the number; fixed in the production
+code, so the published size IS the ranking corpus. M23 survived because the fail-open test
+passed a nonexistent directory and `load` returns an EMPTY graph for a missing log rather than
+throwing, so the catch never ran; now two tests, one per catch.
+`recall.mjs` imports only `wiki.mjs` and `lexical.mjs`, neither of which imports back -- **no
+cycle**, the same constraint that moved Task 8's `calibration` out of `metrics.mjs`.
+`graphBalanceSheet` 185 ms -> 213 ms on the real graph; the probe is 42 ms and `MAX_FINDINGS`
+caps it. See `task-10-report.md`, which also runs **every row of the Definition of done** and
+reports the four that do not pass: findings-on-a-default-install passes only on the letter
+(the one finding is `origin: 'agent'`, and Task 3 is Not started so the producer is unbuilt);
+the `kind:"result"` row is stale per correction #5 and its substitute also reads 0 (3,031
+outcome rows, zero failures, so zero rows carry `exit`/`output`); Layer 1's denominator has
+regressed 1 -> 0 as the last two injections aged out of the 2 MB window; and Layer 2's refusal
+row passes VACUOUSLY, on an empty set. |
 | 11 -- transcript reader | **Complete.** `failedResultsFromTranscript` in
 `hooks-core/transcript.mjs`, read-only, tail-bounded, redacted at the boundary. Yield on
 this machine is **0** and that is measured, not shrugged at: 8 of 571 command failures
@@ -1396,8 +1449,24 @@ published a calibration resting on a ~1e-13 floating-point gap as "referenced fi
 0 more tokens/touch" (fixed with `MIN_GAP_TOKENS = 1`, tied to the unit the verdict prints); and
 a rendered re-read-waste line that printed the confirmed figure without the count of repeats the
 classifier could not judge, which `rereadWaste`'s own docstring says must be reported rather than
-hidden. Neither was visible by reading. **The running total for this class across both plans is
-now nine.**
+hidden. Neither was visible by reading.
+
+**Task 9 added the tenth, and it is the first found by DECLINING to wire something**:
+`recordRefresh` stays on the reachability allowlist because nothing in this repository issues a
+keep-warm refresh, and calling it at the recommendation site would have computed a hit rate over
+refreshes never bought.
+
+**Task 10 added the eleventh and twelfth, and the eleventh was written into this plan's own task
+text.** The Step 3 recall probe -- take each finding's anchors and run `findingsFor` from each --
+**cannot fail**, because the edge `F -> A` is what makes `A` an anchor of `F`, so its rate is 1.0
+for every graph forever; the plan's Step 1 test asserted exactly that, and `recall: 100%` in the
+savings report reads as "retrieval is perfect, embeddings unnecessary". It ships as `integrity`,
+never as `rate`. The twelfth was in Task 10's own new tests and only its mutation run found it: a
+cap assertion read a reported `all.length` while BM25 ranked over a separate `corpus` variable,
+so a mutation shrinking the RANKING corpus -- making retrieval easier, in this project's favour --
+could not move the number the test read. Fixed in the production code rather than the test, so
+the published size IS the ranking corpus. **The running total for this class across both plans is
+now twelve, and every single one flattered this project's own numbers.**
 
 **The ninth was found by Task 9 and is the first one avoided by declining to wire something.**
 `recordRefresh` has no honest call site because nothing in this repository issues a refresh —

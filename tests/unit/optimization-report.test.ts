@@ -166,6 +166,32 @@ describe('get_optimization_report and the graph', () => {
     expect(line).not.toMatch(/\$/);
   });
 
+  it('renders the recall probe, labelled offline, with no rate it cannot support', async () => {
+    // The seeded finding has no anchor, so the probe reports one unanchored
+    // miss and REFUSES a rate -- the branch a fresh machine actually takes.
+    // What the line must never do is print the by-construction check's 1.0.
+    process.env[RATE_ENV] = '3';
+    await seedFindingWithDerivedCost();
+    const report = await run();
+
+    expect(report.graph.recall).toBeDefined();
+    expect(report.graph.recall.basis).toBe(
+      'offline probe over the current graph'
+    );
+    expect(report.graph.recall.rate).toBeNull();
+    // The tautology is present, separately, and it is 1.0 -- which is exactly
+    // why it may not be the thing the rate line prints.
+    expect(report.graph.recall.integrity.rate).toBe(0);
+
+    const line = report.formatted
+      .split('\n')
+      .find((l: string) => /recall \(offline probe\)/.test(l));
+    expect(line).toBeDefined();
+    expect(line).toMatch(/no rate/);
+    expect(line).not.toMatch(/\$/);
+    expect(line).not.toMatch(/100(\.0)?%/);
+  });
+
   it('still renders a section for a graph directory that does not exist', async () => {
     // A fresh install has no graph. The section must still appear, carrying its
     // refusal -- a missing directory is not a reason to hide the loop's state,
