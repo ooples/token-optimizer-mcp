@@ -40,7 +40,7 @@
  * was referenced" and "nothing could be measured" are different answers and
  * this module gives different answers for them.
  */
-import { readMetrics } from './metrics.mjs';
+import { readMetrics, readTruncation } from './metrics.mjs';
 
 /**
  * The events that name a finding, and it is ONE kind, not the two the plan
@@ -127,17 +127,30 @@ export function classify(dir, { events = null } = {}) {
   try {
     const all = inTimeOrder(events || readMetrics(dir));
 
-    // Every reference, keyed on the finding it names. Only references carrying
-    // a session id are usable -- see `unscopedReferences` in `referenceRate`
-    // for the ones this drops and why they are counted rather than credited.
+    // Every reference, keyed on the finding it names and on nothing else.
+    //
+    // NOT SCOPED BY SESSION, and that is a deliberate reversal. Scoping needs
+    // the query's `sessionId`, which `wiki_query` takes as an OPTIONAL input
+    // the model has to volunteer (`options.sessionId ?? null`) -- so the
+    // numerator depended on the model choosing to identify itself, and an
+    // unverifiable model-supplied id is not evidence. Plan 1 settled that for
+    // the `answers` edge and it settles it here: stop depending on the field
+    // rather than hope for cooperation. The finding key is the specific part
+    // anyway; a key is a graph identity, not a guess.
+    //
+    // THE COST, disclosed here and in `referenceNote` because a reader of the
+    // number has to see it: TWO CONCURRENT SESSIONS ON ONE REPOSITORY CAN
+    // CROSS-ATTRIBUTE. Session A's injection of K plus session B's later query
+    // for K reads as a reference. Nothing in the log can separate them once the
+    // session id is gone, so the exposure is real and is stated rather than
+    // priced.
     const references = new Map();
     for (const event of all) {
       if (!REFERENCE_KINDS.has(event.kind)) continue;
       const key = referencedKey(event);
-      const session = sessionOf(event);
-      if (!key || !session) continue;
+      if (!key) continue;
       if (!references.has(key)) references.set(key, []);
-      references.get(key).push({ at: event.at || 0, session });
+      references.get(key).push(event.at || 0);
     }
 
     // Which injections the existing outcome join could attribute. An outcome
@@ -168,9 +181,8 @@ export function classify(dir, { events = null } = {}) {
       const injectionId = event.injectionId ? String(event.injectionId) : null;
       const at = event.at || 0;
       const session = sessionOf(event);
-      // STRICTLY AFTER. A query that PRECEDED the injection is the model
-      // asking on its own initiative; crediting it would let the metric take
-      // the credit for a lookup it had nothing to do with.
+      // STRICTLY AFTER here too: activity that predates the injection is not
+      // an opportunity to have used it.
       const followed = (times) => times.some((t) => t > at);
       const continued =
         (injectionId && attributed.has(injectionId)) ||
@@ -179,9 +191,11 @@ export function classify(dir, { events = null } = {}) {
       for (const raw of keys) {
         const findingKey = String(raw);
         const hits = references.get(findingKey) || [];
-        const referenced = session
-          ? hits.some((hit) => hit.session === session && hit.at > at)
-          : false;
+        // TIME ORDER IS THE ONLY REMAINING GUARD, so it carries the whole
+        // weight of the attribution: a query that PRECEDED the injection is
+        // the model asking on its own initiative, and crediting it would let
+        // the metric take the credit for a lookup it had nothing to do with.
+        const referenced = hits.some((hitAt) => hitAt > at);
         rows.push({
           findingKey,
           injectionId,
@@ -202,9 +216,27 @@ export function classify(dir, { events = null } = {}) {
 /**
  * The rate, with everything needed to tell a real 0 from an absent one.
  *
- * `denominator` counts only `referenced` + `not-referenced`. `unknown`,
- * `unattributable` and `unscopedReferences` are reported beside it, never
- * inside it.
+ * `denominator` counts only `referenced` + `not-referenced`. `unknown` and
+ * `unattributable` are reported beside it, never inside it.
+ *
+ * `windowed` SAYS WHETHER THE DENOMINATOR CAN UNDERSTATE, and it is not
+ * decoration. `readMetrics` reads a 2 MB / 5,000-event TAIL of the firehose,
+ * and injections are rare enough on a real project to age out of it: measured
+ * on this repository, both `inject` events sit at lines 502 and 883 of 6,871
+ * and have scrolled away behind ~6,000 later `read` and `tool-outcome` rows,
+ * so the windowed denominator is 0 where the whole-file truth is 1.
+ *
+ * IT IS REPORTED RATHER THAN FIXED, deliberately. `inject` already gets
+ * unwindowed access through `BALANCE_KINDS` / `EVIDENCE_KINDS`, but `query`
+ * does not -- and reading only the INJECTION arm unwindowed would be worse
+ * than the windowing: every old injection would enter the denominator with no
+ * chance of a matching query in the window and score `not-referenced`,
+ * manufacturing a pessimistic rate out of the asymmetry. Making the query arm
+ * unwindowed means adding `query` to `EVIDENCE_KINDS`, which two other
+ * consumers read, and this project's own standard says a shared-classifier
+ * change needs a per-consumer verdict comparison. So the honest move is to
+ * publish the flag: a caller that needs the unwindowed truth passes its own
+ * `events`, which is exactly what the live measurement in the task report did.
  */
 export function referenceRate(dir, { events = null } = {}) {
   const empty = {
@@ -216,10 +248,15 @@ export function referenceRate(dir, { events = null } = {}) {
     unattributable: 0,
     unattributableWithInjectedToolCall: 0,
     referenceEvents: 0,
-    unscopedReferences: 0,
+    windowed: false,
   };
   try {
     const all = events || readMetrics(dir);
+    // OUT OF BAND, and read IMMEDIATELY after the only read that sets it --
+    // `readTruncation` reports on the last `readAll`, so anything between the
+    // two could overwrite it. False when the caller supplied its own events:
+    // the read was theirs and its bounds are not ours to claim.
+    const truncation = events ? null : readTruncation();
     const rows = classify(dir, { events: all });
     const count = (label) => rows.filter((row) => row.label === label).length;
     const referenced = count('referenced');
@@ -229,17 +266,17 @@ export function referenceRate(dir, { events = null } = {}) {
     // Usable reference events in the window: the numerator's producer. If this
     // is zero the channel never fired, and a 0% rate would be measuring the
     // absence of a producer rather than the uselessness of findings.
+    //
+    // NO SESSION REQUIREMENT, matching the attribution above. The former
+    // `unscopedReferences` counted queries dropped for want of a session id;
+    // nothing is dropped for that reason any more, so the field is GONE rather
+    // than kept at a permanent zero that a later reader would misread as
+    // evidence the loss had been fixed.
     let referenceEvents = 0;
-    let unscopedReferences = 0;
     for (const event of all) {
       if (!REFERENCE_KINDS.has(event.kind)) continue;
       if (!referencedKey(event)) continue;
-      if (sessionOf(event)) referenceEvents += 1;
-      // Names a finding but cannot be scoped to one injection. `sessionId` is
-      // an OPTIONAL input the caller of wiki_query has to volunteer, so this
-      // is the expected loss rather than an edge case -- counted here so it is
-      // visible instead of silently deflating the numerator.
-      else unscopedReferences += 1;
+      referenceEvents += 1;
     }
 
     // The tool calls that DID receive findings, keyed the way
@@ -290,7 +327,7 @@ export function referenceRate(dir, { events = null } = {}) {
       unattributable,
       unattributableWithInjectedToolCall,
       referenceEvents,
-      unscopedReferences,
+      windowed: Boolean(truncation?.byBytes || truncation?.byEvents),
     };
   } catch {
     return empty;
@@ -298,11 +335,18 @@ export function referenceRate(dir, { events = null } = {}) {
 }
 
 /**
- * One line for the audit, or nothing at all.
+ * One or two lines for the audit, or nothing at all.
  *
  * Says which of the three things is true -- a measured rate, a live channel
  * with no opportunities yet, or no channel at all -- rather than printing a
  * figure and letting the reader assume the first.
+ *
+ * AND IT CARRIES THE CAVEATS, because this is the only place a human meets the
+ * number. A rate attributed on (finding key, time order) can cross-attribute
+ * between two concurrent sessions on one repository, and a windowed read can
+ * understate the denominator. Both are stated beside the figure they qualify.
+ * Putting them only in a task report would be publishing a clean number and
+ * filing the asterisk somewhere nobody quoting it will look.
  */
 export function referenceNote(dir, { events = null } = {}) {
   const r = referenceRate(dir, { events });
@@ -315,6 +359,11 @@ export function referenceNote(dir, { events = null } = {}) {
   }
   return (
     `Injected findings referenced later: ${r.referenced}/${r.denominator} ` +
-    `(${Math.round(r.rate * 100)}%); ${r.unknown} unknown, excluded.`
+    `(${Math.round(r.rate * 100)}%); ${r.unknown} unknown, excluded. ` +
+    'Matched on finding key and time order, so concurrent sessions on this ' +
+    'repository can cross-attribute' +
+    (r.windowed
+      ? '; and the event log was truncated, so the denominator can understate.'
+      : '.')
   );
 }
