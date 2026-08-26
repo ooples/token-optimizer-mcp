@@ -39,6 +39,22 @@ imported and never called and the guard passes it. Proven by mutation: dropping 
 the import too made it fail. So Task 1 must discount import and export specifier
 occurrences as well as comments and strings — "imported" is not "called".
 
+**A FOURTH HOLE, and a FIFTH, found while executing Plan 1.**
+
+*Fourth:* the scan checks EXPORTS, so an unread RECORD FIELD is invisible to it.
+`contradictionReason` -- up to 400 characters of human explanation -- was written on
+every `contradict` call with the guard green throughout, and read by nothing. Plan 3
+needs a written-fields-versus-read-fields census, or this class stays undetectable.
+
+*Fifth (test hygiene, not reachability):* several entry points consult the stratified
+holdout (`forTouch`, `forCommand`, `forSharedCommand`, `substitutionFor`), so a test
+asserting on their output must pin `TOKEN_OPTIMIZER_HOLDOUT` or it fails
+intermittently when the anchor lands in the withheld arm. The convention is
+copy-pasted per suite in three different variants and nothing enforces it -- one
+newly-added test on this branch omitted it and produced exactly that flake. A guard
+asserting that every suite calling a holdout-consulting entry point pins the arm
+would close it.
+
 And three sub-classes are outside its model entirely: readers with no producer (`kind:'query'`), producers with no reader (`kind:'lessons'`), and referents with no target (`wiki_query`, named in twelve shipped copies of injected prompt text).
 
 ---
