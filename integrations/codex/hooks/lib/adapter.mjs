@@ -172,6 +172,136 @@ export function toolSucceeded(raw) {
   return true;
 }
 
+/**
+ * The response envelopes a completed tool call can arrive in.
+ *
+ * The same family `toolSucceeded` reads above, hoisted so the three readers
+ * cannot drift apart. Clients disagree on the envelope name and on nothing
+ * else, so this is the one place that disagreement is spelled out.
+ */
+function responseEnvelopes(raw) {
+  return [
+    raw?.tool_response,
+    raw?.toolResponse,
+    raw?.tool_result,
+    raw?.toolResult,
+    raw?.postToolUse,
+  ].filter((envelope) => envelope !== undefined && envelope !== null);
+}
+
+/** A non-empty string, or null.  Blank output is the same as none. */
+function nonEmpty(value) {
+  const text = String(value ?? '');
+  return text.trim() ? text : null;
+}
+
+/**
+ * The human-readable result text inside one envelope, or null.
+ *
+ * RETURNS NULL RATHER THAN GUESSING. An envelope shape nobody here has seen
+ * produces no capture at all, which costs one finding. Stringifying it instead
+ * would put `[object Object]` or a wall of JSON metadata into a claim that gets
+ * injected into model context -- a wrong observation, which is strictly worse
+ * than a missing one.
+ */
+function resultText(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') return nonEmpty(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return null;
+
+  // MCP content blocks, which is how THIS PROJECT'S OWN tools now arrive:
+  // `normalizeTool` resolves `mcp__<server>__smart_edit`, so smart_edit and
+  // smart_write reach the post-tool path for the first time and their results
+  // are `{ content: [{ type: 'text', text }], isError }` rather than a shell
+  // result. Both the bare array and the wrapping object are accepted because
+  // hosts differ on whether they hand the hook the result or its content.
+  if (Array.isArray(value)) {
+    const blocks = value
+      .map((block) =>
+        typeof block === 'string' ? block : nonEmpty(block?.text)
+      )
+      .filter(Boolean);
+    return blocks.length ? nonEmpty(blocks.join('\n')) : null;
+  }
+  if (typeof value !== 'object') return null;
+
+  // STDERR FIRST, and not because that is the order it was produced in. The
+  // cap can only ever cut the tail, and the diagnostic that explains a failure
+  // is almost always on stderr while the volume is almost always on stdout --
+  // so appending stderr would let a 3 MB build log push the one line worth
+  // capturing out of the window.
+  const streams = [nonEmpty(value.stderr), nonEmpty(value.stdout)].filter(
+    Boolean
+  );
+  if (streams.length) return streams.join('\n');
+
+  if (Array.isArray(value.content)) {
+    const inner = resultText(value.content);
+    if (inner) return inner;
+  }
+
+  const error = value.error;
+  if (error) {
+    const message =
+      typeof error === 'string' ? error : nonEmpty(error.message ?? error.msg);
+    if (message) return message;
+  }
+
+  return (
+    nonEmpty(value.output) ??
+    nonEmpty(value.text) ??
+    nonEmpty(value.message) ??
+    (typeof value.result === 'string' ? nonEmpty(value.result) : null)
+  );
+}
+
+/**
+ * The result text of a completed tool call, or null when the client reports
+ * none.  Redaction and the size cap are NOT applied here -- they belong at the
+ * `recordToolOutcome` boundary, which is the only place every caller passes.
+ */
+export function outputFrom(raw) {
+  for (const envelope of responseEnvelopes(raw)) {
+    const text = resultText(envelope);
+    if (text) return text;
+  }
+  return resultText(raw?.output) ?? resultText(raw?.stdout) ?? null;
+}
+
+/**
+ * Key names that mean "process exit code" and nothing else.
+ *
+ * `code` is deliberately ABSENT. JSON-RPC errors (`code: -32602`), Node errno
+ * objects (`code: 'ENOENT'`) and HTTP wrappers all reuse that name, so reading
+ * it would record a confident exit code for calls that never had one. A null
+ * here is honest; a -32602 claiming to be an exit status is not.
+ */
+const EXIT_KEYS = [
+  'exit_code',
+  'exitCode',
+  'exit',
+  'exit_status',
+  'exitStatus',
+  'return_code',
+  'returncode',
+];
+
+/** The numeric exit code a client reported, or null when it reported none. */
+export function exitFrom(raw) {
+  for (const envelope of [...responseEnvelopes(raw), raw]) {
+    if (!envelope || typeof envelope !== 'object') continue;
+    for (const key of EXIT_KEYS) {
+      const value = envelope[key];
+      if (Number.isInteger(value)) return value;
+      // A client that serializes the code as a digit string still reported it.
+      // Bounded so a hash or an id cannot be mistaken for a status.
+      if (typeof value === 'string' && /^-?\d{1,5}$/.test(value.trim()))
+        return Number(value.trim());
+    }
+  }
+  return null;
+}
+
 function contextOutput(client, eventName, additionalContext) {
   if (client.contextStyle === 'top-level') return { additionalContext };
   if (client.contextStyle === 'cline') {
@@ -890,6 +1020,11 @@ async function runHook(clientName, event, invocation) {
         anchor,
         toolName: payload.tool_name,
         success: toolSucceeded(raw),
+        // The two fields a boolean cannot carry: which KIND of failure this
+        // was. Read through the same normalisers as `success`, never off `raw`
+        // at this call site.
+        output: outputFrom(raw),
+        exit: exitFrom(raw),
         durationMs:
           Number(
             raw.duration_ms ?? raw.durationMs ?? raw.elapsed_ms ?? raw.elapsedMs
