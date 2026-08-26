@@ -874,27 +874,135 @@ export function load(dir, { snapshots = false } = {}) {
 }
 
 /**
+ * The sha256 of nothing.
+ *
+ * Every empty file in a repository shares this hash, and they are not the same
+ * file in any sense a reader cares about -- a `.gitkeep` beside an empty
+ * `index.js` beside a placeholder test. Grouping them would make one finding
+ * about one empty file surface on every other, which is noise wearing the
+ * shape of a feature.
+ */
+const EMPTY_CONTENT_HASH = 'e3b0c44298fc1c14';
+
+/**
+ * How many identical copies of one file are followed.
+ *
+ * A vendored core in eleven directories is the case this exists for; a
+ * generated asset checked in five hundred times is the case that would turn one
+ * retrieval into a scan. The cap is far above any real vendoring and far below
+ * anything pathological, and it is applied to the PEERS rather than to the
+ * findings so the ranking below still chooses among a full candidate set.
+ */
+const MAX_CONTENT_PEERS = 32;
+
+/**
+ * Other paths in THIS graph holding byte-identical content to `anchorId`.
+ *
+ * WHY CONTENT IS NOT A SECOND IDENTITY. The obvious implementation of #319 --
+ * the deleted `contentAnchor` -- minted a second anchor id of the form
+ * `content:<hash>:<size>`, and that is the one thing this codebase has already
+ * been burned by: `canonicalKey` lives INSIDE `nodeId` precisely because a
+ * caller that forgot produced a second node for a file that already existed and
+ * split its findings invisibly. A second identity for the same file is that
+ * defect by construction.
+ *
+ * So nothing new is stored and no node is created. A file node already carries
+ * the sha256 of its contents, because staleness needs it -- content identity
+ * has been sitting in the graph since P2. This is an index over what is already
+ * there, which means it cannot split a history: there is still exactly one node
+ * per path, and a finding still has exactly one set of `derived_from` edges.
+ *
+ * STALENESS IS UNAFFECTED, and follows the path exactly as before. That falls
+ * out rather than being decided: content identity IS the hash, so a file whose
+ * bytes change simply stops matching the group and starts matching whichever
+ * group its new bytes belong to. There is no such thing as a stale content
+ * anchor to invalidate.
+ *
+ * SCOPE IS ONE GRAPH, deliberately. This can only ever surface findings that
+ * are already in the graph being read, so it opens no path between projects and
+ * changes nothing about `fleet.mjs` or the shared tier, which remain the only
+ * cross-project transfer and keep their own gates. See docs/WIKI_GRAPH.md for
+ * why the cross-repository half of #319 needs a storage decision this does not
+ * take.
+ */
+export function contentPeers(graph, anchorId) {
+  const anchor = graph.nodes.get(anchorId);
+  if (!anchor || anchor.kind !== 'file') return [];
+
+  const hash = typeof anchor.hash === 'string' ? anchor.hash : '';
+  // A file node minted for an IMPORT TARGET carries no hash at all -- see
+  // `indexFile`, which creates one for every resolved import without reading
+  // it. Grouping on a missing hash would make every unread import in the
+  // repository one content group, which is the largest possible wrong answer.
+  if (!hash || hash === EMPTY_CONTENT_HASH) return [];
+
+  const peers = [];
+  for (const node of graph.nodes.values()) {
+    if (peers.length >= MAX_CONTENT_PEERS) break;
+    if (node.kind !== 'file' || node.id === anchorId) continue;
+    if (node.hash !== hash) continue;
+
+    // THE HASH IS TRUNCATED TO 64 BITS -- `staleness.mjs` slices the sha256 to
+    // sixteen hex characters -- so equal hashes are strong evidence of equal
+    // content and not proof of it, and two unrelated files sharing a digest
+    // would silently share each other's findings. The deleted `contentAnchor`
+    // carried a size beside the digest for exactly this reason, and `indexFile`
+    // now records one.
+    //
+    // ABSENCE IS PERMISSIVE, and deliberately. A node written before `bytes`
+    // existed, or one minted for an import target and never read, has none --
+    // and refusing to group those would make the feature quietly stop working
+    // on every graph that predates it, healing only as files happen to be
+    // touched. Where both sides know their size they must agree.
+    const mine = anchor.bytes;
+    const theirs = node.bytes;
+    if (typeof mine === 'number' && typeof theirs === 'number' && mine !== theirs) continue;
+
+    peers.push(node.id);
+  }
+  return peers;
+}
+
+/**
  * Findings reachable from a file or symbol, by traversal.
  *
  * This is the retrieval primitive the whole design rests on -- no embeddings,
  * no vector index. It follows `derived_from` edges backwards from an anchor to
  * the findings that depend on it, then one hop further through `contains` so
  * that touching a file also surfaces findings about the symbols inside it.
+ *
+ * AND ACROSS IDENTICAL COPIES. A vendored file is the same file wherever it
+ * sits, whatever path each copy is given, so a finding about one copy is a
+ * finding about all of them. This repository is its own example: the shared
+ * hook core is vendored into eleven directories, byte-identical, and until now
+ * a finding recorded against one of them was invisible from the other ten.
+ * `contentPeers` explains why this is an index rather than a second identity.
  */
 export function findingsFor(graph, anchorId, { limit = 20 } = {}) {
-  const anchors = new Set([anchorId]);
+  const anchors = new Set([anchorId, ...contentPeers(graph, anchorId)]);
   for (const edge of graph.edges) {
-    if (edge.edge === 'contains' && edge.from === anchorId) anchors.add(edge.to);
+    // Symbols are expanded from every anchor, not only the one asked for: a
+    // finding about a function inside a vendored file is exactly as applicable
+    // in the copy the reader is actually touching.
+    if (edge.edge === 'contains' && anchors.has(edge.from)) anchors.add(edge.to);
   }
 
   const found = [];
+  // DEDUPED BY ID. A finding can now be reached more than once -- through a file
+  // and a symbol it contains, or through two identical copies of the same file
+  // -- and returning it twice would spend the injection budget twice on one
+  // claim and let it outrank a rival by being duplicated.
+  const seen = new Set();
   for (const edge of graph.edges) {
     if (edge.edge !== 'derived_from' || !anchors.has(edge.to)) continue;
     const node = graph.nodes.get(edge.from);
     // Retired findings are excluded at the SOURCE so no consumer has to
     // remember to filter them. A withdrawn claim reaching a model through some
     // path that forgot is the failure this centralisation prevents.
-    if (node && node.kind === 'finding' && !node.retired) found.push(node);
+    if (!node || node.kind !== 'finding' || node.retired) continue;
+    if (seen.has(node.id)) continue;
+    seen.add(node.id);
+    found.push(node);
   }
 
   // Ranked by confidence x recency, per the design. The hard token budget that

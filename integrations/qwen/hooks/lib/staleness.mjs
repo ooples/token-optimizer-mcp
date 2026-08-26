@@ -150,7 +150,23 @@ export function indexFile(dir, rawPath, text) {
   // staleness detection; only the diff degrades, and `serve` already states
   // plainly when evidence cannot be reconstructed.
   const snapshot = source.length <= snapshotLimit() ? source : undefined;
-  const fileNode = putNode(dir, { kind: 'file', key: path, hash: hash(source), snapshot });
+  // BYTES BESIDE THE HASH, because the hash is truncated to 64 bits and content
+  // identity is now read from it. `contentPeers` groups files by identical
+  // content, and two unrelated files sharing a 16-hex-character digest would
+  // silently share each other's findings. The deleted `contentAnchor` carried a
+  // size for exactly this reason and said so; the size is free here, since the
+  // source is already in hand.
+  //
+  // NOT THE SNAPSHOT, which would have been the obvious discriminator and is
+  // unavailable: `putNode` writes snapshots to a separate file that `load()`
+  // deliberately skips, so a loaded node never carries one.
+  const fileNode = putNode(dir, {
+    kind: 'file',
+    key: path,
+    hash: hash(source),
+    bytes: Buffer.byteLength(source),
+    snapshot,
+  });
 
   const symbols = extractSymbols(path, source);
   for (const symbol of symbols) {
