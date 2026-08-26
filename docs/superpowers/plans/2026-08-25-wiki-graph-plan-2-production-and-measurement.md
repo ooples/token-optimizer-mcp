@@ -1192,7 +1192,30 @@ denominator can understate: unwindowing only the injection arm (which already ha
 time spans and manufacture a pessimistic rate from the asymmetry, and unwindowing the query
 arm means widening `EVIDENCE_KINDS`, which two consumers read and which needs its own
 per-consumer comparison. 28 tests, 25/25 mutations killed. See `task-6-report.md`. |
-| 7 — Layer 2 | Not started. The heaviest task in the plan. |
+| 7 — Layer 2 | **Complete.** `hooks-core/loo.mjs` -- `withheldFor`, `exploreOrder`,
+`observations`, `effects`, `looNote`, `servingPolicyVersion`, `LOO_ENABLED`; 43 tests; 43/43
+mutations killed and all 43 tests killed by at least one mutation. Estimand is
+**read-suppression**, disjoint from Layer 1's explicit reference: `loo.mjs` contains zero
+occurrences of `query`, `usage.mjs` zero occurrences of `tokens`/`cost`/`bytes`, and a test
+moves each layer while the other stays deeply equal. Gated on `recordToolOutcome`'s existing
+join; no new join. Withholding happens in `forTouch` **after `fit`** (a leave-one-out, not a
+substitution) and the delivered set is **re-priced**, so `tokens` bills only what was sent.
+Five guards bound it: file surface only, never fewer than two kept findings, never inside
+`inHoldout` (passed in and refused), one per touch, **one per session** -- so the user's worst
+case is one extra file read per session (median 6,531 / p90 20,000 tokens measured here)
+against a finding that costs 66-317 tokens to send. `pinned` / `origin: 'human'` are exempt and
+the note says how many. Exact permutation p-values (84 relabellings at the 6/3 floor, so the
+floor and q=0.10 are compatible by arithmetic), BH across every candidate row, empirical-Bayes
+shrinkage with both the prior mean and the weight estimated from the data.
+**On this machine Layer 2 is dormant and reports nothing at all**: 0 file-surface injections in
+16,875 rows across three graphs (both live injections are command-surface) and the graph holds
+one finding with no anchor carrying two -- so `effects()` is `[]`, `looNote()` is `null`, and
+the audit gains no line rather than a zero. Verified on a synthetic graph built with the real
+producers (`record`, `recordToolOutcome`), field-checked against live `metrics.jsonl`. Two
+defects found in my own work by mutation: an **unfalsifiable** publication gate on
+`costObservations` (deleted -- with all-zero costs p is exactly 1, so it could not change a
+verdict; the disclosure in `looNote` took over its job) and **exploration wired but unproven**
+(a new test shows a tight budget serving the never-served finding). See `task-7-report.md`. |
 | 8 | Not started. Depends on 6 and 7. |
 | 9, 10 | Not started. |
 | 11 -- transcript reader | **Complete.** `failedResultsFromTranscript` in
